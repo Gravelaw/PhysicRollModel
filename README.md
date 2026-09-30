@@ -135,3 +135,15 @@ The new `artifacts/v03_foundations.result.json` carries the optional outputs
 without changing legacy process results. The original v0.2.1 branch and its
 archive remain the reproducible accepted baseline. This v0.3 candidate has
 not been pushed, merged or validated against aluminium plant measurements.
+
+## Reviewed mechanics and AA5052 literature study
+
+The local `development/aa5052-mechanics-review` branch corrects numerical and
+unit-contract defects and runs an explicitly conditional AA5052 comparison and
+two-intermediate-gauge search. See [the specialist audit](docs/mechanics-audit.md)
+and [actual run, source citations and reproducible commands](docs/aa5052-study.md).
+44 tests pass, including unit factors, independent pressure integration,
+mechanical work, thermal exchange and constrained-search rechecks. The source
+force/slip mismatch and unresolved material/speed conventions are retained.
+No physical aluminium accuracy, product temper or safe schedule is certified.
+The prior candidate and v0.2.1 are preserved; this reviewed stage is unpushed.

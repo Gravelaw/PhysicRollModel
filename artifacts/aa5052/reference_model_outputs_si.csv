@@ -1,0 +1,4 @@
+pass_id,force_n,forward_slip_fraction,flattened_radius_m,printed_force_error_fraction,printed_slip_error_fraction
+1,5265700.0,0.0154,0.2251,0.0237,0.0267
+2,5066500.0,0.0187,0.2345,0.0098,0.0275
+3,4165900.0,0.0216,0.2384,-0.0316,-0.0484

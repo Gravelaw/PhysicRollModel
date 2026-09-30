@@ -1,0 +1,175 @@
+{
+  "sources": {
+    "S1": {
+      "authors": "Jian Shao; Wenquan Sun; Anrui He; Bo Li",
+      "year": 2015,
+      "title_as_published": "Research on the Thermal Calculaion Model of High Strength Aluminum Strip Rolling Based on Finite Diffreence Method",
+      "doi": "https://doi.org/10.18280/ijht.330113",
+      "primary_html": "https://www.iieta.org/journals/ijht/paper/10.18280/ijht.330113",
+      "primary_pdf": "https://www.iieta.org/download/file/fid/24141",
+      "evidence": "Original HTML equations/tables read; PDF p94 checked by parent against original table; no raw plant traces supplied",
+      "limitations": [
+        "Incoming temper and prior strain unknown",
+        "Eq3 accumulation coefficient a unspecified",
+        "K/n reference18 concerns Al-Si continuous casting, not an identifiable AA5052 flow-curve dataset",
+        "Table1 says roll radius; Eq6 prose says diameter",
+        "Rolling-speed measurement location unresolved",
+        "No measured torque or temperature validation",
+        "Measurement uncertainty and independent coils unavailable"
+      ]
+    },
+    "S2": {
+      "author": "Hulamin",
+      "year": null,
+      "title": "5052 Data Sheet",
+      "primary_pdf": "https://www.hulamin.com/sites/default/files/downloads/5052%20Data%20Sheet.pdf",
+      "evidence": "Primary one-page PDF text read; generic density and application categories only",
+      "limitations": [
+        "Generic manufacturer properties do not identify benchmark temper",
+        "No H32/H34 strength or bend certification inferred"
+      ]
+    },
+    "S3": {
+      "authors": "Erfanian et al.",
+      "year": 2024,
+      "title": "Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics",
+      "primary_html": "https://arxiv.org/html/2408.01347v1",
+      "equation_context": "Equations21-28: rigid-roll perfectly-plastic leading-order pressure branches; no hardening/elastic/thermal validation"
+    }
+  },
+  "assumptions": {
+    "case_id": "shao2015_aa5052_three_pass",
+    "product": "AA5052 strip, 1360 mm wide, 4.10 to 1.72 mm in three passes",
+    "proposed_application": "Cut-to-length stock for appliance panels/general sheet-metal work (S2 application categories); S1 end use is not stated",
+    "incoming_temper": null,
+    "outgoing_temper": null,
+    "material": {
+      "K_original": {
+        "value": 276.5,
+        "unit": "MPa",
+        "source_id": "S1",
+        "location": "p94 section4, Eq2 p92"
+      },
+      "n": 0.26,
+      "baseline_prior_log_thickness_strain": 0.05,
+      "prior_log_strain_sensitivity": [
+        0.0,
+        0.01,
+        0.05,
+        0.2
+      ],
+      "strain_convention": "ASSUMED log-thickness law; alternate unconverted equivalent-strain interpretation tested separately",
+      "accumulation": "ASSUMED additive log strain, no anneal/reset; does not reproduce missing-a Eq3",
+      "temperature_dependence": "not modelled; temperature and strain-rate calibration ranges unknown",
+      "calibration_range": null,
+      "K_sensitivity_factors": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "coefficient_conversion": "For the stated log-law assumption only: epsilon_eq=2/sqrt(3)*epsilon_log and K_eq=K_log*(sqrt(3)/2)^n",
+      "stress_convention": "UNRESOLVED: compare assumed uniaxial flow stress versus plane-strain stress difference"
+    },
+    "density": {
+      "value": 2.68,
+      "unit": "g/cm3",
+      "source_id": "S2",
+      "location": "p1 Physical Properties",
+      "status": "generic manufacturer value, not measured benchmark density"
+    },
+    "contact": {
+      "mode": "rigid circular, constant mean yield per pass; established rolling diagnostic",
+      "radius_interpretation": "use Table1 radius label; source prose inconsistency disclosed",
+      "radius_factors_tested": [
+        1.0,
+        0.5
+      ],
+      "flattening": "not solved; source Rprime retained as model output, not measurement"
+    },
+    "speed": {
+      "resolved_mapping": null,
+      "analysis_interpretations": [
+        "roll_surface",
+        "entry_strip",
+        "exit_strip"
+      ],
+      "status": "UNRESOLVED; each executed interpretation is explicitly selected, never inferred as observed"
+    },
+    "optimisation": {
+      "objective": "minimise maximum predicted separating force",
+      "variables": [
+        "pass1 exit gauge",
+        "pass2 exit gauge"
+      ],
+      "fixed": "reported pass speeds, tensions, friction; initial/final gauges and three passes",
+      "reduction_min": 0.22126137546973335,
+      "reduction_max": 0.29209756097560957,
+      "trust_region_status": "ASSUMED observed extrema, not source-certified safe envelope",
+      "mill_force_torque_power_ratings": null,
+      "safe_tension_limits": null,
+      "global_optimum_proven": false
+    },
+    "friction_sensitivity_factors": [
+      0.9,
+      1.0,
+      1.1
+    ],
+    "uncertainty": "Sensitivity ranges are declared engineering assumptions, not confidence intervals; no fitting to the three observations",
+    "generic_strip_E": {
+      "value": 70,
+      "unit": "GPa",
+      "source_id": "S2",
+      "location": "p1 Physical Properties",
+      "used_in_model": false
+    }
+  },
+  "measurement_data": [
+    {
+      "pass_id": 1,
+      "force_n": 5143900.0,
+      "forward_slip_fraction": 0.015,
+      "force_uncertainty_n": null,
+      "slip_uncertainty_fraction": null
+    },
+    {
+      "pass_id": 2,
+      "force_n": 5017400.0,
+      "forward_slip_fraction": 0.0182,
+      "force_uncertainty_n": null,
+      "slip_uncertainty_fraction": null
+    },
+    {
+      "pass_id": 3,
+      "force_n": 4301800.0,
+      "forward_slip_fraction": 0.0227,
+      "force_uncertainty_n": null,
+      "slip_uncertainty_fraction": null
+    }
+  ],
+  "source_model_outputs_separate": [
+    {
+      "pass_id": 1,
+      "force_n": 5265700.0,
+      "forward_slip_fraction": 0.0154,
+      "flattened_radius_m": 0.2251,
+      "printed_force_error_fraction": 0.0237,
+      "printed_slip_error_fraction": 0.0267
+    },
+    {
+      "pass_id": 2,
+      "force_n": 5066500.0,
+      "forward_slip_fraction": 0.0187,
+      "flattened_radius_m": 0.2345,
+      "printed_force_error_fraction": 0.0098,
+      "printed_slip_error_fraction": 0.0275
+    },
+    {
+      "pass_id": 3,
+      "force_n": 4165900.0,
+      "forward_slip_fraction": 0.0216,
+      "flattened_radius_m": 0.2384,
+      "printed_force_error_fraction": -0.0316,
+      "printed_slip_error_fraction": -0.0484
+    }
+  ]
+}

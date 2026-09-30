@@ -2,6 +2,20 @@ test_disconnected_sensor_map (test_equipment_sensors.EquipmentAndSensorsTests.te
 test_limits_and_provenance (test_equipment_sensors.EquipmentAndSensorsTests.test_limits_and_provenance) ... ok
 test_load_path_and_gap (test_equipment_sensors.EquipmentAndSensorsTests.test_load_path_and_gap) ... ok
 test_reel_force_torque_power_and_inertia (test_equipment_sensors.EquipmentAndSensorsTests.test_reel_force_torque_power_and_inertia) ... ok
+test_constrained_search_recheck (test_literature.LiteratureTests.test_constrained_search_recheck) ... ok
+test_missing_history_and_speed_are_not_silently_filled (test_literature.LiteratureTests.test_missing_history_and_speed_are_not_silently_filled) ... ok
+test_source_fixed_inputs_and_speed_interpretations (test_literature.LiteratureTests.test_source_fixed_inputs_and_speed_interpretations) ... ok
+test_hardening_small_interval_and_zero_initial_strength (test_mechanics_audit.MechanicsAuditTests.test_hardening_small_interval_and_zero_initial_strength) ... ok
+test_independent_exponential_midpoint_pressure_reference (test_mechanics_audit.MechanicsAuditTests.test_independent_exponential_midpoint_pressure_reference) ... ok
+test_neutral_on_node_and_nonunique (test_mechanics_audit.MechanicsAuditTests.test_neutral_on_node_and_nonunique) ... ok
+test_profile_nonuniform_grid_invariance_and_curvature (test_mechanics_audit.MechanicsAuditTests.test_profile_nonuniform_grid_invariance_and_curvature) ... ok
+test_small_draft_and_checked_flag (test_mechanics_audit.MechanicsAuditTests.test_small_draft_and_checked_flag) ... ok
+test_thermal_exchange_exact_limit_and_nonoscillation (test_mechanics_audit.MechanicsAuditTests.test_thermal_exchange_exact_limit_and_nonoscillation) ... ok
+test_work_identity_refinement_and_dimensions (test_mechanics_audit.MechanicsAuditTests.test_work_identity_refinement_and_dimensions) ... ok
+test_yield_cap_and_bad_unit_inputs (test_mechanics_audit.MechanicsAuditTests.test_yield_cap_and_bad_unit_inputs) ... ok
+test_exact_source_factors_and_roundtrip (test_mechanics_audit.UnitContractTests.test_exact_source_factors_and_roundtrip) ... ok
+test_source_import_regressions (test_mechanics_audit.UnitContractTests.test_source_import_regressions) ... ok
+test_wrong_dimensions_ambiguous_units_and_offsets (test_mechanics_audit.UnitContractTests.test_wrong_dimensions_ambiguous_units_and_offsets) ... ok
 test_baseline_regression (test_model.ProcessModelTests.test_baseline_regression) ... ok
 test_cli (test_model.ProcessModelTests.test_cli) ... ok
 test_exact_bite_boundary (test_model.ProcessModelTests.test_exact_bite_boundary) ... ok
@@ -30,6 +44,6 @@ test_passive_cooling_refinement (test_v03.ThermalTests.test_passive_cooling_refi
 test_rejections (test_v03.ThermalTests.test_rejections) ... ok
 
 ----------------------------------------------------------------------
-Ran 30 tests in 0.052s
+Ran 44 tests in 0.300s
 
 OK

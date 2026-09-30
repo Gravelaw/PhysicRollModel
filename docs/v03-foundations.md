@@ -1,5 +1,10 @@
 # v0.3 research-informed computational foundations (candidate)
 
+The initial candidate is preserved at `ec3e79f`. The subsequent local specialist
+review and corrections are documented in [mechanics-audit.md](mechanics-audit.md),
+and actual literature runs in [aa5052-study.md](aa5052-study.md). Those documents
+supersede this initial description where numerical safeguards were strengthened.
+
 This branch is an **uncalibrated, synthetic, offline candidate**. It leaves the
 accepted v0.2.1 `.blend`, USDA, sensor manifest and baseline `solve()` result
 unchanged. Its new calculations are separate, inspectable functions; they do not
@@ -99,7 +104,7 @@ and geometry review, especially if six-high or HGC variants are introduced.
 | Finding | Code/input/output | Direct verification | Status |
 |---|---|---|---|
 | Alloy, temper and processing memory affect flow stress | `materials.py`, `v03_foundations.json`, `v03_foundations.result.json` | `MaterialTests`: exact interval integral, two-pass history, constant law and mismatch rejection | Implemented synthetically; no alloy fit/strength validation |
-| Entry/exit tension and neutral traction alter pressure, force and torque | `slab.py`; optional result block | `SlabTests`: analytical constant-gap ODE, grid refinement, pressure hill, rejected no-neutral cases | Ideal constant-yield optional solver; specialist equation review and measured aluminium force/torque/slip still needed |
+| Entry/exit tension and neutral traction alter pressure, force and torque | `slab.py`; optional result block | `SlabTests` plus `MechanicsAuditTests`: independent exponential-midpoint pressure, work balance, refinement and rejection | Specialist equation review completed within the stated approximation; measured aluminium predictive validation still absent |
 | Plastic volume heating, solid slip heating and equal/opposite contact | `thermal.py`; separate demo step | `ThermalTests`: zero slip, opposite contact, energy residual, passive-cooling analytic refinement and rejected unstable/negative-work cases | Conservative lumped calculation; no resolved temperatures/film |
 | Lubricant identity and observations do not identify friction by themselves | `lubrication.py`; nullable fluid inputs | `ClosureTests`: missing inputs and claim guard | Registry/declared effective coefficient only |
 | Crown is not latent flatness; membrane mismatch differs from curvature | `profile.py`; supplied profile | `ClosureTests`: crown/wedge, separated descriptors, null wave amplitude | Supplied-field diagnostics only; no roll-stack/buckling prediction |

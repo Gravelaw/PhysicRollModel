@@ -1,0 +1,50 @@
+original_value,original_unit,quantity_dimension,si_value,si_unit,convention,source_id,source_location,category,pass_id,field
+4.1,mm,length,0.0041,m,full entry thickness,S1,p94 Tables1-2,reported_input,1,entry_thickness_m
+2.9024,mm,length,0.0029024,m,full exit thickness,S1,p94 Tables1-2,reported_input,1,exit_thickness_m
+1360.0,mm,length,1.36,m,full strip width,S1,p94 Tables1-2,reported_input,1,width_m
+9.47,MPa,stress,9470000.0,Pa,"entry tensile stress, not force",S1,p94 Tables1-2,reported_input,1,back_tension_pa
+9.47,MPa,stress,9470000.0,Pa,"exit tensile stress, not force",S1,p94 Tables1-2,reported_input,1,front_tension_pa
+210.81,mm,length,0.21081,m,Table1 radius label; Eq6 diameter prose unresolved,S1,p94 Tables1-2,reported_input,1,work_roll_radius_m
+4.2,m/s,speed,4.2,m/s,measurement location unresolved,S1,p94 Tables1-2,reported_input,1,rolling_speed_m_s
+0.075,1,dimensionless,0.075,1,"reported effective coefficient, identification unknown",S1,p94 Tables1-2,reported_input,1,friction_coefficient
+2.9024,mm,length,0.0029024,m,full entry thickness,S1,p94 Tables1-2,reported_input,2,entry_thickness_m
+2.2087,mm,length,0.0022087,m,full exit thickness,S1,p94 Tables1-2,reported_input,2,exit_thickness_m
+1360.0,mm,length,1.36,m,full strip width,S1,p94 Tables1-2,reported_input,2,width_m
+8.68,MPa,stress,8680000.0,Pa,"entry tensile stress, not force",S1,p94 Tables1-2,reported_input,2,back_tension_pa
+8.11,MPa,stress,8110000.0,Pa,"exit tensile stress, not force",S1,p94 Tables1-2,reported_input,2,front_tension_pa
+210.81,mm,length,0.21081,m,Table1 radius label; Eq6 diameter prose unresolved,S1,p94 Tables1-2,reported_input,2,work_roll_radius_m
+4.7,m/s,speed,4.7,m/s,measurement location unresolved,S1,p94 Tables1-2,reported_input,2,rolling_speed_m_s
+0.071,1,dimensionless,0.071,1,"reported effective coefficient, identification unknown",S1,p94 Tables1-2,reported_input,2,friction_coefficient
+2.2087,mm,length,0.0022087,m,full entry thickness,S1,p94 Tables1-2,reported_input,3,entry_thickness_m
+1.72,mm,length,0.00172,m,full exit thickness,S1,p94 Tables1-2,reported_input,3,exit_thickness_m
+1360.0,mm,length,1.36,m,full strip width,S1,p94 Tables1-2,reported_input,3,width_m
+7.51,MPa,stress,7510000.0,Pa,"entry tensile stress, not force",S1,p94 Tables1-2,reported_input,3,back_tension_pa
+7.25,MPa,stress,7250000.0,Pa,"exit tensile stress, not force",S1,p94 Tables1-2,reported_input,3,front_tension_pa
+210.81,mm,length,0.21081,m,Table1 radius label; Eq6 diameter prose unresolved,S1,p94 Tables1-2,reported_input,3,work_roll_radius_m
+4.0,m/s,speed,4.0,m/s,measurement location unresolved,S1,p94 Tables1-2,reported_input,3,rolling_speed_m_s
+0.069,1,dimensionless,0.069,1,"reported effective coefficient, identification unknown",S1,p94 Tables1-2,reported_input,3,friction_coefficient
+5143.9,kN,force,5143900.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,author_reported_measurement,1,force_n
+0.015,1,dimensionless,0.015,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,author_reported_measurement,1,forward_slip_fraction
+5017.4,kN,force,5017400.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,author_reported_measurement,2,force_n
+0.0182,1,dimensionless,0.0182,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,author_reported_measurement,2,forward_slip_fraction
+4301.8,kN,force,4301800.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,author_reported_measurement,3,force_n
+0.0227,1,dimensionless,0.0227,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,author_reported_measurement,3,forward_slip_fraction
+5265.7,kN,force,5265700.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,source_model_output,1,force_n
+0.0154,1,dimensionless,0.0154,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,source_model_output,1,forward_slip_fraction
+225.1,mm,length,0.2251,m,"source-calculated effective radius, NOT measured",S1,p94 Table2,source_model_output,1,flattened_radius_m
+2.37,%,dimensionless,0.0237,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,1,printed_force_error_fraction
+2.67,%,dimensionless,0.0267,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,1,printed_slip_error_fraction
+5066.5,kN,force,5066500.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,source_model_output,2,force_n
+0.0187,1,dimensionless,0.0187,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,source_model_output,2,forward_slip_fraction
+234.5,mm,length,0.2345,m,"source-calculated effective radius, NOT measured",S1,p94 Table2,source_model_output,2,flattened_radius_m
+0.98,%,dimensionless,0.0098,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,2,printed_force_error_fraction
+2.75,%,dimensionless,0.0275,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,2,printed_slip_error_fraction
+4165.9,kN,force,4165900.0,N,"total stand separating force, not twice per-roll load",S1,p94 Table2,source_model_output,3,force_n
+0.0216,1,dimensionless,0.0216,1,reported fraction; measured speed normalization unspecified,S1,p94 Table2,source_model_output,3,forward_slip_fraction
+238.4,mm,length,0.2384,m,"source-calculated effective radius, NOT measured",S1,p94 Table2,source_model_output,3,flattened_radius_m
+-3.16,%,dimensionless,-0.0316,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,3,printed_force_error_fraction
+-4.84,%,dimensionless,-0.0484,1,"printed relative error, preserve rounding",S1,p94 Table2,source_model_output,3,printed_slip_error_fraction
+276.5,MPa,stress,276500000.0,Pa,deformation resistance coefficient; strain/stress pairing unresolved,S1,"p94 section4, Eq2 p92",material_coefficient,0,K_pa
+0.26,1,dimensionless,0.26,1,power exponent,S1,p94 section4,material_coefficient,0,n
+2.68,g/cm3,density,2680.0,kg/m3,"generic alloy density, not benchmark measurement",S2,p1 Physical Properties,generic_manufacturer,0,density_kg_m3
+70.0,GPa,stress,70000000000.0,Pa,"generic manufacturer Young modulus, NOT used in rigid model",S2,p1 Physical Properties,generic_manufacturer,0,strip_E_pa_unused

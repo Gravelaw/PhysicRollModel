@@ -120,3 +120,32 @@ and `artifacts/v03_sensitivity.json`. These examples do not establish parameter
 uncertainty or a calibrated prediction interval; real data and parameter fits
 remain absent. See `v03-foundations.md` for the equations and distinct validity
 gates.
+
+## Specialist review and executed AA5052 study
+
+The local `development/aa5052-mechanics-review` branch preserves the initial
+candidate via `review/v03-before-mechanics-audit`. It has **44 passing tests**,
+including 49 independent raw→SI targets, dimensional rejection tests, an
+exponential-midpoint pressure reference, mechanical work/refinement, unequal-
+capacity thermal exchange and a rechecked constrained search. Reproduction
+commands and actual residuals are in `aa5052-study.md`; implementation verdicts
+and source-equation limitations are in `mechanics-audit.md`.
+
+The corrected generic optional slab baseline is approximately 1.739488 MN,
+9.208335 kN*m per work roll, and 188.098520 kW for both work rolls. With 20 kW
+net tension work, 159.449589 kW plastic work and 48.648825 kW slip dissipation,
+its absolute work residual is 0.1054 W (5.61e-7 relative); this decreases under
+refinement. The accepted v0.2 heuristic result is unchanged.
+
+The AA5052 run considers 2,564 gauge candidates; 1,682 pass its assumed trust
+region and solver screens. The baseline and selected schedule pass checked
+512/1024-cell re-evaluation with relative work residual below 8e-8. This is
+numerical verification; the measured slip mismatch and unresolved constitutive
+conventions remain explicit. No thermal or final product-quality validation is
+inferred.
+
+The existing `.blend` reopened under CPU Blender 4.3.2 and passed 78-ID/gap/
+true-gauge/closed-strip checks again. Regenerated sensor and equipment JSON match
+the bundled accepted values exactly. A new reviewed archive uses a separate
+filename, `PhysicRollModel-v0.3-reviewed-AA5052.zip`, preserving the original
+candidate archive. The source tree contains no paid-service or plant connection.

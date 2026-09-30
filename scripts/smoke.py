@@ -10,6 +10,7 @@ from physicroll import Scenario, solve
 from physicroll.materials import MaterialState, PowerHardeningLaw, pass_with_history
 from physicroll.slab import solve_slab
 from physicroll.thermal import ThermalStep, step
+from physicroll.literature import load_case
 
 base=Scenario.from_dict(json.loads((ROOT/'scenarios/baseline.json').read_text()))
 r=solve(base)
@@ -29,7 +30,10 @@ candidate=json.loads((ROOT/'scenarios/v03_foundations.json').read_text())
 mat=pass_with_history(base,MaterialState(**{**candidate['material_state'],
     'history':tuple(candidate['material_state']['history'])}),PowerHardeningLaw(**candidate['hardening_law']))
 assert mat['state_out']['accumulated_equivalent_plastic_strain']>mat['state_in']['accumulated_equivalent_plastic_strain']
-assert solve_slab(base)['separating_force_n']>0
+slab=solve_slab(base)
+assert slab['separating_force_n']>0 and slab['numerical_converged']
+assert slab['mechanical_work_residual_relative']<1e-4
+assert load_case(ROOT/'scenarios/literature/shao2015_aa5052')['unit_audit']['converted_numeric_values']==49
 assert abs(step(ThermalStep(**candidate['thermal_step']))['energy_residual_j'])<1e-7
 hashfile=ROOT/'artifacts/checksums.json'
 if hashfile.exists():

@@ -6,7 +6,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser()
-p.add_argument('--output',type=Path,default=ROOT.parent/'PhysicRollModel-prototype-v0.3-candidate.zip')
+p.add_argument('--output',type=Path,default=ROOT.parent/'PhysicRollModel-v0.3-reviewed-AA5052.zip')
 args=p.parse_args()
 include=['README.md','LICENSE','.gitignore','pyproject.toml','requirements-preview.txt','requirements-verify-usd.txt']
 for directory in ['physicroll','blender','scenarios','schema','tests','scripts','docs','artifacts']:

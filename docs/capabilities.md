@@ -1,5 +1,10 @@
 # Physics capability boundary (accepted 0.2 and local 0.3 candidate)
 
+The reviewed candidate adds the [mechanics/unit audit](mechanics-audit.md) and
+[executed AA5052 comparison/search](aa5052-study.md). Its explicitly conditional
+slip mismatch prevents a validated-accuracy claim. Software verification and a
+small numerical search improvement do not establish plant feasibility.
+
 The local v0.3 candidate adds **separate** synthetic material-history,
 constant-yield slab, lumped thermal-budget, fluid-registry and supplied-profile
 functions. See [v0.3 foundations](v03-foundations.md) for the exact equations,

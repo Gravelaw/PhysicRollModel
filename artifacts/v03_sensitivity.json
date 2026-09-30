@@ -4,24 +4,24 @@
   "friction_cases": [
     {
       "effective_friction_coefficient": 0.08,
-      "separating_force_n": 1739488.1125914126,
-      "torque_per_work_roll_nm": 9208.334637593538,
-      "neutral_position_from_entry_m": 0.007098612637604799,
-      "forward_slip_fraction": 0.04437011240721045
+      "separating_force_n": 1739487.430009183,
+      "torque_per_work_roll_nm": 9208.333598557128,
+      "neutral_position_from_entry_m": 0.007098612756194527,
+      "forward_slip_fraction": 0.04437010982702372
     },
     {
       "effective_friction_coefficient": 0.1,
-      "separating_force_n": 1881164.9527629423,
-      "torque_per_work_roll_nm": 9958.721658112527,
-      "neutral_position_from_entry_m": 0.006812526547387535,
-      "forward_slip_fraction": 0.050812889769417335
+      "separating_force_n": 1881163.922721377,
+      "torque_per_work_roll_nm": 9958.719585382205,
+      "neutral_position_from_entry_m": 0.006812526605484437,
+      "forward_slip_fraction": 0.0508128884167145
     },
     {
       "effective_friction_coefficient": 0.12,
-      "separating_force_n": 2034725.5980310964,
-      "torque_per_work_roll_nm": 10773.785340382105,
-      "neutral_position_from_entry_m": 0.0066265644903869304,
-      "forward_slip_fraction": 0.055235026017082633
+      "separating_force_n": 2034724.0931069136,
+      "torque_per_work_roll_nm": 10773.791002121576,
+      "neutral_position_from_entry_m": 0.006626565087589126,
+      "forward_slip_fraction": 0.0552350115194471
     }
   ],
   "plastic_heat_fraction_cases": [
@@ -61,7 +61,7 @@
       "entry_thickness_m": 0.0015,
       "exit_thickness_m": 0.0011250000000000001,
       "mass_flow_kg_s": 10.8,
-      "mean_flow_stress_pa": 185482412.52788603
+      "mean_flow_stress_pa": 185482412.527886
     }
   ]
 }

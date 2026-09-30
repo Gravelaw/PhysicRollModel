@@ -1,0 +1,83 @@
+{
+  "status": "CONDITIONAL_MECHANICS_ONLY_NOT_ALUMINIUM_VALIDATION",
+  "case_id": "shao2015_aa5052_three_pass",
+  "assumptions": {
+    "prior_log_strain": 0.05,
+    "strain_convention": "log_thickness",
+    "stress_convention": "uniaxial",
+    "speed_interpretation": "roll_surface"
+  },
+  "baseline_comparison": [
+    {
+      "pass_id": 1,
+      "predicted_force_n": 4690312.830398071,
+      "author_measured_force_n": 5143900.0,
+      "force_residual_n": -453587.1696019294,
+      "force_relative_residual": -0.0881796243321078,
+      "predicted_forward_slip_fraction": 0.023074072337962104,
+      "author_measured_forward_slip_fraction": 0.015,
+      "slip_residual_fraction": 0.008074072337962104,
+      "slip_relative_residual": 0.5382714891974736,
+      "source_model_force_n_separate": 5265700.0,
+      "source_model_slip_fraction_separate": 0.0154,
+      "measurement_uncertainty": null,
+      "independent_validation": false
+    },
+    {
+      "pass_id": 2,
+      "predicted_force_n": 4772708.903751087,
+      "author_measured_force_n": 5017400.0,
+      "force_residual_n": -244691.09624891263,
+      "force_relative_residual": -0.04876850485289441,
+      "predicted_forward_slip_fraction": 0.026263221422060834,
+      "author_measured_forward_slip_fraction": 0.0182,
+      "slip_residual_fraction": 0.008063221422060833,
+      "slip_relative_residual": 0.44303414406927644,
+      "source_model_force_n_separate": 5066500.0,
+      "source_model_slip_fraction_separate": 0.0187,
+      "measurement_uncertainty": null,
+      "independent_validation": false
+    },
+    {
+      "pass_id": 3,
+      "predicted_force_n": 4582180.768242753,
+      "author_measured_force_n": 4301800.0,
+      "force_residual_n": 280380.7682427531,
+      "force_relative_residual": 0.06517754619990535,
+      "predicted_forward_slip_fraction": 0.02899929817394198,
+      "author_measured_forward_slip_fraction": 0.0227,
+      "slip_residual_fraction": 0.006299298173941977,
+      "slip_relative_residual": 0.2775021222000871,
+      "source_model_force_n_separate": 4165900.0,
+      "source_model_slip_fraction_separate": 0.0216,
+      "measurement_uncertainty": null,
+      "independent_validation": false
+    }
+  ],
+  "baseline_peak_force_n": 4772708.903751087,
+  "selected_peak_force_n": 4684199.681466036,
+  "selected_intermediate_gauges_m": [
+    0.0029045782127043065,
+    0.002232073602243672
+  ],
+  "selected_reductions": [
+    0.2915662895843155,
+    0.23153262236808547,
+    0.22941609171352484
+  ],
+  "peak_force_change_fraction": -0.018544860805461694,
+  "candidate_count": 2564,
+  "accepted_search_count": 1682,
+  "all_final_baseline_selected_grids_converged": true,
+  "max_final_mechanical_work_residual_relative": 7.733493746733678e-08,
+  "force_mean_absolute_relative_residual": 0.06737522512830252,
+  "slip_mean_absolute_relative_residual": 0.4196025851556124,
+  "credible_scope": "Numerical objective improvement only inside the declared rigid mean-flow model and assumed trust region; measured slip mismatch prevents a predictive accuracy claim.",
+  "uncertainty": null,
+  "physical_calibration_domain": "UNKNOWN",
+  "thermal_validation": false,
+  "source_model_reproduced": false,
+  "incoming_temper": null,
+  "final_temper": null,
+  "independent_measurements_used_for_fit": false
+}

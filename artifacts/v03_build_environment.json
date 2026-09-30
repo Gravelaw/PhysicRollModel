@@ -1,8 +1,12 @@
 {
-  "status": "LOCAL_CANDIDATE_NOT_PHYSICALLY_VALIDATED",
+  "status": "REVIEWED_LOCAL_CANDIDATE_NOT_PHYSICALLY_VALIDATED",
   "python": "3.12.14",
   "blender": "Blender 4.3.2",
   "runtime_dependencies": "Python standard library only",
   "scene_note": "v0.2.1 geometry unchanged; existing blend reopened and 78-ID check passed",
-  "native_blender_usd_available": false
+  "native_blender_usd_available": false,
+  "unit_tests_passed": 44,
+  "source_numeric_unit_checks": 49,
+  "review_branch": "development/aa5052-mechanics-review",
+  "preserved_candidate_commit": "ec3e79f60c234f374aa924f32d03faf2a7074fc6"
 }

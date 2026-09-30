@@ -1,5 +1,10 @@
 # Research to implementation traceability
 
+The later [specialist mechanics audit](mechanics-audit.md) maps actual defects,
+corrections, equation derivations, unit conventions and adversarial tests.
+[AA5052 study](aa5052-study.md) maps original tables and uncertain interpretations
+to executable comparison/search results; no calibration fit is claimed.
+
 The optional research-informed v0.3 modules, their primary-source and OEM links,
 equations, test names and still-unmet physical validation gates are mapped in
 [v0.3 foundations](v03-foundations.md#traceability-and-verification-gates).

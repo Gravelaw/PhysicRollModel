@@ -1,0 +1,4 @@
+pass_id,entry_thickness_m,exit_thickness_m,width_m,back_tension_pa,front_tension_pa,work_roll_radius_m,rolling_speed_m_s,friction_coefficient
+1,0.0041,0.0029024,1.36,9470000.0,9470000.0,0.21081,4.2,0.075
+2,0.0029024,0.0022087,1.36,8680000.0,8110000.0,0.21081,4.7,0.071
+3,0.0022087,0.00172,1.36,7510000.0,7250000.0,0.21081,4.0,0.069

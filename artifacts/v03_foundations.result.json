@@ -25,6 +25,14 @@
     "equivalent_plastic_strain_increment": 0.3321866439421302,
     "mean_flow_stress_pa": 166206331.92279223,
     "hardening_provenance": "SYNTHETIC_DEMONSTRATION_NOT_A_FIT",
+    "hardening_units": {
+      "yield_stress": "Pa",
+      "strength_coefficient": "Pa",
+      "strain": "1",
+      "exponent": "1"
+    },
+    "calibrated_strain_range": null,
+    "calibrated_temperature_range_k": null,
     "baseline_mechanics": {
       "model_version": "0.1.0",
       "scenario": {
@@ -73,25 +81,53 @@
     }
   },
   "slab_optional": {
-    "status": "SYNTHETIC_RIGID_ROLL_SLAB",
-    "model": "constant_yield_rigid_circle",
-    "cells": 256,
-    "neutral_position_from_entry_m": 0.007098611411189542,
+    "status": "UNVALIDATED_RIGID_ROLL_SLAB",
+    "model": "constant_yield_projected_contact",
+    "cells": 512,
+    "numerical_converged": true,
+    "refinement_checked": true,
+    "bite_mode": "unassisted",
+    "unassisted_bite_feasible": true,
+    "bite_tangent": 0.04475493274496127,
+    "friction_coefficient": 0.08,
+    "neutral_position_from_entry_m": 0.007098612637604793,
     "contact_length_m": 0.011177544453054078,
-    "neutral_thickness_m": 0.0015665552086358545,
-    "roll_surface_speed_m_s": 2.5533731450697945,
-    "forward_slip_fraction": 0.04437013909056953,
-    "separating_force_n": 1739490.8430843547,
-    "torque_per_work_roll_nm": 9208.332944988791,
+    "neutral_thickness_m": 0.0015665551686108064,
+    "roll_surface_speed_m_s": 2.5533732103077673,
+    "entry_speed_m_s": 2.0,
+    "exit_speed_m_s": 2.6666666666666665,
+    "forward_slip_fraction": 0.04437011240720423,
+    "volume_flow_m3_s": 0.004,
+    "mass_flow_kg_s": 10.8,
+    "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+    "separating_force_n": 1739488.1125914147,
+    "torque_per_work_roll_nm": 9208.334637593527,
+    "roll_mechanical_power_both_rolls_w": 188098.51980144315,
+    "plastic_work_power_w": 159449.5890922225,
+    "solid_slip_dissipation_both_interfaces_w": 48648.82532262561,
+    "net_tension_power_w": 20000.0,
+    "traction_power_to_strip_w": 139449.69447881758,
+    "mechanical_work_residual_w": 0.10538659503072267,
+    "mechanical_work_residual_relative": 5.602733883390937e-07,
     "entry_pressure_pa": 128564064.6055102,
     "exit_pressure_pa": 123564064.6055102,
-    "pressure_at_neutral_pa": 196699104.51632583,
-    "pressure_branch_mismatch_pa": 0.0,
+    "pressure_at_neutral_pa": 196698560.63538253,
+    "max_pressure_pa": 196698560.63538253,
     "min_pressure_pa": 123564064.6055102,
+    "pressure_branch_mismatch_pa": 2.9802322387695312e-08,
+    "max_coulomb_shear_over_yield_shear": 0.22712793386410005,
+    "flags": [],
     "limitations": [
-      "Rigid circular rolls and constant yield; no calibrated aluminium force prediction.",
-      "No flattening, elastic recovery, lubrication film or transient dynamics."
-    ]
+      "Constant yield and rigid circular rolls; no aluminium calibration.",
+      "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+      "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+    ],
+    "refinement": {
+      "coarse_cells": 256,
+      "force_relative_change": 1.5697106067430625e-06,
+      "torque_change_over_capacity": 4.865238043484895e-08,
+      "slip_absolute_change": 2.6683365073054688e-08
+    }
   },
   "thermal": {
     "status": "SYNTHETIC_UNCALIBRATED",
@@ -105,6 +141,9 @@
     "strip_cooling_w": 200.0,
     "roll_cooling_w": 500.0,
     "plastic_work_not_immediately_heat_w": 30000.0,
+    "explicit_mode_step_ratio": 0.0012301605185641947,
+    "strip_thermal_capacity_j_k": 1800.0,
+    "roll_thermal_capacity_j_k": 230000.0,
     "energy_residual_j": -1.3124008546583354e-09
   },
   "lubrication": {
@@ -125,10 +164,14 @@
     "status": "SUPPLIED_FIELDS_ONLY",
     "temperature_k": 300.0,
     "applied_tension_pa": 10000000.0,
+    "center_position_m": 0.0,
     "center_crown_m": 2.0000000000000052e-05,
     "wedge_m": 0.0,
     "thickness_range_m": 2.0000000000000052e-05,
-    "membrane_mismatch_rms": 7.483314773547883e-05,
+    "membrane_mismatch_mean": 0.0,
+    "membrane_mismatch_rms": 5.773502691896258e-05,
+    "through_thickness_curvature_mean_inv_m": 0.0,
+    "max_abs_curvature_inv_m": 0.0,
     "through_thickness_curvature_range_inv_m": 0.0,
     "latent_flatness_prediction": null,
     "unloaded_wave_amplitude_m": null

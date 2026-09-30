@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physicroll"
-version = "0.3.0.dev0"
+version = "0.3.0.dev1"
 description = "Synthetic offline cold rolling demonstrator"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}

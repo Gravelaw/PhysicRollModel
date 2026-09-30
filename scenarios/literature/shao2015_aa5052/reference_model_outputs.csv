@@ -1,0 +1,4 @@
+pass_id,force_kN,forward_slip_fraction,flattened_radius_mm,printed_force_error_percent,printed_slip_error_percent,source_id,source_location
+1,5265.7,0.0154,225.1,2.37,2.67,S1,p94 Table2
+2,5066.5,0.0187,234.5,0.98,2.75,S1,p94 Table2
+3,4165.9,0.0216,238.4,-3.16,-4.84,S1,p94 Table2
