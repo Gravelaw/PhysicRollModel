@@ -111,5 +111,6 @@ transients are not solved. Exit gauge is prescribed, not predicted from a screw 
 Zero draft is unloaded transport, not temper rolling. Friction needs joint force/torque/slip
 identification; geometry and passing unit tests do not validate rolling accuracy.
 
-Apache-2.0; original `LICENSE` retained unchanged. Work is on a local prototype branch;
-no push, pull request or deployment is performed.
+Apache-2.0; original `LICENSE` retained unchanged. The development branch
+`prototype/blender-cold-mill` is pushed to the private repository. No pull request, merge
+or deployment is performed.

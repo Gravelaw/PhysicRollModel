@@ -19,6 +19,7 @@
         "z": 0.21
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_entry_gauge",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -53,6 +54,7 @@
         "z": 0.21
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_exit_gauge",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -87,6 +89,7 @@
         "z": 0.95075
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_roll_force",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -121,6 +124,7 @@
         "z": 2.0
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_stand_position",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -155,6 +159,7 @@
         "z": 1.8499999999999999
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_hydraulic_cap_pressure",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -189,6 +194,7 @@
         "z": 1.8499999999999999
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_hydraulic_rod_pressure",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -223,6 +229,7 @@
         "z": 0.95075
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_roll_bending_force",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -257,6 +264,7 @@
         "z": 0.25
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_entry_tension",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -291,6 +299,7 @@
         "z": 0.25
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_exit_tension",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -325,6 +334,7 @@
         "z": 0.12
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_entry_strip_speed",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -359,6 +369,7 @@
         "z": 0.12
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_exit_strip_speed",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -393,6 +404,7 @@
         "z": 0.25075
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_work_roll_speed",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -427,6 +439,7 @@
         "z": 0.25075
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_work_roll_torque",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -461,6 +474,7 @@
         "z": 0.12
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "widthwise_profile",
       "equipment_id": "sensor_marker_flatness",
       "raw_signal_value": null,
       "raw_signal_unit": null,
@@ -495,6 +509,7 @@
         "z": 0.2
       },
       "position_status": "synthetic_scene_marker",
+      "observation_shape": "scalar",
       "equipment_id": "sensor_marker_strip_temperature",
       "raw_signal_value": null,
       "raw_signal_unit": null,

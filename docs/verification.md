@@ -1,8 +1,9 @@
 # Verification and portable handoff
 
 Build date: 2026-09-30. Base commit: `64d6bf86bb49417d5c668dc28ef6287d3e7fad98`.
-Local branch: `prototype/blender-cold-mill`. Original Apache-2.0 LICENSE verified byte-for-byte
-against Git HEAD. No push, PR or deployment. No rented GPU, credentials or plant connection.
+Development branch: `prototype/blender-cold-mill`, pushed to the private GitHub repository.
+Original Apache-2.0 LICENSE verified byte-for-byte against the base commit. No PR, merge or
+deployment. No rented GPU, credentials or plant connection.
 
 ## Dependencies actually used
 
@@ -75,8 +76,14 @@ MPLCONFIGDIR=/tmp/physicroll-mpl XDG_CACHE_HOME=/tmp/physicroll-cache python ble
 
 To create another archive: `python scripts/package.py`. It deliberately omits `.git`, caches,
 installed dependencies, logs and Blender backup files. Source and generated artifacts are included.
-The parent-computer run remains a separate acceptance step; this document does not claim it has
-already occurred. Library round-trip and extracted-archive smoke results are supplied in the handoff.
+The parent independently rebuilt and rendered the first pushed commit `fee0d29` on its
+separate cloud computer: 19 unit tests, the saved/reopened Blender scene, geometry and USDA
+fallback passed. That run found the committed sensor manifest lacked the
+`observation_shape` field now emitted by the source. This handoff regenerates the manifest
+and checksum; acceptance of the corrected commit remains a separate gate. The parent could
+not byte-verify the committed binary assets through its connector, although independent
+regeneration worked. This document does not claim that binary checksum verification passed
+on the parent computer. Library round-trip and extracted-archive smoke results are supplied in the handoff.
 
 ## Version 0.2 update
 
