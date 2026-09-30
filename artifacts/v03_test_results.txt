@@ -44,6 +44,6 @@ test_passive_cooling_refinement (test_v03.ThermalTests.test_passive_cooling_refi
 test_rejections (test_v03.ThermalTests.test_rejections) ... ok
 
 ----------------------------------------------------------------------
-Ran 44 tests in 0.300s
+Ran 44 tests in 0.297s
 
 OK

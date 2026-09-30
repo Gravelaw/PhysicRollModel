@@ -18,6 +18,7 @@ class LiteratureTests(unittest.TestCase):
     def test_source_fixed_inputs_and_speed_interpretations(self):
         r=simulate_schedule(self.case,self.gauges,**self.args)
         alt=simulate_schedule(self.case,self.gauges,**{**self.args,'speed_interpretation':'entry_strip'})
+        exit_case=simulate_schedule(self.case,self.gauges,**{**self.args,'speed_interpretation':'exit_strip'})
         self.assertTrue(r['numerical_converged'])
         for p,a,src in zip(r['passes'],alt['passes'],self.case['passes']):
             self.assertAlmostEqual(p['roll_surface_speed_m_s'],src['rolling_speed_m_s'])
@@ -29,6 +30,8 @@ class LiteratureTests(unittest.TestCase):
         self.assertFalse(r['passes'][0]['unassisted_bite_feasible'])
         # Numerical solution of an already established pass is allowed, but not threading certification.
         self.assertIn('UNASSISTED_BITE_SCREEN_FAILED_ESTABLISHED_DIAGNOSTIC_ONLY',r['passes'][0]['flags'])
+        for p,src in zip(exit_case['passes'],self.case['passes']):
+            self.assertAlmostEqual(p['exit_speed_m_s'],src['rolling_speed_m_s'])
     def test_constrained_search_recheck(self):
         result=optimise_gauges(self.case,assumptions=self.args,grid_sizes=(5,),cells=32)
         chosen=result['selected']

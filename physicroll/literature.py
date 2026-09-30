@@ -151,17 +151,17 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
         # prescribed speed explicitly and scale the homogeneous work/flow terms.
         reported_speed = p['rolling_speed_m_s']
         if speed_interpretation == 'roll_surface':
-            entry_speed = reported_speed/result['roll_surface_speed_m_s']
+            speed_scale = reported_speed/result['roll_surface_speed_m_s']
         elif speed_interpretation == 'entry_strip':
-            entry_speed = reported_speed
+            speed_scale = reported_speed/result['entry_speed_m_s']
         else:
-            entry_speed = reported_speed*h1/h0
+            speed_scale = reported_speed/result['exit_speed_m_s']
         for field in ('roll_surface_speed_m_s','entry_speed_m_s','exit_speed_m_s',
                       'volume_flow_m3_s','mass_flow_kg_s','mass_flow_residual_kg_s',
                       'roll_mechanical_power_both_rolls_w','plastic_work_power_w',
                       'solid_slip_dissipation_both_interfaces_w','net_tension_power_w',
                       'traction_power_to_strip_w','mechanical_work_residual_w'):
-            result[field] *= entry_speed
+            result[field] *= speed_scale  # dimensionless ratio of two speeds
         result.update(pass_id=j+1,entry_thickness_m=h0,exit_thickness_m=h1,
             reduction_fraction=1-h1/h0,mean_uniaxial_flow_stress_pa=mean,
             assumed_entry_uniaxial_strength_pa=strength_in,assumed_exit_uniaxial_strength_pa=strength_out,
