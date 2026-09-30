@@ -80,7 +80,9 @@ The parent independently rebuilt and rendered the first pushed commit `fee0d29` 
 separate cloud computer: 19 unit tests, the saved/reopened Blender scene, geometry and USDA
 fallback passed. That run found the committed sensor manifest lacked the
 `observation_shape` field now emitted by the source. This handoff regenerates the manifest
-and checksum; acceptance of the corrected commit remains a separate gate. The parent could
+and checksum. The parent later accepted corrected commit `3d349418`: 19/19 unit
+tests, exact transferred text blob hashes, regenerated sensor manifest/checksums,
+CPU Blender scene rebuild/render/reopen and 78-ID geometry check passed. The parent could
 not byte-verify the committed binary assets through its connector, although independent
 regeneration worked. This document does not claim that binary checksum verification passed
 on the parent computer. Library round-trip and extracted-archive smoke results are supplied in the handoff.
@@ -96,4 +98,25 @@ Blender, or regenerate the scene to update its named sensor markers. The deliver
 first archive remains available separately; this handoff is a versioned revision
 of the same Library item. Verification of this revision is recorded in
 `artifacts/build_environment.json` and bundled check logs. Parent-cloud acceptance
-remains pending a user-approved file attachment because Library scope differs.
+was completed against the corrected remote commit. The v0.3 candidate is a
+separate unpushed branch; its independent software and numerical checks follow
+below, and it has no physical aluminium validation.
+
+## v0.3 candidate runs
+
+```bash
+python scripts/build_v03.py
+python scripts/run_v03_study.py
+python scripts/smoke.py
+python -m unittest discover -s tests -v
+```
+
+The first command writes an optional result with material history, rigid-roll
+slab force/torque, two-capacity heat budget, fluid closure status and supplied
+profile. The second runs **separate synthetic sensitivities** at effective
+friction 0.08/0.10/0.12, plastic heat fraction 0/0.5/1 and two successive
+history increments. Results are retained in `artifacts/v03_foundations.result.json`
+and `artifacts/v03_sensitivity.json`. These examples do not establish parameter
+uncertainty or a calibrated prediction interval; real data and parameter fits
+remain absent. See `v03-foundations.md` for the equations and distinct validity
+gates.

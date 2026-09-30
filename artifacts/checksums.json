@@ -7,5 +7,9 @@
   "artifacts/baseline.result.json": "3253a37c973a5aa3fd9b977659633d558ece835e81505afaf891d43dedc0bf5a",
   "artifacts/equipment.result.json": "a4446e77c61b675c219ce2f6509b68362668a10469f3a0118de1ea41a110e5d7",
   "artifacts/sensor_manifest.json": "9e7cd911a9e06a590c2c64d7b1a57e70692a38c3bc0dc4926aea918ca1a2e9f5",
-  "artifacts/equipment_manifest.json": "a2a8a347b85a2de919d539c53321686674ff1d0a4998049dd0778ebb0cf618ae"
+  "artifacts/equipment_manifest.json": "a2a8a347b85a2de919d539c53321686674ff1d0a4998049dd0778ebb0cf618ae",
+  "artifacts/v03_foundations.result.json": "93639083d3d0da7f6abf8c6122ca0ac17915fb90dea9f6484954c5a06ef5764c",
+  "artifacts/v03_sensitivity.json": "964999fd25f059fb8c949c3785a6f7ba24a4c1bc1aaefc8cdde6458e68753e3d",
+  "artifacts/v03_build_environment.json": "757370567fc786c7cdc090db78b5bdd935ee05743358ed621267a0f810abb33a",
+  "artifacts/v03_test_results.txt": "444b62241bd2c792f76728d468d96a850680a50a7e2475c2a37b92bf3e0044ab"
 }

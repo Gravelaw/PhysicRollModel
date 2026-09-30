@@ -1,0 +1,35 @@
+test_disconnected_sensor_map (test_equipment_sensors.EquipmentAndSensorsTests.test_disconnected_sensor_map) ... ok
+test_limits_and_provenance (test_equipment_sensors.EquipmentAndSensorsTests.test_limits_and_provenance) ... ok
+test_load_path_and_gap (test_equipment_sensors.EquipmentAndSensorsTests.test_load_path_and_gap) ... ok
+test_reel_force_torque_power_and_inertia (test_equipment_sensors.EquipmentAndSensorsTests.test_reel_force_torque_power_and_inertia) ... ok
+test_baseline_regression (test_model.ProcessModelTests.test_baseline_regression) ... ok
+test_cli (test_model.ProcessModelTests.test_cli) ... ok
+test_exact_bite_boundary (test_model.ProcessModelTests.test_exact_bite_boundary) ... ok
+test_invalid_types_and_schema (test_model.ProcessModelTests.test_invalid_types_and_schema) ... ok
+test_mass_energy_units_and_traction (test_model.ProcessModelTests.test_mass_energy_units_and_traction) ... ok
+test_rejections (test_model.ProcessModelTests.test_rejections) ... ok
+test_scaling (test_model.ProcessModelTests.test_scaling) ... ok
+test_small_perturbation (test_model.ProcessModelTests.test_small_perturbation) ... ok
+test_zero_draft_and_continuity (test_model.ProcessModelTests.test_zero_draft_and_continuity) ... ok
+test_double_acting_thrust (test_observations.ObservationTests.test_double_acting_thrust) ... ok
+test_force_stress_and_mass_flow (test_observations.ObservationTests.test_force_stress_and_mass_flow) ... ok
+test_qualified_wrap_reaction (test_observations.ObservationTests.test_qualified_wrap_reaction) ... ok
+test_slip_and_reel_torque (test_observations.ObservationTests.test_slip_and_reel_torque) ... ok
+test_constraint_ranking (test_studies.StudyTests.test_constraint_ranking) ... ok
+test_no_feasible_and_invalid_constraints (test_studies.StudyTests.test_no_feasible_and_invalid_constraints) ... ok
+test_fluid_unknowns_and_identification (test_v03.ClosureTests.test_fluid_unknowns_and_identification) ... ok
+test_profile_fields_stay_distinct (test_v03.ClosureTests.test_profile_fields_stay_distinct) ... ok
+test_identification_and_constant_limit (test_v03.MaterialTests.test_identification_and_constant_limit) ... ok
+test_integral_and_history (test_v03.MaterialTests.test_integral_and_history) ... ok
+test_constant_gap_analytic_ode_reference (test_v03.SlabTests.test_constant_gap_analytic_ode_reference) ... ok
+test_no_neutral_is_flagged (test_v03.SlabTests.test_no_neutral_is_flagged) ... ok
+test_refinement_and_signs (test_v03.SlabTests.test_refinement_and_signs) ... ok
+test_tension_boundary_sensitivity (test_v03.SlabTests.test_tension_boundary_sensitivity) ... ok
+test_energy_contact_and_slip (test_v03.ThermalTests.test_energy_contact_and_slip) ... ok
+test_passive_cooling_refinement (test_v03.ThermalTests.test_passive_cooling_refinement) ... ok
+test_rejections (test_v03.ThermalTests.test_rejections) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 0.052s
+
+OK

@@ -1,0 +1,67 @@
+{
+  "status": "SYNTHETIC_SENSITIVITY_ONLY",
+  "warning": "Separate parameter perturbations are not a coupled calibrated mill or optimisation.",
+  "friction_cases": [
+    {
+      "effective_friction_coefficient": 0.08,
+      "separating_force_n": 1739488.1125914126,
+      "torque_per_work_roll_nm": 9208.334637593538,
+      "neutral_position_from_entry_m": 0.007098612637604799,
+      "forward_slip_fraction": 0.04437011240721045
+    },
+    {
+      "effective_friction_coefficient": 0.1,
+      "separating_force_n": 1881164.9527629423,
+      "torque_per_work_roll_nm": 9958.721658112527,
+      "neutral_position_from_entry_m": 0.006812526547387535,
+      "forward_slip_fraction": 0.050812889769417335
+    },
+    {
+      "effective_friction_coefficient": 0.12,
+      "separating_force_n": 2034725.5980310964,
+      "torque_per_work_roll_nm": 10773.785340382105,
+      "neutral_position_from_entry_m": 0.0066265644903869304,
+      "forward_slip_fraction": 0.055235026017082633
+    }
+  ],
+  "plastic_heat_fraction_cases": [
+    {
+      "supplied_plastic_heat_fraction": 0,
+      "strip_temperature_k": 300.0488888888889,
+      "roll_temperature_k": 295.0004565217391,
+      "energy_residual_j": -1.3578755897469819e-09
+    },
+    {
+      "supplied_plastic_heat_fraction": 0.5,
+      "strip_temperature_k": 300.32666666666665,
+      "roll_temperature_k": 295.0004565217391,
+      "energy_residual_j": -1.3692442735191435e-09
+    },
+    {
+      "supplied_plastic_heat_fraction": 1,
+      "strip_temperature_k": 300.6044444444444,
+      "roll_temperature_k": 295.0004565217391,
+      "energy_residual_j": -1.380612957291305e-09
+    }
+  ],
+  "history_cases": [
+    {
+      "pass": 1,
+      "strain_start": 0.1,
+      "strain_end": 0.43218664394213024,
+      "entry_thickness_m": 0.002,
+      "exit_thickness_m": 0.0015,
+      "mass_flow_kg_s": 10.8,
+      "mean_flow_stress_pa": 166206331.92279223
+    },
+    {
+      "pass": 2,
+      "strain_start": 0.43218664394213024,
+      "strain_end": 0.7643732878842604,
+      "entry_thickness_m": 0.0015,
+      "exit_thickness_m": 0.0011250000000000001,
+      "mass_flow_kg_s": 10.8,
+      "mean_flow_stress_pa": 185482412.52788603
+    }
+  ]
+}

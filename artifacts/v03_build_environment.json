@@ -1,0 +1,8 @@
+{
+  "status": "LOCAL_CANDIDATE_NOT_PHYSICALLY_VALIDATED",
+  "python": "3.12.14",
+  "blender": "Blender 4.3.2",
+  "runtime_dependencies": "Python standard library only",
+  "scene_note": "v0.2.1 geometry unchanged; existing blend reopened and 78-ID check passed",
+  "native_blender_usd_available": false
+}

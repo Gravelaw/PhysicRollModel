@@ -1,5 +1,10 @@
 # Research to implementation traceability
 
+The optional research-informed v0.3 modules, their primary-source and OEM links,
+equations, test names and still-unmet physical validation gates are mapped in
+[v0.3 foundations](v03-foundations.md#traceability-and-verification-gates).
+The accepted v0.2.1 evidence below remains unchanged.
+
 This table separates **implemented calculations** from scientific work still needed.
 Tests establish algebra, input rejection and artifact structure; they do not establish
 accuracy for an aluminium plant. Primary source details are in `research.md` and

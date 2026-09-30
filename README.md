@@ -114,3 +114,24 @@ identification; geometry and passing unit tests do not validate rolling accuracy
 Apache-2.0; original `LICENSE` retained unchanged. The development branch
 `prototype/blender-cold-mill` is pushed to the private repository. No pull request, merge
 or deployment is performed.
+
+## v0.3 computational foundations candidate
+
+The separate local branch `development/thermomechanics-v0.3` adds opt-in,
+standard-library-only material-history, rigid-roll slab, thermal-budget,
+lubricant-observation and supplied-profile modules. It does **not** modify
+the accepted v0.2.1 solver or its Blender scene. Every sample value remains
+synthetic. Equations, primary paper and OEM links, units, tests and missing
+validation are detailed in [v0.3 foundations](docs/v03-foundations.md).
+
+```bash
+python scripts/build_v03.py
+python scripts/smoke.py
+python -m unittest discover -s tests -v
+python scripts/package.py --output /tmp/PhysicRollModel-prototype-v0.3-candidate.zip
+```
+
+The new `artifacts/v03_foundations.result.json` carries the optional outputs
+without changing legacy process results. The original v0.2.1 branch and its
+archive remain the reproducible accepted baseline. This v0.3 candidate has
+not been pushed, merged or validated against aluminium plant measurements.

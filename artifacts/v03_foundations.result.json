@@ -1,0 +1,136 @@
+{
+  "status": "SYNTHETIC_FOUNDATIONS_UNCALIBRATED",
+  "warning": "ALL PARAMETERS SYNTHETIC; illustrative exercise, not aluminium calibration or plant setpoints",
+  "material": {
+    "status": "SYNTHETIC_UNCALIBRATED",
+    "state_in": {
+      "alloy": "Al-demo-not-a-qualified-grade",
+      "temper": "demo-prior-cold-work",
+      "accumulated_equivalent_plastic_strain": 0.1,
+      "history": [
+        "synthetic-prior-processing"
+      ],
+      "temperature_k": 293.15
+    },
+    "state_out": {
+      "alloy": "Al-demo-not-a-qualified-grade",
+      "temper": "demo-prior-cold-work",
+      "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+      "history": [
+        "synthetic-prior-processing",
+        "synthetic_aluminium_baseline"
+      ],
+      "temperature_k": 293.15
+    },
+    "equivalent_plastic_strain_increment": 0.3321866439421302,
+    "mean_flow_stress_pa": 166206331.92279223,
+    "hardening_provenance": "SYNTHETIC_DEMONSTRATION_NOT_A_FIT",
+    "baseline_mechanics": {
+      "model_version": "0.1.0",
+      "scenario": {
+        "name": "synthetic_aluminium_baseline",
+        "synthetic": true,
+        "entry_thickness_m": 0.002,
+        "exit_thickness_m": 0.0015,
+        "width_m": 1.0,
+        "entry_speed_m_s": 2.0,
+        "work_roll_radius_m": 0.25,
+        "density_kg_m3": 2700.0,
+        "mean_flow_stress_pa": 166206331.92279223,
+        "friction_coefficient": 0.08,
+        "entry_tension_pa": 10000000.0,
+        "exit_tension_pa": 15000000.0,
+        "drive_efficiency": 0.9
+      },
+      "status": "SYNTHETIC_UNCALIBRATED",
+      "reduction_fraction": 0.25,
+      "true_thickness_strain": 0.28768207245178085,
+      "contact_length_m": 0.011177544453054078,
+      "bite_angle_rad": 0.04472508716873343,
+      "volume_flow_m3_s": 0.004,
+      "mass_flow_kg_s": 10.8,
+      "exit_speed_m_s": 2.6666666666666665,
+      "roll_surface_speed_m_s": 2.333333333333333,
+      "roll_angular_speed_rad_s": 9.333333333333332,
+      "assumed_forward_slip_fraction": 0.14285714285714302,
+      "mean_contact_pressure_pa": 277483821.99880487,
+      "separating_force_n": 3101587.7553949864,
+      "entry_tension_force_n": 20000.0,
+      "exit_tension_force_n": 22500.0,
+      "ideal_plastic_power_w": 220846.09441345636,
+      "extra_dissipation_power_w": 112846.49314696166,
+      "net_tension_power_w": 20000.0,
+      "roll_mechanical_power_w": 313692.587560418,
+      "roll_drive_electrical_power_w": 348547.31951157557,
+      "torque_per_work_roll_nm": 16804.960047879536,
+      "traction_torque_bound_per_roll_nm": 62031.75510789973,
+      "energy_residual_w": -7.275957614183426e-11,
+      "warnings": [
+        "Synthetic inputs; no alloy or plant calibration.",
+        "Pressure, dissipation and roll-speed closures are illustrative.",
+        "Zero draft is unloaded transport, not a temper/skin-pass model."
+      ]
+    }
+  },
+  "slab_optional": {
+    "status": "SYNTHETIC_RIGID_ROLL_SLAB",
+    "model": "constant_yield_rigid_circle",
+    "cells": 256,
+    "neutral_position_from_entry_m": 0.007098611411189542,
+    "contact_length_m": 0.011177544453054078,
+    "neutral_thickness_m": 0.0015665552086358545,
+    "roll_surface_speed_m_s": 2.5533731450697945,
+    "forward_slip_fraction": 0.04437013909056953,
+    "separating_force_n": 1739490.8430843547,
+    "torque_per_work_roll_nm": 9208.332944988791,
+    "entry_pressure_pa": 128564064.6055102,
+    "exit_pressure_pa": 123564064.6055102,
+    "pressure_at_neutral_pa": 196699104.51632583,
+    "pressure_branch_mismatch_pa": 0.0,
+    "min_pressure_pa": 123564064.6055102,
+    "limitations": [
+      "Rigid circular rolls and constant yield; no calibrated aluminium force prediction.",
+      "No flattening, elastic recovery, lubrication film or transient dynamics."
+    ]
+  },
+  "thermal": {
+    "status": "SYNTHETIC_UNCALIBRATED",
+    "strip_temperature_k": 300.4377777777778,
+    "roll_temperature_k": 295.0004565217391,
+    "plastic_heat_volumetric_w_m3": 116666666.66666667,
+    "solid_slip_heat_flux_w_m2": 100000.0,
+    "solid_slip_heat_power_w": 20000.0,
+    "contact_heat_to_strip_w": -1000.0,
+    "contact_heat_to_roll_w": 1000.0,
+    "strip_cooling_w": 200.0,
+    "roll_cooling_w": 500.0,
+    "plastic_work_not_immediately_heat_w": 30000.0,
+    "energy_residual_j": -1.3124008546583354e-09
+  },
+  "lubrication": {
+    "effective_friction_coefficient": 0.1,
+    "closure_status": "SYNTHETIC_UNCALIBRATED",
+    "fluid_identity": "demo-neat-oil-unqualified",
+    "fluid_type": "neat_oil",
+    "unobserved_inputs": [
+      "flow_m3_s",
+      "dynamic_viscosity_pa_s",
+      "roll_rms_roughness_m",
+      "strip_rms_roughness_m"
+    ],
+    "film_dissipation_resolved": false,
+    "cooling_boundary_calibrated": false
+  },
+  "profile": {
+    "status": "SUPPLIED_FIELDS_ONLY",
+    "temperature_k": 300.0,
+    "applied_tension_pa": 10000000.0,
+    "center_crown_m": 2.0000000000000052e-05,
+    "wedge_m": 0.0,
+    "thickness_range_m": 2.0000000000000052e-05,
+    "membrane_mismatch_rms": 7.483314773547883e-05,
+    "through_thickness_curvature_range_inv_m": 0.0,
+    "latent_flatness_prediction": null,
+    "unloaded_wave_amplitude_m": null
+  }
+}

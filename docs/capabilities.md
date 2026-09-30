@@ -1,4 +1,10 @@
-# Physics capability boundary (prototype 0.2)
+# Physics capability boundary (accepted 0.2 and local 0.3 candidate)
+
+The local v0.3 candidate adds **separate** synthetic material-history,
+constant-yield slab, lumped thermal-budget, fluid-registry and supplied-profile
+functions. See [v0.3 foundations](v03-foundations.md) for the exact equations,
+paper/OEM provenance and direct tests. None replaces the accepted `solve()`
+or establishes coupled aluminium validation.
 
 The current code is a **synthetic, steady, isothermal demonstrator**. This table is the
 review boundary for future literature and plant-data work. “Implemented” means the stated
@@ -16,6 +22,16 @@ validated against an aluminium mill. See `model.md` for every current equation a
 | Metallurgy and grain/property effects | One supplied constant mean flow-stress input; density is constant. | Alloy/temper-specific work hardening, grain size/texture, recovery, recrystallization, residual stress and property evolution are not predicted. No microstructure state or strength/hardness output exists. |
 | Fracture and strip breaks | Unsupported parameter regimes are rejected, but no failure criterion is computed. | Ductile damage, edge cracking, local defects, fatigue/strip-break mechanisms and fracture calibration require separate experiments and field resolution. A passed bite or force screen does not certify fracture safety. |
 | Flatness/profile | A disconnected shapemeter type is documented. | Roll-stack bending, widthwise gauge and tension fields, buckling, crown and flatness remain separate mechanics/measurement problems. A flatness-roll stress profile is not geometric crown. |
+
+In v0.3 specifically, `profile.py` computes crown **from a supplied thickness
+profile** while keeping widthwise membrane mismatch separate from through-
+thickness curvature. It predicts neither field. `slab.py` reports optional
+pressure-integrated force and signed-traction torque for rigid circular rolls
+and constant yield; `materials.py` supplies a separately history-averaged
+synthetic law to the original baseline. `thermal.py` conserves heat across two
+lumped capacities with explicitly supplied coefficients, but no thermal crown,
+metallurgy or coolant-to-friction law. `lubrication.py` records fluid state with
+missing observations rather than filling them with invented values.
 
 The next literature round should select sources and measured test cases for each missing
 coupling, resolve their unit and boundary conventions, then add one independently testable
