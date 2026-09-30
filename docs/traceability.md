@@ -29,3 +29,13 @@ accuracy for an aluminium plant. Primary source details are in `research.md` and
 | Flatness-roll stress profile differs from crown/buckling | `physicroll/sensors.py`, `docs/research.md`, `docs/sensors.md` | `test_disconnected_sensor_map` confirms no prediction | Instrument category documented; mechanics future |
 | Aluminium IR emissivity and lubricant-specific closure | `physicroll/sensors.py`, `docs/sensors.md` | Registry confirms null observed/model temperature | Documented interface; no thermal/coolant prediction |
 | Aluminium force/torque/friction calibration, FEM and hybrid residual models | `docs/research.md`, `physicroll/studies.py` | Candidate constraint tests; no scientific accuracy test | Calibration/solver/ML future pending real aluminium data |
+
+## Optional contact/material increment after published 09d0d5b2
+
+The current [equation/provenance table](contact-increment.md#source-to-equation-to-code-to-test-map)
+and [findings log](mechanics-change-log.md) map spatial hardening, circular roll
+flattening, physical shaft kinematics, numerical gates and hypotheses to code/tests.
+[Report-sync packet](report-sync-contact-increment.md) carries the actual per-pass
+residuals and missing experimental-validation evidence. The historical v0.2.1
+rows above describe that accepted version, not a claim that newer optional
+modules are absent.

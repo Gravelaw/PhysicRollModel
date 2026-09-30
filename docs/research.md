@@ -45,7 +45,7 @@ inspection and reopening the actual export are the evidence for this build.
 | Li, Matsumoto & Utsunomiya, [Experimental Study of Roll Flattening in Cold Rolling Process](https://www.jstage.jst.go.jp/article/isijinternational/58/4/58_ISIJINT-2017-623/_html/-char/en), 2018 | Full article inspected: stainless-steel roll-flattening experiment, not aluminium validation. Explains limits of circular Hitchcock geometry and motivates excluding foil/noncircular contact. |
 | Mišović et al., [Deformations and velocities during cold rolling of aluminium alloys](https://mit.imt.si/izvodi/mit161/misovic.pdf), 2016 | Parent research identifies AW2024/AW5083 hardening/kinematics. Candidate alloy-specific validation source; its coefficients are not adopted for an unspecified alloy. |
 | Abdelkhalek et al., [Coupled approach for flatness prediction in cold rolling of thin strip](https://doi.org/10.1016/j.ijmecsci.2011.04.001), 2011 | Coupled roll-stack/strip/buckling research path. Title/metadata verified; publisher/HAL full text blocked here. A separating-force calculation does not establish flatness. |
-| Erfanian et al., [Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics](https://arxiv.org/html/2408.01347v1), 2024 | Full HTML inspected: rigid perfectly plastic strip and rigid-roll starting assumptions. A research extension beyond slab theory, not validation of this heuristic model or of an elastic-gap/hardening implementation. |
+| Erfanian et al., [Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics](https://arxiv.org/html/2408.01347v1), 2024 preprint v1; [2025 journal lineage](https://doi.org/10.1016/j.euromechsol.2025.105712) | Full HTML inspected: rigid perfectly plastic strip and rigid-roll starting assumptions. A research extension beyond slab theory, not validation of this heuristic model or of an elastic-gap/hardening implementation. |
 | [Careful finite element simulations of cold rolling with accurate through-thickness resolution and prediction of residual stress](https://arxiv.org/abs/2408.03242), 2024 | Numerical benchmark lead. Parent review identifies DC04 steel, isothermal 2D rigid rolls; not an aluminium benchmark. Reported through-thickness mesh counts are case-specific, and load convergence is not residual-stress convergence. |
 | [Metals 15(1), 11](https://www.mdpi.com/2075-4701/15/1/11), 2025 | Parent review identifies direct Al-1050 flow-pattern experiments; raw data are on request, not a ready public calibration dataset. Local fetch blocked. |
 | [ELTE engineering study](https://ojs.elte.hu/eis/article/view/4443) | Additional aluminium experimental research lead from parent; not used to assign coefficients here. |
@@ -140,3 +140,16 @@ uncertainties and time alignments remain unknown. A pressure-transducer thrust, 
 load-cell reaction, tension load-cell reaction, and roll-bite force may constrain the
 same load path; they are not terms to sum indiscriminately. Real installation diagrams
 and calibration/quality records are still required before comparing these channels.
+
+## Reviewed contact/material increment
+
+The optional implementation after published `09d0d5b2` is traced in
+[contact-increment.md](contact-increment.md) and the machine-readable
+[source records](research/contact-sources.json). The asymptotic paper now has
+verified 2025 journal lineage, DOI
+[10.1016/j.euromechsol.2025.105712](https://doi.org/10.1016/j.euromechsol.2025.105712);
+our equation-number citations explicitly remain the 2024 preprint v1. The
+[report-sync packet](report-sync-contact-increment.md) links updated first-principles
+equations, optional circular flattening, numerical tests and actual before/after
+force/slip comparisons. Mixed residual changes are retained rather than used to
+claim aluminium validation or silently fit unidentified per-pass parameters.

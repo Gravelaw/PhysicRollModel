@@ -24,5 +24,14 @@
   "artifacts/aa5052/source_context.json": "053f38001a87a51d1d17f11fadec8c18f675af3f71bdf71aa137f99b43f5c503",
   "artifacts/aa5052/summary.json": "78128b5862379a1680019bfd4c8e90f80813d268cbaad47b0a92004d83bd8ccf",
   "artifacts/aa5052/unit_audit.json": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b",
-  "artifacts/aa5052/values_long.csv": "2e8957ac062fdd471d5447016eb94c7446612cb5ba1fbec4ef44deae3ff4e07b"
+  "artifacts/aa5052/values_long.csv": "2e8957ac062fdd471d5447016eb94c7446612cb5ba1fbec4ef44deae3ff4e07b",
+  "artifacts/contact_increment/before_after.csv": "d16dc8ce8b3fc04a0927da6eb0ed3d7d9aa633963ae8036f73288fe26aa789b0",
+  "artifacts/contact_increment/checksums.json": "740fbad953c1af356e0a5cc2904c5e1b03907024f31879da909b63c59ce644a1",
+  "artifacts/contact_increment/hypotheses.json": "448b28873a9746fd0bec3ac19dab1c477681db85d1f3308838ebb1ee26900c1d",
+  "artifacts/contact_increment/reproducibility.json": "15e7b5f6bf850feff827edf3c7a1bd1bbf229687d1bc85751aefadbbca100617",
+  "artifacts/contact_increment/structural_comparisons.json": "f169d2fc7713d80757a0ea126e8f1c6023c9375e8d38492770fb8fdfe993a60e",
+  "artifacts/contact_increment/summary.json": "cce19fd08a00614b88e0f438ed09da6e2d20cea31b2cb0db0ee2a490509b23b4",
+  "artifacts/contact_increment/tests.txt": "255b122a6446f61443d3a41f8a63dab16e9869c10055e4ec8962047542fefe7b",
+  "artifacts/contact_increment/unit_audit.json": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b",
+  "artifacts/contact_increment/verification.json": "4ed455d3f173a7c3796bc20c1a9cae087b6ec82634efbb72bfb9b95b731b1c65"
 }

@@ -8,7 +8,8 @@ import math
 from pathlib import Path
 from dataclasses import replace
 from .units import audited_value, to_si
-from .materials import PowerHardeningLaw
+from .materials import PowerHardeningLaw, MaterialState, BiteHardening
+from .contact import solve_circular_contact
 from .model import Scenario
 from .slab import solve_slab
 
@@ -103,13 +104,16 @@ def load_case(directory):
 
 def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_convention,
                       stress_convention, speed_interpretation, friction_factor=1.0,
-                      strength_factor=1.0, radius_factor=1.0, cells=256, verify_refinement=True):
-    """Conditional what-if: mean hardening stress per pass, rigid slab contact.
+                      strength_factor=1.0, radius_factor=1.0, cells=256, verify_refinement=True,
+                      hardening_model="pass_mean", elasticity=None):
+    """Conditional what-if: default mean strength/rigid; explicit optional extensions.
 
     All unresolved conventions must be selected by name. No fit to measurements.
     Speeds vary between sequential single-stand passes: within-pass mass continuity
     is enforced, but instantaneous throughput is not forced equal between passes.
     """
+    if hardening_model not in ('pass_mean','spatial'):
+        raise ValueError('hardening_model must be pass_mean or spatial')
     if speed_interpretation not in ('roll_surface','entry_strip','exit_strip'):
         raise ValueError('select an explicit speed interpretation; source convention unresolved')
     if strain_convention not in ('log_thickness','equivalent') or stress_convention not in ('uniaxial','plane_strain_difference'):
@@ -135,6 +139,7 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
     law = PowerHardeningLaw('AA5052','UNREPORTED',0,coefficient,case['n'],
                             'S1 coefficients with explicit assumed stress/strain mapping; no calibration')
     accumulated = c*prior_log_strain
+    state=MaterialState('AA5052','UNREPORTED',accumulated,('Assumed initial history; not reported by S1',),293.15)
     outputs=[]
     for j,p in enumerate(case['passes']):
         h0,h1 = gauges[j:j+2]
@@ -146,7 +151,12 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
         scenario = Scenario(f'literature_assumption_bridge_pass_{j+1}',True,h0,h1,p['width_m'],
             1.0,p['work_roll_radius_m']*radius_factor,case['density_kg_m3'],mean,
             p['friction_coefficient']*friction_factor,p['back_tension_pa'],p['front_tension_pa'],1.0)
-        result = solve_slab(scenario,cells,bite_mode='established',verify_refinement=verify_refinement)
+        material = BiteHardening(state,law,(0.,3.),(273.15,373.15)) if hardening_model=='spatial' else None
+        if elasticity is None:
+            result = solve_slab(scenario,cells,bite_mode='established',verify_refinement=verify_refinement,material=material)
+        else:
+            result = solve_circular_contact(scenario,elasticity,cells,bite_mode='established',
+                                            verify_refinement=verify_refinement,material=material)
         # Pressure/neutral point are rate-independent in this model. Map the
         # prescribed speed explicitly and scale the homogeneous work/flow terms.
         reported_speed = p['rolling_speed_m_s']
@@ -156,7 +166,7 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
             speed_scale = reported_speed/result['entry_speed_m_s']
         else:
             speed_scale = reported_speed/result['exit_speed_m_s']
-        for field in ('roll_surface_speed_m_s','entry_speed_m_s','exit_speed_m_s',
+        for field in ('roll_surface_speed_m_s','roll_angular_speed_rad_s','entry_speed_m_s','exit_speed_m_s',
                       'volume_flow_m3_s','mass_flow_kg_s','mass_flow_residual_kg_s',
                       'roll_mechanical_power_both_rolls_w','plastic_work_power_w',
                       'solid_slip_dissipation_both_interfaces_w','net_tension_power_w',
@@ -170,7 +180,9 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
             exit_tension_force_n=p['front_tension_pa']*p['width_m']*h1,
             speed_interpretation=speed_interpretation)
         result['flags'] += ['CALIBRATION_DOMAIN_UNKNOWN','PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED',
-                            'PASS_MEAN_HARDENING_RIGID_CONTACT_APPROXIMATION','MILL_RATINGS_UNKNOWN']
+                            'MILL_RATINGS_UNKNOWN']
+        if hardening_model=='pass_mean' and elasticity is None:
+            result['flags'].append('PASS_MEAN_HARDENING_RIGID_CONTACT_APPROXIMATION')
         if not (math.isclose(h0,p['entry_thickness_m'],rel_tol=1e-12) and math.isclose(h1,p['exit_thickness_m'],rel_tol=1e-12)):
             result['flags'].append('UNOBSERVED_GAUGE_COMBINATION')
         if friction_factor != 1:
@@ -182,12 +194,16 @@ def simulate_schedule(case, intermediate_gauges_m, *, prior_log_strain, strain_c
             result['flags'].append('OUTSIDE_ASSUMED_REDUCTION_TRUST_REGION')
         outputs.append(result)
         accumulated += increment
+        state=replace(state,accumulated_equivalent_plastic_strain=accumulated,history=state.history+(scenario.name,))
     return {'status':'CONDITIONAL_LITERATURE_COMPARISON_NOT_VALIDATED',
             'intermediate_gauges_m':list(intermediate_gauges_m),
             'assumptions':{'prior_log_strain':prior_log_strain,'strain_convention':strain_convention,
                            'stress_convention':stress_convention,'speed_interpretation':speed_interpretation,
                            'friction_factor':friction_factor,'strength_factor':strength_factor,
-                           'radius_factor':radius_factor,'incoming_temper':None,'outgoing_temper':None},
+                           'radius_factor':radius_factor,'hardening_model':hardening_model,
+                           'contact_model':'rigid' if elasticity is None else 'circular_hitchcock',
+                           'material_temperature_k_assumed':293.15 if hardening_model=='spatial' else None,
+                           'incoming_temper':None,'outgoing_temper':None},
             'passes':outputs,'peak_force_n':max(p['separating_force_n'] for p in outputs),
             'numerical_converged':all(p['numerical_converged'] for p in outputs),
             'physical_calibration_domain':'UNKNOWN',

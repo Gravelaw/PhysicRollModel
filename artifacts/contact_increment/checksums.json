@@ -1,0 +1,8 @@
+{
+  "summary.json": "cce19fd08a00614b88e0f438ed09da6e2d20cea31b2cb0db0ee2a490509b23b4",
+  "structural_comparisons.json": "f169d2fc7713d80757a0ea126e8f1c6023c9375e8d38492770fb8fdfe993a60e",
+  "hypotheses.json": "448b28873a9746fd0bec3ac19dab1c477681db85d1f3308838ebb1ee26900c1d",
+  "unit_audit.json": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b",
+  "before_after.csv": "d16dc8ce8b3fc04a0927da6eb0ed3d7d9aa633963ae8036f73288fe26aa789b0",
+  "reproducibility.json": "15e7b5f6bf850feff827edf3c7a1bd1bbf229687d1bc85751aefadbbca100617"
+}

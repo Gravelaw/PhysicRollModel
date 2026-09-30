@@ -3,7 +3,10 @@
 This audit reviews executable code, not aluminium predictive accuracy. The earlier
 candidate remains at `ec3e79f60c234f374aa924f32d03faf2a7074fc6` on
 `review/v03-before-mechanics-audit`; v0.2.1 remains at `3d349418`. Corrections and
-literature work are on `development/aa5052-mechanics-review`, without a push.
+literature work were published at `09d0d5b2` on `development/aa5052-mechanics-review`.
+The subsequent optional local contact/material increment is on
+`development/contact-hardening-increment`, pending review; see
+[its equations and evidence](contact-increment.md).
 
 ## Actual findings and corrections
 
@@ -44,8 +47,13 @@ tau=+mu*q before neutral, tau=-mu*q after neutral
 ```
 
 It corresponds to the full-thickness form of the leading-order pressure relation
-in Erfanian et al., *Through-Thickness Modelling of Metal Rolling using
-Multiple-Scale Asymptotics* (2024), [equations 21–28](https://arxiv.org/html/2408.01347v1).
+in Erfanian et al., *Through-thickness modelling of metal rolling using
+multiple-scales asymptotics*, European Journal of Mechanics A/Solids 113 (2025),
+105712, [journal DOI](https://doi.org/10.1016/j.euromechsol.2025.105712).
+The equation-number references here are specifically [equations 21–28 of the
+2024 preprint v1](https://arxiv.org/html/2408.01347v1); journal numbering has not
+been substituted. The journal lineage is confirmed by [arXiv metadata](https://arxiv.org/abs/2408.01347)
+and the author university record linked in `contact-increment.md`.
 Their higher-order through-thickness solution is not implemented. That paper's
 rigid perfectly plastic assumptions do not validate hardening or elastic-gap models.
 
@@ -75,9 +83,11 @@ This is a small-angle **projected** contact model. Circular sagitta is evaluated
 stably, but finite-angle tangent velocity, arc-length torque corrections, vertical
 friction contributions and the coupled shear/normal yield field are omitted.
 The shear-yield screen is necessary, not proof of exact local yield admissibility.
-No sticking zone, flattening, springback or elastic recovery is solved. If `Kps`
-were varied along the bite, the ODE would also need the `h*dKps/dx` term; the
-current model deliberately uses one exact interval-mean flow stress per pass.
+The default retains constant strength and rigid contact. The optional increment
+now retains `h*dKps/dx` by integrating `z=q-Kps`, and couples a circular
+Hitchcock contact radius to force; see [M1–M7](contact-increment.md). No sticking
+zone, noncircular contact, springback or strip elastic recovery is solved.
+The original default still uses one exact interval-mean flow stress per pass.
 Foil and other original geometric exclusions remain.
 
 Numerical acceptance requires coarse/fine relative force change ≤1e-4, torque
@@ -136,7 +146,7 @@ string guessing is used. Display conversions occur only at report boundaries.
 | Table radius vs Eq6 diameter wording | Preserve Table1's 210.81 mm radius interpretation; separately test half-radius prose interpretation. Contradiction remains unresolved. |
 | Speed m/s location | Resolved mapping remains null. CLI requires an explicit what-if interpretation; roll/entry/exit alternatives are run. Throughput and rpm are not claimed observed. |
 | Tension stress vs force | Source MPa is tensile stress; entry/exit forces use their own local thickness. 9.47 MPa yields 52,804.72 N entry versus 37,380.59008 N exit in pass1. |
-| Source `p` collision | Eq4 pressure [Pa] differs from Eq6 force per width [N/m]. Hitchcock's dimensionless correction uses `F/(b*E*draft)`; no Hitchcock closure is implemented. |
+| Source `p` collision | Eq4 pressure [Pa] differs from Eq6 force per width [N/m]. Hitchcock's dimensionless correction uses `F/(b*E*draft)`; the optional `contact.py` now uses this dimensionally correct circular closure; it remains uncalibrated. |
 | Source Eqs7–8 `ln(dh/h)` | Unsafe literal differential/work convention: not implemented. Our work identity is derived above. Eq8 is per-width power [W/m], not total power or heat flux. |
 | Source Eq9 | `tau*length*slip` is W/m. Multiply by width and count each physical interface once; signed traction must pair with signed relative slip. |
 | Source Eq4 shear cap branches | Printed pressure comparison and overlapping adhesive branches are ambiguous. We do not transcribe/repair them silently; unsupported shear is rejected. |
@@ -160,3 +170,15 @@ supports generic alloy density and appliance/sheet-metal application categories.
 Its temper-specific strength and bending data are **not** used to certify this
 unspecified benchmark stock. The proposed 1.72 mm cut-to-length end use is an
 analyst application choice, not the paper's stated end use.
+
+## Subsequent optional mechanics increment
+
+[Contact increment](contact-increment.md) gives the variable-strength equilibrium,
+nominal-shaft versus contact-radius distinction, circular fixed-point solution,
+local hardening state and explicit validity gates. [Report-sync packet](report-sync-contact-increment.md)
+records all new measured-force/slip comparisons, including worsened residuals.
+The fine-grid run exposed and fixed a one-ULP entry-sagitta boundary defect; the
+exact prescribed entry thickness is now returned at the boundary. The
+[append-only log](mechanics-change-log.md) ties this finding and all optional
+changes to equations, code, tests and retained runs. Numerical verification and
+experimental validation are distinct throughout.

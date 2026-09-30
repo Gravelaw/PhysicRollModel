@@ -1,44 +1,24 @@
-# Physics capability boundary (accepted 0.2 and local 0.3 candidate)
+# Physics capability boundary
 
-The reviewed candidate adds the [mechanics/unit audit](mechanics-audit.md) and
-[executed AA5052 comparison/search](aa5052-study.md). Its explicitly conditional
-slip mismatch prevents a validated-accuracy claim. Software verification and a
-small numerical search improvement do not establish plant feasibility.
+Published reviewed v0.3 is commit `09d0d5b2`; the optional local contact/material
+increment is described in [contact-increment.md](contact-increment.md), with actual
+comparison evidence in the [report-sync packet](report-sync-contact-increment.md).
+Default behavior remains backward-compatible. Tests verify implementation;
+no aluminium mill, thermal, product-quality or control validation is claimed.
 
-The local v0.3 candidate adds **separate** synthetic material-history,
-constant-yield slab, lumped thermal-budget, fluid-registry and supplied-profile
-functions. See [v0.3 foundations](v03-foundations.md) for the exact equations,
-paper/OEM provenance and direct tests. None replaces the accepted `solve()`
-or establishes coupled aluminium validation.
-
-The current code is a **synthetic, steady, isothermal demonstrator**. This table is the
-review boundary for future literature and plant-data work. “Implemented” means the stated
-algebra runs and has numerical tests; it does not mean the prediction is calibrated or
-validated against an aluminium mill. See `model.md` for every current equation and
-`traceability.md` for research-to-test links.
-
-| Topic | Present executable calculation | Missing physics and evidence before a production claim |
+| Topic | Executable calculation | Remaining boundary |
 |---|---|---|
-| Roll–strip contact/friction | A constant input `friction_coefficient` enters a documented heuristic mean-pressure and extra-loss multiplier. A conservative unassisted bite and torque-capacity check reject some cases. | Friction depends on lubricant, surface roughness, pressure, speed, temperature and local slip. There is no resolved traction/neutral-point field, stick–slip transition or oil-film model. Fit an **effective** friction parameter with force, torque and measured forward slip jointly; source lead: [Lenard & Zhang](https://doi.org/10.1016/S0924-0136(97)00183-0). |
-| Strip mass and material flow | `Q=b h v`, `m_dot=rho Q`, and local entry/exit mass-flow observations conserve a fixed-density, fixed-width incompressible strip. The scene has a true-gauge strip mesh. | Width spread, changing density, through-thickness velocity variation, elastic recovery, coil storage and time-aligned material parcels are not solved. A separate coil/transport model is needed for transient signals. |
-| Separating force, torque and reel tension | A heuristic projected-area load, energy-equivalent work-roll torque, local tension force/stress, static stand reaction and signed reel work are calculated without adding duplicate load-path forces. | A tension-aware pressure integral and signed local traction torque, calibrated material hardening, roll flattening and compliant gap closure remain future mechanics work. See `research.md`. |
-| Plastic deformation energy | Uniform plane-strain ideal work `Q K ln(h0/h1)` and a **heuristic** extra dissipation term are calculated for power bookkeeping. | There is no Taylor–Quinney heat fraction, plastic-work partition or spatial plastic-heating source term. Mechanical energy is **not** converted to a strip or roll temperature prediction. |
-| Roll/strip heating and cooling | None. A disconnected pyrometer type appears in the sensor registry with unknown values and emissivity. | Coupled strip/roll conduction, contact heat transfer, friction heat, convection/radiation, cooling jets/oil film, coolant state, roll thermal crown and time-dependent temperatures need measured boundary conditions and validation. Aluminium surface emissivity must be qualified; lubricant may be neat oil rather than emulsion. |
-| Metallurgy and grain/property effects | One supplied constant mean flow-stress input; density is constant. | Alloy/temper-specific work hardening, grain size/texture, recovery, recrystallization, residual stress and property evolution are not predicted. No microstructure state or strength/hardness output exists. |
-| Fracture and strip breaks | Unsupported parameter regimes are rejected, but no failure criterion is computed. | Ductile damage, edge cracking, local defects, fatigue/strip-break mechanisms and fracture calibration require separate experiments and field resolution. A passed bite or force screen does not certify fracture safety. |
-| Flatness/profile | A disconnected shapemeter type is documented. | Roll-stack bending, widthwise gauge and tension fields, buckling, crown and flatness remain separate mechanics/measurement problems. A flatness-roll stress profile is not geometric crown. |
+| Contact, force, torque and speed | Legacy heuristic `solve()` remains. Optional slab integrates tension-aware pressure, signed traction torque, neutral speed and mass/work diagnostics. Optional spatial hardening and coupled circular Hitchcock radius have convergence gates. | Projected small-angle, Coulomb sliding; no sticking/film or noncircular deformation, exact local shear field, strip elastic recovery or measured friction identification. Foil excluded. |
+| Roll versus stand deformation | `contact.py` solves force-dependent circular roll radius. `equipment.py` retains separate synthetic inverse stand F/K bookkeeping. | No coupled loaded/unloaded/recovered-gap solution; never add a fitted full stand compliance to roll deformation without identifying overlapping contributions. |
+| Material history | `MaterialState` carries alloy, declared temper/history, accumulated equivalent strain and supplied temperature. Optional `BiteHardening` varies assumed strength through a homogeneous plane-strain path and carries state across passes. | Synthetic or conditional coefficients, unknown calibration ranges; no rate/thermal feedback, anisotropy, microstructure kinetics, grain/texture/precipitation or certified final properties. |
+| Mass and tension | Fixed-density, fixed-width incompressible `Q=b*h*v`; local tension force/stress and reel/hydraulic load-path observations have explicit units and signs. | No spread, elastic density changes, transient material transport, evolving coil/reel dynamics or live signals. |
+| Plastic work and heat | Mechanical plastic work and solid slip dissipation are separately integrated. `thermal.py` provides an independent two-prescribed-mass energy budget with supplied heat fractions/contact/cooling coefficients and a stable explicit-step gate. | This is not an advecting rolling thermal field. No measured aluminium thermal validation, automatic motor-power-to-heat conversion, universal plastic heat fraction, roll thermal crown or coolant-to-friction law. |
+| Lubricant/coolant and sensors | Disconnected registry with fluid identity, observations/quality and unknown values; explicit alternative load-path observations. | No calibrated film, roughness/friction or HTC closure. Aluminium emissivity and fluid identity need evidence; neat oil is possible. |
+| Profile and flatness | `profile.py` diagnoses crown from supplied thickness, membrane mismatch and through-thickness curvature separately. | Fields are inputs, not predictions. No predictive roll stack/bending, latent-flatness/buckling or wave amplitude. |
+| Fracture and residual stress | Unsupported mechanics regimes reject/flag. | No 3D edge damage, residual-stress field, crack propagation, mesh-regularized fracture or certified strip-break safety. |
+| Literature comparison and optimisation | Retained conditional three-pass AA5052 fixed-data comparison and old assumed-range gauge search. New structural/sensitivity comparisons retain failures and before/after residuals. | No fit to those passes, independent validation, known mill ratings, uncertainty probabilities or expanded optimisation. Slip mismatch and semantic ambiguity remain. |
 
-In v0.3 specifically, `profile.py` computes crown **from a supplied thickness
-profile** while keeping widthwise membrane mismatch separate from through-
-thickness curvature. It predicts neither field. `slab.py` reports optional
-pressure-integrated force and signed-traction torque for rigid circular rolls
-and constant yield; `materials.py` supplies a separately history-averaged
-synthetic law to the original baseline. `thermal.py` conserves heat across two
-lumped capacities with explicitly supplied coefficients, but no thermal crown,
-metallurgy or coolant-to-friction law. `lubrication.py` records fluid state with
-missing observations rather than filling them with invented values.
-
-The next literature round should select sources and measured test cases for each missing
-coupling, resolve their unit and boundary conventions, then add one independently testable
-module at a time. There are no thermal, metallurgical, fracture or live plant signals in
-this version. The research round and any resulting implementations are subsequent work.
+See [mechanics audit](mechanics-audit.md), [traceability](traceability.md),
+[research](research.md) and [sensor references](sensors.md) for source and test paths.
+Thermal/coolant, roll-stack shape and material development remain scoped future
+modules with distinct data and conservation/validation requirements.

@@ -133,12 +133,13 @@ python scripts/package.py --output /tmp/PhysicRollModel-prototype-v0.3-candidate
 
 The new `artifacts/v03_foundations.result.json` carries the optional outputs
 without changing legacy process results. The original v0.2.1 branch and its
-archive remain the reproducible accepted baseline. This v0.3 candidate has
-not been pushed, merged or validated against aluminium plant measurements.
+archive remain the reproducible accepted baseline. The reviewed v0.3 was
+published as `09d0d5b2` on the development branch; it has not been merged or
+validated against aluminium plant measurements.
 
 ## Reviewed mechanics and AA5052 literature study
 
-The local `development/aa5052-mechanics-review` branch corrects numerical and
+The published `development/aa5052-mechanics-review` branch corrects numerical and
 unit-contract defects and runs an explicitly conditional AA5052 comparison and
 two-intermediate-gauge search. See [the specialist audit](docs/mechanics-audit.md)
 and [actual run, source citations and reproducible commands](docs/aa5052-study.md).
@@ -146,4 +147,13 @@ and [actual run, source citations and reproducible commands](docs/aa5052-study.m
 mechanical work, thermal exchange and constrained-search rechecks. The source
 force/slip mismatch and unresolved material/speed conventions are retained.
 No physical aluminium accuracy, product temper or safe schedule is certified.
-The prior candidate and v0.2.1 are preserved; this reviewed stage is unpushed.
+The prior candidate and v0.2.1 are preserved; reviewed commit `09d0d5b2` is published.
+
+## Optional contact/material review increment
+
+From reviewed `09d0d5b2`, a local optional mechanics increment adds spatial
+hardening and circular elastic roll contact without changing the default model.
+Run `python scripts/run_contact_increment.py --cells 512` for the fixed-gauge
+AA5052 comparison and explicit hypothesis sensitivity (no new optimisation).
+See [equations and source provenance](docs/contact-increment.md) and
+[actual report-sync evidence](docs/report-sync-contact-increment.md).

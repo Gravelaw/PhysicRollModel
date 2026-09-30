@@ -107,3 +107,57 @@ def pass_with_history(scenario: Scenario, state: MaterialState, law: PowerHarden
             'hardening_units':{'yield_stress':'Pa','strength_coefficient':'Pa','strain':'1','exponent':'1'},
             'calibrated_strain_range':None,'calibrated_temperature_range_k':None,
             'baseline_mechanics': solved}
+
+
+@dataclass(frozen=True)
+class BiteHardening:
+    """Optional homogeneous path through a bite, with explicit assumed envelope.
+
+    eps_eq(x)=eps_in+2/sqrt(3)*ln(h_in/h(x)). No redundant shear, recovery,
+    temperature feedback or fitted aluminium curve. Kps=2Y/sqrt(3).
+    The variable-strength equilibrium is derived in docs/contact-increment.md;
+    https://arxiv.org/html/2408.01347v1 supplies only its constant-strength limit.
+    """
+    state: MaterialState
+    law: PowerHardeningLaw
+    assumed_strain_range: tuple[float, float]
+    assumed_temperature_range_k: tuple[float, float]
+
+    def validate_pass(self, scenario):
+        self.state.validate()
+        self.law.validate()
+        if (self.state.alloy,self.state.temper) != (self.law.alloy,self.law.temper):
+            raise ValueError('material identity mismatch')
+        for interval in (self.assumed_strain_range,self.assumed_temperature_range_k):
+            if not isinstance(interval,tuple) or len(interval)!=2 or not all(_finite_number(v) for v in interval) or not 0 <= interval[0] < interval[1]:
+                raise ValueError('explicit finite increasing assumed material envelope required')
+        end = self.strain_at_thickness(scenario.entry_thickness_m,scenario.exit_thickness_m)
+        if not self.assumed_strain_range[0] <= self.state.accumulated_equivalent_plastic_strain <= end <= self.assumed_strain_range[1]:
+            raise ValueError('material strain outside assumed envelope (not calibration range)')
+        if not self.assumed_temperature_range_k[0] <= self.state.temperature_k <= self.assumed_temperature_range_k[1]:
+            raise ValueError('material temperature outside assumed envelope')
+        if self.law.stress(self.state.accumulated_equivalent_plastic_strain) <= scenario.entry_tension_pa or self.law.stress(end) <= scenario.exit_tension_pa:
+            raise ValueError('boundary tension reaches local uniaxial strength')
+
+    def strain_at_thickness(self, entry_m, local_m):
+        if not all(_finite_number(v) for v in (entry_m,local_m)) or not 0 < local_m <= entry_m:
+            raise ValueError('positive full thickness with local <= entry required')
+        return self.state.accumulated_equivalent_plastic_strain+2/math.sqrt(3)*math.log(entry_m/local_m)
+
+    def stress_at_thickness(self, entry_m, local_m):
+        return self.law.stress(self.strain_at_thickness(entry_m,local_m))
+
+    def mean_stress(self, entry_m, exit_m):
+        return self.law.mean_stress(self.state.accumulated_equivalent_plastic_strain,
+                                    self.strain_at_thickness(entry_m,exit_m))
+
+    def pass_metadata(self, entry_m, exit_m, name):
+        end = self.strain_at_thickness(entry_m,exit_m)
+        state_out = replace(self.state,accumulated_equivalent_plastic_strain=end,
+                            history=self.state.history+(name,))
+        return {'state_in':asdict(self.state),'state_out':asdict(state_out),
+                'law':asdict(self.law),'stress_units':'Pa','strain_units':'1',
+                'assumed_strain_range':self.assumed_strain_range,
+                'assumed_temperature_range_k':self.assumed_temperature_range_k,
+                'calibrated_strain_range':None,'calibrated_temperature_range_k':None,
+                'temperature_feedback':False,'strain_rate_dependence':False}

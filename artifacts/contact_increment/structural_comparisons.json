@@ -1,0 +1,2563 @@
+[
+  {
+    "case": "reviewed_rigid_mean",
+    "parameter_changes": {},
+    "structural_hardening": "pass_mean",
+    "structural_contact": "rigid",
+    "status": "CONDITIONAL_NUMERICAL_RESULT",
+    "result": {
+      "status": "CONDITIONAL_LITERATURE_COMPARISON_NOT_VALIDATED",
+      "intermediate_gauges_m": [
+        0.0029024,
+        0.0022087
+      ],
+      "assumptions": {
+        "prior_log_strain": 0.05,
+        "strain_convention": "log_thickness",
+        "stress_convention": "uniaxial",
+        "speed_interpretation": "roll_surface",
+        "friction_factor": 1.0,
+        "strength_factor": 1.0,
+        "radius_factor": 1.0,
+        "hardening_model": "pass_mean",
+        "contact_model": "rigid",
+        "material_temperature_k_assumed": null,
+        "incoming_temper": null,
+        "outgoing_temper": null
+      },
+      "passes": [
+        {
+          "status": "UNVALIDATED_RIGID_ROLL_SLAB",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 19.92315355059058,
+          "entry_plane_strain_strength_pa": 211068752.79218543,
+          "exit_plane_strain_strength_pa": 211068752.79218543,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": false,
+          "bite_tangent": 0.07553305088309134,
+          "friction_coefficient": 0.075,
+          "neutral_position_from_entry_m": 0.012120651726223007,
+          "contact_length_m": 0.015877893265795688,
+          "neutral_thickness_m": 0.002969370187553701,
+          "roll_surface_speed_m_s": 4.2,
+          "entry_speed_m_s": 3.041793850664767,
+          "exit_speed_m_s": 4.296911103819441,
+          "forward_slip_fraction": 0.023074072337962104,
+          "volume_flow_m3_s": 0.016961042511306743,
+          "mass_flow_kg_s": 45.45559393030207,
+          "mass_flow_residual_kg_s": -5.403311310673983e-15,
+          "separating_force_n": 4690312.830398071,
+          "torque_per_work_roll_nm": 37945.62943028518,
+          "roll_mechanical_power_both_rolls_w": 1511993.2034267613,
+          "plastic_work_power_w": 1236688.7705928553,
+          "solid_slip_dissipation_both_interfaces_w": 275304.34174439625,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 1236688.861682365,
+          "mechanical_work_residual_w": 0.09108950972548459,
+          "mechanical_work_residual_relative": 6.024465554411258e-08,
+          "entry_pressure_pa": 201598752.79218543,
+          "exit_pressure_pa": 201598752.79218543,
+          "pressure_at_neutral_pa": 249583018.34181222,
+          "max_pressure_pa": 249583018.34181222,
+          "min_pressure_pa": 201430155.62700143,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17737089102967357,
+          "flags": [
+            "UNASSISTED_BITE_SCREEN_FAILED_ESTABLISHED_DIAGNOSTIC_ONLY",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN",
+            "PASS_MEAN_HARDENING_RIGID_CONTACT_APPROXIMATION"
+          ],
+          "limitations": [
+            "Constant yield and rigid circular rolls; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.648863077490022e-07,
+            "torque_change_over_capacity": 9.043019894100278e-08,
+            "slip_absolute_change": 8.458027611624175e-10
+          },
+          "pass_id": 1,
+          "entry_thickness_m": 0.0041,
+          "exit_thickness_m": 0.0029024,
+          "reduction_fraction": 0.2920975609756099,
+          "mean_uniaxial_flow_stress_pa": 182790901.8631302,
+          "assumed_entry_uniaxial_strength_pa": 126889982.28990413,
+          "assumed_exit_uniaxial_strength_pa": 217239432.1004508,
+          "equivalent_strain_start": 0.05773502691896259,
+          "equivalent_strain_end": 0.4566251648548783,
+          "entry_tension_force_n": 52804.72,
+          "exit_tension_force_n": 37380.59008,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_RIGID_ROLL_SLAB",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 22.294957544708506,
+          "entry_plane_strain_strength_pa": 270378043.2662973,
+          "exit_plane_strain_strength_pa": 270378043.2662973,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.05743500633032057,
+          "friction_coefficient": 0.071,
+          "neutral_position_from_entry_m": 0.008591134353242704,
+          "contact_length_m": 0.012087952352549208,
+          "neutral_thickness_m": 0.002266707577154906,
+          "roll_surface_speed_m_s": 4.7,
+          "entry_speed_m_s": 3.670591790458951,
+          "exit_speed_m_s": 4.823437140683686,
+          "forward_slip_fraction": 0.026263221422060834,
+          "volume_flow_m3_s": 0.014488794833174161,
+          "mass_flow_kg_s": 38.82997015290675,
+          "mass_flow_residual_kg_s": 0.0,
+          "separating_force_n": 4772708.903751087,
+          "torque_per_work_roll_nm": 29236.75906902001,
+          "roll_mechanical_power_both_rolls_w": 1303664.604377345,
+          "plastic_work_power_w": 1069988.8390967401,
+          "solid_slip_dissipation_both_interfaces_w": 225417.07317948146,
+          "net_tension_power_w": -8258.61305490927,
+          "traction_power_to_strip_w": 1078247.5311978636,
+          "mechanical_work_residual_w": 0.07904621402365834,
+          "mechanical_work_residual_relative": 6.063385763350713e-08,
+          "entry_pressure_pa": 261698043.26629728,
+          "exit_pressure_pa": 262268043.26629728,
+          "pressure_at_neutral_pa": 335307179.1990012,
+          "max_pressure_pa": 335307179.1990012,
+          "min_pressure_pa": 261698043.26629728,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.17610017023225205,
+          "flags": [
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN",
+            "PASS_MEAN_HARDENING_RIGID_CONTACT_APPROXIMATION"
+          ],
+          "limitations": [
+            "Constant yield and rigid circular rolls; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.2879133716440174e-07,
+            "torque_change_over_capacity": 5.966040361497227e-08,
+            "slip_absolute_change": 6.580902489616847e-10
+          },
+          "pass_id": 2,
+          "entry_thickness_m": 0.0029024,
+          "exit_thickness_m": 0.0022087,
+          "reduction_fraction": 0.23900909592061736,
+          "mean_uniaxial_flow_stress_pa": 234154254.0941415,
+          "assumed_entry_uniaxial_strength_pa": 217239432.1004508,
+          "assumed_exit_uniaxial_strength_pa": 249020728.21804813,
+          "equivalent_strain_start": 0.4566251648548783,
+          "equivalent_strain_end": 0.7720129959598648,
+          "entry_tension_force_n": 34262.25152,
+          "exit_tension_force_n": 24361.077520000003,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_RIGID_ROLL_SLAB",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 18.97443195294341,
+          "entry_plane_strain_strength_pa": 300411298.69698715,
+          "exit_plane_strain_strength_pa": 300411298.69698715,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.048189604736363426,
+          "friction_coefficient": 0.069,
+          "neutral_position_from_entry_m": 0.0069044952452158,
+          "contact_length_m": 0.010147075444555443,
+          "neutral_thickness_m": 0.0017698787928591801,
+          "roll_surface_speed_m_s": 4.0,
+          "entry_speed_m_s": 3.205285992410341,
+          "exit_speed_m_s": 4.115997192695767,
+          "forward_slip_fraction": 0.02899929817394198,
+          "volume_flow_m3_s": 0.00962814063315394,
+          "mass_flow_kg_s": 25.80341689685256,
+          "mass_flow_residual_kg_s": -5.6937316948519285e-15,
+          "separating_force_n": 4582180.768242753,
+          "torque_per_work_roll_nm": 23330.239914040947,
+          "roll_mechanical_power_both_rolls_w": 885356.0993896284,
+          "plastic_work_power_w": 723331.4188473313,
+          "solid_slip_dissipation_both_interfaces_w": 159521.30472986496,
+          "net_tension_power_w": -2503.3165646200246,
+          "traction_power_to_strip_w": 725834.7946597636,
+          "mechanical_work_residual_w": 0.05924781219637715,
+          "mechanical_work_residual_relative": 6.691975379988128e-08,
+          "entry_pressure_pa": 292901298.69698715,
+          "exit_pressure_pa": 293161298.69698715,
+          "pressure_at_neutral_pa": 388705899.5627054,
+          "max_pressure_pa": 388705899.5627054,
+          "min_pressure_pa": 292901298.69698715,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17855990893924165,
+          "flags": [
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN",
+            "PASS_MEAN_HARDENING_RIGID_CONTACT_APPROXIMATION"
+          ],
+          "limitations": [
+            "Constant yield and rigid circular rolls; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.3244272305179502e-07,
+            "torque_change_over_capacity": 2.2701796283197937e-08,
+            "slip_absolute_change": 2.6861488588991733e-09
+          },
+          "pass_id": 3,
+          "entry_thickness_m": 0.0022087,
+          "exit_thickness_m": 0.00172,
+          "reduction_fraction": 0.22126137546973335,
+          "mean_uniaxial_flow_stress_pa": 260163816.25546587,
+          "assumed_entry_uniaxial_strength_pa": 249020728.21804813,
+          "assumed_exit_uniaxial_strength_pa": 270467891.379279,
+          "equivalent_strain_start": 0.7720129959598648,
+          "equivalent_strain_end": 1.0607802945161222,
+          "entry_tension_force_n": 22558.77832,
+          "exit_tension_force_n": 16959.2,
+          "speed_interpretation": "roll_surface"
+        }
+      ],
+      "peak_force_n": 4772708.903751087,
+      "numerical_converged": true,
+      "physical_calibration_domain": "UNKNOWN",
+      "thermal_validation": false,
+      "product_quality_certified": false
+    },
+    "comparison": [
+      {
+        "pass_id": 1,
+        "predicted_force_n": 4690312.830398071,
+        "author_measured_force_n": 5143900.0,
+        "force_residual_n": -453587.1696019294,
+        "force_relative_residual": -0.0881796243321078,
+        "predicted_forward_slip_fraction": 0.023074072337962104,
+        "author_measured_forward_slip_fraction": 0.015,
+        "slip_residual_fraction": 0.008074072337962104,
+        "slip_relative_residual": 0.5382714891974736,
+        "source_model_force_n_separate": 5265700.0,
+        "source_model_slip_fraction_separate": 0.0154,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 2,
+        "predicted_force_n": 4772708.903751087,
+        "author_measured_force_n": 5017400.0,
+        "force_residual_n": -244691.09624891263,
+        "force_relative_residual": -0.04876850485289441,
+        "predicted_forward_slip_fraction": 0.026263221422060834,
+        "author_measured_forward_slip_fraction": 0.0182,
+        "slip_residual_fraction": 0.008063221422060833,
+        "slip_relative_residual": 0.44303414406927644,
+        "source_model_force_n_separate": 5066500.0,
+        "source_model_slip_fraction_separate": 0.0187,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 3,
+        "predicted_force_n": 4582180.768242753,
+        "author_measured_force_n": 4301800.0,
+        "force_residual_n": 280380.7682427531,
+        "force_relative_residual": 0.06517754619990535,
+        "predicted_forward_slip_fraction": 0.02899929817394198,
+        "author_measured_forward_slip_fraction": 0.0227,
+        "slip_residual_fraction": 0.006299298173941977,
+        "slip_relative_residual": 0.2775021222000871,
+        "source_model_force_n_separate": 4165900.0,
+        "source_model_slip_fraction_separate": 0.0216,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      }
+    ],
+    "force_mean_absolute_relative_residual": 0.06737522512830252,
+    "slip_mean_absolute_relative_residual": 0.4196025851556124
+  },
+  {
+    "case": "rigid_spatial",
+    "parameter_changes": {},
+    "structural_hardening": "spatial",
+    "structural_contact": "rigid",
+    "status": "CONDITIONAL_NUMERICAL_RESULT",
+    "result": {
+      "status": "CONDITIONAL_LITERATURE_COMPARISON_NOT_VALIDATED",
+      "intermediate_gauges_m": [
+        0.0029024,
+        0.0022087
+      ],
+      "assumptions": {
+        "prior_log_strain": 0.05,
+        "strain_convention": "log_thickness",
+        "stress_convention": "uniaxial",
+        "speed_interpretation": "roll_surface",
+        "friction_factor": 1.0,
+        "strength_factor": 1.0,
+        "radius_factor": 1.0,
+        "hardening_model": "spatial",
+        "contact_model": "rigid",
+        "material_temperature_k_assumed": 293.15,
+        "incoming_temper": null,
+        "outgoing_temper": null
+      },
+      "passes": [
+        {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 19.923153550590577,
+          "entry_plane_strain_strength_pa": 146519930.86508602,
+          "exit_plane_strain_strength_pa": 250846489.20359343,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": false,
+          "bite_tangent": 0.07553305088309134,
+          "friction_coefficient": 0.075,
+          "neutral_position_from_entry_m": 0.012269310079659552,
+          "contact_length_m": 0.015877893265795688,
+          "neutral_thickness_m": 0.0029641751845482706,
+          "roll_surface_speed_m_s": 4.2,
+          "entry_speed_m_s": 3.03647214026896,
+          "exit_speed_m_s": 4.289393527805518,
+          "forward_slip_fraction": 0.02128417328702814,
+          "volume_flow_m3_s": 0.016931368654139724,
+          "mass_flow_kg_s": 45.37606799309446,
+          "mass_flow_residual_kg_s": -5.3938580540150835e-15,
+          "separating_force_n": 4985314.742506355,
+          "torque_per_work_roll_nm": 37561.40126289572,
+          "roll_mechanical_power_both_rolls_w": 1496683.1298720369,
+          "plastic_work_power_w": 1234525.1461626845,
+          "solid_slip_dissipation_both_interfaces_w": 262158.1882051994,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 1234524.9416668375,
+          "mechanical_work_residual_w": -0.20449584708370575,
+          "mechanical_work_residual_relative": 1.3663269332179197e-07,
+          "entry_pressure_pa": 137049930.86508602,
+          "exit_pressure_pa": 241376489.20359343,
+          "pressure_at_neutral_pa": 292298519.2952786,
+          "max_pressure_pa": 292298519.2952786,
+          "min_pressure_pa": 137049930.86508602,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17729219698514073,
+          "flags": [
+            "UNASSISTED_BITE_SCREEN_FAILED_ESTABLISHED_DIAGNOSTIC_ONLY",
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.05773502691896259,
+              "history": [
+                "Assumed initial history; not reported by S1"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.4566251648548783,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 1.7345734701151108e-07,
+            "torque_change_over_capacity": 3.9710130483440823e-07,
+            "slip_absolute_change": 8.811671836639334e-09
+          },
+          "pass_id": 1,
+          "entry_thickness_m": 0.0041,
+          "exit_thickness_m": 0.0029024,
+          "reduction_fraction": 0.2920975609756099,
+          "mean_uniaxial_flow_stress_pa": 182790901.8631302,
+          "assumed_entry_uniaxial_strength_pa": 126889982.28990413,
+          "assumed_exit_uniaxial_strength_pa": 217239432.1004508,
+          "equivalent_strain_start": 0.05773502691896259,
+          "equivalent_strain_end": 0.4566251648548783,
+          "entry_tension_force_n": 52804.72,
+          "exit_tension_force_n": 37380.59008,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 22.29495754470851,
+          "entry_plane_strain_strength_pa": 250846489.20359343,
+          "exit_plane_strain_strength_pa": 287544368.94097346,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.05743500633032057,
+          "friction_coefficient": 0.071,
+          "neutral_position_from_entry_m": 0.008669678777077633,
+          "contact_length_m": 0.012087952352549208,
+          "neutral_thickness_m": 0.0022641307783291295,
+          "roll_surface_speed_m_s": 4.7,
+          "entry_speed_m_s": 3.666419052558886,
+          "exit_speed_m_s": 4.81795384531485,
+          "forward_slip_fraction": 0.0250965628329467,
+          "volume_flow_m3_s": 0.014472323935079797,
+          "mass_flow_kg_s": 38.78582814601386,
+          "mass_flow_residual_kg_s": 0.0,
+          "separating_force_n": 4866418.821452113,
+          "torque_per_work_roll_nm": 29155.708062865855,
+          "roll_mechanical_power_both_rolls_w": 1300050.5468950195,
+          "plastic_work_power_w": 1068772.473116423,
+          "solid_slip_dissipation_both_interfaces_w": 223028.82928214772,
+          "net_tension_power_w": -8249.224642995485,
+          "traction_power_to_strip_w": 1077021.717612872,
+          "mechanical_work_residual_w": 0.019853453277404193,
+          "mechanical_work_residual_relative": 1.5271293354570912e-08,
+          "entry_pressure_pa": 242166489.20359343,
+          "exit_pressure_pa": 279434368.94097346,
+          "pressure_at_neutral_pa": 352097607.48339826,
+          "max_pressure_pa": 352097607.48339826,
+          "min_pressure_pa": 242166489.20359343,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.17559508448102695,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.4566251648548783,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.7720129959598648,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 1.7282682681128246e-07,
+            "torque_change_over_capacity": 1.4229892608269605e-09,
+            "slip_absolute_change": 3.2667086813376045e-09
+          },
+          "pass_id": 2,
+          "entry_thickness_m": 0.0029024,
+          "exit_thickness_m": 0.0022087,
+          "reduction_fraction": 0.23900909592061736,
+          "mean_uniaxial_flow_stress_pa": 234154254.0941415,
+          "assumed_entry_uniaxial_strength_pa": 217239432.1004508,
+          "assumed_exit_uniaxial_strength_pa": 249020728.21804813,
+          "equivalent_strain_start": 0.4566251648548783,
+          "equivalent_strain_end": 0.7720129959598648,
+          "entry_tension_force_n": 34262.25152,
+          "exit_tension_force_n": 24361.077520000003,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.21081,
+          "roll_angular_speed_rad_s": 18.97443195294341,
+          "entry_plane_strain_strength_pa": 287544368.94097346,
+          "exit_plane_strain_strength_pa": 312309419.7899544,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.048189604736363426,
+          "friction_coefficient": 0.069,
+          "neutral_position_from_entry_m": 0.00695515980976776,
+          "contact_length_m": 0.010147075444555443,
+          "neutral_thickness_m": 0.0017683321921151782,
+          "roll_surface_speed_m_s": 4.0,
+          "entry_speed_m_s": 3.2024850674427094,
+          "exit_speed_m_s": 4.112400446779484,
+          "forward_slip_fraction": 0.028100111694871144,
+          "volume_flow_m3_s": 0.009619727125106569,
+          "mass_flow_kg_s": 25.78086869528561,
+          "mass_flow_residual_kg_s": -5.688756252629029e-15,
+          "separating_force_n": 4637041.646419382,
+          "torque_per_work_roll_nm": 23291.556440301003,
+          "roll_mechanical_power_both_rolls_w": 883888.1055092644,
+          "plastic_work_power_w": 722699.3388907473,
+          "solid_slip_dissipation_both_interfaces_w": 158687.57652830522,
+          "net_tension_power_w": -2501.129052527708,
+          "traction_power_to_strip_w": 725200.5289809593,
+          "mechanical_work_residual_w": 0.061037684157091474,
+          "mechanical_work_residual_relative": 6.905589494489664e-08,
+          "entry_pressure_pa": 280034368.94097346,
+          "exit_pressure_pa": 305059419.7899544,
+          "pressure_at_neutral_pa": 399869309.7624193,
+          "max_pressure_pa": 399869309.7624193,
+          "min_pressure_pa": 280034368.94097346,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17810281014766707,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.7720129959598648,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 1.0607802945161222,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2",
+                "literature_assumption_bridge_pass_3"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.0236731595037013e-07,
+            "torque_change_over_capacity": 4.123130493117025e-08,
+            "slip_absolute_change": 7.629057385827309e-10
+          },
+          "pass_id": 3,
+          "entry_thickness_m": 0.0022087,
+          "exit_thickness_m": 0.00172,
+          "reduction_fraction": 0.22126137546973335,
+          "mean_uniaxial_flow_stress_pa": 260163816.25546587,
+          "assumed_entry_uniaxial_strength_pa": 249020728.21804813,
+          "assumed_exit_uniaxial_strength_pa": 270467891.379279,
+          "equivalent_strain_start": 0.7720129959598648,
+          "equivalent_strain_end": 1.0607802945161222,
+          "entry_tension_force_n": 22558.77832,
+          "exit_tension_force_n": 16959.2,
+          "speed_interpretation": "roll_surface"
+        }
+      ],
+      "peak_force_n": 4985314.742506355,
+      "numerical_converged": true,
+      "physical_calibration_domain": "UNKNOWN",
+      "thermal_validation": false,
+      "product_quality_certified": false
+    },
+    "comparison": [
+      {
+        "pass_id": 1,
+        "predicted_force_n": 4985314.742506355,
+        "author_measured_force_n": 5143900.0,
+        "force_residual_n": -158585.25749364495,
+        "force_relative_residual": -0.030829770698039383,
+        "predicted_forward_slip_fraction": 0.02128417328702814,
+        "author_measured_forward_slip_fraction": 0.015,
+        "slip_residual_fraction": 0.006284173287028141,
+        "slip_relative_residual": 0.41894488580187605,
+        "source_model_force_n_separate": 5265700.0,
+        "source_model_slip_fraction_separate": 0.0154,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 2,
+        "predicted_force_n": 4866418.821452113,
+        "author_measured_force_n": 5017400.0,
+        "force_residual_n": -150981.17854788713,
+        "force_relative_residual": -0.030091517229618336,
+        "predicted_forward_slip_fraction": 0.0250965628329467,
+        "author_measured_forward_slip_fraction": 0.0182,
+        "slip_residual_fraction": 0.0068965628329467,
+        "slip_relative_residual": 0.3789320237882803,
+        "source_model_force_n_separate": 5066500.0,
+        "source_model_slip_fraction_separate": 0.0187,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 3,
+        "predicted_force_n": 4637041.646419382,
+        "author_measured_force_n": 4301800.0,
+        "force_residual_n": 335241.6464193817,
+        "force_relative_residual": 0.07793055149457939,
+        "predicted_forward_slip_fraction": 0.028100111694871144,
+        "author_measured_forward_slip_fraction": 0.0227,
+        "slip_residual_fraction": 0.005400111694871142,
+        "slip_relative_residual": 0.23789038303397092,
+        "source_model_force_n_separate": 4165900.0,
+        "source_model_slip_fraction_separate": 0.0216,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      }
+    ],
+    "force_mean_absolute_relative_residual": 0.04628394647407904,
+    "slip_mean_absolute_relative_residual": 0.34525576420804244
+  },
+  {
+    "case": "circular_mean",
+    "parameter_changes": {},
+    "structural_hardening": "pass_mean",
+    "structural_contact": "circular_hitchcock",
+    "status": "CONDITIONAL_NUMERICAL_RESULT",
+    "result": {
+      "status": "CONDITIONAL_LITERATURE_COMPARISON_NOT_VALIDATED",
+      "intermediate_gauges_m": [
+        0.0029024,
+        0.0022087
+      ],
+      "assumptions": {
+        "prior_log_strain": 0.05,
+        "strain_convention": "log_thickness",
+        "stress_convention": "uniaxial",
+        "speed_interpretation": "roll_surface",
+        "friction_factor": 1.0,
+        "strength_factor": 1.0,
+        "radius_factor": 1.0,
+        "hardening_model": "pass_mean",
+        "contact_model": "circular_hitchcock",
+        "material_temperature_k_assumed": null,
+        "incoming_temper": null,
+        "outgoing_temper": null
+      },
+      "passes": [
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.22475547508123056,
+          "roll_angular_speed_rad_s": 19.923153550590577,
+          "entry_plane_strain_strength_pa": 211068752.79218543,
+          "exit_plane_strain_strength_pa": 211068752.79218543,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.07314251674162311,
+          "friction_coefficient": 0.075,
+          "neutral_position_from_entry_m": 0.012380443776049443,
+          "contact_length_m": 0.01639538335987548,
+          "neutral_thickness_m": 0.0029741269559061803,
+          "roll_surface_speed_m_s": 4.2,
+          "entry_speed_m_s": 3.04666663775755,
+          "exit_speed_m_s": 4.303794519985514,
+          "forward_slip_fraction": 0.02471298094893215,
+          "volume_flow_m3_s": 0.016988213172136103,
+          "mass_flow_kg_s": 45.52841130132475,
+          "mass_flow_residual_kg_s": -5.411967119353189e-15,
+          "separating_force_n": 4882032.386058856,
+          "torque_per_work_roll_nm": 38208.57893153582,
+          "roll_mechanical_power_both_rolls_w": 1522470.7700056967,
+          "plastic_work_power_w": 1238669.8782467542,
+          "solid_slip_dissipation_both_interfaces_w": 283800.7917560395,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 1238669.9782496572,
+          "mechanical_work_residual_w": 0.10000290290556996,
+          "mechanical_work_residual_relative": 6.568461272014817e-08,
+          "entry_pressure_pa": 201598752.79218543,
+          "exit_pressure_pa": 201598752.79218543,
+          "pressure_at_neutral_pa": 253193437.35948363,
+          "max_pressure_pa": 253193437.35948363,
+          "min_pressure_pa": 201572342.2452664,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17993670356936262,
+          "flags": [
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.7273023014325325e-07,
+            "torque_change_over_capacity": 7.101859359923218e-08,
+            "slip_absolute_change": 2.3866808529504624e-09
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 9.473474453395404e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4690312.830398071,
+                "radius_residual_over_nominal": 0.06355406323016949
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.217508916034776,
+                "force_n": 4782891.840637872,
+                "radius_residual_over_nominal": 0.03303148360652421
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.2209905995643217,
+                "force_n": 4830652.2819384765,
+                "radius_residual_over_nominal": 0.01716289908595889
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.22279965494247722,
+                "force_n": 4855374.802281274,
+                "radius_residual_over_nominal": 0.008916441403413952
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.22373949244860408,
+                "force_n": 4868193.767073007,
+                "radius_residual_over_nominal": 0.0046319185611844475
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.22422771982454573,
+                "force_n": 4874846.319899635,
+                "radius_residual_over_nominal": 0.0024061018314781315
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.2244813349880927,
+                "force_n": 4878300.275269924,
+                "radius_residual_over_nominal": 0.0012498522498791502
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.2246130756644912,
+                "force_n": 4880093.954882545,
+                "radius_residual_over_nominal": 0.0006492306077400126
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.22468150781670004,
+                "force_n": 4881025.544646569,
+                "radius_residual_over_nominal": 0.0003372384096004821
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.224717054431264,
+                "force_n": 4881509.417609387,
+                "radius_residual_over_nominal": 0.0001751757169108388
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.22473551882770498,
+                "force_n": 4881760.752001772,
+                "radius_residual_over_nominal": 9.099345685422405e-05
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.22474510999302472,
+                "force_n": 4881891.302854541,
+                "radius_residual_over_nominal": 4.7265701510874254e-05
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.22475009203429247,
+                "force_n": 4881959.1155891465,
+                "radius_residual_over_nominal": 2.4551717999245422e-05
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.2247526799081282,
+                "force_n": 4881994.340082261,
+                "radius_residual_over_nominal": 1.2753153317451172e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.2247540241542536,
+                "force_n": 4882012.637055762,
+                "radius_residual_over_nominal": 6.624501915111433e-06
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.22475472240987798,
+                "force_n": 4882022.141227869,
+                "radius_residual_over_nominal": 3.4410331468255775e-06
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.22475508511197684,
+                "force_n": 4882027.078074068,
+                "radius_residual_over_nominal": 1.787411180778555e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.22475527351405233,
+                "force_n": 4882029.642469805,
+                "radius_residual_over_nominal": 9.284533299826276e-07
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.2247553713776756,
+                "force_n": 4882030.9745199215,
+                "radius_residual_over_nominal": 4.822760360930764e-07
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.2247554222119812,
+                "force_n": 4882031.666440315,
+                "radius_residual_over_nominal": 2.505135871788955e-07
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.22475544861736585,
+                "force_n": 4882032.025851593,
+                "radius_residual_over_nominal": 1.3012684118419755e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.22475546233338556,
+                "force_n": 4882032.212544277,
+                "radius_residual_over_nominal": 6.75931191963944e-08
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.2247554694580383,
+                "force_n": 4882032.309519971,
+                "radius_residual_over_nominal": 3.511058722879544e-08
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.22475547315886973,
+                "force_n": 4882032.359893051,
+                "radius_residual_over_nominal": 1.8237852210056306e-08
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.22475547508123056,
+                "force_n": 4882032.386058856,
+                "radius_residual_over_nominal": 9.473474453395404e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 1,
+          "entry_thickness_m": 0.0041,
+          "exit_thickness_m": 0.0029024,
+          "reduction_fraction": 0.2920975609756099,
+          "mean_uniaxial_flow_stress_pa": 182790901.8631302,
+          "assumed_entry_uniaxial_strength_pa": 126889982.28990413,
+          "assumed_exit_uniaxial_strength_pa": 217239432.1004508,
+          "equivalent_strain_start": 0.05773502691896259,
+          "equivalent_strain_end": 0.4566251648548783,
+          "entry_tension_force_n": 52804.72,
+          "exit_tension_force_n": 37380.59008,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.2360338221936317,
+          "roll_angular_speed_rad_s": 22.294957544708506,
+          "entry_plane_strain_strength_pa": 270378043.2662973,
+          "exit_plane_strain_strength_pa": 270378043.2662973,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.054272244510880974,
+          "friction_coefficient": 0.071,
+          "neutral_position_from_entry_m": 0.008945265440770211,
+          "contact_length_m": 0.012791260982921984,
+          "neutral_thickness_m": 0.0022713717964031113,
+          "roll_surface_speed_m_s": 4.7,
+          "entry_speed_m_s": 3.678144791584421,
+          "exit_speed_m_s": 4.83336235934922,
+          "forward_slip_fraction": 0.02837497007430212,
+          "volume_flow_m3_s": 0.014518608522608688,
+          "mass_flow_kg_s": 38.90987084059128,
+          "mass_flow_residual_kg_s": 0.0,
+          "separating_force_n": 5114911.39794856,
+          "torque_per_work_roll_nm": 29576.115657878658,
+          "roll_mechanical_power_both_rolls_w": 1318796.4858595862,
+          "plastic_work_power_w": 1072190.5622431126,
+          "solid_slip_dissipation_both_interfaces_w": 238330.21733279128,
+          "net_tension_power_w": -8275.60685788695,
+          "traction_power_to_strip_w": 1080466.268526795,
+          "mechanical_work_residual_w": 0.0994257952930889,
+          "mechanical_work_residual_relative": 7.539131045552004e-08,
+          "entry_pressure_pa": 261698043.26629728,
+          "exit_pressure_pa": 262268043.26629728,
+          "pressure_at_neutral_pa": 343288576.82036465,
+          "max_pressure_pa": 343288576.82036465,
+          "min_pressure_pa": 261698043.26629728,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.18029192503801253,
+          "flags": [
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.423893450712705e-07,
+            "torque_change_over_capacity": 6.159360464828857e-08,
+            "slip_absolute_change": 3.907576484607489e-10
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 8.739748485029872e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4772708.903751087,
+                "radius_residual_over_nominal": 0.11164686980153513
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.2225781383114308,
+                "force_n": 4933896.065357128,
+                "radius_residual_over_nominal": 0.05959404869859725
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.22885964901450645,
+                "force_n": 5018817.065183988,
+                "radius_residual_over_nominal": 0.03178356155537752
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.23220979532025102,
+                "force_n": 5063806.6257772185,
+                "radius_residual_over_nominal": 0.016944211109241804
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.23399579989222064,
+                "force_n": 5087707.606515392,
+                "radius_residual_over_nominal": 0.00903121564040607
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.23494773517679762,
+                "force_n": 5100423.364296379,
+                "radius_residual_over_nominal": 0.004813064585748953
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.2354550562494585,
+                "force_n": 5107193.459847629,
+                "radius_residual_over_nominal": 0.0025649035641583037
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.2357254099096386,
+                "force_n": 5110799.4080631565,
+                "radius_residual_over_nominal": 0.001366804890355436
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.2358694779791065,
+                "force_n": 5112720.443825788,
+                "radius_residual_over_nominal": 0.0007283407881608907
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.23594624873988262,
+                "force_n": 5113743.972292763,
+                "radius_residual_over_nominal": 0.00038811355755312936
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.2359871578494165,
+                "force_n": 5114289.341002163,
+                "radius_residual_over_nominal": 0.0002068144622052608
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.23600895712780526,
+                "force_n": 5114579.940094014,
+                "radius_residual_over_nominal": 0.00011020514809848124
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.23602057330144058,
+                "force_n": 5114734.788097617,
+                "radius_residual_over_nominal": 5.872489739757098e-05
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.23602676319925076,
+                "force_n": 5114817.300811029,
+                "radius_residual_over_nominal": 3.1292649420843116e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.23603006160096296,
+                "force_n": 5114861.268962347,
+                "radius_residual_over_nominal": 1.6674861452096113e-05
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.23603181921473432,
+                "force_n": 5114884.698118674,
+                "radius_residual_over_nominal": 8.88550353326863e-06
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.23603275579123423,
+                "force_n": 5114897.182748904,
+                "radius_residual_over_nominal": 4.734801819258289e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.23603325486302,
+                "force_n": 5114903.835404375,
+                "radius_residual_over_nominal": 2.5230249322236477e-06
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.23603352080246298,
+                "force_n": 5114907.380390583,
+                "radius_residual_over_nominal": 1.3444395043301416e-06
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.23603366251310892,
+                "force_n": 5114909.269400137,
+                "radius_residual_over_nominal": 7.164089134658722e-07
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.23603373802619043,
+                "force_n": 5114910.2759929085,
+                "radius_residual_over_nominal": 3.8175144754523325e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.23603377826470176,
+                "force_n": 5114910.812374034,
+                "radius_residual_over_nominal": 2.0342316265494354e-07
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.23603379970652022,
+                "force_n": 5114911.098194402,
+                "radius_residual_over_nominal": 1.0839771082224667e-07
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.23603381113218092,
+                "force_n": 5114911.250498953,
+                "radius_residual_over_nominal": 5.7761680369361914e-08
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.23603381722055083,
+                "force_n": 5114911.331657191,
+                "radius_residual_over_nominal": 3.0779355920459796e-08
+              },
+              {
+                "iteration": 26,
+                "contact_radius_m": 0.23603382046484883,
+                "force_n": 5114911.374903812,
+                "radius_residual_over_nominal": 1.640133643433487e-08
+              },
+              {
+                "iteration": 27,
+                "contact_radius_m": 0.2360338221936317,
+                "force_n": 5114911.39794856,
+                "radius_residual_over_nominal": 8.739748485029872e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 2,
+          "entry_thickness_m": 0.0029024,
+          "exit_thickness_m": 0.0022087,
+          "reduction_fraction": 0.23900909592061736,
+          "mean_uniaxial_flow_stress_pa": 234154254.0941415,
+          "assumed_entry_uniaxial_strength_pa": 217239432.1004508,
+          "assumed_exit_uniaxial_strength_pa": 249020728.21804813,
+          "equivalent_strain_start": 0.4566251648548783,
+          "equivalent_strain_end": 0.7720129959598648,
+          "entry_tension_force_n": 34262.25152,
+          "exit_tension_force_n": 24361.077520000003,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "constant_yield_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.2460913926240024,
+          "roll_angular_speed_rad_s": 18.97443195294341,
+          "entry_plane_strain_strength_pa": 300411298.69698715,
+          "exit_plane_strain_strength_pa": 300411298.69698715,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04459606717827084,
+          "friction_coefficient": 0.069,
+          "neutral_position_from_entry_m": 0.0073163968584048595,
+          "contact_length_m": 0.010963811228439225,
+          "neutral_thickness_m": 0.0017740626884119844,
+          "roll_surface_speed_m_s": 4.0,
+          "entry_speed_m_s": 3.21286311117306,
+          "exit_speed_m_s": 4.125727182353452,
+          "forward_slip_fraction": 0.031431795588362954,
+          "volume_flow_m3_s": 0.009650901024961196,
+          "mass_flow_kg_s": 25.864414746896006,
+          "mass_flow_residual_kg_s": -5.7071913615890326e-15,
+          "separating_force_n": 5040151.220518234,
+          "torque_per_work_roll_nm": 23722.510539634277,
+          "roll_mechanical_power_both_rolls_w": 900242.3239745467,
+          "plastic_work_power_w": 725041.3343052311,
+          "solid_slip_dissipation_both_interfaces_w": 172691.6935747055,
+          "net_tension_power_w": -2509.234266489911,
+          "traction_power_to_strip_w": 727550.6303998413,
+          "mechanical_work_residual_w": 0.061828120247381387,
+          "mechanical_work_residual_relative": 6.867941953052355e-08,
+          "entry_pressure_pa": 292901298.69698715,
+          "exit_pressure_pa": 293161298.69698715,
+          "pressure_at_neutral_pa": 401906224.6365625,
+          "max_pressure_pa": 401906224.6365625,
+          "min_pressure_pa": 292901298.69698715,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.1846237449803411,
+          "flags": [
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.5393387681578995e-07,
+            "torque_change_over_capacity": 2.209947038503028e-08,
+            "slip_absolute_change": 2.7480153708125954e-09
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 6.176830810770457e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4582180.768242753,
+                "radius_residual_over_nominal": 0.15215393143528266
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.22684778514293596,
+                "force_n": 4793052.314923012,
+                "radius_residual_over_nominal": 0.08307907595249006
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.23560473514370817,
+                "force_n": 4906251.559366878,
+                "radius_residual_over_nominal": 0.045298383589017284
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.24037941126590853,
+                "force_n": 4967434.684281343,
+                "radius_residual_over_nominal": 0.024680812427581456
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.24298089229983777,
+                "force_n": 5000616.31931074,
+                "radius_residual_over_nominal": 0.013442221370487246
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.244397769643394,
+                "force_n": 5018643.666705303,
+                "radius_residual_over_nominal": 0.0073197190593266145
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.2451693046308423,
+                "force_n": 5028446.994580143,
+                "radius_residual_over_nominal": 0.003985384635011351
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.24558938409829567,
+                "force_n": 5033780.762886793,
+                "radius_residual_over_nominal": 0.0021698031427367704
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.24581809219855583,
+                "force_n": 5036683.53581651,
+                "radius_residual_over_nominal": 0.0011812898056305992
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.24594260605051832,
+                "force_n": 5038263.532318611,
+                "radius_residual_over_nominal": 0.0006431095897421465
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.2460103930168251,
+                "force_n": 5039123.602774971,
+                "radius_residual_over_nominal": 0.00035011392596294953
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.24604729677519122,
+                "force_n": 5039591.80220449,
+                "radius_residual_over_nominal": 0.00019060379264613782
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.24606738736795508,
+                "force_n": 5039846.683542398,
+                "radius_residual_over_nominal": 0.00010376537683020583
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.24607832475749986,
+                "force_n": 5039985.439233723,
+                "radius_residual_over_nominal": 5.6490150453944126e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.24608427910180847,
+                "force_n": 5040060.977432749,
+                "radius_residual_over_nominal": 3.075336430074359e-05
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.2460875206601726,
+                "force_n": 5040102.100368275,
+                "radius_residual_over_nominal": 1.6742192729213092e-05
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.24608928537099722,
+                "force_n": 5040124.48770834,
+                "radius_residual_over_nominal": 9.11448078712597e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.24609024608284458,
+                "force_n": 5040136.675397693,
+                "radius_residual_over_nominal": 4.961939584684976e-06
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.24609076909608651,
+                "force_n": 5040143.310391538,
+                "radius_residual_over_nominal": 2.701288555351915e-06
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.2460910538254067,
+                "force_n": 5040146.922491971,
+                "radius_residual_over_nominal": 1.4705861369866746e-06
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.24609120883253846,
+                "force_n": 5040148.888925144,
+                "radius_residual_over_nominal": 8.005896059676001e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.2460912932186859,
+                "force_n": 5040149.959454577,
+                "radius_residual_over_nominal": 4.3584234474778673e-07
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.24609133915864823,
+                "force_n": 5040150.542252568,
+                "radius_residual_over_nominal": 2.372733127253858e-07
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.24609136416844174,
+                "force_n": 5040150.859528772,
+                "radius_residual_over_nominal": 1.29171994216822e-07
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.2460913777838158,
+                "force_n": 5040151.032254474,
+                "radius_residual_over_nominal": 7.032145278093966e-08
+              },
+              {
+                "iteration": 26,
+                "contact_radius_m": 0.2460913851960485,
+                "force_n": 5040151.126286635,
+                "radius_residual_over_nominal": 3.8283118117339895e-08
+              },
+              {
+                "iteration": 27,
+                "contact_radius_m": 0.24609138923128057,
+                "force_n": 5040151.177477905,
+                "radius_residual_over_nominal": 2.084139419346509e-08
+              },
+              {
+                "iteration": 28,
+                "contact_radius_m": 0.24609139142806774,
+                "force_n": 5040151.205346517,
+                "radius_residual_over_nominal": 1.1346090383390705e-08
+              },
+              {
+                "iteration": 29,
+                "contact_radius_m": 0.2460913926240024,
+                "force_n": 5040151.220518234,
+                "radius_residual_over_nominal": 6.176830810770457e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 3,
+          "entry_thickness_m": 0.0022087,
+          "exit_thickness_m": 0.00172,
+          "reduction_fraction": 0.22126137546973335,
+          "mean_uniaxial_flow_stress_pa": 260163816.25546587,
+          "assumed_entry_uniaxial_strength_pa": 249020728.21804813,
+          "assumed_exit_uniaxial_strength_pa": 270467891.379279,
+          "equivalent_strain_start": 0.7720129959598648,
+          "equivalent_strain_end": 1.0607802945161222,
+          "entry_tension_force_n": 22558.77832,
+          "exit_tension_force_n": 16959.2,
+          "speed_interpretation": "roll_surface"
+        }
+      ],
+      "peak_force_n": 5114911.39794856,
+      "numerical_converged": true,
+      "physical_calibration_domain": "UNKNOWN",
+      "thermal_validation": false,
+      "product_quality_certified": false
+    },
+    "comparison": [
+      {
+        "pass_id": 1,
+        "predicted_force_n": 4882032.386058856,
+        "author_measured_force_n": 5143900.0,
+        "force_residual_n": -261867.6139411442,
+        "force_relative_residual": -0.050908379622687905,
+        "predicted_forward_slip_fraction": 0.02471298094893215,
+        "author_measured_forward_slip_fraction": 0.015,
+        "slip_residual_fraction": 0.009712980948932151,
+        "slip_relative_residual": 0.6475320632621435,
+        "source_model_force_n_separate": 5265700.0,
+        "source_model_slip_fraction_separate": 0.0154,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 2,
+        "predicted_force_n": 5114911.39794856,
+        "author_measured_force_n": 5017400.0,
+        "force_residual_n": 97511.3979485603,
+        "force_relative_residual": 0.019434647018089057,
+        "predicted_forward_slip_fraction": 0.02837497007430212,
+        "author_measured_forward_slip_fraction": 0.0182,
+        "slip_residual_fraction": 0.010174970074302118,
+        "slip_relative_residual": 0.5590642897968197,
+        "source_model_force_n_separate": 5066500.0,
+        "source_model_slip_fraction_separate": 0.0187,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 3,
+        "predicted_force_n": 5040151.220518234,
+        "author_measured_force_n": 4301800.0,
+        "force_residual_n": 738351.2205182342,
+        "force_relative_residual": 0.17163773781166825,
+        "predicted_forward_slip_fraction": 0.031431795588362954,
+        "author_measured_forward_slip_fraction": 0.0227,
+        "slip_residual_fraction": 0.008731795588362953,
+        "slip_relative_residual": 0.3846605986062974,
+        "source_model_force_n_separate": 4165900.0,
+        "source_model_slip_fraction_separate": 0.0216,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      }
+    ],
+    "force_mean_absolute_relative_residual": 0.08066025481748174,
+    "slip_mean_absolute_relative_residual": 0.5304189838884202
+  },
+  {
+    "case": "circular_spatial",
+    "parameter_changes": {},
+    "structural_hardening": "spatial",
+    "structural_contact": "circular_hitchcock",
+    "status": "CONDITIONAL_NUMERICAL_RESULT",
+    "result": {
+      "status": "CONDITIONAL_LITERATURE_COMPARISON_NOT_VALIDATED",
+      "intermediate_gauges_m": [
+        0.0029024,
+        0.0022087
+      ],
+      "assumptions": {
+        "prior_log_strain": 0.05,
+        "strain_convention": "log_thickness",
+        "stress_convention": "uniaxial",
+        "speed_interpretation": "roll_surface",
+        "friction_factor": 1.0,
+        "strength_factor": 1.0,
+        "radius_factor": 1.0,
+        "hardening_model": "spatial",
+        "contact_model": "circular_hitchcock",
+        "material_temperature_k_assumed": 293.15,
+        "incoming_temper": null,
+        "outgoing_temper": null
+      },
+      "passes": [
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.22566172863111505,
+          "roll_angular_speed_rad_s": 19.92315355059058,
+          "entry_plane_strain_strength_pa": 146519930.86508602,
+          "exit_plane_strain_strength_pa": 250846489.20359343,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.07299491187415542,
+          "friction_coefficient": 0.075,
+          "neutral_position_from_entry_m": 0.012572998871323649,
+          "contact_length_m": 0.016428448641567575,
+          "neutral_thickness_m": 0.002968275493891781,
+          "roll_surface_speed_m_s": 4.2,
+          "entry_speed_m_s": 3.040672457157434,
+          "exit_speed_m_s": 4.295326996397974,
+          "forward_slip_fraction": 0.022696903904279697,
+          "volume_flow_m3_s": 0.016954789621109856,
+          "mass_flow_kg_s": 45.43883618457441,
+          "mass_flow_residual_kg_s": -5.401319315647573e-15,
+          "separating_force_n": 5199293.318229647,
+          "torque_per_work_roll_nm": 37826.783505053994,
+          "roll_mechanical_power_both_rolls_w": 1507257.6321922755,
+          "plastic_work_power_w": 1236232.850558159,
+          "solid_slip_dissipation_both_interfaces_w": 271024.9976545962,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 1236232.6345376794,
+          "mechanical_work_residual_w": -0.21602047979250605,
+          "mechanical_work_residual_relative": 1.433202096169244e-07,
+          "entry_pressure_pa": 137049930.86508602,
+          "exit_pressure_pa": 241376489.20359343,
+          "pressure_at_neutral_pa": 296094817.2280454,
+          "max_pressure_pa": 296094817.2280454,
+          "min_pressure_pa": 137049930.86508602,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.17976763263970705,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.05773502691896259,
+              "history": [
+                "Assumed initial history; not reported by S1"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.4566251648548783,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 1.5945647262511528e-07,
+            "torque_change_over_capacity": 3.259222108444111e-07,
+            "slip_absolute_change": 4.088079430530911e-09
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 5.4673013424546805e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4985314.742506355,
+                "radius_residual_over_nominal": 0.06755135954133244
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.21793025105245414,
+                "force_n": 5088480.77527002,
+                "radius_residual_over_nominal": 0.0351735866494939
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.22163772295324405,
+                "force_n": 5141771.690429788,
+                "radius_residual_over_nominal": 0.01830888891071883
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.22356757138887837,
+                "force_n": 5169399.030450253,
+                "radius_residual_over_nominal": 0.009528796823321431
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.22457195421804055,
+                "force_n": 5183747.68518459,
+                "radius_residual_over_nominal": 0.004958823675652569
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.2250946390275727,
+                "force_n": 5191206.751750219,
+                "radius_residual_over_nominal": 0.002580482705653602
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.22536663480716213,
+                "force_n": 5195086.150589311,
+                "radius_residual_over_nominal": 0.0013428074753924683
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.22550817342910587,
+                "force_n": 5197104.29086035,
+                "radius_residual_over_nominal": 0.0006987496779418436
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.22558182513890934,
+                "force_n": 5198154.3016855,
+                "radius_residual_over_nominal": 0.00036360255826951393
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.22562015066656374,
+                "force_n": 5198700.644264844,
+                "radius_residual_over_nominal": 0.00018920425886955286
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.22564009374146987,
+                "force_n": 5198984.927545877,
+                "radius_residual_over_nominal": 9.845418755358577e-05
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.22565047130510896,
+                "force_n": 5199132.853844694,
+                "radius_residual_over_nominal": 5.1231505356399845e-05
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.22565587136193105,
+                "force_n": 5199209.827750109,
+                "radius_residual_over_nominal": 2.6658754419997022e-05
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.2256586813279407,
+                "force_n": 5199249.881553747,
+                "radius_residual_over_nominal": 1.3872109019150084e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.22566014351759187,
+                "force_n": 5199270.723827971,
+                "radius_residual_over_nominal": 7.218468766738035e-06
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.22566090438029224,
+                "force_n": 5199281.569264046,
+                "radius_residual_over_nominal": 3.756190792285407e-06
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.2256613003015827,
+                "force_n": 5199287.212773141,
+                "radius_residual_over_nominal": 1.954565334512456e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.22566150632254178,
+                "force_n": 5199290.149419125,
+                "radius_residual_over_nominal": 1.0170744236168607e-06
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.2256616135272714,
+                "force_n": 5199291.677527095,
+                "radius_residual_over_nominal": 5.292431803590564e-07
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.22566166931214882,
+                "force_n": 5199292.472690763,
+                "radius_residual_over_nominal": 2.753961130000999e-07
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.2256616983402761,
+                "force_n": 5199292.886460801,
+                "radius_residual_over_nominal": 1.433046690816037e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.22566171344530475,
+                "force_n": 5199293.101769491,
+                "radius_residual_over_nominal": 7.456978232830104e-08
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.22566172130533266,
+                "force_n": 5199293.213807166,
+                "radius_residual_over_nominal": 3.880300923799074e-08
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.22566172539536383,
+                "force_n": 5199293.2721069055,
+                "radius_residual_over_nominal": 2.019147041955248e-08
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.22566172752364577,
+                "force_n": 5199293.302443662,
+                "radius_residual_over_nominal": 1.0506800274617215e-08
+              },
+              {
+                "iteration": 26,
+                "contact_radius_m": 0.22566172863111505,
+                "force_n": 5199293.318229647,
+                "radius_residual_over_nominal": 5.4673013424546805e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 1,
+          "entry_thickness_m": 0.0041,
+          "exit_thickness_m": 0.0029024,
+          "reduction_fraction": 0.2920975609756099,
+          "mean_uniaxial_flow_stress_pa": 182790901.8631302,
+          "assumed_entry_uniaxial_strength_pa": 126889982.28990413,
+          "assumed_exit_uniaxial_strength_pa": 217239432.1004508,
+          "equivalent_strain_start": 0.05773502691896259,
+          "equivalent_strain_end": 0.4566251648548783,
+          "entry_tension_force_n": 52804.72,
+          "exit_tension_force_n": 37380.59008,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.23655963787283854,
+          "roll_angular_speed_rad_s": 22.294957544708506,
+          "entry_plane_strain_strength_pa": 250846489.20359343,
+          "exit_plane_strain_strength_pa": 287544368.94097346,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.05421176079223828,
+          "friction_coefficient": 0.071,
+          "neutral_position_from_entry_m": 0.009042627254454075,
+          "contact_length_m": 0.012805511152230045,
+          "neutral_thickness_m": 0.0022685588631870873,
+          "roll_surface_speed_m_s": 4.7,
+          "entry_speed_m_s": 3.673589669576665,
+          "exit_speed_m_s": 4.827376582143031,
+          "forward_slip_fraction": 0.027101400455963764,
+          "volume_flow_m3_s": 0.014500628253491864,
+          "mass_flow_kg_s": 38.8616837193582,
+          "mass_flow_residual_kg_s": 0.0,
+          "separating_force_n": 5221536.826579351,
+          "torque_per_work_roll_nm": 29498.29682821024,
+          "roll_mechanical_power_both_rolls_w": 1315326.5508523139,
+          "plastic_work_power_w": 1070862.7301148733,
+          "solid_slip_dissipation_both_interfaces_w": 236198.3784942302,
+          "net_tension_power_w": -8265.358104490362,
+          "traction_power_to_strip_w": 1079128.1723580838,
+          "mechanical_work_residual_w": 0.08413872010878586,
+          "mechanical_work_residual_relative": 6.396793256721314e-08,
+          "entry_pressure_pa": 242166489.20359343,
+          "exit_pressure_pa": 279434368.94097346,
+          "pressure_at_neutral_pa": 360156437.3978179,
+          "max_pressure_pa": 360156437.3978179,
+          "min_pressure_pa": 242166489.20359343,
+          "pressure_branch_mismatch_pa": 1.1920928955078125e-07,
+          "max_coulomb_shear_over_yield_shear": 0.17975611426432386,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.4566251648548783,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.7720129959598648,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 1.882292743341601e-07,
+            "torque_change_over_capacity": 5.157376376770525e-08,
+            "slip_absolute_change": 7.543657032371698e-09
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 9.146655282498956e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4866418.821452113,
+                "radius_residual_over_nominal": 0.11383900412015159
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.22280920022928458,
+                "force_n": 5033526.83735198,
+                "radius_residual_over_nominal": 0.060828621025890296
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.22922084102851853,
+                "force_n": 5121636.589877986,
+                "radius_residual_over_nominal": 0.03247544146957762
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.23264391493661934,
+                "force_n": 5168356.9803759,
+                "radius_residual_over_nominal": 0.01733063996791005
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.23447065104243692,
+                "force_n": 5193200.7825274095,
+                "radius_residual_over_nominal": 0.0092464852718702
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.2354452768225184,
+                "force_n": 5206430.900231874,
+                "radius_residual_over_nominal": 0.004932731703589854
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.2359652114077353,
+                "force_n": 5213481.75259933,
+                "radius_residual_over_nominal": 0.0026313048020082217
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.23624256409039096,
+                "force_n": 5217240.949798021,
+                "radius_residual_over_nominal": 0.0014035904271157479
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.23639050953936108,
+                "force_n": 5219245.614661783,
+                "radius_residual_over_nominal": 0.0007486898726609566
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.2364694251953889,
+                "force_n": 5220314.763134591,
+                "radius_residual_over_nominal": 0.0003993552779938078
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.23651151923846586,
+                "force_n": 5220885.007056855,
+                "radius_residual_over_nominal": 0.00021301722249727941
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.2365339723188032,
+                "force_n": 5221189.163754036,
+                "radius_residual_over_nominal": 0.00011362367815385895
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.236545948822599,
+                "force_n": 5221351.39765292,
+                "radius_residual_over_nominal": 6.060693895633673e-05
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.2365523370969997,
+                "force_n": 5221437.932260572,
+                "radius_residual_over_nominal": 3.2327753437163174e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.23655574460385073,
+                "force_n": 5221484.089538251,
+                "radius_residual_over_nominal": 1.7243623184277047e-05
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.23655756216795248,
+                "force_n": 5221508.709744254,
+                "radius_residual_over_nominal": 9.197746347319683e-06
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.23655853165640622,
+                "force_n": 5221521.842134671,
+                "radius_residual_over_nominal": 4.9060761296059695e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.23655904878136066,
+                "force_n": 5221528.8469422925,
+                "radius_residual_over_nominal": 2.616899900898473e-06
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.23655932461569473,
+                "force_n": 5221532.583303136,
+                "radius_residual_over_nominal": 1.395853771051786e-06
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.23655947174566147,
+                "force_n": 5221534.576276543,
+                "radius_residual_over_nominal": 7.445480491226946e-07
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.2365595502247486,
+                "force_n": 5221535.639327896,
+                "radius_residual_over_nominal": 3.971417377975954e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.23655959208547345,
+                "force_n": 5221536.2063591685,
+                "radius_residual_over_nominal": 2.1183529962974744e-07
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.23655961441397322,
+                "force_n": 5221536.50881349,
+                "radius_residual_over_nominal": 1.1299289342835054e-07
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.23655962632398914,
+                "force_n": 5221536.670142542,
+                "radius_residual_over_nominal": 6.027037980900951e-08
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.23655963267678853,
+                "force_n": 5221536.756195415,
+                "radius_residual_over_nominal": 3.2148204663999824e-08
+              },
+              {
+                "iteration": 26,
+                "contact_radius_m": 0.23655963606537006,
+                "force_n": 5221536.802095994,
+                "radius_residual_over_nominal": 1.7147843844613095e-08
+              },
+              {
+                "iteration": 27,
+                "contact_radius_m": 0.23655963787283854,
+                "force_n": 5221536.826579351,
+                "radius_residual_over_nominal": 9.146655282498956e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 2,
+          "entry_thickness_m": 0.0029024,
+          "exit_thickness_m": 0.0022087,
+          "reduction_fraction": 0.23900909592061736,
+          "mean_uniaxial_flow_stress_pa": 234154254.0941415,
+          "assumed_entry_uniaxial_strength_pa": 217239432.1004508,
+          "assumed_exit_uniaxial_strength_pa": 249020728.21804813,
+          "equivalent_strain_start": 0.4566251648548783,
+          "equivalent_strain_end": 0.7720129959598648,
+          "entry_tension_force_n": 34262.25152,
+          "exit_tension_force_n": 24361.077520000003,
+          "speed_interpretation": "roll_surface"
+        },
+        {
+          "status": "UNVALIDATED_CIRCULAR_ELASTIC_CONTACT",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.21081,
+          "contact_radius_m": 0.24655073413106382,
+          "roll_angular_speed_rad_s": 18.97443195294341,
+          "entry_plane_strain_strength_pa": 287544368.94097346,
+          "exit_plane_strain_strength_pa": 312309419.7899544,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "established",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04455444310541665,
+          "friction_coefficient": 0.069,
+          "neutral_position_from_entry_m": 0.007380121849839101,
+          "contact_length_m": 0.01097404377826838,
+          "neutral_thickness_m": 0.0017723906816544271,
+          "roll_surface_speed_m_s": 4.0,
+          "entry_speed_m_s": 3.209835073399605,
+          "exit_speed_m_s": 4.121838794545178,
+          "forward_slip_fraction": 0.03045969863629483,
+          "volume_flow_m3_s": 0.009641805308200083,
+          "mass_flow_kg_s": 25.840038225976222,
+          "mass_flow_residual_kg_s": -5.7018124859801934e-15,
+          "separating_force_n": 5105770.818652384,
+          "torque_per_work_roll_nm": 23686.804539890723,
+          "roll_mechanical_power_both_rolls_w": 898887.3218496551,
+          "plastic_work_power_w": 724358.0021894128,
+          "solid_slip_dissipation_both_interfaces_w": 172022.41116528068,
+          "net_tension_power_w": -2506.869380132022,
+          "traction_power_to_strip_w": 726864.9106843745,
+          "mechanical_work_residual_w": 0.039114829643150384,
+          "mechanical_work_residual_relative": 4.351471946746691e-08,
+          "entry_pressure_pa": 280034368.94097346,
+          "exit_pressure_pa": 305059419.7899544,
+          "pressure_at_neutral_pa": 413176774.56315196,
+          "max_pressure_pa": 413176774.56315196,
+          "min_pressure_pa": 280034368.94097346,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.18415330393516924,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED",
+            "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+            "CALIBRATION_DOMAIN_UNKNOWN",
+            "PRIOR_STATE_AND_CONSTITUTIVE_CONVENTIONS_ASSUMED",
+            "MILL_RATINGS_UNKNOWN"
+          ],
+          "limitations": [
+            "Circular flattening only; no noncircular deformation or elastic strip recovery.",
+            "Nominal shaft radius for torque/speed; local elastic surface kinematics and hysteresis omitted.",
+            "Projected small-angle mechanics; no sticking, roll stack or stand-gap compliance.",
+            "Numerical convergence does not establish aluminium accuracy or physical capacity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 0.7720129959598648,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2"
+              ],
+              "temperature_k": 293.15
+            },
+            "state_out": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "accumulated_equivalent_plastic_strain": 1.0607802945161222,
+              "history": [
+                "Assumed initial history; not reported by S1",
+                "literature_assumption_bridge_pass_1",
+                "literature_assumption_bridge_pass_2",
+                "literature_assumption_bridge_pass_3"
+              ],
+              "temperature_k": 293.15
+            },
+            "law": {
+              "alloy": "AA5052",
+              "temper": "UNREPORTED",
+              "yield_stress_pa": 0,
+              "strength_coefficient_pa": 266350244.55752835,
+              "exponent": 0.26,
+              "provenance": "S1 coefficients with explicit assumed stress/strain mapping; no calibration",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              373.15
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 2.2528591150963655e-07,
+            "torque_change_over_capacity": 1.1000550098447585e-08,
+            "slip_absolute_change": 4.879169068772171e-09
+          },
+          "flattening": {
+            "equation": "R_contact=R_nominal*(1+C*F_total/(width*draft))",
+            "elasticity": {
+              "young_modulus_pa": 210000000000.0,
+              "poisson_ratio": 0.3,
+              "provenance": "Analyst assumed steel E=210 GPa, nu=0.3; NOT Shao benchmark data",
+              "max_radius_ratio": 1.5
+            },
+            "compliance_pa_inv": 2.2069485442076155e-11,
+            "converged": true,
+            "radius_tolerance": 1e-08,
+            "radius_residual_over_nominal": 6.396682592243667e-09,
+            "iteration_history": [
+              {
+                "iteration": 1,
+                "contact_radius_m": 0.21081,
+                "force_n": 4637041.646419382,
+                "radius_residual_over_nominal": 0.15397561825183456
+              },
+              {
+                "iteration": 2,
+                "contact_radius_m": 0.2270398000418346,
+                "force_n": 4852682.592516488,
+                "radius_residual_over_nominal": 0.08414828999443669
+              },
+              {
+                "iteration": 3,
+                "contact_radius_m": 0.23590945054869822,
+                "force_n": 4968519.84449615,
+                "radius_residual_over_nominal": 0.04592058715801577
+              },
+              {
+                "iteration": 4,
+                "contact_radius_m": 0.24074971003808887,
+                "force_n": 5031175.226108437,
+                "radius_residual_over_nominal": 0.025040801337226106
+              },
+              {
+                "iteration": 5,
+                "contact_radius_m": 0.2433891357030392,
+                "force_n": 5065181.697431656,
+                "radius_residual_over_nominal": 0.013649604985895614
+              },
+              {
+                "iteration": 6,
+                "contact_radius_m": 0.24482787231657752,
+                "force_n": 5083671.85976294,
+                "radius_residual_over_nominal": 0.00743877890153476
+              },
+              {
+                "iteration": 7,
+                "contact_radius_m": 0.2456119568066938,
+                "force_n": 5093734.965052696,
+                "radius_residual_over_nominal": 0.004053540613657985
+              },
+              {
+                "iteration": 8,
+                "contact_radius_m": 0.2460392202550764,
+                "force_n": 5099214.513574308,
+                "radius_residual_over_nominal": 0.0022087218474211223
+              },
+              {
+                "iteration": 9,
+                "contact_radius_m": 0.24627203058140384,
+                "force_n": 5102199.052860049,
+                "radius_residual_over_nominal": 0.0012034642565593359
+              },
+              {
+                "iteration": 10,
+                "contact_radius_m": 0.24639888173136648,
+                "force_n": 5103824.881648414,
+                "radius_residual_over_nominal": 0.000655718702468301
+              },
+              {
+                "iteration": 11,
+                "contact_radius_m": 0.24646799776120015,
+                "force_n": 5104710.624482757,
+                "radius_residual_over_nominal": 0.00035727094831041996
+              },
+              {
+                "iteration": 12,
+                "contact_radius_m": 0.24650565590550683,
+                "force_n": 5105193.193807005,
+                "radius_residual_over_nominal": 0.0001946594643878471
+              },
+              {
+                "iteration": 13,
+                "contact_radius_m": 0.24652617398635063,
+                "force_n": 5105456.112971383,
+                "radius_residual_over_nominal": 0.0001060601133230673
+              },
+              {
+                "iteration": 14,
+                "contact_radius_m": 0.24653735325259546,
+                "force_n": 5105599.361601224,
+                "radius_residual_over_nominal": 5.778670929165796e-05
+              },
+              {
+                "iteration": 15,
+                "contact_radius_m": 0.24654344426068836,
+                "force_n": 5105677.40960791,
+                "radius_residual_over_nominal": 3.1484983317439984e-05
+              },
+              {
+                "iteration": 16,
+                "contact_radius_m": 0.24654676293535494,
+                "force_n": 5105719.933680126,
+                "radius_residual_over_nominal": 1.7154527782074387e-05
+              },
+              {
+                "iteration": 17,
+                "contact_radius_m": 0.24654857110835582,
+                "force_n": 5105743.102760709,
+                "radius_residual_over_nominal": 9.346606454368747e-06
+              },
+              {
+                "iteration": 18,
+                "contact_radius_m": 0.24654955628740916,
+                "force_n": 5105755.726361598,
+                "radius_residual_over_nominal": 5.092477109905431e-06
+              },
+              {
+                "iteration": 19,
+                "contact_radius_m": 0.24655009305995892,
+                "force_n": 5105762.604295284,
+                "radius_residual_over_nominal": 2.7746242741776375e-06
+              },
+              {
+                "iteration": 20,
+                "contact_radius_m": 0.24655038551923053,
+                "force_n": 5105766.3517195275,
+                "radius_residual_over_nominal": 1.5117475010539688e-06
+              },
+              {
+                "iteration": 21,
+                "contact_radius_m": 0.24655054486497588,
+                "force_n": 5105768.393494244,
+                "radius_residual_over_nominal": 8.236720469012213e-07
+              },
+              {
+                "iteration": 22,
+                "contact_radius_m": 0.246550631684128,
+                "force_n": 5105769.505950198,
+                "radius_residual_over_nominal": 4.4877575926613573e-07
+              },
+              {
+                "iteration": 23,
+                "contact_radius_m": 0.2465506789873369,
+                "force_n": 5105770.112069135,
+                "radius_residual_over_nominal": 2.445144052182221e-07
+              },
+              {
+                "iteration": 24,
+                "contact_radius_m": 0.24655070476037777,
+                "force_n": 5105770.442311581,
+                "radius_residual_over_nominal": 1.3322309196711822e-07
+              },
+              {
+                "iteration": 25,
+                "contact_radius_m": 0.24655071880275778,
+                "force_n": 5105770.622243388,
+                "radius_residual_over_nominal": 7.258628444707706e-08
+              },
+              {
+                "iteration": 26,
+                "contact_radius_m": 0.2465507264537151,
+                "force_n": 5105770.720278802,
+                "radius_residual_over_nominal": 3.954846427733829e-08
+              },
+              {
+                "iteration": 27,
+                "contact_radius_m": 0.24655073062232097,
+                "force_n": 5105770.773693165,
+                "radius_residual_over_nominal": 2.1547886492679297e-08
+              },
+              {
+                "iteration": 28,
+                "contact_radius_m": 0.24655073289357593,
+                "force_n": 5105770.802795853,
+                "radius_residual_over_nominal": 1.1740314748447896e-08
+              },
+              {
+                "iteration": 29,
+                "contact_radius_m": 0.24655073413106382,
+                "force_n": 5105770.818652384,
+                "radius_residual_over_nominal": 6.396682592243667e-09
+              }
+            ],
+            "source": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+            "parameters_calibrated": false,
+            "uniqueness_proven": false
+          },
+          "pass_id": 3,
+          "entry_thickness_m": 0.0022087,
+          "exit_thickness_m": 0.00172,
+          "reduction_fraction": 0.22126137546973335,
+          "mean_uniaxial_flow_stress_pa": 260163816.25546587,
+          "assumed_entry_uniaxial_strength_pa": 249020728.21804813,
+          "assumed_exit_uniaxial_strength_pa": 270467891.379279,
+          "equivalent_strain_start": 0.7720129959598648,
+          "equivalent_strain_end": 1.0607802945161222,
+          "entry_tension_force_n": 22558.77832,
+          "exit_tension_force_n": 16959.2,
+          "speed_interpretation": "roll_surface"
+        }
+      ],
+      "peak_force_n": 5221536.826579351,
+      "numerical_converged": true,
+      "physical_calibration_domain": "UNKNOWN",
+      "thermal_validation": false,
+      "product_quality_certified": false
+    },
+    "comparison": [
+      {
+        "pass_id": 1,
+        "predicted_force_n": 5199293.318229647,
+        "author_measured_force_n": 5143900.0,
+        "force_residual_n": 55393.31822964735,
+        "force_relative_residual": 0.010768739328067767,
+        "predicted_forward_slip_fraction": 0.022696903904279697,
+        "author_measured_forward_slip_fraction": 0.015,
+        "slip_residual_fraction": 0.007696903904279698,
+        "slip_relative_residual": 0.5131269269519798,
+        "source_model_force_n_separate": 5265700.0,
+        "source_model_slip_fraction_separate": 0.0154,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 2,
+        "predicted_force_n": 5221536.826579351,
+        "author_measured_force_n": 5017400.0,
+        "force_residual_n": 204136.82657935098,
+        "force_relative_residual": 0.040685778805626516,
+        "predicted_forward_slip_fraction": 0.027101400455963764,
+        "author_measured_forward_slip_fraction": 0.0182,
+        "slip_residual_fraction": 0.008901400455963764,
+        "slip_relative_residual": 0.48908793714086607,
+        "source_model_force_n_separate": 5066500.0,
+        "source_model_slip_fraction_separate": 0.0187,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      },
+      {
+        "pass_id": 3,
+        "predicted_force_n": 5105770.818652384,
+        "author_measured_force_n": 4301800.0,
+        "force_residual_n": 803970.818652384,
+        "force_relative_residual": 0.1868917240811716,
+        "predicted_forward_slip_fraction": 0.03045969863629483,
+        "author_measured_forward_slip_fraction": 0.0227,
+        "slip_residual_fraction": 0.007759698636294828,
+        "slip_relative_residual": 0.34183694433016854,
+        "source_model_force_n_separate": 4165900.0,
+        "source_model_slip_fraction_separate": 0.0216,
+        "measurement_uncertainty": null,
+        "independent_validation": false
+      }
+    ],
+    "force_mean_absolute_relative_residual": 0.07944874740495529,
+    "slip_mean_absolute_relative_residual": 0.4480172694743381
+  }
+]

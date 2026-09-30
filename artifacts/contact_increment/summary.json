@@ -1,0 +1,333 @@
+{
+  "status": "CONDITIONAL_MECHANICS_INCREMENT_NOT_EXPERIMENTAL_VALIDATION",
+  "reviewed_base_commit": "09d0d5b2e754ddcc9840e9b2d11fbdb07efd9b89",
+  "fixed_product": "AA5052 1360 mm wide, 4.10 to 1.72 mm in published three-pass gauges; temper unknown",
+  "assumptions": {
+    "prior_log_strain": 0.05,
+    "strain_convention": "log_thickness",
+    "stress_convention": "uniaxial",
+    "speed_interpretation": "roll_surface"
+  },
+  "reported_measurements_fitted": false,
+  "new_optimisation_run": false,
+  "structures": [
+    {
+      "case": "reviewed_rigid_mean",
+      "parameter_changes": {},
+      "structural_hardening": "pass_mean",
+      "structural_contact": "rigid",
+      "status": "CONDITIONAL_NUMERICAL_RESULT",
+      "comparison": [
+        {
+          "pass_id": 1,
+          "predicted_force_n": 4690312.830398071,
+          "author_measured_force_n": 5143900.0,
+          "force_residual_n": -453587.1696019294,
+          "force_relative_residual": -0.0881796243321078,
+          "predicted_forward_slip_fraction": 0.023074072337962104,
+          "author_measured_forward_slip_fraction": 0.015,
+          "slip_residual_fraction": 0.008074072337962104,
+          "slip_relative_residual": 0.5382714891974736,
+          "source_model_force_n_separate": 5265700.0,
+          "source_model_slip_fraction_separate": 0.0154,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 2,
+          "predicted_force_n": 4772708.903751087,
+          "author_measured_force_n": 5017400.0,
+          "force_residual_n": -244691.09624891263,
+          "force_relative_residual": -0.04876850485289441,
+          "predicted_forward_slip_fraction": 0.026263221422060834,
+          "author_measured_forward_slip_fraction": 0.0182,
+          "slip_residual_fraction": 0.008063221422060833,
+          "slip_relative_residual": 0.44303414406927644,
+          "source_model_force_n_separate": 5066500.0,
+          "source_model_slip_fraction_separate": 0.0187,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 3,
+          "predicted_force_n": 4582180.768242753,
+          "author_measured_force_n": 4301800.0,
+          "force_residual_n": 280380.7682427531,
+          "force_relative_residual": 0.06517754619990535,
+          "predicted_forward_slip_fraction": 0.02899929817394198,
+          "author_measured_forward_slip_fraction": 0.0227,
+          "slip_residual_fraction": 0.006299298173941977,
+          "slip_relative_residual": 0.2775021222000871,
+          "source_model_force_n_separate": 4165900.0,
+          "source_model_slip_fraction_separate": 0.0216,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        }
+      ],
+      "force_mean_absolute_relative_residual": 0.06737522512830252,
+      "slip_mean_absolute_relative_residual": 0.4196025851556124
+    },
+    {
+      "case": "rigid_spatial",
+      "parameter_changes": {},
+      "structural_hardening": "spatial",
+      "structural_contact": "rigid",
+      "status": "CONDITIONAL_NUMERICAL_RESULT",
+      "comparison": [
+        {
+          "pass_id": 1,
+          "predicted_force_n": 4985314.742506355,
+          "author_measured_force_n": 5143900.0,
+          "force_residual_n": -158585.25749364495,
+          "force_relative_residual": -0.030829770698039383,
+          "predicted_forward_slip_fraction": 0.02128417328702814,
+          "author_measured_forward_slip_fraction": 0.015,
+          "slip_residual_fraction": 0.006284173287028141,
+          "slip_relative_residual": 0.41894488580187605,
+          "source_model_force_n_separate": 5265700.0,
+          "source_model_slip_fraction_separate": 0.0154,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 2,
+          "predicted_force_n": 4866418.821452113,
+          "author_measured_force_n": 5017400.0,
+          "force_residual_n": -150981.17854788713,
+          "force_relative_residual": -0.030091517229618336,
+          "predicted_forward_slip_fraction": 0.0250965628329467,
+          "author_measured_forward_slip_fraction": 0.0182,
+          "slip_residual_fraction": 0.0068965628329467,
+          "slip_relative_residual": 0.3789320237882803,
+          "source_model_force_n_separate": 5066500.0,
+          "source_model_slip_fraction_separate": 0.0187,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 3,
+          "predicted_force_n": 4637041.646419382,
+          "author_measured_force_n": 4301800.0,
+          "force_residual_n": 335241.6464193817,
+          "force_relative_residual": 0.07793055149457939,
+          "predicted_forward_slip_fraction": 0.028100111694871144,
+          "author_measured_forward_slip_fraction": 0.0227,
+          "slip_residual_fraction": 0.005400111694871142,
+          "slip_relative_residual": 0.23789038303397092,
+          "source_model_force_n_separate": 4165900.0,
+          "source_model_slip_fraction_separate": 0.0216,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        }
+      ],
+      "force_mean_absolute_relative_residual": 0.04628394647407904,
+      "slip_mean_absolute_relative_residual": 0.34525576420804244
+    },
+    {
+      "case": "circular_mean",
+      "parameter_changes": {},
+      "structural_hardening": "pass_mean",
+      "structural_contact": "circular_hitchcock",
+      "status": "CONDITIONAL_NUMERICAL_RESULT",
+      "comparison": [
+        {
+          "pass_id": 1,
+          "predicted_force_n": 4882032.386058856,
+          "author_measured_force_n": 5143900.0,
+          "force_residual_n": -261867.6139411442,
+          "force_relative_residual": -0.050908379622687905,
+          "predicted_forward_slip_fraction": 0.02471298094893215,
+          "author_measured_forward_slip_fraction": 0.015,
+          "slip_residual_fraction": 0.009712980948932151,
+          "slip_relative_residual": 0.6475320632621435,
+          "source_model_force_n_separate": 5265700.0,
+          "source_model_slip_fraction_separate": 0.0154,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 2,
+          "predicted_force_n": 5114911.39794856,
+          "author_measured_force_n": 5017400.0,
+          "force_residual_n": 97511.3979485603,
+          "force_relative_residual": 0.019434647018089057,
+          "predicted_forward_slip_fraction": 0.02837497007430212,
+          "author_measured_forward_slip_fraction": 0.0182,
+          "slip_residual_fraction": 0.010174970074302118,
+          "slip_relative_residual": 0.5590642897968197,
+          "source_model_force_n_separate": 5066500.0,
+          "source_model_slip_fraction_separate": 0.0187,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 3,
+          "predicted_force_n": 5040151.220518234,
+          "author_measured_force_n": 4301800.0,
+          "force_residual_n": 738351.2205182342,
+          "force_relative_residual": 0.17163773781166825,
+          "predicted_forward_slip_fraction": 0.031431795588362954,
+          "author_measured_forward_slip_fraction": 0.0227,
+          "slip_residual_fraction": 0.008731795588362953,
+          "slip_relative_residual": 0.3846605986062974,
+          "source_model_force_n_separate": 4165900.0,
+          "source_model_slip_fraction_separate": 0.0216,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        }
+      ],
+      "force_mean_absolute_relative_residual": 0.08066025481748174,
+      "slip_mean_absolute_relative_residual": 0.5304189838884202
+    },
+    {
+      "case": "circular_spatial",
+      "parameter_changes": {},
+      "structural_hardening": "spatial",
+      "structural_contact": "circular_hitchcock",
+      "status": "CONDITIONAL_NUMERICAL_RESULT",
+      "comparison": [
+        {
+          "pass_id": 1,
+          "predicted_force_n": 5199293.318229647,
+          "author_measured_force_n": 5143900.0,
+          "force_residual_n": 55393.31822964735,
+          "force_relative_residual": 0.010768739328067767,
+          "predicted_forward_slip_fraction": 0.022696903904279697,
+          "author_measured_forward_slip_fraction": 0.015,
+          "slip_residual_fraction": 0.007696903904279698,
+          "slip_relative_residual": 0.5131269269519798,
+          "source_model_force_n_separate": 5265700.0,
+          "source_model_slip_fraction_separate": 0.0154,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 2,
+          "predicted_force_n": 5221536.826579351,
+          "author_measured_force_n": 5017400.0,
+          "force_residual_n": 204136.82657935098,
+          "force_relative_residual": 0.040685778805626516,
+          "predicted_forward_slip_fraction": 0.027101400455963764,
+          "author_measured_forward_slip_fraction": 0.0182,
+          "slip_residual_fraction": 0.008901400455963764,
+          "slip_relative_residual": 0.48908793714086607,
+          "source_model_force_n_separate": 5066500.0,
+          "source_model_slip_fraction_separate": 0.0187,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        },
+        {
+          "pass_id": 3,
+          "predicted_force_n": 5105770.818652384,
+          "author_measured_force_n": 4301800.0,
+          "force_residual_n": 803970.818652384,
+          "force_relative_residual": 0.1868917240811716,
+          "predicted_forward_slip_fraction": 0.03045969863629483,
+          "author_measured_forward_slip_fraction": 0.0227,
+          "slip_residual_fraction": 0.007759698636294828,
+          "slip_relative_residual": 0.34183694433016854,
+          "source_model_force_n_separate": 4165900.0,
+          "source_model_slip_fraction_separate": 0.0216,
+          "measurement_uncertainty": null,
+          "independent_validation": false
+        }
+      ],
+      "force_mean_absolute_relative_residual": 0.07944874740495529,
+      "slip_mean_absolute_relative_residual": 0.4480172694743381
+    }
+  ],
+  "hypothesis_count": 15,
+  "rejected_hypotheses": [
+    {
+      "case": "zero_prior",
+      "parameter_changes": {
+        "prior_log_strain": 0
+      },
+      "structural_hardening": "spatial",
+      "structural_contact": "circular_hitchcock",
+      "status": "REJECTED_MODEL_OR_ASSUMPTION",
+      "reason": "pass 1: boundary tension reaches assumed local uniaxial strength; initial history unresolved"
+    }
+  ],
+  "tested_hypothesis_envelopes_not_confidence_intervals": [
+    {
+      "pass_id": 1,
+      "force_relative_residual": {
+        "minimum": -0.35997337912488214,
+        "maximum": 0.16067945299816833,
+        "all_positive": false,
+        "all_negative": false
+      },
+      "slip_relative_residual": {
+        "minimum": -0.4670623423410394,
+        "maximum": 0.7767621169332948,
+        "all_positive": false,
+        "all_negative": false
+      }
+    },
+    {
+      "pass_id": 2,
+      "force_relative_residual": {
+        "minimum": -0.386921585307078,
+        "maximum": 0.1569926122177323,
+        "all_positive": false,
+        "all_negative": false
+      },
+      "slip_relative_residual": {
+        "minimum": -0.24076716672091536,
+        "maximum": 0.6680515477919009,
+        "all_positive": false,
+        "all_negative": false
+      }
+    },
+    {
+      "pass_id": 3,
+      "force_relative_residual": {
+        "minimum": -0.3217780924847412,
+        "maximum": 0.32216081515707096,
+        "all_positive": false,
+        "all_negative": false
+      },
+      "slip_relative_residual": {
+        "minimum": -0.19344283455732902,
+        "maximum": 0.46468763507239497,
+        "all_positive": false,
+        "all_negative": false
+      }
+    }
+  ],
+  "combined_refinement": [
+    {
+      "pass_id": 1,
+      "force_relative_change": 1.6622462095661206e-07,
+      "slip_absolute_change": -3.861215569500587e-09,
+      "radius_relative_change": 1.0939926964326219e-08,
+      "torque_relative_change": 7.094385592321117e-07
+    },
+    {
+      "pass_id": 2,
+      "force_relative_change": -2.0170288406173853e-07,
+      "slip_absolute_change": -7.921697076085366e-09,
+      "radius_relative_change": -2.195546100480783e-08,
+      "torque_relative_change": 1.3435709078635227e-07
+    },
+    {
+      "pass_id": 3,
+      "force_relative_change": -2.4748399785057273e-07,
+      "slip_absolute_change": -5.408729242262211e-09,
+      "radius_relative_change": -3.5876024817582675e-08,
+      "torque_relative_change": 3.0493681135723705e-08
+    }
+  ],
+  "max_mechanical_work_residual_relative": 7.456169673692192e-07,
+  "max_mass_flow_residual_kg_s": 7.460698725481052e-15,
+  "max_flattening_residual_over_nominal": 9.928656808843374e-09,
+  "data_gate": "Flow curve/history, measured speed locations, torque, elastic geometry, repeat coils and uncertainty remain missing. No parameter identification or plant recommendation.",
+  "limitations": [
+    "Sampled hypotheses have no probabilities or confidence coverage.",
+    "Rate-independent mechanics cannot distinguish speed locations from force or slip; throughput/power differ.",
+    "Circular compliance and friction/hardening can compensate in force; joint evidence is required.",
+    "No sticking/noncircular contact, elastic recovery, calibrated aluminium response or mill ratings.",
+    "No new thermal, metallurgical, flatness or fracture validation."
+  ]
+}

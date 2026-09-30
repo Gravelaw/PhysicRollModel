@@ -149,3 +149,21 @@ true-gauge/closed-strip checks again. Regenerated sensor and equipment JSON matc
 the bundled accepted values exactly. A new reviewed archive uses a separate
 filename, `PhysicRollModel-v0.3-reviewed-AA5052.zip`, preserving the original
 candidate archive. The source tree contains no paid-service or plant connection.
+
+## Optional contact/material increment from published 09d0d5b2
+
+The local `development/contact-hardening-increment` adds optional spatial hardening
+and circular roll compliance; default load/torque/slip match the reviewed baseline
+regression. **54/54 tests pass**, including independent pressure integration and
+bracketed radius checks, signed regenerative work, state continuity and limits.
+The fixed-gauge structural and 15-hypothesis study ran at checked 512/1024 cells;
+one zero-prior hypothesis rejected explicitly. See the
+[report-sync packet](report-sync-contact-increment.md) for per-pass measured-data
+residuals, worsened comparisons and unresolved source semantics.
+
+A clean extracted source archive passed all 54 tests and the portable smoke test.
+Its complete fixed-gauge study rerun matched all seven generated study files
+byte-for-byte on this build environment. Source fingerprints and comparison
+checksums are retained in `artifacts/contact_increment`. This is local package
+verification, not a new independent computer acceptance or aluminium validation.
+The existing scene and original reviewed archives remain unchanged.

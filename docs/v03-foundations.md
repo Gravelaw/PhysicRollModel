@@ -1,7 +1,7 @@
 # v0.3 research-informed computational foundations (candidate)
 
-The initial candidate is preserved at `ec3e79f`. The subsequent local specialist
-review and corrections are documented in [mechanics-audit.md](mechanics-audit.md),
+The initial candidate is preserved at `ec3e79f`. The subsequent published specialist
+review at `09d0d5b2` and corrections are documented in [mechanics-audit.md](mechanics-audit.md),
 and actual literature runs in [aa5052-study.md](aa5052-study.md). Those documents
 supersede this initial description where numerical safeguards were strengthened.
 
@@ -82,7 +82,7 @@ quietly replaced by the hardening law. `solve()` remains the v0.2 heuristic.
 
 | Source (click through) | Viewed evidence, role and implementation boundary |
 |---|---|
-| Erfanian et al., [*Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics*](https://arxiv.org/html/2408.01347v1), 2024 | Primary full HTML inspected: equations 21–28 lead to two pressure branches and a neutral point under rigid-roll, perfectly plastic asymptotics. `slab.py` uses an explicitly converted full-thickness leading-order slab equation, not their first-order through-thickness solution. Tests verify mathematics, not the paper's FEM agreement or aluminium performance. |
+| Erfanian et al., [*Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics*](https://arxiv.org/html/2408.01347v1), 2024 preprint v1; [2025 journal lineage](https://doi.org/10.1016/j.euromechsol.2025.105712) | Primary full HTML inspected: equations 21–28 lead to two pressure branches and a neutral point under rigid-roll, perfectly plastic asymptotics. `slab.py` uses an explicitly converted full-thickness leading-order slab equation, not their first-order through-thickness solution. Tests verify mathematics, not the paper's FEM agreement or aluminium performance. |
 | Mišović et al., [*Deformations and velocities during cold rolling of aluminium alloys*](https://mit.imt.si/izvodi/mit161/misovic.pdf), 2016 | Parent-reviewed AW2024/AW5083 hardening/kinematics motivates tracking strain history. Our power law coefficients are **not taken from the paper**; no generic alloy can stand in for those grades. |
 | Lenard and Zhang, [*A study of friction during lubricated cold rolling of an aluminum alloy*](https://doi.org/10.1016/S0924-0136(97)00183-0), 1997 | Aluminium lubrication/friction source; publisher metadata verified, full text unavailable here. Motivates the declared fluid variables and joint friction identification, not a borrowed `µ(fluid)` law. |
 | Tadić et al., [*An analysis of longitudinal residual stresses in EN AW-5083 alloy strips as a function of cold-rolling process parameters*](https://doi.org/10.1515/jmbm-2022-0297), 2023 | DOI supplied in specialist research; full article blocked. It is a future stress-depth validation lead, **not** evidence for a friction control rule or the present profile diagnostics. |

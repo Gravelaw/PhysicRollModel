@@ -1,0 +1,62 @@
+{
+  "M1": {
+    "authors": "Mozhdeh Erfanian; Edward J. Brambley; Francis Flanagan; Doireann O’Kiely; Alison N. O’Connor",
+    "year": 2025,
+    "title": "Through-thickness modelling of metal rolling using multiple-scales asymptotics",
+    "journal": "European Journal of Mechanics A/Solids",
+    "volume": 113,
+    "article": 105712,
+    "doi_url": "https://doi.org/10.1016/j.euromechsol.2025.105712",
+    "metadata_checked": [
+      "https://arxiv.org/abs/2408.01347",
+      "https://pure.ul.ie/en/publications/through-thickness-modelling-of-metal-rolling-using-multiple-scale/"
+    ],
+    "equation_numbers_checked_in": "https://arxiv.org/html/2408.01347v1",
+    "equation_numbers": "21–28 in 2024 v1 only",
+    "published_pdf_supplied_by_parent": "https://wrap.warwick.ac.uk/191529/2/1-s2.0-S0997753825001469-main.pdf",
+    "journal_equation_numbering_checked": false,
+    "scope": "Constant-strength leading-order motivation only; variable K derivation is documented separately; no aluminium validation"
+  },
+  "M5": {
+    "authors": "Ling Li; Ryo Matsumoto; Hiroshi Utsunomiya",
+    "year": 2018,
+    "title": "Experimental Study of Roll Flattening in Cold Rolling Process",
+    "journal": "ISIJ International",
+    "volume": 58,
+    "issue": 4,
+    "pages": "714–720",
+    "doi_url": "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623",
+    "primary_html_read": "https://www.jstage.jst.go.jp/article/isijinternational/58/4/58_ISIJINT-2017-623/_html/-char/en",
+    "equation": "1",
+    "scope": "Circular Hitchcock formula; stainless steel experiment documents noncircular limits. No transfer of its material curve or experimental accuracy to aluminium."
+  },
+  "AA5052": {
+    "authors": "Jian Shao; Wenquan Sun; Anrui He; Bo Li",
+    "year": 2015,
+    "title_as_published": "Research on the Thermal Calculaion Model of High Strength Aluminum Strip Rolling Based on Finite Diffreence Method",
+    "doi": "https://doi.org/10.18280/ijht.330113",
+    "primary_html": "https://www.iieta.org/journals/ijht/paper/10.18280/ijht.330113",
+    "primary_pdf": "https://www.iieta.org/download/file/fid/24141",
+    "evidence": "Original HTML equations/tables read; PDF p94 checked by parent against original table; no raw plant traces supplied",
+    "limitations": [
+      "Incoming temper and prior strain unknown",
+      "Eq3 accumulation coefficient a unspecified",
+      "K/n reference18 concerns Al-Si continuous casting, not an identifiable AA5052 flow-curve dataset",
+      "Table1 says roll radius; Eq6 prose says diameter",
+      "Rolling-speed measurement location unresolved",
+      "No measured torque or temperature validation",
+      "Measurement uncertainty and independent coils unavailable"
+    ]
+  },
+  "manufacturer": {
+    "author": "Hulamin",
+    "year": null,
+    "title": "5052 Data Sheet",
+    "primary_pdf": "https://www.hulamin.com/sites/default/files/downloads/5052%20Data%20Sheet.pdf",
+    "evidence": "Primary one-page PDF text read; generic density and application categories only",
+    "limitations": [
+      "Generic manufacturer properties do not identify benchmark temper",
+      "No H32/H34 strength or bend certification inferred"
+    ]
+  }
+}

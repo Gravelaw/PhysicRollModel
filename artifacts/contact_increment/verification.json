@@ -1,0 +1,19 @@
+{
+  "status": "NUMERICAL_VERIFICATION_NOT_EXPERIMENTAL_VALIDATION",
+  "tests_passed": 54,
+  "reviewed_tests_preserved": 44,
+  "command": "python -m unittest discover -s tests -v",
+  "smoke": "PASS baseline, foundations and existing bundled checksums",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "new_geometry_render_required": false,
+  "geometry_changed": false,
+  "new_calibration_fit": false,
+  "new_optimisation_study": false,
+  "old_results_preserved": "artifacts/aa5052",
+  "source_hashes": "reproducibility.json",
+  "comparison_checksums": "checksums.json",
+  "clean_extracted_tests_passed": 54,
+  "clean_extracted_smoke": "PASS",
+  "clean_extracted_study_rerun": "All 7 generated files byte-identical on this environment",
+  "consumer_other_environment_verified": false
+}
