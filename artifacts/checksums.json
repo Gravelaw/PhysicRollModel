@@ -1,0 +1,11 @@
+{
+  "artifacts/mill.blend": "1a2a89f347145950ee8aa2f9bd67c1da949fe4adb1a58b1eb7ab494ee6fc2c65",
+  "artifacts/mill.usda": "cffff080522f5b82bd3b865d8d09f0fec31aef82bf4f7aabfa2b3353e98564d5",
+  "artifacts/overview.png": "fd17ce4f850e5da762b6f449bd81749b2e2cad63f9b5aab6812838add093f842",
+  "artifacts/preview.png": "a951e3d9c7349efee5338c48c558855b71d41eca3b6f63f39877fc174bfcc4e4",
+  "artifacts/process.result.json": "3253a37c973a5aa3fd9b977659633d558ece835e81505afaf891d43dedc0bf5a",
+  "artifacts/baseline.result.json": "3253a37c973a5aa3fd9b977659633d558ece835e81505afaf891d43dedc0bf5a",
+  "artifacts/equipment.result.json": "a4446e77c61b675c219ce2f6509b68362668a10469f3a0118de1ea41a110e5d7",
+  "artifacts/sensor_manifest.json": "f6a4722691528efcba77de6673b26812aa29056477854ee646b31c7ce7763e54",
+  "artifacts/equipment_manifest.json": "a2a8a347b85a2de919d539c53321686674ff1d0a4998049dd0778ebb0cf618ae"
+}

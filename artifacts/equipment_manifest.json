@@ -1,0 +1,314 @@
+[
+  {
+    "equipment_id": "strip_product",
+    "object_name": "strip_product"
+  },
+  {
+    "equipment_id": "foundation",
+    "object_name": "foundation"
+  },
+  {
+    "equipment_id": "stand01_work_upper",
+    "object_name": "stand01_work_upper"
+  },
+  {
+    "equipment_id": "stand01_backup_upper",
+    "object_name": "stand01_backup_upper"
+  },
+  {
+    "equipment_id": "stand01_work_upper_journal_-1",
+    "object_name": "stand01_work_upper_journal_-1"
+  },
+  {
+    "equipment_id": "stand01_work_upper_journal_1",
+    "object_name": "stand01_work_upper_journal_1"
+  },
+  {
+    "equipment_id": "stand01_work_lower",
+    "object_name": "stand01_work_lower"
+  },
+  {
+    "equipment_id": "stand01_backup_lower",
+    "object_name": "stand01_backup_lower"
+  },
+  {
+    "equipment_id": "stand01_work_lower_journal_-1",
+    "object_name": "stand01_work_lower_journal_-1"
+  },
+  {
+    "equipment_id": "stand01_work_lower_journal_1",
+    "object_name": "stand01_work_lower_journal_1"
+  },
+  {
+    "equipment_id": "stand01_housing_operator_entry",
+    "object_name": "stand01_housing_operator_entry"
+  },
+  {
+    "equipment_id": "stand01_housing_operator_exit",
+    "object_name": "stand01_housing_operator_exit"
+  },
+  {
+    "equipment_id": "stand01_housing_operator_foot",
+    "object_name": "stand01_housing_operator_foot"
+  },
+  {
+    "equipment_id": "stand01_housing_operator_crown",
+    "object_name": "stand01_housing_operator_crown"
+  },
+  {
+    "equipment_id": "stand01_screwdown_operator",
+    "object_name": "stand01_screwdown_operator"
+  },
+  {
+    "equipment_id": "stand01_chock_operator_upper",
+    "object_name": "stand01_chock_operator_upper"
+  },
+  {
+    "equipment_id": "stand01_chock_operator_lower",
+    "object_name": "stand01_chock_operator_lower"
+  },
+  {
+    "equipment_id": "stand01_housing_drive_entry",
+    "object_name": "stand01_housing_drive_entry"
+  },
+  {
+    "equipment_id": "stand01_housing_drive_exit",
+    "object_name": "stand01_housing_drive_exit"
+  },
+  {
+    "equipment_id": "stand01_housing_drive_foot",
+    "object_name": "stand01_housing_drive_foot"
+  },
+  {
+    "equipment_id": "stand01_housing_drive_crown",
+    "object_name": "stand01_housing_drive_crown"
+  },
+  {
+    "equipment_id": "stand01_screwdown_drive",
+    "object_name": "stand01_screwdown_drive"
+  },
+  {
+    "equipment_id": "stand01_chock_drive_upper",
+    "object_name": "stand01_chock_drive_upper"
+  },
+  {
+    "equipment_id": "stand01_chock_drive_lower",
+    "object_name": "stand01_chock_drive_lower"
+  },
+  {
+    "equipment_id": "entry_coil",
+    "object_name": "entry_coil"
+  },
+  {
+    "equipment_id": "entry_reel_mandrel",
+    "object_name": "entry_reel_mandrel"
+  },
+  {
+    "equipment_id": "entry_reel_pedestal_-1",
+    "object_name": "entry_reel_pedestal_-1"
+  },
+  {
+    "equipment_id": "entry_coil_ring_-1_0",
+    "object_name": "entry_coil_ring_-1_0"
+  },
+  {
+    "equipment_id": "entry_coil_ring_-1_1",
+    "object_name": "entry_coil_ring_-1_1"
+  },
+  {
+    "equipment_id": "entry_coil_ring_-1_2",
+    "object_name": "entry_coil_ring_-1_2"
+  },
+  {
+    "equipment_id": "entry_coil_ring_-1_3",
+    "object_name": "entry_coil_ring_-1_3"
+  },
+  {
+    "equipment_id": "entry_reel_pedestal_1",
+    "object_name": "entry_reel_pedestal_1"
+  },
+  {
+    "equipment_id": "entry_coil_ring_1_0",
+    "object_name": "entry_coil_ring_1_0"
+  },
+  {
+    "equipment_id": "entry_coil_ring_1_1",
+    "object_name": "entry_coil_ring_1_1"
+  },
+  {
+    "equipment_id": "entry_coil_ring_1_2",
+    "object_name": "entry_coil_ring_1_2"
+  },
+  {
+    "equipment_id": "entry_coil_ring_1_3",
+    "object_name": "entry_coil_ring_1_3"
+  },
+  {
+    "equipment_id": "entry_gauge_post_-1",
+    "object_name": "entry_gauge_post_-1"
+  },
+  {
+    "equipment_id": "entry_gauge_post_1",
+    "object_name": "entry_gauge_post_1"
+  },
+  {
+    "equipment_id": "entry_gauge_bridge",
+    "object_name": "entry_gauge_bridge"
+  },
+  {
+    "equipment_id": "entry_gauge_sensor",
+    "object_name": "entry_gauge_sensor"
+  },
+  {
+    "equipment_id": "entry_guide_roll",
+    "object_name": "entry_guide_roll"
+  },
+  {
+    "equipment_id": "entry_edge_guide_-1",
+    "object_name": "entry_edge_guide_-1"
+  },
+  {
+    "equipment_id": "entry_edge_guide_1",
+    "object_name": "entry_edge_guide_1"
+  },
+  {
+    "equipment_id": "exit_coil",
+    "object_name": "exit_coil"
+  },
+  {
+    "equipment_id": "exit_reel_mandrel",
+    "object_name": "exit_reel_mandrel"
+  },
+  {
+    "equipment_id": "exit_reel_pedestal_-1",
+    "object_name": "exit_reel_pedestal_-1"
+  },
+  {
+    "equipment_id": "exit_coil_ring_-1_0",
+    "object_name": "exit_coil_ring_-1_0"
+  },
+  {
+    "equipment_id": "exit_coil_ring_-1_1",
+    "object_name": "exit_coil_ring_-1_1"
+  },
+  {
+    "equipment_id": "exit_coil_ring_-1_2",
+    "object_name": "exit_coil_ring_-1_2"
+  },
+  {
+    "equipment_id": "exit_coil_ring_-1_3",
+    "object_name": "exit_coil_ring_-1_3"
+  },
+  {
+    "equipment_id": "exit_reel_pedestal_1",
+    "object_name": "exit_reel_pedestal_1"
+  },
+  {
+    "equipment_id": "exit_coil_ring_1_0",
+    "object_name": "exit_coil_ring_1_0"
+  },
+  {
+    "equipment_id": "exit_coil_ring_1_1",
+    "object_name": "exit_coil_ring_1_1"
+  },
+  {
+    "equipment_id": "exit_coil_ring_1_2",
+    "object_name": "exit_coil_ring_1_2"
+  },
+  {
+    "equipment_id": "exit_coil_ring_1_3",
+    "object_name": "exit_coil_ring_1_3"
+  },
+  {
+    "equipment_id": "exit_gauge_post_-1",
+    "object_name": "exit_gauge_post_-1"
+  },
+  {
+    "equipment_id": "exit_gauge_post_1",
+    "object_name": "exit_gauge_post_1"
+  },
+  {
+    "equipment_id": "exit_gauge_bridge",
+    "object_name": "exit_gauge_bridge"
+  },
+  {
+    "equipment_id": "exit_gauge_sensor",
+    "object_name": "exit_gauge_sensor"
+  },
+  {
+    "equipment_id": "exit_guide_roll",
+    "object_name": "exit_guide_roll"
+  },
+  {
+    "equipment_id": "exit_edge_guide_-1",
+    "object_name": "exit_edge_guide_-1"
+  },
+  {
+    "equipment_id": "exit_edge_guide_1",
+    "object_name": "exit_edge_guide_1"
+  },
+  {
+    "equipment_id": "floor",
+    "object_name": "floor"
+  },
+  {
+    "equipment_id": "sensor_marker_entry_gauge",
+    "object_name": "sensor_marker_entry_gauge"
+  },
+  {
+    "equipment_id": "sensor_marker_exit_gauge",
+    "object_name": "sensor_marker_exit_gauge"
+  },
+  {
+    "equipment_id": "sensor_marker_roll_force",
+    "object_name": "sensor_marker_roll_force"
+  },
+  {
+    "equipment_id": "sensor_marker_stand_position",
+    "object_name": "sensor_marker_stand_position"
+  },
+  {
+    "equipment_id": "sensor_marker_hydraulic_cap_pressure",
+    "object_name": "sensor_marker_hydraulic_cap_pressure"
+  },
+  {
+    "equipment_id": "sensor_marker_hydraulic_rod_pressure",
+    "object_name": "sensor_marker_hydraulic_rod_pressure"
+  },
+  {
+    "equipment_id": "sensor_marker_roll_bending_force",
+    "object_name": "sensor_marker_roll_bending_force"
+  },
+  {
+    "equipment_id": "sensor_marker_entry_tension",
+    "object_name": "sensor_marker_entry_tension"
+  },
+  {
+    "equipment_id": "sensor_marker_exit_tension",
+    "object_name": "sensor_marker_exit_tension"
+  },
+  {
+    "equipment_id": "sensor_marker_entry_strip_speed",
+    "object_name": "sensor_marker_entry_strip_speed"
+  },
+  {
+    "equipment_id": "sensor_marker_exit_strip_speed",
+    "object_name": "sensor_marker_exit_strip_speed"
+  },
+  {
+    "equipment_id": "sensor_marker_work_roll_speed",
+    "object_name": "sensor_marker_work_roll_speed"
+  },
+  {
+    "equipment_id": "sensor_marker_work_roll_torque",
+    "object_name": "sensor_marker_work_roll_torque"
+  },
+  {
+    "equipment_id": "sensor_marker_flatness",
+    "object_name": "sensor_marker_flatness"
+  },
+  {
+    "equipment_id": "sensor_marker_strip_temperature",
+    "object_name": "sensor_marker_strip_temperature"
+  }
+]

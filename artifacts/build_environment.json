@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-30",
+  "project_version": "0.2.0",
+  "process_model_version": "0.1.0",
+  "equipment_model_version": "0.2.0",
+  "python": "3.12.14",
+  "blender": "4.3.2",
+  "render_engine": "Cycles CPU / 4 threads / 64 samples / no denoising",
+  "native_usd": false,
+  "exporter": "static mesh USDA fallback",
+  "usd_verifier": "usd-core 25.5.1",
+  "numpy": "2.3.5",
+  "matplotlib": "3.10.8",
+  "Pillow": "12.3.0",
+  "unit_tests_passed": 19,
+  "sensor_channels": 15,
+  "sweep_accepted": 16,
+  "sweep_rejected": 4,
+  "base_commit": "64d6bf86bb49417d5c668dc28ef6287d3e7fad98",
+  "branch": "prototype/blender-cold-mill"
+}

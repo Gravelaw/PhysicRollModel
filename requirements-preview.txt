@@ -1,0 +1,4 @@
+# Optional composition of rendered overview + analytical inset; not solver dependencies.
+numpy==2.3.5
+matplotlib==3.10.8
+Pillow==12.3.0

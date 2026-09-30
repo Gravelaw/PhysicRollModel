@@ -1,0 +1,1 @@
+PASS: OpenUSD reopened 77 meshes, valid topology/materials/IDs and true gauge; Z-up metres

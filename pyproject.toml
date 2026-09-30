@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "physicroll"
+version = "0.2.0"
+description = "Synthetic offline cold rolling demonstrator"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = []
+
+[tool.setuptools]
+packages = ["physicroll"]

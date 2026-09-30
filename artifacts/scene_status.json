@@ -1,0 +1,7 @@
+{
+  "blender_version": "4.3.2",
+  "blend": "mill.blend",
+  "render": "overview.png",
+  "usd": "mill.usda (static mesh fallback)",
+  "native_usd_unavailable": "Calling operator \"bpy.ops.wm.usd_export\" error, could not be found"
+}

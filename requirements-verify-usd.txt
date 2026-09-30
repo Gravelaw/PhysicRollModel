@@ -1,0 +1,2 @@
+# Optional independent parser verification; not required by export or smoke test.
+usd-core==25.5.1

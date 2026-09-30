@@ -1,0 +1,5 @@
+PASS: 78 unique equipment IDs; roll gap, true strip gauge, width and closed strip mesh
+Blender 4.3.2
+Read blend: "/workspace/PhysicRollModel/artifacts/mill.blend"
+
+Blender quit
