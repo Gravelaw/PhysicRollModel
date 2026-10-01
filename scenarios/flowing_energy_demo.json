@@ -1,0 +1,98 @@
+{
+  "warning": "ALL PARAMETERS SYNTHETIC. This is an SI conservation exercise, not AA5052 calibration or a plant temperature prediction.",
+  "baseline_scenario_file": "scenarios/baseline.json",
+  "material_state": {
+    "alloy": "Al-demo-not-a-qualified-grade",
+    "temper": "demo-prior-cold-work",
+    "accumulated_equivalent_plastic_strain": 0.1,
+    "history": [
+      "synthetic-prior-processing"
+    ],
+    "temperature_k": 300.0
+  },
+  "hardening_law": {
+    "alloy": "Al-demo-not-a-qualified-grade",
+    "temper": "demo-prior-cold-work",
+    "yield_stress_pa": 100000000.0,
+    "strength_coefficient_pa": 100000000.0,
+    "exponent": 0.3,
+    "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+    "synthetic": true
+  },
+  "assumed_equivalent_strain_range": [
+    0.0,
+    3.0
+  ],
+  "assumed_material_temperature_range_k": [
+    273.15,
+    420.0
+  ],
+  "strip_heat_capacity": {
+    "material_id": "Al-demo-not-a-qualified-grade",
+    "temperature_k": [
+      273.15,
+      350.0,
+      420.0
+    ],
+    "heat_capacity_j_kg_k": [
+      880.0,
+      905.0,
+      940.0
+    ],
+    "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+    "quality": "synthetic"
+  },
+  "roll_heat_capacity": {
+    "material_id": "steel-roll-demo",
+    "temperature_k": [
+      273.15,
+      350.0,
+      420.0
+    ],
+    "heat_capacity_j_kg_k": [
+      450.0,
+      470.0,
+      500.0
+    ],
+    "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+    "quality": "synthetic"
+  },
+  "second_pass_exit_thickness_m": 0.0012,
+  "boundaries": [
+    {
+      "plastic_to_heat_fraction": 0.2,
+      "solid_slip_to_strip_fraction": 0.6,
+      "contact_heat_to_strip_w": -2000.0,
+      "strip_cooling_w": 5000.0,
+      "roll_cooling_w": 3000.0,
+      "roll_effective_mass_kg": 500.0,
+      "roll_temperature_k": 295.0,
+      "duration_s": 5.0,
+      "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS1",
+      "quality": "synthetic"
+    },
+    {
+      "plastic_to_heat_fraction": 0.2,
+      "solid_slip_to_strip_fraction": 0.6,
+      "contact_heat_to_strip_w": -2300.0,
+      "strip_cooling_w": 5500.0,
+      "roll_cooling_w": 3200.0,
+      "roll_effective_mass_kg": 500.0,
+      "roll_temperature_k": null,
+      "duration_s": 5.0,
+      "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS2; roll temperature carried from pass1",
+      "quality": "synthetic"
+    }
+  ],
+  "fluid_observation": {
+    "identity": "demo-neat-oil-unqualified",
+    "fluid_type": "neat_oil",
+    "flow_m3_s": null,
+    "supply_temperature_k": 290.0,
+    "dynamic_viscosity_pa_s": null,
+    "roll_rms_roughness_m": null,
+    "strip_rms_roughness_m": null,
+    "source": "SYNTHETIC_NO_COOLING_OR_FRICTION_CLOSURE",
+    "quality": "synthetic"
+  }
+}

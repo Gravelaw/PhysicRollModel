@@ -152,7 +152,7 @@ candidate archive. The source tree contains no paid-service or plant connection.
 
 ## Optional contact/material increment from published 09d0d5b2
 
-The local `development/contact-hardening-increment` adds optional spatial hardening
+The published `development/contact-hardening-increment` at `1f1145df` adds optional spatial hardening
 and circular roll compliance; default load/torque/slip match the reviewed baseline
 regression. **54/54 tests pass**, including independent pressure integration and
 bracketed radius checks, signed regenerative work, state continuity and limits.
@@ -167,3 +167,36 @@ byte-for-byte on this build environment. Source fingerprints and comparison
 checksums are retained in `artifacts/contact_increment`. This is local package
 verification, not a new independent computer acceptance or aluminium validation.
 The existing scene and original reviewed archives remain unchanged.
+
+## Optional flowing-strip energy handoff (local review increment)
+
+The optional prescribed-boundary ledger in `energy_handoff.py` is tested by
+`tests/test_energy_handoff.py`. The actual synthetic two-pass run is
+`artifacts/flowing_energy_demo.json`; equations, units and source limits are in
+[energy-handoff.md](energy-handoff.md). Numerical energy closure does not
+validate temperature against an aluminium coil.
+
+Full suite: **61/61 tests passed**, including seven new analytic and adversarial
+energy tests. `scripts/smoke.py` passes the baseline/foundations and retained
+artifact checks. The synthetic two-pass run gave strip exits 308.155685 and
+314.904917 K, roll exits 295.581131 and 296.072356 K, and 10.8 kg/s fixed
+mass flow. Thermal allocation residuals were −1.15e−9 and −7.13e−10 W;
+combined mechanical-to-outlet residuals were 0.007842 and 0.015492 W,
+inherited from the mechanics integration. The explicit nonthermal plastic work
+allocations were 176676.876 and 151649.051 W. All of these temperatures and
+boundaries are synthetic.
+
+The clean extracted review archive passed 61/61 tests and smoke checks. Its
+regenerated two-pass output matched `artifacts/flowing_energy_demo.json`
+byte-for-byte (SHA256 `70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4`).
+All bundled asset checksums and executable-source fingerprints matched in that
+extraction. This is build-environment repeatability; no independent cloud
+computer or aluminium thermal experiment has accepted this new increment yet.
+
+## Specialist energy review after d665cce
+
+The [same-environment specialist audit](energy-specialist-audit.md) corrected four
+input-contract/numerical-boundary defects and increased coverage to **67 tests**
+(13 energy tests). The two-pass synthetic output is byte-identical to the prior
+increment. Clean extraction, complete tests, smoke and source/asset fingerprints
+are rechecked for the corrected package. This is not independent consumer acceptance.

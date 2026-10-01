@@ -1,7 +1,8 @@
 # Report-sync packet: optional contact/material increment
 
 Base: published **09d0d5b2e754ddcc9840e9b2d11fbdb07efd9b89**.
-Working branch: `development/contact-hardening-increment` (local, pending review).
+Published reviewed branch: `development/contact-hardening-increment` at
+`1f1145dfda0c6fd70b0be0abc379dcadb26e10d5`.
 The delivery message supplies the resulting local commit; exact executable
 source hashes are in `artifacts/contact_increment/reproducibility.json`.
 
@@ -148,5 +149,7 @@ compliance; the assumed parameter envelopes are not plant operating limits.
 
 Clean extracted package verification: 54/54 tests and portable smoke pass; all
 seven regenerated study files match byte-for-byte in this build environment.
-Independent acceptance on the parent's other computer has not yet been run for
-this increment. Existing reviewed scene and results are preserved.
+The parent subsequently accepted this exact published increment on another
+cloud computer: 54 tests, smoke check and 512-cell study passed; seven
+regenerated result files matched byte-for-byte. Existing reviewed scene and
+results are preserved.

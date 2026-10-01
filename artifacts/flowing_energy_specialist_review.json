@@ -1,0 +1,26 @@
+{
+  "reviewed_commit": "d665ccef8af82c5b39451ec7dd0476776e9b0c95",
+  "scope": "SPECIALIST_REVIEW_IN_SAME_DEVELOPMENT_ENVIRONMENT_NOT_INDEPENDENT_CONSUMER_ACCEPTANCE",
+  "defects_corrected": [
+    "Forward/inverse heat-capacity summation disagreed at valid upper endpoint",
+    "Unsupported temperature-feedback metadata accepted despite no-feedback output claim",
+    "Negative or inconsistent relative mechanical residual metadata could pass source gate",
+    "Incoming/outgoing strip temperature not screened against source material envelope"
+  ],
+  "equations_changed": false,
+  "new_physics_added": false,
+  "mechanical_solver_changed": false,
+  "tests_passed": 67,
+  "energy_tests_passed": 13,
+  "seeded_property_curves": 100,
+  "dimension_scaling_factors": [
+    0.001,
+    1000,
+    1000000
+  ],
+  "demo_byte_identical_to_reviewed_commit": true,
+  "demo_sha256": "70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4",
+  "physical_thermal_validation": false,
+  "independent_consumer_acceptance": false,
+  "report": "docs/energy-specialist-audit.md"
+}

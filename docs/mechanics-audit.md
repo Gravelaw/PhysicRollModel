@@ -5,7 +5,7 @@ candidate remains at `ec3e79f60c234f374aa924f32d03faf2a7074fc6` on
 `review/v03-before-mechanics-audit`; v0.2.1 remains at `3d349418`. Corrections and
 literature work were published at `09d0d5b2` on `development/aa5052-mechanics-review`.
 The subsequent optional local contact/material increment is on
-`development/contact-hardening-increment`, pending review; see
+`development/contact-hardening-increment` at published `1f1145df`; see
 [its equations and evidence](contact-increment.md).
 
 ## Actual findings and corrections

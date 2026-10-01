@@ -151,9 +151,18 @@ The prior candidate and v0.2.1 are preserved; reviewed commit `09d0d5b2` is publ
 
 ## Optional contact/material review increment
 
-From reviewed `09d0d5b2`, a local optional mechanics increment adds spatial
+From reviewed `09d0d5b2`, published contact increment `1f1145df` adds spatial
 hardening and circular elastic roll contact without changing the default model.
 Run `python scripts/run_contact_increment.py --cells 512` for the fixed-gauge
 AA5052 comparison and explicit hypothesis sensitivity (no new optimisation).
 See [equations and source provenance](docs/contact-increment.md) and
 [actual report-sync evidence](docs/report-sync-contact-increment.md).
+
+## Optional flowing-strip energy handoff
+
+On local branch `development/flowing-energy-handoff`, run
+`python scripts/run_flowing_energy_demo.py` for a two-pass **synthetic** strip
+enthalpy and roll-energy example. [Equations, units and source limits](docs/energy-handoff.md),
+[run/report evidence](docs/report-sync-energy-handoff.md) and
+`tests/test_energy_handoff.py` specify the optional interface. Mechanical force
+and the existing benchmark comparison keep their reviewed behavior.

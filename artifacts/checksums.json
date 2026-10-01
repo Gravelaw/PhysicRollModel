@@ -33,5 +33,9 @@
   "artifacts/contact_increment/summary.json": "cce19fd08a00614b88e0f438ed09da6e2d20cea31b2cb0db0ee2a490509b23b4",
   "artifacts/contact_increment/tests.txt": "255b122a6446f61443d3a41f8a63dab16e9869c10055e4ec8962047542fefe7b",
   "artifacts/contact_increment/unit_audit.json": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b",
-  "artifacts/contact_increment/verification.json": "4ed455d3f173a7c3796bc20c1a9cae087b6ec82634efbb72bfb9b95b731b1c65"
+  "artifacts/contact_increment/verification.json": "4ed455d3f173a7c3796bc20c1a9cae087b6ec82634efbb72bfb9b95b731b1c65",
+  "artifacts/flowing_energy_demo.json": "70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4",
+  "artifacts/flowing_energy_tests.txt": "4bde8463e4b3d85b91fd64429ae8c323040796438bcebb26f48be3acbc91056e",
+  "artifacts/flowing_energy_build.json": "f193c9e7111be688be3ed3ab3f56914742b69a47f4d03c7cb09ac12ee3b0c41c",
+  "artifacts/flowing_energy_specialist_review.json": "8db2e282dee6e767c4b18c7fa72bfb5c715d56a03ba42fd023791f7f69edd6fd"
 }

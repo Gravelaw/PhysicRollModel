@@ -39,3 +39,18 @@ flattening, physical shaft kinematics, numerical gates and hypotheses to code/te
 residuals and missing experimental-validation evidence. The historical v0.2.1
 rows above describe that accepted version, not a claim that newer optional
 modules are absent.
+
+## Optional flowing-strip energy handoff
+
+The [E1–E4 equation/source table](energy-handoff.md) and
+[report-sync evidence](report-sync-energy-handoff.md) map checked mechanical
+work and mass flow to a prescribed-boundary flowing-strip/finite-roll energy
+ledger. `tests/test_energy_handoff.py` covers analytic, conservation, units and
+material-coordinate cases. `artifacts/flowing_energy_demo.json` retains the
+actual synthetic two-pass outputs. No film, coolant or aluminium temperature
+calibration is inferred from this data path.
+
+The [specialist energy audit](energy-specialist-audit.md) maps four reproduced
+boundary/metadata defects to corrections and adversarial tests. Its 67-test
+evidence and unchanged synthetic output are same-environment numerical checks;
+independent consumer acceptance and measured thermal validation remain distinct.
