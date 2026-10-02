@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "baseline_commit": "caec37ef86a8b78e1eb88292ea6368bfb64bcbdc",
+  "source_records": 159,
+  "technical_sources": 148,
+  "baseline_distinct_sources": 146,
+  "audit_added_sources": 13,
+  "traceability_rows": 40,
+  "json_files_parsed": 14,
+  "local_markdown_links_checked": 35,
+  "missing_local_links": [],
+  "baseline_files_scanned": 140,
+  "external_locators_reconciled": 178,
+  "unresolved_external_locators": [],
+  "source_review_coverage": "Every technical source has individual fresh review/access annotation; orientation excluded from technical reliance",
+  "external_link_validation_scope": "URL syntax/identity reconciliation and reviewer-documented source retrieval; not a claim all websites are reachable or full text accessible",
+  "historical_reports_preserved_sha256": {
+    "docs/research/Aluminium_cold_rolling_research_for_PhysicRollModel.docx": "9b6a1283340182dec054eeb90cadcf4b0f94658bca37079576a5144888df6da4",
+    "docs/research/Aluminium_cold_rolling_research_for_PhysicRollModel.pdf": "460cd942a3da148cc85d9f1135c8e8cfc71de978773611b5a128b087ea698ac4",
+    "docs/research/report-update-2026-10-02.docx": "7fbf1c85820cd64ac53876dcb0629632e9249b30464d7dc822de4a92895c5ac7",
+    "docs/research/report-update-2026-10-02.pdf": "e95fa472042b4d7220e67f85b641c52a488742962e79e0d96f140cd959475477"
+  },
+  "physics_product_changes": false,
+  "remaining_limitations": [
+    "U001 exact historical book identities unresolved",
+    "Source-specific inaccessible/partial texts and dataset files not fully audited",
+    "Optional OpenUSD runtime verification unavailable without pxr",
+    "No empirical plant-validation or deployment gate passed"
+  ]
+}

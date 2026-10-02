@@ -1,0 +1,947 @@
+[
+  {
+    "source_id": "R001",
+    "title": "Bland and Ford 1948. The Calculation of Roll Force and Torque in Cold Strip Rolling with Tensions",
+    "urls": [
+      "https://doi.org/10.1243/PIME_PROC_1948_159_015_02"
+    ],
+    "historical_review": "Cold strip analytical benchmark. Primary abstract and metadata inspected; original full text restricted. No transferable accuracy guarantee.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R002",
+    "title": "Orowan 1943. The Calculation of Roll Pressure in Hot and Cold Flat Rolling",
+    "urls": [
+      "https://doi.org/10.1243/PIME_PROC_1943_150_025_02"
+    ],
+    "historical_review": "General pressure mechanics with friction and yield variation. Primary abstract and references; detailed original algorithm not extracted.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R003",
+    "title": "Sims 1954. The Calculation of Roll Force and Torque in Hot Rolling Mills",
+    "urls": [
+      "https://doi.org/10.1243/PIME_PROC_1954_168_023_02"
+    ],
+    "historical_review": "Hot steel and room-temperature lead. Primary abstract and metadata. Year is 1954; not aluminium cold-strip validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R004",
+    "title": "Fleck and Johnson 1987. Towards a new theory of cold rolling thin foil",
+    "urls": [
+      "https://doi.org/10.1016/0020-7403(87)90012-9"
+    ],
+    "historical_review": "Noncircular roll deformation and finite central no-slip region. Primary abstract only; full formulation not reconstructed.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R005",
+    "title": "Shigaki et al 2015. Numerical Treatments of Slipping/No-Slip Zones in Cold Rolling of Thin Sheets with Heavy Roll Deformation",
+    "urls": [
+      "https://www.mdpi.com/2075-4442/3/2/113"
+    ],
+    "historical_review": "DOI 10.3390/lubricants3020113. Open primary full text and equations inspected in research. Steel examples; regularisation and coupling lessons transfer, numerical constants do not.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R006",
+    "title": "Li et al 2018. Experimental Study of Roll Flattening in Cold Rolling Process",
+    "urls": [
+      "https://doi.org/10.2355/isijinternational.ISIJINT-2017-623"
+    ],
+    "historical_review": "Open primary J-STAGE full text, including Hitchcock equation and measured profiles. 304 stainless steel; direct evidence of noncircular deformation, not aluminium calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R007",
+    "title": "Mišović et al 2016. Deformations and Velocities During the Cold Rolling of Aluminium Alloys",
+    "urls": [
+      "https://doi.org/10.17222/mit.2014.250"
+    ],
+    "historical_review": "Primary full-text PDF inspected. AW2024 and AW5083 experiments and DEFORM-2D; geometry, hardening and velocity evidence with laboratory and no-strip-tension limits.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R008",
+    "title": "Lenard and Zhang 1997. A study of friction during the lubricated cold rolling of an aluminum alloy",
+    "urls": [
+      "https://doi.org/10.1016/S0924-0136(97)00183-0"
+    ],
+    "historical_review": "Commercially pure aluminium; force, torque and slip. Bibliographic record plus complete abstract reproduced on the publisher page for [9]. Direct article fetch failed; internal equations unverified.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R009",
+    "title": "Zhang and Lenard 1992. The effects of the reduction, speed and lubricant viscosity on friction in cold rolling",
+    "urls": [
+      "https://doi.org/10.1016/0924-0136(92)90346-T"
+    ],
+    "historical_review": "Primary publisher abstract inspected. Aluminium experiments support regime-dependent friction; no universal viscosity-speed law adopted.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R010",
+    "title": "Sutcliffe and Montmitonnet 2001. Numerical modelling of lubricated foil rolling",
+    "urls": [
+      "https://doi.org/10.1051/metal:2001197"
+    ],
+    "historical_review": "Primary publisher abstract. Aluminium foil example 50 to 25 micrometres; coupled asperity and lubricant model. Closure equations and coefficients not inspected.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R011",
+    "title": "Zhang et al 2017. Application of Comprehensive AGC System for Aluminum Twin-Stand Cold Rolling Mill",
+    "urls": [
+      "https://doi.org/10.14257/ijca.2017.10.6.06"
+    ],
+    "historical_review": "Publisher PDF methods/equations and production comparison inspected. Aluminium industrial AGC; raw plant data not audited. Whole-system outcome cannot validate an isolated force law.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R012",
+    "title": "Erfanian et al 2025. Through-thickness modelling of metal rolling using multiple-scales asymptotics",
+    "urls": [
+      "https://doi.org/10.1016/j.euromechsol.2025.105712"
+    ],
+    "historical_review": "European Journal of Mechanics A/Solids 113, 105712; DOI 10.1016/j.euromechsol.2025.105712. Earlier arXiv formulation read in depth; published PDF assumptions and FE material sections checked, later sections truncated. Implementation equation references 21–28 mean 2024 preprint v1, not verified journal numbering. Idealized asymptotics/DC04 comparison; not aluminium plant validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R013",
+    "title": "Bátorfi and Sidor 2025. Computationally Effective Modeling of Cold Rolling: Application to Al Alloys",
+    "urls": [
+      "https://doi.org/10.3390/met15010011"
+    ],
+    "historical_review": "Open primary full text. Al1050 flowline, FE and distortion-pattern comparisons; published online December 2024. Data available on request, not public; no industrial force-validation claim.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R014",
+    "title": "Flanagan et al 2025. Through-thickness resolution, stress oscillations and residual stress in cold rolling",
+    "urls": [
+      "https://doi.org/10.1016/j.euromechsol.2025.105761"
+    ],
+    "historical_review": "European Journal of Mechanics A/Solids 114, 105761. Earlier preprint methods and published methods/results/conclusions inspected; trailing references truncated. DC04 steel and rigid rolls. Input archive DOI 10.5281/zenodo.15609640 identified; files not audited. Experimental validation remains open.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R015",
+    "title": "Abdelkhalek et al 2011. Coupled approach for flatness prediction in cold rolling of thin strip",
+    "urls": [
+      "https://doi.org/10.1016/j.ijmecsci.2011.04.001"
+    ],
+    "historical_review": "Exact paper identified bibliographically. Full text not inspected; mechanism discussion is grounded in the separately read predecessor [16].",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R016",
+    "title": "Abdelkhalek Montmitonnet Legrand and Buessler 2008. Manifested flatness predictions in thin strip cold rolling",
+    "urls": [
+      "https://doi.org/10.1007/s12289-008-0064-6"
+    ],
+    "historical_review": "Author-hosted partial text inspected; extraction mixed continuation material, so only attributable modelling content used. Exact identity independently checked. Distinct from the unread 2011 full paper; not an aluminium plant calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R017",
+    "title": "SIMULIA Abaqus 2025. Rolling of thick plates",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXARefMap/simaexa-c-rolling.htm"
+    ],
+    "historical_review": "Official documentation example. Supports software verification and contact-forming capability; hot or thick rolling example is not aluminium cold-strip validation.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R018",
+    "title": "SIMULIA Abaqus 2025. Mass scaling",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-massscaling.htm"
+    ],
+    "historical_review": "Official documentation. Inertia changes require case-specific sensitivity and energy checks; no universal acceptable scaling factor used.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R019",
+    "title": "SIMULIA Abaqus 2025. About ALE Adaptive Meshing",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-aleover.htm"
+    ],
+    "historical_review": "Official documentation body inspected. Explicit ALE retains topology; do not equate it with arbitrary remeshing or assume identical Standard capabilities.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R020",
+    "title": "CalculiX official sources version 2.23. Capability overview and core repository",
+    "urls": [
+      "https://dhondt.de/ov_calcu.htm"
+    ],
+    "historical_review": "Official capability body and core repository metadata inspected. Core source https://github.com/dhondtguido/calculix is GPL-2.0; example-repository licence is separate. No production rolling pipeline established. Overview version 2.23 checked 30 September 2026; pin the executable and source commit before reproducibility claims.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R021",
+    "title": "Kratos official sources. Constitutive framework and core licence",
+    "urls": [
+      "https://kratosmultiphysics.github.io/Kratos/pages/Kratos/For_Developers/Data_Structures/Constitutive_Law.html"
+    ],
+    "historical_review": "Official framework and repository evidence. Core BSD-4-clause licence inspected at https://github.com/KratosMultiphysics/Kratos/blob/master/kratos/license.txt. Application/dependency checks still required; no verified aluminium rolling package.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R022",
+    "title": "Weiner Renzing Stirl Schmidtchen and Prahl 2024. PyRolL - An Extensible OpenSource Framework for Rolling Simulation",
+    "urls": [
+      "https://doi.org/10.21105/joss.06200"
+    ],
+    "historical_review": "JOSS 9(93), 6200. Primary software description/partial text inspected. Groove-rolling architecture; flat aluminium-strip suitability not established. Core/plugin licences not fully reviewed.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R023",
+    "title": "Zhang et al 2026. Physics-guided Neural Network Model for Predicting Rolling Forces in Aluminum Strip Cold Rolling",
+    "urls": [
+      "https://www.cmemo.org.cn/EN/10.3969/j.issn.1004-132X.2026.05.020"
+    ],
+    "historical_review": "Publisher abstract and exposed tables; DOI 10.3969/j.issn.1004-132X.2026.05.020. Industrial 5182 six-high mill. Split details, sample count and exact final graphical hybrid score not recovered.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R024",
+    "title": "Thakare and Scharifi 2026. Modelling of the cold rolling process for mild steel using physics-constrained neural network",
+    "urls": [
+      "https://doi.org/10.1007/s10845-025-02729-8"
+    ],
+    "historical_review": "Open primary body inspected. DC04 steel, 18 training passes and 5 validation passes within training bounds. Published January 2026 despite 2025 DOI string.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R025",
+    "title": "Overhagen and Martin 2026. Fast Inverse Identification of the Coefficient of Friction in Cold Strip Rolling Using a Physics-Informed Neural Network",
+    "urls": [
+      "https://doi.org/10.4028/p-y3MapP"
+    ],
+    "historical_review": "Open primary PDF inspected at https://www.scientific.net/MSF.1183.55.pdf. C15 steel numerical fixed-geometry example omits flattening; no plant validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R026",
+    "title": "Wehr et al 2020 proceedings. Online Model Adaptation in Cold Rolling for Improvement of Thickness Precision",
+    "urls": [
+      "https://doi.org/10.1016/j.ifacol.2020.12.2776"
+    ],
+    "historical_review": "Full author PDF inspected at https://publications.rwth-aachen.de/record/817497/files/817497.pdf. Narrow cold-steel strip; GP force-map correction and recursive mill-parameter adaptation. Online publication 2021.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R027",
+    "title": "Hou and Behdinan 2023. Neural networks with dimensionality reduction for predicting temperature change due to plastic deformation in a cold rolling simulation",
+    "urls": [
+      "https://doi.org/10.1017/S0890060422000233"
+    ],
+    "historical_review": "Substantive cached primary text inspected; title and data statement checked on Cambridge. 1095 mixed-material FE samples, thick-bar/adiabatic assumptions; no plant validation. Paper lists data DOI 10.17632/wcp8wrdhyj.1; files not audited.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R028",
+    "title": "Yamazaki et al JFE 2026. Development of AI for Tandem Cold Mill Pass Schedule Setup",
+    "urls": [
+      "https://www.jfe-steel.co.jp/en/research/report/035/pdf/035-04.pdf"
+    ],
+    "historical_review": "Full primary manufacturer report inspected. Steel production deployment and observational AI ON/OFF comparisons; no randomised aluminium causal estimate or raw dataset.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R029",
+    "title": "Kusiak Lenard and Dudek 1999. Artificial intelligence approach to the modeling of rolling loads in technology design for cold rolling processes",
+    "urls": [
+      "https://doi.org/10.1109/IPMM.1999.792536"
+    ],
+    "historical_review": "Primary institutional record and abstract at https://badap.agh.edu.pl/publikacja/185. Title also verified in primary paper references. Force/torque experiments; sample size, detailed metrics and full text unavailable.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R030",
+    "title": "Choi et al 2026. Data-Driven Multi-Objective Optimization of Energy, Environmental, and Economic Performances in Manufacturing with Physics-Consistent Deep Learning",
+    "urls": [
+      "https://doi.org/10.69997/sct.128206"
+    ],
+    "historical_review": "Primary repository abstract only. Published record LAPSE:2026.0468 is linked to earlier LAPSE:2026.0041. Three aluminium mills, residual electricity model and NSGA-II; savings, errors, alloy and split not verified.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R031",
+    "title": "Yu Wang Changsheng Li Xin Jin Yongguang Xiang and Xiaogang Li 2020. Multi-objective optimization of rolling schedule for tandem cold strip rolling based on NSGA-II",
+    "urls": [
+      "https://doi.org/10.1016/j.jmapro.2020.10.061"
+    ],
+    "historical_review": "Journal of Manufacturing Processes 60, 257–267. Primary abstract/introduction/section excerpts inspected. Steel five-stand DP590; power/flatness/anti-slip objectives. No verified numerical benefit or aluminium settings transferred.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R032",
+    "title": "Wang et al 2019. Elastic-Plastic Finite Element Analysis of Tension Leveling with Non-Associated Flow Rule and Mixed Hardening",
+    "urls": [
+      "https://doi.org/10.1002/srin.201800401"
+    ],
+    "historical_review": "Primary abstract inspected; title/year corroborated by author publication list. Hill48 and mixed hardening validated on SPCC steel and applied to SPFC980. Method lead only; no aluminium constitutive constants adopted.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R033",
+    "title": "Huh et al 2001. The parametric process design of tension levelling with an elasto-plastic finite element method",
+    "urls": [
+      "https://doi.org/10.1016/S0924-0136(01)00661-6"
+    ],
+    "historical_review": "Primary abstract inspected. Supports investigation of mesh/intermesh/tension coupling. Full quantitative method and aluminium validation not established.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R034",
+    "title": "Schulte and colleagues public dataset. Roughness control in cold rolling data and model repository",
+    "urls": [
+      "https://github.com/Don-Chris/data_set_roughness_control_in_cold_rolling"
+    ],
+    "historical_review": "Primary README and metadata inspected. 17 experimental runs, DC04/DC05 simulation CSVs and model; BSD-3-Clause metadata. Files not executed or numerically audited; steel only.",
+    "source_type": "dataset_repository"
+  },
+  {
+    "source_id": "R035",
+    "title": "Larkiola et al 1996. Prediction of rolling force in cold rolling by using physical models and neural computing",
+    "urls": [
+      "https://doi.org/10.1016/0924-0136(96)02358-8"
+    ],
+    "historical_review": "Primary abstract/indexed excerpt only. Force-model parameter learning is historical precedent. No verified modern grouped-split metrics used.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R036",
+    "title": "EMG iTiM. Thickness measurement technology brochure",
+    "urls": [
+      "https://www.emg.elexis.group/fileadmin/user_upload/emg/Metall/Qualitaetssichernde-Systeme/EMG_iTiM/20221214_Brochure_EMG_iTiM_EN.pdf"
+    ],
+    "historical_review": "Primary OEM brochure inspected. X-ray, isotope and opposed-laser approaches, standards and geometric limitations. Offered capabilities do not establish installed aluminium-mill accuracy.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R037",
+    "title": "ABB thickness gauging. Aluminium strip and foil thickness measurement",
+    "urls": [
+      "https://www.abb.com/global/en/areas/process-automation/measurement-analytics/force-measurement/thickness-gauging"
+    ],
+    "historical_review": "Primary OEM portfolio plus original clad-material paper inspected. Pulsed-eddy-current alternative; broad homogeneous-alloy claims need clad-material qualification. No instrument selected for this project.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R038",
+    "title": "ABB Millmate. Roll force measurement",
+    "urls": [
+      "https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/roll-force"
+    ],
+    "historical_review": "Primary OEM documentation inspected. Stand-reaction load-cell function. Factory calibration claims do not replace installed tare, mounting and load-path verification.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R039",
+    "title": "Temposonics and Danieli 2022. Precise roll gap control with position sensors",
+    "urls": [
+      "https://www.temposonics.com/NewsEvents/Blog/temposonics-blog/2022/01/11/precise-roll-gap-control-with-position-sensors"
+    ],
+    "historical_review": "Primary implementation article inspected. Absolute cylinder-position sensing for AGC; evidence of actuator measurement, not direct loaded strip gauge.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R040",
+    "title": "IMS aluminium cold rolling. Strip tension and web tension meter",
+    "urls": [
+      "https://www.ims-experts.com/en/measuring-system/force-measuring-system-strip-tension-web-tension-meter-aluminium-cold-rolling-mills/"
+    ],
+    "historical_review": "Primary OEM documentation inspected. Bearing-reaction load cells and wrap-angle conversion; specification applies to the offered system, not the unknown plant.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R041",
+    "title": "Polytec cold rolling application note. Enhanced Speed Measurement for AGC Mass Flow Tandem Cold Mills",
+    "urls": [
+      "https://www.polytec.com/_Resources/Persistent/4/1/c/3/41c3659aa7c63b32bde8de58b13484b3de545f07/OM_AN_LSV_S-005_Cold_Rolling_Mill_E_42420.pdf"
+    ],
+    "historical_review": "Primary OEM application note inspected. Non-contact strip velocity and contact-speed slip. Optical alignment, signal quality and material-coordinate timing still require validation.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R042",
+    "title": "ABB Stressometer. Flatness measurement",
+    "urls": [
+      "https://www.abb.com/global/en/areas/process-automation/measurement-analytics/force-measurement/flatness-measurement"
+    ],
+    "historical_review": "Primary OEM documentation inspected, including aluminium foil application. Transverse tension-distribution observation; distinguish it from crown and free-strip wave amplitude.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R043",
+    "title": "IMS cold strip mills. Measuring Systems in Cold Strip Mills",
+    "urls": [
+      "https://www.imssystems.com/pdf/wedge-crown-edgedrop.pdf"
+    ],
+    "historical_review": "Primary OEM technical document inspected. Cross-profile, crown, wedge, width, scanning delay and geometry. General cold-strip measurement logic, not an as-built instrument map.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R044",
+    "title": "AMETEK LAND. Aluminium strip mill cold rolling temperature measurement",
+    "urls": [
+      "https://www.ametek-land.com/applications/aluminium/aluminiumstripmillcoldrolling"
+    ],
+    "historical_review": "Primary OEM application page and wedge-measurement note inspected. Bright aluminium emissivity/background issues and geometry-dependent methods; no plant temperature accuracy assumed.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R045",
+    "title": "ABB DCS800. Winder Application Indirect Torque Control Part 2",
+    "urls": [
+      "https://library.e.abb.com/public/fcab7666a8494f228dbdf7f0074e35dc/G563e%20%20Part%202%20DCS800-Winder%20WINDER_INDIR_02R0101.pdf"
+    ],
+    "historical_review": "Primary generic winder documentation inspected. Diameter, inertia and loss compensation; not evidence of a specific drive installation on the aluminium mill.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R046",
+    "title": "CRS Reprocessing 2014. Coolant management in aluminium flat rolled product manufacturing",
+    "urls": [
+      "https://crs-reprocessing.com/wp-content/uploads/2021/12/FRP-article-Alum-Intl-Today-Sept-2014.pdf"
+    ],
+    "historical_review": "First-party technical article in Aluminium International Today inspected. Distinguishes neat-oil and emulsion practice and contamination; no universal friction calibration follows.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R047",
+    "title": "Takao Mori JFE Steel 2026. Development of Chatter Mark Detection Technique Using Vibration Sensor",
+    "urls": [
+      "https://www.jfe-steel.co.jp/en/research/report/035/pdf/035-07.pdf"
+    ],
+    "historical_review": "Primary industrial technical report inspected. Steel vibration/condition-monitoring evidence; not an aluminium mode-frequency or chatter-force calibration.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R048",
+    "title": "Kiakidis Mandagi and Hol 2023. A fully integrated roll deflection and strip buckling model for calculating strip flatness",
+    "urls": [
+      "https://aimnet.it/la_metallurgia_italiana/2023/maggio/Kiakidis.pdf"
+    ],
+    "historical_review": "Primary four-high segmented stack/buckling paper inspected. Steel example; structural method and distinction between buckling onset and wave amplitude transfer, calibration does not.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R049",
+    "title": "Pachnek Simon and Zeman 2024. Reduced Three-Dimensional Model for Cold Rolling Simulation of Aluminium Alloys",
+    "urls": [
+      "https://doi.org/10.1007/978-3-031-58006-2_2"
+    ],
+    "historical_review": "Open full chapter read. AA6016 process history and industrial force comparison; rigid rolls and constrained width. Some thermal comparisons use Level 2 estimates. Last-pass force error about 13%; no final-flatness validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R050",
+    "title": "Neto et al 2020. Experimental and numerical analysis of the heat generated by plastic deformation in quasi-static uniaxial tensile tests",
+    "urls": [
+      "https://doi.org/10.1016/j.mechmat.2020.103398"
+    ],
+    "historical_review": "Full author manuscript read at https://hal.science/hal-04699292v1/file/R2.20.pdf, including uncertainty appendix. AA6016-T4 quasi-static tension; variable work-to-heat conversion, not cold-bite coefficients.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R051",
+    "title": "SIMULIA Abaqus 2024 theory. Heat generation caused by frictional sliding",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm"
+    ],
+    "historical_review": "Official theory text read. Relative sliding and two-surface heat balance; numerical conventions, not plant parameter calibration.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R052",
+    "title": "SIMULIA Abaqus 2025. Fully Coupled Thermal-Stress Analysis",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-couptempdisp.htm"
+    ],
+    "historical_review": "Official excerpt containing relevant inelastic-heat equations read; whole manual not read. Plastic-work and backstress-adjusted source conventions.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R053",
+    "title": "Horák et al 2011. Research on Cooling Efficiencies of Water, Emulsions and Oil",
+    "urls": [
+      "https://www.engineeringmechanics.cz/pdf/18_2_081.pdf"
+    ],
+    "historical_review": "Full primary paper text read. Engineering Mechanics 18(2), 81–89. Spray/inverse-conduction experiments on an instrumented steel plate; fluid/nozzle/temperature-specific evidence.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R054",
+    "title": "Hnízdil Chabičovský and Resl 2024. Cold Rolling - Cooling Enhancement and Optimization",
+    "urls": [
+      "https://doi.org/10.37904/metal.2024.4875"
+    ],
+    "historical_review": "Full primary proceedings text read at https://www.confer.cz/metal/2024/download/4875-cold-rolling-cooling-enhancement-and-optimization.pdf. Rotating-surface emulsion/water tests; no unknown aluminium neat-oil calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R055",
+    "title": "Gavalas and Papaefthymiou 2020. Thermal Camber and Temperature Evolution on Work Roll during Aluminum Hot Rolling",
+    "urls": [
+      "https://doi.org/10.3390/met10111434"
+    ],
+    "historical_review": "Primary main body and thermal sections read. AA5754 hot rolling, not cold rolling. Fitted contact coefficient implicitly contains friction heat; rendered notation/dimensional problems were not copied.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R056",
+    "title": "Sutcliffe and Johnson 1990. Lubrication in Cold Strip Rolling in the ‘Mixed’ Regime",
+    "urls": [
+      "https://doi.org/10.1243/PIME_PROC_1990_204_064_02"
+    ],
+    "historical_review": "Primary publisher abstract and references read; full algorithm restricted. Coupled oil film, roughness and contact mechanism only.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R057",
+    "title": "Le and Sutcliffe 2006. A multi-scale model for friction in cold rolling of aluminium alloy",
+    "urls": [
+      "https://doi.org/10.1007/s11249-006-9021-z"
+    ],
+    "historical_review": "Primary publisher abstract and references read. Roughness scales, boundary chemistry and transfer layer; detailed asperity algorithm and fit coefficients not inspected.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R058",
+    "title": "COMSOL 6.4. Reynolds Equation",
+    "urls": [
+      "https://doc.comsol.com/6.4/doc/com.comsol.help.rotor/rotor_ug_hydrodynamicbearing.8.03.html"
+    ],
+    "historical_review": "Official relevant excerpt read. Thin-gap/low-inertia assumptions; report flux and dissipation equations are elementary derived forms, not copied from unrendered formula images.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R059",
+    "title": "COMSOL 6.4. Journal Bearing with Cavitation",
+    "urls": [
+      "https://doc.comsol.com/6.4/doc/com.comsol.help.models.cfd.journal_bearing_cavitation/journal_bearing_cavitation.html"
+    ],
+    "historical_review": "Official text fetched; formula images not all rendered as text. General cavitation framework, not an aluminium rolling validation case.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R060",
+    "title": "SIMULIA Abaqus 2025. Thermal Contact Properties",
+    "urls": [
+      "https://docs.software.vt.edu/abaqusv2025/English/SIMACAEITNRefMap/simaitn-c-thermalinteraction.htm"
+    ],
+    "historical_review": "Official conductance and generation sections read. Dependencies and numerical caveats; software defaults do not supply material data.",
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R061",
+    "title": "Lechler. SELECTOSPRAY roll cooling systems",
+    "urls": [
+      "https://www.lechler.com/fileadmin/media/kataloge/pdfs/metallurgy/EN/lechler_brochure_selectospray_en.pdf"
+    ],
+    "historical_review": "Official brochure extract read. Zoned coolant actuation and flatness linkage; offered architecture, not this mill’s measured gain or delay.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R062",
+    "title": "Jian Shao Wenquan Sun Anrui He and Bo Li 2015. Research on the Thermal Calculaion Model of High Strength Aluminum Strip Rolling Based on Finite Diffreence Method",
+    "urls": [
+      "https://doi.org/10.18280/ijht.330113"
+    ],
+    "historical_review": "IJHT 33(1), 91–98. Publisher title spelling retained. Primary equations/tables read. Below ±5% applies to force/slip, not measured heat. Radius/diameter, speed role, strain-law and per-width-power ambiguities block unqualified benchmark import; see Section 39.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R063",
+    "title": "Bátorfi and Sidor 2025. Characterizing the Substructural Changes in Metals by Microindentation and Various Numerical Approaches",
+    "urls": [
+      "https://doi.org/10.3390/met15070795"
+    ],
+    "historical_review": "Open full text read. Specified cold-rolled 1xxx/5xxx/6xxx materials, hardness and dislocation-density models. Density is partly inferred; initial-state and parameter identifiability limitations remain.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R064",
+    "title": "León et al 2016. A Proposal of a Constitutive Description for Aluminium Alloys in Both Cold and Hot Working",
+    "urls": [
+      "https://doi.org/10.3390/met6100244"
+    ],
+    "historical_review": "Open full text read. AA5754/3103/5083 compression after specified annealed/ECAP histories, 25–300 °C. Material-specific fits, not universal rolling parameters.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R065",
+    "title": "Khadyko et al 2016. A microstructure-based yield stress and work-hardening model for textured 6xxx aluminium alloys",
+    "urls": [
+      "https://doi.org/10.1080/14786435.2016.1154995"
+    ],
+    "historical_review": "Institutional abstract read at https://hdl.handle.net/11250/2468342. Two alloys/five tempers, solute/precipitation and crystal-plasticity coupling. Listed accepted PDF not read.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R066",
+    "title": "Myhr et al 2020. Nanoscale modelling of combined isotropic and kinematic hardening of 6000 series aluminium alloys",
+    "urls": [
+      "https://doi.org/10.1016/j.mechmat.2020.103603"
+    ],
+    "historical_review": "Primary SINTEF abstract read. AA6063 O/T6/T7 compression–tension and microscopy. Full implementation not inspected. DOI independently recovered.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R067",
+    "title": "Bignon et al 2023. Interactions between plastic deformation and precipitation in Aluminium alloys A crystal plasticity model",
+    "urls": [
+      "https://doi.org/10.1016/j.actamat.2023.118735"
+    ],
+    "historical_review": "Institutional abstract and metadata read. Pre-aged AA7075 at 150 °C, coupled precipitation/crystal plasticity. Warm-process evidence, not routine room-temperature bite kinetics.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R068",
+    "title": "Poole Militzer and Wells 2003. Modelling recovery and recrystallisation during annealing of AA5754 aluminium alloy",
+    "urls": [
+      "https://doi.org/10.1179/026708303225005980"
+    ],
+    "historical_review": "Indexed abstract/references supplied by DOI fetch; not full text. Dislocation density, recrystallized fraction and grain size; reported prior-reduction domain belongs to the annealing model.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R069",
+    "title": "Hallberg Wallin and Ristinmaa 2010. Modeling of continuous dynamic recrystallization in commercial-purity aluminum",
+    "urls": [
+      "https://doi.org/10.1016/j.msea.2009.09.043"
+    ],
+    "historical_review": "Partial author PDF read at https://lup.lub.lu.se/search/ws/files/1451861/4228318.pdf through formulation/calibration/ECAP sections. AA1050 severe-deformation regime, not routine rolling calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R070",
+    "title": "Hansen 1977. The effect of grain size and strain on the tensile flow stress of aluminium at room temperature",
+    "urls": [
+      "https://doi.org/10.1016/0001-6160(77)90171-7"
+    ],
+    "historical_review": "Primary DTU institutional abstract read. Grain-size strengthening depends on purity and strain; no universal Hall–Petch coefficient supplied.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R071",
+    "title": "Li Winther and Hansen 2006. Anisotropy in rolled metals induced by dislocation structure",
+    "urls": [
+      "https://doi.org/10.1016/j.actamat.2005.09.011"
+    ],
+    "historical_review": "Publisher introduction, experiments/model snippets and conclusions read. Prerolled AA1050; dislocation-boundary anisotropy beyond crystallographic texture.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R072",
+    "title": "Barlat et al 2003. Plane stress yield function for aluminum alloy sheets part 1 theory",
+    "urls": [
+      "https://doi.org/10.1016/S0749-6419(02)00019-0"
+    ],
+    "historical_review": "Publisher abstract/introduction/model and validation snippets read. Yld2000-2d is explicitly plane stress; not directly a full rolling-contact constitutive law.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R073",
+    "title": "Ghosh Li and Gardiner 2004. A Computational and Experimental Study of Cold Rolling of Aluminum Alloys With Edge Cracking",
+    "urls": [
+      "https://doi.org/10.1115/1.1645877"
+    ],
+    "historical_review": "Indexed abstract/references and corroborated DOI only. Aluminium material/friction/damage and 2D/3D comparison; no unverified alloy, fitted parameters or accuracy quoted.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R074",
+    "title": "Erice Rolfe and Mendiguren 2023. Anisotropic plasticity and fracture modelling of cold rolled AA5754",
+    "urls": [
+      "https://doi.org/10.1016/j.engfracmech.2023.109471"
+    ],
+    "historical_review": "Primary publisher highlights/abstract and repository metadata read; AA5754-H111 temper and non-monotonic rate behaviour verified. Full PDF/methods not read. Test/model lead only, no parameter or validation-split reuse.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R075",
+    "title": "Papasidero Doquet and Mohr 2015. Ductile fracture of aluminum 2024 T351 under proportional and non proportional multi axial loading Bao Wierzbicki results revisited",
+    "urls": [
+      "https://doi.org/10.1016/j.ijsolstr.2015.05.006"
+    ],
+    "historical_review": "Full author PDF read at https://old.mohr.ethz.ch/papers/47.pdf. AA2024-T351 tension–torsion, DIC and path effects; constitutive interpretation matters.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R076",
+    "title": "Bergo Morin and Hopperstad 2021. Numerical implementation of a non local GTN model for explicit FE simulation of ductile damage and fracture",
+    "urls": [
+      "https://doi.org/10.1016/j.ijsolstr.2021.03.007"
+    ],
+    "historical_review": "Publisher full text read. Current-configuration nonlocal porosity and conditional mesh convergence; numerical methodology, not this mill’s aluminium fracture calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R077",
+    "title": "Aluminum Extruders Council. Alloys and Tempers",
+    "urls": [
+      "https://aec.org/alloys-tempers"
+    ],
+    "historical_review": "Industry authority page read. Alloy-family and treatment orientation in an extrusion context; no rolling material cards or flow curves.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R078",
+    "title": "Ryen et al 2006. Large strain work hardening of aluminum alloys and the effect of Mg in solid solution",
+    "urls": [
+      "https://doi.org/10.1007/s11661-006-0143-6"
+    ],
+    "historical_review": "Primary publisher abstract read. Compression/cold rolling and stage-IV hardening in a specified Mg range; does not support a universal composition multiplier.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R079",
+    "title": "Gjønnes and Andersson 1998. Mechanisms of surface deformation during cold rolling of aluminium",
+    "urls": [
+      "https://doi.org/10.1023/A:1004328513471"
+    ],
+    "historical_review": "Primary publisher abstract read. Surface features of initially twin-roll-cast aluminium; distinct from bulk ductile-fracture calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R080",
+    "title": "Tadić Mišović and Radović 2023. An analysis of longitudinal residual stresses in EN AW 5083 alloy strips as a function of cold rolling process parameters",
+    "urls": [
+      "https://doi.org/10.1515/jmbm-2022-0297"
+    ],
+    "historical_review": "Full open text read. Aluminium laboratory tests and 2D thickness stress model; destructive inversion assumptions. Body/conclusion conflict on friction trend, so no universal sign adopted.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R081",
+    "title": "Hattori Matsumoto and Utsunomiya 2014. Residual Stress Distribution through Thickness in Cold-Rolled Aluminum Sheet",
+    "urls": [
+      "https://doi.org/10.4028/www.scientific.net/KEM.622-623.1000"
+    ],
+    "historical_review": "Primary abstract read, not full paper. Stress sign varies with bite geometry/friction; no exact fields or transferable fit used.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R082",
+    "title": "Tibar and Jiang 2017. Improving Thin Strip Profile Using Work Roll Cross and Work Roll Shifting Methods in Cold Strip Rolling",
+    "urls": [
+      "https://doi.org/10.1155/2017/6489769"
+    ],
+    "historical_review": "Full article text read. Asymmetric aluminium laboratory mill, unequal diameters/speed ratio. Improved profile with a center buckle in one condition; no symmetric industrial-mill calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R083",
+    "title": "Mathieu et al 2013. Flatness defects after bridle rolls a numerical analysis of leveling",
+    "urls": [
+      "https://doi.org/10.1007/s12289-011-1083-2"
+    ],
+    "historical_review": "Full author manuscript read at https://hal.univ-lorraine.fr/hal-01501445/document. Aluminium shell/through-thickness model with tension release; mainly numerical, not this stand’s validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R084",
+    "title": "Hacquin Montmitonnet and Guillerault 1998. A three dimensional semi analytical model of rolling stand deformation with finite element validation",
+    "urls": [
+      "https://doi.org/10.1016/S0997-7538(98)80065-X"
+    ],
+    "historical_review": "Publisher abstract and references read. Roll-stack elasticity compared with FE; detailed influence kernels not inspected.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R085",
+    "title": "Wang Zhang and Ai 2023. Influence of edge thermal spraying on the temperature field and thermal crown of work roll during cold rolling of aluminum alloy strip",
+    "urls": [
+      "https://doi.org/10.1007/s00170-023-11830-2"
+    ],
+    "historical_review": "Primary abstract/references read. Aluminium thermal actuation and industrial application stated; coefficients, response times and detailed measurements unavailable.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R086",
+    "title": "Shore et al 2018. Multiscale modelling of asymmetric rolling with an anisotropic constitutive law",
+    "urls": [
+      "https://doi.org/10.1016/j.crme.2018.06.001"
+    ],
+    "historical_review": "Full primary text read. Aluminium texture-based constitutive study; anisotropy fixed within a pass, not updated over a validated process chain.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R087",
+    "title": "Kpogan and Potier Ferry 2014. Buckling of long thin plates under residual stresses with application to strip rolling",
+    "urls": [
+      "https://doi.org/10.4028/www.scientific.net/KEM.611-612.221"
+    ],
+    "historical_review": "Full author manuscript read at https://hal.univ-lorraine.fr/hal-01503450v1/document. Reduced-width harmonic and weakly nonlinear method, predominantly steel elastic parameters; notation checked dimensionally.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R088",
+    "title": "Abdelkhalek et al 2009. Coupled and uncoupled approaches for thin cold rolled strip buckling prediction",
+    "urls": [
+      "https://doi.org/10.1007/s12289-009-0547-0"
+    ],
+    "historical_review": "Full text read at https://minesparis-psl.hal.science/hal-00509416/document. Steel example and tensiometer profiles; local relaxation is distinct from nonlinear mode/amplitude prediction.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R089",
+    "title": "Hosseini and Rodríguez Martínez 2021. A simple and computationally efficient stress integration scheme based on numerical approximation of the yield function gradients: Application to advanced yield criteria",
+    "urls": [
+      "https://doi.org/10.1016/j.finel.2021.103538"
+    ],
+    "historical_review": "Full institutional PDF constitutive/integration/tangent and benchmark sections read. AA2090-T3 examples; solver-specific objective-rate framework, not a rolling-twin runtime or accuracy claim.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R090",
+    "title": "Liu et al 2020. A 3D phenomenological yield function with both in and out-of-plane mechanical anisotropy using full-field crystal plasticity spectral method for modelling sheet metal forming of strong textured aluminum alloy",
+    "urls": [
+      "https://doi.org/10.1016/j.ijsolstr.2020.02.008"
+    ],
+    "historical_review": "Full publisher body through appendix read. AA3104-H19 and AA2024-T3 texture/CPFFT-to-continuum, directional/plane-strain/shear and earing evidence; not roll-bite validation.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R091",
+    "title": "Wen and Mudawar 2005. Emissivity characteristics of polished aluminum alloy surfaces and assessment of multispectral radiation thermometry (MRT) emissivity models",
+    "urls": [
+      "https://doi.org/10.1016/j.ijheatmasstransfer.2004.10.003"
+    ],
+    "historical_review": "Full author PDF experiments/conclusions read at https://engineering.purdue.edu/mudawar/files/articles-all/2005/2005_3.pdf. Polished 1100/2024/7075/7150 at 600–800 K; no cold oily-strip emissivity calibration.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R092",
+    "title": "Le Sutcliffe Wang and Burstein 2004. Surface oxide fracture in cold aluminium rolling",
+    "urls": [
+      "https://doi.org/10.1016/j.actamat.2003.10.027"
+    ],
+    "historical_review": "Primary abstract/introduction and methods/conclusion snippets read. Deliberately anodized 1050/1200 strips; mechanism evidence, not a universal native-oxide critical reduction.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R093",
+    "title": "Sutcliffe 1990. Experimental Measurements of Lubricant Film Thickness in Cold Strip Rolling",
+    "urls": [
+      "https://doi.org/10.1243/PIME_PROC_1990_204_065_02"
+    ],
+    "historical_review": "Primary publisher abstract read. Uneven supply produced film thinner than smooth-surface prediction; full material list not established. Measurement methodology, not an aluminium-specific parameter set.",
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R094",
+    "title": "Achenbach OPTIMILL. Aluminium strip rolling mills",
+    "urls": [
+      "https://www.achenbach.de/en/machines-equipment/optimill-rolling-mills/optimill-strip-rolling-mills/"
+    ],
+    "historical_review": "Official page and actual render inspected. Enclosed stand, supported reel machinery, projecting hoods and service connections; 4-/6-high and bottom-setting-cylinder options documented. Representative arrangement, not dimensions or physics validation.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R095",
+    "title": "Achenbach. Future Concepts Since 1452",
+    "urls": [
+      "https://www.achenbach.de/fileadmin/achenbach/company/news/2022/Achenbach_Image_brochure.pdf"
+    ],
+    "historical_review": "Actual PDF pixels inspected on pages 6, 9 and 11 (printed 12, 18 and 22): foil-mill enclosure/access, reel-side machinery and separate media-treatment plant. Visual context only; artwork not reproduced. Corporate image brochure; accessed 30 September 2026. No publication year inferred from URL.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R096",
+    "title": "Achenbach UniFlat. Flatness measuring rolls",
+    "urls": [
+      "https://www.achenbach.de/en/machines-equipment/technology-components/uniflat-flatness-measuring-rolls/"
+    ],
+    "historical_review": "Official product description read. Across-width tensile-stress sensing, including closed-surface embodiments. Instrument function and external-design inspiration; no installed calibration assumed.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R097",
+    "title": "Achenbach UniSpray. Coolant distribution system",
+    "urls": [
+      "https://www.achenbach.de/en/machines-equipment/technology-components/unisprayr-coolant-distribution-system/"
+    ],
+    "historical_review": "Official product description read. Individually controlled nozzle valves, rows and local oil application. Inspires separate zone actuators; no universal nozzle pitch or heat-transfer gain.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R098",
+    "title": "Achenbach UniHeat. Curved hot edge system",
+    "urls": [
+      "https://www.achenbach.de/en/machines-equipment/technology-components/uniheat-curved-hot-edge-system/"
+    ],
+    "historical_review": "Official description read. Local work-roll induction heating near strip edges, with exit-side splash-guard mounting described. Not a strip furnace and not proof of hot rolling.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R099",
+    "title": "Primetals Technologies. Aluminum cold rolling",
+    "urls": [
+      "https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/aluminum-cold-rolling/"
+    ],
+    "historical_review": "Official portfolio read. Four-/six-high and tandem options; equipment-configuration reference. Stand count, roll-stack height and reversing operation are separate choices.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R100",
+    "title": "Primetals Technologies. Air Bearing Shapemeter",
+    "urls": [
+      "https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/air-bearing-shapemeter/"
+    ],
+    "historical_review": "Official installed/component image pixels inspected and product text read. Supported narrow rotor sections and pneumatic load inference; an alternative to solid measuring-roll designs, not an optical scanner.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R101",
+    "title": "MINO 2021. Mino supplies a new foil finishing mill to Laminazione Sottile",
+    "urls": [
+      "https://mino.it/wp-content/uploads/2025/03/2021_11_INTERNATIONAL-ALUMINIUM-JOURNAL_MINO-Foil-Mill.pdf"
+    ],
+    "historical_review": "OEM-hosted publication: image pixels on PDF pages 2 and 4 inspected; text on page 3 read. No. 2 photograph supports access/enclosure observations; announced No. 3 doubled-foil features are separate. No artwork copied. International Aluminium Journal, November 2021; the later upload date is not the issue date.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R102",
+    "title": "MINO 2023. New “High-Specification” Six-High Mill Receives Final Acceptance by Customer",
+    "urls": [
+      "https://mino.it/six-high-mill-receives-final-acceptance/"
+    ],
+    "historical_review": "Official ELVAL case read. Intermediate shifting, thermal treatment and monitoring functions; optional six-high configuration evidence, not a requirement to convert the four-high baseline. The 2023 date comes from the earlier source review, not a fresh date check.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R103",
+    "title": "MINO Process Control 2025. Bliss cold mill upgrade at ELVAL Greece",
+    "urls": [
+      "https://mino.it/mino-process-control-completes-bliss-cold-mill-upgrade-at-elval-greece/"
+    ],
+    "historical_review": "Official four-high aluminium upgrade case read. AGC/AFC, displacement-transducer and hydraulic integration; public function evidence, not an as-built drawing or control validation for this project.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R104",
+    "title": "Thermo Scientific. Thermo Scientific RM210AS aluminum x-ray thickness gauge",
+    "urls": [
+      "https://assets.thermofisher.com/TFS-Assets/CAD/Datasheets/rm210-aluminum-thickness-gauge-datasheet.pdf"
+    ],
+    "historical_review": "Actual PDF page 2 diagram inspected: separate entry/exit C-frames and opposed measurement heads in a typical aluminium cold/reversing arrangement. Alloy/temperature correction documented; offered capability, not installed accuracy.",
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R105",
+    "title": "Achenbach official YouTube. Achenbach Buschhütten Speed",
+    "urls": [
+      "https://www.youtube.com/watch?v=G3_KB3xJUn4"
+    ],
+    "historical_review": "Official channel linkage and 5:18 video identity verified. Player remained buffering; no usable machinery frames were viewed. Reference link only, no timestamp-specific design claim or video reproduction.",
+    "source_type": "video"
+  }
+]

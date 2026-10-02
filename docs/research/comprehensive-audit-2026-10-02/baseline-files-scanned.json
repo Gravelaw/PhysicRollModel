@@ -1,0 +1,562 @@
+[
+  {
+    "path": "README.md",
+    "sha256": "2b39d1a47671aa2ba858fabc53efbf2a97589b0ce4de5c1cb86161011aa925aa"
+  },
+  {
+    "path": "artifacts/aa5052/baseline.json",
+    "sha256": "3cca298e93ad2d3b6a61296ce8d121349185a047c64cdd2e6a4f009043bc3aff"
+  },
+  {
+    "path": "artifacts/aa5052/baseline_vs_measurements.csv",
+    "sha256": "d640fa9e9d75600ec731dd2759ec30c0ee46a195c0c5d31d216beeb84d476c60"
+  },
+  {
+    "path": "artifacts/aa5052/measured_validation_si.csv",
+    "sha256": "54869b96edb84a692f891622678e4fd03b7bf3d66935ec9fc8b63c47e7dbdb59"
+  },
+  {
+    "path": "artifacts/aa5052/optimisation.json",
+    "sha256": "afcb68eaee0a853237376217189ca5f59a7e44e4df343843c0cdacc2029d7283"
+  },
+  {
+    "path": "artifacts/aa5052/process_inputs_si.csv",
+    "sha256": "e8bb2d2575f40e79026468172da5f88a485a4a30e8fe67ff13465aa9d7743f0b"
+  },
+  {
+    "path": "artifacts/aa5052/reference_model_outputs_si.csv",
+    "sha256": "2c7718c7468bdb660ae825afb747f0332d49572bf59a10b821f46c893d7f89cf"
+  },
+  {
+    "path": "artifacts/aa5052/search_candidates.csv",
+    "sha256": "b0a52a5a79aa1e184bb28a3ba059c78cc3e594dc2e05441e3f398d23a3b726db"
+  },
+  {
+    "path": "artifacts/aa5052/sensitivity.json",
+    "sha256": "a444fe390dc05e05022f13d3a77c300f5d1a0b8fc33675aa449c3a9480af6570"
+  },
+  {
+    "path": "artifacts/aa5052/source_context.json",
+    "sha256": "053f38001a87a51d1d17f11fadec8c18f675af3f71bdf71aa137f99b43f5c503"
+  },
+  {
+    "path": "artifacts/aa5052/summary.json",
+    "sha256": "78128b5862379a1680019bfd4c8e90f80813d268cbaad47b0a92004d83bd8ccf"
+  },
+  {
+    "path": "artifacts/aa5052/unit_audit.json",
+    "sha256": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b"
+  },
+  {
+    "path": "artifacts/aa5052/values_long.csv",
+    "sha256": "2e8957ac062fdd471d5447016eb94c7446612cb5ba1fbec4ef44deae3ff4e07b"
+  },
+  {
+    "path": "artifacts/baseline.result.json",
+    "sha256": "3253a37c973a5aa3fd9b977659633d558ece835e81505afaf891d43dedc0bf5a"
+  },
+  {
+    "path": "artifacts/blend_check.txt",
+    "sha256": "968951e0669d7fc9c856d5e0aecc515700e2be7af4e7641dd808459ce9b7a907"
+  },
+  {
+    "path": "artifacts/build_environment.json",
+    "sha256": "58315ca322f914d7a118780bb8e3b398f682e81f87cc9b85f79c269797089642"
+  },
+  {
+    "path": "artifacts/checksums.json",
+    "sha256": "e2fe455518b851a683cafdde18bb8dc96bdae4b669b571d1983195a2973f8fdf"
+  },
+  {
+    "path": "artifacts/constraint_study.json",
+    "sha256": "e5e9590862a546b9217967de583c011a44a59ebab885f53338b2daddc53c134d"
+  },
+  {
+    "path": "artifacts/contact_increment/before_after.csv",
+    "sha256": "d16dc8ce8b3fc04a0927da6eb0ed3d7d9aa633963ae8036f73288fe26aa789b0"
+  },
+  {
+    "path": "artifacts/contact_increment/checksums.json",
+    "sha256": "740fbad953c1af356e0a5cc2904c5e1b03907024f31879da909b63c59ce644a1"
+  },
+  {
+    "path": "artifacts/contact_increment/hypotheses.json",
+    "sha256": "448b28873a9746fd0bec3ac19dab1c477681db85d1f3308838ebb1ee26900c1d"
+  },
+  {
+    "path": "artifacts/contact_increment/reproducibility.json",
+    "sha256": "15e7b5f6bf850feff827edf3c7a1bd1bbf229687d1bc85751aefadbbca100617"
+  },
+  {
+    "path": "artifacts/contact_increment/structural_comparisons.json",
+    "sha256": "f169d2fc7713d80757a0ea126e8f1c6023c9375e8d38492770fb8fdfe993a60e"
+  },
+  {
+    "path": "artifacts/contact_increment/summary.json",
+    "sha256": "cce19fd08a00614b88e0f438ed09da6e2d20cea31b2cb0db0ee2a490509b23b4"
+  },
+  {
+    "path": "artifacts/contact_increment/tests.txt",
+    "sha256": "255b122a6446f61443d3a41f8a63dab16e9869c10055e4ec8962047542fefe7b"
+  },
+  {
+    "path": "artifacts/contact_increment/unit_audit.json",
+    "sha256": "0b0f97d186e26556bcf2635cd3cbc92d957d34727e44612ae7675871ce78e74b"
+  },
+  {
+    "path": "artifacts/contact_increment/verification.json",
+    "sha256": "4ed455d3f173a7c3796bc20c1a9cae087b6ec82634efbb72bfb9b95b731b1c65"
+  },
+  {
+    "path": "artifacts/equipment.result.json",
+    "sha256": "a4446e77c61b675c219ce2f6509b68362668a10469f3a0118de1ea41a110e5d7"
+  },
+  {
+    "path": "artifacts/equipment_manifest.json",
+    "sha256": "a2a8a347b85a2de919d539c53321686674ff1d0a4998049dd0778ebb0cf618ae"
+  },
+  {
+    "path": "artifacts/flowing_energy_build.json",
+    "sha256": "f193c9e7111be688be3ed3ab3f56914742b69a47f4d03c7cb09ac12ee3b0c41c"
+  },
+  {
+    "path": "artifacts/flowing_energy_demo.json",
+    "sha256": "70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4"
+  },
+  {
+    "path": "artifacts/flowing_energy_specialist_review.json",
+    "sha256": "8db2e282dee6e767c4b18c7fa72bfb5c715d56a03ba42fd023791f7f69edd6fd"
+  },
+  {
+    "path": "artifacts/flowing_energy_tests.txt",
+    "sha256": "4bde8463e4b3d85b91fd64429ae8c323040796438bcebb26f48be3acbc91056e"
+  },
+  {
+    "path": "artifacts/higher_reduction.result.json",
+    "sha256": "4b63c8ade9dfe548d1a3dabdce1f4b0a305c3adbd2ddf4a0dc4cc5f318280a7f"
+  },
+  {
+    "path": "artifacts/higher_speed.result.json",
+    "sha256": "8196e96e46f155e4ee9a2573d9cd25bc4734edb49212f52b3f7f531c7c29d3cc"
+  },
+  {
+    "path": "artifacts/passive_contact_demo.json",
+    "sha256": "1ec69cf7cec240845f5c251bab49b11f9989f999289df085c49166ec245a3942"
+  },
+  {
+    "path": "artifacts/process.result.json",
+    "sha256": "3253a37c973a5aa3fd9b977659633d558ece835e81505afaf891d43dedc0bf5a"
+  },
+  {
+    "path": "artifacts/scene_status.json",
+    "sha256": "510ede521a40d3612678c96cacabf753c60b5020527f58bdc3681daf80d5b32a"
+  },
+  {
+    "path": "artifacts/sensor_manifest.json",
+    "sha256": "9e7cd911a9e06a590c2c64d7b1a57e70692a38c3bc0dc4926aea918ca1a2e9f5"
+  },
+  {
+    "path": "artifacts/sweep.csv",
+    "sha256": "bb3a779128755957fc7b94f1724ac1208b86e4b9ce00657c30bf1dc93f7abe84"
+  },
+  {
+    "path": "artifacts/test_results.txt",
+    "sha256": "2e8d1c72e0caaccd7535e429d6c27250469c82a09105b2ae13ebbb803057becb"
+  },
+  {
+    "path": "artifacts/unloaded_transport.result.json",
+    "sha256": "87ca0f1ed314df647961fa90108b0e95ef104dfe5d8b29da54ed5a09e896e5eb"
+  },
+  {
+    "path": "artifacts/usd_check.txt",
+    "sha256": "6f800a2b45caf76eff627933645c32739cc55a04a88d844b79aa4f0097bcb5a2"
+  },
+  {
+    "path": "artifacts/v03_build_environment.json",
+    "sha256": "b7f3bf9a8705dcffe9d69304d052e9972d64684d5aa786daecbb21ad450d992f"
+  },
+  {
+    "path": "artifacts/v03_foundations.result.json",
+    "sha256": "1c27fbc00bc9d5d37a5b6d3f883a96d7305fa36dddc6cb9f51a36bd133000779"
+  },
+  {
+    "path": "artifacts/v03_sensitivity.json",
+    "sha256": "fcf0e7b35ad9a6f2489c05afe9126d86f71c1c4d143fda37e6ef79ab5fa912d8"
+  },
+  {
+    "path": "artifacts/v03_test_results.txt",
+    "sha256": "fe59a59e5d43582827b1a27810e00fbf4c45a27ce3fa5f998124221f452d1b96"
+  },
+  {
+    "path": "blender/generate.py",
+    "sha256": "b8e7eaeade62f6760087423f84f3604d2747a094928ed68bd33a648957aea3f5"
+  },
+  {
+    "path": "blender/make_preview.py",
+    "sha256": "a1ea48da705f8e8e63041256f7428a76a74131e48a0719043e162f390fd88bb4"
+  },
+  {
+    "path": "blender/usda.py",
+    "sha256": "8c50c258f1df91b7cdb97abf9a5e39a19e7f7ea7a0150cf0edf3d3635fcdd1f5"
+  },
+  {
+    "path": "docs/aa5052-study.md",
+    "sha256": "6ae5f96c154bd8d9a5581079316007d9790e1502f970f9901328884158c1c4d2"
+  },
+  {
+    "path": "docs/capabilities.md",
+    "sha256": "6db001a48c626ed9b16aa1bb1f00d28815379cf6aa7ed7bc0fefac7271e6b59d"
+  },
+  {
+    "path": "docs/contact-increment.md",
+    "sha256": "7dd760388886e251f15333453169f5d0b2f314563ffb625114673eb2c142d261"
+  },
+  {
+    "path": "docs/development.md",
+    "sha256": "b3ba47fcac54be5c44490de71e23dd40629d0bafdd00661e91ac306ab75a257d"
+  },
+  {
+    "path": "docs/energy-handoff.md",
+    "sha256": "b69ca35c3c0829b032a0e68271a8ed11dcf33028f94a7d69fcf86fbc57af19c9"
+  },
+  {
+    "path": "docs/energy-specialist-audit.md",
+    "sha256": "e8d889a4ede3100176e23bde1c6ff28eeab281d6697c79478ef4b80df8bade85"
+  },
+  {
+    "path": "docs/mechanics-audit.md",
+    "sha256": "fafea782042db4007dc7969a150d90d9cc8e749fe01ce7c962d73123812a68e2"
+  },
+  {
+    "path": "docs/mechanics-change-log.md",
+    "sha256": "d07cce8b12381f0238e52bd349760272ca1339174c503474d965df0f92a45560"
+  },
+  {
+    "path": "docs/model.md",
+    "sha256": "f3b42e8493ef37a4e0f254ccc72c377a2b6c8b136594380e07e887c2a78ca365"
+  },
+  {
+    "path": "docs/next_modules.md",
+    "sha256": "99f59067435b0e3ac10f3073b52e681b4aa9d3c1d12f6027ee093812d72ffc03"
+  },
+  {
+    "path": "docs/passive-contact.md",
+    "sha256": "7a92e11eeadc859634d4018f23d75638bf8cf8730c5ea0f7ba08a6f889b54aaa"
+  },
+  {
+    "path": "docs/report-sync-contact-increment.md",
+    "sha256": "314ec66a2801b114da98a3beef163b4e14d47def63e45f006fc658eb2de2f781"
+  },
+  {
+    "path": "docs/report-sync-energy-handoff.md",
+    "sha256": "9c96e4c16fe77385634a69d0ef928fe01f2a9e9b94fa2190c66fa02ef05f21b8"
+  },
+  {
+    "path": "docs/research.md",
+    "sha256": "c2fef66d4213a6d0502a567568285658195a0cd3d764bc9f3dc8c22f3a61de25"
+  },
+  {
+    "path": "docs/research/Aluminium_cold_rolling_research_for_PhysicRollModel.docx",
+    "sha256": "9b6a1283340182dec054eeb90cadcf4b0f94658bca37079576a5144888df6da4"
+  },
+  {
+    "path": "docs/research/Aluminium_cold_rolling_research_for_PhysicRollModel.pdf",
+    "sha256": "460cd942a3da148cc85d9f1135c8e8cfc71de978773611b5a128b087ea698ac4"
+  },
+  {
+    "path": "docs/research/README.md",
+    "sha256": "0b40f4c668f7104253b2a07e1099952bc2af502f02a79511925b1f4b3557b1ae"
+  },
+  {
+    "path": "docs/research/checked-schedule-integration-2026-10-02.md",
+    "sha256": "8676a617896b8e0ea9310366616d973b9b3a39328c64cb0cc8a89d0197494336"
+  },
+  {
+    "path": "docs/research/contact-sources.json",
+    "sha256": "7d73384e5064c9c7d1b6da955ea70f87c3b750edfccf8ea089fe3491929c0b12"
+  },
+  {
+    "path": "docs/research/multipass-foundation-2026-10-02.md",
+    "sha256": "d61babe934952c5fc0535a308e90dae76699ab7fcbf1eff0fcb60d13ef8b7dbf"
+  },
+  {
+    "path": "docs/research/multipass-theory-2026-10-02.md",
+    "sha256": "4b842953761c70acb949ed7b63ab91d5ee186c387fe5db86290dec1b7b74a30d"
+  },
+  {
+    "path": "docs/research/report-update-2026-10-02.docx",
+    "sha256": "7fbf1c85820cd64ac53876dcb0629632e9249b30464d7dc822de4a92895c5ac7"
+  },
+  {
+    "path": "docs/research/report-update-2026-10-02.md",
+    "sha256": "449f5a722481161a4876cb7b98d324ab839e5cd63c12d92ad59ed7c909e09fbc"
+  },
+  {
+    "path": "docs/research/report-update-2026-10-02.pdf",
+    "sha256": "e95fa472042b4d7220e67f85b641c52a488742962e79e0d96f140cd959475477"
+  },
+  {
+    "path": "docs/research/source-ledger.md",
+    "sha256": "ba3374b5000766babaa94a58bd0a11c407476e8ee1e137c0461d8e8a572dcd82"
+  },
+  {
+    "path": "docs/sensors.md",
+    "sha256": "1100a75f8b4a464a794bfad5b8706de0df926f600f58ddc85b18a8b08418ca8c"
+  },
+  {
+    "path": "docs/traceability.md",
+    "sha256": "6b9d92c0021636663e4c3a94d9ac546dc937c3f49de7aa3c08a1317dc3e72ef9"
+  },
+  {
+    "path": "docs/v03-foundations.md",
+    "sha256": "bcfb70506e15c3a4c7fc4662bb95817da13f7e883e8a9816da5fe0eaef85d6b4"
+  },
+  {
+    "path": "docs/verification.md",
+    "sha256": "565c17709d158116f8a80009600a248101ad1ebd7d96af9d1f17693795019554"
+  },
+  {
+    "path": "physicroll/__init__.py",
+    "sha256": "6e177b1e61389ec7fc817a5b35c252718867b30ba898d75667646aaee3335212"
+  },
+  {
+    "path": "physicroll/__main__.py",
+    "sha256": "b2be8bc15a3750d7e1de07004fa21582d668cd8d392dee70a66c414c6569c0e4"
+  },
+  {
+    "path": "physicroll/checked_schedule.py",
+    "sha256": "831ac024cd220cf4ab6cf820ac52a5bced0c55ea2e3cb33b5f46772f953e9783"
+  },
+  {
+    "path": "physicroll/contact.py",
+    "sha256": "aa0c3360381695a7f53160b66f43d7f6723dbc98eea73c54b3ce2fdaf399179e"
+  },
+  {
+    "path": "physicroll/energy_handoff.py",
+    "sha256": "28867e9dc3f3db2cd56d314dbd82eafbf1a0bebb39232d96d04d90fd9a9ed821"
+  },
+  {
+    "path": "physicroll/equipment.py",
+    "sha256": "794bc7e1900f4821a1b28d48d4d617c232d443194b5504875a31c73eb91d8964"
+  },
+  {
+    "path": "physicroll/literature.py",
+    "sha256": "cef678243e0f371fec809aa6a6f391a38e140ead9060223e08986aaee56e8fda"
+  },
+  {
+    "path": "physicroll/lubrication.py",
+    "sha256": "16e2ad9cc4bfdd54fc0266210c3d108aa6d52114c945ae148516318b8f5ee7c6"
+  },
+  {
+    "path": "physicroll/materials.py",
+    "sha256": "656850daa6757c58a9e0ce1372dc298f622f633b3ce20df3aaf6deb9aaf714d4"
+  },
+  {
+    "path": "physicroll/model.py",
+    "sha256": "49367cf5ed1104da56c5b77bbcb85efb6874e2ef9e5ce3bee406dde1e4752dea"
+  },
+  {
+    "path": "physicroll/observations.py",
+    "sha256": "0ac9ffa8fd9bd70c04f2f9fa2970a241820e58505ef341cf94931d9fdf9f546d"
+  },
+  {
+    "path": "physicroll/operating.py",
+    "sha256": "25843f80529654c087f92c4b588574aeb19a21a40dde3ea6fd9eee356013970a"
+  },
+  {
+    "path": "physicroll/profile.py",
+    "sha256": "d9419798ab5d8e4092ee6f3d75506ed6ee7d719d61556aa6c0e8600c52eb501e"
+  },
+  {
+    "path": "physicroll/schedule.py",
+    "sha256": "ac9b475c754101df4cad7c26094b916558c90d921a2e441643f1bba0e76547b2"
+  },
+  {
+    "path": "physicroll/sensors.py",
+    "sha256": "5021ed210914e6a6acd4a0469c33f6400198c94b3da927d31183abc20666f041"
+  },
+  {
+    "path": "physicroll/slab.py",
+    "sha256": "88d3795c125cb612b5fbc1a460c8cd15a1685cc84fd638e28cb9821f6710a265"
+  },
+  {
+    "path": "physicroll/studies.py",
+    "sha256": "f9bcc4786fad9c4c2ba855c85f6445377b1d7e8f53a8ea0e0d42aef9a2a16f48"
+  },
+  {
+    "path": "physicroll/thermal.py",
+    "sha256": "00aafdd799b7432ae9d5a73c6c314db4bc966beaa692b6abae3f8accedd2f3e1"
+  },
+  {
+    "path": "physicroll/units.py",
+    "sha256": "e33d28c715db9cdcc7c1ca5e92e14c6d9b5b4199ccb6d0c541e8332366892d68"
+  },
+  {
+    "path": "pyproject.toml",
+    "sha256": "dd8f2dae17a385b3c9482272bd63da31c852f41d4d2bb31f5598aedc4a183f9a"
+  },
+  {
+    "path": "requirements-preview.txt",
+    "sha256": "2b4669a14fe573921da759b254bbff0c447670c55a0f2d73c0538a4d9714f9a1"
+  },
+  {
+    "path": "requirements-verify-usd.txt",
+    "sha256": "c0e78486a8e035bd879bd00954e56b8b82a40e705b0f81bc9d261e5a2903d089"
+  },
+  {
+    "path": "scenarios/baseline.equipment.json",
+    "sha256": "a2a25b98ba5dddcfb8f7ebf5f8fba03972329ed4904453a355209d1589aa85d3"
+  },
+  {
+    "path": "scenarios/baseline.json",
+    "sha256": "46400358b613f0f8240a2e0779ca26ea2af62e22789a6c35ee174a5a454a39d0"
+  },
+  {
+    "path": "scenarios/flowing_energy_demo.json",
+    "sha256": "5ca667a5bb6c5243de0a2e0fcd63e9c329203d8fa122c4749c37db0ac23d6848"
+  },
+  {
+    "path": "scenarios/higher_reduction.json",
+    "sha256": "7281696cdaf629c62c0c17f0342b60257845f72ef203a49ffc247c717f515c5f"
+  },
+  {
+    "path": "scenarios/higher_speed.json",
+    "sha256": "cd26b978a343817a9b713c4559f2a96f2ebecca89d567dc47b01a736481af2ff"
+  },
+  {
+    "path": "scenarios/literature/shao2015_aa5052/assumptions.json",
+    "sha256": "2ad7091bdb92896c01c99e49c16e0f6fc4aad44b0d20e4b81ebf46ca295d9918"
+  },
+  {
+    "path": "scenarios/literature/shao2015_aa5052/inputs.csv",
+    "sha256": "269a4e0692c7d91785f065a2811dcc15dca61355bf0c62751fbe184233f191a8"
+  },
+  {
+    "path": "scenarios/literature/shao2015_aa5052/measured_validation.csv",
+    "sha256": "51b1f81c0d81e827d4010eb5b1382baf042ac600dbf9bd9ed296f60c14e35033"
+  },
+  {
+    "path": "scenarios/literature/shao2015_aa5052/reference_model_outputs.csv",
+    "sha256": "a9a885a5a17158f499896ba59186f160f6de6fb7d2a70eefde52cdfc84d498c2"
+  },
+  {
+    "path": "scenarios/literature/shao2015_aa5052/sources.json",
+    "sha256": "0d783d0714175ff40788de1ef75b2f15c5587ac41ecf5ef75c2ac194ffaeb4ac"
+  },
+  {
+    "path": "scenarios/passive_contact_demo.json",
+    "sha256": "ef24196b6c6bc37712eeaf826bc4efd88014dbf675c568e8e5d3233bed292607"
+  },
+  {
+    "path": "scenarios/run_sweep.py",
+    "sha256": "1d979e05ce5f4fee42909de1a03d1b75883413bdced9f633a7df96d28a737ffb"
+  },
+  {
+    "path": "scenarios/unloaded_transport.json",
+    "sha256": "e129875553bc06415f22e60f81f602349cbceb63de440f03ef2fb55e28f2c0b0"
+  },
+  {
+    "path": "scenarios/v03_foundations.json",
+    "sha256": "1e76ae82540817aa87ed071da84c2d65b4c3e2b72a5f85567cc83b34d13f1a91"
+  },
+  {
+    "path": "schema/scenario.schema.json",
+    "sha256": "84216080394907773515e18ac3645b7a28e4c4e82dbb9ecc5195ebc8459bdaf7"
+  },
+  {
+    "path": "scripts/audit_literature_units.py",
+    "sha256": "5673cb2fc2bede8e011b37a43047db9210eaa6b1ccd6a6cbaa1caa30b7aa0479"
+  },
+  {
+    "path": "scripts/build_extended.py",
+    "sha256": "0b2b9d95cbe6f6dc4b62c65a2b6e872fe8fc1e99d2aac3fffd74faa732c7b360"
+  },
+  {
+    "path": "scripts/build_v03.py",
+    "sha256": "132bad3d48735f2d761af889cf4f3d07108114b870ebf432431beda0e03ed588"
+  },
+  {
+    "path": "scripts/check_blend.py",
+    "sha256": "fba9f1de511127e5eb0751f28b4bb6dac604b3c935b1782198012b1ba8c5f038"
+  },
+  {
+    "path": "scripts/check_usd.py",
+    "sha256": "e580f99af00780e22bfe792b570e2902c8bd3a6165a6bd673cc86db693aaebbb"
+  },
+  {
+    "path": "scripts/package.py",
+    "sha256": "be822981f437f33d2befe2f652ed05f6e8d0de9ce7cf1d5610a1d3b72c80fc86"
+  },
+  {
+    "path": "scripts/plot_literature.py",
+    "sha256": "9e34041e83a4eb4ad38f44e4c978b89fd323bc18eb1d680fdcb4858a7baed3f1"
+  },
+  {
+    "path": "scripts/run_contact_increment.py",
+    "sha256": "90e37b57f666e5f6de35ff3f462ab5c77a2ad49ffede37f5bf280ab83f91e75a"
+  },
+  {
+    "path": "scripts/run_flowing_energy_demo.py",
+    "sha256": "07d28c143a208ed9cead831106d798b647cb136c32f48222d1b8828f69d2f70e"
+  },
+  {
+    "path": "scripts/run_literature_study.py",
+    "sha256": "0288a6ab2d43b36c5c0d497dd4eaabe2f2643493d885e2fd786bf532904cfa12"
+  },
+  {
+    "path": "scripts/run_v03_study.py",
+    "sha256": "c2b3eef8aa2b9c4fd6efa780f664aeea515bdff18a67b6421ed05efa49b19aa2"
+  },
+  {
+    "path": "scripts/smoke.py",
+    "sha256": "7b107fede969c27d64b54a3de2dfd75af4ca14e26ad488f73ec56fb8c540a654"
+  },
+  {
+    "path": "tests/test_checked_schedule.py",
+    "sha256": "099273f3d63872618c60b6abcc42f1dad9ac9989634c6634d1804c1df40e996c"
+  },
+  {
+    "path": "tests/test_contact_increment.py",
+    "sha256": "9f0e2067b3786b077817d613421e6793295c63008139b4e2063ef96d2f6a0853"
+  },
+  {
+    "path": "tests/test_energy_handoff.py",
+    "sha256": "83120d931af2f8b79f6eefc8f28efc8fd8be4e3324a0ce2ef4c90e95ab5ee0f1"
+  },
+  {
+    "path": "tests/test_equipment_sensors.py",
+    "sha256": "620fbdf8d4e7aa4e7888070c00a3db6745a253f018adf589b3ca5339ad58214f"
+  },
+  {
+    "path": "tests/test_literature.py",
+    "sha256": "ccac8f2ed011a623e298ad5ee75a20ca2bb892fdba66812429e7305c46c60afb"
+  },
+  {
+    "path": "tests/test_mechanics_audit.py",
+    "sha256": "7dc4387631e660454f87ef7b6134c90427dfc5b552623fcf7a43c89fa15e0209"
+  },
+  {
+    "path": "tests/test_model.py",
+    "sha256": "06e70145ac6aeb65e2d26d1ee3da17a582c1ab296a6ca045029e1d5f778ff3e4"
+  },
+  {
+    "path": "tests/test_observations.py",
+    "sha256": "a71a0900e43c1100822bd47a82f347f7119b1ef080273e2acc21dfc7c7020037"
+  },
+  {
+    "path": "tests/test_passive_contact.py",
+    "sha256": "5e2bb755fc87989d25433a3cef82d4a4027838bc8218b1112ff320c9fbc9797a"
+  },
+  {
+    "path": "tests/test_schedule.py",
+    "sha256": "5b2767adbdb62fddb472d8fd37dea5c72fd44ba5700ef2768b359e299637b96e"
+  },
+  {
+    "path": "tests/test_studies.py",
+    "sha256": "9e09582c8e2822f6bc75cfe4f61c785685fa38e1a379e84b0e9335185a22a086"
+  },
+  {
+    "path": "tests/test_v03.py",
+    "sha256": "4ba588aa740da9ec8fe7f4602a5b454ca3cef52f6f4f923b894b92e264263ee3"
+  }
+]

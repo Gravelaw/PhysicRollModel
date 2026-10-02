@@ -1,0 +1,42 @@
+{
+  "baseline_commit": "caec37ef86a8b78e1eb88292ea6368bfb64bcbdc",
+  "audit_date": "2026-10-02",
+  "verified_distinct_source_records": 159,
+  "original_numbered_records": 105,
+  "additional_records": 54,
+  "by_source_type": {
+    "dataset_repository": 3,
+    "oem_industry": 43,
+    "official_guidance": 1,
+    "official_software": 14,
+    "official_standard": 1,
+    "patent": 1,
+    "scholarly": 81,
+    "secondary_orientation": 11,
+    "teaching": 1,
+    "thesis": 2,
+    "video": 1
+  },
+  "current_access_status": {
+    "abstract_only": 31,
+    "full_text_reviewed": 16,
+    "metadata_only": 20,
+    "not_retrieved_orientation_only": 11,
+    "official_document_reviewed": 50,
+    "partial_text_reviewed": 24,
+    "unavailable": 7
+  },
+  "records_with_fresh_reviewer_annotation": 148,
+  "baseline_files_scanned": 140,
+  "baseline_file_url_pairs": 450,
+  "baseline_unique_external_urls": 178,
+  "unresolved_external_urls": [],
+  "unresolved_historical_clusters": [
+    {
+      "id": "U001",
+      "description": "Historical book-lead list absent; handoff mentions 14, exact identities not recovered",
+      "verified_distinct_count": null
+    }
+  ],
+  "counts_are_not_quality_scores": true
+}
