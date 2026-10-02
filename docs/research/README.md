@@ -16,6 +16,7 @@ The [2 October status addendum](report-update-2026-10-02.md) is retained as a hi
 | What was checked numerically? | [Verification](../verification.md), [mechanics audit](../mechanics-audit.md), [energy specialist audit](../energy-specialist-audit.md), [change log](../mechanics-change-log.md) |
 | What do the published aluminium cases support? | [AA5052 comparison](../aa5052-study.md), [contact comparison packet](../report-sync-contact-increment.md), [energy packet](../report-sync-energy-handoff.md) |
 | What data and later models are needed? | [Sensors](../sensors.md), [next modules](../next_modules.md), [development](../development.md) |
+| How are prescribed multi-pass gauges and pass-specific signals handled? | [Multi-pass foundation (2 October 2026)](multipass-foundation-2026-10-02.md) |
 | Where are source claims qualified? | [Source and reference ledger](source-ledger.md), [contact source records](contact-sources.json), source tables in the documents above |
 
 `artifacts/aa5052/`, `artifacts/contact_increment/` and
@@ -31,3 +32,5 @@ Subsequent optional development is tracked in the live engineering documents;
 the [passive-contact increment](../passive-contact.md) adds a supplied-conductance
 numerical closure without revising the 53-page historical edition or claiming
 new thermal validation.
+The multi-pass foundation is a subsequent development note and leaves that
+53-page report as a dated snapshot.

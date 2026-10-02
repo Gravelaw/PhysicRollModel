@@ -59,3 +59,11 @@ The [optional passive-contact equation/source/code/test map](passive-contact.md#
 adds a supplied-conductance numerical closure to the same ledger. Its synthetic
 demonstration and passivity tests do not identify an aluminium HTC or validate
 strip/roll temperatures.
+
+## Prescribed multi-pass foundation
+
+The [2 October multi-pass source/equation/code/test map](research/multipass-foundation-2026-10-02.md#traceability-and-acceptance-checks)
+links kinematic gauge and strain identities, explicit material handoff, per-pass
+signal roles and existing foil rejection to `physicroll/schedule.py`,
+`physicroll/operating.py` and `tests/test_schedule.py`. This is a development
+branch foundation and not a validated 50 µm production schedule.

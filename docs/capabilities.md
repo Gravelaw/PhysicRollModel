@@ -18,6 +18,7 @@ no aluminium mill, thermal, product-quality or control validation is claimed.
 | Profile and flatness | `profile.py` diagnoses crown from supplied thickness, membrane mismatch and through-thickness curvature separately. | Fields are inputs, not predictions. No predictive roll stack/bending, latent-flatness/buckling or wave amplitude. |
 | Fracture and residual stress | Unsupported mechanics regimes reject/flag. | No 3D edge damage, residual-stress field, crack propagation, mesh-regularized fracture or certified strip-break safety. |
 | Literature comparison and optimisation | Retained conditional three-pass AA5052 fixed-data comparison and old assumed-range gauge search. New structural/sensitivity comparisons retain failures and before/after residuals. | No fit to those passes, independent validation, known mill ratings, uncertainty probabilities or expanded optimisation. Slip mismatch and semantic ambiguity remain. |
+| Prescribed multi-pass workflow (development branch) | Audits gauge transitions and equivalent-strain increments; chains the existing synthetic hardening state, pass-specific steady inputs and declared signal ranges. | No inferred pass count, controller, anneal, temperature or foil prediction. The existing 300 µm single-pass model guard rejects the 50 µm target stage; see [multi-pass foundation](research/multipass-foundation-2026-10-02.md). |
 
 See [mechanics audit](mechanics-audit.md), [traceability](traceability.md),
 [research](research.md) and [sensor references](sensors.md) for source and test paths.
