@@ -1,12 +1,11 @@
 # Research and project documentation
 
 This directory is the entry point for PhysicRollModel's research record. The
-repository's executable and engineering documentation remains in `docs/` so
-existing links keep working. The [2 October 2026 report addendum](report-update-2026-10-02.md)
-maps the user's 49-page, 30 September research report to reviewed code at
-`fbafee54bb8f22554904166c9653d75915051359`. Its editable Word and rendered
-PDF copies are beside the Markdown source. The original report is a separate
-Library attachment and is **not** reproduced in this repository.
+repository's executable and engineering documentation remains in `docs/` so existing links keep working.
+
+The full research report, revised 2 October 2026, is available in [editable Word](Aluminium_cold_rolling_research_for_PhysicRollModel.docx) and [PDF](Aluminium_cold_rolling_research_for_PhysicRollModel.pdf). The 53-page revision preserves the 105-entry bibliography, 63 original equation objects and original research discussion; Section 40 adds current implementation, source/code/test mapping and validation boundaries against reviewed code `fbafee54bb8f22554904166c9653d75915051359`.
+
+The [2 October status addendum](report-update-2026-10-02.md) is retained as a historical bridge from the original 30 September, 49-page report. Its page references refer to that earlier edition; use section references in the revised full report.
 
 ## Reading order
 
@@ -25,7 +24,4 @@ synthetic-run records cited by those documents. The tests verify equations and
 implementation under stated assumptions. None of these artifacts is an
 independent aluminium plant validation or a production parameter set.
 
-The original 49-page Word/PDF report contains the long-form literature review
-and source bibliography. This repository includes a concise status correction
-and links to the research record; it does not include copyrighted full papers,
-books, manufacturer images or private assistant working notes.
+The full revised Word/PDF contains the long-form literature review and source bibliography. This repository includes the project's authored research and implementation records, not full third-party papers, books, manufacturer images or private assistant working notes.
