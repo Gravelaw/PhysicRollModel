@@ -171,5 +171,8 @@ The later opt-in [passive-contact boundary](docs/passive-contact.md) uses a
 **supplied synthetic** total conductance and solves contact power jointly with
 the flowing-strip/aggregate-roll ledger. Run
 `python scripts/run_flowing_energy_demo.py --config scenarios/passive_contact_demo.json --out artifacts/passive_contact_demo.json`.
-Its midpoint temperatures and contact coefficient are unvalidated; the
+The unchanged closure now rejects inputs outside a conservative stream/roll
+capacity domain; representative contact entropy and pure-exchange whole-step
+entropy are reported separately. Its midpoint temperatures and contact coefficient
+are unvalidated; the
 prescribed-power example remains the default.

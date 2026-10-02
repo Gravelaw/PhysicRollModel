@@ -122,6 +122,17 @@ class CheckedScheduleTests(unittest.TestCase):
         self.assertAlmostEqual(actual['thermal']['contact_heat_to_strip_w'], e_ref['contact_heat_to_strip_w'])
         self.assertEqual(actual['thermal']['contact_mode'], 'PASSIVE_SUPPLIED_TOTAL_CONDUCTANCE')
 
+    def test_passive_contact_domain_rejection_propagates(self):
+        data = json.loads((ROOT / 'scenarios/passive_contact_demo.json').read_text())
+        boundary = PassHeatBoundary(**data['boundaries'][0])
+        passive = replace(PassiveContactBoundary(**data['passive_contacts'][0]),
+                          conductance_w_k=1e6)
+        with self.assertRaisesRegex(ValueError, 'passive contact.*domain'):
+            run_checked_schedule((self.checked(self.scenario, PassOperatingPlan(self.scenario.name),
+                                               boundary, passive=passive),),
+                                 self.state, self.law, **self.gauge_args,
+                                 strip_cp=self.strip_cp, roll_cp=self.roll_cp)
+
     def test_invalid_layer_stage_handoff_and_limit_propagation(self):
         plan = PassOperatingPlan(self.scenario.name,
                                  ranges=(SignalRange('separating_force_n', 'N', 0, 1,

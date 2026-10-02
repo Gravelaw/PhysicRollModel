@@ -52,7 +52,7 @@ closure is outside this module.
 
 | Equation or guard | Basis | Code | Verification |
 |---|---|---|---|
-| P1, representative temperatures and passive sign | Full research report (2 October 2026), Section 25 proposes equal/opposite conductive exchange and distinguishes it from friction partition; the midpoint reduction is **this repository's declared approximation** | `PassiveContactBoundary`, `_passive_contact_power` | Independent constant-cp solution; zero/equal/reversed temperature; entropy sign; large-G case in `tests/test_passive_contact.py` |
+| P1, representative temperatures and passive sign | Full research report (2 October 2026), Section 25 proposes equal/opposite conductive exchange and distinguishes it from friction partition; the midpoint reduction is **this repository's declared approximation** | `PassiveContactBoundary`, `_passive_contact_power` | Independent constant-cp solution; zero/equal/reversed temperature; representative entropy sign; large-G rejection in `tests/test_passive_contact.py` |
 | P2–P3 and exact cancellation | Existing E1–E4 [first-law ledger](energy-handoff.md), derived in this repository | `handoff_pass` | Analytic temperatures, total W and J budget, variable cp, unit scaling, carried roll state, step refinement |
 | Domain and declared-law no-double-count guard | Existing mechanical and thermal guards; [specialist audit](energy-specialist-audit.md) | `handoff_pass`, `_passive_contact_power` | Mixed-mode, *declared* fitted-effective-law, invalid G, property and assumed-material envelope rejection |
 
@@ -61,8 +61,8 @@ thermal/contact publication was inspected at abstract depth and supplies no G;
 the AA5052 paper supplies force/slip cases but no thermal validation. The
 numerical example's `G=1000 W/K` is an arbitrary labelled synthetic input,
 not an aluminium or plant recommendation. The new result fields report G,
-representative temperature difference, P1 residual and contact entropy
-production; they do not claim thermodynamic admissibility for unmodelled film,
+representative temperature difference, P1 residual and representative contact entropy
+diagnostic; they do not claim thermodynamic admissibility for unmodelled film,
 cooling or plastic internal energy.
 
 Calibration would need known alloy/temper and prior history; independent
@@ -73,3 +73,76 @@ mechanical force, torque, speeds, tensions and gauges; and held-out coils.
 Temporal substep convergence is numerical evidence only. Spatial conduction,
 advection, film dissipation and thermal feedback each require a separate model
 and observations.
+
+## I01 supported domain: unchanged closure, conservative rejection
+
+`MONOTONE_CAPACITY_V1` keeps P1–P3 unchanged and admits only
+
+```
+G/2 <= C_s,min = m_dot * min(cp_strip)          [W/K]
+G/2 <= C_r,min = (m_roll/delta_t) * min(cp_roll) [W/K].
+```
+
+The minima cover each entire supplied piecewise-linear curve. These sufficient
+bounds apply with or without sources; they are not necessary bounds or measured
+operating limits. Even equal-temperature or balanced-capacity cases outside
+this deliberately small domain reject. Zero G remains supported subject to
+finite positive capacity rates, property ranges and the existing energy gates.
+There is no temperature clipping, conductance rescaling or automatic substepping.
+Reducing duration can repair the roll inequality, but cannot repair the stream
+inequality, whose capacity is a rate independent of duration.
+
+To see why the bounds account for sources, define positive secant capacities
+`C_s=m_dot*Delta H_s/Delta T_s` and `C_r=(m_roll/delta_t)*Delta H_r/Delta T_r`
+(use the local cp limit at zero temperature change). Both exceed their minima.
+Writing `g=G/2`, P1–P3 give
+
+```
+[ C_s+g   -g   ] T_out = [ C_s-g    g   ] T_in + [ S_s ]
+[  -g   C_r+g ]         [   g    C_r-g ]        [ S_r ].
+```
+
+The left matrix M has positive determinant and nonnegative inverse; the right
+matrix N has nonnegative entries under the guard. `M^-1 N` has row sums one.
+Thus the source-free part is a convex combination of inlet temperatures.
+`M^-1 diag(C_s,C_r)` also has nonnegative entries and row sums one, so each
+source increment lies between `S_s/C_s` and `S_r/C_r`. A conservative enclosure is
+
+```
+min(T_in) + min(0,S_s/C_s,min,S_r/C_r,min) <= each T_out
+ each T_out <= max(T_in) + max(0,S_s/C_s,min,S_r/C_r,min).
+```
+
+The implementation checks this enclosure after solving, allowing only
+`1e-9 K + 1e-12*max(abs(T_out),1 K)` roundoff. Property and mechanical envelopes
+still apply independently without extrapolation, including unequal cp domains.
+Heating may legitimately exceed the inlet maximum and cooling may fall below
+the inlet minimum. The guard does not qualify supplied heating/cooling physics.
+
+### Entropy contract and compatibility
+
+`contact_entropy_production_w_k` keeps its historical numerical meaning:
+`Q*(1/T_s,mid-1/T_r,mid)`. The additive `contact_entropy_scope` explicitly labels
+it `REPRESENTATIVE_CONTACT_TEMPERATURES_ONLY`. It cannot establish whole-step
+admissibility: the original temporal counterexample conserved energy and had a
+positive representative diagnostic but negative whole-step entropy. The stream
+counterexample even had positive whole-step entropy while overshooting the
+hot inlet. Both temperature and entropy checks are required.
+
+Only when plastic heat, slip dissipation and both cooling exports are individually
+zero does `pure_exchange_entropy_rate_w_k` report
+`m_dot*integral(cp_s/T)dT + (m_roll/delta_t)*integral(cp_r/T)dT`.
+This is the whole-interval entropy rate of the represented thermal subsystem,
+labelled `PURE_EXCHANGE_THERMAL_SUBSYSTEM`; it excludes any nonthermal work
+allocation. The exact piecewise-linear integral uses stable `log1p` arithmetic.
+Negative entropy beyond `(1e-8 J/K)/delta_t + 1e-10*sum(abs(entropy rates))`
+rejects. These are numerical tolerances, not experimental error budgets.
+With any thermal sources or exports, the field is null and
+`entropy_balance_scope=INCOMPLETE_WITH_SOURCES_OR_EXPORTS`, even if net powers
+cancel. Cooling transfer temperatures and nonthermal entropy closures are absent.
+
+The ordinary passive demo retains every historical field/value and adds four
+metadata/diagnostic fields. Historical artifacts are not overwritten. The
+prescribed demo remains byte-identical; the standalone closed two-capacity
+`thermal.step` is unchanged. This is a bounded numerical admissibility increment,
+not a new contact model, resolved field, material law or thermal calibration.

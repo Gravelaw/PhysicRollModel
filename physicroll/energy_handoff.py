@@ -68,6 +68,31 @@ class HeatCapacityCurve:
             raise ValueError('enthalpy exceeds numerical domain')
         return value
 
+    def entropy_change_j_kg_k(self, start_k, end_k):
+        """Exact integral of cp(T)/T within the supplied piecewise-linear domain."""
+        self.validate()
+        self._location(start_k); self._location(end_k)
+        if end_k < start_k:
+            return -self.entropy_change_j_kg_k(end_k, start_k)
+        if end_k == start_k:
+            return 0.
+        points = [start_k] + [t for t in self.temperature_k if start_k < t < end_k] + [end_k]
+        terms = []
+        for lo, hi in zip(points, points[1:]):
+            j = self._location(hi)
+            slope = (self.heat_capacity_j_kg_k[j+1]-self.heat_capacity_j_kg_k[j])/(self.temperature_k[j+1]-self.temperature_k[j])
+            cp_lo = self.heat_capacity_j_kg_k[j]+slope*(lo-self.temperature_k[j])
+            x = (hi-lo)/lo
+            logarithm = math.log1p(x)
+            # x-log1p(x), avoiding cancellation on very short segments.
+            remainder = (math.fsum((-1)**k*x**k/k for k in range(2,12))
+                         if x < .001 else x-logarithm)
+            terms.append(cp_lo*logarithm+slope*lo*remainder)
+        value = math.fsum(terms)
+        if not math.isfinite(value):
+            raise ValueError('entropy integral exceeds numerical domain')
+        return value
+
     def temperature_for_enthalpy(self, enthalpy_j_kg):
         """Exact piecewise-quadratic inverse for positive piecewise-linear c_p."""
         self.validate()
@@ -153,6 +178,14 @@ def _passive_contact_power(strip_cp, roll_cp, strip_in_k, roll_in_k, mass_flow,
     The scalar residual is strictly increasing: raising Q heats the flowing
     strip and cools the finite roll. Bisection cannot jump over a root.
     """
+    # Sufficient source-inclusive monotonicity domain for the unchanged
+    # arithmetic-endpoint closure; see docs/passive-contact.md for the proof.
+    cs_min = mass_flow*min(strip_cp.heat_capacity_j_kg_k)
+    cr_min = roll_mass/duration*min(roll_cp.heat_capacity_j_kg_k)
+    if (not all(math.isfinite(v) and v > 0 for v in (cs_min, cr_min))
+            or conductance/2 > min(cs_min, cr_min)):
+        raise ValueError('passive contact outside supported monotone capacity domain: '
+                         'require G/2 <= mdot*min(cp_strip) and M/dt*min(cp_roll)')
     strip_in_h = strip_cp.enthalpy_j_kg(strip_in_k)
     roll_in_h = roll_cp.enthalpy_j_kg(roll_in_k)
     strip_lo = max(strip_cp.temperature_k[0],strip_range[0])
@@ -347,6 +380,28 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
         strip_t, roll_t = passive_strip_t, passive_roll_t
     if not temperature_range[0] <= strip_t <= temperature_range[1]:
         raise ValueError('outgoing strip temperature outside assumed mechanical material range')
+    pure_entropy = None
+    if passive_contact is not None:
+        cs_min = mass_flow*min(strip_cp.heat_capacity_j_kg_k)
+        cr_min = boundary.roll_effective_mass_kg/boundary.duration_s*min(roll_cp.heat_capacity_j_kg_k)
+        lo = min(state_in.temperature_k,boundary.roll_temperature_k) + min(
+            0.,strip_without_contact/cs_min,roll_without_contact/cr_min)
+        hi = max(state_in.temperature_k,boundary.roll_temperature_k) + max(
+            0.,strip_without_contact/cs_min,roll_without_contact/cr_min)
+        tolerance = 1e-9+1e-12*max(abs(strip_t),abs(roll_t),1.)
+        if not all(math.isfinite(v) for v in (lo,hi)) or not all(
+                lo-tolerance <= t <= hi+tolerance for t in (strip_t,roll_t)):
+            raise ValueError('passive contact source-inclusive temperature bounds failed')
+        # Require absent thermal sources/exports, not merely cancelling net powers.
+        if plastic_heat == slip == boundary.strip_cooling_w == boundary.roll_cooling_w == 0:
+            stream_entropy = mass_flow*strip_cp.entropy_change_j_kg_k(state_in.temperature_k,strip_t)
+            roll_entropy = boundary.roll_effective_mass_kg/boundary.duration_s*roll_cp.entropy_change_j_kg_k(
+                boundary.roll_temperature_k,roll_t)
+            pure_entropy = math.fsum((stream_entropy,roll_entropy))
+            # Rate equivalent of a 1e-8 J/K absolute + 1e-10 relative step budget.
+            entropy_tolerance = 1e-8/boundary.duration_s+1e-10*(abs(stream_entropy)+abs(roll_entropy))
+            if not math.isfinite(pure_entropy) or pure_entropy < -entropy_tolerance:
+                raise ValueError('passive contact pure-exchange whole-step entropy failed')
     strip_gain = mass_flow*(strip_cp.enthalpy_j_kg(strip_t)-strip_in_h)
     roll_storage = boundary.roll_effective_mass_kg*(roll_cp.enthalpy_j_kg(roll_t)-roll_in_h)/boundary.duration_s
     residual = (strip_gain+roll_storage+nonthermal_plastic+boundary.strip_cooling_w+
@@ -404,5 +459,10 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
                        'passive_contact':asdict(passive_contact),
                        'contact_midpoint_roll_minus_strip_k':contact_delta,
                        'contact_law_residual_w':contact_residual,
-                       'contact_entropy_production_w_k':contact_entropy})
+                       'contact_entropy_production_w_k':contact_entropy,
+                       'contact_entropy_scope':'REPRESENTATIVE_CONTACT_TEMPERATURES_ONLY',
+                       'passive_contact_domain':'MONOTONE_CAPACITY_V1',
+                       'pure_exchange_entropy_rate_w_k':pure_entropy,
+                       'entropy_balance_scope':('PURE_EXCHANGE_THERMAL_SUBSYSTEM' if pure_entropy is not None
+                                                else 'INCOMPLETE_WITH_SOURCES_OR_EXPORTS')})
     return result

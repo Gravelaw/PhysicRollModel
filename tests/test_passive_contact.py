@@ -84,12 +84,9 @@ class PassiveContactTests(unittest.TestCase):
         p=self.zero_mechanics();b=replace(self.boundary,strip_cooling_w=0.,roll_cooling_w=0.,roll_temperature_k=320.)
         variable=replace(self.scp,temperature_k=(250.,300.,350.,450.),
                          heat_capacity_j_kg_k=(600.,900.,1100.,700.))
-        r=self.run_energy(mechanics=p,boundary=b,scp=variable,
-                          contact=replace(self.contact,conductance_w_k=1e8))
-        self.assertGreater(r['contact_heat_to_strip_w'],0.)
-        self.assertGreaterEqual(r['contact_entropy_production_w_k'],0.)
-        self.assertLess(abs(r['contact_law_residual_w'])/max(abs(r['contact_heat_to_strip_w']),1),1e-9)
-        self.assertLess(abs(r['thermal_allocation_residual_w']),1e-7)
+        with self.assertRaisesRegex(ValueError, 'passive contact.*domain'):
+            self.run_energy(mechanics=p,boundary=b,scp=variable,
+                            contact=replace(self.contact,conductance_w_k=1e8))
         # Repeating steady-flow substeps should converge toward the same roll
         # interval solution as the substep size shrinks, not equal one coarse step.
         def advance(n):
@@ -103,6 +100,100 @@ class PassiveContactTests(unittest.TestCase):
         t4,_=advance(4);t8,_=advance(8);t16,_=advance(16)
         self.assertLess(abs(t16-t8),abs(t8-t4))
         self.assertTrue(all(math.isfinite(v) for v in (t4,t8,t16)))
+
+    def test_i01_temporal_and_stream_counterexamples_rejected(self):
+        p=self.zero_mechanics()
+        for mass,dt in ((1.,5.),(500.,.001),(500.,.00001)):
+            with self.subTest(mass=mass,dt=dt):
+                cs=p['mass_flow_kg_s']*900.;cr=mass*500./dt;g=1e6
+                q=g*20/(1+g/(2*cs)+g/(2*cr))
+                ts,tr=300+q/cs,320-q/cr
+                self.assertTrue(ts>320 or tr<300)
+                entropy=cs*math.log(ts/300)+cr*math.log(tr/320)
+                self.assertEqual(entropy<0,mass==1.)
+                b=replace(self.boundary,strip_cooling_w=0.,roll_cooling_w=0.,
+                          roll_temperature_k=320.,roll_effective_mass_kg=mass,duration_s=dt)
+                with self.assertRaisesRegex(ValueError,'passive contact.*domain'):
+                    self.run_energy(mechanics=p,boundary=b,
+                                    contact=replace(self.contact,conductance_w_k=g))
+
+    def test_pure_exchange_entropy_and_supported_boundary(self):
+        p=self.zero_mechanics();cs=p['mass_flow_kg_s']*900.
+        for roll_t in (280.,300.,320.):
+            b=replace(self.boundary,strip_cooling_w=0.,roll_cooling_w=0.,
+                      roll_temperature_k=roll_t,roll_effective_mass_kg=cs*5/500.)
+            r=self.run_energy(mechanics=p,boundary=b,
+                              contact=replace(self.contact,conductance_w_k=2*cs))
+            ts,tr=r['strip_temperature_out_k'],r['roll_temperature_out_k']
+            self.assertTrue(min(300.,roll_t)-1e-9<=ts<=max(300.,roll_t)+1e-9)
+            self.assertTrue(min(300.,roll_t)-1e-9<=tr<=max(300.,roll_t)+1e-9)
+            exact=cs*math.log(ts/300)+cs*math.log(tr/roll_t)
+            self.assertAlmostEqual(r['pure_exchange_entropy_rate_w_k'],exact,places=9)
+            self.assertGreaterEqual(exact,-1e-8)
+            with self.assertRaisesRegex(ValueError,'passive contact.*domain'):
+                self.run_energy(mechanics=p,boundary=b,
+                    contact=replace(self.contact,conductance_w_k=2*cs*(1+1e-8)))
+
+    def test_entropy_integral_and_heated_case_semantics(self):
+        cp=replace(self.scp,temperature_k=(250.,300.,350.,450.),
+                   heat_capacity_j_kg_k=(1200.,900.,1100.,700.))
+        a,b=280.,400.
+        n=20000;h=(b-a)/n
+        def f(t):
+            j=cp._location(t)
+            v=cp.heat_capacity_j_kg_k[j]+(t-cp.temperature_k[j])*(
+                cp.heat_capacity_j_kg_k[j+1]-cp.heat_capacity_j_kg_k[j])/(cp.temperature_k[j+1]-cp.temperature_k[j])
+            return v/t
+        numerical=h/3*math.fsum(f(a+i*h)*(1 if i in (0,n) else 4 if i%2 else 2) for i in range(n+1))
+        exact=cp.entropy_change_j_kg_k(a,b)
+        self.assertAlmostEqual(exact,numerical,places=6)
+        self.assertEqual(exact,-cp.entropy_change_j_kg_k(b,a))
+        self.assertAlmostEqual(exact,cp.entropy_change_j_kg_k(a,350.)+cp.entropy_change_j_kg_k(350.,b),places=12)
+        with self.assertRaises(ValueError):cp.entropy_change_j_kg_k(249.,b)
+        r=self.run_energy()
+        self.assertGreater(r['strip_temperature_out_k'],300.)
+        self.assertIsNone(r['pure_exchange_entropy_rate_w_k'])
+        self.assertEqual(r['entropy_balance_scope'],'INCOMPLETE_WITH_SOURCES_OR_EXPORTS')
+
+    def test_variable_cp_exchange_and_source_bounds(self):
+        p=self.zero_mechanics()
+        scp=replace(self.scp,temperature_k=(280.,305.,350.),heat_capacity_j_kg_k=(1100.,700.,950.))
+        rcp=replace(self.rcp,temperature_k=(290.,310.,400.),heat_capacity_j_kg_k=(400.,600.,450.))
+        for roll_t in (295.,330.):
+            b=replace(self.boundary,roll_temperature_k=roll_t,strip_cooling_w=0.,roll_cooling_w=0.)
+            r=self.run_energy(mechanics=p,scp=scp,rcp=rcp,boundary=b,
+                              contact=replace(self.contact,conductance_w_k=12000.))
+            for key in ('strip_temperature_out_k','roll_temperature_out_k'):
+                self.assertTrue(min(300.,roll_t)<=r[key]<=max(300.,roll_t))
+            self.assertGreaterEqual(r['pure_exchange_entropy_rate_w_k'],-1e-8)
+        # Admitted source-driven cooling below both inlets is legitimate.
+        b=replace(self.boundary,strip_cooling_w=100000.,roll_cooling_w=100000.)
+        r=self.run_energy(mechanics=p,boundary=b)
+        self.assertLess(r['strip_temperature_out_k'],295.)
+        self.assertIsNone(r['pure_exchange_entropy_rate_w_k'])
+        # Equal net powers do not identify the missing cooling entropy transfer.
+        b=replace(self.boundary,strip_cooling_w=.2*self.mechanics['plastic_work_power_w']+
+                  .6*self.mechanics['solid_slip_dissipation_both_interfaces_w'],
+                  roll_cooling_w=.4*self.mechanics['solid_slip_dissipation_both_interfaces_w'])
+        r=self.run_energy(boundary=b)
+        self.assertIsNone(r['pure_exchange_entropy_rate_w_k'])
+        self.assertEqual(r['entropy_balance_scope'],'INCOMPLETE_WITH_SOURCES_OR_EXPORTS')
+
+    def test_zero_g_endpoints_and_numerical_capacity_rejection(self):
+        p=self.zero_mechanics()
+        b=replace(self.boundary,strip_cooling_w=0.,roll_cooling_w=0.,roll_temperature_k=450.)
+        r=self.run_energy(mechanics=p,boundary=b,contact=replace(self.contact,conductance_w_k=0.))
+        self.assertEqual(r['strip_temperature_out_k'],300.)
+        self.assertEqual(r['roll_temperature_out_k'],450.)
+        self.assertEqual(r['pure_exchange_entropy_rate_w_k'],0.)
+        for mass,dt in ((1e308,1e-308),(1e-308,1e308)):
+            with self.assertRaisesRegex(ValueError,'passive contact.*domain'):
+                self.run_energy(mechanics=p,boundary=replace(b,roll_effective_mass_kg=mass,duration_s=dt))
+        # Very small but supported G recovers the uncoupled limit.
+        r=self.run_energy(mechanics=p,boundary=replace(b,roll_temperature_k=320.),
+                          contact=replace(self.contact,conductance_w_k=1e-8))
+        self.assertAlmostEqual(r['strip_temperature_out_k'],300.,places=8)
+        self.assertAlmostEqual(r['roll_temperature_out_k'],320.,places=8)
 
     def test_units_scaling_and_rejections(self):
         base=self.run_energy()
@@ -132,7 +223,7 @@ class PassiveContactTests(unittest.TestCase):
             self.run_energy(mechanics=self.zero_mechanics(),
                 boundary=replace(self.boundary,strip_cooling_w=0.,roll_cooling_w=0.,roll_temperature_k=400.),
                 scp=replace(self.scp,temperature_k=(299.9,300.1)),
-                contact=replace(self.contact,conductance_w_k=1e8))
+                contact=replace(self.contact,conductance_w_k=1000.))
 
     def test_two_pass_synthetic_demo_and_legacy_artifact(self):
         with TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
@@ -141,10 +232,16 @@ class PassiveContactTests(unittest.TestCase):
             run(ROOT/'scenarios/passive_contact_demo.json',passive_path)
             run(ROOT/'scenarios/flowing_energy_demo.json',legacy_path)
             passive=json.loads(passive_path.read_text())
-            passive_bytes=passive_path.read_bytes()
             legacy_bytes=legacy_path.read_bytes()
         self.assertEqual(legacy_bytes,(ROOT/'artifacts/flowing_energy_demo.json').read_bytes())
-        self.assertEqual(passive_bytes,(ROOT/'artifacts/passive_contact_demo.json').read_bytes())
+        # New diagnostic metadata is additive; historical numerical fields stay exact.
+        historical=json.loads((ROOT/'artifacts/passive_contact_demo.json').read_text())
+        projected=json.loads(json.dumps(passive))
+        for item in projected['passes']:
+            for key in ('contact_entropy_scope','passive_contact_domain',
+                        'pure_exchange_entropy_rate_w_k','entropy_balance_scope'):
+                del item['energy'][key]
+        self.assertEqual(projected,historical)
         first,second=passive['passes']
         self.assertEqual(first['energy']['strip_state_out'],second['energy']['strip_state_in'])
         self.assertEqual(first['energy']['roll_temperature_out_k'],second['energy']['boundary']['roll_temperature_k'])
