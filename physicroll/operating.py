@@ -14,11 +14,16 @@ QUANTITIES = {
     'torque_per_work_roll_nm': ('N m', 'prediction'),
     'roll_mechanical_power_w': ('W', 'prediction'),
     'assumed_forward_slip_fraction': ('1', 'prediction'),
-    'exit_temperature_k': ('K', 'unsupported_prediction'),
+    'forward_slip_fraction': ('1', 'prediction'),
+    'exit_temperature_k': ('K', 'prediction'),
     'coolant_flow_kg_s': ('kg/s', 'boundary'),
     'lubricant_flow_kg_s': ('kg/s', 'boundary'),
 }
 PHASES = frozenset(('threading', 'steady', 'deceleration', 'tailout'))
+NONNEGATIVE_QUANTITIES = frozenset((
+    'exit_thickness_m', 'entry_speed_m_s', 'entry_tension_pa', 'exit_tension_pa',
+    'reduction_fraction', 'separating_force_n', 'coolant_flow_kg_s',
+    'lubricant_flow_kg_s'))
 
 
 def _number(value):
@@ -41,7 +46,8 @@ class SignalRange:
             raise ValueError('signal range needs a known phase and provenance')
         if not _number(self.minimum) or not _number(self.maximum) or self.minimum > self.maximum:
             raise ValueError('signal range bounds must be finite and ordered')
-        if self.minimum < 0 or (self.quantity == 'exit_temperature_k' and self.minimum <= 0):
+        if ((self.quantity in NONNEGATIVE_QUANTITIES and self.minimum < 0)
+                or (self.quantity == 'exit_temperature_k' and self.minimum <= 0)):
             raise ValueError('signal range is outside its nonnegative domain')
         if self.quantity == 'reduction_fraction' and self.maximum > 1:
             raise ValueError('reduction fraction cannot exceed one')
@@ -60,7 +66,9 @@ class ObservedSignal:
             raise ValueError('unknown observed quantity or incorrect SI unit')
         if self.phase not in PHASES or not isinstance(self.provenance, str) or not self.provenance.strip():
             raise ValueError('observed signal needs a known phase and provenance')
-        if not _number(self.value) or self.value < 0 or (self.quantity == 'exit_temperature_k' and self.value <= 0):
+        if (not _number(self.value)
+                or (self.quantity in NONNEGATIVE_QUANTITIES and self.value < 0)
+                or (self.quantity == 'exit_temperature_k' and self.value <= 0)):
             raise ValueError('observed signal must be finite and in its physical domain')
         if self.quantity == 'reduction_fraction' and self.value > 1:
             raise ValueError('observed reduction fraction cannot exceed one')
@@ -133,7 +141,8 @@ class EquipmentLimits:
 
 
 def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dict,
-                               equipment: EquipmentLimits | None = None) -> dict:
+                               equipment: EquipmentLimits | None = None,
+                               *, thermal: dict | None = None, requested_scenario=None) -> dict:
     plan.validate()
     if equipment is not None:
         equipment.validate()
@@ -142,7 +151,34 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
               'entry_tension_pa': scenario.entry_tension_pa,
               'exit_tension_pa': scenario.exit_tension_pa,
               'reduction_fraction': 1 - scenario.exit_thickness_m / scenario.entry_thickness_m}
-    predictions = mechanics['baseline_mechanics']
+    if 'baseline_mechanics' in mechanics:
+        legacy = mechanics['baseline_mechanics']
+        predictions = {
+            'separating_force_n': legacy['separating_force_n'],
+            'torque_per_work_roll_nm': legacy['torque_per_work_roll_nm'],
+            'roll_mechanical_power_w': legacy['roll_mechanical_power_w'],
+            'assumed_forward_slip_fraction': legacy['assumed_forward_slip_fraction'],
+            'forward_slip_fraction': None,
+            'roll_surface_speed_m_s': legacy['roll_surface_speed_m_s'],
+            'entry_tension_force_n': legacy['entry_tension_force_n'],
+            'exit_tension_force_n': legacy['exit_tension_force_n'],
+        }
+        stress_used = mechanics['mean_flow_stress_pa']
+        law_provenance = mechanics['hardening_provenance']
+    else:
+        predictions = {
+            'separating_force_n': mechanics['separating_force_n'],
+            'torque_per_work_roll_nm': mechanics['torque_per_work_roll_nm'],
+            'roll_mechanical_power_w': mechanics['roll_mechanical_power_both_rolls_w'],
+            'assumed_forward_slip_fraction': None,
+            'forward_slip_fraction': mechanics['forward_slip_fraction'],
+            'roll_surface_speed_m_s': mechanics['roll_surface_speed_m_s'],
+            'entry_tension_force_n': scenario.entry_tension_pa * scenario.width_m * scenario.entry_thickness_m,
+            'exit_tension_force_n': scenario.exit_tension_pa * scenario.width_m * scenario.exit_thickness_m,
+        }
+        stress_used = scenario.mean_flow_stress_pa
+        law_provenance = mechanics['material']['law']['provenance']
+    predictions['exit_temperature_k'] = None if thermal is None else thermal['strip_temperature_out_k']
     boundaries = {'coolant_flow_kg_s': plan.coolant_flow_kg_s,
                   'lubricant_flow_kg_s': plan.lubricant_flow_kg_s}
     checks = []
@@ -150,13 +186,13 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
         role = QUANTITIES[bound.quantity][1]
         value = (inputs if role == 'setpoint' else predictions if role == 'prediction' else
                  boundaries if role == 'boundary' else {}).get(bound.quantity)
-        status = ('NOT_EVALUATED_NO_MODEL' if role == 'unsupported_prediction' else
-                  'NOT_EVALUATED_PHASE' if bound.phase != 'steady' else
+        status = ('NOT_EVALUATED_PHASE' if bound.phase != 'steady' else
                   'NOT_EVALUATED_MISSING_BOUNDARY_INPUT' if role == 'boundary' and value is None else
+                  'NOT_EVALUATED_NO_MODEL' if role == 'prediction' and value is None else
                   'WITHIN_DECLARED_RANGE' if bound.minimum <= value <= bound.maximum else
                   'OUTSIDE_DECLARED_RANGE')
         checks.append({'range': asdict(bound), 'role': role,
-                       'evaluated_value': value if bound.phase == 'steady' and role != 'unsupported_prediction' else None,
+                       'evaluated_value': value if bound.phase == 'steady' else None,
                        'status': status})
     fixed = []
     if equipment is not None:
@@ -169,9 +205,13 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
                 ('max_exit_reel_tension_n', 'exit_tension_force_n')):
             limit = getattr(equipment, limit_name)
             if limit is not None:
-                fixed.append({'quantity': output_name, 'predicted_value': predictions[output_name],
-                              'limit': limit, 'status': 'WITHIN_DECLARED_LIMIT' if predictions[output_name] <= limit
-                              else 'OUTSIDE_DECLARED_LIMIT'})
+                predicted = predictions[output_name]
+                status = ('NOT_EVALUATED_REGENERATIVE_LIMIT_UNKNOWN'
+                          if output_name in ('torque_per_work_roll_nm', 'roll_mechanical_power_w')
+                          and predicted < 0 else
+                          'WITHIN_DECLARED_LIMIT' if predicted <= limit else 'OUTSIDE_DECLARED_LIMIT')
+                fixed.append({'quantity': output_name, 'predicted_value': predicted,
+                              'limit': limit, 'status': status})
     range_lookup = {(item.phase, item.quantity): item for item in plan.ranges}
     observed_checks = []
     for item in plan.observations:
@@ -189,11 +229,12 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
                                  'work_roll_radius_m': scenario.work_roll_radius_m,
                                  'density_kg_m3': scenario.density_kg_m3,
                                  'drive_efficiency': scenario.drive_efficiency,
-                                 'scenario_mean_flow_stress_pa_supplied_but_replaced': scenario.mean_flow_stress_pa,
-                                 'hardening_mean_flow_stress_pa_used': mechanics['mean_flow_stress_pa'],
-                                 'hardening_provenance': mechanics['hardening_provenance']},
-            'predictions': {key: predictions[key] for key, (_, role) in QUANTITIES.items()
-                                               if role == 'prediction'},
+                                 'scenario_mean_flow_stress_pa_supplied_but_replaced': (
+                                     scenario if requested_scenario is None else requested_scenario).mean_flow_stress_pa,
+                                 'hardening_mean_flow_stress_pa_used': stress_used,
+                                 'hardening_provenance': law_provenance},
+            'predictions': {key: predictions.get(key) for key, (_, role) in QUANTITIES.items()
+                            if role == 'prediction'},
             'observations': [asdict(item) for item in plan.observations],
             'cooling_boundary': plan.cooling_boundary,
             'lubrication_boundary': plan.lubrication_boundary,

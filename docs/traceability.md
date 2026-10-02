@@ -67,3 +67,9 @@ links kinematic gauge and strain identities, explicit material handoff, per-pass
 signal roles and existing foil rejection to `physicroll/schedule.py`,
 `physicroll/operating.py` and `tests/test_schedule.py`. This is a development
 branch foundation and not a validated 50 µm production schedule.
+
+The later [checked multi-pass integration](research/checked-schedule-integration-2026-10-02.md#equation-and-output-traceability)
+maps explicit slab/circular-contact solver selection, material and thermal
+handoffs, pass-specific constraints and failure guards to `checked_schedule.py`
+and `tests/test_checked_schedule.py`. It composes existing solvers without
+extending them into foil or claiming a calibrated schedule optimiser.

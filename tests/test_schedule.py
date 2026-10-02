@@ -6,7 +6,7 @@ from dataclasses import replace
 from physicroll.materials import MaterialState, PowerHardeningLaw
 from physicroll.model import Scenario
 from physicroll.operating import (EquipmentLimits, ObservedSignal, PassOperatingPlan,
-                                   SignalRange)
+                                   SignalRange, assess_pass_operating_plan)
 from physicroll.schedule import (GaugeSchedule, InterpassTemperature,
                                  inspect_gauge_schedule, run_prescribed_schedule)
 
@@ -119,6 +119,27 @@ class PrescribedPassTests(unittest.TestCase):
             run_prescribed_schedule((self.first, self.second), self.state, self.law,
                                      operating_plans=self.plans, **self.gauge_args,
                                      interpass_temperatures=(InterpassTemperature(2, 300, 'test'),))
+
+    def test_signed_drive_ranges_do_not_imply_regeneration_rating(self):
+        SignalRange('roll_mechanical_power_w', 'W', -1e6, 1e6,
+                    'steady', 'signed synthetic range').validate()
+        ObservedSignal('torque_per_work_roll_nm', 'N m', -100,
+                       'steady', 'signed synthetic reading').validate()
+        with self.assertRaises(ValueError):
+            SignalRange('separating_force_n', 'N', -1, 1e6,
+                        'steady', 'invalid negative force').validate()
+        baseline = run_prescribed_schedule((self.first,), self.state, self.law,
+                                           operating_plans=(self.plans[0],), **self.gauge_args)
+        mechanics = baseline['passes'][0]['mechanics']
+        signed = {**mechanics, 'baseline_mechanics': {
+            **mechanics['baseline_mechanics'], 'torque_per_work_roll_nm': -100,
+            'roll_mechanical_power_w': -1000}}
+        operating = assess_pass_operating_plan(PassOperatingPlan('p1'), self.first, signed,
+                                                EquipmentLimits('motoring rating only',
+                                                                max_torque_per_work_roll_nm=1000,
+                                                                max_roll_mechanical_power_w=10000))
+        self.assertTrue(all(x['status'] == 'NOT_EVALUATED_REGENERATIVE_LIMIT_UNKNOWN'
+                            for x in operating['equipment_checks']))
 
     def test_declared_range_and_hardware_violations_are_visible(self):
         narrow = PassOperatingPlan('p1', ranges=(SignalRange('entry_speed_m_s', 'm/s', 0, 1,
