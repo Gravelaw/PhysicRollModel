@@ -8,6 +8,9 @@ reconciles the complete observed source corpus, records current versus historica
 access depth, audits actual code/tests at `caec37ef`, and plans through advisory
 deployment with explicit science/data gates. It preserves the reports below and
 records unresolved historical book identities rather than claiming they were read.
+The supplement adds a newly selected fundamentals bibliography, targeted access
+priorities, a thermal numerical handoff, and source-grounded operational-phase
+requirements from threading/ramp-up through tail-out and reversal.
 Development after research remains in the saved Codex cloud environment; deployment
 options are open and no deployment or main merge is authorized by this audit.
 

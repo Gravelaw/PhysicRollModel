@@ -6,15 +6,15 @@ Generated from original bibliography, additional identities and independent revi
 
 Source: [https://doi.org/10.1243/PIME_PROC_1948_159_015_02](https://doi.org/10.1243/PIME_PROC_1948_159_015_02) · Type: scholarly · Current access: **abstract_only** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 1948 journal record, pp.144–163. [contact-source-reviews.json] Publisher abstract only
+Version/locator: [contact-source-reviews.json] 1948 journal record, pp.144–163; [p1-p2-access-source-reviews.json] 1948 publisher landing page/abstract; original article full text restricted. [contact-source-reviews.json] Publisher abstract only; [p1-p2-access-source-reviews.json] Publisher abstract; equations/tables not accessed
 
-Domain/evidence: [contact-source-reviews.json] Cold strip; alloy not established from abstract. [contact-source-reviews.json] primary_abstract
+Domain/evidence: [contact-source-reviews.json] Cold strip; alloy not established from abstract; [p1-p2-access-source-reviews.json] Cold strip rolling; no aluminium-specific calibration established from abstract. [contact-source-reviews.json] primary_abstract; [p1-p2-access-source-reviews.json] Primary abstract only
 
-Findings: [contact-source-reviews.json] Approximate tension-dependent force and torque ancestry.
+Findings: [contact-source-reviews.json] Approximate tension-dependent force and torque ancestry.; [p1-p2-access-source-reviews.json] Primary abstract describes approximate force/torque calculation with tension and discusses power.
 
-Limits/conflicts: [contact-source-reviews.json] Full original equations restricted; historical accuracy statement cannot transfer to this implementation.
+Limits/conflicts: [contact-source-reviews.json] Full original equations restricted; historical accuracy statement cannot transfer to this implementation.; [p1-p2-access-source-reviews.json] No equation-level reproduction or transferable accuracy bound established. Full PDF retrieval failed and publisher indicates restricted access.
 
-Project use: [contact-source-reviews.json] Analytical benchmark ancestry and tension conventions. Trace rows: T004, T007.
+Project use: [contact-source-reviews.json] Analytical benchmark ancestry and tension conventions; [p1-p2-access-source-reviews.json] P1: recover if claiming exact Bland–Ford reproduction; accessible derivations can support generic slab verification without that claim.. Trace rows: T004, T007.
 
 Historical review record: Cold strip analytical benchmark. Primary abstract and metadata inspected; original full text restricted. No transferable accuracy guarantee.
 
@@ -22,15 +22,15 @@ Historical review record: Cold strip analytical benchmark. Primary abstract and 
 
 Source: [https://doi.org/10.1243/PIME_PROC_1943_150_025_02](https://doi.org/10.1243/PIME_PROC_1943_150_025_02) · Type: scholarly · Current access: **abstract_only** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 1943 journal record, pp.140–167. [contact-source-reviews.json] Publisher abstract only
+Version/locator: [contact-source-reviews.json] 1943 journal record, pp.140–167; [p1-p2-access-source-reviews.json] 1943 publisher landing page/abstract; original article full text restricted. [contact-source-reviews.json] Publisher abstract only; [p1-p2-access-source-reviews.json] Publisher abstract; equations/tables not accessed
 
-Domain/evidence: [contact-source-reviews.json] General hot/cold flat rolling. [contact-source-reviews.json] primary_abstract
+Domain/evidence: [contact-source-reviews.json] General hot/cold flat rolling; [p1-p2-access-source-reviews.json] Hot/cold flat rolling; generic theory. [contact-source-reviews.json] primary_abstract; [p1-p2-access-source-reviews.json] Primary abstract only
 
-Findings: [contact-source-reviews.json] Includes nonhomogeneous deformation and shear-limited friction.
+Findings: [contact-source-reviews.json] Includes nonhomogeneous deformation and shear-limited friction.; [p1-p2-access-source-reviews.json] Primary abstract covers pressure integration, variable friction/yield strength and shear limitation/sticking.
 
-Limits/conflicts: [contact-source-reviews.json] Original numerical/graphical algorithm not recovered.
+Limits/conflicts: [contact-source-reviews.json] Original numerical/graphical algorithm not recovered.; [p1-p2-access-source-reviews.json] No original equation audit. Restricted full text and failed PDF retrieval leave source-specific approximations unresolved.
 
-Project use: [contact-source-reviews.json] Friction/yield assumptions and limiting-case ancestry. Trace rows: T004.
+Project use: [contact-source-reviews.json] Friction/yield assumptions and limiting-case ancestry; [p1-p2-access-source-reviews.json] P1: exact historical provenance remains open; P4 sticking requires an accessible pinned formulation rather than inferred equations.. Trace rows: T004.
 
 Historical review record: General pressure mechanics with friction and yield variation. Primary abstract and references; detailed original algorithm not extracted.
 
@@ -100,17 +100,17 @@ Historical review record: Open primary J-STAGE full text, including Hitchcock eq
 
 ## R007 — Mišović et al 2016. Deformations and Velocities During the Cold Rolling of Aluminium Alloys
 
-Source: [https://doi.org/10.17222/mit.2014.250](https://doi.org/10.17222/mit.2014.250) · Type: scholarly · Current access: **metadata_only** · Date: 2026-10-02
+Source: [https://doi.org/10.17222/mit.2014.250](https://doi.org/10.17222/mit.2014.250) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 2016 journal, 50(1), pp.59–67. [contact-source-reviews.json] Current national-library record; historical full-text findings retained separately
+Version/locator: [contact-source-reviews.json] 2016 journal, 50(1), pp.59–67; [p1-p2-access-source-reviews.json] Materials and technology 50(2016)1,59–67; coauthor Milojica Jacimovic upload dated 18 April 2016. [contact-source-reviews.json] Current national-library record; historical full-text findings retained separately; [p1-p2-access-source-reviews.json] pp. 59–61 Eqs.1–5 and §§2.1–2.2.3; pp. 62–64 §§3.1–3.3.3; Fig.4 caption
 
-Domain/evidence: [contact-source-reviews.json] AW2024 and AW5083 cold laboratory rolling. [contact-source-reviews.json] primary_metadata_current
+Domain/evidence: [contact-source-reviews.json] AW2024 and AW5083 cold laboratory rolling; [p1-p2-access-source-reviews.json] AW2024 and AW5083 cold rolling,4–0.6 mm study range. [contact-source-reviews.json] primary_metadata_current; [p1-p2-access-source-reviews.json] Primary author-upload article; targeted body review
 
-Findings: [contact-source-reviews.json] Prospective AW2024/AW5083 deformation/velocity benchmark.
+Findings: [contact-source-reviews.json] Prospective AW2024/AW5083 deformation/velocity benchmark.; [p1-p2-access-source-reviews.json] AW2024/5083 experiments support a geometry/strain-field reserve case. Laboratory roll diameter 125 mm, peripheral speed 173.4 mm/s, no applied strip tension. Friction 0.1 is adopted after sensitivity study, not independently measured.
 
-Limits/conflicts: [contact-source-reviews.json] Fresh full text not obtained; current review cannot re-extract measured tables.
+Limits/conflicts: [contact-source-reviews.json] Fresh full text not obtained; current review cannot re-extract measured tables.; [p1-p2-access-source-reviews.json] Eq. 1 extracted signs need rendered verification; high-strain hardening uses post-rolling tensile yield rather than continuous tensile extrapolation. Mesh adequacy assessed from displacement; not every output. No AA5052 material transfer.
 
-Project use: [contact-source-reviews.json] Measured aluminium kinematics candidate. Trace rows: T022.
+Project use: [contact-source-reviews.json] Measured aluminium kinematics candidate; [p1-p2-access-source-reviews.json] P1 strain/kinematics checks and P2 reserve study design; not a replacement for Shao history or friction provenance.. Trace rows: T022.
 
 Historical review record: Primary full-text PDF inspected. AW2024 and AW5083 experiments and DEFORM-2D; geometry, hardening and velocity evidence with laboratory and no-strip-tension limits.
 
@@ -118,15 +118,15 @@ Historical review record: Primary full-text PDF inspected. AW2024 and AW5083 exp
 
 Source: [https://doi.org/10.1016/S0924-0136(97)00183-0](https://doi.org/10.1016/S0924-0136(97)00183-0) · Type: scholarly · Current access: **metadata_only** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 1997 journal, 72(2), pp.293–301. [contact-source-reviews.json] Primary indexed metadata; inherited abstract provenance
+Version/locator: [contact-source-reviews.json] 1997 journal, 72(2), pp.293–301; [p1-p2-access-source-reviews.json] 1997 article identity retained from existing library; primary body unavailable in this access attempt. [contact-source-reviews.json] Primary indexed metadata; inherited abstract provenance; [p1-p2-access-source-reviews.json] No fresh primary body/equation/table access
 
-Domain/evidence: [contact-source-reviews.json] Commercially pure aluminium according to historical abstract. [contact-source-reviews.json] primary_metadata_current
+Domain/evidence: [contact-source-reviews.json] Commercially pure aluminium according to historical abstract; [p1-p2-access-source-reviews.json] Lubricated aluminium cold rolling; exact alloy/case not freshly verified. [contact-source-reviews.json] primary_metadata_current; [p1-p2-access-source-reviews.json] Metadata lead only
 
-Findings: [contact-source-reviews.json] Force/torque/slip friction-identification lead.
+Findings: [contact-source-reviews.json] Force/torque/slip friction-identification lead.; [p1-p2-access-source-reviews.json] Targeted publisher retrieval did not establish substantive primary content.
 
-Limits/conflicts: [contact-source-reviews.json] Full article inaccessible; no fresh method or measurement table extraction.
+Limits/conflicts: [contact-source-reviews.json] Full article inaccessible; no fresh method or measurement table extraction.; [p1-p2-access-source-reviews.json] Publisher web and Exa retrieval failed. Author institutional publications page did not expose this article; do not attribute a friction law or numerical dataset from secondary citation snippets.
 
-Project use: [contact-source-reviews.json] Joint friction-identification experiment lead. Trace rows: T016, T031.
+Project use: [contact-source-reviews.json] Joint friction-identification experiment lead; [p1-p2-access-source-reviews.json] P2/P3: useful targeted retrieval for independent friction identification; not prerequisite to fixed-input conditional replay.. Trace rows: T016, T031.
 
 Historical review record: Commercially pure aluminium; force, torque and slip. Bibliographic record plus complete abstract reproduced on the publisher page for [9]. Direct article fetch failed; internal equations unverified.
 
@@ -196,17 +196,17 @@ Historical review record: European Journal of Mechanics A/Solids 113, 105712; DO
 
 ## R013 — Bátorfi and Sidor 2025. Computationally Effective Modeling of Cold Rolling: Application to Al Alloys
 
-Source: [https://doi.org/10.3390/met15010011](https://doi.org/10.3390/met15010011) · Type: scholarly · Current access: **metadata_only** · Date: 2026-10-02
+Source: [https://doi.org/10.3390/met15010011](https://doi.org/10.3390/met15010011) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 2025 issue; December 2024 publication per prior report. [contact-source-reviews.json] Current primary indexed title/Al1050 scope
+Version/locator: [contact-source-reviews.json] 2025 issue; December 2024 publication per prior report; [p1-p2-access-source-reviews.json] Metals 2025,15(1),11; published 27 December 2024; current republished HTML states minor typographical correction without dated version identifier. [contact-source-reviews.json] Current primary indexed title/Al1050 scope; [p1-p2-access-source-reviews.json] §3 material/DEFORM setup; §4.1 fitting ranges; Eqs.16–20; §§4.2–4.4 velocity construction; Eqs.22–39; §5 casesA–E and Figs.9–14 captions; Data Availability and Correction Statements
 
-Domain/evidence: [contact-source-reviews.json] Al1050 cold rolling. [contact-source-reviews.json] primary_metadata_current
+Domain/evidence: [contact-source-reviews.json] Al1050 cold rolling; [p1-p2-access-source-reviews.json] AA1050 symmetric cold rolling;150 mm diameter laboratory rolls. [contact-source-reviews.json] primary_metadata_current; [p1-p2-access-source-reviews.json] Primary open publisher article; relevant body reviewed
 
-Findings: [contact-source-reviews.json] Flowline/field benchmark candidate.
+Findings: [contact-source-reviews.json] Flowline/field benchmark candidate.; [p1-p2-access-source-reviews.json] AA1050 flowline model uses FE-derived coefficients and compares simulated velocities plus experimental distortion patterns. Thermal effects omitted. Underlying data are on request, not publicly released.
 
-Limits/conflicts: [contact-source-reviews.json] Full text could not be reacquired; public raw data not established.
+Limits/conflicts: [contact-source-reviews.json] Full text could not be reacquired; public raw data not established.; [p1-p2-access-source-reviews.json] Material constants borrowed from reference25. Published case B gauges0.5625→0.4615 mm imply 17.956% reduction, unlike 17.24% stated; case D2.53→1.81 implies 28.458%, unlike 28.09%. Equation extraction needs visual QA; no measured force/torque validation.
 
-Project use: [contact-source-reviews.json] Reduced-order deformation-field benchmark. Trace rows: none; future/context source.
+Project use: [contact-source-reviews.json] Reduced-order deformation-field benchmark; [p1-p2-access-source-reviews.json] P1 kinematics alternative and P2 reserve distortion study, not a directly executable independent AA5052 benchmark.. Trace rows: none; future/context source.
 
 Historical review record: Open primary full text. Al1050 flowline, FE and distortion-pattern comparisons; published online December 2024. Data available on request, not public; no industrial force-validation claim.
 
@@ -214,15 +214,15 @@ Historical review record: Open primary full text. Al1050 flowline, FE and distor
 
 Source: [https://doi.org/10.1016/j.euromechsol.2025.105761](https://doi.org/10.1016/j.euromechsol.2025.105761) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
 
-Version/locator: [contact-source-reviews.json] 2025 author-hosted 16-page manuscript; distinct from arXiv 2408.03242v2. [contact-source-reviews.json] Sections 3–6; Tables 2–3; through-thickness convergence
+Version/locator: [contact-source-reviews.json] 2025 author-hosted 16-page manuscript; distinct from arXiv 2408.03242v2; [operational-oem-source-reviews.json] 2024-08-06 arXiv2408.03242v1, earlier title Careful finite element simulations; manifestation of existing published work R014. [contact-source-reviews.json] Sections 3–6; Tables 2–3; through-thickness convergence; [operational-oem-source-reviews.json] Preprint v1 section4.4 Figure6; not later-publication section numbering
 
-Domain/evidence: [contact-source-reviews.json] Cold steel FE. [contact-source-reviews.json] primary_numerical
+Domain/evidence: [contact-source-reviews.json] Cold steel FE; [operational-oem-source-reviews.json] FE cold strip rolling; operational inference qualified. [contact-source-reviews.json] primary_numerical; [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
 
-Findings: [contact-source-reviews.json] Interior field resolution needs separate convergence criteria.
+Findings: [contact-source-reviews.json] Interior field resolution needs separate convergence criteria.; [operational-oem-source-reviews.json] In this FE example, force/torque plateaus precede steady internal stress and equivalent-strain fields. Steadiness is output-dependent.
 
-Limits/conflicts: [contact-source-reviews.json] DC04/rigid rolls; supplements and input archive not reviewed here.
+Limits/conflicts: [contact-source-reviews.json] DC04/rigid rolls; supplements and input archive not reviewed here.; [operational-oem-source-reviews.json] Numerical example, not aluminium plant transition thresholds or universal dwell time. Version-specific field-resolution evidence.
 
-Project use: [contact-source-reviews.json] Field/mesh/reference solver acceptance. Trace rows: none; future/context source.
+Project use: [contact-source-reviews.json] Field/mesh/reference solver acceptance; [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T049.
 
 Historical review record: European Journal of Mechanics A/Solids 114, 105761. Earlier preprint methods and published methods/results/conclusions inspected; trailing references truncated. DC04 steel and rigid rolls. Input archive DOI 10.5281/zenodo.15609640 identified; files not audited. Experimental validation remains open.
 
@@ -406,15 +406,15 @@ Historical review record: Open primary PDF inspected at https://www.scientific.n
 
 Source: [https://doi.org/10.1016/j.ifacol.2020.12.2776](https://doi.org/10.1016/j.ifacol.2020.12.2776) · Type: scholarly · Current access: **full_text_reviewed** · Date: 2026-10-02
 
-Version/locator: [optimisation-data-source-reviews.json] IFAC-PapersOnLine53-2(2020),10372–10379; author repository published PDF; online2021. [optimisation-data-source-reviews.json] pp.10372–10378; Eqs.1–4 gap/force;5–15 RLS/GP;16–24 compliance/adaptation; §5 alignment/implementation; Figs.8–10,Table2.
+Version/locator: [operational-oem-source-reviews.json] IFAC-PapersOnLine53-2(2020)10372–10379, RWTH repository journal PDF; [optimisation-data-source-reviews.json] IFAC-PapersOnLine53-2(2020),10372–10379; author repository published PDF; online2021. [operational-oem-source-reviews.json] Sections4.1,5,6.3 and Figure10; [optimisation-data-source-reviews.json] pp.10372–10378; Eqs.1–4 gap/force;5–15 RLS/GP;16–24 compliance/adaptation; §5 alignment/implementation; Figs.8–10,Table2.
 
-Domain/evidence: [optimisation-data-source-reviews.json] Narrow cold steel strip; approximately1mm→0.95mm. [optimisation-data-source-reviews.json] primary experimental control study
+Domain/evidence: [operational-oem-source-reviews.json] Cold steel slit-strip laboratory mill; [optimisation-data-source-reviews.json] Narrow cold steel strip; approximately1mm→0.95mm. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit; [optimisation-data-source-reviews.json] primary experimental control study
 
-Findings: [optimisation-data-source-reviews.json] Separates RLS mill stiffness/offset adaptation from GP strip-force correction, using spatially synchronized measurements and a physical prior mean.
+Findings: [operational-oem-source-reviews.json] Adaptation requires synchronized valid measurements; RLS uses an identified linear-load region. Assumes parameter drift slower than measurement transport delay; updates are rate-limited.; [optimisation-data-source-reviews.json] Separates RLS mill stiffness/offset adaptation from GP strip-force correction, using spatially synchronized measurements and a physical prior mean.
 
-Limits/conflicts: [optimisation-data-source-reviews.json] Steel narrow-domain experiment. GP predictive covariance exceeded machine memory; corrected-map derivatives may be misleading. Nominal-prior fallback is not validated extrapolation. Raw measurements not audited.
+Limits/conflicts: [operational-oem-source-reviews.json] Laboratory steel example. Does not define a universal startup speed. Process variance was not computed; observed map derivatives may disagree. No project controller implemented.; [optimisation-data-source-reviews.json] Steel narrow-domain experiment. GP predictive covariance exceeded machine memory; corrected-map derivatives may be misleading. Nominal-prior fallback is not validated extrapolation. Raw measurements not audited.
 
-Project use: [optimisation-data-source-reviews.json] Strong architecture precedent for offline alignment and separated calibration; closed-loop deployment not transferable.. Trace rows: T036, T039, T040.
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription; [optimisation-data-source-reviews.json] Strong architecture precedent for offline alignment and separated calibration; closed-loop deployment not transferable.. Trace rows: T036, T039, T040, T047, T049, T052.
 
 Historical review record: Full author PDF inspected at https://publications.rwth-aachen.de/record/817497/files/817497.pdf. Narrow cold-steel strip; GP force-map correction and recursive mill-parameter adaptation. Online publication 2021.
 
@@ -710,15 +710,15 @@ Historical review record: Primary OEM application page and wedge-measurement not
 
 Source: [https://library.e.abb.com/public/fcab7666a8494f228dbdf7f0074e35dc/G563e%20%20Part%202%20DCS800-Winder%20WINDER_INDIR_02R0101.pdf](https://library.e.abb.com/public/fcab7666a8494f228dbdf7f0074e35dc/G563e%20%20Part%202%20DCS800-Winder%20WINDER_INDIR_02R0101.pdf) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
 
-Version/locator: [sensing-profile-source-reviews.json] DCS800 WINDER_INDIR_02R0101 training part2. [sensing-profile-source-reviews.json] Full 27-slide textual body, diameter, loss compensation and inertia sections; equation illustrations not fully extracted
+Version/locator: [operational-oem-source-reviews.json] Official27-page training module WINDER_INDIR_02R0101; publication date not established; [sensing-profile-source-reviews.json] DCS800 WINDER_INDIR_02R0101 training part2. [operational-oem-source-reviews.json] PDFpp5–10,11–19,20–24; [sensing-profile-source-reviews.json] Full 27-slide textual body, diameter, loss compensation and inertia sections; equation illustrations not fully extracted
 
-Domain/evidence: [sensing-profile-source-reviews.json] generic winding. [sensing-profile-source-reviews.json] Official software/drive training; full textual body reviewed
+Domain/evidence: [operational-oem-source-reviews.json] Winding drive; applicable concepts require mill-specific mapping; [sensing-profile-source-reviews.json] generic winding. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit; [sensing-profile-source-reviews.json] Official software/drive training; full textual body reviewed
 
-Findings: [sensing-profile-source-reviews.json] Indirect torque control separates line-speed reference, diameter-dependent gains/filtering, measured empty-core loss curve, mechanical and coil inertia, and acceleration compensation. Winding direction and torque polarity require an explicit convention.
+Findings: [operational-oem-source-reviews.json] Separates speed reference, loss compensation, mechanical/coil inertia and winding logic. Diameter, width, density and acceleration affect compensation.; [sensing-profile-source-reviews.json] Indirect torque control separates line-speed reference, diameter-dependent gains/filtering, measured empty-core loss curve, mechanical and coil inertia, and acceleration compensation. Winding direction and torque polarity require an explicit convention.
 
-Limits/conflicts: [sensing-profile-source-reviews.json] Illustrated equations were not fully extracted; drive defaults are not project parameters. No installation-specific motor/gear calibration; reel shaft torque differs from work-roll torque.
+Limits/conflicts: [operational-oem-source-reviews.json] Product-specific example and parameter scalings; not installed drive configuration or universal equations for changing-mass coils. No numerical settings adopted.; [sensing-profile-source-reviews.json] Illustrated equations were not fully extracted; drive defaults are not project parameters. No installation-specific motor/gear calibration; reel shaft torque differs from work-roll torque.
 
-Project use: [sensing-profile-source-reviews.json] Sensors, equipment, profile/flatness and advisory deployment evidence; see sensing-profile-review.md. Trace rows: T010, T024, T026, T029.
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription; [sensing-profile-source-reviews.json] Sensors, equipment, profile/flatness and advisory deployment evidence; see sensing-profile-review.md. Trace rows: T010, T024, T026, T029, T048.
 
 Historical review record: Primary generic winder documentation inspected. Diameter, inertia and loss compensation; not evidence of a specific drive installation on the aluminium mill.
 
@@ -788,33 +788,33 @@ Historical review record: Open full chapter read. AA6016 process history and ind
 
 ## R050 — Neto et al 2020. Experimental and numerical analysis of the heat generated by plastic deformation in quasi-static uniaxial tensile tests
 
-Source: [https://doi.org/10.1016/j.mechmat.2020.103398](https://doi.org/10.1016/j.mechmat.2020.103398) · Type: scholarly · Current access: **metadata_only** · Date: 2026-10-02
+Source: [https://doi.org/10.1016/j.mechmat.2020.103398](https://doi.org/10.1016/j.mechmat.2020.103398) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
 
-Version/locator: [materials-thermal-source-reviews.json] 2020; bibliographic representation only; article full-text version not inspected. Exact journal/manual and accessed locator are recorded in pages_equations_tables.. [materials-thermal-source-reviews.json] Current publisher/search metadata only; HAL v1 access denied
+Version/locator: [materials-thermal-source-reviews.json] 2020; bibliographic representation only; article full-text version not inspected. Exact journal/manual and accessed locator are recorded in pages_equations_tables.; [p1-p2-access-source-reviews.json] HAL hal-04699292v1, deposited 18 November 2024; 2020 Journal Pre-proof, not definitive version of record. [materials-thermal-source-reviews.json] Current publisher/search metadata only; HAL v1 access denied; [p1-p2-access-source-reviews.json] Manuscript pp. 10–17 §§3.1,4.1–4.2, Eqs.2–6; Appendix A pp. 27–28; Tables 2–4 pp. 60–62; Figs.12–19 captions
 
-Domain/evidence: [materials-thermal-source-reviews.json] AA6016-T4 quasi-static uniaxial tension (historical review). [materials-thermal-source-reviews.json] identity_or_access_gap
+Domain/evidence: [materials-thermal-source-reviews.json] AA6016-T4 quasi-static uniaxial tension (historical review); [p1-p2-access-source-reviews.json] AA6016-T4 quasi-static tension;1/18-month natural aging,0.01–1 mm/s crosshead velocities. [materials-thermal-source-reviews.json] identity_or_access_gap; [p1-p2-access-source-reviews.json] Primary accepted/pre-proof author manuscript in official repository; targeted body review
 
-Findings: [materials-thermal-source-reviews.json] Title and DOI reidentified; earlier project review recorded strain-dependent heat conversion in AA6016-T4 tension.
+Findings: [materials-thermal-source-reviews.json] Title and DOI reidentified; earlier project review recorded strain-dependent heat conversion in AA6016-T4 tension.; [p1-p2-access-source-reviews.json] AA6016-T4 tensile heating depends on losses, aging and plastic-work conversion. Eq.3 uses a differential Taylor–Quinney fraction; low-rate tests are nonadiabatic. The study compares constant and strain-dependent conversion.
 
-Limits/conflicts: [materials-thermal-source-reviews.json] HAL Anubis blocked full manuscript; publisher unavailable. Historical uncertainty appendix and results were not re-read; no new coefficient imported.
+Limits/conflicts: [materials-thermal-source-reviews.json] HAL Anubis blocked full manuscript; publisher unavailable. Historical uncertainty appendix and results were not re-read; no new coefficient imported.; [p1-p2-access-source-reviews.json] Not rolling or AA5052. Coefficients and aging-specific Voce fits cannot transfer. Manuscript cover metadata omit Neto while article title page includes him. Parameter fits and shared experimental comparisons are not blind validation.
 
-Project use: [materials-thermal-source-reviews.json] Priority access gap for plastic-work heat fraction calibration.. Trace rows: T018, T019.
+Project use: [materials-thermal-source-reviews.json] Priority access gap for plastic-work heat fraction calibration.; [p1-p2-access-source-reviews.json] P1 source/source-term semantics and later thermal experiment design. Does not repair the zero-source I01 integration failure or establish roll-strip conductance.. Trace rows: T018, T019.
 
 Historical review record: Full author manuscript read at https://hal.science/hal-04699292v1/file/R2.20.pdf, including uncertainty appendix. AA6016-T4 quasi-static tension; variable work-to-heat conversion, not cold-bite coefficients.
 
 ## R051 — SIMULIA Abaqus 2024 theory. Heat generation caused by frictional sliding
 
-Source: [https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm](https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm) · Type: official_software · Current access: **unavailable** · Date: 2026-10-02
+Source: [https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm](https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm) · Type: official_software · Current access: **official_document_reviewed** · Date: 2026-10-02
 
-Version/locator: [materials-thermal-source-reviews.json] Official documentation 2024. [materials-thermal-source-reviews.json] Abaqus2024 theory page; fetch403
+Version/locator: [materials-thermal-source-reviews.json] Official documentation 2024; [p1-p2-access-source-reviews.json] SIMULIA Abaqus 2024 online theory documentation, exact existing version. [materials-thermal-source-reviews.json] Abaqus2024 theory page; fetch403; [p1-p2-access-source-reviews.json] Opening heat-generation and contact-interface assumptions; Unnumbered q1,q2,qg,qk flux equations; Eq. 1 weak-form Jacobian and following derivatives
 
-Domain/evidence: [materials-thermal-source-reviews.json] General contact solver theory. [materials-thermal-source-reviews.json] identity_or_access_gap
+Domain/evidence: [materials-thermal-source-reviews.json] General contact solver theory; [p1-p2-access-source-reviews.json] Generic coupled contact heat transfer/friction in Abaqus. [materials-thermal-source-reviews.json] identity_or_access_gap; [p1-p2-access-source-reviews.json] Official software theory body
 
-Findings: [materials-thermal-source-reviews.json] Earlier official-doc review addresses sliding heat generation.
+Findings: [materials-thermal-source-reviews.json] Earlier official-doc review addresses sliding heat generation.; [p1-p2-access-source-reviews.json] Defines separate friction-to-heat fraction and body partitions; contact flux has outward signs on each body. Conduction uses a heat-transfer coefficient times temperature difference; surface integration yields power.
 
-Limits/conflicts: [materials-thermal-source-reviews.json] Current page inaccessible; numerical convention must be rechecked before equations are copied. R060 freshly verifies equivalent heat partition principles.
+Limits/conflicts: [materials-thermal-source-reviews.json] Current page inaccessible; numerical convention must be rechecked before equations are copied. R060 freshly verifies equivalent heat partition principles.; [p1-p2-access-source-reviews.json] Software convention, not measured aluminium partition/conductance. Zero interface heat capacity is an assumption. Local constitutive equations do not establish finite-step entropy preservation.
 
-Project use: [materials-thermal-source-reviews.json] Retain as separate versioned document; no physical calibration.. Trace rows: T018, T019.
+Project use: [materials-thermal-source-reviews.json] Retain as separate versioned document; no physical calibration.; [p1-p2-access-source-reviews.json] P1: distinguish W/m² flux, W integrated power and W/K lumped conductance; check traction/slip signs and source partitions.. Trace rows: T018, T019.
 
 Historical review record: Official theory text read. Relative sliding and two-surface heat balance; numerical conventions, not plant parameter calibration.
 
@@ -1238,15 +1238,15 @@ Historical review record: Industry authority page read. Alloy-family and treatme
 
 Source: [https://doi.org/10.1007/s11661-006-0143-6](https://doi.org/10.1007/s11661-006-0143-6) · Type: scholarly · Current access: **abstract_only** · Date: 2026-10-02
 
-Version/locator: [materials-thermal-source-reviews.json] 2006; publisher or institutional abstract; article full-text version not inspected. Exact journal/manual and accessed locator are recorded in pages_equations_tables.. [materials-thermal-source-reviews.json] Publisher abstract;37,2007–2013
+Version/locator: [materials-thermal-source-reviews.json] 2006; publisher or institutional abstract; article full-text version not inspected. Exact journal/manual and accessed locator are recorded in pages_equations_tables.; [p1-p2-access-source-reviews.json] Metallurgical and Materials Transactions A 37,2007–2013(2006); publisher abstract/subscription preview. [materials-thermal-source-reviews.json] Publisher abstract;37,2007–2013; [p1-p2-access-source-reviews.json] Primary abstract and bibliographic/availability fields only
 
-Domain/evidence: [materials-thermal-source-reviews.json] Al-Mg large-strain work hardening. [materials-thermal-source-reviews.json] primary_abstract
+Domain/evidence: [materials-thermal-source-reviews.json] Al-Mg large-strain work hardening; [p1-p2-access-source-reviews.json] Al-Mg 0.5–4.55 wt% Mg; high-strain work hardening. [materials-thermal-source-reviews.json] primary_abstract; [p1-p2-access-source-reviews.json] Primary abstract only
 
-Findings: [materials-thermal-source-reviews.json] Compression/rolling tests over0.5–4.55wt%Mg show stage-IV hardening rate not simply proportional to Mg; shear-band/dislocation storage interpretation.
+Findings: [materials-thermal-source-reviews.json] Compression/rolling tests over0.5–4.55wt%Mg show stage-IV hardening rate not simply proportional to Mg; shear-band/dislocation storage interpretation.; [p1-p2-access-source-reviews.json] Abstract reports compression/cold-rolling tests across Al-Mg compositions and altered high-strain hardening associated with microstructure.
 
-Limits/conflicts: [materials-thermal-source-reviews.json] Full numerical law and experiments restricted; cannot derive universal Mg strengthening factor.
+Limits/conflicts: [materials-thermal-source-reviews.json] Full numerical law and experiments restricted; cannot derive universal Mg strengthening factor.; [p1-p2-access-source-reviews.json] No accessed curves, equations, parameter table or exact AA5052 case; cannot derive an incoming material card or extrapolation limit.
 
-Project use: [materials-thermal-source-reviews.json] Evaluate saturation/stage-IV alternatives against large-strain data.. Trace rows: T013.
+Project use: [materials-thermal-source-reviews.json] Evaluate saturation/stage-IV alternatives against large-strain data.; [p1-p2-access-source-reviews.json] P2/P3 science-priority retrieval if replacing synthetic effective-history with an identified high-strain law; not required for explicitly conditional one-parameter replay.. Trace rows: T013.
 
 Historical review record: Primary publisher abstract read. Compression/cold rolling and stage-IV hardening in a specified Mg range; does not support a universal composition multiplier.
 
@@ -1782,15 +1782,15 @@ Historical review record: Additional source; not a numbered entry in historical 
 
 Source: [https://library.e.abb.com/public/cab489262e40ea6ac1257beb0029324a/ABB%20Review_1_2009_72dpi.pdf](https://library.e.abb.com/public/cab489262e40ea6ac1257beb0029324a/ABB%20Review_1_2009_72dpi.pdf) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
 
-Version/locator: [supplemental-route-source-reviews.json] Feldmann,Gerdau,Vollmer; ABB Review1/2009,printedpp43–48; magazine PDFindices42–47. [supplemental-route-source-reviews.json] Articlepp43–48; Figs1–6,Factboxes1–3 and named scheduling,preset,temperature,gap,adaptation sections
+Version/locator: [operational-oem-source-reviews.json] ABB Review1/2009 pp43–48; article-only manifestation of existing full-issue source; [supplemental-route-source-reviews.json] Feldmann,Gerdau,Vollmer; ABB Review1/2009,printedpp43–48; magazine PDFindices42–47. [operational-oem-source-reviews.json] Printedpp46–48, preset/adaptation/thermal subsections; [supplemental-route-source-reviews.json] Articlepp43–48; Figs1–6,Factboxes1–3 and named scheduling,preset,temperature,gap,adaptation sections
 
-Domain/evidence: [supplemental-route-source-reviews.json] Industrial cold mills,steel and nonferrous including aluminium; mixed product regimes. [supplemental-route-source-reviews.json] primary_oem_architecture
+Domain/evidence: [operational-oem-source-reviews.json] Cold rolling, steel and aluminium examples; [supplemental-route-source-reviews.json] Industrial cold mills,steel and nonferrous including aluminium; mixed product regimes. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit; [supplemental-route-source-reviews.json] primary_oem_architecture
 
-Findings: [supplemental-route-source-reviews.json] Separates scheduling,preset and adaptation. Circular reduction-mill model differs from noncircular-informed foil model. Loaded gap needs mill compliance/thermal expansion. Limits include reel/drive capability,temperature and quality; short pass-to-pass and slower coil adaptation are distinguished.
+Findings: [operational-oem-source-reviews.json] Preset can precede threading; roll thermal model continues during/after rolling. Adaptation processes plausibility-checked filtered measurements across rolling phases.; [supplemental-route-source-reviews.json] Separates scheduling,preset and adaptation. Circular reduction-mill model differs from noncircular-informed foil model. Loaded gap needs mill compliance/thermal expansion. Limits include reel/drive capability,temperature and quality; short pass-to-pass and slower coil adaptation are distinguished.
 
-Limits/conflicts: [supplemental-route-source-reviews.json] OEM architecture account, not public equations/calibration dataset or project performance proof. Steel illustrations cannot become aluminium coefficients. Publication's approximate domain split is not a universal5% switch. Reported benefits lack reusable raw validation here.
+Limits/conflicts: [operational-oem-source-reviews.json] OEM architecture description, not complete algorithms or one universal enable gate. Product/material-specific coefficients and limits remain required.; [supplemental-route-source-reviews.json] OEM architecture account, not public equations/calibration dataset or project performance proof. Steel illustrations cannot become aluminium coefficients. Publication's approximate domain split is not a universal5% switch. Reported benefits lack reusable raw validation here.
 
-Project use: [supplemental-route-source-reviews.json] State/equipment/settings contracts; offline calibration and later advisory architecture. Trace rows: none; future/context source.
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription; [supplemental-route-source-reviews.json] State/equipment/settings contracts; offline calibration and later advisory architecture. Trace rows: T049, T050.
 
 Historical review record: Additional source; not a numbered entry in historical report
 
@@ -1922,19 +1922,19 @@ Project use: [integration-source-reviews.json] Optional later viewer; preserve s
 
 Historical review record: Additional source; not a numbered entry in historical report
 
-## R121 — BIPM International System of Units, 9th edition updated 2026
+## R121 — The International System of Units (SI),9th edition
 
-Source: [https://www.bipm.org/en/publications/si-brochure](https://www.bipm.org/en/publications/si-brochure) · Type: official_standard · Current access: **metadata_only** · Date: 2026-10-02
+Source: [https://www.bipm.org/en/publications/si-brochure](https://www.bipm.org/en/publications/si-brochure) · Type: official_standard · Current access: **official_document_reviewed** · Date: 2026-10-02
 
-Version/locator: [integration-source-reviews.json] 9th edition2019, official catalogue updated2026. [integration-source-reviews.json] Official brochure catalogue and citation
+Version/locator: [integration-source-reviews.json] 9th edition2019, official catalogue updated2026; [p1-p2-access-source-reviews.json] Official English PDF title:9th edition/version 4.01, current 2026 body; download query version7.0 is transport metadata, not edition 7. [integration-source-reviews.json] Official brochure catalogue and citation; [p1-p2-access-source-reviews.json] Printed p. 129 kelvin/Celsius relation; Printed pp. 133–136 Tables4–5 and quantity/unit distinction; Printed pp. 144–146 §§5.4.2,5.4.5,5.4.7
 
-Domain/evidence: [integration-source-reviews.json] SI units across engineering. [integration-source-reviews.json] Official standard identity
+Domain/evidence: [integration-source-reviews.json] SI units across engineering; [p1-p2-access-source-reviews.json] Cross-domain SI metrology. [integration-source-reviews.json] Official standard identity; [p1-p2-access-source-reviews.json] Official normative reference body
 
-Findings: [integration-source-reviews.json] Current official catalogue identifies updated edition and DOI; source of canonical SI conventions.
+Findings: [integration-source-reviews.json] Current official catalogue identifies updated edition and DOI; source of canonical SI conventions.; [p1-p2-access-source-reviews.json] Supports force/stress, heat/power and torque unit contracts. Identical dimensions do not identify quantities; absolute temperatures differ from intervals.
 
-Limits/conflicts: [integration-source-reviews.json] This audit checked catalogue, not entire brochure; physical quantity semantics still require source-specific interpretation.
+Limits/conflicts: [integration-source-reviews.json] This audit checked catalogue, not entire brochure; physical quantity semantics still require source-specific interpretation.; [p1-p2-access-source-reviews.json] Cannot resolve paper-specific tension meaning, radius versus diameter, torque scope, sign or strain convention. Only relevant sections reviewed.
 
-Project use: [integration-source-reviews.json] Unit contract provenance; does not resolve stress versus force or total versus per-width power.. Trace rows: T001.
+Project use: [integration-source-reviews.json] Unit contract provenance; does not resolve stress versus force or total versus per-width power.; [p1-p2-access-source-reviews.json] P1 dimensional adapters and explicit physical-quantity labels.. Trace rows: T001.
 
 Historical review record: Additional source; not a numbered entry in historical report
 
@@ -2543,5 +2543,373 @@ Findings: [sensing-profile-source-reviews.json] Current official explanation of 
 Limits/conflicts: [sensing-profile-source-reviews.json] Replacement context for unavailable R036; not the same brochure version.
 
 Project use: [sensing-profile-source-reviews.json] Sensors, equipment, profile/flatness and advisory deployment evidence; see sensing-profile-review.md. Trace rows: none; future/context source.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R154 — A Heat Transfer Textbook
+
+Source: [https://ahtt.mit.edu/](https://ahtt.mit.edu/) · Type: textbook_monograph · Current access: **metadata_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-materials-thermal-source-reviews.json] Sixth edition, version 6.00, 19 April 2024, Phlogiston Press. Identified through indexed author-site citation and PDF front matter. No sixth-edition ISBN/DOI verified; the fifth-edition ISBN is deliberately not reused.. [fundamentals-materials-thermal-source-reviews.json] Indexed official contents: Chapter 5, transient/multidimensional conduction; section 5.2, lumped-capacity solutions. Chapters not read.
+
+Domain/evidence: [fundamentals-materials-thermal-source-reviews.json] General engineering heat and mass transfer; not an aluminium rolling calibration source.. [fundamentals-materials-thermal-source-reviews.json] author_metadata_and_contents
+
+Findings: [fundamentals-materials-thermal-source-reviews.json] Verified edition-specific lawful textbook lead for heat-transfer fundamentals. Current PDF fetches failed; indexed fragments are not treated as substantive review.
+
+Limits/conflicts: [fundamentals-materials-thermal-source-reviews.json] Browser returned 502/access failure; workspace download returned 403. No equation or coefficient adopted from unread chapters.
+
+Project use: [fundamentals-materials-thermal-source-reviews.json] P1 thermal model-assumption and verification reading priority; R158 supplies independently accessible teaching derivation now.. Trace rows: T043.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R155 — Light Alloys: Metallurgy of the Light Metals
+
+Source: [https://www.inspectioncopy.elsevier.com/book/details/9780080994314](https://www.inspectioncopy.elsevier.com/book/details/9780080994314) · Type: textbook_monograph · Current access: **metadata_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-materials-thermal-source-reviews.json] Fifth edition, 29 March 2017, Butterworth-Heinemann/Elsevier, 544 pages; official publisher bibliographic record and contents.. [fundamentals-materials-thermal-source-reviews.json] Observed TOC: 2.1 Work Hardening and Annealing; 2.2–2.3 age hardening/ageing; 2.5 Mechanical Behaviour; 4.2 alloy/temper designations; 4.3–4.4 non-heat-treatable/heat-treatable wrought alloys. No chapter text read.
+
+Domain/evidence: [fundamentals-materials-thermal-source-reviews.json] Aluminium-specific chapters selected; other chapters cover magnesium, titanium and casting.. [fundamentals-materials-thermal-source-reviews.json] publisher_metadata_and_contents
+
+Findings: [fundamentals-materials-thermal-source-reviews.json] Publisher contents distinguish aluminium physical metallurgy and wrought-alloy families, giving a targeted acquisition syllabus.
+
+Limits/conflicts: [fundamentals-materials-thermal-source-reviews.json] The publisher description retains an older subtitle while the title heading says Metallurgy of the Light Metals; ISBN and fifth edition pin identity. No constitutive parameters, kinetics or property tables accessed.
+
+Project use: [fundamentals-materials-thermal-source-reviews.json] P1 material-card taxonomy and P2 specimen-state provenance; future P3/P4 material and anneal model selection.. Trace rows: T042.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R156 — Recrystallization and Related Annealing Phenomena
+
+Source: [https://shop.elsevier.com/books/recrystallization-and-related-annealing-phenomena/rollett/978-0-08-098235-9](https://shop.elsevier.com/books/recrystallization-and-related-annealing-phenomena/rollett/978-0-08-098235-9) · Type: textbook_monograph · Current access: **metadata_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-materials-thermal-source-reviews.json] Third edition, 24 July 2017, Elsevier. Publisher shop and indexed ScienceDirect ISBN/edition; no chapter text obtained.. [fundamentals-materials-thermal-source-reviews.json] Observed contents: chapters 2–3 deformed state/texture; 6 recovery; 7–9 recrystallization of different material classes; 13 dynamic restoration; 14 continuous recrystallization; measurement appendix.
+
+Domain/evidence: [fundamentals-materials-thermal-source-reviews.json] General physical metallurgy across material classes; aluminium applicability needs chapter-level verification.. [fundamentals-materials-thermal-source-reviews.json] publisher_metadata_and_contents
+
+Findings: [fundamentals-materials-thermal-source-reviews.json] The contents provide a mechanism-separated reading plan for recovery and annealing research.
+
+Limits/conflicts: [fundamentals-materials-thermal-source-reviews.json] Official shop TOC jumps from chapter 15 to 18 for computer modelling; numbering is not repaired by guesswork. This third edition must not be attributed to the earlier Humphreys–Hatherly edition. No kinetics constants obtained.
+
+Project use: [fundamentals-materials-thermal-source-reviews.json] P1 explicit non-capability labels for annealing; P2 treatment-state documentation; future P4 model and measurement selection.. Trace rows: T042.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R157 — Recovery and Recrystallization: Phenomena, Physics, Models, Simulation
+
+Source: [https://www.dierk-raabe.com/app/download/5801853763/Dierk%2BRaabe%2Boverview%2Brecrystallization.pdf](https://www.dierk-raabe.com/app/download/5801853763/Dierk%2BRaabe%2Boverview%2Brecrystallization.pdf) · Type: book_chapter · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-materials-thermal-source-reviews.json] Published chapter 23, Physical Metallurgy, fifth edition, editors David E. Laughlin and Kazuhiro Hono, Elsevier 2014, pp.2291–2397; author-hosted personal copy, 108 PDF pages. Publisher book date 23 July 2014.. [fundamentals-materials-thermal-source-reviews.json] Selected §§23.1.1/23.1.3, pp.2291–2298; §23.2.1, pp.2308–2310; §23.8, pp.2375–2377 including unnumbered JMAK expressions; §§23.9.1–23.9.3.2, pp.2378–2382.
+
+Domain/evidence: [fundamentals-materials-thermal-source-reviews.json] General metallic recovery/recrystallization with explicitly identified aluminium examples.. [fundamentals-materials-thermal-source-reviews.json] author_hosted_published_chapter_selected_text
+
+Findings: [fundamentals-materials-thermal-source-reviews.json] Recovery reorganizes stored defects; JMAK assumptions restrict a fitted isothermal law. Statistical texture models omit local topology; cellular automata require calibrated physical time and length scales.
+
+Limits/conflicts: [fundamentals-materials-thermal-source-reviews.json] Selected sections, not the entire chapter or book, reviewed. General mechanisms and examples include aluminium and steel; no steel constants transfer to aluminium. Review synthesis is not new plant data.
+
+Project use: [fundamentals-materials-thermal-source-reviews.json] P1 state semantics; P2 supplied treatment versus predicted evolution; P4 anneal identifiability and fidelity decision.. Trace rows: T042.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R158 — Part 3: Introduction to Engineering Heat Transfer, MIT 16.050 Thermal Energy
+
+Source: [https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/87d9f4544b7fd64a77201382500d057c_10_part3.pdf](https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/87d9f4544b7fd64a77201382500d057c_10_part3.pdf) · Type: teaching · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-materials-thermal-source-reviews.json] Fall 2002 course notes, Part 3, 74-page institutional PDF. Course attribution verified; individual section authorship not separately asserted. Not a commercial textbook or Lienhard edition.. [fundamentals-materials-thermal-source-reviews.json] §§3.2–3.3, printed HT-25–HT-32, equations 3.16–3.18/3.26–3.27; §6, HT-42–HT-43, equations 6.1–6.6.
+
+Domain/evidence: [fundamentals-materials-thermal-source-reviews.json] General continuum heat transfer; no aluminium-specific property validation.. [fundamentals-materials-thermal-source-reviews.json] official_teaching_text_selected_sections
+
+Findings: [fundamentals-materials-thermal-source-reviews.json] Derives series conduction/convection resistance and the lumped cooling energy balance, with a small-Biot-number approximation and exponential constant-property limit.
+
+Limits/conflicts: [fundamentals-materials-thermal-source-reviews.json] Aerospace/general teaching examples do not calibrate roll-strip conductance or coolant coefficients. A fixed-temperature reservoir solution is not the exact finite-capacity two-body contact solution.
+
+Project use: [fundamentals-materials-thermal-source-reviews.json] P1 dimensional, equilibrium-limit and timestep verification; P2 reject thermal validation claims from force-only evidence.. Trace rows: T043.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R149 — Applied Mechanics of Solids
+
+Source: [https://solidmechanics.org/](https://solidmechanics.org/) · Type: textbook_monograph · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-mechanics-source-reviews.json] Reviewed mutable author electronic text on2026-10-02; related2009 first-edition print/eBook identity recorded separately. No claim that current HTML is page-identical to that edition or2025 second edition.. [fundamentals-mechanics-source-reviews.json] Substantive HTML §3.7.1–3.7.7,§3.9.1–3.9.4,§2.5.1–2.5.2,§6.3.1–6.3.3; equations unnumbered; no print-page equivalence asserted
+
+Domain/evidence: [fundamentals-mechanics-source-reviews.json] Continuum solid mechanics and plasticity; generic metal examples. [fundamentals-mechanics-source-reviews.json] author_textbook_substantive_sections
+
+Findings: [fundamentals-mechanics-source-reviews.json] Distinguishes yield,flow,hardening and unloading; equivalent plastic strain is path accumulated. Finite-deformation work requires conjugate measures. Limit-analysis bounds require admissible fields and stated rigid-plastic assumptions.
+
+Limits/conflicts: [fundamentals-mechanics-source-reviews.json] Generic continuum teaching,not aluminium material calibration. Small-strain formulas cannot be applied indiscriminately to large reductions; isotropy cannot be assumed for textured sheet. Web notation/cross-reference and volume-integral measure typos require equation-level checking before implementation.
+
+Project use: [fundamentals-mechanics-source-reviews.json] P1 strain/stress/work adapters and history contracts; P2 prevent fitted initial state masking a convention error. Trace rows: T041.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R150 — Metal Forming: Mechanics and Metallurgy
+
+Source: [https://www.cambridge.org/core/books/metal-forming/DFD3C93FFFCB89A29076C55B8A4E1831](https://www.cambridge.org/core/books/metal-forming/DFD3C93FFFCB89A29076C55B8A4E1831) · Type: textbook_monograph · Current access: **metadata_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-mechanics-source-reviews.json] Third edition2007. Fourth-edition2011 search leads were not substituted into this record; chapter numbering differs.. [fundamentals-mechanics-source-reviews.json] Publisher TOC read:ch2pp17–29, ch3pp30–42, ch5pp52–75, ch6pp76–84, ch7pp85–109,ch8pp110–127,ch9pp128–162,ch13pp207–219. These are chapter locations,not read pages.
+
+Domain/evidence: [fundamentals-mechanics-source-reviews.json] General bulk and sheet metal forming; rolling among covered processes. [fundamentals-mechanics-source-reviews.json] publisher_toc_metadata_only
+
+Findings: [fundamentals-mechanics-source-reviews.json] Verified syllabus spans plasticity,hardening,rate/temperature,work balance,slab/friction,upper bounds,slip lines and anisotropy. Useful structured reading plan; no chapter equation adopted from TOC.
+
+Limits/conflicts: [fundamentals-mechanics-source-reviews.json] Chapter pages show access restriction. First-page image links resolved but image content could not be inspected; excerpt requests timed out. No substantive chapter review or numerical evidence claimed.
+
+Project use: [fundamentals-mechanics-source-reviews.json] P1/P2 lawful acquisition and targeted chapter checklist; primary rolling papers remain equation evidence. Trace rows: T041.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R151 — Cold and Hot Forging: Fundamentals and Applications
+
+Source: [https://dl.asminternational.org/technical-books/edited-volume/126/Cold-and-Hot-ForgingFundamentals-and-Applications](https://dl.asminternational.org/technical-books/edited-volume/126/Cold-and-Hot-ForgingFundamentals-and-Applications) · Type: textbook_monograph · Current access: **abstract_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-mechanics-source-reviews.json] 2005 edited volume; current ASM electronic manifestation; no numbered later edition claimed. [fundamentals-mechanics-source-reviews.json] Full preface and TOC; abstracts ch4pp25–49,ch6pp59–66,ch17pp211–235,ch18pp237–246. Technical chapter body/equations/tables not read.
+
+Domain/evidence: [fundamentals-mechanics-source-reviews.json] Cold,warm,hot bulk forging; multiple alloys including aluminium. [fundamentals-mechanics-source-reviews.json] publisher_preface_toc_and_chapter_abstracts
+
+Findings: [fundamentals-mechanics-source-reviews.json] Preface frames forming as interacting material,interface,equipment and geometry variables. Chapter4 abstract identifies flow-stress test methods/error sources and aluminium data; ch6 identifies contact-time/thermal factors. These are acquisition leads,not recovered data.
+
+Limits/conflicts: [fundamentals-mechanics-source-reviews.json] Full chapters restricted or robot-validation blocked; no friction constants,flow curves or forging-load equations imported. Forging geometry/contact histories differ from rolling,so process laws cannot transfer merely because plasticity is shared.
+
+Project use: [fundamentals-mechanics-source-reviews.json] P2 independent characterization design and P1 material/interface/equipment separation; not rolling calibration. Trace rows: T041.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R152 — Primer on Flat Rolling
+
+Source: [https://shop.elsevier.com/books/primer-on-flat-rolling/lenard/978-0-08-099418-5](https://shop.elsevier.com/books/primer-on-flat-rolling/lenard/978-0-08-099418-5) · Type: textbook_monograph · Current access: **metadata_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-mechanics-source-reviews.json] Second edition,ISBN-specific publisher catalog/TOC; not first edition and not an opened full book. [fundamentals-mechanics-source-reviews.json] Detailed publisher TOC:chs4–10 physical events,models,FE,shape,material,tribology,sensitivity;ch11 hot aluminium;chs12–15 temper/roll-bonding/flexible rolling. No printed page/equation inspected.
+
+Domain/evidence: [fundamentals-mechanics-source-reviews.json] Flat rolling; steel and aluminium; several hot,cold and specialized regimes. [fundamentals-mechanics-source-reviews.json] publisher_toc_metadata_only
+
+Findings: [fundamentals-mechanics-source-reviews.json] TOC provides a rolling-specific reading structure separating model predictions,material testing,tribology and sensitivity; hot-aluminium and specialized rolling chapters are distinctly labelled.
+
+Limits/conflicts: [fundamentals-mechanics-source-reviews.json] ScienceDirect full-book endpoint403; no chapter conclusions or coefficients verified. Catalog description is not benchmark validation. Hot-aluminium/steel chapters cannot establish cold-aluminium parameters.
+
+Project use: [fundamentals-mechanics-source-reviews.json] P2 method/data acquisition map; targeted access priorities for rolling model discrimination. Trace rows: T041.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R159 — Convex Optimization
+
+Source: [https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf](https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf) · Type: textbook_monograph · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-numerics-optimisation-source-reviews.json] Print publication 2004-03-08; author-hosted corrected 2009 printing; publisher digital record 2013-08-05. [fundamentals-numerics-optimisation-source-reviews.json] Selected author-PDF full-text sections: 4.1.4–4.2.4 pp.136–144, Eq.4.15 and local/global proof; 5.5.2–5.5.3 pp.242–244, Eqs.5.48–5.49; 6.3.1–6.3.2 pp.305–306, Eqs.6.7–6.9. Copyright page read. Other chapters not comprehensively reviewed.
+
+Domain/evidence: [fundamentals-numerics-optimisation-source-reviews.json] General mathematical/scientific computing; no alloy or mill calibration. [fundamentals-numerics-optimisation-source-reviews.json] Authoritative fundamentals text; access depth specified per record
+
+Findings: [fundamentals-numerics-optimisation-source-reviews.json] Distinguishes convex guarantees, feasible-point evaluation, optimality conditions and regularized fitting. Nonconvex cases do not inherit global guarantees.
+
+Limits/conflicts: [fundamentals-numerics-optimisation-source-reviews.json] No convexity proof for present rolling model. Selected sections only; no whole-book review. Mathematical objective accuracy does not establish physical prediction accuracy.
+
+Project use: [fundamentals-numerics-optimisation-source-reviews.json] P2 calibration formulation; P5 search certificates/limitations; keep existing conditional mesh-search status.. Trace rows: T044.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R160 — Finite Difference Computing with Exponential Decay Models
+
+Source: [https://link.springer.com/book/10.1007/978-3-319-29439-1](https://link.springer.com/book/10.1007/978-3-319-29439-1) · Type: textbook_monograph · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-numerics-optimisation-source-reviews.json] Publisher eBook 2016-06-10; hardback 2016-06-12. Review anchors use publisher chapter pagination, not longer author draft dated 2016-02-29.. [fundamentals-numerics-optimisation-source-reviews.json] Publisher chapter 2 Analysis, pp.39–58 selected substantive sections 2.1–2.4.2: Eqs.2.1–2.8 amplification/stability; Eqs.2.10–2.14 convergence; model/data error discussion. Publisher frontmatter ISBN/licence read. Author draft consulted for comparison.
+
+Domain/evidence: [fundamentals-numerics-optimisation-source-reviews.json] General mathematical/scientific computing; no alloy or mill calibration. [fundamentals-numerics-optimisation-source-reviews.json] Authoritative fundamentals text; access depth specified per record
+
+Findings: [fundamentals-numerics-optimisation-source-reviews.json] Scalar decay shows bounded amplification and monotonicity are different requirements; centered integration can oscillate. Numerical, model and input errors need separate investigation.
+
+Limits/conflicts: [fundamentals-numerics-optimisation-source-reviews.json] Scalar constant-coefficient result is not a proof for nonlinear coupled rolling heat exchange. Time substepping alone cannot fix the present spatial strip-midpoint closure. Legacy Python examples require contemporary review.
+
+Project use: [fundamentals-numerics-optimisation-source-reviews.json] P1 analytic thermal limits, independent refinement, qualitative bounds; P4 thermal closure qualification.. Trace rows: T043.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R161 — Discrete Inverse Problems: Insight and Algorithms
+
+Source: [https://epubs.siam.org/doi/book/10.1137/1.9780898718836](https://epubs.siam.org/doi/book/10.1137/1.9780898718836) · Type: textbook_monograph · Current access: **abstract_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-numerics-optimisation-source-reviews.json] SIAM book published 2010; chapter 4 official online record 2012-03-23 independently checked by reviewer; author errata dated 2015-04-15.. [fundamentals-numerics-optimisation-source-reviews.json] Publisher exposed chapter opening extracts are labeled Abstract: chapter 3 (whole chapter pp.23–51), chapter 4 (whole chapter pp.53–83) including Eq.4.1 filtered SVD, chapter 5 (whole chapter pp.85–107). Equation page within chapter not independently verified. Full chapter PDFs unavailable. Author errata consulted. Teaching collection separately identified as R163; slide pages are not book pagination.
+
+Domain/evidence: [fundamentals-numerics-optimisation-source-reviews.json] General mathematical/scientific computing; no alloy or mill calibration. [fundamentals-numerics-optimisation-source-reviews.json] Authoritative fundamentals text; access depth specified per record
+
+Findings: [fundamentals-numerics-optimisation-source-reviews.json] Ill-conditioning allows small fit residuals with inaccurate parameters. Spectral regularization trades noise amplification against bias; parameter-choice rules have assumptions and can fail.
+
+Limits/conflicts: [fundamentals-numerics-optimisation-source-reviews.json] Book primarily treats linear Fredholm inverse problems with at least as many observations as unknowns. Local sensitivity SVD is not proof of global nonlinear identifiability. Long publisher abstracts/extracts do not establish partial chapter-body access; full chapters not obtained.
+
+Project use: [fundamentals-numerics-optimisation-source-reviews.json] P2 conditional calibration: inspect scaled sensitivity, report ambiguous parameter combinations, avoid claiming identified prestrain from an effective fit.. Trace rows: T044.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R162 — Verification and Validation in Scientific Computing
+
+Source: [https://www.cambridge.org/core/books/verification-and-validation-in-scientific-computing/05CA1F8F3CCB5AE5445FDF55239A0183](https://www.cambridge.org/core/books/verification-and-validation-in-scientific-computing/05CA1F8F3CCB5AE5445FDF55239A0183) · Type: textbook_monograph · Current access: **abstract_only** · Date: 2026-10-02
+
+Version/locator: [fundamentals-numerics-optimisation-source-reviews.json] First published 2010; official chapter records online 2013-03-05. Author-uploaded publisher frontmatter posted 2014-01-14.. [fundamentals-numerics-optimisation-source-reviews.json] Official chapter 5 summary (chapter pp.170–207) and chapter 6 summary (pp.208–248), not chapter bodies. Author-uploaded Cambridge frontmatter: contents pp.vii–x; 5.3 order p.180, 5.4 mesh refinement p.185, 6.3 MMS p.219, 8.3 Richardson p.309, 8.6 GCI p.323, 14.3 gap analysis p.684 are TOC leads only. No equations reviewed.
+
+Domain/evidence: [fundamentals-numerics-optimisation-source-reviews.json] General mathematical/scientific computing; no alloy or mill calibration. [fundamentals-numerics-optimisation-source-reviews.json] Authoritative fundamentals text; access depth specified per record
+
+Findings: [fundamentals-numerics-optimisation-source-reviews.json] Publisher summaries distinguish numerical implementation checks and exact-solution/order tests; TOC provides a structured route for deeper verification/validation study.
+
+Limits/conflicts: [fundamentals-numerics-optimisation-source-reviews.json] No full chapter access obtained. TOC headings establish topics, not reviewed procedures. Do not claim application of an unread GCI formula, validation metric or full-book methodology.
+
+Project use: [fundamentals-numerics-optimisation-source-reviews.json] P1 separate code/solution verification and empirical validation; P2 conditional source reproduction remains short of independent validation.. Trace rows: T045.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R163 — Short-course teaching materials accompanying Discrete Inverse Problems: Insight and Algorithms
+
+Source: [https://people.compute.dtu.dk/pcha/DIPbook.html](https://people.compute.dtu.dk/pcha/DIPbook.html) · Type: teaching · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [fundamentals-numerics-optimisation-source-reviews.json] Collection date and immutable revision not exposed; do not assign the book publication year to teaching PDFs.. [fundamentals-numerics-optimisation-source-reviews.json] chap12.pdf printed slides 7–11 and 24–29: small-residual ill-conditioning example and singular-value expansion/Picard condition; chap4.pdf slides 11–17: Tikhonov objective, filter factors and augmented least-squares form; chap5.pdf printed slides 5–13: bias/perturbation, discrepancy principle and L-curve. Printed slide numbers used; chapters not fully reviewed.
+
+Domain/evidence: [fundamentals-numerics-optimisation-source-reviews.json] General inverse-problem mathematics; no alloy-specific calibration. [fundamentals-numerics-optimisation-source-reviews.json] Primary author teaching material, selected substantive slides
+
+Findings: [fundamentals-numerics-optimisation-source-reviews.json] Author examples distinguish small fit residual from accurate parameters and show regularization bias/noise tradeoffs. Tikhonov can be expressed as augmented least squares.
+
+Limits/conflicts: [fundamentals-numerics-optimisation-source-reviews.json] Teaching examples concern mainly linear inverse problems; neither regularization nor a local SVD establishes unique nonlinear rolling parameters. Undated slides and full-book text are separate evidence. Not all course lectures reviewed.
+
+Project use: [fundamentals-numerics-optimisation-source-reviews.json] P2 sensitivity and effective-parameter interpretation; synthetic inverse verification before measured calibration.. Trace rows: T044.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R164 — IndustrialIT for cold rolling mills: The next generation of automation system and solutions
+
+Source: [https://library.e.abb.com/public/76bffa60a31d625cc1256f57004df84c/44-49%204M891.pdf](https://library.e.abb.com/public/76bffa60a31d625cc1256f57004df84c/44-49%204M891.pdf) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] Andreas Kroll and Andreas Vollmer, ABB Review4/2004 pp44–49. [operational-oem-source-reviews.json] Printedpp44–47, nonlinear mill-simulation section
+
+Domain/evidence: [operational-oem-source-reviews.json] Cold rolling automation and simulation. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Describes full-pass nonlinear simulation covering acceleration/deceleration, distinct from operating-point models; integrates drives, hydraulics, material and sensing concepts.
+
+Limits/conflicts: [operational-oem-source-reviews.json] Vendor capability account without a reproducible aluminium dynamic-validation dataset. Historical commercial product is not a project implementation recommendation.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T046, T051, T052.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R165 — Technological controls for cold rolling processes
+
+Source: [https://library.e.abb.com/public/04580d2383cc4b53b8573d1bb8eda2e8/Technological_Controls_for_Cold_Rolling_Mill_190815_LowRes.pdf](https://library.e.abb.com/public/04580d2383cc4b53b8573d1bb8eda2e8/Technological_Controls_for_Cold_Rolling_Mill_190815_LowRes.pdf) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] ABB document3BDD017150-EN 08.2017, copyright2017; official6-page brochure. Later filename190815 is not the document edition.. [operational-oem-source-reviews.json] PDFpp2–4: threading, roll-gap/AGC, speed feed-forward, adaptive concepts
+
+Domain/evidence: [operational-oem-source-reviews.json] Cold mills including breakdown, tandem, foil and temper. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Discusses threading/tail-out/reversal, gauge transport delay, speed feed-forward during ramps and mode selection by threading strategy.
+
+Limits/conflicts: [operational-oem-source-reviews.json] Architecture/capability claims, not tuning rules, tolerances, customer ratings or quantified validation.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T046, T050, T052.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R166 — Automation and Modernization for Aluminum Cold Rolling Mill
+
+Source: [https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/automation-and-modernization-for-aluminum-cold-rolling-mills/](https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/automation-and-modernization-for-aluminum-cold-rolling-mills/) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] Mutable official webpage accessed2026-10-02; revision/date unspecified. [operational-oem-source-reviews.json] Overview and mill setup/precision control feature sections
+
+Domain/evidence: [operational-oem-source-reviews.json] Aluminium cold rolling automation. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Distinguishes mill-setup information from speed encoder and coiler-tension control functions in aluminium rolling automation.
+
+Limits/conflicts: [operational-oem-source-reviews.json] High-level supplier description; no internal activation sequence, dynamic equations, measured error budgets or plant-specific parameters published in reviewed text.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T050.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R168 — Coil Eccentricity Expert for Cold Rolling Mills
+
+Source: [https://www.primetals.com/en/portfolio/solutions/cold-rolling/coil-eccentricity-expert/](https://www.primetals.com/en/portfolio/solutions/cold-rolling/coil-eccentricity-expert/) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] Mutable official webpage accessed2026-10-02; revision/date unspecified. [operational-oem-source-reviews.json] Product description and benefits
+
+Domain/evidence: [operational-oem-source-reviews.json] Steel cold rolling; mechanics/control architecture lead. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Describes speed-dependent winding eccentricity compensation, including acceleration/deceleration, shaft resonance and torque-limit considerations.
+
+Limits/conflicts: [operational-oem-source-reviews.json] Steel application; benefit claims not independent evidence of aluminium accuracy. No tuning constants or proposed project control action.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T048.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R171 — Rolling mill automatic slowdown control, US3518857A
+
+Source: [https://patents.google.com/patent/US3518857A/en](https://patents.google.com/patent/US3518857A/en) · Type: patent · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] Charles O Hancock and Joseph A McCarthy; US patent publication1970-07-07, filed1967-09-28. [operational-oem-source-reviews.json] Description background/summary/preferred embodiment, Figure1 discussion
+
+Domain/evidence: [operational-oem-source-reviews.json] Primarily tandem cold steel; reversing alternatives described. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Historical example relates slowdown to payoff builddown diameter, gauge and run speed; describes threading, acceleration, running and deceleration.
+
+Limits/conflicts: [operational-oem-source-reviews.json] Patent disclosure is not experimental validation or universal/current practice. No legal-status or equipment-safety conclusion; numerical thresholds not adopted.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T046, T047.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R172 — ACS880 winder control program option+N5000 firmware manual
+
+Source: [https://library.e.abb.com/public/b103c5c12ec749edb727e684d3a394eb/AWIL140x_en.pdf](https://library.e.abb.com/public/b103c5c12ec749edb727e684d3a394eb/AWIL140x_en.pdf) · Type: oem_industry · Current access: **official_document_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-oem-source-reviews.json] 3AUA0000107532 RevD EN, effective2021-03-04;712-page PDF. [operational-oem-source-reviews.json] Printedpp49–50 diameter hold/tension control;pp475–477 virtual-roll counter parameters; title revision
+
+Domain/evidence: [operational-oem-source-reviews.json] Winder drives and material tracking. [operational-oem-source-reviews.json] Primary source, selected body reviewed; domain and validation limits explicit
+
+Findings: [operational-oem-source-reviews.json] Provides sensed/speed-ratio/encoder diameter alternatives, conditional hold logic and distinct tension-control modes. Length-counter resets, holds and quality flags need explicit provenance.
+
+Limits/conflicts: [operational-oem-source-reviews.json] Only selected sections reviewed, not712pages. Vendor-specific configuration, not chosen project limits or model activation policy.
+
+Project use: [operational-oem-source-reviews.json] Operational-phase data/model contracts and P1/P3/P4/P5 validation; not a plant control prescription. Trace rows: T047, T048, T049.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R167 — Development of the model of cold rolling process in dynamic conditions
+
+Source: [https://journal.uctm.edu/node/j2018-2/26_17_77_p_366_372.pdf](https://journal.uctm.edu/node/j2018-2/26_17_77_p_366_372.pdf) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-papers-source-reviews.json] JCTM 53(2), 2018, published citation pp.366–372; reviewed author-uploaded manuscript, uploaded 2018-10-11, internal pp.11–17 with provisional publication pagination. Publisher PDF search-indexed but direct retrieval failed. Manuscript/version-of-record equivalence not verified.. [operational-papers-source-reviews.json] Author manuscript pp.11–17, model/results/conclusions; Eqs.1–11, Table1 and figure captions. Equation OCR incomplete; plotted figures not visually audited.
+
+Domain/evidence: [operational-papers-source-reviews.json] Steel tandem cold strip; no established aluminium/foil/pack domain. [operational-papers-source-reviews.json] Primary modelling and industrial comparison; incomplete author-manuscript verification
+
+Findings: [operational-papers-source-reviews.json] Couples elastoplastic bite, neighbouring stands and drive torque feedback. Eqs.9–11 introduce inertia, two-mass transmission/backlash and DC electrical states. Eq.4 separates rolling, bearing, backup-roll and tension torque.; Table1 supplies a Severstal five-stand steel schedule; Fig.4 describes measured-versus-modelled stand-2 force. Tension entries are forces in kN. Ramp/weld and steady regimes are distinguished.
+
+Limits/conflicts: [operational-papers-source-reviews.json] Manuscript contains an unfinished sentence and provisional pages. Eq.5 divides power by omega, called peripheral velocity in prose but angular velocity in Fig.1: dimensional reconciliation required. Retranscribe Eq.8 signs/factor and Eq.10 backlash branches from verified original.; No public raw oscillograms, quantified validation uncertainty or universal model-enable thresholds established. No aluminium validation. Distinct publication from R169; shared authors/evidence do not make independent replications.
+
+Project use: [operational-papers-source-reviews.json] Basis for a future coupled transient model and unit audit; cannot supply plant limits or executable equations without reconciliation.. Trace rows: T051, T052.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R169 — Simulation of Cold-Rolling Process in Dynamic Conditions
+
+Source: [https://doi.org/10.1007/s11015-017-0526-5](https://doi.org/10.1007/s11015-017-0526-5) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-papers-source-reviews.json] Metallurgist 61(7–8), 519–522, published 2017-11-20; published English translation of Metallurg No.7 pp.15–18 July2017, author-uploaded 2018-06-18. Original and translation belong to one work identity; separate from JCTM R167.. [operational-papers-source-reviews.json] pp.519–522 body, Tables1–2, Figs.1–4 captions; graph pixels not independently read.
+
+Domain/evidence: [operational-papers-source-reviews.json] 08ps steel, five-stand tandem cold rolling. [operational-papers-source-reviews.json] Primary simulation with reported industrial time-series comparison; incomplete reproducibility
+
+Findings: [operational-papers-source-reviews.json] Coupled deformation/interstand, hydraulic hold-down and electromechanical models; roll-speed/torque feedback and force/gap coupling distinguish this from independent snapshots.; 08ps steel industrial oscillography: reported shaft-speed mean error3.5%, maximum6.6%; force error within6% in85.3% of cases. Table2 tensions are MPa, unlike force variables in Fig.1.
+
+Limits/conflicts: [operational-papers-source-reviews.json] Model details delegated to references; raw time series, sample counts, uncertainty and controller activation logic not established. Random yield/thickness spreads are assumed optimisation inputs. Reported8% energy improvement is a simulated schedule comparison, not independently demonstrated plant savings.; Same research group/mill as R167; correlated evidence. Neither validates aluminium, thermal feedback, rate constitutive response, pack rolling or live-control safety.
+
+Project use: [operational-papers-source-reviews.json] Specify measurable dynamic states and benchmark outputs; keep steady and transient error measures separate.. Trace rows: T048, T051, T052.
+
+Historical review record: Additional source; not a numbered entry in historical report
+
+## R170 — Synergistic optimization of shape-force and dynamic coupling effect in bending roll systems during accelerated rolling
+
+Source: [https://www.nature.com/articles/s41598-025-21834-5](https://www.nature.com/articles/s41598-025-21834-5) · Type: scholarly · Current access: **partial_text_reviewed** · Date: 2026-10-02
+
+Version/locator: [operational-papers-source-reviews.json] Scientific Reports 15, article38073, published 2025-10-30; publisher HTML. Supplement spreadsheet linked but not read (tool unsupported binary, shell retrieval403).. [operational-papers-source-reviews.json] Model creation/grid/preliminary results; dynamic compensation Eq.6; industrial verification; Table4 independently opened; Tables6–7 and supplement links located. Selected body read, figures not visually audited.
+
+Domain/evidence: [operational-papers-source-reviews.json] Steel, six-high stands/five-stand cold tandem line; aluminium transfer unvalidated. [operational-papers-source-reviews.json] Primary FE/industrial report, methodological and numerical ambiguities
+
+Findings: [operational-papers-source-reviews.json] Sequential ABAQUS stand-state transfer and speed-segment bending/tension compensation. Reported industrial trial concerns steel. This does not establish simultaneous interstand drive/tension dynamics or validated thermal/rate feedback.
+
+Limits/conflicts: [operational-papers-source-reviews.json] Reduction adjusted for model comparison: calibration is not independent validation. Main prose2.102/2.0mm implies5.1%, not stated2.53%; Table4 instead2.066/2.015mm consistently gives2.53%. Preserve both, quarantine prose. Table4 flatness error25%.; Second-order hexahedral mesh and explicit-analysis statements require exact element/solver clarification. Trial uncertainty, sample count and public raw traces not established. No transferable enable thresholds; speed segmentation is not a universal controller recipe.
+
+Project use: [operational-papers-source-reviews.json] Motivates offline shape-versus-speed studies; not an accepted accuracy benchmark or source of aluminium limits.. Trace rows: T051, T052.
 
 Historical review record: Additional source; not a numbered entry in historical report

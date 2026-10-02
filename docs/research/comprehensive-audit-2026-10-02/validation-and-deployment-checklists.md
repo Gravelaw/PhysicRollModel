@@ -17,13 +17,24 @@ Unchecked items are future acceptance criteria, not completed work. Evidence own
 - [ ] Foil/pack, thermal/history, profile/flatness, released stress/damage and dynamics each have their own evidence gate if claimed.
 - [ ] Independent scientific reviewer can reproduce the result and explain all conflicts/quarantines.
 
+## Operational-phase and dynamic-model gate
+
+- [ ] Extend existing phase tags with evidenced transitions for threading/bite, ramp-up, settled rolling, deceleration, tail/reversal and interruption; record unknown phases honestly.
+- [ ] Version recipe targets, applied references/trims and actual signals separately by alloy/temper/gauge/pass/phase; preserve transition provenance and tracking errors.
+- [ ] Validate material-coordinate alignment, remaining-length/diameter uncertainty and direction/reel-role changes; never use a fixed transport delay through arbitrary ramps.
+- [ ] Declare O0 observation replay, O1 qualified quasi-steady sampling or O2 coupled dynamics; no relabelling of repeated steady solves as dynamic prediction.
+- [ ] Per-model/output eligibility, parameter-update gates, invalid-data fallback and interruption re-entry have independent reasons and evidence; no universal speed-only gate.
+- [ ] For O2, verify span/reel/drive/actuator balances, changing-mass inertia treatment, signed power/storage and time/spatial/event convergence.
+- [ ] Compare independent head/ramp/settled/tail trajectories and short-coil/no-plateau cases; test dropouts, saturation, topology loss and reversals.
+- [ ] Phase thresholds and accuracy bands come from qualified data/intended use; steel paper or vendor example parameters are not installed aluminium limits.
+
 ## Scenario and optimisation gate
 
 - [ ] Candidate inputs distinguish material state, equipment, commands, observations and pass-specific bounds.
 - [ ] Every candidate uses the versioned checked evaluator with full state history; rejected and indeterminate routes remain recorded.
 - [ ] The selected route is replayed independently under stricter numerical settings and compared with a tractable finite oracle.
 - [ ] Missing ratings/quality models cannot produce physical feasibility; observed ranges are not certified capacities.
-- [ ] Objective units and scope are correct: energy integrates power over duration, with reel/idle/reversal/efficiency scope stated.
+- [ ] Objective units and scope are correct: energy integrates power over duration, with reel/idle/reversal/efficiency scope stated; full-pass objectives require the applicable operational/dynamic gate.
 - [ ] Robust margins reflect joint uncertainty and support, not a rectangle formed from marginal statistics.
 - [ ] Surrogates cannot hide invalid physics or out-of-domain inputs; reference fallback/rejection exists.
 - [ ] Ranking is labelled with grid/model scope; no unsupported global optimum, production savings or safe-setpoint claim.
@@ -34,7 +45,7 @@ Unchecked items are future acceptance criteria, not completed work. Evidence own
 - [ ] Solver, material, contact, data, schema and scene versions are recorded separately.
 - [ ] Clean target-environment install and offline replay succeed with pinned dependencies/hashes and a licence inventory.
 - [ ] Optional Blender/USD verification is actually run in a compatible runtime; historical success is not relabelled as fresh.
-- [ ] UI exposes units, uncertainty, data age, evidence status, failure reasons and model domain.
+- [ ] UI exposes units, uncertainty, data age, evidence status, failure reasons, phase, recipe/actual separation and model domain; these states originate in the core data/model contract.
 - [ ] Geometry/visualization agrees with numerical state; exaggerated scale and unavailable fields are labelled.
 - [ ] Invalid/malformed/oversized inputs, cancellation, memory limits and recoverable errors are tested.
 - [ ] Dependency/model updates, backup/restore, schema migration and rollback are demonstrated.

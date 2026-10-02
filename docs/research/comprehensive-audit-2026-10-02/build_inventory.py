@@ -185,6 +185,14 @@ def main():
             assert doi not in doi_ids or doi_ids[doi] == r['source_id'], f'Duplicate DOI {doi}'
             doi_ids[doi] = r['source_id']
     counts = {'baseline_commit': BASE, 'audit_date': DATE, 'verified_distinct_source_records': len(records), 'original_numbered_records': len(originals), 'additional_records': len(extras), 'by_source_type': dict(sorted(Counter(r['source_type'] for r in records).items())), 'current_access_status': dict(sorted(Counter(r['access_status'] for r in records).items())), 'records_with_fresh_reviewer_annotation': len(reviews), 'baseline_files_scanned': len(files_scanned), 'baseline_file_url_pairs': len(occurrences), 'baseline_unique_external_urls': len(set(x['canonical_url'] for x in occurrences if x['classification'] in ('external_source', 'unresolved_external_url'))), 'unresolved_external_urls': sorted(set(x['canonical_url'] for x in occurrences if x['classification'] == 'unresolved_external_url')), 'unresolved_historical_clusters': [{'id': 'U001', 'description': 'Historical book-lead list absent; handoff mentions 14, exact identities not recovered', 'verified_distinct_count': None}], 'counts_are_not_quality_scores': True}
+    counts['supplement_provenance'] = {
+        'first_publication_commit': 'ade4d1d0c4d5f8e6ca943ea1af9860446ead01d9',
+        'first_publication_distinct_identities': 159,
+        'new_fundamentals_identities': [r['source_id'] for r in extras if r.get('identity_review_file', '').startswith('fundamentals-')],
+        'new_operational_identities': [r['source_id'] for r in extras if r.get('identity_review_file', '').startswith('operational-')],
+        'historical_book_list_recovered': False,
+        'new_references_are_not_recovered_historical_books': True,
+    }
     dump('source-ledger.json', records)
     table('source-ledger.csv', [{k: v for k, v in r.items() if k != 'reviews'} for r in records])
     dump('source-counts.json', counts)

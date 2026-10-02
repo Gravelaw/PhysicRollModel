@@ -1,0 +1,165 @@
+[
+  {
+    "legacy_id": "R154",
+    "title": "A Heat Transfer Textbook",
+    "authors": [
+      "John H. Lienhard V",
+      "John H. Lienhard IV"
+    ],
+    "doi": null,
+    "isbn": null,
+    "url": "https://ahtt.mit.edu/",
+    "supporting_urls": [
+      "https://ahtt.mit.edu/bibtex-entry/",
+      "https://ahtt.mit.edu/table-of-contents/",
+      "https://bpb-us-e1.wpmucdn.com/sites.mit.edu/dist/6/1810/files/2024/04/AHTTv600.pdf"
+    ],
+    "source_type": "book",
+    "version": "Sixth edition, version 6.00, 19 April 2024, Phlogiston Press. Identified through indexed author-site citation and PDF front matter. No sixth-edition ISBN/DOI verified; the fifth-edition ISBN is deliberately not reused.",
+    "access_status": "metadata_only",
+    "pages_equations_tables": "Indexed official contents: Chapter 5, transient/multidimensional conduction; section 5.2, lumped-capacity solutions. Chapters not read.",
+    "findings": "Verified edition-specific lawful textbook lead for heat-transfer fundamentals. Current PDF fetches failed; indexed fragments are not treated as substantive review.",
+    "weaknesses_conflicts": "Browser returned 502/access failure; workspace download returned 403. No equation or coefficient adopted from unread chapters.",
+    "domain": "General engineering heat and mass transfer; not an aluminium rolling calibration source.",
+    "evidence_level": "author_metadata_and_contents",
+    "relevance": "P1 thermal model-assumption and verification reading priority; R158 supplies independently accessible teaching derivation now.",
+    "code_test_mapping": [
+      "physicroll/thermal.py",
+      "physicroll/energy_handoff.py",
+      "tests/test_passive_contact.py",
+      "tests/test_energy_handoff.py"
+    ],
+    "access_date": "2026-10-02",
+    "provenance": "New selection for fundamentals coverage; not recovered from the historical unidentified 14-book list U001.",
+    "redistribution": "Citations and project-authored analysis only; no source PDF or illustrations committed."
+  },
+  {
+    "legacy_id": "R155",
+    "title": "Light Alloys: Metallurgy of the Light Metals",
+    "authors": [
+      "Ian Polmear",
+      "David StJohn",
+      "Jian-Feng Nie",
+      "Ma Qian"
+    ],
+    "doi": null,
+    "isbn": "9780080994314",
+    "url": "https://www.inspectioncopy.elsevier.com/book/details/9780080994314",
+    "supporting_urls": [
+      "https://shop.elsevier.com/books/light-alloys/polmear/978-0-08-099431-4"
+    ],
+    "source_type": "book",
+    "version": "Fifth edition, 29 March 2017, Butterworth-Heinemann/Elsevier, 544 pages; official publisher bibliographic record and contents.",
+    "access_status": "metadata_only",
+    "pages_equations_tables": "Observed TOC: 2.1 Work Hardening and Annealing; 2.2–2.3 age hardening/ageing; 2.5 Mechanical Behaviour; 4.2 alloy/temper designations; 4.3–4.4 non-heat-treatable/heat-treatable wrought alloys. No chapter text read.",
+    "findings": "Publisher contents distinguish aluminium physical metallurgy and wrought-alloy families, giving a targeted acquisition syllabus.",
+    "weaknesses_conflicts": "The publisher description retains an older subtitle while the title heading says Metallurgy of the Light Metals; ISBN and fifth edition pin identity. No constitutive parameters, kinetics or property tables accessed.",
+    "domain": "Aluminium-specific chapters selected; other chapters cover magnesium, titanium and casting.",
+    "evidence_level": "publisher_metadata_and_contents",
+    "relevance": "P1 material-card taxonomy and P2 specimen-state provenance; future P3/P4 material and anneal model selection.",
+    "code_test_mapping": [
+      "physicroll/materials.py: MaterialState and PowerHardeningLaw",
+      "physicroll/schedule.py: interpass state handoff",
+      "tests/test_v03.py",
+      "tests/test_schedule.py"
+    ],
+    "access_date": "2026-10-02",
+    "provenance": "New selection for fundamentals coverage; not recovered from the historical unidentified 14-book list U001.",
+    "redistribution": "Citations and project-authored analysis only; no source PDF or illustrations committed."
+  },
+  {
+    "legacy_id": "R156",
+    "title": "Recrystallization and Related Annealing Phenomena",
+    "authors": [
+      "John Humphreys",
+      "Gregory S. Rohrer",
+      "Anthony Rollett"
+    ],
+    "doi": null,
+    "isbn": "9780080982359",
+    "url": "https://shop.elsevier.com/books/recrystallization-and-related-annealing-phenomena/rollett/978-0-08-098235-9",
+    "supporting_urls": [
+      "https://www.sciencedirect.com/book/monograph/9780080982359/recrystallization-and-related-annealing-phenomena"
+    ],
+    "source_type": "book",
+    "version": "Third edition, 24 July 2017, Elsevier. Publisher shop and indexed ScienceDirect ISBN/edition; no chapter text obtained.",
+    "access_status": "metadata_only",
+    "pages_equations_tables": "Observed contents: chapters 2–3 deformed state/texture; 6 recovery; 7–9 recrystallization of different material classes; 13 dynamic restoration; 14 continuous recrystallization; measurement appendix.",
+    "findings": "The contents provide a mechanism-separated reading plan for recovery and annealing research.",
+    "weaknesses_conflicts": "Official shop TOC jumps from chapter 15 to 18 for computer modelling; numbering is not repaired by guesswork. This third edition must not be attributed to the earlier Humphreys–Hatherly edition. No kinetics constants obtained.",
+    "domain": "General physical metallurgy across material classes; aluminium applicability needs chapter-level verification.",
+    "evidence_level": "publisher_metadata_and_contents",
+    "relevance": "P1 explicit non-capability labels for annealing; P2 treatment-state documentation; future P4 model and measurement selection.",
+    "code_test_mapping": [
+      "physicroll/materials.py: MaterialState",
+      "physicroll/schedule.py: InterpassTemperature",
+      "tests/test_schedule.py"
+    ],
+    "access_date": "2026-10-02",
+    "provenance": "New selection for fundamentals coverage; not recovered from the historical unidentified 14-book list U001.",
+    "redistribution": "Citations and project-authored analysis only; no source PDF or illustrations committed."
+  },
+  {
+    "legacy_id": "R157",
+    "title": "Recovery and Recrystallization: Phenomena, Physics, Models, Simulation",
+    "authors": [
+      "Dierk Raabe"
+    ],
+    "doi": "10.1016/B978-0-444-53770-6.00023-X",
+    "isbn": "9780444537706",
+    "url": "https://www.dierk-raabe.com/app/download/5801853763/Dierk%2BRaabe%2Boverview%2Brecrystallization.pdf",
+    "supporting_urls": [
+      "https://www.sciencedirect.com/science/chapter/edited-volume/pii/B978044453770600023X",
+      "https://shop.elsevier.com/books/physical-metallurgy/laughlin/978-0-444-53770-6"
+    ],
+    "source_type": "book_chapter",
+    "version": "Published chapter 23, Physical Metallurgy, fifth edition, editors David E. Laughlin and Kazuhiro Hono, Elsevier 2014, pp.2291–2397; author-hosted personal copy, 108 PDF pages. Publisher book date 23 July 2014.",
+    "access_status": "partial_text_reviewed",
+    "pages_equations_tables": "Selected §§23.1.1/23.1.3, pp.2291–2298; §23.2.1, pp.2308–2310; §23.8, pp.2375–2377 including unnumbered JMAK expressions; §§23.9.1–23.9.3.2, pp.2378–2382.",
+    "findings": "Recovery reorganizes stored defects; JMAK assumptions restrict a fitted isothermal law. Statistical texture models omit local topology; cellular automata require calibrated physical time and length scales.",
+    "weaknesses_conflicts": "Selected sections, not the entire chapter or book, reviewed. General mechanisms and examples include aluminium and steel; no steel constants transfer to aluminium. Review synthesis is not new plant data.",
+    "domain": "General metallic recovery/recrystallization with explicitly identified aluminium examples.",
+    "evidence_level": "author_hosted_published_chapter_selected_text",
+    "relevance": "P1 state semantics; P2 supplied treatment versus predicted evolution; P4 anneal identifiability and fidelity decision.",
+    "code_test_mapping": [
+      "physicroll/materials.py: MaterialState",
+      "physicroll/schedule.py: InterpassTemperature",
+      "tests/test_schedule.py",
+      "tests/test_v03.py"
+    ],
+    "access_date": "2026-10-02",
+    "provenance": "New selection for fundamentals coverage; not recovered from the historical unidentified 14-book list U001.",
+    "redistribution": "Citations and project-authored analysis only; no source PDF or illustrations committed."
+  },
+  {
+    "legacy_id": "R158",
+    "title": "Part 3: Introduction to Engineering Heat Transfer, MIT 16.050 Thermal Energy",
+    "authors": [
+      "MIT OpenCourseWare; course instructor Zoltan Spakovszky"
+    ],
+    "doi": null,
+    "isbn": null,
+    "url": "https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/87d9f4544b7fd64a77201382500d057c_10_part3.pdf",
+    "supporting_urls": [
+      "https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/"
+    ],
+    "source_type": "teaching_notes",
+    "version": "Fall 2002 course notes, Part 3, 74-page institutional PDF. Course attribution verified; individual section authorship not separately asserted. Not a commercial textbook or Lienhard edition.",
+    "access_status": "partial_text_reviewed",
+    "pages_equations_tables": "§§3.2–3.3, printed HT-25–HT-32, equations 3.16–3.18/3.26–3.27; §6, HT-42–HT-43, equations 6.1–6.6.",
+    "findings": "Derives series conduction/convection resistance and the lumped cooling energy balance, with a small-Biot-number approximation and exponential constant-property limit.",
+    "weaknesses_conflicts": "Aerospace/general teaching examples do not calibrate roll-strip conductance or coolant coefficients. A fixed-temperature reservoir solution is not the exact finite-capacity two-body contact solution.",
+    "domain": "General continuum heat transfer; no aluminium-specific property validation.",
+    "evidence_level": "official_teaching_text_selected_sections",
+    "relevance": "P1 dimensional, equilibrium-limit and timestep verification; P2 reject thermal validation claims from force-only evidence.",
+    "code_test_mapping": [
+      "physicroll/thermal.py",
+      "physicroll/energy_handoff.py: HeatCapacityCurve and PassiveContactBoundary",
+      "tests/test_passive_contact.py",
+      "tests/test_energy_handoff.py"
+    ],
+    "access_date": "2026-10-02",
+    "provenance": "New selection for fundamentals coverage; not recovered from the historical unidentified 14-book list U001.",
+    "redistribution": "Citations and project-authored analysis only; no source PDF or illustrations committed."
+  }
+]

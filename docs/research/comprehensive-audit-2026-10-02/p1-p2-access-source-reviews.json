@@ -1,0 +1,181 @@
+{
+  "schema_version": "1.0",
+  "review_date": "2026-10-02",
+  "scope": "Targeted existing-source access for P1 numerical/semantic and P2 conditional AA5052 decisions; no new identities",
+  "access_rule": "Availability is not exhaustive reading. Partial means relevant body sections reviewed. Previous annotations and locators must be retained, including failed access. No new code or simulations.",
+  "sources": [
+    {
+      "legacy_id": "R001",
+      "title": "The Calculation of Roll Force and Torque in Cold Strip Rolling with Tensions",
+      "doi": "10.1243/PIME_PROC_1948_159_015_02",
+      "url": "https://journals.sagepub.com/doi/10.1243/PIME_PROC_1948_159_015_02",
+      "version": "1948 publisher landing page/abstract; original article full text restricted",
+      "access_date": "2026-10-02",
+      "access_status": "abstract_only",
+      "pages_equations_tables": [
+        "Publisher abstract; equations/tables not accessed"
+      ],
+      "findings": "Primary abstract describes approximate force/torque calculation with tension and discusses power.",
+      "weaknesses_conflicts": "No equation-level reproduction or transferable accuracy bound established. Full PDF retrieval failed and publisher indicates restricted access.",
+      "domain": "Cold strip rolling; no aluminium-specific calibration established from abstract",
+      "evidence_level": "Primary abstract only",
+      "relevance": "P1: recover if claiming exact Bland–Ford reproduction; accessible derivations can support generic slab verification without that claim.",
+      "fresh_access_detail": "Fresh publisher abstract read; no original body read."
+    },
+    {
+      "legacy_id": "R002",
+      "title": "The Calculation of Roll Pressure in Hot and Cold Flat Rolling",
+      "doi": "10.1243/PIME_PROC_1943_150_025_02",
+      "url": "https://journals.sagepub.com/doi/10.1243/PIME_PROC_1943_150_025_02",
+      "version": "1943 publisher landing page/abstract; original article full text restricted",
+      "access_date": "2026-10-02",
+      "access_status": "abstract_only",
+      "pages_equations_tables": [
+        "Publisher abstract; equations/tables not accessed"
+      ],
+      "findings": "Primary abstract covers pressure integration, variable friction/yield strength and shear limitation/sticking.",
+      "weaknesses_conflicts": "No original equation audit. Restricted full text and failed PDF retrieval leave source-specific approximations unresolved.",
+      "domain": "Hot/cold flat rolling; generic theory",
+      "evidence_level": "Primary abstract only",
+      "relevance": "P1: exact historical provenance remains open; P4 sticking requires an accessible pinned formulation rather than inferred equations.",
+      "fresh_access_detail": "Fresh publisher abstract read; no original body read."
+    },
+    {
+      "legacy_id": "R007",
+      "title": "Deformations and velocities during the cold rolling of aluminium alloys",
+      "doi": "10.17222/mit.2014.250",
+      "url": "https://www.researchgate.net/publication/291527264_Deformations_and_velocities_during_the_cold_rolling_of_aluminium_alloys",
+      "version": "Materials and technology 50(2016)1,59–67; coauthor Milojica Jacimovic upload dated 18 April 2016",
+      "access_date": "2026-10-02",
+      "access_status": "partial_text_reviewed",
+      "pages_equations_tables": [
+        "pp. 59–61 Eqs.1–5 and §§2.1–2.2.3",
+        "pp. 62–64 §§3.1–3.3.3; Fig.4 caption"
+      ],
+      "findings": "AW2024/5083 experiments support a geometry/strain-field reserve case. Laboratory roll diameter 125 mm, peripheral speed 173.4 mm/s, no applied strip tension. Friction 0.1 is adopted after sensitivity study, not independently measured.",
+      "weaknesses_conflicts": "Eq. 1 extracted signs need rendered verification; high-strain hardening uses post-rolling tensile yield rather than continuous tensile extrapolation. Mesh adequacy assessed from displacement; not every output. No AA5052 material transfer.",
+      "domain": "AW2024 and AW5083 cold rolling,4–0.6 mm study range",
+      "evidence_level": "Primary author-upload article; targeted body review",
+      "relevance": "P1 strain/kinematics checks and P2 reserve study design; not a replacement for Shao history or friction provenance.",
+      "fresh_access_detail": "Official https://mit.imt.si/izvodi/mit161/misovic.pdf timed out. Author-upload full text available; relevant experimental/model sections read; no fresh visual inspection or exhaustive full-paper review."
+    },
+    {
+      "legacy_id": "R008",
+      "title": "A study of friction during the lubricated cold rolling of an aluminum alloy",
+      "doi": "10.1016/S0924-0136(97)00183-0",
+      "url": "https://www.sciencedirect.com/science/article/abs/pii/S0924013697001830",
+      "version": "1997 article identity retained from existing library; primary body unavailable in this access attempt",
+      "access_date": "2026-10-02",
+      "access_status": "metadata_only",
+      "pages_equations_tables": [
+        "No fresh primary body/equation/table access"
+      ],
+      "findings": "Targeted publisher retrieval did not establish substantive primary content.",
+      "weaknesses_conflicts": "Publisher web and Exa retrieval failed. Author institutional publications page did not expose this article; do not attribute a friction law or numerical dataset from secondary citation snippets.",
+      "domain": "Lubricated aluminium cold rolling; exact alloy/case not freshly verified",
+      "evidence_level": "Metadata lead only",
+      "relevance": "P2/P3: useful targeted retrieval for independent friction identification; not prerequisite to fixed-input conditional replay.",
+      "fresh_access_detail": "Attempted official publisher URL and https://www.eng.uwaterloo.ca/~jglenard/publications.html; no full text recovered."
+    },
+    {
+      "legacy_id": "R013",
+      "title": "Computationally Effective Modeling of Cold Rolling: Application to Al Alloys",
+      "doi": "10.3390/met15010011",
+      "url": "https://www.mdpi.com/2075-4701/15/1/11",
+      "version": "Metals 2025,15(1),11; published 27 December 2024; current republished HTML states minor typographical correction without dated version identifier",
+      "access_date": "2026-10-02",
+      "access_status": "partial_text_reviewed",
+      "pages_equations_tables": [
+        "§3 material/DEFORM setup",
+        "§4.1 fitting ranges; Eqs.16–20",
+        "§§4.2–4.4 velocity construction; Eqs.22–39",
+        "§5 casesA–E and Figs.9–14 captions",
+        "Data Availability and Correction Statements"
+      ],
+      "findings": "AA1050 flowline model uses FE-derived coefficients and compares simulated velocities plus experimental distortion patterns. Thermal effects omitted. Underlying data are on request, not publicly released.",
+      "weaknesses_conflicts": "Material constants borrowed from reference25. Published case B gauges0.5625→0.4615 mm imply 17.956% reduction, unlike 17.24% stated; case D2.53→1.81 implies 28.458%, unlike 28.09%. Equation extraction needs visual QA; no measured force/torque validation.",
+      "domain": "AA1050 symmetric cold rolling;150 mm diameter laboratory rolls",
+      "evidence_level": "Primary open publisher article; relevant body reviewed",
+      "relevance": "P1 kinematics alternative and P2 reserve distortion study, not a directly executable independent AA5052 benchmark.",
+      "fresh_access_detail": "Web429 response; Exa recovered official HTML. Reviewed §§3–5, equations as extracted text and data/version statements; figures not visually inspected. No full-paper completeness claim."
+    },
+    {
+      "legacy_id": "R050",
+      "title": "Experimental and numerical analysis of the heat generated by plastic deformation in quasi-static uniaxial tensile tests",
+      "doi": "10.1016/j.mechmat.2020.103398",
+      "url": "https://hal.science/hal-04699292v1/file/R2.20.pdf",
+      "version": "HAL hal-04699292v1, deposited 18 November 2024; 2020 Journal Pre-proof, not definitive version of record",
+      "access_date": "2026-10-02",
+      "access_status": "partial_text_reviewed",
+      "pages_equations_tables": [
+        "Manuscript pp. 10–17 §§3.1,4.1–4.2, Eqs.2–6",
+        "Appendix A pp. 27–28",
+        "Tables 2–4 pp. 60–62; Figs.12–19 captions"
+      ],
+      "findings": "AA6016-T4 tensile heating depends on losses, aging and plastic-work conversion. Eq.3 uses a differential Taylor–Quinney fraction; low-rate tests are nonadiabatic. The study compares constant and strain-dependent conversion.",
+      "weaknesses_conflicts": "Not rolling or AA5052. Coefficients and aging-specific Voce fits cannot transfer. Manuscript cover metadata omit Neto while article title page includes him. Parameter fits and shared experimental comparisons are not blind validation.",
+      "domain": "AA6016-T4 quasi-static tension;1/18-month natural aging,0.01–1 mm/s crosshead velocities",
+      "evidence_level": "Primary accepted/pre-proof author manuscript in official repository; targeted body review",
+      "relevance": "P1 source/source-term semantics and later thermal experiment design. Does not repair the zero-source I01 integration failure or establish roll-strip conductance.",
+      "fresh_access_detail": "Exa recovered official HAL full manuscript after web bot response. Relevant model/results, tables and Appendix A read as extracted text; no rendered-equation/figure QA."
+    },
+    {
+      "legacy_id": "R051",
+      "title": "Heat generation caused by frictional sliding",
+      "doi": null,
+      "url": "https://docs.software.vt.edu/abaqusv2024/English/SIMACAETHERefMap/simathe-c-fricheatgen.htm",
+      "version": "SIMULIA Abaqus 2024 online theory documentation, exact existing version",
+      "access_date": "2026-10-02",
+      "access_status": "official_document_reviewed",
+      "pages_equations_tables": [
+        "Opening heat-generation and contact-interface assumptions",
+        "Unnumbered q1,q2,qg,qk flux equations",
+        "Eq. 1 weak-form Jacobian and following derivatives"
+      ],
+      "findings": "Defines separate friction-to-heat fraction and body partitions; contact flux has outward signs on each body. Conduction uses a heat-transfer coefficient times temperature difference; surface integration yields power.",
+      "weaknesses_conflicts": "Software convention, not measured aluminium partition/conductance. Zero interface heat capacity is an assumption. Local constitutive equations do not establish finite-step entropy preservation.",
+      "domain": "Generic coupled contact heat transfer/friction in Abaqus",
+      "evidence_level": "Official software theory body",
+      "relevance": "P1: distinguish W/m² flux, W integrated power and W/K lumped conductance; check traction/slip signs and source partitions.",
+      "fresh_access_detail": "Exact 2024 official page recovered through Exa; full short text body reviewed. 2025 official counterpart was also reachable, but no substitution of version needed."
+    },
+    {
+      "legacy_id": "R078",
+      "title": "Large strain work hardening of aluminum alloys and the effect of mg in solid solution",
+      "doi": "10.1007/s11661-006-0143-6",
+      "url": "https://link.springer.com/article/10.1007/s11661-006-0143-6",
+      "version": "Metallurgical and Materials Transactions A 37,2007–2013(2006); publisher abstract/subscription preview",
+      "access_date": "2026-10-02",
+      "access_status": "abstract_only",
+      "pages_equations_tables": [
+        "Primary abstract and bibliographic/availability fields only"
+      ],
+      "findings": "Abstract reports compression/cold-rolling tests across Al-Mg compositions and altered high-strain hardening associated with microstructure.",
+      "weaknesses_conflicts": "No accessed curves, equations, parameter table or exact AA5052 case; cannot derive an incoming material card or extrapolation limit.",
+      "domain": "Al-Mg 0.5–4.55 wt% Mg; high-strain work hardening",
+      "evidence_level": "Primary abstract only",
+      "relevance": "P2/P3 science-priority retrieval if replacing synthetic effective-history with an identified high-strain law; not required for explicitly conditional one-parameter replay.",
+      "fresh_access_detail": "Fresh official Springer abstract read. Publisher labels content subscription preview; targeted search found institutional citation/profile rather than public primary full text."
+    },
+    {
+      "legacy_id": "R121",
+      "title": "The International System of Units (SI),9th edition",
+      "doi": "10.59161/AUEZ1291",
+      "url": "https://www.bipm.org/en/publications/si-brochure",
+      "version": "Official English PDF title:9th edition/version 4.01, current 2026 body; download query version7.0 is transport metadata, not edition 7",
+      "access_date": "2026-10-02",
+      "access_status": "official_document_reviewed",
+      "pages_equations_tables": [
+        "Printed p. 129 kelvin/Celsius relation",
+        "Printed pp. 133–136 Tables4–5 and quantity/unit distinction",
+        "Printed pp. 144–146 §§5.4.2,5.4.5,5.4.7"
+      ],
+      "findings": "Supports force/stress, heat/power and torque unit contracts. Identical dimensions do not identify quantities; absolute temperatures differ from intervals.",
+      "weaknesses_conflicts": "Cannot resolve paper-specific tension meaning, radius versus diameter, torque scope, sign or strain convention. Only relevant sections reviewed.",
+      "domain": "Cross-domain SI metrology",
+      "evidence_level": "Official normative reference body",
+      "relevance": "P1 dimensional adapters and explicit physical-quantity labels.",
+      "fresh_access_detail": "Read official PDF relevant body; direct URL https://www.bipm.org/documents/20126/41483022/SI-Brochure-9-EN.pdf/2d2b50bf-f2b4-9661-f402-5f9d66e4b507?download=true&t=1780410776583&version=7.0 . No claim to have read all 102 PDF pages."
+    }
+  ]
+}

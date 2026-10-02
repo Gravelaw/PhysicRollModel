@@ -1,32 +1,34 @@
 {
   "baseline_commit": "caec37ef86a8b78e1eb88292ea6368bfb64bcbdc",
   "audit_date": "2026-10-02",
-  "verified_distinct_source_records": 159,
+  "verified_distinct_source_records": 182,
   "original_numbered_records": 105,
-  "additional_records": 54,
+  "additional_records": 77,
   "by_source_type": {
+    "book_chapter": 1,
     "dataset_repository": 3,
-    "oem_industry": 43,
+    "oem_industry": 48,
     "official_guidance": 1,
     "official_software": 14,
     "official_standard": 1,
-    "patent": 1,
-    "scholarly": 81,
+    "patent": 2,
+    "scholarly": 84,
     "secondary_orientation": 11,
-    "teaching": 1,
+    "teaching": 3,
+    "textbook_monograph": 11,
     "thesis": 2,
     "video": 1
   },
   "current_access_status": {
-    "abstract_only": 31,
+    "abstract_only": 34,
     "full_text_reviewed": 16,
-    "metadata_only": 20,
+    "metadata_only": 21,
     "not_retrieved_orientation_only": 11,
-    "official_document_reviewed": 50,
-    "partial_text_reviewed": 24,
-    "unavailable": 7
+    "official_document_reviewed": 57,
+    "partial_text_reviewed": 37,
+    "unavailable": 6
   },
-  "records_with_fresh_reviewer_annotation": 148,
+  "records_with_fresh_reviewer_annotation": 171,
   "baseline_files_scanned": 140,
   "baseline_file_url_pairs": 450,
   "baseline_unique_external_urls": 178,
@@ -38,5 +40,38 @@
       "verified_distinct_count": null
     }
   ],
-  "counts_are_not_quality_scores": true
+  "counts_are_not_quality_scores": true,
+  "supplement_provenance": {
+    "first_publication_commit": "ade4d1d0c4d5f8e6ca943ea1af9860446ead01d9",
+    "first_publication_distinct_identities": 159,
+    "new_fundamentals_identities": [
+      "R154",
+      "R155",
+      "R156",
+      "R157",
+      "R158",
+      "R149",
+      "R150",
+      "R151",
+      "R152",
+      "R159",
+      "R160",
+      "R161",
+      "R162",
+      "R163"
+    ],
+    "new_operational_identities": [
+      "R164",
+      "R165",
+      "R166",
+      "R168",
+      "R171",
+      "R172",
+      "R167",
+      "R169",
+      "R170"
+    ],
+    "historical_book_list_recovered": false,
+    "new_references_are_not_recovered_historical_books": true
+  }
 }

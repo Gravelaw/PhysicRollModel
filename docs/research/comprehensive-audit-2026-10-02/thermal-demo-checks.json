@@ -1,0 +1,3133 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-02",
+  "physics_baseline_commit": "caec37ef86a8b78e1eb88292ea6368bfb64bcbdc",
+  "documentation_checkout_commit_at_start": "ade4d1d0c4d5f8e6ca943ea1af9860446ead01d9",
+  "python": "3.12.14",
+  "status": "DOCUMENTATION_ONLY_SYNTHETIC_NUMERICAL_HANDOFF_NO_PHYSICAL_VALIDATION",
+  "source_sha256": {
+    "scenarios/baseline.json": "46400358b613f0f8240a2e0779ca26ea2af62e22789a6c35ee174a5a454a39d0",
+    "scenarios/v03_foundations.json": "1e76ae82540817aa87ed071da84c2d65b4c3e2b72a5f85567cc83b34d13f1a91",
+    "scenarios/flowing_energy_demo.json": "5ca667a5bb6c5243de0a2e0fcd63e9c329203d8fa122c4749c37db0ac23d6848",
+    "scenarios/passive_contact_demo.json": "ef24196b6c6bc37712eeaf826bc4efd88014dbf675c568e8e5d3233bed292607",
+    "physicroll/energy_handoff.py": "28867e9dc3f3db2cd56d314dbd82eafbf1a0bebb39232d96d04d90fd9a9ed821",
+    "physicroll/thermal.py": "00aafdd799b7432ae9d5a73c6c314db4bc966beaa692b6abae3f8accedd2f3e1",
+    "physicroll/checked_schedule.py": "831ac024cd220cf4ab6cf820ac52a5bced0c55ea2e3cb33b5f46772f953e9783",
+    "physicroll/slab.py": "88d3795c125cb612b5fbc1a460c8cd15a1685cc84fd638e28cb9821f6710a265",
+    "physicroll/materials.py": "656850daa6757c58a9e0ce1372dc298f622f633b3ce20df3aaf6deb9aaf714d4",
+    "scripts/run_flowing_energy_demo.py": "07d28c143a208ed9cead831106d798b647cb136c32f48222d1b8828f69d2f70e",
+    "scripts/build_v03.py": "132bad3d48735f2d761af889cf4f3d07108114b870ebf432431beda0e03ed588",
+    "scripts/run_v03_study.py": "c2b3eef8aa2b9c4fd6efa780f664aeea515bdff18a67b6421ed05efa49b19aa2",
+    "tests/test_checked_schedule.py": "099273f3d63872618c60b6abcc42f1dad9ac9989634c6634d1804c1df40e996c",
+    "tests/test_energy_handoff.py": "83120d931af2f8b79f6eefc8f28efc8fd8be4e3324a0ce2ef4c90e95ab5ee0f1",
+    "tests/test_passive_contact.py": "5e2bb755fc87989d25433a3cef82d4a4027838bc8218b1112ff320c9fbc9797a"
+  },
+  "stored_artifact_replays": [
+    {
+      "stored_path": "artifacts/v03_foundations.result.json",
+      "fresh_path": "/tmp/physicroll-thermal-handoff-2026-10-02/v03_foundations.result.json",
+      "exact_command": "python scripts/build_v03.py --out /tmp/physicroll-thermal-handoff-2026-10-02/v03_foundations.result.json",
+      "stored_sha256": "1c27fbc00bc9d5d37a5b6d3f883a96d7305fa36dddc6cb9f51a36bd133000779",
+      "fresh_sha256": "cf9c076dc85c6ab986639f2bdf8625bab91dd8f0d31ef28d7c0cde9429b792d4",
+      "byte_identical": false,
+      "semantic_difference": {
+        "thermal_section_identical": true,
+        "added_slab_optional_fields": [
+          "contact_radius_m",
+          "entry_plane_strain_strength_pa",
+          "exit_plane_strain_strength_pa",
+          "physical_roll_radius_m",
+          "roll_angular_speed_rad_s"
+        ],
+        "changed_existing_fields": []
+      }
+    },
+    {
+      "stored_path": "artifacts/v03_sensitivity.json",
+      "fresh_path": "/tmp/physicroll-thermal-handoff-2026-10-02/v03_sensitivity.json",
+      "exact_command": "python scripts/run_v03_study.py --out /tmp/physicroll-thermal-handoff-2026-10-02/v03_sensitivity.json",
+      "stored_sha256": "fcf0e7b35ad9a6f2489c05afe9126d86f71c1c4d143fda37e6ef79ab5fa912d8",
+      "fresh_sha256": "fcf0e7b35ad9a6f2489c05afe9126d86f71c1c4d143fda37e6ef79ab5fa912d8",
+      "byte_identical": true
+    },
+    {
+      "stored_path": "artifacts/flowing_energy_demo.json",
+      "fresh_path": "/tmp/physicroll-thermal-handoff-2026-10-02/flowing_energy_demo.json",
+      "exact_command": "python scripts/run_flowing_energy_demo.py --config scenarios/flowing_energy_demo.json --out /tmp/physicroll-thermal-handoff-2026-10-02/flowing_energy_demo.json",
+      "stored_sha256": "70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4",
+      "fresh_sha256": "70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4",
+      "byte_identical": true
+    },
+    {
+      "stored_path": "artifacts/passive_contact_demo.json",
+      "fresh_path": "/tmp/physicroll-thermal-handoff-2026-10-02/passive_contact_demo.json",
+      "exact_command": "python scripts/run_flowing_energy_demo.py --config scenarios/passive_contact_demo.json --out /tmp/physicroll-thermal-handoff-2026-10-02/passive_contact_demo.json",
+      "stored_sha256": "1ec69cf7cec240845f5c251bab49b11f9989f999289df085c49166ec245a3942",
+      "fresh_sha256": "1ec69cf7cec240845f5c251bab49b11f9989f999289df085c49166ec245a3942",
+      "byte_identical": true
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "flowing_energy_demo_pass_1",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 269560.44119520544,
+          "plastic_work_power_w": 220846.09441345636,
+          "solid_slip_dissipation_both_interfaces_w": 68714.33893978935,
+          "net_tension_power_w": 20000.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.007841959726647474,
+          "mechanical_work_residual_relative": 2.9091656371672965e-08,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.2,
+          "solid_slip_to_strip_fraction": 0.6,
+          "contact_heat_to_strip_w": -2000.0,
+          "strip_cooling_w": 5000.0,
+          "roll_cooling_w": 3000.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.0,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS1",
+          "quality": "synthetic"
+        },
+        "passive_contact": null
+      },
+      "ordinary_diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 295.0,
+        "strip_out_k": 308.15568454799507,
+        "roll_out_k": 295.5811308173966,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2000.0,
+        "thermal_first_law_residual_w": -1.1496013030409813e-09,
+        "thermal_first_law_residual_relative": 5.2054409478881644e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 347.5291279311981,
+        "strip_entropy_flow_gain_w_k": 257.83529485468165,
+        "roll_entropy_storage_rate_w_k": 89.69383307651646,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      },
+      "isolated_contact_api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": -2000.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.0,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS1",
+          "quality": "synthetic"
+        },
+        "passive_contact": null
+      },
+      "isolated_contact_diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 295.0,
+        "strip_out_k": 299.79162253983674,
+        "roll_out_k": 295.0438892827513,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2000.0,
+        "thermal_first_law_residual_w": 1.0024905350292102e-09,
+        "thermal_first_law_residual_relative": 5.012452675143315e-13,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 0.11017372025877581,
+        "strip_entropy_flow_gain_w_k": -6.668983015011783,
+        "roll_entropy_storage_rate_w_k": 6.779156735270559,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": true,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      },
+      "time_refinements": [
+        {
+          "substeps": 1,
+          "duration_each_s": 5.0,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.5811308173966,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 1.1496013030409813e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 347.5291279311981
+        },
+        {
+          "substeps": 2,
+          "duration_each_s": 2.5,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.5811308173967,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 1.5279510989785194e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 347.5291279312069,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 4,
+          "duration_each_s": 1.25,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.5811308173967,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 2.2846506908535957e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 347.5291279312069,
+          "roll_change_from_prior_grid_k": 0.0,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 8,
+          "duration_each_s": 0.625,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.5811308173966,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 1.025910023599863e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 347.5291279311981,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 16,
+          "duration_each_s": 0.3125,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.5811308173968,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 2.0445440895855427e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 347.5291279312244,
+          "roll_change_from_prior_grid_k": 1.7053025658242404e-13,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 32,
+          "duration_each_s": 0.15625,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 295.58113081739674,
+          "strip_enthalpy_mean_out_k": 308.15568454799507,
+          "last_fresh_stream_out_k": 308.15568454799507,
+          "average_contact_heat_w": -2000.0,
+          "max_substep_first_law_residual_w": 4.372850526124239e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 347.52912793121567,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        }
+      ],
+      "heat_partition_sensitivity_checks": [
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.019391111660481e-15,
+          "strip_out_k": 299.27060933583533,
+          "roll_out_k": 296.48535549239256
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.0969079057056168e-15,
+          "strip_out_k": 302.848714819661,
+          "roll_out_k": 295.73186734360934
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.5155081240687061e-15,
+          "strip_out_k": 306.4221449950406,
+          "roll_out_k": 294.97805494607707
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.019391111660481e-15,
+          "strip_out_k": 310.75393947025543,
+          "roll_out_k": 296.48535549239256
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.0969079057056168e-15,
+          "strip_out_k": 314.31708349762926,
+          "roll_out_k": 295.73186734360934
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.2519414937958876e-15,
+          "strip_out_k": 317.87561054408866,
+          "roll_out_k": 294.97805494607707
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 5.86435752357021e-15,
+          "strip_out_k": 322.18939084891923,
+          "roll_out_k": 296.48535549239256
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.3484675624964168e-15,
+          "strip_out_k": 325.73775954305336,
+          "roll_out_k": 295.73186734360934
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.6050131078055903e-16,
+          "strip_out_k": 329.28156838102024,
+          "roll_out_k": 294.97805494607707
+        }
+      ],
+      "status": "REPRODUCED_BOUNDED_SYNTHETIC_LEDGER; PHYSICAL_VALIDATION_UNAVAILABLE"
+    },
+    {
+      "case_id": "flowing_energy_demo_pass_2",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 12.844596039004566,
+          "entry_plane_strain_strength_pa": 205248228.4042711,
+          "exit_plane_strain_strength_pa": 218768998.94607168,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.03465661357733135,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.005280421421028123,
+          "contact_length_m": 0.008658954902296238,
+          "neutral_thickness_m": 0.0012456600387753395,
+          "roll_surface_speed_m_s": 3.2111490097511415,
+          "entry_speed_m_s": 2.6666666666666665,
+          "exit_speed_m_s": 3.3333333333333335,
+          "forward_slip_fraction": 0.03805003231278303,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2195671.795735668,
+          "torque_per_work_roll_nm": 8867.498513471628,
+          "roll_mechanical_power_both_rolls_w": 227798.8725640331,
+          "plastic_work_power_w": 189561.31407642007,
+          "solid_slip_dissipation_both_interfaces_w": 58237.54299573896,
+          "net_tension_power_w": 20000.0,
+          "traction_power_to_strip_w": 169561.32956829414,
+          "mechanical_work_residual_w": 0.015491874088183977,
+          "mechanical_work_residual_relative": 6.800680755708872e-08,
+          "entry_pressure_pa": 195248228.4042711,
+          "exit_pressure_pa": 203768998.94607168,
+          "pressure_at_neutral_pa": 325121402.7619537,
+          "max_pressure_pa": 325121402.7619537,
+          "min_pressure_pa": 195248228.4042711,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.23995532976913483,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 308.15568454799507
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.6898506227805066,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline",
+                "synthetic_aluminium_second_pass"
+              ],
+              "temperature_k": 308.15568454799507
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.3935808552237303e-07,
+            "torque_change_over_capacity": 8.748883770451281e-09,
+            "slip_absolute_change": 4.023205546488384e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+          "history": [
+            "synthetic-prior-processing",
+            "synthetic_aluminium_baseline"
+          ],
+          "temperature_k": 308.15568454799507
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.2,
+          "solid_slip_to_strip_fraction": 0.6,
+          "contact_heat_to_strip_w": -2300.0,
+          "strip_cooling_w": 5500.0,
+          "roll_cooling_w": 3200.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.5811308173966,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS2; roll temperature carried from pass1",
+          "quality": "synthetic"
+        },
+        "passive_contact": null
+      },
+      "ordinary_diagnostics": {
+        "strip_in_k": 308.15568454799507,
+        "roll_in_k": 295.5811308173966,
+        "strip_out_k": 314.9049166819678,
+        "roll_out_k": 296.07235566014253,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2300.0,
+        "thermal_first_law_residual_w": -7.130438461899757e-10,
+        "thermal_first_law_residual_relative": 3.761547284392205e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 284.5337185210436,
+        "strip_entropy_flow_gain_w_k": 208.83055108604455,
+        "roll_entropy_storage_rate_w_k": 75.7031674349991,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      },
+      "isolated_contact_api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 12.844596039004566,
+          "entry_plane_strain_strength_pa": 205248228.4042711,
+          "exit_plane_strain_strength_pa": 218768998.94607168,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.03465661357733135,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.005280421421028123,
+          "contact_length_m": 0.008658954902296238,
+          "neutral_thickness_m": 0.0012456600387753395,
+          "roll_surface_speed_m_s": 3.2111490097511415,
+          "entry_speed_m_s": 2.6666666666666665,
+          "exit_speed_m_s": 3.3333333333333335,
+          "forward_slip_fraction": 0.03805003231278303,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2195671.795735668,
+          "torque_per_work_roll_nm": 8867.498513471628,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 169561.32956829414,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 195248228.4042711,
+          "exit_pressure_pa": 203768998.94607168,
+          "pressure_at_neutral_pa": 325121402.7619537,
+          "max_pressure_pa": 325121402.7619537,
+          "min_pressure_pa": 195248228.4042711,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.23995532976913483,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 308.15568454799507
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.6898506227805066,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline",
+                "synthetic_aluminium_second_pass"
+              ],
+              "temperature_k": 308.15568454799507
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.3935808552237303e-07,
+            "torque_change_over_capacity": 8.748883770451281e-09,
+            "slip_absolute_change": 4.023205546488384e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+          "history": [
+            "synthetic-prior-processing",
+            "synthetic_aluminium_baseline"
+          ],
+          "temperature_k": 308.15568454799507
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": -2300.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.5811308173966,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS2; roll temperature carried from pass1",
+          "quality": "synthetic"
+        },
+        "passive_contact": null
+      },
+      "isolated_contact_diagnostics": {
+        "strip_in_k": 308.15568454799507,
+        "roll_in_k": 295.5811308173966,
+        "strip_out_k": 307.9167624088632,
+        "roll_out_k": 295.6315866523821,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2300.0,
+        "thermal_first_law_residual_w": -3.306013240944594e-10,
+        "thermal_first_law_residual_relative": 1.4373970612802583e-13,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 0.31396283273033987,
+        "strip_entropy_flow_gain_w_k": -7.466654656299194,
+        "roll_entropy_storage_rate_w_k": 7.780617489029534,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": true,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      },
+      "time_refinements": [
+        {
+          "substeps": 1,
+          "duration_each_s": 5.0,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.07235566014253,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 7.130438461899757e-10,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210436
+        },
+        {
+          "substeps": 2,
+          "duration_each_s": 2.5,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.0723556601426,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 2.371962182223797e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210524,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 4,
+          "duration_each_s": 1.25,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.07235566014253,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 4.1763996705412865e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210436,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 8,
+          "duration_each_s": 0.625,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.07235566014253,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 6.00994098931551e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210436,
+          "roll_change_from_prior_grid_k": 0.0,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 16,
+          "duration_each_s": 0.3125,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.0723556601426,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 2.3093889467418194e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210524,
+          "roll_change_from_prior_grid_k": 5.684341886080802e-14,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        },
+        {
+          "substeps": 32,
+          "duration_each_s": 0.15625,
+          "unchanged_conductance_w_k": null,
+          "roll_out_k": 296.0723556601424,
+          "strip_enthalpy_mean_out_k": 314.9049166819678,
+          "last_fresh_stream_out_k": 314.9049166819678,
+          "average_contact_heat_w": -2300.0,
+          "max_substep_first_law_residual_w": 4.3466570787131786e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 284.5337185210261,
+          "roll_change_from_prior_grid_k": 1.7053025658242404e-13,
+          "strip_mean_change_from_prior_grid_k": 0.0
+        }
+      ],
+      "heat_partition_sensitivity_checks": [
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.226221862191305e-15,
+          "strip_out_k": 307.3453423615537,
+          "roll_out_k": 296.8385296098189
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.682742537712745e-15,
+          "strip_out_k": 310.3692706211267,
+          "roll_out_k": 296.20007458404973
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 7.292795755454275e-15,
+          "strip_out_k": 313.3898681200667,
+          "roll_out_k": 295.5613868341443
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.305026608870765e-15,
+          "strip_out_k": 317.1759240125966,
+          "roll_out_k": 296.8385296098189
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.989807622152925e-15,
+          "strip_out_k": 320.18905096498565,
+          "roll_out_k": 296.20007458404973
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 7.906925924334635e-15,
+          "strip_out_k": 323.1988826824949,
+          "roll_out_k": 295.5613868341443
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.6120916933109449e-15,
+          "strip_out_k": 326.97147783760556,
+          "roll_out_k": 296.8385296098189
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.3473553080674775e-15,
+          "strip_out_k": 329.97391840713664,
+          "roll_out_k": 296.20007458404973
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 6.002693617724891e-15,
+          "strip_out_k": 332.9730986404738,
+          "roll_out_k": 295.5613868341443
+        }
+      ],
+      "status": "REPRODUCED_BOUNDED_SYNTHETIC_LEDGER; PHYSICAL_VALIDATION_UNAVAILABLE"
+    },
+    {
+      "case_id": "passive_contact_demo_pass_1",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 269560.44119520544,
+          "plastic_work_power_w": 220846.09441345636,
+          "solid_slip_dissipation_both_interfaces_w": 68714.33893978935,
+          "net_tension_power_w": 20000.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.007841959726647474,
+          "mechanical_work_residual_relative": 2.9091656371672965e-08,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.2,
+          "solid_slip_to_strip_fraction": 0.6,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 5000.0,
+          "roll_cooling_w": 3000.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.0,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PASSIVE_CONTACT_BOUNDARY_PASS1",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000.0,
+          "source": "SYNTHETIC_TOTAL_TWO_INTERFACE_CONDUCTANCE_UNCALIBRATED",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "ordinary_diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 295.0,
+        "strip_out_k": 307.49230748083033,
+        "roll_out_k": 295.72120906724325,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -8385.54920679416,
+        "thermal_first_law_residual_w": -1.1496013030409813e-09,
+        "thermal_first_law_residual_relative": 5.2054409478881644e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 348.3832189325236,
+        "strip_entropy_flow_gain_w_k": 237.09113103654752,
+        "roll_entropy_storage_rate_w_k": 111.29208789597608,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 0.7837899092926979,
+        "contact_law_residual_w": -6.45741238258779e-10
+      },
+      "isolated_contact_api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.0,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PASSIVE_CONTACT_BOUNDARY_PASS1",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000.0,
+          "source": "SYNTHETIC_TOTAL_TWO_INTERFACE_CONDUCTANCE_UNCALIBRATED",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "isolated_contact_diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 295.0,
+        "strip_out_k": 299.5099373434352,
+        "roll_out_k": 295.1032118602501,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -4703.362741587216,
+        "thermal_first_law_residual_w": -4.3382897274568677e-10,
+        "thermal_first_law_residual_relative": 9.223804256256133e-14,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 0.2501194171133001,
+        "strip_entropy_flow_gain_w_k": -15.690694619940716,
+        "roll_entropy_storage_rate_w_k": 15.940814037054016,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": true,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 0.25012239333034003,
+        "contact_law_residual_w": 5.326000973582268e-09
+      },
+      "time_refinements": [
+        {
+          "substeps": 1,
+          "duration_each_s": 5.0,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72120906724325,
+          "strip_enthalpy_mean_out_k": 307.49230748083033,
+          "last_fresh_stream_out_k": 307.49230748083033,
+          "average_contact_heat_w": -8385.54920679416,
+          "max_substep_first_law_residual_w": 1.1496013030409813e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 348.3832189325236
+        },
+        {
+          "substeps": 2,
+          "duration_each_s": 2.5,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72118928215224,
+          "strip_enthalpy_mean_out_k": 307.49240119337605,
+          "last_fresh_stream_out_k": 307.5102088824955,
+          "average_contact_heat_w": -8384.647255751726,
+          "max_substep_first_law_residual_w": 2.2264430299401283e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 348.3830860348684,
+          "roll_change_from_prior_grid_k": 1.9785091012636258e-05,
+          "strip_mean_change_from_prior_grid_k": 9.371254571988175e-05
+        },
+        {
+          "substeps": 4,
+          "duration_each_s": 1.25,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72118433618976,
+          "strip_enthalpy_mean_out_k": 307.4924246200419,
+          "last_fresh_stream_out_k": 307.51908845676604,
+          "average_contact_heat_w": -8384.421782140536,
+          "max_substep_first_law_residual_w": 3.128661774098873e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 348.3830528125016,
+          "roll_change_from_prior_grid_k": 4.945962473357213e-06,
+          "strip_mean_change_from_prior_grid_k": 2.3426665848091943e-05
+        },
+        {
+          "substeps": 8,
+          "duration_each_s": 0.625,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72118309971876,
+          "strip_enthalpy_mean_out_k": 307.4924304766156,
+          "last_fresh_stream_out_k": 307.523510631209,
+          "average_contact_heat_w": -8384.365414629969,
+          "max_substep_first_law_residual_w": 1.0986695997416973e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 348.38304450704635,
+          "roll_change_from_prior_grid_k": 1.2364710073597962e-06,
+          "strip_mean_change_from_prior_grid_k": 5.856573693563405e-06
+        },
+        {
+          "substeps": 16,
+          "duration_each_s": 0.3125,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72118279060214,
+          "strip_enthalpy_mean_out_k": 307.49243194075353,
+          "last_fresh_stream_out_k": 307.5257173361575,
+          "average_contact_heat_w": -8384.351322805018,
+          "max_substep_first_law_residual_w": 2.134765964001417e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 348.38304243068706,
+          "roll_change_from_prior_grid_k": 3.0911661497157183e-07,
+          "strip_mean_change_from_prior_grid_k": 1.4641379380009312e-06
+        },
+        {
+          "substeps": 32,
+          "duration_each_s": 0.15625,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 295.72118271332306,
+          "strip_enthalpy_mean_out_k": 307.4924323067878,
+          "last_fresh_stream_out_k": 307.526819595663,
+          "average_contact_heat_w": -8384.347799850853,
+          "max_substep_first_law_residual_w": 4.128378350287676e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 348.3830419116017,
+          "roll_change_from_prior_grid_k": 7.727908268861938e-08,
+          "strip_mean_change_from_prior_grid_k": 3.6603427133741206e-07
+        }
+      ],
+      "heat_partition_sensitivity_checks": [
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.701557960296389e-15,
+          "strip_out_k": 299.08506931480713,
+          "roll_out_k": 296.524391333406
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.228691220842026e-15,
+          "strip_out_k": 302.45133724221085,
+          "roll_out_k": 295.81561300221694
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.360474535978435e-15,
+          "strip_out_k": 305.81365452717574,
+          "roll_out_k": 295.10650801998327
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.701557960296389e-15,
+          "strip_out_k": 310.008434367385,
+          "roll_out_k": 296.6428406913256
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.9767497270461384e-16,
+          "strip_out_k": 313.3619639599625,
+          "roll_out_k": 295.9339715809792
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 1.2519414937958876e-15,
+          "strip_out_k": 316.71158743254364,
+          "roll_out_k": 295.22477625187497
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.701557960296389e-15,
+          "strip_out_k": 320.89056398725904,
+          "roll_out_k": 296.7608350326507
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.3047511053431297e-15,
+          "strip_out_k": 324.2314987960707,
+          "roll_out_k": 296.05187653024507
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.3528421468763386e-15,
+          "strip_out_k": 327.56857117566,
+          "roll_out_k": 295.34259223330463
+        }
+      ],
+      "status": "REPRODUCED_BOUNDED_SYNTHETIC_LEDGER; PHYSICAL_VALIDATION_UNAVAILABLE",
+      "conservative_dimensionless_indicators": {
+        "G_over_2Cs_min": 0.05260942760942761,
+        "G_over_2Cr_min": 0.011111111111111112,
+        "G_over_2_times_sum_inverse_min_rates": 0.0637205387205387,
+        "note": "Conservative diagnostics across supplied cp range, not calibrated operating bounds."
+      }
+    },
+    {
+      "case_id": "passive_contact_demo_pass_2",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 12.844596039004566,
+          "entry_plane_strain_strength_pa": 205248228.4042711,
+          "exit_plane_strain_strength_pa": 218768998.94607168,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.03465661357733135,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.005280421421028123,
+          "contact_length_m": 0.008658954902296238,
+          "neutral_thickness_m": 0.0012456600387753395,
+          "roll_surface_speed_m_s": 3.2111490097511415,
+          "entry_speed_m_s": 2.6666666666666665,
+          "exit_speed_m_s": 3.3333333333333335,
+          "forward_slip_fraction": 0.03805003231278303,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2195671.795735668,
+          "torque_per_work_roll_nm": 8867.498513471628,
+          "roll_mechanical_power_both_rolls_w": 227798.8725640331,
+          "plastic_work_power_w": 189561.31407642007,
+          "solid_slip_dissipation_both_interfaces_w": 58237.54299573896,
+          "net_tension_power_w": 20000.0,
+          "traction_power_to_strip_w": 169561.32956829414,
+          "mechanical_work_residual_w": 0.015491874088183977,
+          "mechanical_work_residual_relative": 6.800680755708872e-08,
+          "entry_pressure_pa": 195248228.4042711,
+          "exit_pressure_pa": 203768998.94607168,
+          "pressure_at_neutral_pa": 325121402.7619537,
+          "max_pressure_pa": 325121402.7619537,
+          "min_pressure_pa": 195248228.4042711,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.23995532976913483,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 307.49230748083033
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.6898506227805066,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline",
+                "synthetic_aluminium_second_pass"
+              ],
+              "temperature_k": 307.49230748083033
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.3935808552237303e-07,
+            "torque_change_over_capacity": 8.748883770451281e-09,
+            "slip_absolute_change": 4.023205546488384e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+          "history": [
+            "synthetic-prior-processing",
+            "synthetic_aluminium_baseline"
+          ],
+          "temperature_k": 307.49230748083033
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.2,
+          "solid_slip_to_strip_fraction": 0.6,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 5500.0,
+          "roll_cooling_w": 3200.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.72120906724325,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PASSIVE_CONTACT_BOUNDARY_PASS2; roll temperature carried from pass1",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000.0,
+          "source": "SYNTHETIC_TOTAL_TWO_INTERFACE_CONDUCTANCE_UNCALIBRATED",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "ordinary_diagnostics": {
+        "strip_in_k": 307.49230748083033,
+        "roll_in_k": 295.72120906724325,
+        "strip_out_k": 313.01404729602,
+        "roll_out_k": 296.4723826206405,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -14156.381544479518,
+        "thermal_first_law_residual_w": 3.055902197957039e-10,
+        "thermal_first_law_residual_relative": 1.6120916933109449e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 287.1481498334117,
+        "strip_entropy_flow_gain_w_k": 171.47174100666732,
+        "roll_entropy_storage_rate_w_k": 115.67640882674439,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 2.1814967627987123,
+        "contact_law_residual_w": 3.763489075936377e-09
+      },
+      "isolated_contact_api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 12.844596039004566,
+          "entry_plane_strain_strength_pa": 205248228.4042711,
+          "exit_plane_strain_strength_pa": 218768998.94607168,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.03465661357733135,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.005280421421028123,
+          "contact_length_m": 0.008658954902296238,
+          "neutral_thickness_m": 0.0012456600387753395,
+          "roll_surface_speed_m_s": 3.2111490097511415,
+          "entry_speed_m_s": 2.6666666666666665,
+          "exit_speed_m_s": 3.3333333333333335,
+          "forward_slip_fraction": 0.03805003231278303,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2195671.795735668,
+          "torque_per_work_roll_nm": 8867.498513471628,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 169561.32956829414,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 195248228.4042711,
+          "exit_pressure_pa": 203768998.94607168,
+          "pressure_at_neutral_pa": 325121402.7619537,
+          "max_pressure_pa": 325121402.7619537,
+          "min_pressure_pa": 195248228.4042711,
+          "pressure_branch_mismatch_pa": 5.960464477539063e-08,
+          "max_coulomb_shear_over_yield_shear": 0.23995532976913483,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 307.49230748083033
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.6898506227805066,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline",
+                "synthetic_aluminium_second_pass"
+              ],
+              "temperature_k": 307.49230748083033
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.3935808552237303e-07,
+            "torque_change_over_capacity": 8.748883770451281e-09,
+            "slip_absolute_change": 4.023205546488384e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+          "history": [
+            "synthetic-prior-processing",
+            "synthetic_aluminium_baseline"
+          ],
+          "temperature_k": 307.49230748083033
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            880.0,
+            905.0,
+            940.0
+          ],
+          "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "steel-roll-demo",
+          "temperature_k": [
+            273.15,
+            350.0,
+            420.0
+          ],
+          "heat_capacity_j_kg_k": [
+            450.0,
+            470.0,
+            500.0
+          ],
+          "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 295.72120906724325,
+          "duration_s": 5.0,
+          "source": "SYNTHETIC_PASSIVE_CONTACT_BOUNDARY_PASS2; roll temperature carried from pass1",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000.0,
+          "source": "SYNTHETIC_TOTAL_TWO_INTERFACE_CONDUCTANCE_UNCALIBRATED",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "isolated_contact_diagnostics": {
+        "strip_in_k": 307.49230748083033,
+        "roll_in_k": 295.72120906724325,
+        "strip_out_k": 306.34145633663945,
+        "roll_out_k": 295.96411499745096,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -11074.219876390378,
+        "thermal_first_law_residual_w": -7.676135282963514e-10,
+        "thermal_first_law_residual_relative": 6.931535917332297e-14,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 1.3506200615589208,
+        "strip_entropy_flow_gain_w_k": -36.08218397483573,
+        "roll_entropy_storage_rate_w_k": 37.43280403639465,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": true,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 1.3506558536476772,
+        "contact_law_residual_w": -2.5920599000528455e-09
+      },
+      "time_refinements": [
+        {
+          "substeps": 1,
+          "duration_each_s": 5.0,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.4723826206405,
+          "strip_enthalpy_mean_out_k": 313.01404729602,
+          "last_fresh_stream_out_k": 313.01404729602,
+          "average_contact_heat_w": -14156.381544479518,
+          "max_substep_first_law_residual_w": 3.055902197957039e-10,
+          "integrated_thermal_state_entropy_rate_w_k": 287.1481498334117
+        },
+        {
+          "substeps": 2,
+          "duration_each_s": 2.5,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.47236201030785,
+          "strip_enthalpy_mean_out_k": 313.0141447627474,
+          "last_fresh_stream_out_k": 313.0326568449771,
+          "average_contact_heat_w": -14155.441569899738,
+          "max_substep_first_law_residual_w": 2.764863893389702e-10,
+          "integrated_thermal_state_entropy_rate_w_k": 287.147965415622,
+          "roll_change_from_prior_grid_k": 2.0610332626347372e-05,
+          "strip_mean_change_from_prior_grid_k": 9.746672736810069e-05
+        },
+        {
+          "substeps": 4,
+          "duration_each_s": 1.25,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.472356858048,
+          "strip_enthalpy_mean_out_k": 313.0141691278997,
+          "last_fresh_stream_out_k": 313.04188764197613,
+          "average_contact_heat_w": -14155.20659100051,
+          "max_substep_first_law_residual_w": 3.768946044147015e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 287.1479193140399,
+          "roll_change_from_prior_grid_k": 5.152259859642072e-06,
+          "strip_mean_change_from_prior_grid_k": 2.436515234194303e-05
+        },
+        {
+          "substeps": 8,
+          "duration_each_s": 0.625,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.47235557000334,
+          "strip_enthalpy_mean_out_k": 313.0141752190913,
+          "last_fresh_stream_out_k": 313.0464847220495,
+          "average_contact_heat_w": -14155.147847205613,
+          "max_substep_first_law_residual_w": 9.735231287777424e-09,
+          "integrated_thermal_state_entropy_rate_w_k": 287.1479077888147,
+          "roll_change_from_prior_grid_k": 1.2880446433882753e-06,
+          "strip_mean_change_from_prior_grid_k": 6.091191607993096e-06
+        },
+        {
+          "substeps": 16,
+          "duration_each_s": 0.3125,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.4723552479935,
+          "strip_enthalpy_mean_out_k": 313.0141767418834,
+          "last_fresh_stream_out_k": 313.04877870424286,
+          "average_contact_heat_w": -14155.133161313093,
+          "max_substep_first_law_residual_w": 1.9572325982153416e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 287.14790490753313,
+          "roll_change_from_prior_grid_k": 3.220098392375803e-07,
+          "strip_mean_change_from_prior_grid_k": 1.5227920471261314e-06
+        },
+        {
+          "substeps": 32,
+          "duration_each_s": 0.15625,
+          "unchanged_conductance_w_k": 1000.0,
+          "roll_out_k": 296.47235516749095,
+          "strip_enthalpy_mean_out_k": 313.01417712258126,
+          "last_fresh_stream_out_k": 313.04992455858655,
+          "average_contact_heat_w": -14155.12948984156,
+          "max_substep_first_law_residual_w": 4.20986907556653e-08,
+          "integrated_thermal_state_entropy_rate_w_k": 287.14790418719235,
+          "roll_change_from_prior_grid_k": 8.050255928537808e-08,
+          "strip_mean_change_from_prior_grid_k": 3.806978838838404e-07
+        }
+      ],
+      "heat_partition_sensitivity_checks": [
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 4.222144911052475e-15,
+          "strip_out_k": 305.8566809678697,
+          "roll_out_k": 297.15249305826075
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.379754404411395e-15,
+          "strip_out_k": 308.70325862970503,
+          "roll_out_k": 296.5519427936635
+        },
+        {
+          "beta": 0.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.147417115511845e-15,
+          "strip_out_k": 311.54701688513,
+          "roll_out_k": 295.9511583133896
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.147417115511845e-15,
+          "strip_out_k": 315.21318145228076,
+          "roll_out_k": 297.25391638725813
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.0726893199712147e-15,
+          "strip_out_k": 318.05054742796614,
+          "roll_out_k": 296.65330061468114
+        },
+        {
+          "beta": 0.5,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.4544821999520247e-15,
+          "strip_out_k": 320.88512118876787,
+          "roll_out_k": 296.05245089034236
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 3.83831355550225e-16,
+          "strip_out_k": 324.53946586568395,
+          "roll_out_k": 297.35500640244334
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 0.5,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 5.3815176791541845e-15,
+          "strip_out_k": 327.3677090257051,
+          "roll_out_k": 296.75432597998065
+        },
+        {
+          "beta": 1.0,
+          "slip_to_strip_fraction": 1.0,
+          "status": "PASS_FIRST_LAW_AND_DOMAIN",
+          "first_law_relative": 2.3214781554717056e-15,
+          "strip_out_k": 330.19318672722096,
+          "roll_out_k": 296.1534118654539
+        }
+      ],
+      "status": "REPRODUCED_BOUNDED_SYNTHETIC_LEDGER; PHYSICAL_VALIDATION_UNAVAILABLE",
+      "conservative_dimensionless_indicators": {
+        "G_over_2Cs_min": 0.05260942760942761,
+        "G_over_2Cr_min": 0.011111111111111112,
+        "G_over_2_times_sum_inverse_min_rates": 0.0637205387205387,
+        "note": "Conservative diagnostics across supplied cp range, not calibrated operating bounds."
+      }
+    }
+  ],
+  "findings": [
+    {
+      "case_id": "I01_temporal_overshoot",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            900.0,
+            900.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "roll",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            500.0,
+            500.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 1.0,
+          "roll_temperature_k": 320.0,
+          "duration_s": 5.0,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000000.0,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 320.0,
+        "strip_out_k": 300.4072513547216,
+        "roll_out_k": 280.41516832105737,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": 3958.483167894261,
+        "thermal_first_law_residual_w": -2.2100721253082156e-10,
+        "thermal_first_law_residual_relative": 5.583128768193994e-14,
+        "whole_step_thermal_state_entropy_change_rate_w_k": -0.01897878794982155,
+        "strip_entropy_flow_gain_w_k": 13.185995892072647,
+        "roll_entropy_storage_rate_w_k": -13.204974680022469,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": false,
+        "zero_source_entropy_pass": false,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 0.00017386814170859945,
+        "contact_law_residual_w": 4.46252670371905e-08
+      },
+      "Cs_w_k": 9720.0,
+      "Cr_w_k": 100.0,
+      "status": "COUNTEREXAMPLE_OPEN_NOT_A_PLANT_CASE",
+      "independent_constant_cp_solution": {
+        "contact_heat_w": 3958.4831678942583,
+        "strip_out_k": 300.4072513547216,
+        "roll_out_k": 280.4151683210574,
+        "G_over_2_absolute_inverse_rate_difference": 4948.559670781893,
+        "whole_step_maximum_principle_criterion_pass": false
+      }
+    },
+    {
+      "case_id": "I01_spatial_stream_overshoot",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            900.0,
+            900.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "roll",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            500.0,
+            500.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 320.0,
+          "duration_s": 0.001,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000000.0,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 320.0,
+        "strip_out_k": 339.23573188686385,
+        "roll_out_k": 319.99847451474426,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": 381371.3139403162,
+        "thermal_first_law_residual_w": 5.083566065877676e-06,
+        "thermal_first_law_residual_relative": 1.3329702261437624e-11,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 2.923882548937627,
+        "strip_entropy_flow_gain_w_k": 1194.7120793098834,
+        "roll_entropy_storage_rate_w_k": -1191.7881967609458,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": false,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 1.4220538930164273,
+        "contact_law_residual_w": 1.3777753338217735e-07
+      },
+      "Cs_w_k": 9720.0,
+      "Cr_w_k": 250000000.0,
+      "status": "COUNTEREXAMPLE_OPEN_NOT_A_PLANT_CASE",
+      "independent_constant_cp_solution": {
+        "contact_heat_w": 381371.31394031434,
+        "strip_out_k": 339.2357318868636,
+        "roll_out_k": 319.99847451474426,
+        "G_over_2_absolute_inverse_rate_difference": 51.438329218107,
+        "whole_step_maximum_principle_criterion_pass": false
+      }
+    },
+    {
+      "case_id": "I01_spatial_stream_overshoot_smaller_dt",
+      "api_inputs": {
+        "mechanics": {
+          "status": "UNVALIDATED_SPATIAL_HARDENING_SLAB",
+          "model": "spatial_hardening_projected_contact",
+          "physical_roll_radius_m": 0.25,
+          "contact_radius_m": 0.25,
+          "roll_angular_speed_rad_s": 10.244017615186426,
+          "entry_plane_strain_strength_pa": 173342170.68774706,
+          "exit_plane_strain_strength_pa": 205248228.4042711,
+          "cells": 1024,
+          "numerical_converged": true,
+          "refinement_checked": true,
+          "bite_mode": "unassisted",
+          "unassisted_bite_feasible": true,
+          "bite_tangent": 0.04475493274496127,
+          "friction_coefficient": 0.08,
+          "neutral_position_from_entry_m": 0.007244245234316766,
+          "contact_length_m": 0.011177544453054078,
+          "neutral_thickness_m": 0.001561887201002126,
+          "roll_surface_speed_m_s": 2.5610044037966064,
+          "entry_speed_m_s": 2.0,
+          "exit_speed_m_s": 2.6666666666666665,
+          "forward_slip_fraction": 0.04125813400141731,
+          "volume_flow_m3_s": 0.004,
+          "mass_flow_kg_s": 10.8,
+          "mass_flow_residual_kg_s": -1.7763568394002505e-15,
+          "separating_force_n": 2529915.4221633147,
+          "torque_per_work_roll_nm": 13156.968843727424,
+          "roll_mechanical_power_both_rolls_w": 0.0,
+          "plastic_work_power_w": 0.0,
+          "solid_slip_dissipation_both_interfaces_w": 0.0,
+          "net_tension_power_w": 0.0,
+          "traction_power_to_strip_w": 200846.10225541607,
+          "mechanical_work_residual_w": 0.0,
+          "mechanical_work_residual_relative": 0.0,
+          "entry_pressure_pa": 163342170.68774706,
+          "exit_pressure_pa": 190248228.4042711,
+          "pressure_at_neutral_pa": 293816277.285256,
+          "max_pressure_pa": 293816277.285256,
+          "min_pressure_pa": 163342170.68774706,
+          "pressure_branch_mismatch_pa": 0.0,
+          "max_coulomb_shear_over_yield_shear": 0.23247067348429673,
+          "flags": [
+            "ASSUMED_MATERIAL_ENVELOPE_NOT_CALIBRATED"
+          ],
+          "limitations": [
+            "Homogeneous plane-strain hardening; no aluminium calibration.",
+            "Projected small-angle traction/work; no elastic recovery, sticking or flattening.",
+            "No mill ratings or threading dynamics; numerical convergence is not physical validity."
+          ],
+          "material": {
+            "state_in": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.1,
+              "history": [
+                "synthetic-prior-processing"
+              ],
+              "temperature_k": 300.0
+            },
+            "state_out": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "accumulated_equivalent_plastic_strain": 0.43218664394213024,
+              "history": [
+                "synthetic-prior-processing",
+                "synthetic_aluminium_baseline"
+              ],
+              "temperature_k": 300.0
+            },
+            "law": {
+              "alloy": "Al-demo-not-a-qualified-grade",
+              "temper": "demo-prior-cold-work",
+              "yield_stress_pa": 100000000.0,
+              "strength_coefficient_pa": 100000000.0,
+              "exponent": 0.3,
+              "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+              "synthetic": true
+            },
+            "stress_units": "Pa",
+            "strain_units": "1",
+            "assumed_strain_range": [
+              0.0,
+              3.0
+            ],
+            "assumed_temperature_range_k": [
+              273.15,
+              420.0
+            ],
+            "calibrated_strain_range": null,
+            "calibrated_temperature_range_k": null,
+            "temperature_feedback": false,
+            "strain_rate_dependence": false
+          },
+          "refinement": {
+            "coarse_cells": 512,
+            "force_relative_change": 3.0169984347818967e-07,
+            "torque_change_over_capacity": 4.2171365744221936e-08,
+            "slip_absolute_change": 4.895233995938497e-09
+          }
+        },
+        "state_in": {
+          "alloy": "Al-demo-not-a-qualified-grade",
+          "temper": "demo-prior-cold-work",
+          "accumulated_equivalent_plastic_strain": 0.1,
+          "history": [
+            "synthetic-prior-processing"
+          ],
+          "temperature_k": 300.0
+        },
+        "strip_cp": {
+          "material_id": "Al-demo-not-a-qualified-grade",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            900.0,
+            900.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "roll_cp": {
+          "material_id": "roll",
+          "temperature_k": [
+            250.0,
+            450.0
+          ],
+          "heat_capacity_j_kg_k": [
+            500.0,
+            500.0
+          ],
+          "source": "synthetic constant cp",
+          "quality": "synthetic"
+        },
+        "boundary": {
+          "plastic_to_heat_fraction": 0.0,
+          "solid_slip_to_strip_fraction": 0.0,
+          "contact_heat_to_strip_w": 0.0,
+          "strip_cooling_w": 0.0,
+          "roll_cooling_w": 0.0,
+          "roll_effective_mass_kg": 500.0,
+          "roll_temperature_k": 320.0,
+          "duration_s": 1e-05,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic"
+        },
+        "passive_contact": {
+          "conductance_w_k": 1000000.0,
+          "source": "synthetic operator isolation",
+          "quality": "synthetic",
+          "law_scope": "conductive_only"
+        }
+      },
+      "diagnostics": {
+        "strip_in_k": 300.0,
+        "roll_in_k": 320.0,
+        "strip_out_k": 339.2372133176758,
+        "roll_out_k": 319.99998474457146,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": 381385.7134478086,
+        "thermal_first_law_residual_w": 0.00018509267829358578,
+        "thermal_first_law_residual_relative": 4.853162343715188e-10,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 2.9241433069607865,
+        "strip_entropy_flow_gain_w_k": 1194.7545261239945,
+        "roll_entropy_storage_rate_w_k": -1191.8303828170338,
+        "whole_step_entropy_complete": true,
+        "zero_source_maximum_principle_applicable": true,
+        "zero_source_maximum_principle_pass": false,
+        "zero_source_entropy_pass": true,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": 1.4221546287796505,
+        "contact_law_residual_w": -4.674075171351433e-08
+      },
+      "Cs_w_k": 9720.0,
+      "Cr_w_k": 24999999999.999996,
+      "status": "COUNTEREXAMPLE_OPEN_NOT_A_PLANT_CASE",
+      "independent_constant_cp_solution": {
+        "contact_heat_w": 381385.7134478092,
+        "strip_out_k": 339.23721331767587,
+        "roll_out_k": 319.99998474457146,
+        "G_over_2_absolute_inverse_rate_difference": 51.440309218107,
+        "whole_step_maximum_principle_criterion_pass": false
+      }
+    }
+  ],
+  "standalone_two_capacity": {
+    "config_path": "scenarios/v03_foundations.json",
+    "api_input": {
+      "strip_temperature_k": 300.0,
+      "roll_temperature_k": 295.0,
+      "strip_mass_kg": 2.0,
+      "roll_mass_kg": 500.0,
+      "strip_heat_capacity_j_kg_k": 900.0,
+      "roll_heat_capacity_j_kg_k": 460.0,
+      "duration_s": 0.01,
+      "deforming_volume_m3": 0.0006,
+      "contact_area_m2": 0.2,
+      "plastic_power_w": 100000.0,
+      "plastic_heat_fraction": 0.7,
+      "signed_solid_traction_pa": 1000000.0,
+      "signed_relative_slip_m_s": 0.1,
+      "strip_slip_heat_fraction": 0.5,
+      "contact_conductance_w_m2_k": 1000.0,
+      "strip_cooling_conductance_w_k": 20.0,
+      "roll_cooling_conductance_w_k": 100.0,
+      "strip_coolant_temperature_k": 290.0,
+      "roll_coolant_temperature_k": 290.0,
+      "contact_law": "conductive_only"
+    },
+    "ordinary_output": {
+      "status": "SYNTHETIC_UNCALIBRATED",
+      "strip_temperature_k": 300.4377777777778,
+      "roll_temperature_k": 295.0004565217391,
+      "plastic_heat_volumetric_w_m3": 116666666.66666667,
+      "solid_slip_heat_flux_w_m2": 100000.0,
+      "solid_slip_heat_power_w": 20000.0,
+      "contact_heat_to_strip_w": -1000.0,
+      "contact_heat_to_roll_w": 1000.0,
+      "strip_cooling_w": 200.0,
+      "roll_cooling_w": 500.0,
+      "plastic_work_not_immediately_heat_w": 30000.0,
+      "explicit_mode_step_ratio": 0.0012301605185641947,
+      "strip_thermal_capacity_j_k": 1800.0,
+      "roll_thermal_capacity_j_k": 230000.0,
+      "energy_residual_j": -1.3124008546583354e-09
+    },
+    "operator": "Closed two finite thermal capacities, explicit Euler, not flowing stream",
+    "zero_source_input": {
+      "strip_temperature_k": 300.0,
+      "roll_temperature_k": 295.0,
+      "strip_mass_kg": 2.0,
+      "roll_mass_kg": 500.0,
+      "strip_heat_capacity_j_kg_k": 900.0,
+      "roll_heat_capacity_j_kg_k": 460.0,
+      "duration_s": 0.01,
+      "deforming_volume_m3": 0.0006,
+      "contact_area_m2": 0.2,
+      "plastic_power_w": 0.0,
+      "plastic_heat_fraction": 0.7,
+      "signed_solid_traction_pa": 1000000.0,
+      "signed_relative_slip_m_s": 0.0,
+      "strip_slip_heat_fraction": 0.5,
+      "contact_conductance_w_m2_k": 1000.0,
+      "strip_cooling_conductance_w_k": 0.0,
+      "roll_cooling_conductance_w_k": 0.0,
+      "strip_coolant_temperature_k": 290.0,
+      "roll_coolant_temperature_k": 290.0,
+      "contact_law": "conductive_only"
+    },
+    "zero_source_output": {
+      "status": "SYNTHETIC_UNCALIBRATED",
+      "strip_temperature_k": 299.99444444444447,
+      "roll_temperature_k": 295.00004347826086,
+      "plastic_heat_volumetric_w_m3": 0.0,
+      "solid_slip_heat_flux_w_m2": 0.0,
+      "solid_slip_heat_power_w": 0.0,
+      "contact_heat_to_strip_w": -1000.0,
+      "contact_heat_to_roll_w": 1000.0,
+      "strip_cooling_w": 0.0,
+      "roll_cooling_w": 0.0,
+      "plastic_work_not_immediately_heat_w": 0.0,
+      "explicit_mode_step_ratio": 0.001119806763285024,
+      "strip_thermal_capacity_j_k": 1800.0,
+      "roll_thermal_capacity_j_k": 230000.0,
+      "energy_residual_j": -1.3301360013429075e-09
+    },
+    "zero_source_entropy_rate_w_k": 0.05646605859812165,
+    "zero_source_maximum_principle_pass": true,
+    "time_refinements": [
+      {
+        "substeps": 1,
+        "strip_out_k": 300.4377777777778,
+        "roll_out_k": 295.0004565217391
+      },
+      {
+        "substeps": 2,
+        "strip_out_k": 300.43764413915727,
+        "roll_out_k": 295.0004574719413
+      },
+      {
+        "substeps": 4,
+        "strip_out_k": 300.4375773609418,
+        "roll_out_k": 295.0004579467487
+      },
+      {
+        "substeps": 8,
+        "strip_out_k": 300.4375439820995,
+        "roll_out_k": 295.00045818407915
+      },
+      {
+        "substeps": 16,
+        "strip_out_k": 300.43752729524374,
+        "roll_out_k": 295.00045830272603
+      },
+      {
+        "substeps": 32,
+        "strip_out_k": 300.43751895245697,
+        "roll_out_k": 295.000458362045
+      }
+    ]
+  },
+  "checked_schedule": {
+    "source_fixture": "tests/test_checked_schedule.py::CheckedScheduleTests.test_two_pass_slab_and_energy_match_independent_replay",
+    "standalone_stored_schedule_artifact": false,
+    "inputs": {
+      "passes": [
+        {
+          "scenario": {
+            "name": "synthetic_aluminium_baseline",
+            "synthetic": true,
+            "entry_thickness_m": 0.002,
+            "exit_thickness_m": 0.0015,
+            "width_m": 1.0,
+            "entry_speed_m_s": 2.0,
+            "work_roll_radius_m": 0.25,
+            "density_kg_m3": 2700.0,
+            "mean_flow_stress_pa": 120000000.0,
+            "friction_coefficient": 0.08,
+            "entry_tension_pa": 10000000.0,
+            "exit_tension_pa": 15000000.0,
+            "drive_efficiency": 0.9
+          },
+          "operating_plan": {
+            "pass_name": "synthetic_aluminium_baseline",
+            "ranges": [
+              {
+                "quantity": "entry_speed_m_s",
+                "unit": "m/s",
+                "minimum": 1,
+                "maximum": 3,
+                "phase": "steady",
+                "provenance": "synthetic p1"
+              },
+              {
+                "quantity": "exit_temperature_k",
+                "unit": "K",
+                "minimum": 290,
+                "maximum": 320,
+                "phase": "steady",
+                "provenance": "synthetic p1"
+              }
+            ],
+            "observations": [],
+            "cooling_boundary": null,
+            "lubrication_boundary": null,
+            "coolant_flow_kg_s": null,
+            "lubricant_flow_kg_s": null,
+            "boundary_provenance": null
+          },
+          "solver": "spatial_slab",
+          "cells": 256,
+          "bite_mode": "unassisted",
+          "assumed_strain_range": [
+            0.0,
+            3.0
+          ],
+          "assumed_temperature_range_k": [
+            273.15,
+            420.0
+          ],
+          "elasticity": null,
+          "heat_boundary": {
+            "plastic_to_heat_fraction": 0.2,
+            "solid_slip_to_strip_fraction": 0.6,
+            "contact_heat_to_strip_w": -2000.0,
+            "strip_cooling_w": 5000.0,
+            "roll_cooling_w": 3000.0,
+            "roll_effective_mass_kg": 500.0,
+            "roll_temperature_k": 295.0,
+            "duration_s": 5.0,
+            "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS1",
+            "quality": "synthetic"
+          },
+          "passive_contact": null,
+          "fluid_observation": null,
+          "roll_body_id": "synthetic_roll_body_A"
+        },
+        {
+          "scenario": {
+            "name": "checked_second_pass",
+            "synthetic": true,
+            "entry_thickness_m": 0.0015,
+            "exit_thickness_m": 0.0012,
+            "width_m": 1.0,
+            "entry_speed_m_s": 2.6666666666666665,
+            "work_roll_radius_m": 0.25,
+            "density_kg_m3": 2700.0,
+            "mean_flow_stress_pa": 120000000.0,
+            "friction_coefficient": 0.09,
+            "entry_tension_pa": 12000000.0,
+            "exit_tension_pa": 18000000.0,
+            "drive_efficiency": 0.9
+          },
+          "operating_plan": {
+            "pass_name": "checked_second_pass",
+            "ranges": [
+              {
+                "quantity": "entry_speed_m_s",
+                "unit": "m/s",
+                "minimum": 2.5,
+                "maximum": 3,
+                "phase": "steady",
+                "provenance": "synthetic p2"
+              },
+              {
+                "quantity": "exit_temperature_k",
+                "unit": "K",
+                "minimum": 300,
+                "maximum": 330,
+                "phase": "steady",
+                "provenance": "synthetic p2"
+              }
+            ],
+            "observations": [],
+            "cooling_boundary": null,
+            "lubrication_boundary": null,
+            "coolant_flow_kg_s": null,
+            "lubricant_flow_kg_s": null,
+            "boundary_provenance": null
+          },
+          "solver": "spatial_slab",
+          "cells": 256,
+          "bite_mode": "unassisted",
+          "assumed_strain_range": [
+            0.0,
+            3.0
+          ],
+          "assumed_temperature_range_k": [
+            273.15,
+            420.0
+          ],
+          "elasticity": null,
+          "heat_boundary": {
+            "plastic_to_heat_fraction": 0.2,
+            "solid_slip_to_strip_fraction": 0.6,
+            "contact_heat_to_strip_w": -2300.0,
+            "strip_cooling_w": 5500.0,
+            "roll_cooling_w": 3200.0,
+            "roll_effective_mass_kg": 500.0,
+            "roll_temperature_k": null,
+            "duration_s": 5.0,
+            "source": "SYNTHETIC_PRESCRIBED_HEAT_BOUNDARY_PASS2; roll temperature carried from pass1",
+            "quality": "synthetic"
+          },
+          "passive_contact": null,
+          "fluid_observation": null,
+          "roll_body_id": "synthetic_roll_body_A"
+        }
+      ],
+      "initial_state": {
+        "alloy": "Al-demo-not-a-qualified-grade",
+        "temper": "demo-prior-cold-work",
+        "accumulated_equivalent_plastic_strain": 0.1,
+        "history": [
+          "synthetic-prior-processing"
+        ],
+        "temperature_k": 300.0
+      },
+      "law": {
+        "alloy": "Al-demo-not-a-qualified-grade",
+        "temper": "demo-prior-cold-work",
+        "yield_stress_pa": 100000000.0,
+        "strength_coefficient_pa": 100000000.0,
+        "exponent": 0.3,
+        "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+        "synthetic": true
+      },
+      "interpass_handoffs": [
+        {
+          "after_pass": 1,
+          "strip_mode": "direct_predicted_carry",
+          "strip_temperature_k": null,
+          "roll_mode": "direct_predicted_carry",
+          "roll_temperature_k": null,
+          "provenance": "synthetic immediate reversal; no interpass exchange",
+          "width_change_provenance": null
+        }
+      ],
+      "strip_cp": {
+        "material_id": "Al-demo-not-a-qualified-grade",
+        "temperature_k": [
+          273.15,
+          350.0,
+          420.0
+        ],
+        "heat_capacity_j_kg_k": [
+          880.0,
+          905.0,
+          940.0
+        ],
+        "source": "SYNTHETIC_ALUMINIUM_LIKE_CP_EXERCISE; no alloy/temper calibration",
+        "quality": "synthetic"
+      },
+      "roll_cp": {
+        "material_id": "steel-roll-demo",
+        "temperature_k": [
+          273.15,
+          350.0,
+          420.0
+        ],
+        "heat_capacity_j_kg_k": [
+          450.0,
+          470.0,
+          500.0
+        ],
+        "source": "SYNTHETIC_ROLL_CP_EXERCISE; effective roll mass unqualified",
+        "quality": "synthetic"
+      },
+      "equipment_limits": {
+        "provenance": "synthetic rating",
+        "max_separating_force_n": 1000000000.0,
+        "max_torque_per_work_roll_nm": null,
+        "max_roll_mechanical_power_w": null,
+        "max_roll_surface_speed_m_s": null,
+        "max_entry_reel_tension_n": null,
+        "max_exit_reel_tension_n": null
+      }
+    },
+    "fresh_path": "/tmp/physicroll-thermal-handoff-2026-10-02/checked_schedule_thermal_replay.json",
+    "sha256": "7a13779cd65a55540ef6285ba4bfa8b4d62bfbd517612ed81be4c9a1e341a8cb",
+    "status": "CHECKED_SYNTHETIC_SCHEDULE",
+    "declared_bounds_status": "INDETERMINATE",
+    "pass_diagnostics": [
+      {
+        "strip_in_k": 300.0,
+        "roll_in_k": 295.0,
+        "strip_out_k": 308.1556767946504,
+        "roll_out_k": 295.5811297257602,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2000.0,
+        "thermal_first_law_residual_w": -2.6193447411060333e-10,
+        "thermal_first_law_residual_relative": 1.186049836227683e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 347.5287173622255,
+        "strip_entropy_flow_gain_w_k": 257.83505263507857,
+        "roll_entropy_storage_rate_w_k": 89.69366472714697,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      },
+      {
+        "strip_in_k": 308.1556767946504,
+        "roll_in_k": 295.5811297257602,
+        "strip_out_k": 315.37982674352224,
+        "roll_out_k": 296.1393712984882,
+        "mass_flow_kg_s": 10.8,
+        "contact_heat_to_strip_w": -2300.0,
+        "thermal_first_law_residual_w": -1.1204974725842476e-09,
+        "thermal_first_law_residual_relative": 5.911002875473465e-15,
+        "whole_step_thermal_state_entropy_change_rate_w_k": 309.39845746948964,
+        "strip_entropy_flow_gain_w_k": 223.37536582783363,
+        "roll_entropy_storage_rate_w_k": 86.023091641656,
+        "whole_step_entropy_complete": false,
+        "zero_source_maximum_principle_applicable": false,
+        "zero_source_maximum_principle_pass": null,
+        "zero_source_entropy_pass": null,
+        "entropy_note": "Exact c_p(T)/T integral; complete only for zero non-contact sources and exports. Ordinary mechanically heated/cooled case omits unspecified export and nonthermal-allocation entropy.",
+        "midpoint_entropy_proxy_w_k": null,
+        "contact_law_residual_w": null
+      }
+    ],
+    "state_and_roll_continuity_verified": true
+  },
+  "audit_driver_sha256": "96d27a0f69a7d029b64b5015f3ab2de5c27e7302585c2e7e2d5a3dd48f756f27",
+  "audit_entropy_function_verification": {
+    "constant_cp_analytic": "PASS",
+    "antisymmetry": "PASS",
+    "knot_additivity": "PASS",
+    "simpson_intervals": 20000,
+    "simpson_curve": {
+      "temperature_k": [
+        250.0,
+        300.0,
+        350.0,
+        450.0
+      ],
+      "heat_capacity_j_kg_k": [
+        800.0,
+        1000.0,
+        850.0,
+        1100.0
+      ]
+    },
+    "integration_interval_k": [
+      280.0,
+      420.0
+    ],
+    "absolute_difference_j_kg_k": 9.333427897217916e-08,
+    "absolute_tolerance_j_kg_k": 1e-06,
+    "status": "PASS"
+  },
+  "exact_audit_driver_command": "python /tmp/physicroll-thermal-handoff-2026-10-02/audit.py",
+  "driver_reproduction_note": "The temporary initial analysis driver is not a deliverable. Complete public API inputs are preserved here; thermal-numerical-handoff.md Appendix A contains an executed durable replay for flowing entropy, temporal refinements, heat partitions and all open counterexamples. Stored-demo and existing-test commands are also preserved.",
+  "existing_test_verification": {
+    "command": "PYTHONPATH=tests python -m unittest -v test_energy_handoff test_passive_contact test_checked_schedule test_v03.ThermalTests test_mechanics_audit.MechanicsAuditTests.test_thermal_exchange_exact_limit_and_nonoscillation",
+    "tests_run": 27,
+    "elapsed_seconds": 2.513,
+    "status": "PASS",
+    "production_tests_modified": false
+  },
+  "durable_replay_verification": {
+    "source": "thermal-numerical-handoff.md#appendix-a-durable-entropy-and-fresh-stream-replay",
+    "executed_from": "/tmp/physicroll-thermal-handoff-2026-10-02/durable-replay.py",
+    "script_sha256": "7a1c89ee695507984c376db5f452e457f10e6694eca324131026b0a9d52cf25a",
+    "ordinary_cases": 4,
+    "refinement_counts": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "heat_partition_cases": 36,
+    "open_counterexamples_reproduced": 3,
+    "status": "PASS_REPRODUCTION_NOT_PHYSICAL_VALIDATION"
+  }
+}
