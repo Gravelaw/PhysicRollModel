@@ -10,7 +10,8 @@ sys.path.insert(0,str(ROOT))
 from physicroll.model import Scenario
 from physicroll.materials import MaterialState, PowerHardeningLaw, BiteHardening
 from physicroll.slab import solve_slab
-from physicroll.energy_handoff import HeatCapacityCurve, PassHeatBoundary, handoff_pass
+from physicroll.energy_handoff import (HeatCapacityCurve, PassHeatBoundary,
+                                      PassiveContactBoundary, handoff_pass)
 from physicroll.lubrication import FluidObservation
 
 
@@ -44,7 +45,10 @@ def run(config_path: Path, output_path: Path):
             raise ValueError(f'pass {index+1}: mechanics refinement gate failed')
         boundary_data=dict(data['boundaries'][index])
         if index:boundary_data['roll_temperature_k']=outputs[-1]['energy']['roll_temperature_out_k']
-        energy=handoff_pass(mechanics,state,strip_cp,roll_cp,PassHeatBoundary(**boundary_data),fluid=fluid)
+        contact_data=data.get('passive_contacts')
+        passive_contact=None if contact_data is None else PassiveContactBoundary(**contact_data[index])
+        energy=handoff_pass(mechanics,state,strip_cp,roll_cp,PassHeatBoundary(**boundary_data),
+                            fluid=fluid,passive_contact=passive_contact)
         if energy['thermal_allocation_residual_relative']>1e-8:
             raise ValueError(f'pass {index+1}: energy conservation gate failed')
         outputs.append({'pass_id':index+1,'mechanics':mechanics,'energy':energy})

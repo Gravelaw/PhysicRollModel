@@ -25,3 +25,9 @@ implementation under stated assumptions. None of these artifacts is an
 independent aluminium plant validation or a production parameter set.
 
 The full revised Word/PDF contains the long-form literature review and source bibliography. This repository includes the project's authored research and implementation records, not full third-party papers, books, manufacturer images or private assistant working notes.
+
+The report is a **2 October 2026 snapshot** of executable code `fbafee54`.
+Subsequent optional development is tracked in the live engineering documents;
+the [passive-contact increment](../passive-contact.md) adds a supplied-conductance
+numerical closure without revising the 53-page historical edition or claiming
+new thermal validation.

@@ -123,9 +123,124 @@ class PassHeatBoundary:
             raise ValueError('roll effective mass, absolute temperature and duration must be positive')
 
 
+@dataclass(frozen=True)
+class PassiveContactBoundary:
+    """Supplied total conductance for both interfaces, W/K; no inferred HTC.
+
+    The reduced closure uses arithmetic inlet/outlet strip and roll temperatures
+    as its two representative contact temperatures. It does not resolve a bite
+    temperature field or identify contact area, film behavior or conductance.
+    """
+    conductance_w_k: float
+    source: str
+    quality: str  # synthetic or measured; neither implies a calibrated law
+    law_scope: str = 'conductive_only'
+
+    def validate(self):
+        if not _number(self.conductance_w_k) or self.conductance_w_k < 0:
+            raise ValueError('passive contact conductance must be nonnegative W/K')
+        if not isinstance(self.source,str) or not self.source.strip() or self.quality not in ('synthetic','measured'):
+            raise ValueError('passive contact needs a source and synthetic/measured quality')
+        if self.law_scope != 'conductive_only':
+            raise ValueError('effective contact laws may already contain slip heat')
+
+
+def _passive_contact_power(strip_cp, roll_cp, strip_in_k, roll_in_k, mass_flow,
+                           roll_mass, duration, strip_without_contact_w,
+                           roll_without_contact_w, strip_range, conductance):
+    """Find Q in the shared property domain; Q>0 means roll heats strip.
+
+    The scalar residual is strictly increasing: raising Q heats the flowing
+    strip and cools the finite roll. Bisection cannot jump over a root.
+    """
+    strip_in_h = strip_cp.enthalpy_j_kg(strip_in_k)
+    roll_in_h = roll_cp.enthalpy_j_kg(roll_in_k)
+    strip_lo = max(strip_cp.temperature_k[0],strip_range[0])
+    strip_hi = min(strip_cp.temperature_k[-1],strip_range[1])
+    if strip_lo > strip_hi:
+        raise ValueError('no shared strip property and mechanical temperature domain')
+    lower = max(mass_flow*(strip_cp.enthalpy_j_kg(strip_lo)-strip_in_h)-strip_without_contact_w,
+                roll_without_contact_w-roll_mass*(roll_cp.enthalpy_j_kg(roll_cp.temperature_k[-1])-roll_in_h)/duration)
+    upper = min(mass_flow*(strip_cp.enthalpy_j_kg(strip_hi)-strip_in_h)-strip_without_contact_w,
+                roll_without_contact_w-roll_mass*(roll_cp.enthalpy_j_kg(roll_cp.temperature_k[0])-roll_in_h)/duration)
+    if not all(math.isfinite(v) for v in (lower,upper)):
+        raise ValueError('passive contact bounds exceed numerical domain')
+    if lower > upper:
+        raise ValueError('passive contact has no shared thermal property domain')
+
+    def inverse(curve, target, endpoint):
+        try:
+            return curve.temperature_for_enthalpy(target)
+        except ValueError:
+            if not endpoint or not math.isfinite(target):
+                raise
+            # Forming a Q boundary and reconstructing H from it involves two
+            # rounded arithmetic paths. Accept only endpoint-scale roundoff;
+            # the public property inverse remains strictly bounded.
+            top = curve._knot_enthalpies()[-1]
+            tolerance = 32*math.ulp(max(abs(target),abs(top),1.))
+            if -tolerance <= target < 0:
+                return curve.temperature_k[0]
+            if top < target <= top+tolerance:
+                return curve.temperature_k[-1]
+            raise
+
+    def state(q, *, endpoint=False):
+        strip_target = strip_in_h+(strip_without_contact_w+q)/mass_flow
+        roll_target = roll_in_h+(roll_without_contact_w-q)*duration/roll_mass
+        strip_t = inverse(strip_cp,strip_target,endpoint)
+        roll_t = inverse(roll_cp,roll_target,endpoint)
+        delta = (roll_in_k+roll_t-strip_in_k-strip_t)/2
+        law_power = conductance*delta
+        residual = q-law_power
+        if not all(math.isfinite(v) for v in (delta,law_power,residual)):
+            raise ValueError('passive contact law exceeds numerical domain')
+        return residual, strip_t, roll_t, delta
+
+    if conductance == 0:
+        if not lower <= 0 <= upper:
+            raise ValueError('zero-conductance state outside supplied thermal domain')
+        _, strip_t, roll_t, delta = state(0.)
+        return 0., delta, 0., strip_t, roll_t
+
+    def bounded_state(q):
+        return state(q,endpoint=q in (lower,upper))
+
+    if lower <= 0 <= upper:
+        zero_residual, strip_t, roll_t, zero_delta = state(0.)
+        if abs(zero_residual) <= 1e-12*max(abs(conductance*zero_delta),1.)+1e-9:
+            return 0., zero_delta, zero_residual, strip_t, roll_t
+
+    f_lo, *_ = bounded_state(lower)
+    f_hi, *_ = bounded_state(upper)
+    if f_lo > 0 or f_hi < 0:
+        raise ValueError('passive contact root outside supplied thermal domain')
+    if f_lo == 0:
+        q = lower
+    elif f_hi == 0:
+        q = upper
+    else:
+        lo,hi = lower,upper
+        for _ in range(160):
+            q=(lo+hi)/2
+            f, _, _, delta = bounded_state(q)
+            if abs(f) <= 1e-12*max(abs(q),abs(conductance*delta),1.)+1e-9 or q == lo or q == hi:
+                break
+            if f < 0:lo=q
+            else:hi=q
+        else:
+            raise ValueError('passive contact root did not converge')
+    residual,strip_t,roll_t,delta=bounded_state(q)
+    scale=max(abs(q),abs(conductance*delta),1.)
+    if abs(residual)/scale > 1e-9 or q*delta < 0:
+        raise ValueError('passive contact root or heat-flow direction failed')
+    return q, delta, residual, strip_t, roll_t
+
+
 def handoff_pass(mechanics: dict, state_in: MaterialState,
                  strip_cp: HeatCapacityCurve, roll_cp: HeatCapacityCurve,
-                 boundary: PassHeatBoundary, *, fluid: FluidObservation | None = None) -> dict:
+                 boundary: PassHeatBoundary, *, fluid: FluidObservation | None = None,
+                 passive_contact: PassiveContactBoundary | None = None) -> dict:
     """Steady strip enthalpy plus one aggregate roll thermal step.
 
     P_plastic and P_slip are total W from both strip/roll interfaces where
@@ -135,6 +250,12 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
     if not isinstance(mechanics, dict) or mechanics.get('numerical_converged') is not True:
         raise ValueError('checked converged mechanics result required')
     state_in.validate(); strip_cp.validate(); roll_cp.validate(); boundary.validate()
+    if passive_contact is not None:
+        if not isinstance(passive_contact,PassiveContactBoundary):
+            raise ValueError('passive contact must be a PassiveContactBoundary')
+        passive_contact.validate()
+        if boundary.contact_heat_to_strip_w != 0:
+            raise ValueError('passive and prescribed contact heat modes are mutually exclusive')
     if fluid is not None:
         if not isinstance(fluid, FluidObservation):
             raise ValueError("fluid must be a FluidObservation or None")
@@ -200,24 +321,37 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
     nonthermal_plastic = plastic-plastic_heat
     strip_slip = boundary.solid_slip_to_strip_fraction*slip
     roll_slip = slip-strip_slip
-    strip_rate = plastic_heat+strip_slip+boundary.contact_heat_to_strip_w-boundary.strip_cooling_w
-    roll_rate = roll_slip-boundary.contact_heat_to_strip_w-boundary.roll_cooling_w
+    strip_without_contact = plastic_heat+strip_slip-boundary.strip_cooling_w
+    roll_without_contact = roll_slip-boundary.roll_cooling_w
+    contact = boundary.contact_heat_to_strip_w
+    if passive_contact is not None:
+        contact, contact_delta, contact_residual, passive_strip_t, passive_roll_t = _passive_contact_power(
+            strip_cp,roll_cp,state_in.temperature_k,boundary.roll_temperature_k,
+            mass_flow,boundary.roll_effective_mass_kg,boundary.duration_s,
+            strip_without_contact,roll_without_contact,temperature_range,
+            passive_contact.conductance_w_k)
+    strip_rate = strip_without_contact+contact
+    roll_rate = roll_without_contact-contact
     values = (plastic_heat,nonthermal_plastic,strip_slip,roll_slip,strip_rate,roll_rate,
               strip_in_h+strip_rate/mass_flow,
               roll_in_h+roll_rate*boundary.duration_s/boundary.roll_effective_mass_kg)
     if not all(math.isfinite(v) for v in values):
         raise ValueError('thermal rate or target enthalpy exceeds numerical domain')
-    strip_t = (state_in.temperature_k if strip_rate == 0 else
-               strip_cp.temperature_for_enthalpy(values[-2]))
-    roll_t = (boundary.roll_temperature_k if roll_rate == 0 else
-              roll_cp.temperature_for_enthalpy(values[-1]))
+    if passive_contact is None:
+        strip_t = (state_in.temperature_k if strip_rate == 0 else
+                   strip_cp.temperature_for_enthalpy(values[-2]))
+        roll_t = (boundary.roll_temperature_k if roll_rate == 0 else
+                  roll_cp.temperature_for_enthalpy(values[-1]))
+    else:
+        # Keep endpoint-safe temperatures from the same Q root evaluation.
+        strip_t, roll_t = passive_strip_t, passive_roll_t
     if not temperature_range[0] <= strip_t <= temperature_range[1]:
         raise ValueError('outgoing strip temperature outside assumed mechanical material range')
     strip_gain = mass_flow*(strip_cp.enthalpy_j_kg(strip_t)-strip_in_h)
     roll_storage = boundary.roll_effective_mass_kg*(roll_cp.enthalpy_j_kg(roll_t)-roll_in_h)/boundary.duration_s
     residual = (strip_gain+roll_storage+nonthermal_plastic+boundary.strip_cooling_w+
                 boundary.roll_cooling_w-plastic-slip)
-    scale = max(plastic,slip,abs(strip_gain),abs(roll_storage),abs(boundary.contact_heat_to_strip_w),1.)
+    scale = max(plastic,slip,abs(strip_gain),abs(roll_storage),abs(contact),1.)
     if not math.isfinite(residual) or abs(residual)/scale > 1e-8:
         raise ValueError('flowing energy balance failed numerical tolerance')
     combined_residual = mechanical_input-(strip_gain+roll_storage+nonthermal_plastic+
@@ -233,7 +367,13 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
         flags.append('FLUID_OBSERVATION_NOT_A_HEAT_OR_FRICTION_CLOSURE')
     if strip_cp.quality == 'synthetic' or roll_cp.quality == 'synthetic' or boundary.quality == 'synthetic':
         flags.append('SYNTHETIC_THERMAL_INPUTS_NOT_CALIBRATED')
-    return {'status':'CONDITIONAL_FLOWING_STRIP_ENERGY_LEDGER',
+    if passive_contact is not None:
+        flags.append('SUPPLIED_PASSIVE_CONTACT_CONDUCTANCE_UNCALIBRATED')
+        contact_entropy = contact*((1/((state_in.temperature_k+strip_t)/2))-
+                                   (1/((boundary.roll_temperature_k+roll_t)/2)))
+        if not math.isfinite(contact_entropy) or contact_entropy < 0:
+            raise ValueError('passive contact entropy production failed')
+    result = {'status':'CONDITIONAL_FLOWING_STRIP_ENERGY_LEDGER',
             'strip_state_in':asdict(state_in),'strip_state_out':asdict(state_out),
             'strip_temperature_out_k':strip_t,'roll_temperature_out_k':roll_t,
             'mass_flow_kg_s':mass_flow,'roll_effective_mass_kg':boundary.roll_effective_mass_kg,
@@ -241,8 +381,8 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
             'plastic_heat_w':plastic_heat,'nonthermal_plastic_work_w':nonthermal_plastic,
             'solid_slip_dissipation_both_interfaces_w':slip,
             'solid_slip_heat_to_strip_w':strip_slip,'solid_slip_heat_to_roll_w':roll_slip,
-            'contact_heat_to_strip_w':boundary.contact_heat_to_strip_w,
-            'contact_heat_to_roll_w':-boundary.contact_heat_to_strip_w,
+            'contact_heat_to_strip_w':contact,
+            'contact_heat_to_roll_w':-contact,
             'strip_cooling_export_w':boundary.strip_cooling_w,
             'roll_cooling_export_w':boundary.roll_cooling_w,
             'flowing_strip_enthalpy_gain_w':strip_gain,
@@ -259,3 +399,10 @@ def handoff_pass(mechanics: dict, state_in: MaterialState,
             'coolant_or_lubricant_law':'none; exported heat rates supplied',
             'temperature_feedback_to_mechanics':False,
             'flags':flags}
+    if passive_contact is not None:
+        result.update({'contact_mode':'PASSIVE_SUPPLIED_TOTAL_CONDUCTANCE',
+                       'passive_contact':asdict(passive_contact),
+                       'contact_midpoint_roll_minus_strip_k':contact_delta,
+                       'contact_law_residual_w':contact_residual,
+                       'contact_entropy_production_w_k':contact_entropy})
+    return result

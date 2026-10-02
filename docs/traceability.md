@@ -54,3 +54,8 @@ The [specialist energy audit](energy-specialist-audit.md) maps four reproduced
 boundary/metadata defects to corrections and adversarial tests. Its 67-test
 evidence and unchanged synthetic output are same-environment numerical checks;
 independent consumer acceptance and measured thermal validation remain distinct.
+
+The [optional passive-contact equation/source/code/test map](passive-contact.md#equation-source-and-test-map)
+adds a supplied-conductance numerical closure to the same ledger. Its synthetic
+demonstration and passivity tests do not identify an aluminium HTC or validate
+strip/roll temperatures.

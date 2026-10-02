@@ -200,3 +200,37 @@ input-contract/numerical-boundary defects and increased coverage to **67 tests**
 (13 energy tests). The two-pass synthetic output is byte-identical to the prior
 increment. Clean extraction, complete tests, smoke and source/asset fingerprints
 are rechecked for the corrected package. This is not independent consumer acceptance.
+
+## Optional passive-contact development increment
+
+`tests/test_passive_contact.py` adds an independent constant-heat-capacity
+solution, passive-sign and entropy checks, zero/equal/reversed-temperature
+limits, variable-cp and large-conductance cases, temporal refinement,
+W/K and throughput scaling, mixed-mode/declared-fitted-law rejection,
+property-domain rejection and byte-identical legacy-demo regression.
+`scenarios/passive_contact_demo.json` and `artifacts/passive_contact_demo.json`
+are a separate two-pass synthetic numerical example. The [equation/source/test
+map](passive-contact.md) distinguishes this optional numerical closure from
+the 2 October 53-page report snapshot and from measured validation.
+
+The full suite passed **73/73** tests and `scripts/smoke.py` passed after the
+extreme-conductance and property-bracket corrections. The old prescribed-boundary demo remains
+byte-identical to its retained artifact (SHA256 `70ba963e8a53d718dee4a14f81aa488072f888a73547982488f214b54cebd5c4`);
+the new passive demo SHA256 is `1ec69cf7cec240845f5c251bab49b11f9989f999289df085c49166ec245a3942`.
+Both are synthetic. Independent specialist review exposed the initially
+nonfinite `G=1e308 W/K` result; finite derived-power and entropy guards now
+reject it. The reviewer then checked dimensions, cancellation, monotonic root
+and a seeded 2,000-case parameter sweep: 1,429 accepted cases met the
+diagnostic invariants, while 571 rejected at the declared guards. A supplied
+conductance's declared conductive scope still requires source review.
+
+Independent Astra review reproduced a second numerical defect: a valid
+constant-cp interior root was rejected because reconstructing enthalpy at a
+Q bracket endpoint differed by a few floating-point units from its knot.
+Endpoint-only knot-scale tolerance now handles that arithmetic difference
+without relaxing the public property inverse; the exact analytic case is a
+regression test. Astra's follow-up review found no remaining concrete issue:
+all 19 energy/passive-contact tests passed, and 10,000 seeded admissible
+constant-cp cases matched an independent analytic solution with maximum
+normalised contact-power error about `1.46e-10`. This is numerical correction,
+not an empirical calibration.
