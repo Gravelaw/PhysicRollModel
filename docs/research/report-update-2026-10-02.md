@@ -11,7 +11,7 @@ Word/PDF has not been silently treated as an editable repository file.
 
 ## Executive correction
 
-The report's pages 1, 17 and 35 describe the project as a generic v0.2
+The report's pages 1, 18 and 36 describe the project as a generic v0.2
 illustration and place a tension-aware bite solver, material-history handling
 and heat accounting wholly in the future. The reviewed repository now contains
 an **optional** tension-aware small-slope slab solution, optional spatial
@@ -42,24 +42,24 @@ exists in `physicroll/contact.py`, with explicit convergence and radius-envelope
 gates. A measured stand-spring/loaded-gap/recovered-gauge solution still does
 not exist. A fitted full stand compliance must not overlap the roll correction.
 
-**Pages 6 and 17 — material and integration.** `MaterialState` carries
+**Pages 7 and 18 — material and integration.** `MaterialState` carries
 declared alloy, temper, equivalent strain, temperature and pass history;
 optional `BiteHardening` varies assumed strength through a homogeneous
 plane-strain path. The AA5052 bridge retains unresolved initial strain,
 stress/strain convention, radius and speed-location assumptions. It is not an
 identified constitutive card.
 
-**Pages 10, 24–27 and 35 — heat.** `physicroll/energy_handoff.py` now computes
+**Pages 20 and 23–27; page 36 thermal gate — heat.** `physicroll/energy_handoff.py` now computes
 a conservative flowing-strip enthalpy and finite aggregate-roll sensible-energy
 ledger from **supplied** heat fractions, heat-capacity curves, contact power
 and cooling power. It does not solve a temperature field, heat-transfer
 coefficient, oil film, thermal crown or thermal feedback into rolling force.
 
-**Page 17 — repository inspection.** Repository files, tests and recorded
+**Page 18 — repository inspection.** Repository files, tests and recorded
 artifacts have now been inspected. The report's “No repository inspection or
 live-project edit” statement described the earlier writing state.
 
-**Pages 35–36 — validation gates.** Numerical conservation/refinement and
+**Pages 17 and 36 — validation gates.** Numerical conservation/refinement and
 fault tests have been run. Independent aluminium measurements, calibrated
 thermal boundaries, measured roll/stand geometry and held-out coils remain
 necessary before predictive or operational claims.
