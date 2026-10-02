@@ -17,6 +17,7 @@ The [2 October status addendum](report-update-2026-10-02.md) is retained as a hi
 | What do the published aluminium cases support? | [AA5052 comparison](../aa5052-study.md), [contact comparison packet](../report-sync-contact-increment.md), [energy packet](../report-sync-energy-handoff.md) |
 | What data and later models are needed? | [Sensors](../sensors.md), [next modules](../next_modules.md), [development](../development.md) |
 | How are prescribed multi-pass gauges and pass-specific signals handled? | [Multi-pass foundation (2 October 2026)](multipass-foundation-2026-10-02.md) |
+| What theory and source limits guide later schedule search? | [Multi-pass theory and scheduler boundary](multipass-theory-2026-10-02.md) |
 | Where are source claims qualified? | [Source and reference ledger](source-ledger.md), [contact source records](contact-sources.json), source tables in the documents above |
 
 `artifacts/aa5052/`, `artifacts/contact_increment/` and

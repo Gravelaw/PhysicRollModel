@@ -1,5 +1,8 @@
 # Multi-pass rolling: bounded development foundation (2026-10-02)
 
+The companion [theory and source register](multipass-theory-2026-10-02.md)
+records derivations, operating roles, foil topology and the later search design.
+
 ## Request and interpretation
 
 The example **6 mm → 0.05 mm** means a 6 mm entry gauge and a **0.05 mm final
@@ -35,8 +38,9 @@ the software foil guard; `run_prescribed_schedule()` rejects it with the pass
 number. There is no silent extrapolation through that stage.
 
 `run_prescribed_schedule()` accepts one explicit `Scenario` and one
-`PassOperatingPlan` per pass. It validates every pass and exact gauge handoff
-before calculating. The current executable mechanics is the **legacy synthetic
+`PassOperatingPlan` bound by pass name per pass, and requires an explicit
+single-layer, per-layer full-thickness gauge basis. It validates every pass
+and exact gauge handoff before calculating. The current executable mechanics is the **legacy synthetic
 heuristic** with the existing mean-stress hardening law. Its force, torque,
 power and assumed forward slip remain illustrative. The new workflow does not
 replace them with a validated slab, foil or stand model. Each pass has its own
@@ -56,12 +60,17 @@ explicit current-interface limitation, not evidence of physical infeasibility.
 The operating plan separates roles: `Scenario` contains requested steady inputs;
 `SignalRange` contains caller-declared phase-specific bounds; `ObservedSignal`
 contains separate readings; solver output contains predictions. Only declared
-steady input and model-output ranges are compared. Threading/deceleration/tailout
-range checks report `NOT_EVALUATED_PHASE`, temperature prediction reports
-`NOT_EVALUATED_NO_MODEL`, and cooling/lubricant boundaries remain declarations.
+steady input and model-output ranges are compared. Declared coolant/lubricant
+flow inputs may also be checked against pass ranges but do not change mechanics.
+Threading/deceleration/tailout range checks report `NOT_EVALUATED_PHASE`,
+temperature prediction reports `NOT_EVALUATED_NO_MODEL`, and cooling/lubricant
+descriptions remain declarations.
 Optional `EquipmentLimits` represent fixed hardware ratings separately from
-pass/phase ranges. Missing limits are unknown, not unlimited. Passing supplied
-ranges is not a process-safety or quality certificate.
+pass/phase ranges. Violations propagate to a top-level
+`DECLARED_BOUNDS_VIOLATED` result. Otherwise bounds status remains
+`INDETERMINATE` and coverage reports absent/unevaluated checks. Missing limits
+are unknown, not unlimited. Passing supplied ranges is not a process-safety
+or quality certificate.
 
 ## Traceability and acceptance checks
 
@@ -71,6 +80,8 @@ ranges is not a process-safety or quality certificate.
 | Exact consecutive gauge handoff; strict reduction; target equality | `schedule.py:GaugeSchedule.validate`, `run_prescribed_schedule` | `test_schedule.py:test_rejects_jump_reverse_target_and_bad_numbers`, `test_all_passes_preflight_and_no_inherited_plan` |
 | Prior strain and supplied temperature handoff; no inferred reset | `schedule.py:run_prescribed_schedule`, `materials.py:pass_with_history` | `test_schedule.py:test_state_handoff_and_distinct_pass_ranges` |
 | Per-pass role, units, provenance and phase range checks | `operating.py` | `test_schedule.py:test_state_handoff_and_distinct_pass_ranges`, `test_bad_units_duplicates_and_event_position`, `test_declared_range_and_hardware_violations_are_visible` |
+| Limit violation propagation, plan binding and boundary inputs | `schedule.py`, `operating.py` | `test_schedule.py:test_all_passes_preflight_and_no_inherited_plan`, `test_declared_boundary_flow_is_pass_local_input` |
+| Stable strain calculation for extremely large and tiny gauge ratios | `schedule.py:_log_thickness_ratio` | `test_schedule.py:test_extreme_positive_gauges_audit_stays_finite` |
 | Foil and reduction rejection before mechanics | `model.py:Scenario.validate`; `schedule.py` | `test_schedule.py:test_all_passes_preflight_and_no_inherited_plan` |
 
 ## Development boundary and missing data

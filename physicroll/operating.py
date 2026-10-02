@@ -69,13 +69,18 @@ class ObservedSignal:
 @dataclass(frozen=True)
 class PassOperatingPlan:
     """Inputs and envelopes belonging to exactly one pass; never inherited."""
+    pass_name: str
     ranges: tuple[SignalRange, ...] = ()
     observations: tuple[ObservedSignal, ...] = ()
     cooling_boundary: str | None = None
     lubrication_boundary: str | None = None
+    coolant_flow_kg_s: float | None = None
+    lubricant_flow_kg_s: float | None = None
     boundary_provenance: str | None = None
 
     def validate(self):
+        if not isinstance(self.pass_name, str) or not self.pass_name.strip():
+            raise ValueError('operating plan pass_name is required')
         if not isinstance(self.ranges, tuple) or not all(isinstance(x, SignalRange) for x in self.ranges):
             raise ValueError('pass ranges must be a tuple of SignalRange')
         if not isinstance(self.observations, tuple) or not all(isinstance(x, ObservedSignal) for x in self.observations):
@@ -97,7 +102,10 @@ class PassOperatingPlan:
         boundaries = (self.cooling_boundary, self.lubrication_boundary)
         if any(x is not None and (not isinstance(x, str) or not x.strip()) for x in boundaries):
             raise ValueError('boundary descriptions must be nonempty strings when supplied')
-        if any(x is not None for x in boundaries) and (
+        flows = (self.coolant_flow_kg_s, self.lubricant_flow_kg_s)
+        if any(x is not None and (not _number(x) or x < 0) for x in flows):
+            raise ValueError('declared boundary flows must be finite nonnegative kg/s')
+        if any(x is not None for x in boundaries + flows) and (
                 not isinstance(self.boundary_provenance, str) or not self.boundary_provenance.strip()):
             raise ValueError('declared cooling/lubrication boundaries need provenance')
 
@@ -135,16 +143,20 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
               'exit_tension_pa': scenario.exit_tension_pa,
               'reduction_fraction': 1 - scenario.exit_thickness_m / scenario.entry_thickness_m}
     predictions = mechanics['baseline_mechanics']
+    boundaries = {'coolant_flow_kg_s': plan.coolant_flow_kg_s,
+                  'lubricant_flow_kg_s': plan.lubricant_flow_kg_s}
     checks = []
     for bound in plan.ranges:
         role = QUANTITIES[bound.quantity][1]
-        value = (inputs if role == 'setpoint' else predictions if role == 'prediction' else {}).get(bound.quantity)
+        value = (inputs if role == 'setpoint' else predictions if role == 'prediction' else
+                 boundaries if role == 'boundary' else {}).get(bound.quantity)
         status = ('NOT_EVALUATED_NO_MODEL' if role == 'unsupported_prediction' else
                   'NOT_EVALUATED_PHASE' if bound.phase != 'steady' else
-                  'NOT_EVALUATED_DECLARED_BOUNDARY' if role == 'boundary' else
+                  'NOT_EVALUATED_MISSING_BOUNDARY_INPUT' if role == 'boundary' and value is None else
                   'WITHIN_DECLARED_RANGE' if bound.minimum <= value <= bound.maximum else
                   'OUTSIDE_DECLARED_RANGE')
-        checks.append({'range': asdict(bound), 'role': role, 'evaluated_value': value if bound.phase == 'steady' else None,
+        checks.append({'range': asdict(bound), 'role': role,
+                       'evaluated_value': value if bound.phase == 'steady' and role != 'unsupported_prediction' else None,
                        'status': status})
     fixed = []
     if equipment is not None:
@@ -170,7 +182,9 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
                                            else 'OUTSIDE_DECLARED_RANGE')})
     evaluated = [x for x in checks + fixed + observed_checks
                  if x['status'].startswith(('WITHIN', 'OUTSIDE'))]
-    return {'setpoints': inputs,
+    declared_steady = {item.quantity for item in plan.ranges if item.phase == 'steady'}
+    expected = {key for key, (_, role) in QUANTITIES.items() if role in ('setpoint', 'prediction')}
+    return {'pass_name': plan.pass_name, 'setpoints': inputs,
             'model_parameters': {'friction_coefficient': scenario.friction_coefficient,
                                  'work_roll_radius_m': scenario.work_roll_radius_m,
                                  'density_kg_m3': scenario.density_kg_m3,
@@ -183,12 +197,17 @@ def assess_pass_operating_plan(plan: PassOperatingPlan, scenario, mechanics: dic
             'observations': [asdict(item) for item in plan.observations],
             'cooling_boundary': plan.cooling_boundary,
             'lubrication_boundary': plan.lubrication_boundary,
+            'boundary_inputs': boundaries,
             'boundary_provenance': plan.boundary_provenance,
             'range_checks': checks, 'equipment_checks': fixed,
             'observation_range_checks': observed_checks,
-            'evaluated_checks_status': ('UNASSESSED' if not evaluated else
-                                        'WITHIN_DECLARED_BOUNDS' if all(x['status'].startswith('WITHIN') for x in evaluated)
-                                        else 'OUTSIDE_DECLARED_BOUNDS'),
+            'coverage': {'evaluated_check_count': len(evaluated),
+                         'unevaluated_range_count': sum(x['status'].startswith('NOT_EVALUATED') for x in checks),
+                         'steady_input_output_ranges_not_supplied': sorted(expected - declared_steady)},
+            'evaluated_checks_status': ('OUTSIDE_DECLARED_BOUNDS' if any(
+                x['status'].startswith('OUTSIDE') for x in evaluated) else
+                                        'UNASSESSED' if not evaluated else
+                                        'PARTIAL_DECLARED_CHECKS_ONLY'),
             'limitations': ['Ranges are caller-declared, not inferred from earlier passes.',
                             'Observations and boundaries do not calibrate mechanics or predict cooling/lubrication.',
                             'Only steady-state quantities with model outputs are evaluated.']}

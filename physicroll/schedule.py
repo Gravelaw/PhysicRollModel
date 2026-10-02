@@ -15,12 +15,21 @@ def _positive_finite(value):
             and math.isfinite(value) and value > 0)
 
 
+def _log_thickness_ratio(entry, exit_):
+    """Avoid both entry/exit overflow and near-equal log subtraction."""
+    if entry <= 2 * exit_:
+        return math.log1p((entry - exit_) / exit_)
+    return math.log(entry) - math.log(exit_)
+
+
 @dataclass(frozen=True)
 class GaugeSchedule:
     """Full entry gauge followed by each prescribed pass exit gauge, in metres."""
     name: str
     gauges_m: tuple[float, ...]
     target_exit_m: float
+    gauge_basis: str
+    layer_count: int
 
     def validate(self):
         if not isinstance(self.name, str) or not self.name.strip():
@@ -33,6 +42,10 @@ class GaugeSchedule:
             raise ValueError('prescribed gauges must strictly decrease at every pass')
         if not _positive_finite(self.target_exit_m) or self.gauges_m[-1] != self.target_exit_m:
             raise ValueError('last prescribed exit gauge must equal the final target')
+        if self.gauge_basis != 'per_layer_full_thickness':
+            raise ValueError('only explicit per-layer full-thickness gauges are supported')
+        if isinstance(self.layer_count, bool) or not isinstance(self.layer_count, int) or self.layer_count != 1:
+            raise ValueError('only explicitly declared single-layer rolling is supported')
 
 
 def inspect_gauge_schedule(schedule: GaugeSchedule) -> dict:
@@ -43,7 +56,7 @@ def inspect_gauge_schedule(schedule: GaugeSchedule) -> dict:
     cumulative_log = 0.0
     cumulative_equivalent = 0.0
     for index, (entry, exit_) in enumerate(zip(schedule.gauges_m, schedule.gauges_m[1:]), 1):
-        increment = math.log(entry / exit_)
+        increment = _log_thickness_ratio(entry, exit_)
         cumulative_log += increment
         cumulative_equivalent += coefficient * increment
         reasons = []
@@ -60,9 +73,10 @@ def inspect_gauge_schedule(schedule: GaugeSchedule) -> dict:
                        'single_pass_gauge_screen': 'OUTSIDE_MODEL_DOMAIN' if reasons else 'NEEDS_FULL_INPUTS',
                        'reasons': reasons})
     return {'status': 'KINEMATIC_AUDIT_ONLY', 'name': schedule.name,
-            'target_exit_m': schedule.target_exit_m, 'passes': passes,
-            'total_log_thickness_strain': math.log(schedule.gauges_m[0] / schedule.target_exit_m),
-            'total_plane_strain_equivalent_increment': coefficient * math.log(schedule.gauges_m[0] / schedule.target_exit_m),
+            'target_exit_m': schedule.target_exit_m, 'gauge_basis': schedule.gauge_basis,
+            'layer_count': schedule.layer_count, 'passes': passes,
+            'total_log_thickness_strain': _log_thickness_ratio(schedule.gauges_m[0], schedule.target_exit_m),
+            'total_plane_strain_equivalent_increment': coefficient * _log_thickness_ratio(schedule.gauges_m[0], schedule.target_exit_m),
             'limitations': ['Gauge screen is the existing demonstrator guard, not a physical pass limit.',
                             'No alloy, mill rating, bite, force, torque, power or temperature feasibility is inferred.',
                             'Plane-strain equivalent strain assumes homogeneous incompressible deformation without recovery.']}
@@ -88,6 +102,7 @@ class InterpassTemperature:
 def run_prescribed_schedule(passes: tuple[Scenario, ...], initial_state: MaterialState,
                             law: PowerHardeningLaw, *,
                             operating_plans: tuple[PassOperatingPlan, ...],
+                            gauge_basis: str, layer_count: int,
                             equipment_limits: EquipmentLimits | None = None,
                             interpass_temperatures: tuple[InterpassTemperature, ...] = ()) -> dict:
     """Chain the existing synthetic mean-hardening/legacy mechanics pass calculation.
@@ -107,6 +122,8 @@ def run_prescribed_schedule(passes: tuple[Scenario, ...], initial_state: Materia
             plan.validate()
         except ValueError as exc:
             raise ValueError(f'pass {index}: {exc}') from exc
+        if plan.pass_name != passes[index - 1].name:
+            raise ValueError(f'pass {index}: operating plan pass_name does not match scenario')
     if equipment_limits is not None:
         if not isinstance(equipment_limits, EquipmentLimits):
             raise ValueError('equipment_limits must be EquipmentLimits')
@@ -123,11 +140,14 @@ def run_prescribed_schedule(passes: tuple[Scenario, ...], initial_state: Materia
             scenario.validate()
         except ValueError as exc:
             raise ValueError(f'pass {index}: {exc}') from exc
+    if len({scenario.name for scenario in passes}) != len(passes):
+        raise ValueError('pass names must be unique within a schedule')
     gauges = (passes[0].entry_thickness_m,) + tuple(p.exit_thickness_m for p in passes)
     for index, (prior, following) in enumerate(zip(passes, passes[1:]), 1):
         if prior.exit_thickness_m != following.entry_thickness_m:
             raise ValueError(f'pass {index + 1}: entry gauge does not equal preceding exit gauge')
-    audit = inspect_gauge_schedule(GaugeSchedule(passes[0].name, gauges, gauges[-1]))
+    audit = inspect_gauge_schedule(GaugeSchedule(passes[0].name, gauges, gauges[-1],
+                                                 gauge_basis, layer_count))
     events = {}
     for event in interpass_temperatures:
         event.validate(len(passes))
@@ -153,11 +173,19 @@ def run_prescribed_schedule(passes: tuple[Scenario, ...], initial_state: Materia
                         'operating': assess_pass_operating_plan(operating_plans[index - 1], scenario,
                                                                 result, equipment_limits),
                         'state_for_next_pass': asdict(state)})
-    return {'status': 'SYNTHETIC_UNCALIBRATED_PRESCRIBED_SCHEDULE',
+    violations = [{'pass_number': item['pass_number'], 'check': check}
+                  for item in outputs for check in
+                  (item['operating']['range_checks'] + item['operating']['equipment_checks']
+                   + item['operating']['observation_range_checks'])
+                  if check['status'].startswith('OUTSIDE')]
+    return {'status': ('DECLARED_BOUNDS_VIOLATED' if violations else
+                       'SYNTHETIC_UNCALIBRATED_PRESCRIBED_SCHEDULE'),
+            'declared_bounds_status': ('VIOLATED' if violations else 'INDETERMINATE'),
+            'declared_bound_violations': violations,
             'mechanics_model': 'legacy_heuristic_mean_hardening',
             'initial_state': asdict(initial_state), 'final_state': asdict(state),
             'gauge_audit': audit, 'passes': outputs,
             'limitations': ['No schedule optimisation or inferred pass count.',
                             'No interpass heat transfer, recovery, annealing or strain reset.',
-                            'No mill ratings or alloy calibration supplied by this interface.',
+                            'Missing mill ratings, phase predictions and alloy calibration cannot be inferred.',
                             'Each pass uses the existing illustrative pressure, torque and speed closures.']}
