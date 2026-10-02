@@ -1,17 +1,21 @@
-# PhysicRollModel research report update
+# Historical status addendum to the 30 September report
 
-**2 October 2026 · addendum to _Aluminium cold rolling models for
-PhysicRollModel_, 30 September 2026, 49 pages**
+**2 October 2026 · addendum to the original 49-page edition of _Aluminium
+cold rolling models for PhysicRollModel_, dated 30 September 2026.** All page
+references below refer to that edition. The revised 53-page full report is
+available in [editable Word](Aluminium_cold_rolling_research_for_PhysicRollModel.docx)
+and [PDF](Aluminium_cold_rolling_research_for_PhysicRollModel.pdf); its Section
+40 records the current implementation and evidence boundaries.
 
 **Code baseline:** reviewed `main` commit
 `fbafee54bb8f22554904166c9653d75915051359`. This addendum records what
-changed since the report. The original literature discussion and its 105
-numbered source entries remain the long-form research record; the attached
-Word/PDF has not been silently treated as an editable repository file.
+changed after the 30 September edition. The revised full report preserves its
+literature discussion and 105 numbered source entries; this shorter addendum
+remains a bridge between editions.
 
 ## Executive correction
 
-The report's pages 1, 18 and 36 describe the project as a generic v0.2
+The 30 September edition's pages 1, 18 and 36 describe the project as a generic v0.2
 illustration and place a tension-aware bite solver, material-history handling
 and heat accounting wholly in the future. The reviewed repository now contains
 an **optional** tension-aware small-slope slab solution, optional spatial
@@ -24,7 +28,7 @@ plant-gauge, profile, flatness, residual-stress or control validation has been
 established. [Capability boundary](../capabilities.md) and
 [verification record](../verification.md) provide the current scope.
 
-## Replace these report status statements
+## Corrections to the 30 September edition
 
 **Page 1 — current status.** The reviewed code implements an optional,
 numerically checked, tension-aware slab bite with signed traction, force,
@@ -56,7 +60,7 @@ and cooling power. It does not solve a temperature field, heat-transfer
 coefficient, oil film, thermal crown or thermal feedback into rolling force.
 
 **Page 18 — repository inspection.** Repository files, tests and recorded
-artifacts have now been inspected. The report's “No repository inspection or
+artifacts have now been inspected. The earlier report's “No repository inspection or
 live-project edit” statement described the earlier writing state.
 
 **Pages 17 and 36 — validation gates.** Numerical conservation/refinement and
@@ -70,7 +74,7 @@ options**. Nothing in the optional slab or energy handoff implements them.
 
 ## Implemented equations and source boundary
 
-The report's page 3 convention uses full strip thickness `h` [m], width `b`
+The 30 September edition's page 3 convention uses full strip thickness `h` [m], width `b`
 [m], rolling coordinate `x` from entry to exit, positive longitudinal tension
 and positive compressive contact pressure. Repository code calls that pressure
 `q` and the signed strip traction `tau`; keep this notation translation explicit
@@ -165,9 +169,10 @@ has mean absolute **relative** force/slip residuals of 6.738%/41.960%; rigid
 spatial hardening gives 4.628%/34.526%; circular mean gives 8.066%/53.042%; and
 circular spatial gives 7.945%/44.802%. Pass 3 force worsens under rigid spatial
 hardening, and circular flattening worsens aggregate comparison residuals for
-that assumption set. Sensitivities to prior strain, strength interpretation,
-radius, friction and speed leave the residual sign unidentifiable across sampled
-cases. These are comparison residuals, **not fitted accuracy**, independent
+that assumption set. Sampled sensitivities to prior strain, strength
+interpretation, radius, friction and speed do not identify unique physical
+parameters from these three passes. Each recorded run has determinate residual
+signs. These are comparison residuals, **not fitted accuracy**, independent
 holdout results or a basis for plant settings. The source provides no measured
 torque or thermal boundary for validation. Exact inputs and each pass are in
 [the contact comparison packet](../report-sync-contact-increment.md) and
