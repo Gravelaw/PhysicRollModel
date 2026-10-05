@@ -176,3 +176,12 @@ capacity domain; representative contact entropy and pure-exchange whole-step
 entropy are reported separately. Its midpoint temperatures and contact coefficient
 are unvalidated; the
 prescribed-power example remains the default.
+
+## Offline operating-phase replay
+
+[O0 operating contracts](docs/operational-replay.md) preserve versioned phase
+recipe targets, applied references and measured samples separately. The
+`physicroll.operational_replay` API records ramp-up, steady and deceleration
+histories and reports per-model readiness with explicit missing-data reasons.
+Readiness permits only a separate domain check; replay computes no predictions,
+advances no material state and implements no dynamic physics or control.

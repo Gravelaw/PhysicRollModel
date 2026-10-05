@@ -19,7 +19,8 @@ QUANTITIES = {
     'coolant_flow_kg_s': ('kg/s', 'boundary'),
     'lubricant_flow_kg_s': ('kg/s', 'boundary'),
 }
-PHASES = frozenset(('threading', 'steady', 'deceleration', 'tailout'))
+PHASES = frozenset(('prepared', 'threading', 'ramp_up', 'steady', 'deceleration',
+                    'tailout', 'reversal', 'interrupted', 'complete', 'unknown'))
 NONNEGATIVE_QUANTITIES = frozenset((
     'exit_thickness_m', 'entry_speed_m_s', 'entry_tension_pa', 'exit_tension_pa',
     'reduction_fraction', 'separating_force_n', 'coolant_flow_kg_s',
