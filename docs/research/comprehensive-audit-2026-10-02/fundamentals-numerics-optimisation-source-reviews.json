@@ -1,0 +1,189 @@
+[
+  {
+    "legacy_id": "R159",
+    "persistent_id": "R159",
+    "title": "Convex Optimization",
+    "authors": [
+      "Stephen Boyd",
+      "Lieven Vandenberghe"
+    ],
+    "source_type": "book",
+    "publisher": "Cambridge University Press",
+    "edition": "1st edition; author PDF seventh printing with corrections, 2009",
+    "publication_year": 2004,
+    "isbn": {
+      "hardback": "9780521833783",
+      "digital": "9780511804441"
+    },
+    "doi": "10.1017/CBO9780511804441",
+    "url": "https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf",
+    "version": "Print publication 2004-03-08; author-hosted corrected 2009 printing; publisher digital record 2013-08-05",
+    "access_date": "2026-10-02",
+    "access_status": "partial_text_reviewed",
+    "pages_equations_tables": "Selected author-PDF full-text sections: 4.1.4–4.2.4 pp.136–144, Eq.4.15 and local/global proof; 5.5.2–5.5.3 pp.242–244, Eqs.5.48–5.49; 6.3.1–6.3.2 pp.305–306, Eqs.6.7–6.9. Copyright page read. Other chapters not comprehensively reviewed.",
+    "findings": "Distinguishes convex guarantees, feasible-point evaluation, optimality conditions and regularized fitting. Nonconvex cases do not inherit global guarantees.",
+    "weaknesses_conflicts": "No convexity proof for present rolling model. Selected sections only; no whole-book review. Mathematical objective accuracy does not establish physical prediction accuracy.",
+    "domain": "General mathematical/scientific computing; no alloy or mill calibration",
+    "evidence_level": "Authoritative fundamentals text; access depth specified per record",
+    "relevance": "P2 calibration formulation; P5 search certificates/limitations; keep existing conditional mesh-search status.",
+    "new_source": true,
+    "historical_book_list_membership": "Not established; newly selected fundamentals source, not recovery of historical 14-book list",
+    "metadata_url": "https://www.cambridge.org/highereducation/books/convexoptimization/17D2FAA54F641A2F62C7CCD01DFA97C4",
+    "license": "Copyright Cambridge; lawful author-hosted reading, no redistribution of book/code/images.",
+    "full_text_available": true
+  },
+  {
+    "legacy_id": "R160",
+    "persistent_id": "R160",
+    "title": "Finite Difference Computing with Exponential Decay Models",
+    "authors": [
+      "Hans Petter Langtangen"
+    ],
+    "source_type": "book",
+    "publisher": "Springer International Publishing",
+    "edition": "1st edition, Lecture Notes in Computational Science and Engineering 110",
+    "publication_year": 2016,
+    "isbn": {
+      "hardback": "9783319294384",
+      "ebook": "9783319294391"
+    },
+    "doi": "10.1007/978-3-319-29439-1",
+    "url": "https://link.springer.com/book/10.1007/978-3-319-29439-1",
+    "version": "Publisher eBook 2016-06-10; hardback 2016-06-12. Review anchors use publisher chapter pagination, not longer author draft dated 2016-02-29.",
+    "access_date": "2026-10-02",
+    "access_status": "partial_text_reviewed",
+    "pages_equations_tables": "Publisher chapter 2 Analysis, pp.39–58 selected substantive sections 2.1–2.4.2: Eqs.2.1–2.8 amplification/stability; Eqs.2.10–2.14 convergence; model/data error discussion. Publisher frontmatter ISBN/licence read. Author draft consulted for comparison.",
+    "findings": "Scalar decay shows bounded amplification and monotonicity are different requirements; centered integration can oscillate. Numerical, model and input errors need separate investigation.",
+    "weaknesses_conflicts": "Scalar constant-coefficient result is not a proof for nonlinear coupled rolling heat exchange. Time substepping alone cannot fix the present spatial strip-midpoint closure. Legacy Python examples require contemporary review.",
+    "domain": "General mathematical/scientific computing; no alloy or mill calibration",
+    "evidence_level": "Authoritative fundamentals text; access depth specified per record",
+    "relevance": "P1 analytic thermal limits, independent refinement, qualitative bounds; P4 thermal closure qualification.",
+    "new_source": true,
+    "historical_book_list_membership": "Not established; newly selected fundamentals source, not recovery of historical 14-book list",
+    "chapter_url": "https://link.springer.com/content/pdf/10.1007/978-3-319-29439-1_2",
+    "author_url": "https://hplgit.github.io/decay-book/doc/web/",
+    "license": "Publisher frontmatter: CC BY-NC 4.0, third-party exceptions. This audit redistributes no book material.",
+    "full_text_available": true
+  },
+  {
+    "legacy_id": "R161",
+    "persistent_id": "R161",
+    "title": "Discrete Inverse Problems: Insight and Algorithms",
+    "authors": [
+      "Per Christian Hansen"
+    ],
+    "source_type": "book",
+    "publisher": "Society for Industrial and Applied Mathematics",
+    "edition": "2010 original edition, Fundamentals of Algorithms 7; author errata dated 2015-04-15 consulted",
+    "publication_year": 2010,
+    "isbn": {
+      "print": "9780898716962",
+      "ebook": "9780898718836"
+    },
+    "doi": "10.1137/1.9780898718836",
+    "url": "https://epubs.siam.org/doi/book/10.1137/1.9780898718836",
+    "version": "SIAM book published 2010; chapter 4 official online record 2012-03-23 independently checked by reviewer; author errata dated 2015-04-15.",
+    "access_date": "2026-10-02",
+    "access_status": "abstract_only",
+    "pages_equations_tables": "Publisher exposed chapter opening extracts are labeled Abstract: chapter 3 (whole chapter pp.23–51), chapter 4 (whole chapter pp.53–83) including Eq.4.1 filtered SVD, chapter 5 (whole chapter pp.85–107). Equation page within chapter not independently verified. Full chapter PDFs unavailable. Author errata consulted. Teaching collection separately identified as R163; slide pages are not book pagination.",
+    "findings": "Ill-conditioning allows small fit residuals with inaccurate parameters. Spectral regularization trades noise amplification against bias; parameter-choice rules have assumptions and can fail.",
+    "weaknesses_conflicts": "Book primarily treats linear Fredholm inverse problems with at least as many observations as unknowns. Local sensitivity SVD is not proof of global nonlinear identifiability. Long publisher abstracts/extracts do not establish partial chapter-body access; full chapters not obtained.",
+    "domain": "General mathematical/scientific computing; no alloy or mill calibration",
+    "evidence_level": "Authoritative fundamentals text; access depth specified per record",
+    "relevance": "P2 conditional calibration: inspect scaled sensitivity, report ambiguous parameter combinations, avoid claiming identified prestrain from an effective fit.",
+    "new_source": true,
+    "historical_book_list_membership": "Not established; newly selected fundamentals source, not recovery of historical 14-book list",
+    "author_url": "https://people.compute.dtu.dk/pcha/DIPbook.html",
+    "identity_confirmation_url": "https://orbit.dtu.dk/en/publications/discrete-inverse-problems-insight-and-algorithms",
+    "license": "SIAM copyrighted book; author lecture material publicly posted without an audited redistribution licence. Links/original analysis only.",
+    "full_text_available": false,
+    "related_entity": "R163"
+  },
+  {
+    "legacy_id": "R162",
+    "persistent_id": "R162",
+    "title": "Verification and Validation in Scientific Computing",
+    "authors": [
+      "William L. Oberkampf",
+      "Christopher J. Roy"
+    ],
+    "source_type": "book",
+    "publisher": "Cambridge University Press",
+    "edition": "2010 original edition; no later edition substituted",
+    "publication_year": 2010,
+    "isbn": {
+      "hardback": "9780521113601"
+    },
+    "doi": "10.1017/CBO9780511760396",
+    "url": "https://www.cambridge.org/core/books/verification-and-validation-in-scientific-computing/05CA1F8F3CCB5AE5445FDF55239A0183",
+    "version": "First published 2010; official chapter records online 2013-03-05. Author-uploaded publisher frontmatter posted 2014-01-14.",
+    "access_date": "2026-10-02",
+    "access_status": "abstract_only",
+    "pages_equations_tables": "Official chapter 5 summary (chapter pp.170–207) and chapter 6 summary (pp.208–248), not chapter bodies. Author-uploaded Cambridge frontmatter: contents pp.vii–x; 5.3 order p.180, 5.4 mesh refinement p.185, 6.3 MMS p.219, 8.3 Richardson p.309, 8.6 GCI p.323, 14.3 gap analysis p.684 are TOC leads only. No equations reviewed.",
+    "findings": "Publisher summaries distinguish numerical implementation checks and exact-solution/order tests; TOC provides a structured route for deeper verification/validation study.",
+    "weaknesses_conflicts": "No full chapter access obtained. TOC headings establish topics, not reviewed procedures. Do not claim application of an unread GCI formula, validation metric or full-book methodology.",
+    "domain": "General mathematical/scientific computing; no alloy or mill calibration",
+    "evidence_level": "Authoritative fundamentals text; access depth specified per record",
+    "relevance": "P1 separate code/solution verification and empirical validation; P2 conditional source reproduction remains short of independent validation.",
+    "new_source": true,
+    "historical_book_list_membership": "Not established; newly selected fundamentals source, not recovery of historical 14-book list",
+    "chapter_summary_urls": [
+      "https://www.cambridge.org/core/books/abs/verification-and-validation-in-scientific-computing/code-verification/733E362E9B977EA1E3745BF9FAF607A0",
+      "https://www.cambridge.org/core/books/abs/verification-and-validation-in-scientific-computing/exact-solutions/DFB030CD8A8334FA13DF3B2A627964E4"
+    ],
+    "author_uploaded_publisher_frontmatter_url": "https://www.researchgate.net/publication/237076931_Verification_and_Validation_in_Scientific_Computing",
+    "license": "Cambridge copyrighted text; author-uploaded publisher frontmatter read only. No book redistribution.",
+    "full_text_available": false,
+    "metadata_only_component": "TOC and frontmatter; primary chapter summaries additionally reviewed"
+  },
+  {
+    "legacy_id": "R163",
+    "persistent_id": "R163",
+    "title": "Short-course teaching materials accompanying Discrete Inverse Problems: Insight and Algorithms",
+    "title_note": "Descriptive title for the single author-organized short-course collection; component titles are Chapter 1 and 2, Chapter 4, and Chapter 5.",
+    "authors": [
+      "Per Christian Hansen"
+    ],
+    "source_type": "author_teaching_collection",
+    "publisher": "Technical University of Denmark author website",
+    "edition": "Undated public teaching collection; reviewed components as served on 2026-10-02",
+    "publication_year": null,
+    "isbn": {},
+    "doi": null,
+    "url": "https://people.compute.dtu.dk/pcha/DIPbook.html",
+    "version": "Collection date and immutable revision not exposed; do not assign the book publication year to teaching PDFs.",
+    "access_date": "2026-10-02",
+    "access_status": "partial_text_reviewed",
+    "pages_equations_tables": "chap12.pdf printed slides 7–11 and 24–29: small-residual ill-conditioning example and singular-value expansion/Picard condition; chap4.pdf slides 11–17: Tikhonov objective, filter factors and augmented least-squares form; chap5.pdf printed slides 5–13: bias/perturbation, discrepancy principle and L-curve. Printed slide numbers used; chapters not fully reviewed.",
+    "findings": "Author examples distinguish small fit residual from accurate parameters and show regularization bias/noise tradeoffs. Tikhonov can be expressed as augmented least squares.",
+    "weaknesses_conflicts": "Teaching examples concern mainly linear inverse problems; neither regularization nor a local SVD establishes unique nonlinear rolling parameters. Undated slides and full-book text are separate evidence. Not all course lectures reviewed.",
+    "domain": "General inverse-problem mathematics; no alloy-specific calibration",
+    "evidence_level": "Primary author teaching material, selected substantive slides",
+    "relevance": "P2 sensitivity and effective-parameter interpretation; synthetic inverse verification before measured calibration.",
+    "new_source": true,
+    "historical_book_list_membership": "Not a book; distinct newly reviewed course resource",
+    "related_entity": "R161",
+    "components": [
+      {
+        "component_id": "R163:C12",
+        "title": "Chapter 1 and 2",
+        "url": "https://people.compute.dtu.dk/pcha/DIP/chap12.pdf",
+        "pdf_pages": 32
+      },
+      {
+        "component_id": "R163:C4",
+        "title": "Chapter 4",
+        "url": "https://people.compute.dtu.dk/pcha/DIP/chap4.pdf",
+        "pdf_pages": 29
+      },
+      {
+        "component_id": "R163:C5",
+        "title": "Chapter 5",
+        "url": "https://people.compute.dtu.dk/pcha/DIP/chap5.pdf",
+        "pdf_pages": 27,
+        "pagination_note": "PDF has 27 pages; printed footer numbering says /29."
+      }
+    ],
+    "license": "Public author-hosted reading; no redistribution licence audited. Citations and original analysis only."
+  }
+]

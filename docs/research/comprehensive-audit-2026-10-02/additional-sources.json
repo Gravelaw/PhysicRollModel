@@ -1,0 +1,865 @@
+[
+  {
+    "source_id": "R106",
+    "title": "Olaogun et al. Heat transfer in cold rolling process of AA8015 alloy (online 2018 / volume 2019)",
+    "urls": [
+      "https://doi.org/10.1007/s00170-018-2811-2"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R107",
+    "title": "Hulamin 5052 Data Sheet",
+    "urls": [
+      "https://www.hulamin.com/sites/default/files/downloads/5052%20Data%20Sheet.pdf"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R108",
+    "title": "Tsuchida et al. 2009 AA1050 pass-schedule texture",
+    "urls": [
+      "https://doi.org/10.2464/jilm.59.555"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R109",
+    "title": "Cantergiani et al. 2024 aluminium near-surface texture",
+    "urls": [
+      "https://doi.org/10.1007/s11661-024-07472-y"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R110",
+    "title": "Medraj Concordia lecture 5 rolling",
+    "urls": [
+      "https://users.encs.concordia.ca/~mmedraj/mech421/lecture%205%20rolling.pdf"
+    ],
+    "source_type": "teaching"
+  },
+  {
+    "source_id": "R111",
+    "title": "Fleck et al. 1992 Cold rolling of foil",
+    "urls": [
+      "https://sage.cnpereading.com/storage/sage/journal/article/PIB/1992/PIB_1992_206_2/unzip/10.1243_PIME_PROC_1992_206_064_02.pdf"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R112",
+    "title": "ABB Review 1/2009 Rolling models pp43–48",
+    "urls": [
+      "https://library.e.abb.com/public/cab489262e40ea6ac1257beb0029324a/ABB%20Review_1_2009_72dpi.pdf"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R113",
+    "title": "European Aluminium Environmental Profile Report 2018",
+    "urls": [
+      "https://european-aluminium.eu/wp-content/uploads/2023/01/European-Aluminium_Environmental-Profile-Report-2018_full-version.pdf"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R114",
+    "title": "Achenbach OPTIMILL foil rolling mills",
+    "urls": [
+      "https://www.achenbach.de/en/machines-equipment/optimill-rolling-mills/optimill-foil-rolling-mills/"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R115",
+    "title": "US20040088840A1 foil rolling route patent",
+    "urls": [
+      "https://patents.google.com/patent/US20040088840A1/en"
+    ],
+    "source_type": "patent"
+  },
+  {
+    "source_id": "R116",
+    "title": "Hu et al. 2016 aluminium hot tandem schedule optimisation",
+    "urls": [
+      "https://doi.org/10.1007/s00170-015-7909-1"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R117",
+    "title": "Smeulders STLE 2017 pilot mill aluminium hot rolling",
+    "urls": [
+      "https://www.stle.org/images/pdf/STLE_ORG/AM2017%20Presentations/Nonferrous%20Metals/STLE2017_Nonferrous%20Metals%20II_Session%206L_B.%20Smeulders_The%20Use%20of%20a%20Pilot%20Mill%20for%20Development%20of%20Lubricants%20for%20Aluminum%20Hot%20Rolling.pdf"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R118",
+    "title": "Bátorfi et al. 2022 Models for symmetric cold rolling of an aluminum sheet",
+    "urls": [
+      "https://doi.org/10.37775/EIS.2022.2.1"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R119",
+    "title": "Blender manual USD import/export",
+    "urls": [
+      "https://docs.blender.org/manual/en/latest/files/import_export/usd.html"
+    ],
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R120",
+    "title": "NVIDIA Omniverse Kit-CAE reference application",
+    "urls": [
+      "https://github.com/NVIDIA-Omniverse/kit-cae"
+    ],
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R121",
+    "title": "BIPM International System of Units 9th edition updated 2026",
+    "urls": [
+      "https://www.bipm.org/en/publications/si-brochure"
+    ],
+    "source_type": "official_standard"
+  },
+  {
+    "source_id": "R122",
+    "title": "JSON Schema draft 2020-12 core meta-schema",
+    "urls": [
+      "https://json-schema.org/draft/2020-12/schema"
+    ],
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "R123",
+    "title": "Danieli HiTHIX thickness measurement",
+    "urls": [
+      "https://www.danieli.com/en/products/products-processes-and-technologies/product-lines/hithix_26_115.htm"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R124",
+    "title": "Danieli Hydraulic Automatic Gap Control cylinders",
+    "urls": [
+      "https://www.danieli.com/en/products/processes-technologies/product-lines/hydraulic-automatic-gap-control-cylinders_26_203.htm"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R125",
+    "title": "DwyerOmega LVDT sensors",
+    "urls": [
+      "https://www.dwyeromega.com/en-us/resources/lvdt-sensors"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R126",
+    "title": "Encoder Products Company home page",
+    "urls": [
+      "https://www.encoder.com/"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R127",
+    "title": "Kistler home page",
+    "urls": [
+      "https://www.kistler.com/"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R128",
+    "title": "Fluke Process Instruments emissivity of metals",
+    "urls": [
+      "https://www.flukeprocessinstruments.com/en-us/service-and-support/knowledge-center/infrared-technology/emissivity-metals"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R129",
+    "title": "ABB strip tension overview",
+    "urls": [
+      "https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/strip-tension"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R130",
+    "title": "ABB Pressductor pillowblock load cells PFTL211",
+    "urls": [
+      "https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/strip-tension/pressductor-pillowblock-load-cells-pftl211"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R131",
+    "title": "Polytec velocimetry overview",
+    "urls": [
+      "https://www.polytec.com/en/velocimetry"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R132",
+    "title": "ABB flatness systems overview",
+    "urls": [
+      "https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/flatness-measurement/flatness-systems"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R133",
+    "title": "ABB flatness measurement system",
+    "urls": [
+      "https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/flatness-measurement/flatness-systems/flatness-measurement-system"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R134",
+    "title": "Szűcs et al. 2020 Comparison of Simplified and Finite Element Analysis on Cold Flat Rolling",
+    "urls": [
+      "https://doi.org/10.32974/mse.2020.028"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R135",
+    "title": "Szűcs et al. 2020 companion cold-rolling study .029",
+    "urls": [
+      "https://doi.org/10.32974/mse.2020.029"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R136",
+    "title": "Yang et al. 2012 AA3102 cold rolling study",
+    "urls": [
+      "https://doi.org/10.1155/2012/734510"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R137",
+    "title": "Eriksson and Waltersson 2011 Investigation of steady state rolling and evaluation of rolling force and friction in cold rolling of aluminum",
+    "urls": [
+      "https://du.diva-portal.org/smash/get/diva2%3A519236/FULLTEXT01.pdf"
+    ],
+    "source_type": "thesis"
+  },
+  {
+    "source_id": "R138",
+    "title": "Olaogun 2018 Cold rolling mill modelling of the heat transfer and mechanical behaviour",
+    "urls": [
+      "https://hdl.handle.net/10210/293954"
+    ],
+    "source_type": "thesis"
+  },
+  {
+    "source_id": "R139",
+    "title": "Safarov et al. 2023 aluminium strip cold rolling route",
+    "urls": [
+      "https://jomardpublishing.com/UploadFiles/Files/journals/NMCA/v7n2/Safarov_et_al.pdf"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R140",
+    "title": "AA1050 Scientific Reports 2026 dislocation-based cold rolling study",
+    "urls": [
+      "https://www.nature.com/articles/s41598-026-58036-6"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R141",
+    "title": "Hou and Behdinan cold-rolling FE dataset version 1",
+    "urls": [
+      "https://doi.org/10.17632/wcp8wrdhyj.1"
+    ],
+    "source_type": "dataset_repository"
+  },
+  {
+    "source_id": "R142",
+    "title": "Flanagan et al. cold rolling numerical input archive",
+    "urls": [
+      "https://doi.org/10.5281/zenodo.15609640"
+    ],
+    "source_type": "dataset_repository"
+  },
+  {
+    "source_id": "R143",
+    "title": "NIST SP 800-82 Rev.3 Guide to Operational Technology Security",
+    "urls": [
+      "https://csrc.nist.gov/pubs/sp/800/82/r3/final"
+    ],
+    "source_type": "official_guidance"
+  },
+  {
+    "source_id": "R144",
+    "title": "pip Secure installs documentation",
+    "urls": [
+      "https://pip.pypa.io/en/stable/topics/secure-installs/"
+    ],
+    "source_type": "official_software"
+  },
+  {
+    "source_id": "W001",
+    "title": "Wikipedia orientation: Aluminium",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Aluminium"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W002",
+    "title": "Wikipedia orientation: Aluminium_alloy",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Aluminium_alloy"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W003",
+    "title": "Wikipedia orientation: Forging",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Forging"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W004",
+    "title": "Wikipedia orientation: Fracture_mechanics",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Fracture_mechanics"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W005",
+    "title": "Wikipedia orientation: Grain-boundary_strengthening",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Grain-boundary_strengthening"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W006",
+    "title": "Wikipedia orientation: Lubrication",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Lubrication"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W007",
+    "title": "Wikipedia orientation: Recrystallization_(metallurgy)",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Recrystallization_(metallurgy)"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W008",
+    "title": "Wikipedia orientation: Rolling_(metalworking)",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Rolling_(metalworking)"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W009",
+    "title": "Wikipedia orientation: Thermal_contact_conductance",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Thermal_contact_conductance"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W010",
+    "title": "Wikipedia orientation: Thermodynamics",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Thermodynamics"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "W011",
+    "title": "Wikipedia orientation: Work_hardening",
+    "urls": [
+      "https://en.wikipedia.org/wiki/Work_hardening"
+    ],
+    "source_type": "secondary_orientation",
+    "access_status": "not_retrieved_orientation_only",
+    "version": "Mutable page; historical link, no revision pinned",
+    "findings": "Vocabulary orientation only. No physical coefficient or engineering recommendation relies on this secondary source.",
+    "weaknesses_conflicts": "No primary research evidence or version-specific technical claim adopted.",
+    "domain": "General vocabulary; no alloy-specific calibration",
+    "evidence_level": "secondary orientation",
+    "relevance": "Terminology only; use primary sources for equations and data",
+    "pages_equations_tables": "No equation/data locator used"
+  },
+  {
+    "source_id": "R145",
+    "title": "Insights into a cold rolling mill: a survey through length-related process data, strip splitting, and multiple passes",
+    "urls": [
+      "https://link.springer.com/article/10.1007/s00170-025-15506-x",
+      "https://doi.org/10.1007/s00170-025-15506-x"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R146",
+    "title": "Robust multi-objective optimization of rolling schedule for tandem cold rolling based on evolutionary direction differential evolution algorithm",
+    "urls": [
+      "https://link.springer.com/article/10.1016/S1006-706X(17)30119-X",
+      "https://doi.org/10.1016/S1006-706X(17)30119-X"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R147",
+    "title": "Potential of asymmetric strip tension to control the surface roughness in cold rolling",
+    "urls": [
+      "https://www.sciencedirect.com/science/article/pii/S1526612525011673"
+    ],
+    "source_type": "scholarly"
+  },
+  {
+    "source_id": "R148",
+    "title": "EMG iTiM current family overview",
+    "urls": [
+      "https://www.emg.elexis.group/news/through-thick-and-thin-emg-itim-high-precision-thickness-measurement-now-part-of-the-emg-portfolio"
+    ],
+    "source_type": "oem_industry"
+  },
+  {
+    "source_id": "R154",
+    "title": "A Heat Transfer Textbook",
+    "urls": [
+      "https://ahtt.mit.edu/"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-materials-thermal-source-reviews.json",
+    "authors": [
+      "John H. Lienhard V",
+      "John H. Lienhard IV"
+    ],
+    "isbn": null
+  },
+  {
+    "source_id": "R155",
+    "title": "Light Alloys: Metallurgy of the Light Metals",
+    "urls": [
+      "https://www.inspectioncopy.elsevier.com/book/details/9780080994314"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-materials-thermal-source-reviews.json",
+    "authors": [
+      "Ian Polmear",
+      "David StJohn",
+      "Jian-Feng Nie",
+      "Ma Qian"
+    ],
+    "isbn": "9780080994314"
+  },
+  {
+    "source_id": "R156",
+    "title": "Recrystallization and Related Annealing Phenomena",
+    "urls": [
+      "https://shop.elsevier.com/books/recrystallization-and-related-annealing-phenomena/rollett/978-0-08-098235-9"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-materials-thermal-source-reviews.json",
+    "authors": [
+      "John Humphreys",
+      "Gregory S. Rohrer",
+      "Anthony Rollett"
+    ],
+    "isbn": "9780080982359"
+  },
+  {
+    "source_id": "R157",
+    "title": "Recovery and Recrystallization: Phenomena, Physics, Models, Simulation",
+    "urls": [
+      "https://www.dierk-raabe.com/app/download/5801853763/Dierk%2BRaabe%2Boverview%2Brecrystallization.pdf",
+      "https://doi.org/10.1016/B978-0-444-53770-6.00023-X"
+    ],
+    "source_type": "book_chapter",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-materials-thermal-source-reviews.json",
+    "authors": [
+      "Dierk Raabe"
+    ],
+    "isbn": "9780444537706"
+  },
+  {
+    "source_id": "R158",
+    "title": "Part 3: Introduction to Engineering Heat Transfer, MIT 16.050 Thermal Energy",
+    "urls": [
+      "https://ocw.mit.edu/courses/16-050-thermal-energy-fall-2002/87d9f4544b7fd64a77201382500d057c_10_part3.pdf"
+    ],
+    "source_type": "teaching",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-materials-thermal-source-reviews.json",
+    "authors": [
+      "MIT OpenCourseWare; course instructor Zoltan Spakovszky"
+    ],
+    "isbn": null
+  },
+  {
+    "source_id": "R149",
+    "title": "Applied Mechanics of Solids",
+    "urls": [
+      "https://solidmechanics.org/",
+      "https://doi.org/10.1201/9781439802489"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-mechanics-source-reviews.json",
+    "authors": [
+      "Allan F. Bower"
+    ],
+    "isbn": {
+      "print_first_edition": "9781439802472",
+      "electronic_first_edition": "9781439802489"
+    }
+  },
+  {
+    "source_id": "R150",
+    "title": "Metal Forming: Mechanics and Metallurgy",
+    "urls": [
+      "https://www.cambridge.org/core/books/metal-forming/DFD3C93FFFCB89A29076C55B8A4E1831",
+      "https://doi.org/10.1017/CBO9780511811111"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-mechanics-source-reviews.json",
+    "authors": [
+      "William F. Hosford",
+      "Robert M. Caddell"
+    ],
+    "isbn": {
+      "hardback_third_edition": "9780521881210",
+      "electronic_third_edition": "9780511811111"
+    }
+  },
+  {
+    "source_id": "R151",
+    "title": "Cold and Hot Forging: Fundamentals and Applications",
+    "urls": [
+      "https://dl.asminternational.org/technical-books/edited-volume/126/Cold-and-Hot-ForgingFundamentals-and-Applications",
+      "https://doi.org/10.31399/asm.tb.chffa.9781627083003"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-mechanics-source-reviews.json",
+    "editors": [
+      "Taylan Altan",
+      "Gracious Ngaile",
+      "Gangshu Shen"
+    ],
+    "isbn": {
+      "print": "9780871708052",
+      "electronic": "9781627083003"
+    }
+  },
+  {
+    "source_id": "R152",
+    "title": "Primer on Flat Rolling",
+    "urls": [
+      "https://shop.elsevier.com/books/primer-on-flat-rolling/lenard/978-0-08-099418-5"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-mechanics-source-reviews.json",
+    "authors": [
+      "John G. Lenard"
+    ],
+    "isbn": {
+      "print_second_edition": "9780080994185"
+    }
+  },
+  {
+    "source_id": "R159",
+    "title": "Convex Optimization",
+    "urls": [
+      "https://web.stanford.edu/~boyd/cvxbook/bv_cvxbook.pdf",
+      "https://doi.org/10.1017/CBO9780511804441"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-numerics-optimisation-source-reviews.json",
+    "authors": [
+      "Stephen Boyd",
+      "Lieven Vandenberghe"
+    ],
+    "isbn": {
+      "hardback": "9780521833783",
+      "digital": "9780511804441"
+    },
+    "edition": "1st edition; author PDF seventh printing with corrections, 2009",
+    "publication_year": 2004
+  },
+  {
+    "source_id": "R160",
+    "title": "Finite Difference Computing with Exponential Decay Models",
+    "urls": [
+      "https://link.springer.com/book/10.1007/978-3-319-29439-1",
+      "https://doi.org/10.1007/978-3-319-29439-1"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-numerics-optimisation-source-reviews.json",
+    "authors": [
+      "Hans Petter Langtangen"
+    ],
+    "isbn": {
+      "hardback": "9783319294384",
+      "ebook": "9783319294391"
+    },
+    "edition": "1st edition, Lecture Notes in Computational Science and Engineering 110",
+    "publication_year": 2016
+  },
+  {
+    "source_id": "R161",
+    "title": "Discrete Inverse Problems: Insight and Algorithms",
+    "urls": [
+      "https://epubs.siam.org/doi/book/10.1137/1.9780898718836",
+      "https://doi.org/10.1137/1.9780898718836"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-numerics-optimisation-source-reviews.json",
+    "authors": [
+      "Per Christian Hansen"
+    ],
+    "isbn": {
+      "print": "9780898716962",
+      "ebook": "9780898718836"
+    },
+    "edition": "2010 original edition, Fundamentals of Algorithms 7; author errata dated 2015-04-15 consulted",
+    "publication_year": 2010
+  },
+  {
+    "source_id": "R162",
+    "title": "Verification and Validation in Scientific Computing",
+    "urls": [
+      "https://www.cambridge.org/core/books/verification-and-validation-in-scientific-computing/05CA1F8F3CCB5AE5445FDF55239A0183",
+      "https://doi.org/10.1017/CBO9780511760396"
+    ],
+    "source_type": "textbook_monograph",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-numerics-optimisation-source-reviews.json",
+    "authors": [
+      "William L. Oberkampf",
+      "Christopher J. Roy"
+    ],
+    "isbn": {
+      "hardback": "9780521113601"
+    },
+    "edition": "2010 original edition; no later edition substituted",
+    "publication_year": 2010
+  },
+  {
+    "source_id": "R163",
+    "title": "Short-course teaching materials accompanying Discrete Inverse Problems: Insight and Algorithms",
+    "urls": [
+      "https://people.compute.dtu.dk/pcha/DIPbook.html"
+    ],
+    "source_type": "teaching",
+    "selection_provenance": "Newly selected 2026-10-02 supplement; not recovered historical book inventory",
+    "identity_review_file": "fundamentals-numerics-optimisation-source-reviews.json",
+    "authors": [
+      "Per Christian Hansen"
+    ],
+    "isbn": {},
+    "edition": "Undated public teaching collection; reviewed components as served on 2026-10-02",
+    "publication_year": null
+  },
+  {
+    "source_id": "R164",
+    "title": "IndustrialIT for cold rolling mills: The next generation of automation system and solutions",
+    "urls": [
+      "https://library.e.abb.com/public/76bffa60a31d625cc1256f57004df84c/44-49%204M891.pdf"
+    ],
+    "source_type": "oem_industry",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R165",
+    "title": "Technological controls for cold rolling processes",
+    "urls": [
+      "https://library.e.abb.com/public/04580d2383cc4b53b8573d1bb8eda2e8/Technological_Controls_for_Cold_Rolling_Mill_190815_LowRes.pdf"
+    ],
+    "source_type": "oem_industry",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R166",
+    "title": "Automation and Modernization for Aluminum Cold Rolling Mill",
+    "urls": [
+      "https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/automation-and-modernization-for-aluminum-cold-rolling-mills/"
+    ],
+    "source_type": "oem_industry",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R168",
+    "title": "Coil Eccentricity Expert for Cold Rolling Mills",
+    "urls": [
+      "https://www.primetals.com/en/portfolio/solutions/cold-rolling/coil-eccentricity-expert/"
+    ],
+    "source_type": "oem_industry",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R171",
+    "title": "Rolling mill automatic slowdown control, US3518857A",
+    "urls": [
+      "https://patents.google.com/patent/US3518857A/en"
+    ],
+    "source_type": "patent",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R172",
+    "title": "ACS880 winder control program option+N5000 firmware manual",
+    "urls": [
+      "https://library.e.abb.com/public/b103c5c12ec749edb727e684d3a394eb/AWIL140x_en.pdf"
+    ],
+    "source_type": "oem_industry",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-oem-source-reviews.json"
+  },
+  {
+    "source_id": "R167",
+    "title": "Development of the model of cold rolling process in dynamic conditions",
+    "urls": [
+      "https://journal.uctm.edu/node/j2018-2/26_17_77_p_366_372.pdf"
+    ],
+    "source_type": "scholarly",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-papers-source-reviews.json",
+    "authors": "Aleksandr V. Kozhevnikov; Irina A. Kozhevnikova; Nataliya L. Bolobanova"
+  },
+  {
+    "source_id": "R169",
+    "title": "Simulation of Cold-Rolling Process in Dynamic Conditions",
+    "urls": [
+      "https://doi.org/10.1007/s11015-017-0526-5"
+    ],
+    "source_type": "scholarly",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-papers-source-reviews.json",
+    "authors": "A. V. Kozhevnikov; I. A. Kozhevnikova; N. L. Bolobanova"
+  },
+  {
+    "source_id": "R170",
+    "title": "Synergistic optimization of shape-force and dynamic coupling effect in bending roll systems during accelerated rolling",
+    "urls": [
+      "https://www.nature.com/articles/s41598-025-21834-5",
+      "https://doi.org/10.1038/s41598-025-21834-5"
+    ],
+    "source_type": "scholarly",
+    "selection_provenance": "New operational-phases research after user practical-process feedback; not baseline corpus",
+    "identity_review_file": "operational-papers-source-reviews.json",
+    "authors": "Zhu-wen Yan; Ying-xin Tang; Shuai-zhen Pan; Wen-jun Cao; Jia-wei Wu"
+  }
+]

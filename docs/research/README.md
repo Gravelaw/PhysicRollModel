@@ -3,6 +3,17 @@
 This directory is the entry point for PhysicRollModel's research record. The
 repository's executable and engineering documentation remains in `docs/` so existing links keep working.
 
+The [comprehensive evidence audit and end-to-end roadmap (2 October 2026)](comprehensive-audit-2026-10-02/README.md)
+reconciles the complete observed source corpus, records current versus historical
+access depth, audits actual code/tests at `caec37ef`, and plans through advisory
+deployment with explicit science/data gates. It preserves the reports below and
+records unresolved historical book identities rather than claiming they were read.
+The supplement adds a newly selected fundamentals bibliography, targeted access
+priorities, a thermal numerical handoff, and source-grounded operational-phase
+requirements from threading/ramp-up through tail-out and reversal.
+Development after research remains in the saved Codex cloud environment; deployment
+options are open and no deployment or main merge is authorized by this audit.
+
 The full research report, revised 2 October 2026, is available in [editable Word](Aluminium_cold_rolling_research_for_PhysicRollModel.docx) and [PDF](Aluminium_cold_rolling_research_for_PhysicRollModel.pdf). The 53-page revision preserves the 105-entry bibliography, 63 original equation objects and original research discussion; Section 40 adds current implementation, source/code/test mapping and validation boundaries against reviewed code `fbafee54bb8f22554904166c9653d75915051359`.
 
 The [2 October status addendum](report-update-2026-10-02.md) is retained as a historical bridge from the original 30 September, 49-page report. Its page references refer to that earlier edition; use section references in the revised full report.
