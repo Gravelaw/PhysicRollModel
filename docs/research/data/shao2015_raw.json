@@ -1,0 +1,57 @@
+{
+  "record_kind": "immutable_source_transcription",
+  "case_id": "shao2015_aa5052_three_pass",
+  "source": {
+    "authors": "Jian Shao; Wenquan Sun; Anrui He; Bo Li",
+    "year": 2015,
+    "title_as_published": "Research on the Thermal Calculaion Model of High Strength Aluminum Strip Rolling Based on Finite Diffreence Method",
+    "doi": "10.18280/ijht.330113",
+    "article_url": "https://iieta.org/journals/ijht/paper/10.18280/ijht.330113",
+    "pdf_url": "https://www.iieta.org/download/file/fid/24141",
+    "original_pdf_sha256": "d09702e9c7314432dee1baf1c0c3b843ddd432ddbaaedac72d1019e7f9853b27",
+    "access_depth": "Full publisher PDF re-read; pp. 92-94 equations and Tables 1-2 visually checked by source auditor 2026-10-02"
+  },
+  "material_source": {
+    "alloy": "AA5052",
+    "incoming_temper": null,
+    "incoming_plastic_strain": null,
+    "initial_temperature_k": null,
+    "flow_law": "sigma = K * epsilon_sum**n",
+    "strength_coefficient_mpa": 276.5,
+    "hardening_exponent": 0.26,
+    "strain_accumulation_weight_a": null,
+    "strain_and_stress_conversion": null,
+    "locator": "p. 92 Eqs. 2-3"
+  },
+  "passes": [
+    {
+      "pass": 1,
+      "table_1": {"entry_mm": 4.1, "exit_mm": 2.9024, "width_mm": 1360, "radius_labelled_mm": 210.81, "back_tension_mpa": 9.47, "front_tension_mpa": 9.47, "reported_speed_m_s": 4.2, "speed_reference": null},
+      "table_2_model_input": {"friction_coefficient": 0.075},
+      "table_2_measured": {"force_kn": 5143.9, "forward_slip_fraction": 0.015, "uncertainty": null},
+      "table_2_author_calculated": {"force_kn": 5265.7, "forward_slip_fraction": 0.0154, "flattened_radius_mm": 225.1}
+    },
+    {
+      "pass": 2,
+      "table_1": {"entry_mm": 2.9024, "exit_mm": 2.2087, "width_mm": 1360, "radius_labelled_mm": 210.81, "back_tension_mpa": 8.68, "front_tension_mpa": 8.11, "reported_speed_m_s": 4.7, "speed_reference": null},
+      "table_2_model_input": {"friction_coefficient": 0.071},
+      "table_2_measured": {"force_kn": 5017.4, "forward_slip_fraction": 0.0182, "uncertainty": null},
+      "table_2_author_calculated": {"force_kn": 5066.5, "forward_slip_fraction": 0.0187, "flattened_radius_mm": 234.5}
+    },
+    {
+      "pass": 3,
+      "table_1": {"entry_mm": 2.2087, "exit_mm": 1.72, "width_mm": 1360, "radius_labelled_mm": 210.81, "back_tension_mpa": 7.51, "front_tension_mpa": 7.25, "reported_speed_m_s": 4.0, "speed_reference": null},
+      "table_2_model_input": {"friction_coefficient": 0.069},
+      "table_2_measured": {"force_kn": 4301.8, "forward_slip_fraction": 0.0227, "uncertainty": null},
+      "table_2_author_calculated": {"force_kn": 4165.9, "forward_slip_fraction": 0.0216, "flattened_radius_mm": 238.4}
+    }
+  ],
+  "unresolved": [
+    "Table 1 labels 210.81 mm radius; Eq. 6 prose calls R diameter",
+    "Incoming temper, history strain and Eq. 3 weight a not supplied",
+    "Reported speed has no resolved strip/roll reference",
+    "Friction may have been selected against the same force/slip observations",
+    "No certified mill capacity, measured torque/temperature or sensor uncertainty",
+    "Reference 18 for strength constants concerns Al-Si solidification"
+  ]
+}
