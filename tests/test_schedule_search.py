@@ -11,7 +11,8 @@ import physicroll.conditional_shao as conditional_shao
 from physicroll.schedule_search import (OperatingChoice, SearchSpace,
                                         log_gauge_grid, search_schedules)
 from physicroll.conditional_shao import (audited_raw, compare_existing_fixture,
-                                         run_conditional_comparison)
+                                         run_conditional_comparison,
+                                         run_declared_prior_sensitivity)
 
 
 FAST = OperatingChoice(2.0, 10.0, 10.0, 'synthetic fast')
@@ -182,6 +183,43 @@ class SearchTests(unittest.TestCase):
             with mock.patch.object(conditional_shao, 'ADAPTER_PATH', path):
                 with self.assertRaisesRegex(ValueError, 'conventions differ'):
                     conditional_shao.run_conditional_comparison()
+
+    def test_declared_prior_sensitivity_replays_complete_routes_without_fit(self):
+        baseline = run_conditional_comparison()['comparisons']
+        result = run_declared_prior_sensitivity()
+        self.assertEqual(result['status'], 'NO_FIT_ASSUMPTION_SENSITIVITY')
+        cases = result['cases']
+        self.assertEqual([case['assumed_prior_log_thickness_strain'] for case in cases],
+                         [0.0, 0.01, 0.05, 0.2])
+        self.assertEqual(cases[0]['status'], 'REJECTED_BY_CHECKED_MODEL')
+        self.assertIn('pass 1: boundary tension reaches local uniaxial strength',
+                      cases[0]['reason'])
+        self.assertIsNone(cases[0]['comparisons'])
+        for case in cases[1:]:
+            self.assertEqual(case['status'], 'CONDITIONAL_REPLAY_INDETERMINATE')
+            self.assertEqual(case['declared_bounds_status'], 'INDETERMINATE')
+            self.assertEqual(len(case['comparisons']), 3)
+            self.assertTrue(all(p['signed_slip_residual_fraction'] > 0
+                                for p in case['comparisons']))
+        self.assertEqual(cases[2]['comparisons'], baseline)
+        first_pass_forces = [case['comparisons'][0]['predicted_force_n'] for case in cases[1:]]
+        self.assertEqual(first_pass_forces, sorted(first_pass_forces))
+        self.assertLess(first_pass_forces[1], baseline[0]['observed_force_n'])
+        self.assertGreater(first_pass_forces[2], baseline[0]['observed_force_n'])
+
+    def test_prior_sensitivity_contract_drift_rejects(self):
+        study = json.loads(conditional_shao.SENSITIVITY_PATH.read_text())
+        study['values'][2] = 0.06
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'changed_study.json'
+            path.write_text(json.dumps(study))
+            with mock.patch.object(conditional_shao, 'SENSITIVITY_PATH', path):
+                with self.assertRaisesRegex(ValueError, 'study differs'):
+                    run_declared_prior_sensitivity()
+        with mock.patch.object(conditional_shao, '_build_fixed_route',
+                               side_effect=ValueError('unexpected adapter setup failure')):
+            with self.assertRaisesRegex(ValueError, 'unexpected adapter setup failure'):
+                run_declared_prior_sensitivity()
 
 
 if __name__ == '__main__':
