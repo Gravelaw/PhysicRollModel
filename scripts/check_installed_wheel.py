@@ -76,6 +76,14 @@ def main():
             "and result['bar_material_role']=='fixed_material_no_flux' "
             "and result['maximum_energy_defect_j']<1e-18",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a3 import T2A3Case, run_prescribed_reel_flux; "
+            "result=run_prescribed_reel_flux(T2A3Case()); "
+            "assert result['mode']=='constant_prescribed_transport_reaction' "
+            "and result['maximum_reel_angular_impulse_defect_nm_s']['left']<1e-10 "
+            "and result['maximum_reel_energy_defect_j']['right']<1e-10",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

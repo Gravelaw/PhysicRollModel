@@ -1,16 +1,18 @@
-# T2A fixed-geometry shaft and elastic-span benchmark candidate
+# T2A shaft, span and prescribed-flow reel benchmarks
 
 **Status:** the independently reviewed, fixed-inertia massless-span **T2A1**
 benchmark is executable in `physicroll/transient_t2a1.py`; the restricted
 fixed-material bar/shaft **T2A2** benchmark is executable in
-`physicroll/transient_t2a2.py`. T2A1's torque-driven
+`physicroll/transient_t2a2.py`; the prescribed-flow reel-flux **T2A3**
+benchmark is executable in `physicroll/transient_t2a3.py`. T2A1's torque-driven
 midpoint states, analytic first-zero event detection, prescribed-motion
 reaction torques and work diagnostics pass closed-form checks. The fixed-end
-bar pulse and partitioned-coupling cases remain design candidates; neither subset
-has public RunSpec/restart integration. T2A is a closed local perturbation
-problem. It has no material entering/leaving the span, changing reel radius,
-running-web inventory, roll
-bite or strip contact. Passing it will not complete T2 or qualify a mill.
+bar pulse and partitioned-coupling cases remain design candidates; none of the
+three subsets has public RunSpec/restart integration. T2A1/T2A2 are closed
+fixed-material perturbation problems. T2A3 adds prescribed material flow and
+changing reel radius/inertia, but does not predict speed or tension. None
+resolves a roll bite or strip contact. Passing these cases will not complete
+torque-driven moving-web T2 or qualify a mill.
 
 This restricted stage tests the dynamic and coupling machinery needed by the
 [T0 design](v1-transient-T0-design.md) without silently applying fixed-inertia
@@ -21,9 +23,10 @@ releases strip from the left and positive `θ2` takes up strip on the right:
 `θ1 = −Δθ_left_winding` and `θ2 = Δθ_right_winding` relative to T1's
 winding-positive reel angles. Endpoint displacements are `u_left=R1 θ1` and
 `u_right=R2 θ2`, so the extension perturbation is `u_right−u_left`.
-Radius `R_i`, inertia
-`J_i`, span length `L`, area `A`, modulus `E`, and nonnegative viscous shaft
-loss `b_i` are constant within one case.
+In the fixed-geometry T2A1/T2A2 cases, radius `R_i`, inertia `J_i`, span
+length `L`, area `A`, modulus `E`, and nonnegative viscous shaft loss `b_i`
+are constant. T2A3's changing radius and inertia have separate equations
+below.
 
 ## Massless-span reference
 
@@ -254,17 +257,18 @@ The open control-volume balance is
 torque, `d(½Jω²)/dt=½ṁ(Rω)²` checks kinetic-energy flux. This isolated
 identity does not close the moving span or winding tension/compaction.
 The moving material coordinate, boundary cuts, transfer strain, flow
-reversal, and slack behavior must be frozen before implementing coupled
-reels. [Yan (2020)](https://www.intechopen.com/chapters/68827) provides a
+reversal, and slack behavior must be frozen before implementing a general
+torque-driven coupled-reel solver. The prescribed-flow T2A3 subset fixes
+only its declared constant-stretch transfer. [Yan (2020)](https://www.intechopen.com/chapters/68827) provides a
 published web/reel model and span continuity relations under its stated
 small-strain/no-slip assumptions, but its written `d(Jω)/dt` reel equation
 does not explicitly show this angular-momentum flux. The reference above
 is an independent control-volume derivation, not an adoption of that
 published reel equation.
 
-### Frozen prescribed-flow two-reel oracle (T2A3 candidate)
+### Frozen prescribed-flow two-reel oracle (T2A3)
 
-The next **unimplemented** reference couples a translating taut span to two
+This restricted reference couples a translating taut span to two
 variable-mass reels in a restricted prescribed-motion setting. It checks
 mass ownership, angular-momentum flux, reaction drive torques and energy
 transfer before a torque-driven moving-web solver is attempted. It does not
