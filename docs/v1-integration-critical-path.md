@@ -15,7 +15,11 @@ Corrected-endpoint diagnostics now separately bracket internal donor arrival
 and reel reversal when the frozen pre-event numerical branch changes sign;
 the symmetric two-reel standing-wave reversal checks spatial, temporal and
 forcing refinement without changing reel phase or ownership.
-Physical event timing, post-event transitions including depletion, bite/drive engagement, restart, T3 contact
+The [isolated donor restart](v1-transient-T2-isolated-donor-restart.md)
+continues one retained-record boundary under the declared idealized pickup
+law, with bounded terminal overshoot and a signed ownership residual. It
+stops on competing, inadmissible or repeated transitions.
+Physical event timing, general post-event transitions including depletion, bite/drive engagement, repeated restart, T3 contact
 and full v1 coupling remain open.
 
 ## Next decisions and executable gates

@@ -17,12 +17,16 @@ from . import transient_t2a7 as geometry
 from . import transient_t2a8 as fv
 
 
-MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_ADMISSIBILITY_STOP_V1'
+MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_EVENT_POLICY_V1'
 EVENT_BRACKET_TOLERANCE_S = 1e-11
 EVENT_COINCIDENCE_TOLERANCE_S = 1e-9
 TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH = 1-1e-4
 TRIAL_NEGATIVE_INVENTORY_LIMIT_M = -1e-4
 DEPLETION_PROXIMITY_M = 1e-10
+DONOR_RESTART_MAX_OVERSHOOT_M = 1e-13
+DONOR_RESTART_MAX_LABEL_ULP_M = 1e-14
+DONOR_RESTART_MAX_STORAGE_RESIDUAL_J = 1e-12
+CONTINUE_ISOLATED_DONOR = 'continue_isolated_internal_donor'
 
 
 class _TrialCompressionLimit(ValueError):
@@ -102,7 +106,8 @@ class TwoReelEpisode:
                 self.cfl_limit not in (span.CFL_LIMIT, span.CFL_LIMIT/2,
                                        span.CFL_LIMIT/4)):
             raise ValueError('T2 two-reel episode exceeds frozen mesh/time bounds')
-        if self.event_policy not in ('reject', 'stop_at_numerical_admissibility_limit'):
+        if self.event_policy not in ('reject', 'stop_at_numerical_admissibility_limit',
+                                     CONTINUE_ISOLATED_DONOR):
             raise ValueError('T2 two-reel event policy is unsupported')
         if not isinstance(self.left, ReelEnd) or not isinstance(self.right, ReelEnd):
             raise ValueError('T2 two-reel episode requires both named ends')
@@ -259,7 +264,7 @@ def _rates(cells, reels, time_s, records, episode, donors=None,
 
 
 def _advance(cells, reels, time_s, h, records, episode):
-    trial_probe = episode.event_policy == 'stop_at_numerical_admissibility_limit'
+    trial_probe = episode.event_policy != 'reject'
     donors = {}
     for side in ('left', 'right'):
         end = getattr(episode, side)
@@ -335,7 +340,8 @@ def _state(time_s, cells, reels, records, heat, integrated, episode):
             'integrated_global_right_mass_flux_m': integrated['right_mass_flux']}
 
 
-def _reject_unresolved_event(start, trial, episode, records):
+def _reject_unresolved_event(start, trial, episode, records,
+                             terminal_donor_side=None):
     for side in ('left', 'right'):
         end = getattr(episode, side)
         old_cut = start['ports'][side]['cut_label_m']
@@ -347,17 +353,21 @@ def _reject_unresolved_event(start, trial, episode, records):
             if (end.phase == 'release' and
                     (port['omega_rad_s'] >= 0 or port['reference_flux_m_s'] >= 0)):
                 raise ValueError('T2 two-reel unresolved phase reversal')
-            depletion_margin = (0. if episode.event_policy ==
-                                'stop_at_numerical_admissibility_limit' else 1e-12)
+            depletion_margin = (0. if episode.event_policy != 'reject' else 1e-12)
             if port['cut_label_m'] >= (records[side][0].high_label_m -
                                       depletion_margin):
                 raise ValueError('T2 two-reel inventory depletion')
-            donor_margin = (0. if episode.event_policy ==
-                            'stop_at_numerical_admissibility_limit' else 1e-12)
-            if end.phase == 'release' and port['cut_label_m'] >= (
-                    single._next_donor_boundary(records[side], old_cut)-
-                    donor_margin):
-                raise ValueError('T2 two-reel unresolved donor boundary')
+            donor_margin = (0. if episode.event_policy != 'reject' else 1e-12)
+            if end.phase == 'release':
+                boundary = single._next_donor_boundary(records[side], old_cut)
+                if side == terminal_donor_side:
+                    # The terminal old-donor branch may cross only this label.
+                    next_boundary = single._next_donor_boundary(
+                        records[side], boundary)
+                    if port['cut_label_m'] >= next_boundary:
+                        raise ValueError('T2 two-reel terminal probe skipped donor')
+                elif port['cut_label_m'] >= boundary-donor_margin:
+                    raise ValueError('T2 two-reel unresolved donor boundary')
         if trial['reels'][side][0] <= 0:
             raise ValueError('T2 two-reel inventory depletion')
     if min(rate['minimum_stretch'] for rate in
@@ -516,6 +526,140 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
             'feasible_step_s': lower_h, 'feasible_trial': lower_trial}
 
 
+def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
+                             start, side, boundary, full_trial):
+    """Return a one-sided corrected Heun crossing with bounded label error."""
+    end = getattr(episode, side)
+    old_cut = start['ports'][side]['cut_label_m']
+    if max(math.ulp(value) for value in (end.initial_local_cut_m,
+            end.initial_local_cut_m+end.initial_reference_length_m,
+            boundary, old_cut)) > DONOR_RESTART_MAX_LABEL_ULP_M:
+        return None, 'insufficient_terminal_label_resolution'
+    if not old_cut < boundary:
+        return None, 'insufficient_initial_label_resolution'
+    if full_trial['final']['ports'][side]['cut_label_m'] < boundary:
+        return None, 'corrected_endpoint_not_bracketed'
+    lower_h, upper_h, upper_trial = 0., h, full_trial
+    for _ in range(64):
+        terminal_cut = upper_trial['final']['ports'][side]['cut_label_m']
+        overshoot = terminal_cut-boundary
+        if (0 <= overshoot <= DONOR_RESTART_MAX_OVERSHOOT_M and
+                upper_h-lower_h <= EVENT_BRACKET_TOLERANCE_S):
+            break
+        middle = (lower_h+upper_h)/2
+        if middle == lower_h or middle == upper_h:
+            return None, 'insufficient_terminal_label_resolution'
+        try:
+            probe = _advance(cells, reels, time_s, middle, records, episode)
+        except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
+            return None, 'terminal_probe_left_admissible_domain'
+        if probe['final']['ports'][side]['cut_label_m'] < boundary:
+            lower_h = middle
+        else:
+            upper_h, upper_trial = middle, probe
+    else:
+        return None, 'terminal_root_budget_exhausted'
+    if time_s+upper_h == time_s:
+        return None, 'terminal_step_collapsed'
+    terminal_cut = upper_trial['final']['ports'][side]['cut_label_m']
+    overshoot = terminal_cut-boundary
+    if not 0 <= overshoot <= DONOR_RESTART_MAX_OVERSHOOT_M:
+        return None, 'terminal_overshoot_exceeded'
+    # This difference is formed from the independently integrated inventory.
+    # Large absolute labels can round cut onto a boundary while ell still
+    # contains appreciable material owned by the old record.
+    inventory_overshoot = (end.initial_reference_length_m-
+        (boundary-end.initial_local_cut_m)-upper_trial['reels'][side][0])
+    if (not 0 <= inventory_overshoot <= DONOR_RESTART_MAX_OVERSHOOT_M or
+            abs(inventory_overshoot-overshoot) >
+            DONOR_RESTART_MAX_LABEL_ULP_M):
+        return None, 'insufficient_terminal_label_resolution'
+    competing = [item for item in _supported_event_candidates(
+        start, upper_trial, episode, records) if (item['side'], item['kind']) !=
+        (side, 'donor_boundary')]
+    if competing:
+        return None, 'competing_numerical_limit'
+    old_record = single._donor(records[side], old_cut)
+    new_record = single._donor(records[side], terminal_cut)
+    if new_record is old_record:
+        return None, 'next_donor_not_selected'
+    old_index = next(index for index, record in enumerate(records[side])
+                     if record is old_record)
+    if (old_index == 0 or new_record is not records[side][old_index-1] or
+            not terminal_cut < new_record.high_label_m):
+        return None, 'next_donor_interval_skipped'
+    try:
+        new_port = _local_port(upper_trial['cells'], side,
+            upper_trial['reels'][side][0], upper_trial['reels'][side][1],
+            'release', records[side], getattr(episode, side))
+    except ValueError:
+        return None, 'new_donor_trace_inadmissible'
+    if new_port['stretch'] <= 1 or new_port['reference_flux_m_s'] >= 0:
+        return None, 'new_donor_trace_inadmissible'
+    # A torque knot may truncate the current trial before a competing event
+    # that still lies inside the declared numerical grouping window.
+    look_time = time_s+upper_h
+    look_end = min(episode.duration_s,
+                   look_time+EVENT_COINCIDENCE_TOLERANCE_S)
+    look_cells, look_reels = upper_trial['cells'], upper_trial['reels']
+    for _ in range(256):
+        if look_time >= look_end:
+            break
+        next_time = min((knot[0] for reel_end in (episode.left,
+            episode.right) for knot in reel_end.applied_torque_history
+            if look_time < knot[0] < look_end), default=look_end)
+        try:
+            look_start = _rates(look_cells, look_reels, look_time,
+                                records, episode)
+            look_trial = _advance(look_cells, look_reels, look_time,
+                                  next_time-look_time, records, episode)
+        except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
+            return None, 'competing_numerical_limit_within_tolerance'
+        if (look_trial['courant'] > episode.cfl_limit*(1+1e-12) or
+                _supported_event_candidates(look_start, look_trial,
+                                            episode, records)):
+            return None, 'competing_numerical_limit_within_tolerance'
+        look_cells, look_reels, look_time = (look_trial['cells'],
+                                            look_trial['reels'], next_time)
+    else:
+        return None, 'competing_probe_budget_exhausted'
+    old_density = single._record_energy(0., 1., old_record.retained_stretch)
+    new_density = single._record_energy(0., 1., new_record.retained_stretch)
+    density_jump = old_density-new_density
+    storage_residual = inventory_overshoot*density_jump
+    storage_bound = (max(overshoot, inventory_overshoot)+
+                     DONOR_RESTART_MAX_LABEL_ULP_M)*abs(density_jump)
+    if storage_bound > DONOR_RESTART_MAX_STORAGE_RESIDUAL_J:
+        return None, 'storage_ownership_residual_exceeded'
+    def identity(record):
+        return {'low_label_m': record.low_label_m,
+                'high_label_m': record.high_label_m,
+                'retained_stretch': record.retained_stretch}
+    def port_snapshot(port):
+        return {key: port[key] for key in (
+            'reference_flux_m_s', 'stretch', 'outward_span_speed_m_s',
+            'wound_speed_m_s', 'tension_n', 'dissipated_power_w',
+            'retained_stretch')}
+    return {'step_s': upper_h, 'trial': upper_trial,
+            'transition': {
+                'side': side, 'kind': 'internal_donor_restart',
+                'boundary_label_m': boundary,
+                'accepted_time_s': time_s+upper_h,
+                'corrected_root_bracket_time_s':
+                    [time_s+lower_h, time_s+upper_h],
+                'terminal_label_overshoot_m': overshoot,
+                'terminal_inventory_overshoot_m': inventory_overshoot,
+                'signed_storage_ownership_residual_j': storage_residual,
+                'absolute_storage_ownership_residual_bound_j':
+                    storage_bound,
+                'old_donor': identity(old_record),
+                'new_donor': identity(new_record),
+                'old_port': port_snapshot(upper_trial['final']['ports'][side]),
+                'new_port': port_snapshot(new_port),
+                'event_time_interpretation':
+                    'numerical_terminal_not_physical_event_time'}}, None
+
+
 def run_two_reel_episode(episode: TwoReelEpisode):
     """Advance a pre-engaged interval, stopping at numerical admissibility limits."""
     if not isinstance(episode, TwoReelEpisode):
@@ -536,6 +680,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
     accepted = [initial]
     snapshots = [initial]
     events = []
+    transitions = []
     outcome = None
     maximum = {'courant': 0., 'mass': 0., 'momentum': 0.,
                'inventory': 0., 'energy': 0., 'angular': 0.,
@@ -550,7 +695,8 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             raise ValueError('T2 two-reel initial or committed slack')
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'],
                                          start['minimum_stretch'])
-        if episode.event_policy == 'stop_at_numerical_admissibility_limit':
+        near_donor = []
+        if episode.event_policy != 'reject':
             if start['minimum_stretch']-1 <= 1e-12:
                 events.append({'side': 'span', 'kind': 'tension_zero',
                     'boundary': 1., 'unit': 'stretch excess',
@@ -596,7 +742,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'active_retained_stretch':
                             start['ports'][side]['retained_stretch']})
                 elif gap <= 1e-12:
-                    events.append({'side': side, 'kind': 'donor_boundary',
+                    proximity = {'side': side, 'kind': 'donor_boundary',
                         'boundary': boundary, 'unit': 'reference m',
                         'root_basis': 'accepted_state_label_proximity',
                         'limit_source': 'accepted_state',
@@ -609,8 +755,15 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'feasible_stop_time_s': time_s,
                         'phase': 'release',
                         'active_retained_stretch':
-                            start['ports'][side]['retained_stretch']})
-            if events:
+                            start['ports'][side]['retained_stretch']}
+                    if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
+                            not transitions and gap > 0 and
+                            boundary < records[side][0].high_label_m-1e-12):
+                        near_donor.append(proximity)
+                    else:
+                        events.append(proximity)
+            if events or len(near_donor) > 1:
+                events.extend(near_donor)
                 outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
                 break
         knot = single._first_future_knot(time_s,
@@ -633,9 +786,34 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             h /= 2
         else:
             raise ValueError('T2 two-reel CFL retry budget exhausted')
-        if episode.event_policy == 'stop_at_numerical_admissibility_limit':
+        transition_candidate = None
+        if episode.event_policy != 'reject':
             candidates = _supported_event_candidates(start, trial, episode, records)
-            if candidates:
+            if near_donor:
+                proximity = near_donor[0]
+                side, boundary = proximity['side'], proximity['boundary']
+                competing = [item for item in candidates if
+                    (item['side'], item['kind']) != (side, 'donor_boundary')]
+                terminal, restart_status = (None, 'competing_numerical_limit')
+                if not competing:
+                    terminal, restart_status = _terminal_internal_donor(
+                        cells, reels, records, time_s, h, episode, start,
+                        side, boundary, trial)
+                if terminal is not None:
+                    try:
+                        _reject_unresolved_event(start, terminal['trial'],
+                            episode, records, side)
+                    except ValueError:
+                        restart_status = 'terminal_stage_left_admissible_domain'
+                    else:
+                        h, trial = terminal['step_s'], terminal['trial']
+                        transition_candidate = terminal['transition']
+                if transition_candidate is None:
+                    events = [{**proximity, 'restart_attempt_status':
+                               restart_status}]
+                    outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
+                    break
+            elif candidates:
                 located = [_locate_reel_event(
                     cells, reels, records, time_s, h, episode,
                     candidate, trial) for candidate in candidates]
@@ -644,37 +822,59 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                     item['bracket_time_s'][0] <=
                     selected['bracket_time_s'][1]+
                     EVENT_COINCIDENCE_TOLERANCE_S]
-                h, trial = (selected['feasible_step_s'],
-                            selected['feasible_trial'])
-                events = []
-                for item in sorted(grouped,
-                                   key=lambda item: (item['side'], item['kind'])):
-                    relation = ('selected_lowest_feasible_bracket' if item is selected else
-                        'overlapping_brackets' if item['bracket_time_s'][0] <=
-                            selected['bracket_time_s'][1] else
-                        'within_numerical_coincidence_tolerance')
-                    predictor_margin, corrected_margin = _event_stage_margins(
-                        trial, item['side'], item['kind'], item['boundary'])
-                    events.append({**{key: value for key, value in item.items()
-                        if key not in ('feasible_step_s', 'feasible_trial')},
-                        'selection_role': ('selected_lowest_feasible_bracket'
-                            if item is selected else 'grouped_candidate'),
-                        'bracket_relation_to_selected': relation,
-                        'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
-                        'predictor_margin_at_shared_trial': predictor_margin,
-                        'corrected_margin_at_shared_stop': corrected_margin,
-                        'grouping_interpretation':
-                            'numerical_only_not_physical_simultaneity'})
-                    if item['kind'] in ('donor_boundary', 'reversal'):
-                        prefix = ('corrected_arrival' if item['kind'] ==
-                                  'donor_boundary' else 'corrected_reversal')
-                        bracket = item[f'{prefix}_bracket_time_s']
-                        events[-1][f'{prefix}_gap_after_feasible_stop_s'] = (
-                            bracket[0]-(time_s+h) if bracket is not None else None)
-                outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
+                restart_status = None
+                if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
+                        not transitions and len(grouped) == 1 and
+                        selected['kind'] == 'donor_boundary'):
+                    terminal, restart_status = _terminal_internal_donor(
+                        cells, reels, records, time_s, h, episode, start,
+                        selected['side'], selected['boundary'], trial)
+                    if terminal is not None:
+                        try:
+                            _reject_unresolved_event(start, terminal['trial'],
+                                episode, records, selected['side'])
+                        except ValueError:
+                            restart_status = 'terminal_stage_left_admissible_domain'
+                        else:
+                            h, trial = terminal['step_s'], terminal['trial']
+                            transition_candidate = terminal['transition']
+                if transition_candidate is None:
+                    h, trial = (selected['feasible_step_s'],
+                                selected['feasible_trial'])
+                    events = []
+                    for item in sorted(grouped,
+                                       key=lambda item: (item['side'], item['kind'])):
+                        relation = ('selected_lowest_feasible_bracket' if item is selected else
+                            'overlapping_brackets' if item['bracket_time_s'][0] <=
+                                selected['bracket_time_s'][1] else
+                            'within_numerical_coincidence_tolerance')
+                        predictor_margin, corrected_margin = _event_stage_margins(
+                            trial, item['side'], item['kind'], item['boundary'])
+                        events.append({**{key: value for key, value in item.items()
+                            if key not in ('feasible_step_s', 'feasible_trial')},
+                            'selection_role': ('selected_lowest_feasible_bracket'
+                                if item is selected else 'grouped_candidate'),
+                            'bracket_relation_to_selected': relation,
+                            'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
+                            'predictor_margin_at_shared_trial': predictor_margin,
+                            'corrected_margin_at_shared_stop': corrected_margin,
+                            'grouping_interpretation':
+                                'numerical_only_not_physical_simultaneity'})
+                        if item['kind'] in ('donor_boundary', 'reversal'):
+                            prefix = ('corrected_arrival' if item['kind'] ==
+                                      'donor_boundary' else 'corrected_reversal')
+                            bracket = item[f'{prefix}_bracket_time_s']
+                            events[-1][f'{prefix}_gap_after_feasible_stop_s'] = (
+                                bracket[0]-(time_s+h) if bracket is not None else None)
+                        if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
+                                item is selected and item['kind'] == 'donor_boundary'):
+                            events[-1]['restart_attempt_status'] = (
+                                restart_status or 'additional_or_competing_limit')
+                    outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')
-        _reject_unresolved_event(start, trial, episode, records)
+        _reject_unresolved_event(start, trial, episode, records,
+            transition_candidate['side'] if transition_candidate else None)
         first, second = trial['first'], trial['second']
         old_mass, old_momentum, _ = fv._integrals(cells, dx)
         for side in ('left', 'right'):
@@ -718,6 +918,8 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         maximum['courant'] = max(maximum['courant'], trial['courant'])
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'], *(
             rate['minimum_stretch'] for rate in (first, second, trial['final'])))
+        maximum['minimum_stretch'] = min(maximum['minimum_stretch'], *(
+            state['ends'][side]['span_stretch'] for side in ('left', 'right')))
         maximum['mass'] = max(maximum['mass'], abs(new_mass-old_mass+
             span.REFERENCE_LINE_MASS_KG_M*h*((first['right_flux'][0]+
                 second['right_flux'][0]-first['left_flux'][0]-
@@ -752,6 +954,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                 now['owned_wound_strain_energy_j']-
                 begin['owned_wound_strain_energy_j']-ledger['stored_flux']))
         accepted.append(state)
+        if transition_candidate is not None:
+            transition_candidate['accepted_state_index'] = len(accepted)-1
+            transitions.append(transition_candidate)
         if events:
             for item in events:
                 item['feasible_stop_time_s'] = time_s
@@ -775,7 +980,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         outcome = 'COMPLETED_DECLARED_DURATION'
     return {'model_id': MODEL_ID, 'mode': 'preengaged_two_reel_elastic_span',
             'episode_outcome': outcome, 'event_policy': episode.event_policy,
-            'events': events,
+            'events': events, 'transitions': transitions,
             'torque_role': 'prescribed_time_only_input',
             'span_and_reel_speed_role': 'predicted_from_coupled_dynamics',
             'pickup_closure_role': 'idealized_dissipative_not_physically_validated',
@@ -792,6 +997,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             'maximum_reel_cumulative_energy_defect_j': maximum['reel_energy'],
             'maximum_exact_storage_vs_transfer_flux_defect_j': maximum['storage'],
             'limitations': ['pre-engaged two-reel taut subsonic interval only',
-                            'tautness and supported reel limits stop on the feasible side',
-                            'event continuation, slack and post-depletion evolution rejected',
+                            'tautness and unsupported reel limits stop on the feasible side',
+                            ('only one isolated internal donor restart supported'
+                             if episode.event_policy == CONTINUE_ISOLATED_DONOR else
+                             'event continuation rejected'),
+                            'phase changes, slack and post-depletion evolution rejected',
                             'no rolling contact or calibrated material data']}

@@ -1,6 +1,7 @@
 """Independent constant-flow, reflection, and two-drive checks for T2."""
 
 import math
+import bisect
 import unittest
 from dataclasses import replace
 
@@ -166,7 +167,368 @@ def standing_reversal_case(count=64, cfl=span.CFL_LIMIT, torque_knots=400):
         cfl_limit=cfl, event_policy='stop_at_numerical_admissibility_limit')
 
 
+def isolated_donor_case(count=64, reflected=False, cfl=span.CFL_LIMIT,
+                        new_stretch=1.02, torque_knots=100):
+    base = case(count, duration=.04, reflected=reflected, cfl=cfl)
+    release_side = 'right' if reflected else 'left'
+    ends = {}
+    for side in ('left', 'right'):
+        physical = ({'left': 'right', 'right': 'left'}[side]
+                    if reflected else side)
+        end = getattr(base, side)
+        history = tuple((index*.04/torque_knots,
+            exact_torque(physical, index*.04/torque_knots))
+            for index in range(torque_knots+1))
+        if side == release_side:
+            cut = end.initial_local_cut_m
+            boundary = cut+.0037
+            end = replace(end, initial_records=(
+                one.WoundRecord(boundary, cut+1., new_stretch),
+                one.WoundRecord(cut, boundary, 1.01)))
+        ends[side] = replace(end, applied_torque_history=history)
+    return replace(base, **ends, event_policy=two.CONTINUE_ISOLATED_DONOR)
+
+
+def independent_post_donor_ode(history, step_s=5e-6):
+    """RK4 reel reference with a constant outgoing wave and new donor."""
+    time0, time1 = .037, .04
+    length0 = 1-.0037
+    radius0, _ = geometry(length0)
+    state = (length0, -.101/radius0, 0., 0., 0.)
+    def rates(time, values):
+        length, omega, _, _, _ = values
+        radius, inertia = geometry(length)
+        q = radius*omega/1.02
+        stretch = -10.1101/(q-10)
+        speed = q*stretch
+        tension = EA*(stretch-1)
+        index = bisect.bisect_right(history, (time, math.inf))-1
+        index = min(index, len(history)-2)
+        low_time, low_torque = history[index]
+        high_time, high_torque = history[index+1]
+        torque = low_torque+(high_torque-low_torque)*(
+            time-low_time)/(high_time-low_time)
+        angular_rhs = torque-radius*tension+MU*q*radius*speed
+        omega_rate = (angular_rhs-MU*q*radius**2*omega)/inertia
+        heat_rate = (-q)*(EA-MU*q*q)*(stretch-1.02)**2/2
+        return q, omega_rate, torque*omega, heat_rate, angular_rhs
+    count = round((time1-time0)/step_s)
+    h = (time1-time0)/count
+    for index in range(count):
+        time = time0+index*h
+        first = rates(time, state)
+        second = rates(time+h/2, tuple(
+            state[j]+h*first[j]/2 for j in range(5)))
+        third = rates(time+h/2, tuple(
+            state[j]+h*second[j]/2 for j in range(5)))
+        fourth = rates(time+h, tuple(
+            state[j]+h*third[j] for j in range(5)))
+        state = tuple(state[j]+h*(first[j]+2*second[j]+2*third[j]+fourth[j])/6
+                      for j in range(5))
+    return state
+
+
 class TwoReelTests(unittest.TestCase):
+    def test_isolated_donor_rejects_unresolved_absolute_labels(self):
+        left_cut, right_cut = -1e6, 1e6+.625
+        boundary = left_cut+.0001
+        fields = tuple(span._conserved(1.6,
+            -.2*((index+.5)/64-.5)/1.6) for index in range(64))
+        radius, _ = geometry(1.)
+        left = two.ReelEnd(left_cut, 1., -.0625/radius, (
+            one.WoundRecord(boundary, left_cut+1., 1.7),
+            one.WoundRecord(left_cut, boundary, 1.6)),
+            ((0., 0.), (.005, 0.)), 'release')
+        right = two.ReelEnd(right_cut, 1., -.0625/radius,
+            (one.WoundRecord(right_cut, right_cut+1., 1.6),),
+            ((0., 0.), (.005, 0.)), 'release')
+        episode = two.TwoReelEpisode(64, .005, fields, left, right,
+            event_policy=two.CONTINUE_ISOLATED_DONOR)
+        result = two.run_two_reel_episode(episode)
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'insufficient_terminal_label_resolution')
+
+    def test_isolated_donor_groups_competitor_across_torque_knot(self):
+        base = affine_two_release_case()
+        reference = two.run_two_reel_episode(base)
+        at_knot = min(reference['accepted_states'],
+                      key=lambda state: abs(state['time_s']-.011))
+        self.assertAlmostEqual(at_knot['time_s'], .011, delta=1e-12)
+        ends = {}
+        for side, offset in (('left', -2e-11), ('right', 2e-11)):
+            original = getattr(base, side)
+            cut = original.initial_local_cut_m
+            boundary = at_knot['ends'][side]['local_cut_label_m']+offset
+            ends[side] = replace(original, initial_records=(
+                one.WoundRecord(boundary, cut+1., 1.01),
+                one.WoundRecord(cut, boundary, 1.01)))
+        result = two.run_two_reel_episode(replace(base, **ends,
+            event_policy=two.CONTINUE_ISOLATED_DONOR))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'competing_numerical_limit_within_tolerance')
+
+    def test_isolated_donor_lookahead_resolves_interior_torque_pulse(self):
+        base = isolated_donor_case(new_stretch=1.01)
+        history = tuple(sorted(base.right.applied_torque_history+(
+            (.037+2e-10, exact_torque('right', .037+2e-10)),
+            (.037+4e-10, -1e8),
+            (.037+8e-10, exact_torque('right', .037+8e-10)))))
+        result = two.run_two_reel_episode(replace(base,
+            right=replace(base.right, applied_torque_history=history)))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'competing_numerical_limit_within_tolerance')
+
+    def test_isolated_donor_bounds_large_stored_energy_jump(self):
+        result = two.run_two_reel_episode(
+            isolated_donor_case(new_stretch=1e6))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'storage_ownership_residual_exceeded')
+
+    def test_isolated_donor_restart_preserves_split_material_identity(self):
+        for count in (64, 128, 256):
+            for reflected in (False, True):
+                with self.subTest(cells=count, reflected=reflected):
+                    split = isolated_donor_case(
+                        count, reflected=reflected, new_stretch=1.01)
+                    side = 'right' if reflected else 'left'
+                    unsplit = replace(split, **{side: getattr(
+                        case(count, duration=.04, reflected=reflected), side)})
+                    a = two.run_two_reel_episode(unsplit)
+                    b = two.run_two_reel_episode(split)
+                    self.assertEqual(a['episode_outcome'],
+                                     'COMPLETED_DECLARED_DURATION')
+                    self.assertEqual(b['episode_outcome'],
+                                     'COMPLETED_DECLARED_DURATION')
+                    self.assertEqual(len(b['transitions']), 1)
+                    transition = b['transitions'][0]
+                    self.assertEqual((transition['side'], transition['kind']),
+                                     (side, 'internal_donor_restart'))
+                    self.assertAlmostEqual(transition['accepted_time_s'],
+                                           .037, delta=2e-11)
+                    self.assertLessEqual(transition['terminal_label_overshoot_m'],
+                                         two.DONOR_RESTART_MAX_OVERSHOOT_M)
+                    self.assertAlmostEqual(transition['terminal_inventory_overshoot_m'],
+                        transition['terminal_label_overshoot_m'], delta=1e-14)
+                    self.assertEqual(transition[
+                        'signed_storage_ownership_residual_j'], 0.)
+                    self.assertEqual(transition['old_donor'][
+                        'retained_stretch'], 1.01)
+                    self.assertEqual(transition['new_donor'][
+                        'retained_stretch'], 1.01)
+                    final_a, final_b = (result['accepted_states'][-1]
+                                        for result in (a, b))
+                    for key in ('span_mass_kg', 'span_momentum_kg_m_s',
+                                'total_mechanical_energy_j'):
+                        self.assertAlmostEqual(final_a[key], final_b[key],
+                                               delta=1e-12)
+                    for end_side in ('left', 'right'):
+                        for key in ('reference_length_m',
+                                    'angular_speed_rad_s',
+                                    'owned_wound_strain_energy_j'):
+                            self.assertAlmostEqual(final_a['ends'][end_side][key],
+                                final_b['ends'][end_side][key], delta=1e-12)
+                    self.assertEqual(len(final_b['ends'][side][
+                        'ordered_wound_records']), 2)
+                    self.assertLess(b['maximum_combined_inventory_defect_kg'],
+                                    1e-11)
+
+    def test_unequal_donor_restart_matches_jump_and_independent_reel_ode(self):
+        base = isolated_donor_case()
+        history = base.left.applied_torque_history
+        coarse = independent_post_donor_ode(history, 1e-5)
+        reference = independent_post_donor_ode(history, 5e-6)
+        self.assertLess(abs(coarse[1]-reference[1]), 1e-11)
+        self.assertLess(abs(coarse[2]-reference[2]), 1e-12)
+        omega_errors = []
+        energy_defects = []
+        for count in (64, 128, 256):
+            result = two.run_two_reel_episode(isolated_donor_case(count))
+            self.assertEqual(result['episode_outcome'],
+                             'COMPLETED_DECLARED_DURATION')
+            self.assertEqual(len(result['transitions']), 1)
+            transition = result['transitions'][0]
+            post = transition['new_port']
+            self.assertAlmostEqual(post['reference_flux_m_s'],
+                -.09901960784313726, delta=2e-12)
+            self.assertAlmostEqual(post['stretch'],
+                1.00109717503155, delta=2e-12)
+            self.assertAlmostEqual(post['outward_span_speed_m_s'],
+                -.09912824968449663, delta=2e-12)
+            self.assertAlmostEqual(post['tension_n'],
+                .01097175031550046, delta=2e-11)
+            self.assertAlmostEqual(post['dissipated_power_w'],
+                .0001768894974844970, delta=2e-12)
+            self.assertAlmostEqual(transition['old_port'][
+                'reference_flux_m_s'], -.1, delta=2e-12)
+            delta = transition['terminal_inventory_overshoot_m']
+            expected_residual = delta*EA/2*((1.01-1)**2-(1.02-1)**2)
+            self.assertAlmostEqual(transition[
+                'signed_storage_ownership_residual_j'],
+                expected_residual, delta=1e-18)
+            self.assertLessEqual(abs(expected_residual),
+                transition['absolute_storage_ownership_residual_bound_j']+1e-18)
+            final = result['accepted_states'][-1]['ends']['left']
+            at_switch = result['accepted_states'][transition[
+                'accepted_state_index']]['ends']['left']
+            self.assertAlmostEqual(final['reference_length_m'], reference[0],
+                                   delta=1e-10)
+            omega_errors.append(abs(final['angular_speed_rad_s']-reference[1]))
+            for key, expected in (
+                    ('integrated_drive_work_j', reference[2]),
+                    ('accumulated_dissipated_energy_j', reference[3]),
+                    ('integrated_angular_rhs_nm_s', reference[4])):
+                self.assertAlmostEqual(final[key]-at_switch[key], expected,
+                                       delta=1e-11)
+            self.assertLess(result['maximum_combined_inventory_defect_kg'], 1e-11)
+            energy_defects.append(result['maximum_combined_energy_defect_j'])
+        self.assertLess(omega_errors[2], omega_errors[1])
+        self.assertLess(omega_errors[1], omega_errors[0])
+        self.assertLess(energy_defects[2], energy_defects[1])
+        self.assertLess(energy_defects[1], energy_defects[0])
+        self.assertLess(energy_defects[2], 1e-8)
+
+    def test_isolated_donor_restart_refines_time_and_declared_torque(self):
+        reference = independent_post_donor_ode(
+            isolated_donor_case().left.applied_torque_history)
+        errors = []
+        for cfl in (span.CFL_LIMIT, span.CFL_LIMIT/2, span.CFL_LIMIT/4):
+            result = two.run_two_reel_episode(isolated_donor_case(cfl=cfl))
+            errors.append(abs(result['accepted_states'][-1]['ends']['left'][
+                'angular_speed_rad_s']-reference[1]))
+        self.assertLess(errors[2], errors[1])
+        self.assertLess(errors[1], errors[0])
+        work = []
+        for knots in (2, 4, 8, 40):
+            episode = isolated_donor_case(torque_knots=knots)
+            result = two.run_two_reel_episode(episode)
+            self.assertEqual(result['episode_outcome'],
+                             'COMPLETED_DECLARED_DURATION')
+            self.assertEqual(len(result['transitions']), 1)
+            self.assertLessEqual(result['transitions'][0][
+                'terminal_label_overshoot_m'],
+                two.DONOR_RESTART_MAX_OVERSHOOT_M)
+            reference_run = independent_post_donor_ode(
+                episode.left.applied_torque_history)
+            switch = result['accepted_states'][result['transitions'][0][
+                'accepted_state_index']]['ends']['left']
+            final = result['accepted_states'][-1]['ends']['left']
+            self.assertAlmostEqual(final['integrated_drive_work_j']-
+                switch['integrated_drive_work_j'], reference_run[2], delta=1e-11)
+            work.append(reference_run[2])
+        fine_work = independent_post_donor_ode(
+            isolated_donor_case(torque_knots=100).left.applied_torque_history)[2]
+        self.assertLess(abs(work[2]-fine_work), abs(work[1]-fine_work))
+        self.assertLess(abs(work[1]-fine_work), abs(work[0]-fine_work))
+
+    def test_isolated_donor_restart_rejects_slack_new_trace(self):
+        lam, speed, duration = 1.00001, .100001, .003
+        base = case(duration=duration)
+        cut = 1/lam-1
+        radius, inertia = geometry(1.)
+        kappa = .001/math.pi
+        def torque(q, port_speed, wound_speed):
+            radius_rate = kappa*q/(2*radius)
+            omega_rate = -wound_speed*radius_rate/radius**2
+            return (inertia*omega_rate+radius*EA*(lam-1)-
+                    MU*q*radius*(port_speed-wound_speed))
+        left_torque = torque(-.1, -speed, -.102)
+        right_torque = torque(.1, speed, speed)
+        left = replace(base.left, initial_local_cut_m=cut,
+            initial_omega_rad_s=-.102/radius,
+            initial_records=(
+                one.WoundRecord(cut+.0001, cut+1., 1.000001),
+                one.WoundRecord(cut, cut+.0001, 1.02)),
+            applied_torque_history=((0., left_torque),
+                                    (duration, left_torque)))
+        right = replace(base.right, initial_omega_rad_s=speed/radius,
+            applied_torque_history=((0., right_torque),
+                                    (duration, right_torque)))
+        episode = replace(base, left=left, right=right,
+            initial_conserved_fields=tuple(span._conserved(lam, speed)
+                                           for _ in range(64)),
+            event_policy=two.CONTINUE_ISOLATED_DONOR)
+        result = two.run_two_reel_episode(episode)
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'new_donor_trace_inadmissible')
+        self.assertGreater(result['minimum_used_stretch'], 1.)
+        self.assertLess(result['accepted_states'][-1]['time_s'], .001)
+
+    def test_isolated_donor_restart_keeps_competing_and_thin_stops(self):
+        base = case(duration=.04)
+        cut = base.left.initial_local_cut_m
+        boundary = cut+.0037
+        thin = replace(base.left, initial_records=(
+            one.WoundRecord(boundary+1e-15, cut+1., 1.03),
+            one.WoundRecord(boundary, boundary+1e-15, 1.02),
+            one.WoundRecord(cut, boundary, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=thin,
+            event_policy=two.CONTINUE_ISOLATED_DONOR))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'next_donor_interval_skipped')
+        self.assertLess(result['accepted_states'][-1]['ends']['left'][
+            'local_cut_label_m'], boundary)
+
+        base = affine_two_release_case(duration=.04)
+        cut = base.left.initial_local_cut_m
+        boundary = cut+.002
+        end = replace(base.left, initial_records=(
+            one.WoundRecord(boundary, cut+1., 1.02),
+            one.WoundRecord(cut, boundary, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=end, right=end,
+            event_policy=two.CONTINUE_ISOLATED_DONOR))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual([(event['side'], event['kind']) for event in
+                          result['events']], [('left', 'donor_boundary'),
+                                              ('right', 'donor_boundary')])
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'additional_or_competing_limit')
+
+    def test_isolated_donor_restart_stops_on_second_or_unresolved_arrival(self):
+        base = case(duration=.07)
+        cut = base.left.initial_local_cut_m
+        first, second = cut+.0037, cut+.005
+        left = replace(base.left, initial_records=(
+            one.WoundRecord(second, cut+1., 1.03),
+            one.WoundRecord(first, second, 1.02),
+            one.WoundRecord(cut, first, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=left,
+            event_policy=two.CONTINUE_ISOLATED_DONOR))
+        self.assertEqual(len(result['transitions']), 1)
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'additional_or_competing_limit')
+
+        base = case(duration=.02)
+        left = replace(base.left, applied_torque_history=((0., 1.),
+                                                          (.02, 1.)))
+        cut = left.initial_local_cut_m
+        boundary = cut+(.00002000000000016+.0000198175861768)/2
+        left = replace(left, initial_records=(
+            one.WoundRecord(boundary, cut+1., 1.02),
+            one.WoundRecord(cut, boundary, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=left,
+            event_policy=two.CONTINUE_ISOLATED_DONOR))
+        self.assertEqual(result['transitions'], [])
+        self.assertEqual(result['events'][0]['restart_attempt_status'],
+                         'corrected_endpoint_not_bracketed')
+
     def test_corrected_reversal_matches_independent_standing_wave(self):
         self.assertAlmostEqual(standing_reversal_exact(.02)[1],
                                1.0000216140997287, delta=1e-14)

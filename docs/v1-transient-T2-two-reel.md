@@ -36,7 +36,9 @@ The default `event_policy=reject` raises at a donor boundary or phase
 reversal or tension loss. `stop_at_numerical_admissibility_limit` instead saves
 the last feasible state before a reel or tautness limit. It does not change
 the accepted port law, infer slack dynamics, or resume under a new donor or
-phase.
+phase. The separate `continue_isolated_internal_donor` policy permits
+exactly one bounded internal donor restart; its [ownership and numerical
+limits](v1-transient-T2-isolated-donor-restart.md) are declared separately.
 
 The local outward span energy flux is
 `G=q(μu_s²/2+EA(λ_s-1)²/2)-T u_s`. During release the declared idealized
@@ -51,7 +53,7 @@ contact law.
 Episodes accept 64, 128 or 256 finite-volume cells, duration from 1 ns to
 0.2 s, and CFL 0.35, 0.175 or 0.0875. The scheme uses MUSCL/HLL spatial
 flux and a coupled Heun step, split at both torque histories' knots. It
-rejects initially non-taut or supersonic states. Under the stop
+rejects initially non-taut or supersonic states. Under either event-handling
 policy it locates the first **numerical admissibility limit** among both
 reels' reversal, internal donor and depletion conditions and the minimum tautness margin
 over ports, cells and reconstructed faces. A disposable trial may extend the
@@ -65,10 +67,12 @@ while bisecting.
 A predictor stage can reach a limit
 before the corrected endpoint: `limit_source` identifies this, and
 `bracket_time_s` is then a numerical bracket, **not a physical event-time
-estimate**. An accepted cut within `1e-12` reference m of a donor boundary,
-or an accepted tautness margin within `1e-12`, stops by proximity with no
-time bracket. The returned duration is the last feasible accepted time,
-never post-event continuation. A release reel stops at a positive
+estimate**. Under the stop policy an accepted cut within `1e-12` reference m
+of a donor boundary, or an accepted tautness margin within `1e-12`, stops by
+proximity with no time bracket. The returned duration then is the last
+feasible accepted time. The isolated-donor policy may instead resolve a
+remaining positive label gap with a small terminal step. A release reel stops
+at a positive
 `1e-10 m` numerical inventory threshold. Its reported bracket locates that
 threshold, not physical zero inventory; `inventory_stop_threshold_m` and
 predictor/corrected signed margins make this explicit. A state already within
@@ -78,7 +82,7 @@ release flux, stops with no time bracket. The latter distance is saved as
 independent of retained-record segmentation. A winding reel may grow from
 below the threshold. The default reject policy still rejects depletion.
 This pre-engaged interval does not include
-engagement, post-event restart, free leading edges or a roll/strip contact
+engagement, general post-event transitions, free leading edges or a roll/strip contact
 law. Snapshot requests read accepted states
 without changing the integration trajectory. Full accepted cell fields are
 saved and source hashes bind the example to its installed solver.
@@ -96,9 +100,11 @@ Heun endpoint cut against the exposed record label within the original
 complete trial, holding the pre-event donor fixed. It reports
 `corrected_arrival_bracket_time_s` when that
 corrected margin changes sign; a predictor-only crossing reports no corrected
-arrival bracket. `feasible_stop_time_s` still comes from the earliest
-predictor/corrected numerical admissibility limit, and no trial transfer or
-next donor is committed. The corrected bracket is an estimate for the
+arrival bracket. Under the stop policy, `feasible_stop_time_s` still comes
+from the earliest predictor/corrected numerical admissibility limit, and no
+trial transfer or next donor is committed. The isolated-donor policy uses a
+separate corrected terminal bracket and accepts at most one adjacent donor
+with a bounded, reported ownership residual. The corrected bracket is an estimate for the
 discrete numerical trajectory, not a rigorous enclosure of the continuum
 event. Sign changes can miss grazing or repeated crossings; a physical
 event-time enclosure would require a separate solution-error bound and a
@@ -175,6 +181,17 @@ shows its predictor-to-corrected arrival gap falls on a finer time grid;
 forcing-knot placement can cause a plateau between adjacent CFL choices.
 A faster predictor with no corrected sign change is checked to return no
 invented corrected-arrival bracket.
+
+The isolated-donor case continues across one `0.0037 m` layer at its exact
+constant-flow arrival `0.037 s`. An independently calculated new-donor port
+and reduced reel ODE check the immediate trace jump and short-time inventory,
+angular speed, work, heat and impulse. Split versus unsplit equal-stretch
+records agree to roundoff on three grids and under spatial reflection.
+Spatial, CFL and declared torque-knot refinement are checked separately.
+Unsupported new slack trace, skipped thin interval, competing or second donor
+event and predictor-only arrival retain a feasible stop. A forcing knot at
+the donor label checks the bounded small terminal step. The transition and
+its signed stored-energy ownership residual are saved and replayed.
 
 An independent symmetric standing-wave solution supplies two driven winding
 reels with simultaneous exact reversal at `0.02 s`, positive tension and
