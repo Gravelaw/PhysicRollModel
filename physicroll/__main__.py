@@ -28,7 +28,7 @@ def main():
     p = argparse.ArgumentParser(description='Synthetic cold rolling calculation (SI only)')
     p.add_argument('scenario', type=Path, nargs='?')
     p.add_argument('--run-spec', type=Path,
-                   help='versioned checked or conditional RunSpec')
+                   help='versioned checked, conditional or operating RunSpec')
     p.add_argument('--output', type=Path)
     args = p.parse_args()
     if (args.scenario is None) == (args.run_spec is None):

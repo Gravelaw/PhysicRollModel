@@ -53,8 +53,15 @@ def main():
         conditional_result.verify_run_spec(conditional_spec)
         if conditional_result.to_dict()['assessments']['scientific_qualification'] != 'NOT_ASSESSED':
             raise AssertionError('conditional result gained unsupported qualification')
+    operating_spec = RunSpec(read_example('v1_operating_replay.runspec.json'))
+    operating_result = run_workflow(operating_spec)
+    operating_result.verify_run_spec(operating_spec)
+    operating = operating_result.to_dict()
+    if (operating['assessments']['predictions_computed'] or
+            len(operating['outputs']['operating_replay']['samples']) != 7):
+        raise AssertionError('packaged O0 replay changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
-          'audited Shao fixture, conditional replay and sensitivity')
+          'audited Shao fixture, conditional workflows and O0 replay')
 
 
 if __name__ == '__main__':

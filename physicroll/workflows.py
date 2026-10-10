@@ -18,6 +18,10 @@ from .lubrication import FluidObservation
 from .materials import MaterialState, PowerHardeningLaw
 from .model import Scenario
 from .operating import EquipmentLimits, ObservedSignal, PassOperatingPlan, SignalRange
+from .operational_replay import (CONTRACT_VERSION, AppliedReference, MeasuredSignal,
+                                 OperationSample, OperatingRecipe, PassScope,
+                                 PhaseTarget, SteadyWindowEvidence,
+                                 replay_operating_samples)
 from .resources import resource_file
 from .run_contract import ResultBundle, RunSpec
 
@@ -50,6 +54,10 @@ CONDITIONAL_CARD_RESOURCES = {
         ('shao_fixture', 'assumptions.json'),
 }
 CONDITIONAL_ADAPTER_ID = 'shao2015_fixed_rigid_slab_prior_log_005'
+OPERATING_SOURCE_RESOURCES = {
+    'physicroll/operational_replay.py': 'operational_replay.py',
+    'physicroll/operating.py': 'operating.py',
+}
 
 
 def _record(cls, value, **converted):
@@ -341,8 +349,99 @@ def run_conditional_spec(spec: RunSpec) -> ResultBundle:
     })
 
 
+def _operating_recipe(value):
+    if type(value) is not dict:
+        raise ValueError('operating recipe must be an object')
+    try:
+        return _record(OperatingRecipe, value,
+                       scope=_record(PassScope, value['scope']),
+                       targets=tuple(_record(PhaseTarget, item)
+                                     for item in _array(value['targets'], 'recipe targets')))
+    except KeyError as exc:
+        raise ValueError(f'operating recipe missing {exc}') from exc
+
+
+def _operation_sample(value):
+    if type(value) is not dict:
+        raise ValueError('operation sample must be an object')
+    try:
+        return _record(
+            OperationSample, value,
+            scope=_record(PassScope, value['scope']),
+            measurements=tuple(_record(MeasuredSignal, item)
+                               for item in _array(value['measurements'], 'measurements')),
+            applied_references=tuple(_record(AppliedReference, item)
+                                     for item in _array(value['applied_references'],
+                                                        'applied references')),
+            steady_evidence=tuple(_record(SteadyWindowEvidence, item)
+                                  for item in _array(value['steady_evidence'],
+                                                     'steady evidence')),
+        )
+    except KeyError as exc:
+        raise ValueError(f'operation sample missing {exc}') from exc
+
+
+def run_operating_replay_spec(spec: RunSpec) -> ResultBundle:
+    """Replay supplied O0 phase observations; compute no process prediction."""
+    if not isinstance(spec, RunSpec):
+        raise ValueError('run_operating_replay_spec requires a RunSpec')
+    data = spec.to_dict()
+    if data['workflow_kind'] != 'operating_replay':
+        raise ValueError('RunSpec is not an operating replay')
+    if data['model_choices'] != dict.fromkeys(('solver', 'material', 'bite', 'thermal'), 'none'):
+        raise ValueError('O0 model choices must declare no solver')
+    if (data['numerical_settings'] != {} or data['card_hashes'] != {} or
+            data['identities']['model_version'] != CONTRACT_VERSION or
+            any(data['identities'][key] is not None
+                for key in ('material_id', 'state_id'))):
+        raise ValueError('O0 has no numerical solver or material state')
+    requested = data['requested_inputs']
+    if (set(requested) != {'replay_id'} or
+            type(requested['replay_id']) is not str or
+            not requested['replay_id'].strip() or
+            not _same_frozen_json(data['resolved_inputs'], requested)):
+        raise ValueError('O0 replay identity differs between requested and resolved inputs')
+    if set(data['source_hashes']) != set(OPERATING_SOURCE_RESOURCES):
+        raise ValueError('O0 source hashes must name both operating modules')
+    for name, resource_name in OPERATING_SOURCE_RESOURCES.items():
+        digest = hashlib.sha256(files('physicroll').joinpath(resource_name).read_bytes()).hexdigest()
+        if data['source_hashes'][name] != digest:
+            raise ValueError(f'O0 source hash mismatch: {name}')
+    if (set(data['recipe_targets']) != {'recipes'} or
+            set(data['observations']) != {'samples'}):
+        raise ValueError('O0 recipes and samples must remain separate')
+    recipes = tuple(_operating_recipe(item) for item in
+                    _array(data['recipe_targets']['recipes'], 'recipes'))
+    samples = tuple(_operation_sample(item) for item in
+                    _array(data['observations']['samples'], 'samples'))
+    replay = replay_operating_samples(recipes, samples)
+    recipe_ids = {recipe.recipe_id for recipe in recipes}
+    identity = next(iter(recipe_ids)) if len(recipe_ids) == 1 else None
+    if data['identities']['recipe_id'] != identity:
+        raise ValueError('O0 recipe identity disagrees with supplied revisions')
+    return ResultBundle({
+        'schema_version': '1', 'run_spec_sha256': spec.sha256,
+        'effective_inputs': {'replay_id': requested['replay_id'],
+                             'coil_id': samples[0].coil_id,
+                             'timebase_id': samples[0].timebase_id},
+        'outputs': {'operating_replay': replay},
+        'checks': {'declared_bounds': {'required_limit_ids': [], 'evaluations': []}},
+        'assessments': {
+            'execution': 'COMPLETED', 'input_validity': 'VALID',
+            'model_applicability': 'NOT_ASSESSED',
+            'numerical_verification': 'NOT_ASSESSED',
+            'declared_bounds_status': 'INDETERMINATE',
+            'declared_bounds_coverage': 'NONE',
+            'scientific_qualification': 'NOT_ASSESSED',
+            'operating_readiness': 'NOT_ASSESSED',
+            'predictions_computed': False,
+            'qualification_evidence_refs': [],
+        },
+    })
+
+
 def run_workflow(spec: RunSpec) -> ResultBundle:
-    """Dispatch currently public version-1 checked and conditional workflows."""
+    """Dispatch public checked, conditional and offline operating workflows."""
     if not isinstance(spec, RunSpec):
         raise ValueError('run_workflow requires a RunSpec')
     kind = spec.to_dict()['workflow_kind']
@@ -350,4 +449,6 @@ def run_workflow(spec: RunSpec) -> ResultBundle:
         return run_checked_spec(spec)
     if kind in ('benchmark', 'sensitivity'):
         return run_conditional_spec(spec)
+    if kind == 'operating_replay':
+        return run_operating_replay_spec(spec)
     raise ValueError(f'no public adapter for workflow_kind {kind}')

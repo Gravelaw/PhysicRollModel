@@ -11,7 +11,7 @@ The package-data list in `pyproject.toml` declares four resource groups:
 
 | Group | Reviewed source copy | Use |
 |---|---|---|
-| `examples` | `scenarios/*.json` (eleven named files) | Legacy baseline, W1 checked example and two conditional Shao templates; further public adapters in W3 |
+| `examples` | `scenarios/*.json` (twelve named files) | Legacy baseline, W1 checked example, two conditional Shao templates and synthetic O0 phase replay; further public adapters in W3 |
 | `schemas` | `schema/*.json` | V1 contract and legacy scenario schemas |
 | `shao_fixture` | `scenarios/literature/shao2015_aa5052/*` | Established audited CSV/assumptions source fixture |
 | `shao_research` | `docs/research/data/shao2015_*.json` | Raw transcription, conditional adapter, prior sensitivity |
@@ -46,7 +46,7 @@ baseline = read_example('baseline.json')
 shao = load_case(resource_directory('shao_fixture'))
 ```
 
-W3 still needs public checked workflow adapters for all required workflow kinds.
+W3 still needs a public finite schedule-search adapter.
 W4 still needs run-bundle manifests, resource verification for saved runs, and
 replay. Keeping the duplicate source/package records in sync is enforced in
 source tests and CI, but a separately tampered installed wheel is outside W2's

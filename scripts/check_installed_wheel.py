@@ -41,6 +41,7 @@ def main():
         subprocess.run([str(python), '-I', '-m', 'physicroll.package_check'],
                        cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
+                     'v1_operating_replay.runspec.json',
                      'v1_shao_benchmark.runspec.json',
                      'v1_shao_sensitivity.runspec.json'):
             spec = outside / name
