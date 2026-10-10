@@ -65,7 +65,7 @@ def run(config_path: Path, output_path: Path):
             'max_thermal_allocation_residual_w':max(abs(p['energy']['thermal_allocation_residual_w']) for p in outputs),
             'max_mechanical_work_residual_relative':max(p['mechanics']['mechanical_work_residual_relative'] for p in outputs)}
     output_path.parent.mkdir(parents=True,exist_ok=True)
-    output_path.write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+    output_path.write_bytes((json.dumps(result,indent=2,allow_nan=False)+'\n').encode('utf-8'))
     print(json.dumps({'status':result['status'],
         'pass_summaries':[{'pass_id':p['pass_id'],'strip_exit_k':p['energy']['strip_temperature_out_k'],
             'roll_exit_k':p['energy']['roll_temperature_out_k'],
