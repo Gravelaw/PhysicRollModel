@@ -74,8 +74,17 @@ def main():
             t1_result['outputs']['requested_duration_s'] or
             t1_result['assessments']['numerical_verification'] != 'PASSED'):
         raise AssertionError('packaged T1 transport changed')
+    t2_spec = RunSpec(read_example('v1_torque_driven_span_reel_t2.runspec.json'))
+    t2_result = run_workflow(t2_spec).to_dict()
+    t2 = t2_result['outputs']['torque_driven_span_reel_t2']
+    if (t2_result['outputs']['episode_outcome'] != 'COMPLETED_DECLARED_DURATION' or
+            t2['torque_role'] != 'prescribed_input' or
+            t2['span_and_reel_speed_role'] != 'predicted_from_coupled_dynamics' or
+            t2['maximum_combined_inventory_defect_kg'] >= 1e-10 or
+            t2_result['assessments']['scientific_qualification'] != 'NOT_ASSESSED'):
+        raise AssertionError('packaged T2 span/reel example changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
-          'audited Shao fixture, conditional workflows, O0 replay, finite search and T1')
+          'audited Shao fixture, conditional workflows, O0 replay, finite search, T1 and T2')
 
 
 if __name__ == '__main__':

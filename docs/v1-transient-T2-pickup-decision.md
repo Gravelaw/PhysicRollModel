@@ -1,11 +1,11 @@
 # T2 stored-strain pickup decision
 
-**Status: independently reviewed design option, not an implemented law or a
-physical validation.** This decision sits between the published T2A7
-append-only torque-driven case and T2A9 matched reaction-mode reversal, and
-the integrated torque-driven T2 solver. The user choice between a labeled
-idealized transition and resolving reel contact remains open. Neither path
-permits calling the present benchmarks a full rolling-mill solver.
+**Status: independently reviewed idealized Option A now has a bounded
+right-reel implementation; no physical validation.** The
+[integrated T2 increment](v1-transient-T2-integrated.md) uses this labeled
+pickup law for a first torque-driven elastic span/reel episode. A resolved
+reel-contact transition remains a later physical-model gate. Neither this
+increment nor the T2A7/T2A9 benchmarks are a full rolling-mill solver.
 
 ## What the existing benchmarks establish
 
@@ -69,7 +69,8 @@ D=(-q)/2*(EA-mu*q^2)*(lambda_s-lambda_w)^2.
 ```
 
 It is nonnegative for the declared tensile, strictly subsonic release
-`-c<q<0`, `lambda_s>1`, `lambda_w>0` and positive wound inventory. The
+`-c<q<0`, `lambda_s>1`, `lambda_w>0` and positive wound inventory. The bounded
+implementation additionally requires taut `lambda_w>1`. The
 `q=-c` limit changes the boundary characteristic count and is excluded.
 Track accumulated dissipated energy `Qdot=D` separately; combined span,
 reel and `Q` close
@@ -102,22 +103,24 @@ verification before torque-driven mismatched release can be integrated.
 The full 3D T3 work already requires a contact model, but reel pickup has
 its own wrap geometry and cannot be assumed to inherit the roll-bite law.
 
-## Independent verification to freeze before coding either choice
+## Independent verification and remaining checks
 
-For Option A, start with a constant-state mismatch release: set
+For Option A, the first independent constant-state mismatch release uses
 `EA=10 N`, `mu=0.1 kg/reference m`, `lambda_w=1.01`,
 `lambda_s=1.001`, `q=-0.1 reference m/s`, then
 `v_w=-0.101 m/s`, `v_s=-0.1001 m/s` and
 `D=4.049595e-5 W`. Use the analytic annulus `R(ell),J(ell)` with
 `ell=ell0+q*t` and independently manufacture a time-only torque from the
 angular equation. Verify signed span flux, original-layer energy depletion,
-dissipation, angular impulse and combined work; repeat with the sign of the stretch
-mismatch reversed. These are synthetic checks of the chosen closure.
+dissipation, angular impulse and combined work. The existing integrated
+tests cover the stated case and a changed donor; reversal of the mismatch
+sign remains a separate check. These are synthetic checks of the chosen
+closure.
 
-Next use T2A9's standing-wave reaction torque as a **frozen applied input**
-and require the torque-driven solver to recover its matched reversal and
-zero transition dissipation under refinement. Vary inertia with the same applied
-torque and require the trajectory to change, proving actual dynamic feedback.
+The integrated tests also use T2A9's standing-wave reaction torque as a
+**frozen applied input**, recover its matched reversal and near-zero modeled
+dissipation under refinement, and show sensitivity to changed applied torque.
+An independently varied inertia case remains to be checked.
 A specialist has proposed a non-time-symmetric full-reversal oracle with
 deposited-time inversion, pending independent trajectory verification:
 at `t=.03 s` it has

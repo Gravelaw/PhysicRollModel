@@ -24,6 +24,7 @@ python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --outp
 python -m physicroll.bundle_cli create --run-spec scenarios/v1_schedule_search.runspec.json --out /tmp/physicroll-search-run
 python -m physicroll.bundle_cli verify /tmp/physicroll-search-run
 python -m physicroll.bundle_cli create --run-spec scenarios/v1_prescribed_transport_t1.runspec.json --out /tmp/physicroll-t1-run
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_torque_driven_span_reel_t2.runspec.json --out /tmp/physicroll-t2-run
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```
@@ -35,7 +36,10 @@ For guided synthetic pass editing and reopening saved runs, start the
 The [T1 transport contract](docs/v1-transient-T1.md) describes a separate
 bounded prescribed-motion kinematic layer; it does not solve the requested
 drive, deformation or contact dynamics.
-The [T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
+The [integrated T2 increment](docs/v1-transient-T2-integrated.md) adds a bounded
+torque-driven elastic span and right reel with labeled idealized release pickup;
+it remains short of the full v1 transient solver. The
+[T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
 shaft/span/reel cases. [T2A5](docs/v1-transient-T2A5-design.md) adds
 distributed strain and velocity with characteristic-compatible fixed ports;
 [T2A6](docs/v1-transient-T2A6-design.md) checks append-only wound-strain

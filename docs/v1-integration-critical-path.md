@@ -1,11 +1,13 @@
 # V1 transient integration critical path
 
-**Status: dependency assessment after T2A9.** The executable T2A1–T2A9
-modules are restricted verification fixtures. T2A7 proves a two-way
-torque-driven elastic span/reel *while winding only*. T2A9 proves a matched
-stored-strain donor switch under *reaction torque*. Joining these two results
-is a new physical and numerical design step; their successful tests do not
-establish an integrated torque-driven release model.
+**Status: first integrated right-reel increment.** The executable T2A1–T2A9
+modules remain restricted verification fixtures. The
+[integrated T2 increment](v1-transient-T2-integrated.md) now combines a
+torque-driven elastic span and right reel with winding, matched or mismatched
+release, stored-label ownership and an explicitly idealized dissipative
+pickup law. It has a source-bound saved-run contract and independent synthetic
+oracles. The left reel, bite/drive engagement, restart, T3 contact and full v1
+coupling remain open.
 
 ## Next decisions and executable gates
 
@@ -59,9 +61,12 @@ establish an integrated torque-driven release model.
    checks Linux/Windows source and installed wheels, bounded performance
    and memory, numerical regression, and independent review.
 
-The immediate blocker to implementing step 2 is the independently reviewed
-torque-driven stored-strain pickup and reversal transition law in step 1.
-Step 3 can progress in parallel only after its equation-level T0 design is
-frozen. No current synthetic fixture supplies material calibration or
-transient mill measurements. Software verification (S), scientific physical
-validation (V), and site qualification (O) have separate gates.
+The right-reel pickup transition is independently reviewed and implemented as
+a labeled model proposal. Step 2 next needs two-ended reel and engagement
+ports with their own independent work/impulse and event gates; the current
+right-reel Episode is not full T2. The first T3 full 3D elastic/contact
+candidate has equation-level independent review, while its numerical engine
+and contact enforcement remain to be built. No synthetic fixture supplies
+material calibration or transient mill measurements. Software verification
+(S), scientific physical validation (V), and site qualification (O) have
+separate gates.

@@ -22,6 +22,7 @@ EXAMPLES = (
     'v1_shao_sensitivity.runspec.json', 'v1_operating_replay.runspec.json',
     'v1_schedule_search.runspec.json',
     'v1_prescribed_transport_t1.runspec.json',
+    'v1_torque_driven_span_reel_t2.runspec.json',
 )
 
 
