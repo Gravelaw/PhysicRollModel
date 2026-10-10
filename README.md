@@ -40,7 +40,8 @@ drive, deformation or contact dynamics.
 The [integrated T2 increment](docs/v1-transient-T2-integrated.md) adds a bounded
 torque-driven elastic span and right reel with labeled idealized release pickup;
 the [two-reel interval](docs/v1-transient-T2-two-reel.md) adds independent
-drive torques and mirrored reel ownership while rejecting unresolved events.
+drive torques, mirrored reel ownership and optional one-sided numerical
+admissibility stops for reversal and internal donor boundaries.
 Both remain short of the full v1 transient solver. The
 [T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
 shaft/span/reel cases. [T2A5](docs/v1-transient-T2A5-design.md) adds

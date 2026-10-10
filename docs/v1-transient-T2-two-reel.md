@@ -32,9 +32,10 @@ ordering. The wound interval at each end is `[cut,cut+ℓ]`, with
 span's cell-average reference length. This is checked throughout, together
 with total span-plus-reels mass. Winding deposits accepted-stage packets of
 the computed incoming stretch. Release consumes an immutable retained donor.
-At a donor boundary or phase reversal, this first two-reel implementation
-raises an unsupported-event error before committing the trial; there is no
-silent reuse of the old port law.
+The default `event_policy=reject` raises at a donor boundary or phase
+reversal. `stop_at_reel_admissibility_limit` instead saves the last feasible
+state before either limit. It does not change the port law or resume under a
+new donor or phase.
 
 The local outward span energy flux is
 `G=q(μu_s²/2+EA(λ_s-1)²/2)-T u_s`. During release the declared idealized
@@ -49,10 +50,18 @@ contact law.
 Episodes accept 64, 128 or 256 finite-volume cells, duration from 1 ns to
 0.2 s, and CFL 0.35, 0.175 or 0.0875. The scheme uses MUSCL/HLL spatial
 flux and a coupled Heun step, split at both torque histories' knots. It
-rejects phase reversal, donor transition, first tension zero, depletion,
-non-taut or supersonic states. This is a **pre-engaged, event-free** interval;
-it does not include engagement, event localization, restart, free leading
-edges, or a roll/strip contact law. Snapshot requests read accepted states
+rejects first tension zero, depletion, non-taut or supersonic states. Under
+the stop policy it locates the first **numerical admissibility limit** among
+the two reels' reversal and internal donor conditions. The complete coupled
+Heun trial is repeated while bisecting. A predictor stage can reach a limit
+before the corrected endpoint: `limit_source` identifies this, and
+`bracket_time_s` is then a numerical bracket, **not a physical event-time
+estimate**. An accepted cut within `1e-12` reference m of a donor boundary
+stops by label proximity with no time bracket. The returned duration is the
+last feasible accepted time, never post-event continuation. Tension-zero and
+depletion are still rejected. This pre-engaged interval does not include
+engagement, post-event restart, free leading edges or a roll/strip contact
+law. Snapshot requests read accepted states
 without changing the integration trajectory. Full accepted cell fields are
 saved and source hashes bind the example to its installed solver.
 
@@ -69,8 +78,16 @@ momentum, and preserves local reel angular and energy states. Tests also
 perturb only the left torque and verify the right reel responds after a wave
 crosses the span, while its early response remains at numerical zero.
 The test suite separately checks mesh/CFL choices, record output isolation,
-observation-cadence invariance, input label mismatches, and unsupported
-donor, reversal and tension-zero paths.
+observation-cadence invariance, input label mismatches, default rejection and
+the optional one-sided donor/reversal stops. The donor label oracle stops near
+`0.01037 s` for a `0.001037 m` record at `0.1 m/s` release, on 64/128/256
+cells and under spatial reflection. A donor limit coincident with a forcing
+knot stops at the accepted state without a zero-length step. The reversal
+case's combined-energy defect on 64 cells is about `3.5e-7 J` and falls to
+about `1.6e-8 J` on 256 cells. This is unresolved finite-volume numerical
+loss, not physical pickup heat; the public `1e-8 J` internal balance check
+fails for that case. A source-bound stopped RunSpec is replayed from a saved
+bundle and reports requested versus completed duration.
 
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical
@@ -80,8 +97,9 @@ of physical mill accuracy.
 
 ## Next dependencies
 
-Add a shared earliest-event scheduler across both reels, donor interfaces
-and the span, including coincident-event policy and refinement checks. Then
+Add a shared physical earliest-event scheduler across both reels, donor
+interfaces and the span, including tension loss, depletion, simultaneous
+events and independent physical event-time refinement. Then
 add a compatible boundary-engagement transition, drive train and T2/T3
 interface with a single owner for each moving material region. Full 3D
 transient strip/contact, rigid gap and compliant elastic-roll modes, dynamic

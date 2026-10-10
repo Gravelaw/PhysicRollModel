@@ -19,7 +19,7 @@ MODEL_CHOICES = {
 }
 NUMERICAL_SETTINGS = {
     'spatial_flux': 'minmod_muscl_hll_finite_volume',
-    'time_integrator': 'heun_preengaged_event_free',
+    'time_integrator': 'heun_preengaged_reel_admissibility_stop',
     'torque_interpolation': 'linear_from_declared_knots',
     'EA_n': 10.0,
     'reference_line_mass_kg_m': 0.1,
@@ -122,6 +122,8 @@ def run_two_reel_spec(spec: RunSpec) -> ResultBundle:
         'nonempty_left_reel': final['ends']['left']['reference_length_m'] > 0,
         'nonempty_right_reel': final['ends']['right']['reference_length_m'] > 0,
         'declared_episode_duration': final['time_s'] <= episode.duration_s+1e-12,
+        'stopped_before_requested_end': (transport['episode_outcome'] ==
+            'COMPLETED_DECLARED_DURATION' or final['time_s'] < episode.duration_s),
         'declared_spatial_grid': episode.cell_count in (64, 128, 256),
     }
     return ResultBundle({
@@ -159,7 +161,9 @@ def run_two_reel_spec(spec: RunSpec) -> ResultBundle:
         },
         'assessments': {
             'execution': 'COMPLETED', 'input_validity': 'VALID',
-            'model_applicability': 'IN_DOMAIN',
+            'model_applicability': ('IN_DOMAIN' if transport['episode_outcome'] ==
+                                    'COMPLETED_DECLARED_DURATION' else
+                                    'INDETERMINATE'),
             'numerical_verification': 'NOT_ASSESSED' if balanced else 'FAILED',
             'declared_bounds_status': 'WITHIN' if all(limits.values()) else 'VIOLATED',
             'declared_bounds_coverage': 'COMPLETE',

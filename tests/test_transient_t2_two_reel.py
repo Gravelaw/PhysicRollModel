@@ -61,6 +61,90 @@ def case(count=64, duration=.1, reflected=False, bump=0.,
 
 
 class TwoReelTests(unittest.TestCase):
+    def test_supported_donor_stop_matches_independent_label_oracle(self):
+        for reflected in (False, True):
+            for n in (64, 128, 256):
+                with self.subTest(reflected=reflected, cells=n):
+                    base = case(n, duration=.02, reflected=reflected)
+                    side = 'right' if reflected else 'left'
+                    release = getattr(base, side)
+                    cut = release.initial_local_cut_m
+                    boundary = cut+.001037
+                    record = (
+                        one.WoundRecord(boundary, cut+1., 1.02),
+                        one.WoundRecord(cut, boundary, 1.01))
+                    episode = replace(base, **{side: replace(release,
+                        initial_records=record)},
+                        event_policy='stop_at_reel_admissibility_limit')
+                    result = two.run_two_reel_episode(episode)
+                    final = result['accepted_states'][-1]
+                    self.assertEqual(result['episode_outcome'],
+                                     'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+                    self.assertEqual(len(result['events']), 1)
+                    event = result['events'][0]
+                    self.assertEqual((event['side'], event['kind']),
+                                     (side, 'donor_boundary'))
+                    self.assertAlmostEqual(event['boundary'], boundary)
+                    self.assertEqual(event['event_time_interpretation'],
+                                     'numerical_bracket_not_physical_event_time')
+                    # Constant manufactured outward release flux is -0.1 m/s.
+                    self.assertAlmostEqual(final['time_s'], .001037/.1,
+                                           delta=2e-8)
+                    self.assertLess(event['bracket_width_s'], 1e-11)
+                    self.assertLess(final['ends'][side]['local_cut_label_m'],
+                                    boundary)
+                    self.assertEqual(final['ends'][side][
+                        'ordered_wound_records'][1]['retained_stretch'], 1.01)
+                    self.assertLess(result['maximum_combined_inventory_defect_kg'],
+                                    1e-10)
+                    self.assertLess(result['maximum_combined_energy_defect_j'],
+                                    1e-8)
+
+    def test_reversal_stop_is_one_sided_and_energy_defect_refines(self):
+        defects = []
+        times = []
+        for n in (64, 128, 256):
+            base = case(n, duration=.02)
+            episode = replace(base, left=replace(base.left,
+                applied_torque_history=((0., 1.), (.02, 1.))),
+                event_policy='stop_at_reel_admissibility_limit')
+            result = two.run_two_reel_episode(episode)
+            self.assertEqual(result['episode_outcome'],
+                             'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+            self.assertEqual([(event['side'], event['kind'])
+                              for event in result['events']],
+                             [('left', 'reversal')])
+            event = result['events'][0]
+            self.assertEqual(event['limit_source'], 'predictor_stage')
+            self.assertEqual(event['event_time_interpretation'],
+                             'numerical_bracket_not_physical_event_time')
+            final = result['accepted_states'][-1]
+            self.assertLess(final['ends']['left']['angular_speed_rad_s'], 0)
+            self.assertLess(event['bracket_width_s'], 1e-11)
+            defects.append(result['maximum_combined_energy_defect_j'])
+            times.append(final['time_s'])
+        self.assertLess(defects[2], defects[1])
+        self.assertLess(defects[1], defects[0])
+        self.assertLess(max(times)-min(times), 1e-8)
+        # This defect is numerical FV energy loss, not calibrated dissipation.
+        self.assertGreater(defects[0], 1e-8)
+
+    def test_donor_limit_on_forcing_knot_uses_accepted_state_proximity(self):
+        base = case(duration=.02)
+        cut = base.left.initial_local_cut_m
+        left = replace(base.left, initial_records=(
+            one.WoundRecord(cut+.0005, cut+1., 1.02),
+            one.WoundRecord(cut, cut+.0005, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=left,
+            event_policy='stop_at_reel_admissibility_limit'))
+        self.assertEqual(result['episode_outcome'],
+                         'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+        self.assertAlmostEqual(result['accepted_states'][-1]['time_s'], .005,
+                               delta=1e-10)
+        self.assertEqual(result['events'][0]['root_basis'],
+                         'accepted_state_label_proximity')
+        self.assertIsNone(result['events'][0]['bracket_time_s'])
+
     def test_constant_flow_and_independent_component_oracles(self):
         for n in (64, 128, 256):
             with self.subTest(cells=n):
