@@ -40,6 +40,14 @@ def main():
         outside.mkdir()
         subprocess.run([str(python), '-I', '-m', 'physicroll.package_check'],
                        cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.editor import _template, guided_values, build_guided_checked; "
+            "from physicroll.workflows import run_workflow; "
+            "base=_template('checked_pass'); "
+            "saved=build_guided_checked(base, guided_values(base)); "
+            "assert run_workflow(saved).to_dict()['assessments']['execution']=='COMPLETED'",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

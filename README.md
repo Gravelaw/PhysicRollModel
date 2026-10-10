@@ -29,6 +29,8 @@ python scripts/build_extended.py
 
 The saved run includes a self-contained `report.html` that displays the verified
 inputs, status axes, checks and results; see [the run-bundle guide](docs/v1-run-bundle.md).
+For guided synthetic pass editing and reopening saved runs, start the
+[loopback editor](docs/v1-editor.md) with an explicit `--runs-dir`.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a
