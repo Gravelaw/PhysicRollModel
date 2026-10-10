@@ -9,7 +9,9 @@ establish an integrated torque-driven release model.
 
 ## Next decisions and executable gates
 
-1. **Freeze an integrated strain-bearing T2 formulation.** Define the
+1. **Freeze an integrated strain-bearing T2 formulation.** The
+   [stored-strain pickup decision](v1-transient-T2-pickup-decision.md)
+   records two reviewed modeling paths and their scientific limits. Define the
    supplied drive torque, both end ports, speed/tension characteristic count,
    reel state and original stored-strain ownership, including material
    pickup at reversal. Derive the interface transition law for a mismatch
