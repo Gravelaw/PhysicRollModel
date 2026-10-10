@@ -108,6 +108,14 @@ def main():
             "and result['shaft_torque_role']=='reaction_not_applied_input' "
             "and result['maximum_storage_vs_flux_defect_j']<1e-11",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a7 import T2A7Case, run_torque_driven_elastic_coupling; "
+            "result=run_torque_driven_elastic_coupling(T2A7Case(64)); "
+            "assert result['mode']=='torque_driven_append_only_elastic_span_reel_coupling' "
+            "and result['right_incoming_characteristic_role']=='predicted_from_reel_speed' "
+            "and result['maximum_combined_inventory_defect_kg']<1e-12",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

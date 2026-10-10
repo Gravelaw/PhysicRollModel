@@ -39,9 +39,11 @@ The [T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
 shaft/span/reel cases. [T2A5](docs/v1-transient-T2A5-design.md) adds
 distributed strain and velocity with characteristic-compatible fixed ports;
 [T2A6](docs/v1-transient-T2A6-design.md) checks append-only wound-strain
-ownership and a reaction reel for an analytic outgoing wave. They do not
-establish a coupled torque-driven elastic reel/rolling solver or physical
-mill accuracy.
+ownership and a reaction reel for an analytic outgoing wave.
+[T2A7](docs/v1-transient-T2A7-design.md) adds a restricted torque-driven,
+two-way elastic span/reel coupling with append-only transfer. These
+benchmarks do not establish release, slack, rolling contact, full T2 or
+physical mill accuracy.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a
