@@ -19,6 +19,15 @@ The following are now **required for v1**:
   alone do not meet this requirement.
 - Linux and Windows wheels, with Python 3.10 and 3.12 as the initial test
   versions unless a later explicit decision changes them.
+- Bounded transient episodes with declared duration and mesh limits. Both a
+  prescribed rigid-roll gap mode and a stand-compliance/elastic-roll mode are
+  required before the v1 transient gate closes. The elastic mode must resolve
+  cross-width roll bending and structural vibration through a width-resolved
+  **full 3D shipped strip/contact engine** coupled to dynamic roll/stand
+  structure. Lightweight and
+  numerical/native implementation routes will be prototyped against the same
+  acceptance cases before choosing the supported distribution route; the
+  existing lightweight steady workflows retain their dependency boundary.
 
 ## Revised dependency sequence
 
@@ -27,10 +36,11 @@ remains the public checked workflow layer. Add a separately reviewed **T
 track** after W1/W2, feeding W4 reproducibility and W5 interface integration:
 
 1. **T0 — transient contract and numerical benchmark design.** Declare the
-   cold, wide, symmetric, single-layer, plane-strain domain; field and state
+   domains for the plane-strain rigid-gap baseline and width-resolved dynamic
+   elastic-roll/stand mode; field and state
    variables; prescribed inputs; initial/boundary conditions; units; frame and
    time coordinates; event rules; supported constitutive/contact laws; and
-   failure conditions. Select the gap/roll-compliance boundary model and state
+   failure conditions. Specify both gap modes, their boundary conditions and
    whether exit thickness is prescribed or predicted before T3 begins. Freeze
    quantities, numerical tolerances, and independent analytical, manufactured
    or separately verified transient references for T2/T3 before interpreting
@@ -52,12 +62,14 @@ track** after W1/W2, feeding W4 reproducibility and W5 interface integration:
    checks, not just comparisons of end states.
 4. **T3 — transient strip deformation/contact.** Resolve time-dependent
    material transport, thickness and strain fields and roll/strip contact
-   tractions in the stated plane-strain domain, with a declared constitutive
+   tractions in the declared domain for each mode, with a declared constitutive
    law and friction/contact regularization. It must couple to T2 through
    force/torque and strip velocities, reject unsupported regimes, and report
    spatial/time refinement, conservation, independent transient references,
-   coupled-interface convergence and steady-limit comparisons. Material history
-   must remain bound to transported parcels through contact transitions. New
+   coupled-interface convergence and steady-limit comparisons for both gap
+   modes. The elastic mode also verifies cross-width roll/strip contact,
+   support dynamics and vibration. Material history must remain bound to
+   transported parcels through contact transitions. New
    strain-rate or thermal claims require their own material inputs and tests.
 5. **T4 — verified saved animation.** Store bounded frames or field samples
    with their source-run digest, timeline, coordinate system, unit labels and
@@ -65,7 +77,9 @@ track** after W1/W2, feeding W4 reproducibility and W5 interface integration:
    verifies identity, and animates transport, bodies and deformation/contact
    fields without treating prescribed inputs as predictions.
 
-T0–T3 may proceed alongside W3 after contracts stabilize. W4 must save and
+T0–T3 may proceed alongside W3 after contracts stabilize. The two runtime
+routes are evaluation candidates, not a promise to ship duplicate engines.
+W4 must save and
 replay T results as well as static workflows. W5 requires the guided editor,
 offline report and T4 animation to agree with saved values. W6 requires
 installed-wheel workflow and animation checks on Linux and Windows, numerical
