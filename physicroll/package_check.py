@@ -5,13 +5,11 @@ import json
 from .conditional_shao import (compare_existing_fixture,
                                run_conditional_comparison,
                                run_declared_prior_sensitivity)
-from .checked_schedule import CheckedPass, run_checked_schedule
 from .literature import load_case
-from .materials import MaterialState, PowerHardeningLaw
 from .model import Scenario, solve
-from .operating import ObservedSignal, PassOperatingPlan, SignalRange
 from .resources import read_example, resource_directory, resource_file
 from .run_contract import RunSpec
+from .workflows import run_checked_spec
 
 
 def main():
@@ -23,30 +21,9 @@ def main():
     spec = RunSpec(read_example('v1_checked_pass.runspec.json'))
     if spec.to_dict()['workflow_kind'] != 'checked_pass':
         raise AssertionError('packaged RunSpec kind changed')
-    resolved = spec.to_dict()['resolved_inputs']
-    checked_data = resolved['checked_pass']
-    scenario = Scenario.from_dict(checked_data['scenario'])
-    state_data = resolved['initial_state']
-    state = MaterialState(**{**state_data, 'history': tuple(state_data['history'])})
-    law = PowerHardeningLaw(**resolved['law'])
-    plan_data = checked_data['operating_plan']
-    plan = PassOperatingPlan(**{
-        **plan_data,
-        'ranges': tuple(SignalRange(**item) for item in plan_data['ranges']),
-        'observations': tuple(ObservedSignal(**item)
-                              for item in plan_data['observations']),
-    })
-    checked = CheckedPass(
-        scenario, plan, checked_data['solver'], checked_data['cells'],
-        checked_data['bite_mode'], tuple(checked_data['assumed_strain_range']),
-        tuple(checked_data['assumed_temperature_range_k']),
-        checked_data['elasticity'], checked_data['heat_boundary'],
-        checked_data['passive_contact'], checked_data['fluid_observation'],
-        checked_data['roll_body_id'],
-    )
-    replay = run_checked_schedule((checked,), state, law,
-                                  gauge_basis=resolved['gauge_basis'],
-                                  layer_count=resolved['layer_count'])
+    bundle = run_checked_spec(spec)
+    bundle.verify_run_spec(spec)
+    replay = bundle.to_dict()['outputs']['checked_schedule']
     if (not replay['passes'][0]['mechanics']['numerical_converged'] or
             replay['declared_bounds_status'] != 'INDETERMINATE'):
         raise AssertionError('packaged checked example changed')

@@ -40,6 +40,30 @@ def main():
         outside.mkdir()
         subprocess.run([str(python), '-I', '-m', 'physicroll.package_check'],
                        cwd=outside, env=clean_env, check=True)
+        spec = outside / 'checked-example.json'
+        result = outside / 'checked-result.json'
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from pathlib import Path; import sys; "
+            "from physicroll.resources import resource_file; "
+            "Path(sys.argv[1]).write_bytes(resource_file('examples', "
+            "'v1_checked_pass.runspec.json').read_bytes())",
+            str(spec),
+        ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([str(python), '-I', '-m', 'physicroll', '--run-spec',
+                        str(spec), '--output', str(result)],
+                       cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from pathlib import Path; import sys; "
+            "from physicroll.run_contract import RunSpec, ResultBundle; "
+            "from physicroll.workflows import run_checked_spec; "
+            "spec=RunSpec.from_json(Path(sys.argv[1]).read_bytes()); "
+            "cli=ResultBundle.from_json(Path(sys.argv[2]).read_bytes()); "
+            "cli.verify_run_spec(spec); "
+            "assert cli.sha256 == run_checked_spec(spec).sha256",
+            str(spec), str(result),
+        ], cwd=outside, env=clean_env, check=True)
 
 
 if __name__ == '__main__':
