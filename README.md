@@ -43,9 +43,13 @@ ownership and a reaction reel for an analytic outgoing wave.
 [T2A7](docs/v1-transient-T2A7-design.md) adds a restricted torque-driven,
 two-way elastic span/reel coupling with append-only transfer.
 [T2A8](docs/v1-transient-T2A8-design.md) checks retained-strain reaction
-release and stops at first tension zero. These benchmarks do not establish
-general reversal, slack continuation, rolling contact, full T2 or physical
-mill accuracy.
+release and stops at first tension zero. [T2A9](docs/v1-transient-T2A9-design-candidate.md)
+checks a matched reaction-mode winding-to-release reversal with stored-layer
+pickup. These benchmarks do not establish arbitrary torque-driven reversal,
+slack continuation, rolling contact, full T2 or physical mill accuracy.
+The [transient integration critical path](docs/v1-integration-critical-path.md)
+lists the remaining equation, solver, full 3D contact, animation and release
+gates.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a

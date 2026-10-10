@@ -1,6 +1,6 @@
 # T2A9 matched reaction-mode reversal design candidate
 
-**Status: independently derived design candidate, not implemented.** This
+**Status: restricted benchmark implemented and independently reviewed.** This
 is the next restricted T2 verification case after T2A8. It tests an actual
 winding-to-release donor switch with a smooth zero-speed crossing while
 all span tension stays positive. Reel speed and torque are reactions to
@@ -141,7 +141,7 @@ Per-step span/combined mass and label-inventory defects should stay below
 ownership below `1e-14 J`, and storage-versus-stage-flux defect below
 `1e-10 J`. Require decreasing spatial errors and ledger defects above
 roundoff, plus decreasing fixed-grid temporal field differences. These
-are **proposed preimplementation synthetic gates**, not measured passes
+were **frozen preimplementation synthetic gates**, not physical accuracy claims
 or physical accuracy claims.
 
 The solver must save original deposited profiles and leave the old
@@ -160,3 +160,30 @@ its sign is not a loss law for this ideal matched elastic reversal.
 [Singh and Hanna](https://arxiv.org/abs/1611.03332) likewise analyze
 admissibility at moving string discontinuities, without validating this
 synthetic cold-rolling boundary.
+
+## Implemented restricted result
+
+`physicroll.transient_t2a9.run_matched_reaction_reversal` implements the
+frozen reaction-mode episode. The left endpoint is reflecting (`v=0`);
+the right winding input is the declared stretch profile. After the computed
+reversal, the exposed original deposited record supplies the incoming
+stretch and derivative. The first computed return to the old layer ends the
+episode. The solver does not advance history when a snapshot is taken.
+
+Local Python 3.12 measurements (synthetic numerical errors, not physical
+validation) are:
+
+| Cells | Accepted steps | Reversal (s) | Return (s) | Peak combined energy defect (J) | Peak new-strain ownership defect (J) |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 76 | 0.019998461302 | 0.039997059126 | 5.39e-12 | 2.05e-23 |
+| 128 | 152 | 0.019999643635 | 0.039999304917 | 6.63e-13 | 6.62e-24 |
+| 256 | 300 | 0.019999914154 | 0.039999831293 | 8.05e-14 | 1.16e-23 |
+
+The test suite checks both nonzero half-cycle transfer integrals against
+an independently integrated standing-wave oracle, material-label ownership
+by separate quadrature, donor mutation, event endpoint brackets, spatial and
+temporal refinement, and mass, momentum, angular and energy ledgers. Stored
+energy ownership is at roundoff, so it is not expected to decrease
+monotonically. An independent physics review found and corrected a left-port
+boundary error before publication; it found no remaining equation or sign
+blocker for this restricted benchmark.

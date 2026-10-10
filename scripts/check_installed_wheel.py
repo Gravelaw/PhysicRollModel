@@ -124,6 +124,14 @@ def main():
             "and result['event']['feasible_minimum_tension_n']<1e-9 "
             "and result['maximum_combined_inventory_defect_kg']<1e-11",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a9 import T2A9Case, run_matched_reaction_reversal; "
+            "result=run_matched_reaction_reversal(T2A9Case(64)); "
+            "assert result['episode_outcome']=='RETURNED_TO_OLD_LAYER_WITHOUT_CONSUMING_IT' "
+            "and len(result['events'])==2 "
+            "and result['maximum_new_strain_ownership_defect_j']<1e-14",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
