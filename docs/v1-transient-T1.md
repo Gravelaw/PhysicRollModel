@@ -45,6 +45,31 @@ speed knot or reversal are deduplicated. A parcel may cross the same boundary
 twice around a reversal. Animation samples query states without advancing
 history.
 
+The public `prescribed_transport_t1` RunSpec is an exact synthetic episode
+snapshot. It binds the T1 implementation hashes, piecewise-linear speed
+policy, parcels and all reel inputs. Requested and resolved episodes must
+match; the adapter rejects changed source bytes or unsupported model choices.
+`run_workflow` stores accepted states, events, conservation checks, separate
+requested/completed durations, and an `episode_outcome`. A first reel limit
+ends the executed interval but counts as a completed computation. A capacity
+reached exactly is within its declared bound. Undeclared optional capacities
+remain unevaluated, so declared-bounds status is indeterminate. Numerical
+verification refers only to recorded internal mass, geometry and event-order
+checks; scientific qualification and operating readiness remain unassessed.
+
+Use `python -m physicroll.bundle_cli create --run-spec
+scenarios/v1_prescribed_transport_t1.runspec.json --out /tmp/t1-run`, then
+`verify` and `replay` against `/tmp/t1-run`. The sample first reaches its right
+capacity at about 0.8 s of a requested 2.0 s. A saved checkpoint created by
+`T1Trajectory.checkpoint_at(time_s, run_spec_sha256)` contains the accepted
+state, segment and event cursors, complete source identities and a digest.
+`save_t1_checkpoint` publishes without replacing another writer's file;
+`load_t1_checkpoint` plus `continue_t1(episode, checkpoint,
+run_spec_sha256)` validates redundant state and returns only the remaining
+states/events. Every event at the checkpoint time is consumed. A terminal
+checkpoint has an empty suffix. Checkpoints require the same T1 implementation
+bytes and RunSpec; they are not cross-version migration artifacts.
+
 Before treating this layer as verified, compare zero speed, constant speed,
 linear ramp, forward/reverse return, mid-interval reversals, both reel
 inventory bounds, parcel crossings and independent frame cadences against

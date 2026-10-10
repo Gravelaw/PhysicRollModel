@@ -23,6 +23,7 @@ python -m physicroll --run-spec scenarios/v1_operating_replay.runspec.json --out
 python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --output search-result.json
 python -m physicroll.bundle_cli create --run-spec scenarios/v1_schedule_search.runspec.json --out /tmp/physicroll-search-run
 python -m physicroll.bundle_cli verify /tmp/physicroll-search-run
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_prescribed_transport_t1.runspec.json --out /tmp/physicroll-t1-run
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```

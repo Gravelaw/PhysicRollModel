@@ -61,6 +61,7 @@ def main():
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
+                     'v1_prescribed_transport_t1.runspec.json',
                      'v1_shao_benchmark.runspec.json',
                      'v1_shao_sensitivity.runspec.json'):
             spec = outside / name
@@ -88,7 +89,8 @@ def main():
                 str(spec), str(result),
             ], cwd=outside, env=clean_env, check=True)
             if name in ('v1_checked_pass.runspec.json',
-                        'v1_schedule_search.runspec.json'):
+                        'v1_schedule_search.runspec.json',
+                        'v1_prescribed_transport_t1.runspec.json'):
                 bundle = outside / f'{name}.run'
                 subprocess.run([str(python), '-I', '-m', 'physicroll.bundle_cli',
                                 'create', '--run-spec', str(spec), '--out', str(bundle)],
@@ -97,6 +99,24 @@ def main():
                     subprocess.run([str(python), '-I', '-m', 'physicroll.bundle_cli',
                                     action, str(bundle)],
                                    cwd=outside, env=clean_env, check=True)
+                if name == 'v1_prescribed_transport_t1.runspec.json':
+                    subprocess.run([
+                        str(python), '-I', '-c',
+                        "from pathlib import Path; import sys; "
+                        "from physicroll.run_contract import RunSpec; "
+                        "from physicroll.transient_workflow import episode_from_spec; "
+                        "from physicroll.transient_t1 import T1Trajectory, continue_t1, "
+                        "save_t1_checkpoint, load_t1_checkpoint; "
+                        "spec=RunSpec.from_json(Path(sys.argv[1]).read_bytes()); "
+                        "case=episode_from_spec(spec); direct=T1Trajectory(case); "
+                        "cursor=direct.stop_time_s/2; "
+                        "save_t1_checkpoint(sys.argv[2], direct.checkpoint_at(cursor,spec.sha256)); "
+                        "suffix=continue_t1(case,load_t1_checkpoint(sys.argv[2]),spec.sha256).result(); "
+                        "assert suffix['final_state']==direct.state_at(direct.stop_time_s); "
+                        "assert suffix['remaining_events']==list(direct.events)["
+                        "load_t1_checkpoint(sys.argv[2])['next_event_index']:]",
+                        str(spec), str(outside / 't1-checkpoint.json'),
+                    ], cwd=outside, env=clean_env, check=True)
 
 
 if __name__ == '__main__':

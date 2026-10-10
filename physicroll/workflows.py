@@ -25,6 +25,7 @@ from .operational_replay import (CONTRACT_VERSION, AppliedReference, MeasuredSig
 from .resources import resource_file
 from .run_contract import ResultBundle, RunSpec
 from .schedule_search import OperatingChoice, SearchSpace, search_schedules
+from .transient_workflow import run_t1_spec
 
 
 EQUIPMENT_LIMITS = {
@@ -589,4 +590,6 @@ def run_workflow(spec: RunSpec) -> ResultBundle:
         return run_operating_replay_spec(spec)
     if kind == 'schedule_search':
         return run_schedule_search_spec(spec)
+    if kind == 'prescribed_transport_t1':
+        return run_t1_spec(spec)
     raise ValueError(f'no public adapter for workflow_kind {kind}')

@@ -1,11 +1,16 @@
 """Independent closed-form checks for bounded prescribed T1 transport."""
 
 from dataclasses import replace
+import hashlib
 import math
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
 
 from physicroll.run_contract import canonical_json
-from physicroll.transient_t1 import T1Episode, T1Trajectory
+from physicroll.transient_t1 import (T1Episode, T1Trajectory, continue_t1,
+                                     load_t1_checkpoint, save_t1_checkpoint)
 
 
 def episode(**changes):
@@ -161,6 +166,94 @@ class T1TransportTests(unittest.TestCase):
         right_full = T1Trajectory(episode(right_capacity_length_m=1.4))
         self.assertAlmostEqual(right_full.stop_time_s, 0.8, delta=1e-9)
         self.assertEqual(right_full.state_at(right_full.stop_time_s)['right_length_m'], 1.4)
+
+    def test_checkpoint_restart_suffix_at_segment_knot_event_and_terminal(self):
+        case = episode(times_s=(0.0, 1.0, 2.0),
+                       prescribed_strip_speed_m_s=(1.0, 0.0, -1.0),
+                       parcels=(('a', -0.25), ('b', -0.25)))
+        direct = T1Trajectory(case)
+        crossing = next(item['time_s'] for item in direct.events
+                        if item['event'] == 'parcel_boundary_crossing')
+        for cursor in (.2, crossing, 1.0, 1.25, 2.0):
+            with self.subTest(cursor=cursor):
+                checkpoint = direct.checkpoint_at(cursor, case.sha256)
+                continuation = continue_t1(case, checkpoint, case.sha256)
+                resumed = continuation.result()
+                self.assertEqual(resumed['initial_state'], direct.state_at(cursor))
+                self.assertEqual(resumed['final_state'], direct.state_at(2.0))
+                self.assertEqual(resumed['remaining_events'],
+                                 list(direct.events)[checkpoint['next_event_index']:])
+                self.assertTrue(all(item['time_s'] > cursor
+                                    for item in resumed['remaining_states']))
+                with self.assertRaisesRegex(ValueError, 'before its checkpoint'):
+                    continuation.state_at(cursor - .01)
+                if cursor == crossing:
+                    self.assertEqual(len([event for event in direct.events
+                                          if event['time_s'] == cursor]), 2)
+
+        limited = T1Trajectory(episode(left_initial_length_m=.5))
+        terminal = limited.checkpoint_at(limited.stop_time_s, limited.episode.sha256)
+        suffix = continue_t1(limited.episode, terminal, limited.episode.sha256).result()
+        self.assertEqual(suffix['remaining_events'], [])
+        self.assertEqual(suffix['remaining_states'], [])
+
+        dwell_case = episode(times_s=(0.0, 1.0, 2.0, 3.0),
+                             prescribed_strip_speed_m_s=(1.0, 0.0, 0.0, -1.0),
+                             parcels=(('turning', -0.5),))
+        dwell = T1Trajectory(dwell_case)
+        saved = dwell.checkpoint_at(1.5, dwell_case.sha256)
+        self.assertEqual(continue_t1(dwell_case, saved, dwell_case.sha256)
+                         .result()['remaining_events'],
+                         list(dwell.events)[saved['next_event_index']:])
+
+    def test_checkpoint_integrity_source_and_atomic_save_load(self):
+        case = episode()
+        trajectory = T1Trajectory(case)
+        checkpoint = trajectory.checkpoint_at(.4, case.sha256)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'checkpoint.json'
+            save_t1_checkpoint(path, checkpoint)
+            self.assertEqual(load_t1_checkpoint(path), checkpoint)
+            with self.assertRaisesRegex(ValueError, 'already exists'):
+                save_t1_checkpoint(path, checkpoint)
+            self.assertEqual(continue_t1(case, load_t1_checkpoint(path), case.sha256)
+                             .state_at(2.0), trajectory.state_at(2.0))
+        with self.assertRaisesRegex(ValueError, 'digest differs'):
+            continue_t1(case, {**checkpoint, 'next_event_index': 50}, case.sha256)
+        changed = {**checkpoint, 'state': {**checkpoint['state'], 'left_length_m': 999.0}}
+        changed['checkpoint_sha256'] = hashlib.sha256(canonical_json({
+            key: value for key, value in changed.items() if key != 'checkpoint_sha256'
+        }).encode()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'state, event cursor'):
+            continue_t1(case, changed, case.sha256)
+        with self.assertRaisesRegex(ValueError, 'source, model'):
+            continue_t1(replace(case, width_m=2.0), checkpoint, case.sha256)
+        with self.assertRaisesRegex(ValueError, 'source, model'):
+            continue_t1(case, {**checkpoint, 'module_sha256': '0' * 64,
+                               'checkpoint_sha256': hashlib.sha256(canonical_json({
+                                   **{key: value for key, value in checkpoint.items()
+                                      if key != 'checkpoint_sha256'},
+                                   'module_sha256': '0' * 64,
+                               }).encode()).hexdigest()}, case.sha256)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'checkpoint.json'
+            real_link = __import__('os').link
+
+            def competing_writer(staged, destination):
+                Path(destination).write_text('another writer')
+                return real_link(staged, destination)
+
+            with mock.patch('physicroll.transient_t1.os.link', side_effect=competing_writer):
+                with self.assertRaisesRegex(ValueError, 'appeared during creation'):
+                    save_t1_checkpoint(path, checkpoint)
+            self.assertEqual(path.read_text(), 'another writer')
+            self.assertEqual(list(Path(temporary).iterdir()), [path])
+            path.unlink()
+            with mock.patch('physicroll.transient_t1.Path.write_bytes',
+                            side_effect=OSError('staging failed')):
+                with self.assertRaisesRegex(OSError, 'staging failed'):
+                    save_t1_checkpoint(path, checkpoint)
+            self.assertEqual(list(Path(temporary).iterdir()), [])
 
 
 if __name__ == '__main__':

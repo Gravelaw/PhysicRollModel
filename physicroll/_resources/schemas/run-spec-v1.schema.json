@@ -7,7 +7,7 @@
   "required": ["schema_version", "workflow_kind", "model_choices", "unit_conventions", "identities", "source_hashes", "card_hashes", "numerical_settings", "requested_inputs", "resolved_inputs", "recipe_targets", "observations"],
   "properties": {
     "schema_version": {"const": "1"},
-    "workflow_kind": {"enum": ["legacy_pass", "checked_pass", "checked_schedule", "schedule_search", "benchmark", "sensitivity", "operating_replay"]},
+    "workflow_kind": {"enum": ["legacy_pass", "checked_pass", "checked_schedule", "schedule_search", "benchmark", "sensitivity", "operating_replay", "prescribed_transport_t1"]},
     "model_choices": {
       "type": "object", "additionalProperties": false,
       "required": ["solver", "material", "bite", "thermal"],

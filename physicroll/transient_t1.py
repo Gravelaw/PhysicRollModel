@@ -7,12 +7,28 @@ deformation or contact law; the strip speed is an input, not a prediction.
 from bisect import bisect_right
 from dataclasses import asdict, dataclass
 import hashlib
+from importlib.resources import files
+import json
 import math
+import os
+from pathlib import Path
+import re
+from tempfile import TemporaryDirectory
 
 from .run_contract import canonical_json
 
 
 MODEL_ID = 'T1_UNIFORM_STRIP_PRESCRIBED_MOTION_V1'
+CHECKPOINT_VERSION = '1'
+SHA256 = re.compile(r'[0-9a-f]{64}\Z')
+
+
+def _digest(value):
+    return hashlib.sha256(canonical_json(value).encode('utf-8')).hexdigest()
+
+
+def _module_sha256():
+    return hashlib.sha256(files('physicroll').joinpath('transient_t1.py').read_bytes()).hexdigest()
 
 
 def _number(value, name, *, positive=False, nonnegative=False):
@@ -361,3 +377,123 @@ class T1Trajectory:
             'limitations': ['uniform nonreducing strip', 'fixed free-span path',
                             'continuous annular reels', 'no torque/tension/contact solution'],
         }
+
+    def checkpoint_at(self, time_s, run_spec_sha256):
+        """Capture an accepted cursor, consuming all events at this exact time."""
+        if type(run_spec_sha256) is not str or SHA256.fullmatch(run_spec_sha256) is None:
+            raise ValueError('checkpoint requires a RunSpec SHA-256 identity')
+        state = self.state_at(time_s)
+        next_event = sum(event['time_s'] <= time_s for event in self._event_records)
+        segment = min(bisect_right(self.episode.times_s, time_s) - 1,
+                      len(self.episode.times_s) - 2)
+        payload = {
+            'checkpoint_version': CHECKPOINT_VERSION,
+            'model_id': MODEL_ID,
+            'episode_sha256': self.episode.sha256,
+            'run_spec_sha256': run_spec_sha256,
+            'module_sha256': _module_sha256(),
+            'state': state,
+            'history_segment_index': segment,
+            'next_event_index': next_event,
+            'consumed_events_sha256': _digest(self._event_records[:next_event]),
+            'terminal': self._terminal_event is not None and time_s == self.stop_time_s,
+        }
+        return {**payload, 'checkpoint_sha256': _digest(payload)}
+
+
+def continue_t1(episode, checkpoint, run_spec_sha256):
+    """Verify a saved cursor and return only its remaining accepted suffix."""
+    if not isinstance(episode, T1Episode):
+        raise ValueError('T1 continuation requires a T1Episode')
+    if type(checkpoint) is not dict or set(checkpoint) != {
+            'checkpoint_version', 'model_id', 'episode_sha256',
+            'run_spec_sha256', 'module_sha256', 'state',
+            'history_segment_index', 'next_event_index',
+            'consumed_events_sha256', 'terminal', 'checkpoint_sha256'}:
+        raise ValueError('invalid T1 checkpoint shape')
+    data = {key: value for key, value in checkpoint.items() if key != 'checkpoint_sha256'}
+    if (type(checkpoint['checkpoint_sha256']) is not str or
+            checkpoint['checkpoint_sha256'] != _digest(data)):
+        raise ValueError('T1 checkpoint digest differs from contents')
+    if (checkpoint['checkpoint_version'] != CHECKPOINT_VERSION or
+            checkpoint['model_id'] != MODEL_ID or
+            checkpoint['episode_sha256'] != episode.sha256 or
+            checkpoint['run_spec_sha256'] != run_spec_sha256 or
+            checkpoint['module_sha256'] != _module_sha256()):
+        raise ValueError('T1 checkpoint source, model or implementation differs')
+    trajectory = T1Trajectory(episode)
+    state = checkpoint['state']
+    if type(state) is not dict or 'time_s' not in state:
+        raise ValueError('T1 checkpoint has no valid accepted state')
+    time_s = state['time_s']
+    if (type(time_s) not in (int, float) or not math.isfinite(time_s) or
+            not 0 <= time_s <= trajectory.stop_time_s):
+        raise ValueError('T1 checkpoint time lies outside the accepted trajectory')
+    expected = trajectory.checkpoint_at(time_s, run_spec_sha256)
+    if canonical_json(checkpoint) != canonical_json(expected):
+        raise ValueError('T1 checkpoint state, event cursor or history cursor differs')
+    return T1Continuation(trajectory, checkpoint)
+
+
+class T1Continuation:
+    """Read-only continuation from a validated, already-consumed event cursor."""
+
+    def __init__(self, trajectory, checkpoint):
+        self._trajectory = trajectory
+        self._checkpoint = json.loads(canonical_json(checkpoint))
+
+    def state_at(self, time_s):
+        if time_s < self._checkpoint['state']['time_s']:
+            raise ValueError('T1 continuation cannot query before its checkpoint')
+        return self._trajectory.state_at(time_s)
+
+    def result(self):
+        saved = self._trajectory.result()
+        cursor_time = self._checkpoint['state']['time_s']
+        index = self._checkpoint['next_event_index']
+        return {
+            'model_id': MODEL_ID,
+            'episode_sha256': self._trajectory.episode.sha256,
+            'checkpoint_sha256': self._checkpoint['checkpoint_sha256'],
+            'initial_state': json.loads(canonical_json(self._checkpoint['state'])),
+            'remaining_states': [state for state in saved['states']
+                                 if state['time_s'] > cursor_time],
+            'remaining_events': saved['events'][index:],
+            'final_state': saved['states'][-1],
+        }
+
+
+def _unique_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f'duplicate T1 checkpoint key: {key}')
+        result[key] = value
+    return result
+
+
+def save_t1_checkpoint(path, checkpoint):
+    """Publish a new checkpoint file only after its complete bytes are staged."""
+    path = Path(path)
+    if path.exists() or path.is_symlink():
+        raise ValueError('T1 checkpoint destination already exists')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=path.parent, prefix=f'.{path.name}.') as temporary:
+        staged = Path(temporary) / 'checkpoint.json'
+        staged.write_bytes((canonical_json(checkpoint) + '\n').encode('utf-8'))
+        try:
+            # Same-directory hard-link creation is atomic and fails if another
+            # writer published the destination while we staged the bytes.
+            os.link(staged, path)
+        except FileExistsError as exc:
+            raise ValueError('T1 checkpoint destination appeared during creation') from exc
+
+
+def load_t1_checkpoint(path):
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('T1 checkpoint must be a real file')
+    try:
+        return json.loads(path.read_bytes(), object_pairs_hook=_unique_pairs)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f'invalid T1 checkpoint JSON: {exc}') from exc

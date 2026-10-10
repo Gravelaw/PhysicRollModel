@@ -67,8 +67,15 @@ def main():
     if (search['evaluations'] != 3 or search['selected'] is None or
             search['status'] != 'SELECTED_DECLARED_BOUNDS_INDETERMINATE'):
         raise AssertionError('packaged finite search changed')
+    t1_spec = RunSpec(read_example('v1_prescribed_transport_t1.runspec.json'))
+    t1_result = run_workflow(t1_spec).to_dict()
+    if (t1_result['outputs']['episode_outcome'] != 'TERMINATED_REEL_LIMIT' or
+            t1_result['outputs']['completed_duration_s'] >=
+            t1_result['outputs']['requested_duration_s'] or
+            t1_result['assessments']['numerical_verification'] != 'PASSED'):
+        raise AssertionError('packaged T1 transport changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
-          'audited Shao fixture, conditional workflows, O0 replay and finite search')
+          'audited Shao fixture, conditional workflows, O0 replay, finite search and T1')
 
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ from dataclasses import dataclass, fields, is_dataclass
 SCHEMA_VERSION = '1'
 WORKFLOWS = frozenset({
     'legacy_pass', 'checked_pass', 'checked_schedule', 'schedule_search',
-    'benchmark', 'sensitivity', 'operating_replay',
+    'benchmark', 'sensitivity', 'operating_replay', 'prescribed_transport_t1',
 })
 MODEL_KEYS = frozenset({'solver', 'material', 'bite', 'thermal'})
 IDENTITY_KEYS = frozenset({'code_version', 'model_version', 'material_id',
