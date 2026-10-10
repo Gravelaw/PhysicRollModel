@@ -1,7 +1,7 @@
 # T3 full 3D verification candidate
 
-**Status: specialist-derived candidate pending independent equation-level
-review; no engine is implemented.** This is the first full 3D elastic
+**Status: independently reviewed synthetic design candidate; numerical
+thresholds remain provisional and no engine is implemented.** This is the first full 3D elastic
 material/contact verification increment on the [v1 integration path](v1-integration-critical-path.md).
 It can advance while the separate [T2 reel-pickup decision](v1-transient-T2-pickup-decision.md)
 is pending. Rigid planes are a flat-tool limit; success here does not satisfy
