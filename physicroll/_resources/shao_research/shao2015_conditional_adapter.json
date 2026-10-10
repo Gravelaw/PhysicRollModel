@@ -1,0 +1,42 @@
+{
+  "adapter_id": "shao2015_fixed_rigid_slab_prior_log_005",
+  "raw_record": "shao2015_raw.json",
+  "purpose": "conditional numerical replay only; no fit or plant feasibility",
+  "executable_contract": {
+    "speed_mapping": "reported_as_entry_strip",
+    "roll_radius_interpretation": "table_1_radius",
+    "strain_mapping": "log_thickness_to_plane_strain_equivalent",
+    "stress_mapping": "current_bite_hardening_plane_strain",
+    "source_history_law": "unresolved_not_reproduced",
+    "solver": "spatial_slab",
+    "cells": 256,
+    "bite_mode": "established",
+    "interpass_temperature": "prescribed_constant_bookkeeping",
+    "thermal_enabled": false,
+    "fit_performed": false
+  },
+  "source_input_handling": {
+    "gauges_width_tensions_friction": "source values copied per pass with explicit mm/MPa to SI conversion",
+    "radius": "210.81 mm interpreted as radius according to Table 1; Eq. 6 prose conflict remains open",
+    "reported_speed": "treated as entry-strip speed; source reference unknown",
+    "measured_force_and_slip": "comparison outputs only, never equipment limits or fitted targets",
+    "author_calculated_outputs": "not used as measurements or inputs"
+  },
+  "explicit_assumptions": {
+    "prior_log_thickness_strain": 0.05,
+    "material_temper_label": "unknown_source_temper_conditional",
+    "material_temperature_k": 293.15,
+    "temperature_role": "bookkeeping assumed constant between passes; no thermal solver or force feedback",
+    "density_kg_m3": 2680,
+    "density_provenance": "generic Hulamin 5052 data sheet, not measured Shao coil",
+    "drive_efficiency": 1.0,
+    "drive_efficiency_role": "mechanical bookkeeping convention only; no electrical-energy comparison",
+    "mechanics": "spatial_slab, rigid circular geometry, 256 cells, established-bite diagnostic",
+    "assumed_equivalent_strain_range": [0.0, 2.0],
+    "assumed_temperature_range_k": [273.15, 350.0]
+  },
+  "fit": "none; initial strain 0.05 is a pre-existing explicit sensitivity assumption, not inferred from measurements",
+  "held_out_claim": "none; all three force/slip residuals are reported with possible source friction leakage",
+  "equipment_limits": null,
+  "prohibited_claims": ["fully specified reproduction", "independent validation", "safe mill schedule", "measured energy agreement"]
+}

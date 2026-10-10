@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/physicroll/result-bundle-v1.schema.json",
+  "title": "PhysicRollModel ResultBundle version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_spec_sha256", "effective_inputs", "outputs", "checks", "assessments"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "run_spec_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "effective_inputs": {"type": "object"},
+    "outputs": {"type": "object"},
+    "checks": {
+      "type": "object", "required": ["declared_bounds"],
+      "properties": {
+        "declared_bounds": {
+          "type": "object", "additionalProperties": false,
+          "required": ["required_limit_ids", "evaluations"],
+          "properties": {
+            "required_limit_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "\\S"}},
+            "evaluations": {"type": "array", "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["limit_id", "status"],
+              "properties": {
+                "limit_id": {"type": "string", "pattern": "\\S"},
+                "status": {"enum": ["WITHIN", "VIOLATED"]}
+              }
+            }}
+          }
+        }
+      }
+    },
+    "runtime_metadata": {"type": "object", "description": "Excluded from the scientific SHA-256 payload"},
+    "assessments": {
+      "type": "object", "additionalProperties": false,
+      "required": ["execution", "input_validity", "model_applicability", "numerical_verification", "declared_bounds_status", "declared_bounds_coverage", "scientific_qualification", "operating_readiness", "predictions_computed", "qualification_evidence_refs"],
+      "properties": {
+        "execution": {"enum": ["COMPLETED", "REJECTED", "FAILED"]},
+        "input_validity": {"enum": ["VALID", "INVALID", "NOT_ASSESSED"]},
+        "model_applicability": {"enum": ["IN_DOMAIN", "OUT_OF_DOMAIN", "INDETERMINATE", "NOT_ASSESSED"]},
+        "numerical_verification": {"enum": ["PASSED", "FAILED", "NOT_ASSESSED"]},
+        "declared_bounds_status": {"enum": ["WITHIN", "VIOLATED", "INDETERMINATE", "NOT_ASSESSED"]},
+        "declared_bounds_coverage": {"enum": ["COMPLETE", "PARTIAL", "NONE"]},
+        "scientific_qualification": {"enum": ["QUALIFIED", "UNQUALIFIED", "NOT_ASSESSED"]},
+        "operating_readiness": {"enum": ["READY", "NOT_READY", "NOT_ASSESSED"]},
+        "predictions_computed": {"type": "boolean"},
+        "qualification_evidence_refs": {"type": "array", "items": {"type": "string", "pattern": "\\S"}}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"assessments": {"properties": {"declared_bounds_status": {"const": "WITHIN"}}}}},
+      "then": {"properties": {
+        "assessments": {"properties": {"declared_bounds_coverage": {"const": "COMPLETE"}}},
+        "checks": {"properties": {"declared_bounds": {"properties": {
+          "required_limit_ids": {"minItems": 1},
+          "evaluations": {"minItems": 1, "items": {"properties": {"status": {"const": "WITHIN"}}}}
+        }}}}
+      }}
+    },
+    {
+      "if": {"properties": {"assessments": {"properties": {"declared_bounds_status": {"const": "VIOLATED"}}}}},
+      "then": {"properties": {
+        "assessments": {"properties": {"declared_bounds_coverage": {"enum": ["PARTIAL", "COMPLETE"]}}},
+        "checks": {"properties": {"declared_bounds": {"properties": {
+          "evaluations": {"contains": {"properties": {"status": {"const": "VIOLATED"}}}}
+        }}}}
+      }}
+    },
+    {
+      "if": {"properties": {"assessments": {"properties": {"declared_bounds_coverage": {"const": "NONE"}}}}},
+      "then": {"properties": {
+        "assessments": {"properties": {
+          "declared_bounds_status": {"enum": ["INDETERMINATE", "NOT_ASSESSED"]}
+        }},
+        "checks": {"properties": {"declared_bounds": {"properties": {
+          "evaluations": {"maxItems": 0}
+        }}}}
+      }}
+    },
+    {
+      "if": {"properties": {"assessments": {"properties": {"declared_bounds_coverage": {"enum": ["PARTIAL", "COMPLETE"]}}}}},
+      "then": {"properties": {"checks": {"properties": {"declared_bounds": {"properties": {
+        "required_limit_ids": {"minItems": 1}, "evaluations": {"minItems": 1}
+      }}}}}}
+    },
+    {
+      "if": {"properties": {"checks": {"properties": {"declared_bounds": {"properties": {
+        "evaluations": {"contains": {"properties": {"status": {"const": "VIOLATED"}}}}
+      }}}}}},
+      "then": {"properties": {"assessments": {"properties": {
+        "declared_bounds_status": {"const": "VIOLATED"}
+      }}}}
+    }
+  ],
+  "$comment": "Runtime ResultBundle validation derives coverage/status from distinct required limit IDs and evaluations, checks nonfinite values and verifies RunSpec digests."
+}

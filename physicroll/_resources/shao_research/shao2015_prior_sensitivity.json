@@ -1,0 +1,12 @@
+{
+  "study_id": "shao2015_declared_prior_log_strain_sensitivity_v1",
+  "fixed_adapter_id": "shao2015_fixed_rigid_slab_prior_log_005",
+  "axis": "assumed_prior_log_thickness_strain",
+  "values": [0.0, 0.01, 0.05, 0.2],
+  "value_provenance": "Pre-existing scenarios/literature/shao2015_aa5052/assumptions.json prior_log_strain_sensitivity; analyst assumptions, not source observations or confidence bounds",
+  "all_other_inputs": "fixed conditional adapter unchanged, including Table 2 friction and reported speed interpreted as entry-strip speed",
+  "method": "replay each complete three-pass route through checked spatial slab; record each solver rejection and signed force/slip residual",
+  "fit_performed": false,
+  "equipment_limits": null,
+  "interpretation": "scenario sensitivity only; no inferred incoming history, material calibration, independent validation or plant feasibility"
+}

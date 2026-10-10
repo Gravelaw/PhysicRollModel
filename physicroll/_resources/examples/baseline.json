@@ -1,0 +1,15 @@
+{
+  "name": "synthetic_aluminium_baseline",
+  "synthetic": true,
+  "entry_thickness_m": 0.002,
+  "exit_thickness_m": 0.0015,
+  "width_m": 1.0,
+  "entry_speed_m_s": 2.0,
+  "work_roll_radius_m": 0.25,
+  "density_kg_m3": 2700.0,
+  "mean_flow_stress_pa": 120000000.0,
+  "friction_coefficient": 0.08,
+  "entry_tension_pa": 10000000.0,
+  "exit_tension_pa": 15000000.0,
+  "drive_efficiency": 0.9
+}

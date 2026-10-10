@@ -1,0 +1,4 @@
+pass_id,force_kN,forward_slip_fraction,force_uncertainty_N,slip_uncertainty_fraction,source_id,source_location
+1,5143.9,0.015,,,S1,p94 Table2
+2,5017.4,0.0182,,,S1,p94 Table2
+3,4301.8,0.0227,,,S1,p94 Table2

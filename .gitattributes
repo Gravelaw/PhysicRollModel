@@ -1,0 +1,3 @@
+# Audited inputs and RunSpec source hashes are byte-sensitive on every platform.
+# Keep repository blob bytes unchanged at checkout, including on Windows.
+* -text

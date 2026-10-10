@@ -15,6 +15,7 @@ Use Python 3.10+ (tested with 3.12.14), from this directory:
 ```bash
 python scripts/smoke.py
 python -m unittest discover -s tests -v
+python scripts/check_installed_wheel.py
 python -m physicroll scenarios/baseline.json --output artifacts/baseline.result.json
 python scenarios/run_sweep.py
 python scripts/build_extended.py

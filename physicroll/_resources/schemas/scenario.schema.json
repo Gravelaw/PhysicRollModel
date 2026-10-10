@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/physicroll/scenario.schema.json",
+  "title": "Synthetic SI cold rolling scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "synthetic",
+    "entry_thickness_m",
+    "exit_thickness_m",
+    "width_m",
+    "entry_speed_m_s",
+    "work_roll_radius_m",
+    "density_kg_m3",
+    "mean_flow_stress_pa",
+    "friction_coefficient",
+    "entry_tension_pa",
+    "exit_tension_pa",
+    "drive_efficiency"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "synthetic": {
+      "const": true
+    },
+    "entry_thickness_m": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "exit_thickness_m": {
+      "type": "number",
+      "description": "Full exit thickness, metres. Demonstrator floor excludes foil; not a validated industrial boundary.",
+      "minimum": 0.0003
+    },
+    "width_m": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "entry_speed_m_s": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "work_roll_radius_m": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "density_kg_m3": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "mean_flow_stress_pa": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0
+    },
+    "friction_coefficient": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "minimum": 0,
+      "maximum": 0.3
+    },
+    "entry_tension_pa": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "minimum": 0
+    },
+    "exit_tension_pa": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "minimum": 0
+    },
+    "drive_efficiency": {
+      "type": "number",
+      "description": "SI units as named; dimensionless for friction coefficient and efficiency",
+      "exclusiveMinimum": 0,
+      "maximum": 1
+    }
+  },
+  "$comment": "Cross-field, finite-number and physical feasibility checks are implemented by Scenario.validate and solve. Schema is not sufficient by itself."
+}

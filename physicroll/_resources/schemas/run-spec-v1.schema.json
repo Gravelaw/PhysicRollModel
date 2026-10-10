@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/physicroll/run-spec-v1.schema.json",
+  "title": "PhysicRollModel RunSpec version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workflow_kind", "model_choices", "unit_conventions", "identities", "source_hashes", "card_hashes", "numerical_settings", "requested_inputs", "resolved_inputs", "recipe_targets", "observations"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "workflow_kind": {"enum": ["legacy_pass", "checked_pass", "checked_schedule", "schedule_search", "benchmark", "sensitivity", "operating_replay"]},
+    "model_choices": {
+      "type": "object", "additionalProperties": false,
+      "required": ["solver", "material", "bite", "thermal"],
+      "properties": {
+        "solver": {"$ref": "#/$defs/nonempty"},
+        "material": {"$ref": "#/$defs/nonempty"},
+        "bite": {"$ref": "#/$defs/nonempty"},
+        "thermal": {"$ref": "#/$defs/nonempty"}
+      }
+    },
+    "unit_conventions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unit_system", "gauge_basis", "layer_count", "temperature_unit", "force_sign", "torque_sign", "power_sign"],
+      "properties": {
+        "unit_system": {"const": "SI"},
+        "gauge_basis": {"const": "per_layer_full_thickness"},
+        "layer_count": {"const": 1},
+        "temperature_unit": {"const": "K"},
+        "force_sign": {"const": "separating_positive"},
+        "torque_sign": {"const": "motoring_positive_regeneration_negative"},
+        "power_sign": {"const": "motoring_positive_regeneration_negative"}
+      }
+    },
+    "identities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code_version", "model_version", "material_id", "state_id", "recipe_id"],
+      "properties": {
+        "code_version": {"$ref": "#/$defs/nonempty"},
+        "model_version": {"$ref": "#/$defs/nonempty"},
+        "material_id": {"$ref": "#/$defs/nullableNonempty"},
+        "state_id": {"$ref": "#/$defs/nullableNonempty"},
+        "recipe_id": {"$ref": "#/$defs/nullableNonempty"}
+      }
+    },
+    "source_hashes": {"$ref": "#/$defs/nonemptyHashes"},
+    "card_hashes": {"$ref": "#/$defs/hashes"},
+    "numerical_settings": {"type": "object"},
+    "requested_inputs": {"type": "object"},
+    "resolved_inputs": {"type": "object"},
+    "recipe_targets": {"type": "object"},
+    "observations": {"type": "object"}
+  },
+  "$defs": {
+    "nonempty": {"type": "string", "pattern": "\\S"},
+    "nullableNonempty": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty"}]},
+    "hashes": {"type": "object", "propertyNames": {"pattern": "\\S"}, "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "nonemptyHashes": {"allOf": [{"$ref": "#/$defs/hashes"}, {"minProperties": 1}]}
+  },
+  "$comment": "Runtime RunSpec validation also rejects nonfinite values and requires a card hash for a non-null material_id. Workflow adapters must validate specific model choices and physical applicability."
+}

@@ -12,3 +12,12 @@ dependencies = []
 
 [tool.setuptools]
 packages = ["physicroll"]
+
+[tool.setuptools.package-data]
+physicroll = [
+  "_resources/examples/*.json",
+  "_resources/schemas/*.json",
+  "_resources/shao_fixture/*.json",
+  "_resources/shao_fixture/*.csv",
+  "_resources/shao_research/*.json",
+]

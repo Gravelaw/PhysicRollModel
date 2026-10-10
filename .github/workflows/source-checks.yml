@@ -12,11 +12,12 @@ permissions:
 
 jobs:
   python-source:
-    name: Python ${{ matrix.python-version }} source tests
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} Python ${{ matrix.python-version }} source and wheel tests
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v7
@@ -34,4 +35,6 @@ jobs:
       - name: Run source tests
         run: python -m unittest discover -s tests -q
       - name: Preserve legacy positional command
-        run: python -m physicroll scenarios/baseline.json > /dev/null
+        run: python -m physicroll scenarios/baseline.json > baseline-result.json
+      - name: Verify installed wheel outside checkout
+        run: python scripts/check_installed_wheel.py
