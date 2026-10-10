@@ -1,6 +1,7 @@
 """Offline check of examples and audited resources in an installed wheel."""
 
 import json
+from dataclasses import replace
 
 from .conditional_shao import (compare_existing_fixture,
                                run_conditional_comparison,
@@ -10,6 +11,10 @@ from .model import Scenario, solve
 from .resources import read_example, resource_directory, resource_file
 from .run_contract import RunSpec
 from .workflows import run_checked_spec, run_workflow
+from .transient_t2 import WoundRecord
+from .transient_t2_two_reel import (CONTINUE_ISOLATED_SEQUENCE,
+                                    run_two_reel_episode)
+from .transient_t2_two_reel_workflow import episode_from_spec
 
 
 def main():
@@ -91,6 +96,20 @@ def main():
             pair['maximum_combined_inventory_defect_kg'] >= 1e-10 or
             pair_result['assessments']['scientific_qualification'] != 'NOT_ASSESSED'):
         raise AssertionError('packaged two-reel T2 example changed')
+    pair_episode = episode_from_spec(pair_spec)
+    cut = pair_episode.left.initial_local_cut_m
+    boundaries = (cut, cut+.0001, cut+.0002,
+                  cut+pair_episode.left.initial_reference_length_m)
+    records = tuple(WoundRecord(low, high, 1.01) for low, high in
+                    reversed(list(zip(boundaries, boundaries[1:]))))
+    sequence = run_two_reel_episode(replace(pair_episode,
+        left=replace(pair_episode.left, initial_records=records),
+        event_policy=CONTINUE_ISOLATED_SEQUENCE))
+    if (sequence['episode_outcome'] != 'COMPLETED_DECLARED_DURATION' or
+            [(item['side'], item['kind']) for item in sequence['transitions']] !=
+            [('left', 'internal_donor_restart')]*2 or
+            sequence['maximum_combined_energy_defect_j'] >= 1e-8):
+        raise AssertionError('packaged bounded two-reel event sequence changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
           'audited Shao fixture, conditional workflows, O0 replay, finite search, T1 and T2')
 

@@ -14,6 +14,7 @@ from tests.test_transient_t2_two_reel import (affine_two_release_case,
                                               isolated_donor_case,
                                               standing_reversal_case)
 from tests.test_transient_t2_recapture import wave_case
+from tests.test_transient_t2_event_sequence import split_wave_case
 
 
 EXAMPLE = (Path(__file__).resolve().parents[1] /
@@ -21,6 +22,26 @@ EXAMPLE = (Path(__file__).resolve().parents[1] /
 
 
 class TwoReelWorkflowTests(unittest.TestCase):
+    def test_bounded_sequence_is_source_bound_and_replayable(self):
+        payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
+        episode = asdict(split_wave_case(64))
+        payload['requested_inputs']['episode'] = episode
+        payload['resolved_inputs']['episode'] = episode
+        spec = RunSpec(payload)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'bounded-event-sequence'
+            saved = create_run_bundle(spec, path)
+            self.assertEqual(verify_run_bundle(path)[1].sha256, saved.sha256)
+            self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
+            result = saved.to_dict()['outputs']['two_reel_span_t2']
+            self.assertEqual(result['episode_outcome'],
+                             'COMPLETED_DECLARED_DURATION')
+            self.assertEqual(len(result['transitions']), 5)
+            self.assertLessEqual(result['cumulative_absolute_event_storage_bound_j'],
+                                 result['maximum_cumulative_event_storage_bound_j'])
+            self.assertEqual(saved.to_dict()['assessments'][
+                'scientific_qualification'], 'NOT_ASSESSED')
+
     def test_recapture_is_source_bound_and_replayable(self):
         payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
         episode = asdict(wave_case(64, torque_knots=100))

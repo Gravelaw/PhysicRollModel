@@ -19,7 +19,7 @@ MODEL_CHOICES = {
 }
 NUMERICAL_SETTINGS = {
     'spatial_flux': 'minmod_muscl_hll_finite_volume',
-    'time_integrator': 'heun_with_isolated_midpoint_recapture_v2',
+    'time_integrator': 'heun_with_bounded_isolated_event_sequence_v3',
     'torque_interpolation': 'linear_from_declared_knots',
     'EA_n': 10.0,
     'reference_line_mass_kg_m': 0.1,

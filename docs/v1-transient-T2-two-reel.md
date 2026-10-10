@@ -215,10 +215,13 @@ of physical mill accuracy.
 
 ## Next dependencies
 
-Add a shared physical earliest-event scheduler across both reels, donor
-interfaces and the span, including post-depletion transitions, simultaneous events, slack
-transition and independent physical event-time refinement. Then
-add a compatible boundary-engagement transition, drive train and T2/T3
+The [bounded event sequence](v1-transient-T2-event-sequence.md) now reuses
+the numerical earliest-limit scheduler for up to eight separated donor and
+release-to-wind transitions across both ends. Continue with independently
+verified wind-to-release material re-exposure, restart across event
+boundaries, and distinct physical laws for engagement, slack and depletion.
+Simultaneous transitions and physical event-time validation still need
+separate treatment. Then add a drive train and T2/T3
 interface with a single owner for each moving material region. Full 3D
 transient strip/contact, rigid gap and compliant elastic-roll modes, dynamic
 animation, broader editor acceptance and W6 remain open under the

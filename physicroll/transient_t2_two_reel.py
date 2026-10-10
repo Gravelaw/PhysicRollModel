@@ -16,7 +16,7 @@ from . import transient_t2a7 as geometry
 from . import transient_t2a8 as fv
 
 
-MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_EVENT_POLICY_V2'
+MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_EVENT_POLICY_V3'
 EVENT_BRACKET_TOLERANCE_S = 1e-11
 EVENT_COINCIDENCE_TOLERANCE_S = 1e-9
 TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH = 1-1e-4
@@ -27,6 +27,9 @@ DONOR_RESTART_MAX_LABEL_ULP_M = 1e-14
 DONOR_RESTART_MAX_STORAGE_RESIDUAL_J = 1e-12
 CONTINUE_ISOLATED_DONOR = 'continue_isolated_internal_donor'
 CONTINUE_ISOLATED_RECAPTURE = 'continue_isolated_release_to_wind'
+CONTINUE_ISOLATED_SEQUENCE = 'continue_isolated_event_sequence'
+MAX_ISOLATED_TRANSITIONS = 8
+MAX_CUMULATIVE_EVENT_STORAGE_BOUND_J = 8e-12
 RECAPTURE_MAX_OMEGA_RAD_S = 1e-12
 RECAPTURE_MAX_SLIVER_M = 1e-12
 RECAPTURE_MIN_SAMPLED_ACCEL_RAD_S2 = 1e-6
@@ -111,7 +114,8 @@ class TwoReelEpisode:
             raise ValueError('T2 two-reel episode exceeds frozen mesh/time bounds')
         if self.event_policy not in ('reject', 'stop_at_numerical_admissibility_limit',
                                      CONTINUE_ISOLATED_DONOR,
-                                     CONTINUE_ISOLATED_RECAPTURE):
+                                     CONTINUE_ISOLATED_RECAPTURE,
+                                     CONTINUE_ISOLATED_SEQUENCE):
             raise ValueError('T2 two-reel event policy is unsupported')
         if not isinstance(self.left, ReelEnd) or not isinstance(self.right, ReelEnd):
             raise ValueError('T2 two-reel episode requires both named ends')
@@ -470,10 +474,11 @@ def _terminal_recapture(cells, reels, records, time_s, h, episode,
                                  phases=phases, terminal_recapture_side=side)
     except ValueError:
         return None, 'terminal_stage_left_admissible_domain'
+    other_winding_discrepancy = 0.
     for other in ('left', 'right'):
         if other != side and phases[other] == 'wind':
             try:
-                _midpoint_winding_packet(other, first, middle,
+                _, other_winding_discrepancy = _midpoint_winding_packet(other, first, middle,
                     upper_trial['reels'], records[other], episode, upper_h)
             except ValueError:
                 return None, 'other_winding_packet_unresolved'
@@ -527,6 +532,8 @@ def _terminal_recapture(cells, reels, records, time_s, h, episode,
                 'active_storage_ownership_residual_j': storage_residual,
                 'terminal_old_material_storage_vs_midpoint_flux_residual_j':
                     storage_flux_residual,
+                'other_winding_packet_storage_residual_j':
+                    other_winding_discrepancy,
                 'event_time_interpretation':
                     'midpoint_numerical_root_not_physical_event_time'}}, None
 
@@ -920,6 +927,42 @@ def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
                     'numerical_terminal_not_physical_event_time'}}, None
 
 
+def _continuation_allowed(policy, kind, transition_count):
+    """Only the already defined taut, engaged interface laws may restart."""
+    if policy == CONTINUE_ISOLATED_SEQUENCE:
+        return (transition_count < MAX_ISOLATED_TRANSITIONS and
+                kind in ('donor_boundary', 'reversal'))
+    return transition_count == 0 and (
+        (policy == CONTINUE_ISOLATED_DONOR and kind == 'donor_boundary') or
+        (policy == CONTINUE_ISOLATED_RECAPTURE and kind == 'reversal'))
+
+
+def _restart_denial(policy, kind, transition_count):
+    if (policy == CONTINUE_ISOLATED_SEQUENCE and
+            transition_count >= MAX_ISOLATED_TRANSITIONS and
+            kind in ('donor_boundary', 'reversal')):
+        return 'isolated_transition_budget_exhausted'
+    return ('unsupported_transition_policy' if policy ==
+            CONTINUE_ISOLATED_SEQUENCE else 'additional_or_competing_limit')
+
+
+def _event_storage_residuals(terminal):
+    """Account for every signed terminal storage discrepancy without cancellation."""
+    transition = terminal['transition']
+    if transition['kind'] == 'internal_donor_restart':
+        return (transition['signed_storage_ownership_residual_j'],
+                transition['absolute_storage_ownership_residual_bound_j'])
+    active = transition['active_storage_ownership_residual_j']
+    total_old = transition[
+        'terminal_old_material_storage_vs_midpoint_flux_residual_j']
+    other = transition['other_winding_packet_storage_residual_j']
+    # The total old-material flux residual already contains active clipping.
+    # Split it into disjoint contributions before accumulating an absolute bound.
+    signed = total_old+other
+    absolute = abs(active)+abs(total_old-active)+abs(other)
+    return signed, absolute
+
+
 def run_two_reel_episode(episode: TwoReelEpisode):
     """Advance a pre-engaged interval, stopping at numerical admissibility limits."""
     if not isinstance(episode, TwoReelEpisode):
@@ -943,6 +986,8 @@ def run_two_reel_episode(episode: TwoReelEpisode):
     snapshots = [initial]
     events = []
     transitions = []
+    cumulative_event_storage_residual = 0.
+    cumulative_event_storage_bound = 0.
     outcome = None
     maximum = {'courant': 0., 'mass': 0., 'momentum': 0.,
                'inventory': 0., 'energy': 0., 'angular': 0.,
@@ -1031,11 +1076,15 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'phase': 'release',
                         'active_retained_stretch':
                             start['ports'][side]['retained_stretch']}
-                    if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
-                            not transitions and gap > 0 and
+                    if (_continuation_allowed(episode.event_policy,
+                            'donor_boundary', len(transitions)) and gap > 0 and
                             boundary < records[side][0].high_label_m-1e-12):
                         near_donor.append(proximity)
                     else:
+                        if episode.event_policy == CONTINUE_ISOLATED_SEQUENCE:
+                            proximity['restart_attempt_status'] = _restart_denial(
+                                episode.event_policy, 'donor_boundary',
+                                len(transitions))
                         events.append(proximity)
             if events or len(near_donor) > 1:
                 events.extend(near_donor)
@@ -1110,8 +1159,13 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                     except ValueError:
                         restart_status = 'terminal_stage_left_admissible_domain'
                     else:
-                        h, trial = terminal['step_s'], terminal['trial']
-                        transition_candidate = terminal['transition']
+                        _, event_bound = _event_storage_residuals(terminal)
+                        if (cumulative_event_storage_bound+event_bound >
+                                MAX_CUMULATIVE_EVENT_STORAGE_BOUND_J):
+                            restart_status = 'cumulative_event_storage_budget_exhausted'
+                        else:
+                            h, trial = terminal['step_s'], terminal['trial']
+                            transition_candidate = terminal['transition']
                 if transition_candidate is None:
                     events = [{**proximity, 'restart_attempt_status':
                                restart_status}]
@@ -1127,9 +1181,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                     selected['bracket_time_s'][1]+
                     EVENT_COINCIDENCE_TOLERANCE_S]
                 restart_status = None
-                if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
-                        not transitions and len(grouped) == 1 and
-                        selected['kind'] == 'donor_boundary'):
+                if (len(grouped) == 1 and selected['kind'] == 'donor_boundary' and
+                        _continuation_allowed(episode.event_policy,
+                                              selected['kind'], len(transitions))):
                     terminal, restart_status = _terminal_internal_donor(
                         cells, reels, records, time_s, h, episode, start,
                         selected['side'], selected['boundary'], trial, phases)
@@ -1140,20 +1194,30 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         except ValueError:
                             restart_status = 'terminal_stage_left_admissible_domain'
                         else:
-                            h, trial = terminal['step_s'], terminal['trial']
-                            transition_candidate = terminal['transition']
-                if (episode.event_policy == CONTINUE_ISOLATED_RECAPTURE and
-                        not transitions and len(grouped) == 1 and
-                        selected['kind'] == 'reversal' and
+                            _, event_bound = _event_storage_residuals(terminal)
+                            if (cumulative_event_storage_bound+event_bound >
+                                    MAX_CUMULATIVE_EVENT_STORAGE_BOUND_J):
+                                restart_status = 'cumulative_event_storage_budget_exhausted'
+                            else:
+                                h, trial = terminal['step_s'], terminal['trial']
+                                transition_candidate = terminal['transition']
+                if (len(grouped) == 1 and selected['kind'] == 'reversal' and
+                        _continuation_allowed(episode.event_policy,
+                                              selected['kind'], len(transitions)) and
                         selected['side'] in ('left', 'right') and
                         phases[selected['side']] == 'release'):
                     terminal, restart_status = _terminal_recapture(
                         cells, reels, records, time_s, h, episode, phases,
                         start, selected['side'])
                     if terminal is not None:
-                        h, trial = terminal['step_s'], terminal['trial']
-                        transition_candidate = terminal['transition']
-                        terminal_recapture_records = terminal['active_records']
+                        _, event_bound = _event_storage_residuals(terminal)
+                        if (cumulative_event_storage_bound+event_bound >
+                                MAX_CUMULATIVE_EVENT_STORAGE_BOUND_J):
+                            restart_status = 'cumulative_event_storage_budget_exhausted'
+                        else:
+                            h, trial = terminal['step_s'], terminal['trial']
+                            transition_candidate = terminal['transition']
+                            terminal_recapture_records = terminal['active_records']
                 if transition_candidate is None:
                     h, trial = (selected['feasible_step_s'],
                                 selected['feasible_trial'])
@@ -1183,10 +1247,14 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                             events[-1][f'{prefix}_gap_after_feasible_stop_s'] = (
                                 bracket[0]-(time_s+h) if bracket is not None else None)
                         if (episode.event_policy in (CONTINUE_ISOLATED_DONOR,
-                                CONTINUE_ISOLATED_RECAPTURE) and item is selected and
+                                CONTINUE_ISOLATED_RECAPTURE,
+                                CONTINUE_ISOLATED_SEQUENCE) and item is selected and
                                 item['kind'] in ('donor_boundary', 'reversal')):
                             events[-1]['restart_attempt_status'] = (
-                                restart_status or 'additional_or_competing_limit')
+                                restart_status or ('additional_or_competing_limit'
+                                    if len(grouped) > 1 else _restart_denial(
+                                        episode.event_policy, item['kind'],
+                                        len(transitions))))
                     outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')
@@ -1289,6 +1357,19 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         accepted.append(state)
         if transition_candidate is not None:
             transition_candidate['accepted_state_index'] = len(accepted)-1
+            transition_candidate['sequence_index'] = len(transitions)+1
+            transition_candidate['phase_before'] = (
+                'release' if transition_candidate['kind'] == 'release_to_wind'
+                else phases[transition_candidate['side']])
+            transition_candidate['phase_after'] = phases[transition_candidate['side']]
+            event_signed, event_bound = _event_storage_residuals(
+                {'transition': transition_candidate})
+            cumulative_event_storage_residual += event_signed
+            cumulative_event_storage_bound += event_bound
+            transition_candidate['cumulative_signed_event_storage_residual_j'] = (
+                cumulative_event_storage_residual)
+            transition_candidate['cumulative_absolute_event_storage_bound_j'] = (
+                cumulative_event_storage_bound)
             transitions.append(transition_candidate)
         if events:
             for item in events:
@@ -1314,6 +1395,16 @@ def run_two_reel_episode(episode: TwoReelEpisode):
     return {'model_id': MODEL_ID, 'mode': 'preengaged_two_reel_elastic_span',
             'episode_outcome': outcome, 'event_policy': episode.event_policy,
             'events': events, 'transitions': transitions,
+            'maximum_isolated_transitions': (MAX_ISOLATED_TRANSITIONS if
+                episode.event_policy == CONTINUE_ISOLATED_SEQUENCE else 1 if
+                episode.event_policy in (CONTINUE_ISOLATED_DONOR,
+                                         CONTINUE_ISOLATED_RECAPTURE) else 0),
+            'cumulative_signed_event_storage_residual_j':
+                cumulative_event_storage_residual,
+            'cumulative_absolute_event_storage_bound_j':
+                cumulative_event_storage_bound,
+            'maximum_cumulative_event_storage_bound_j':
+                MAX_CUMULATIVE_EVENT_STORAGE_BOUND_J,
             'original_initial_records': {side: [
                 {'low_label_m': item.low_label_m,
                  'high_label_m': item.high_label_m,
@@ -1337,7 +1428,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             'maximum_exact_storage_vs_transfer_flux_defect_j': maximum['storage'],
             'limitations': ['pre-engaged two-reel taut subsonic interval only',
                             'tautness and unsupported reel limits stop on the feasible side',
-                            ('only one isolated internal donor restart supported'
+                            ('up to eight isolated donor or release-to-wind transitions'
+                             if episode.event_policy == CONTINUE_ISOLATED_SEQUENCE else
+                             'only one isolated internal donor restart supported'
                              if episode.event_policy == CONTINUE_ISOLATED_DONOR else
                              'only one isolated release-to-wind recapture supported'
                              if episode.event_policy == CONTINUE_ISOLATED_RECAPTURE else

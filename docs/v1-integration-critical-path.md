@@ -24,7 +24,10 @@ release-to-wind turn with a corrected coupled midpoint terminal step,
 inventory-derived active-record clipping and separately bounded numerical
 turning diagnostics. It does not supply general reversal or a physically
 certified event time.
-Physical event timing, general post-event transitions including depletion, bite/drive engagement, repeated restart, T3 contact
+The [bounded event sequence](v1-transient-T2-event-sequence.md) now continues
+up to eight isolated donor changes and release-to-wind turns across both ends,
+with a cumulative ownership bound. Unsupported transitions retain a feasible
+stop. Physical event timing, general post-event transitions including depletion, bite/drive engagement, slack, T3 contact
 and full v1 coupling remain open.
 
 ## Next decisions and executable gates
@@ -80,10 +83,11 @@ and full v1 coupling remain open.
    and memory, numerical regression, and independent review.
 
 The right-reel pickup transition is independently reviewed and implemented as
-a labeled model proposal. Step 2 next needs an integrated shared earliest-event
-scheduler and compatible engagement, slack and repeated material transitions,
-with independent work/impulse and event gates; the current two-reel Episode is
-not full T2. The first T3 full 3D elastic/contact
+a labeled model proposal. The bounded shared sequence covers repeated
+separated transitions under the existing taut engaged law. Step 2 still needs
+wind-to-release deposition/re-exposure verification, restart across event
+boundaries, and explicit engagement and slack closures; the current two-reel
+Episode is not full T2. The first T3 full 3D elastic/contact
 candidate has equation-level independent review, while its numerical engine
 and contact enforcement remain to be built. No synthetic fixture supplies
 material calibration or transient mill measurements. Software verification
