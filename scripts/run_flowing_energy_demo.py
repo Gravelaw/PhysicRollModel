@@ -54,7 +54,7 @@ def run(config_path: Path, output_path: Path):
         outputs.append({'pass_id':index+1,'mechanics':mechanics,'energy':energy})
         state=MaterialState(**{**energy['strip_state_out'],'history':tuple(energy['strip_state_out']['history'])})
     try:
-        config_label=str(config_path.relative_to(ROOT))
+        config_label=config_path.relative_to(ROOT).as_posix()
     except ValueError:
         config_label=str(config_path)
     result={'status':'SYNTHETIC_NUMERICAL_CONSERVATION_EXERCISE_NO_THERMAL_VALIDATION',
