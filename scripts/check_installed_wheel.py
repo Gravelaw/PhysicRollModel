@@ -58,6 +58,16 @@ def main():
             "result=T1Trajectory(case).result(); "
             "assert result['status']=='COMPLETED' and result['strip_speed_role']=='prescribed_input'",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a1 import T2A1Case, run_torque_driven; "
+            "case=T2A1Case(duration_s=2.,step_s=.01,left_radius_m=.1,"
+            "right_radius_m=.1,left_inertia_kg_m2=1.,right_inertia_kg_m2=1.,"
+            "span_stiffness_n_m=100.,initial_extension_m=.01); "
+            "result=run_torque_driven(case); "
+            "assert result['episode_outcome']=='TERMINATED_TENSION_LOSS' "
+            "and result['shaft_speed_role']=='predicted_from_applied_torque'",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

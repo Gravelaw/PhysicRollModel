@@ -35,6 +35,9 @@ For guided synthetic pass editing and reopening saved runs, start the
 The [T1 transport contract](docs/v1-transient-T1.md) describes a separate
 bounded prescribed-motion kinematic layer; it does not solve the requested
 drive, deformation or contact dynamics.
+The [T2A benchmark](docs/v1-transient-T2A-benchmark.md) includes a restricted
+fixed-radius, fixed-inertia, undamped shaft/elastic-span dynamics kernel. It
+does not model moving material, changing reel mass, or roll contact.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a

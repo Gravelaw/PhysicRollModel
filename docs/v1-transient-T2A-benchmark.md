@@ -1,7 +1,12 @@
 # T2A fixed-geometry shaft and elastic-span benchmark candidate
 
-**Status:** equation and acceptance proposal for independent review before
-implementation. T2A is a closed local perturbation problem. It has no material
+**Status:** the independently reviewed, fixed-inertia massless-span **T2A1**
+benchmark is executable in `physicroll/transient_t2a1.py`. Its torque-driven
+midpoint states, analytic first-zero event detection, prescribed-motion
+reaction torques and work diagnostics pass closed-form checks. The massive-bar
+and partitioned-coupling cases below remain design candidates; T2A1 has no
+public RunSpec/restart integration yet. T2A is a closed local perturbation
+problem. It has no material
 entering/leaving the span, changing reel radius, running-web inventory, roll
 bite or strip contact. Passing it will not complete T2 or qualify a mill.
 
@@ -111,10 +116,24 @@ and `≤10%` normalized bar-tension error against the d'Alembert field.
 Errors must decrease over the three refinements where the oracle is smooth.
 Review these software targets before coding; they imply no physical accuracy.
 
+The first executable subset, **T2A1**, sets `b1=b2=0` and uses fixed radii,
+inertias and a massless span only. Its torque-driven loss oracle has
+`τ1=τ2=0`, `θ1=θ2=θ̇1=θ̇2=0` initially: the relative extension is
+`e(t)=e0 cos(sqrt(2)t)` and first zero is `π/(2sqrt(2)) s`. Accept no state
+with negative tension; a root residual above `10⁻⁹ N` or event-time error
+above `10⁻⁴ s` fails the run. The prescribed-motion loss case at `0.5 s`
+remains a separate reaction-mode test. For the analytic prescribed sinusoid,
+compare reaction torques at every accepted time with `≤10⁻¹⁰ N m` absolute
+error. Its midpoint-work quadrature defect must decrease over the three time
+steps; the closed torque-driven energy target is not applied to it. Damping,
+bar mass and partitioned iteration are outside T2A1. Any future partitioned
+run must fail if its interface iteration does not converge; an unresolved
+first-zero event likewise fails rather than accepting a compressive step.
+
 For the oscillator, normalize RMS extension error by its `0.01 m` initial
-perturbation and sample every accepted time in `[0,2 s]`. Extract phase by
-least-squares fitting the sampled relative coordinate to constant, sine and
-cosine terms at the independently derived `sqrt(2) rad/s` frequency. For the
+perturbation and sample every accepted time in `[0,2 s]`. Extract endpoint
+phase from `atan2(−ė/ω, e−e0)`, using the independently derived
+`ω=sqrt(2) rad/s` and unwrapping to the reference phase interval. For the
 fixed-end bar, compare displacement at all interior nodes and tension at all
 element midpoints at `t=0.025, 0.05, 0.10, 0.15, 0.20 s`, using the exact
 d'Alembert function and derivative. Normalize displacement RMS by `a` and
@@ -152,9 +171,9 @@ discrete energy/work balance and observed convergence order. Trial budget is
 `≤60 s` wall time on one CI runner for this benchmark; these are candidate
 limits to verify, not measured performance.
 
-Before T2A implementation, independent review must confirm signs, endpoint
-power transfer, pulse/reference data, time and spatial tolerances, and the
-first-zero event rule. Broader T2 still requires a moving-span control volume,
+Before implementing the massive-bar and partitioned cases, independent review
+must confirm their endpoint power transfer, pulse/reference data, spatial
+tolerances and bar first-zero event rule. Broader T2 still requires a moving-span control volume,
 variable-mass reel angular-momentum and energy flux, ownership of span/reel/
 shaft mass and compliance, damping/slack transitions, and independent
 variable-mass benchmark outputs. T3 retains its separate full 3D and dynamic
