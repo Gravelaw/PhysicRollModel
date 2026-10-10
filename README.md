@@ -41,9 +41,11 @@ distributed strain and velocity with characteristic-compatible fixed ports;
 [T2A6](docs/v1-transient-T2A6-design.md) checks append-only wound-strain
 ownership and a reaction reel for an analytic outgoing wave.
 [T2A7](docs/v1-transient-T2A7-design.md) adds a restricted torque-driven,
-two-way elastic span/reel coupling with append-only transfer. These
-benchmarks do not establish release, slack, rolling contact, full T2 or
-physical mill accuracy.
+two-way elastic span/reel coupling with append-only transfer.
+[T2A8](docs/v1-transient-T2A8-design.md) checks retained-strain reaction
+release and stops at first tension zero. These benchmarks do not establish
+general reversal, slack continuation, rolling contact, full T2 or physical
+mill accuracy.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a

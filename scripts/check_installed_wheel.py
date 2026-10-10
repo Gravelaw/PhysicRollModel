@@ -116,6 +116,14 @@ def main():
             "and result['right_incoming_characteristic_role']=='predicted_from_reel_speed' "
             "and result['maximum_combined_inventory_defect_kg']<1e-12",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a8 import T2A8Case, run_reaction_release_first_tension_zero; "
+            "result=run_reaction_release_first_tension_zero(T2A8Case(64)); "
+            "assert result['episode_outcome']=='STOPPED_AT_FIRST_TENSION_ZERO' "
+            "and result['event']['feasible_minimum_tension_n']<1e-9 "
+            "and result['maximum_combined_inventory_defect_kg']<1e-11",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

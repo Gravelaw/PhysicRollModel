@@ -1,6 +1,6 @@
 # T2A shaft, span and prescribed-flow reel benchmarks
 
-**Status:** seven restricted benchmarks are executable:
+**Status:** eight restricted benchmarks are executable:
 [T2A1](../physicroll/transient_t2a1.py) for fixed-inertia shafts and a
 massless elastic span, [T2A2](../physicroll/transient_t2a2.py) for a
 fixed-material elastic bar coupled to shafts,
@@ -10,8 +10,10 @@ inextensible torque-driven moving web, and
 [T2A5](v1-transient-T2A5-design.md) for a distributed moving elastic span
 with characteristic-compatible fixed ports, and
 [T2A6](v1-transient-T2A6-design.md) for append-only retained winding strain
-with a reaction reel, and [T2A7](v1-transient-T2A7-design.md) for a bounded
-two-way torque-driven elastic span/reel case. T2A1 predicts shaft motion and
+with a reaction reel, [T2A7](v1-transient-T2A7-design.md) for a bounded
+two-way torque-driven elastic span/reel case, and
+[T2A8](v1-transient-T2A8-design.md) for retained-strain reaction release
+ending at first tension zero. T2A1 predicts shaft motion and
 locates its first tension-zero event; T2A3 calculates reaction torques for
 prescribed motion; T2A4 predicts speed but treats tension as an
 inextensibility constraint reaction. T2A5 predicts nonuniform stretch and
@@ -21,7 +23,9 @@ port; its torque is a reaction, and it does not solve the discrete T2A5
 field and reel together. T2A7 couples an evolving strain field and reel only
 for a taut ideal append-only episode with manufactured torque; it has no
 release/reversal or slack continuation. The fixed-end bar pulse and broader
-transition/interface benchmarks remain design candidates. None of these
+transition/interface benchmarks remain design candidates. T2A8 does not
+implement torque-driven release, an actual direction reversal or slack
+continuation. None of these
 subsets has public RunSpec/restart integration, roll bite or contact. They do
 not complete full moving-web T2 or qualify a mill.
 
