@@ -1,8 +1,8 @@
 # T0 transient solver design candidate
 
 **Status: design under renewed review for width-resolved structural dynamics;
-the restricted prescribed-motion T1 layer and T2A1/T2A2/T2A3
-benchmarks are implemented, while torque-driven moving-span/reel T2 and full 3D T3 contact
+the restricted prescribed-motion T1 layer and T2A1/T2A2/T2A3/T2A4
+benchmarks are implemented, while strain-bearing torque-driven moving-span/reel T2 and full 3D T3 contact
 remain design candidates.** This
 develops the [v1 scope amendment](v1-scope-amendment-2026-10-10.md) after an
 independent Astra review of primary technical sources. The user requires all

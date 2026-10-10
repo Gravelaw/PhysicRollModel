@@ -1,23 +1,24 @@
 # T2A shaft, span and prescribed-flow reel benchmarks
 
-**Status:** the independently reviewed, fixed-inertia massless-span **T2A1**
-benchmark is executable in `physicroll/transient_t2a1.py`; the restricted
-fixed-material bar/shaft **T2A2** benchmark is executable in
-`physicroll/transient_t2a2.py`; the prescribed-flow reel-flux **T2A3**
-benchmark is executable in `physicroll/transient_t2a3.py`. T2A1's torque-driven
-midpoint states, analytic first-zero event detection, prescribed-motion
-reaction torques and work diagnostics pass closed-form checks. The fixed-end
-bar pulse and partitioned-coupling cases remain design candidates; none of the
-three subsets has public RunSpec/restart integration. T2A1/T2A2 are closed
-fixed-material perturbation problems. T2A3 adds prescribed material flow and
-changing reel radius/inertia, but does not predict speed or tension. None
-resolves a roll bite or strip contact. Passing these cases will not complete
-torque-driven moving-web T2 or qualify a mill.
+**Status:** four independently reviewed restricted benchmarks are executable:
+[T2A1](../physicroll/transient_t2a1.py) for fixed-inertia shafts and a
+massless elastic span, [T2A2](../physicroll/transient_t2a2.py) for a
+fixed-material elastic bar coupled to shafts,
+[T2A3](../physicroll/transient_t2a3.py) for prescribed flow through
+variable-mass reels, and [T2A4](../physicroll/transient_t2a4.py) for an
+inextensible torque-driven moving web. T2A1 predicts shaft motion and
+locates its first tension-zero event; T2A3 calculates reaction torques for
+prescribed motion; T2A4 predicts speed but treats tension as an
+inextensibility constraint reaction. The fixed-end bar pulse and partitioned
+coupling remain design candidates. None of these subsets has public
+RunSpec/restart integration, evolving strain with material flux, roll bite
+or contact. They do not complete full moving-web T2 or qualify a mill.
 
-This restricted stage tests the dynamic and coupling machinery needed by the
+The fixed-material stages test dynamic and coupling machinery needed by the
 [T0 design](v1-transient-T0-design.md) without silently applying fixed-inertia
 equations to T1's changing reels. Positive strip tension defines the taut
-domain; its first zero is a terminal event. Shaft angles are unwrapped
+domain. T2A1 locates its first zero; the other subsets do not resolve a
+general tension-loss event. Shaft angles are unwrapped
 perturbations from the equilibrated initial configuration. Positive `θ1`
 releases strip from the left and positive `θ2` takes up strip on the right:
 `θ1 = −Δθ_left_winding` and `θ2 = Δθ_right_winding` relative to T1's
@@ -351,3 +352,74 @@ unassessed in this benchmark. Zero-speed and reversal are separate gates.
 The ideal ports omit bending
 energy, compaction, radial deformation, changing tangent/wrap-path mass and
 support work; these formulas do not validate a physical winding line.
+
+### Frozen inextensible torque-driven reference (T2A4)
+
+This restricted stage lets common strip speed be a predicted
+state while retaining a fixed spatial span and inextensible, constant-density
+material. Tension is a constraint reaction, not a constitutive prediction.
+The two reel axes are fixed; material flows left to right with `V>0` and
+both reel angles transport-positive. Let transferred reference length `q`
+obey `q̇=V`; `L_1=L_1(0)−q` and `L_2=L_2(0)+q`. The span owns
+`m_s=μL` once; the reels own wound inertia through the annular `J_i(q)`
+above. Use the same ideal no-slip ports and omit bending, compaction,
+changing wrap-path inventory and losses. Terminate before inventory
+exhaustion, nonpositive speed or tension, or reversal. Capacity is
+unassessed. This stage does not model evolving strain.
+
+Because equal-velocity inlet/outlet momentum fluxes cancel for the fixed
+span, `m_s V̇=T_2−T_1`. For each reel the material angular flux cancels
+`J̇_iω_i`, leaving `J_1ω̇_1=τ_1+R_1T_1` and
+`J_2ω̇_2=τ_2−R_2T_2`, with `ω_i=V/R_i` and
+`Ṙ_i=(h0/π)(±V)/(2R_i)`. Eliminating tensions gives
+
+```text
+M(q) = m_s + J_1/R_1² + J_2/R_2²
+M(q) V̇ + ½ M'(q) V² = τ_1/R_1 + τ_2/R_2.
+```
+
+The independent dynamic oracle uses the kinetic-energy integral
+`V(q)²=[M(0)V0²+2∫(τ_1/R_1+τ_2/R_2)dq]/M(q)` and scalar quadrature
+`t(q)=∫dq/V(q)`. It must not supply the numerical ODE's velocity update.
+The first fixture sets `μ=0.1 kg/m`, `h0=0.001 m`, `Rc=0.1 m`,
+`Jcore=0.01 kg m²`, span length `L=1 m`, initial reel lengths
+`(10,1) m`, `V0=0.1 m/s`, and terminal `q=0.2 m`. Opposing
+position-dependent torques are `τ_1=−(1 N)R_1(q)` and
+`τ_2=(1 N)R_2(q)`; their net drive power is zero. Thus
+`V(q)=V0 sqrt(M(0)/M(q))`. Independent high-precision quadrature gives
+terminal `t=2.00023193699641217 s`, `M=2.80672012521324316 kg`,
+`V=0.09997699682837918 m/s`,
+`V̇=−0.00001121901573108618 m/s²`,
+`T_1=1.00017889011892767 N`, and `T_2=1.00017776821735456 N`.
+Verify positive tension over the full interval, not just at the endpoint.
+
+The frozen software acceptance is: integrate
+`q̇=V`, `V̇=−M'(q)V²/(2M(q))` with RK4 at maximum steps
+`0.04,0.02,0.01 s`, shortening and reintegrating the final step to
+`q=0.2 m`. At every accepted state, compare speed with the independent
+energy oracle. Require maximum speed error `≤10⁻¹⁰ m/s`, terminal-time
+error `≤10⁻⁸ s`, terminal-`q` error `≤10⁻¹² m` and recovered tension
+error `≤10⁻⁸ N`. The total kinetic-energy defect divided by initial
+kinetic energy must be `≤10⁻⁹`. Independently integrate each reel's
+angular-momentum and kinetic-energy flux, plus span momentum and kinetic
+energy, over every accepted interval; require residuals below
+`10⁻¹⁰ N m s`, `10⁻¹⁰ J`, `10⁻¹⁰ N s` and `10⁻¹⁰ J`, respectively.
+The ledger integrals use separate time quadrature, not endpoint identities
+as their own right-hand sides. Record three-resolution error trends until
+roundoff dominates; strict decrease at machine precision is not required.
+Reject nonfinite state, nonpositive inventory/speed/tension and unresolved
+terminal event. Passing this inextensible constraint benchmark will not
+complete strain-bearing T2, slack/reversal or T3 contact.
+
+Local Python 3.12 observations for the frozen fixture (software residuals,
+not physical errors) are:
+
+| Maximum step (s) | Max speed-oracle error (m/s) | Scaled total-energy defect | Max left-reel angular-impulse residual (N m s) |
+|---:|---:|---:|---:|
+| 0.04 | `4.16e-17` | `7.42e-16` | `7.35e-18` |
+| 0.02 | `5.55e-17` | `9.89e-16` | `6.92e-18` |
+| 0.01 | `5.55e-17` | `1.36e-15` | `7.04e-18` |
+
+These differences are already at floating-point roundoff; they do not show
+meaningful monotonic refinement. The independent terminal-time quadrature
+and all three-grid subsystem thresholds remain the actual acceptance checks.

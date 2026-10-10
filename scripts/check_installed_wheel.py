@@ -84,6 +84,14 @@ def main():
             "and result['maximum_reel_angular_impulse_defect_nm_s']['left']<1e-10 "
             "and result['maximum_reel_energy_defect_j']['right']<1e-10",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a4 import T2A4Case, run_torque_driven_reels; "
+            "result=run_torque_driven_reels(T2A4Case(.04)); "
+            "assert result['mode']=='torque_driven_inextensible_moving_web' "
+            "and result['shaft_speed_role']=='predicted_from_applied_torque' "
+            "and abs(result['completed_transfer_m']-.2)<1e-12",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
