@@ -19,6 +19,11 @@ The [isolated donor restart](v1-transient-T2-isolated-donor-restart.md)
 continues one retained-record boundary under the declared idealized pickup
 law, with bounded terminal overshoot and a signed ownership residual. It
 stops on competing, inadmissible or repeated transitions.
+The [isolated recapture](v1-transient-T2-isolated-recapture.md) continues one
+release-to-wind turn with a corrected coupled midpoint terminal step,
+inventory-derived active-record clipping and separately bounded numerical
+turning diagnostics. It does not supply general reversal or a physically
+certified event time.
 Physical event timing, general post-event transitions including depletion, bite/drive engagement, repeated restart, T3 contact
 and full v1 coupling remain open.
 
@@ -75,9 +80,10 @@ and full v1 coupling remain open.
    and memory, numerical regression, and independent review.
 
 The right-reel pickup transition is independently reviewed and implemented as
-a labeled model proposal. Step 2 next needs a physical shared earliest-event
-scheduler for the two-reel port and compatible engagement, with independent work/impulse
-and event gates; the current two-reel Episode is not full T2. The first T3 full 3D elastic/contact
+a labeled model proposal. Step 2 next needs an integrated shared earliest-event
+scheduler and compatible engagement, slack and repeated material transitions,
+with independent work/impulse and event gates; the current two-reel Episode is
+not full T2. The first T3 full 3D elastic/contact
 candidate has equation-level independent review, while its numerical engine
 and contact enforcement remain to be built. No synthetic fixture supplies
 material calibration or transient mill measurements. Software verification

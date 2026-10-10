@@ -13,6 +13,7 @@ from tests.test_transient_t2_two_reel import (affine_two_release_case,
                                               depletion_case,
                                               isolated_donor_case,
                                               standing_reversal_case)
+from tests.test_transient_t2_recapture import wave_case
 
 
 EXAMPLE = (Path(__file__).resolve().parents[1] /
@@ -20,6 +21,28 @@ EXAMPLE = (Path(__file__).resolve().parents[1] /
 
 
 class TwoReelWorkflowTests(unittest.TestCase):
+    def test_recapture_is_source_bound_and_replayable(self):
+        payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
+        episode = asdict(wave_case(64, torque_knots=100))
+        payload['requested_inputs']['episode'] = episode
+        payload['resolved_inputs']['episode'] = episode
+        spec = RunSpec(payload)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'release-to-wind'
+            saved = create_run_bundle(spec, path)
+            self.assertEqual(verify_run_bundle(path)[1].sha256, saved.sha256)
+            self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
+            result = saved.to_dict()['outputs']['two_reel_span_t2']
+            self.assertEqual(result['episode_outcome'],
+                             'COMPLETED_DECLARED_DURATION')
+            self.assertEqual([(event['side'], event['kind']) for event in
+                              result['transitions']],
+                             [('right', 'release_to_wind')])
+            self.assertEqual(result['accepted_states'][-1]['ends']['right'][
+                'phase'], 'wind')
+            self.assertEqual(result['original_initial_records']['right'][0][
+                'retained_stretch'], 1.0125)
+
     def test_isolated_donor_restart_is_source_bound_and_replayable(self):
         payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
         episode = asdict(isolated_donor_case())

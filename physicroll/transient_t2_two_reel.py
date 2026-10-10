@@ -1,11 +1,10 @@
-"""Pre-engaged two-reel elastic-span prototype with admissibility stops.
+"""Pre-engaged two-reel elastic span with bounded event policies.
 
-Both reels are driven by independent, declared time-only torques. Each local
-angular coordinate is winding-positive. This narrow increment rejects phase
-changes, donor changes and first tension loss can be approached and stopped
-on their feasible side under an explicit policy. A Heun predictor may reach its limit before
-the corrected endpoint; this is a numerical admissibility stop, not a measured
-physical event time. Slack and post-depletion evolution remain rejected.
+Both reels use independent declared time-only torques and winding-positive
+angular coordinates. The default Heun policy stops on feasible numerical
+limits. Optional isolated donor or release-to-wind continuation preserves
+state and ownership under separate terminal guards. No reported bracket is
+a measured physical event time. Slack and post-depletion remain rejected.
 """
 
 from dataclasses import dataclass
@@ -17,7 +16,7 @@ from . import transient_t2a7 as geometry
 from . import transient_t2a8 as fv
 
 
-MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_EVENT_POLICY_V1'
+MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_EVENT_POLICY_V2'
 EVENT_BRACKET_TOLERANCE_S = 1e-11
 EVENT_COINCIDENCE_TOLERANCE_S = 1e-9
 TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH = 1-1e-4
@@ -27,6 +26,10 @@ DONOR_RESTART_MAX_OVERSHOOT_M = 1e-13
 DONOR_RESTART_MAX_LABEL_ULP_M = 1e-14
 DONOR_RESTART_MAX_STORAGE_RESIDUAL_J = 1e-12
 CONTINUE_ISOLATED_DONOR = 'continue_isolated_internal_donor'
+CONTINUE_ISOLATED_RECAPTURE = 'continue_isolated_release_to_wind'
+RECAPTURE_MAX_OMEGA_RAD_S = 1e-12
+RECAPTURE_MAX_SLIVER_M = 1e-12
+RECAPTURE_MIN_SAMPLED_ACCEL_RAD_S2 = 1e-6
 
 
 class _TrialCompressionLimit(ValueError):
@@ -107,7 +110,8 @@ class TwoReelEpisode:
                                        span.CFL_LIMIT/4)):
             raise ValueError('T2 two-reel episode exceeds frozen mesh/time bounds')
         if self.event_policy not in ('reject', 'stop_at_numerical_admissibility_limit',
-                                     CONTINUE_ISOLATED_DONOR):
+                                     CONTINUE_ISOLATED_DONOR,
+                                     CONTINUE_ISOLATED_RECAPTURE):
             raise ValueError('T2 two-reel event policy is unsupported')
         if not isinstance(self.left, ReelEnd) or not isinstance(self.right, ReelEnd):
             raise ValueError('T2 two-reel episode requires both named ends')
@@ -186,9 +190,10 @@ def _local_port(cells, side, length, omega, phase, records, end, donor=None,
 
 
 def _rates(cells, reels, time_s, records, episode, donors=None,
-           trial_probe=False):
+           trial_probe=False, phases=None):
     ports = {side: _local_port(cells, side, reels[side][0], reels[side][1],
-                              getattr(episode, side).phase, records[side],
+                              (phases[side] if phases is not None else
+                               getattr(episode, side).phase), records[side],
                               getattr(episode, side),
                               None if donors is None else donors[side],
                               trial_probe)
@@ -263,37 +268,271 @@ def _rates(cells, reels, time_s, records, episode, donors=None,
             'maximum_signal_m_s': signal}
 
 
-def _advance(cells, reels, time_s, h, records, episode):
+def _advance(cells, reels, time_s, h, records, episode, phases=None):
     trial_probe = episode.event_policy != 'reject'
     donors = {}
     for side in ('left', 'right'):
         end = getattr(episode, side)
         cut = end.initial_local_cut_m + end.initial_reference_length_m - reels[side][0]
+        phase = phases[side] if phases is not None else end.phase
         donors[side] = (single._donor(records[side], cut).retained_stretch
-                        if end.phase == 'release' else None)
+                        if phase == 'release' else None)
     first = _rates(cells, reels, time_s, records, episode, donors,
-                   trial_probe)
+                   trial_probe, phases)
     predicted = [tuple(cell[j]+h*rate[j] for j in (0, 1))
                  for cell, rate in zip(cells, first['field_rates'])]
     predicted_reels = {side: tuple(reels[side][j]+h*first['reel_rates'][side][j]
                                    for j in range(3)) for side in ('left', 'right')}
     second = _rates(predicted, predicted_reels, time_s+h, records, episode, donors,
-                    trial_probe)
+                    trial_probe, phases)
     updated = [tuple((cells[i][j]+predicted[i][j]+h*second['field_rates'][i][j])/2
                      for j in (0, 1)) for i in range(len(cells))]
     updated_reels = {side: tuple((reels[side][j]+predicted_reels[side][j]+
                                   h*second['reel_rates'][side][j])/2
                                  for j in range(3)) for side in ('left', 'right')}
     final = _rates(updated, updated_reels, time_s+h, records, episode, donors,
-                   trial_probe)
+                   trial_probe, phases)
     courant = h*max(rate['maximum_signal_m_s'] for rate in
                     (first, second, final))/(span.SPAN_LENGTH_M/episode.cell_count)
     return {'cells': updated, 'reels': updated_reels,
             'predicted_reels': predicted_reels, 'first': first,
-            'second': second, 'final': final, 'courant': courant}
+            'second': second, 'final': final, 'courant': courant,
+            'quadrature': 'heun'}
 
 
-def _state(time_s, cells, reels, records, heat, integrated, episode):
+def _advance_midpoint_terminal(cells, reels, time_s, h, records, episode,
+                               phases, side):
+    """Complete coupled midpoint trial; only its endpoint uses the wind trace."""
+    donors = {}
+    for name in ('left', 'right'):
+        end = getattr(episode, name)
+        cut = end.initial_local_cut_m+end.initial_reference_length_m-reels[name][0]
+        donors[name] = (single._donor(records[name], cut).retained_stretch
+                        if phases[name] == 'release' else None)
+    first = _rates(cells, reels, time_s, records, episode, donors, True, phases)
+    middle_cells = [tuple(cell[j]+h*rate[j]/2 for j in (0, 1))
+                    for cell, rate in zip(cells, first['field_rates'])]
+    middle_reels = {name: tuple(reels[name][j]+h*first['reel_rates'][name][j]/2
+                               for j in range(3)) for name in ('left', 'right')}
+    middle = _rates(middle_cells, middle_reels, time_s+h/2, records,
+                    episode, donors, True, phases)
+    updated = [tuple(cell[j]+h*rate[j] for j in (0, 1))
+               for cell, rate in zip(cells, middle['field_rates'])]
+    updated_reels = {name: tuple(reels[name][j]+h*middle['reel_rates'][name][j]
+                                 for j in range(3)) for name in ('left', 'right')}
+    wind_phases = {**phases, side: 'wind'}
+    final = _rates(updated, updated_reels, time_s+h, records, episode,
+                   None, True, wind_phases)
+    courant = h*max(rate['maximum_signal_m_s'] for rate in
+                    (first, middle, final))/(span.SPAN_LENGTH_M/episode.cell_count)
+    return {'cells': updated, 'reels': updated_reels,
+            'predicted_reels': middle_reels, 'first': first,
+            'second': middle, 'final': final, 'courant': courant,
+            'quadrature': 'midpoint_terminal'}
+
+
+def _clip_active_records(records, cut):
+    """Remove released material from the active store; originals remain archived."""
+    active = []
+    for item in records:
+        low = max(item.low_label_m, cut)
+        if item.high_label_m > low:
+            active.append(single.WoundRecord(low, item.high_label_m,
+                                              item.retained_stretch))
+    if (not active or abs(active[-1].low_label_m-cut) > 1e-14 or
+            any(abs(older.low_label_m-newer.high_label_m) > 1e-13
+                for older, newer in zip(active, active[1:])) or
+            abs(sum(item.high_label_m-item.low_label_m for item in active)-
+                (active[0].high_label_m-cut)) > 1e-13):
+        raise ValueError('T2 recapture active records leave turning cut unowned')
+    return active
+
+
+def _midpoint_winding_packet(side, first, middle, updated_reels,
+                             records, episode, h):
+    """Represent the other winding end's midpoint transfer, or bound its loss."""
+    end = getattr(episode, side)
+    old_cut = first['ports'][side]['cut_label_m']
+    new_cut = (end.initial_local_cut_m+end.initial_reference_length_m-
+               updated_reels[side][0])
+    transfer = h*middle['ports'][side]['reference_flux_m_s']
+    density = span.EA_N*(middle['ports'][side]['stretch']-1)**2/2
+    represented = old_cut-new_cut
+    discrepancy = (represented-transfer)*density
+    if (transfer <= 0 or abs(represented-transfer) > 1e-13 or
+            abs(discrepancy) > DONOR_RESTART_MAX_STORAGE_RESIDUAL_J or
+            abs(records[-1].low_label_m-old_cut) > 1e-13):
+        raise ValueError('T2 midpoint winding packet flux or storage unresolved')
+    if represented == 0 and transfer < 1e-14:
+        return None, discrepancy
+    if represented <= 0:
+        raise ValueError('T2 midpoint winding packet label unresolved')
+    return single.WoundRecord(new_cut, old_cut,
+                              middle['ports'][side]['stretch']), discrepancy
+
+
+def _terminal_recapture(cells, reels, records, time_s, h, episode,
+                        phases, start, side):
+    """Locate a one-sided release-to-wind root of the corrected midpoint map."""
+    if phases[side] != 'release':
+        return None, 'not_releasing'
+    end = getattr(episode, side)
+    old_cut = start['ports'][side]['cut_label_m']
+    if max(math.ulp(value) for value in (old_cut, end.initial_local_cut_m,
+            end.initial_local_cut_m+end.initial_reference_length_m)) > \
+            DONOR_RESTART_MAX_LABEL_ULP_M:
+        return None, 'insufficient_terminal_label_resolution'
+    try:
+        upper_trial = _advance_midpoint_terminal(cells, reels, time_s, h,
+                                                  records, episode, phases, side)
+    except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
+        return None, 'midpoint_probe_left_admissible_domain'
+    if upper_trial['reels'][side][1] < 0:
+        return None, 'midpoint_corrected_endpoint_not_bracketed'
+    lower_h, upper_h = 0., h
+    for _ in range(64):
+        if (upper_trial['reels'][side][1] <= RECAPTURE_MAX_OMEGA_RAD_S and
+                upper_h-lower_h <= EVENT_BRACKET_TOLERANCE_S):
+            break
+        middle_h = (lower_h+upper_h)/2
+        if middle_h in (lower_h, upper_h):
+            return None, 'midpoint_root_resolution_exhausted'
+        try:
+            probe = _advance_midpoint_terminal(cells, reels, time_s,
+                        middle_h, records, episode, phases, side)
+        except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
+            return None, 'midpoint_probe_left_admissible_domain'
+        if probe['reels'][side][1] < 0:
+            lower_h = middle_h
+        else:
+            upper_h, upper_trial = middle_h, probe
+    else:
+        return None, 'midpoint_root_budget_exhausted'
+    if time_s+upper_h == time_s:
+        return None, 'midpoint_terminal_step_collapsed'
+    first, middle, final = (upper_trial[key] for key in
+                            ('first', 'second', 'final'))
+    if (first['ports'][side]['reference_flux_m_s'] >= 0 or
+            middle['ports'][side]['reference_flux_m_s'] >= 0 or
+            middle['ports'][side]['omega_rad_s'] >= 0 or
+            upper_trial['reels'][side][1] < 0 or
+            upper_trial['reels'][side][1] > RECAPTURE_MAX_OMEGA_RAD_S or
+            upper_trial['courant'] > episode.cfl_limit*(1+1e-12)):
+        return None, 'midpoint_terminal_stage_inadmissible'
+    accelerations = [rate['reel_rates'][side][1] for rate in
+                     (first, middle, final)]
+    sampled_min_accel = min(accelerations)
+    if sampled_min_accel <= RECAPTURE_MIN_SAMPLED_ACCEL_RAD_S2:
+        return None, 'turn_not_transverse_at_sampled_stages'
+    # A sampled guard and a numerical sliver estimate, not a rigorous
+    # enclosure of the continuum turning label or midpoint truncation error.
+    a_min = sampled_min_accel/2
+    omega_error = max(upper_trial['reels'][side][1],
+                      max(accelerations)*(upper_h-lower_h))
+    radius_max = max(rate['ports'][side]['radius_m'] for rate in
+                     (first, middle, final))
+    stretch_min = min(first['ports'][side]['retained_stretch'],
+                      middle['ports'][side]['retained_stretch'],
+                      final['ports'][side]['stretch'])
+    sliver = radius_max*omega_error**2/(2*stretch_min*a_min)
+    if sliver > RECAPTURE_MAX_SLIVER_M:
+        return None, 'turning_sliver_budget_exceeded'
+    cut = end.initial_local_cut_m+end.initial_reference_length_m-\
+        upper_trial['reels'][side][0]
+    transfer = -upper_h*middle['ports'][side]['reference_flux_m_s']
+    label_residual = (cut-old_cut)-transfer
+    if (cut < old_cut or abs(label_residual) > 1e-13 or
+            math.ulp(cut) > DONOR_RESTART_MAX_LABEL_ULP_M):
+        return None, 'turning_inventory_label_disagreement'
+    try:
+        active = _clip_active_records(records[side], cut)
+    except ValueError:
+        return None, 'turning_record_ownership_unresolved'
+    original_remaining = single._owned_energy(cut, records[side])
+    active_remaining = single._owned_energy(cut, active)
+    storage_residual = active_remaining-original_remaining
+    initial_energy = single._owned_energy(old_cut, records[side])
+    density = span.EA_N*(first['ports'][side]['retained_stretch']-1)**2/2
+    storage_flux_residual = (active_remaining-initial_energy-
+                             upper_h*middle['ports'][side]['reference_flux_m_s']*
+                             density)
+    if (abs(storage_residual) > DONOR_RESTART_MAX_STORAGE_RESIDUAL_J or
+            abs(storage_flux_residual) > DONOR_RESTART_MAX_STORAGE_RESIDUAL_J):
+        return None, 'turning_storage_ownership_residual_exceeded'
+    competing = [item for item in _supported_event_candidates(
+        start, upper_trial, episode, records, phases) if
+        (item['side'], item['kind']) != (side, 'reversal')]
+    if competing or any(rate['minimum_stretch'] <= 1 for rate in
+                        (first, middle, final)):
+        return None, 'competing_numerical_limit'
+    try:
+        _reject_unresolved_event(start, upper_trial, episode, records,
+                                 phases=phases, terminal_recapture_side=side)
+    except ValueError:
+        return None, 'terminal_stage_left_admissible_domain'
+    for other in ('left', 'right'):
+        if other != side and phases[other] == 'wind':
+            try:
+                _midpoint_winding_packet(other, first, middle,
+                    upper_trial['reels'], records[other], episode, upper_h)
+            except ValueError:
+                return None, 'other_winding_packet_unresolved'
+    # A forcing knot may end this trial just before another numerical limit.
+    # Check a disposable post-switch neighborhood with the newly owned store.
+    look_records = {**records, side: active}
+    look_phases = {**phases, side: 'wind'}
+    look_time = time_s+upper_h
+    look_end = min(episode.duration_s,
+                   look_time+EVENT_COINCIDENCE_TOLERANCE_S)
+    look_cells, look_reels = upper_trial['cells'], upper_trial['reels']
+    for _ in range(256):
+        if look_time >= look_end:
+            break
+        next_time = min((knot[0] for reel_end in (episode.left, episode.right)
+            for knot in reel_end.applied_torque_history
+            if look_time < knot[0] < look_end), default=look_end)
+        if next_time <= look_time:
+            return None, 'competing_probe_time_resolution_exhausted'
+        try:
+            look_start = _rates(look_cells, look_reels, look_time,
+                                look_records, episode, phases=look_phases)
+            look_trial = _advance(look_cells, look_reels, look_time,
+                                  next_time-look_time, look_records, episode,
+                                  look_phases)
+            _reject_unresolved_event(look_start, look_trial, episode,
+                                     look_records, phases=look_phases)
+        except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
+            return None, 'competing_numerical_limit_within_tolerance'
+        if (look_trial['courant'] > episode.cfl_limit*(1+1e-12) or
+                _supported_event_candidates(look_start, look_trial, episode,
+                                            look_records, look_phases)):
+            return None, 'competing_numerical_limit_within_tolerance'
+        look_cells, look_reels, look_time = (look_trial['cells'],
+                                            look_trial['reels'], next_time)
+    else:
+        return None, 'competing_probe_budget_exhausted'
+    return {'step_s': upper_h, 'trial': upper_trial,
+            'active_records': active,
+            'transition': {
+                'side': side, 'kind': 'release_to_wind',
+                'accepted_time_s': time_s+upper_h,
+                'midpoint_corrected_root_bracket_time_s':
+                    [time_s+lower_h, time_s+upper_h],
+                'midpoint_corrected_endpoint_omega_rad_s':
+                    upper_trial['reels'][side][1],
+                'sampled_acceleration_lower_guard_rad_s2': a_min,
+                'numerical_turning_sliver_estimate_m': sliver,
+                'turning_cut_label_m': cut,
+                'turning_label_inventory_residual_m': label_residual,
+                'active_storage_ownership_residual_j': storage_residual,
+                'terminal_old_material_storage_vs_midpoint_flux_residual_j':
+                    storage_flux_residual,
+                'event_time_interpretation':
+                    'midpoint_numerical_root_not_physical_event_time'}}, None
+
+
+def _state(time_s, cells, reels, records, heat, integrated, episode,
+           phases=None):
     dx = span.SPAN_LENGTH_M/episode.cell_count
     mass, momentum, energy = fv._integrals(cells, dx)
     ends = {}
@@ -302,10 +541,11 @@ def _state(time_s, cells, reels, records, heat, integrated, episode):
         end = getattr(episode, side)
         cut = end.initial_local_cut_m + end.initial_reference_length_m - length
         radius, inertia = geometry._geometry(length)
-        port = _local_port(cells, side, length, omega, end.phase,
+        phase = phases[side] if phases is not None else end.phase
+        port = _local_port(cells, side, length, omega, phase,
                            records[side], end)
         ends[side] = {
-            'phase': end.phase, 'local_cut_label_m': cut,
+            'phase': phase, 'local_cut_label_m': cut,
             'global_span_cut_label_m': (-cut if side == 'left' else cut),
             'reference_length_m': length, 'radius_m': radius,
             'inertia_kg_m2': inertia, 'angular_speed_rad_s': omega,
@@ -341,16 +581,30 @@ def _state(time_s, cells, reels, records, heat, integrated, episode):
 
 
 def _reject_unresolved_event(start, trial, episode, records,
-                             terminal_donor_side=None):
+                             terminal_donor_side=None, phases=None,
+                             terminal_recapture_side=None):
     for side in ('left', 'right'):
         end = getattr(episode, side)
         old_cut = start['ports'][side]['cut_label_m']
-        for rates in (trial['first'], trial['second'], trial['final']):
+        phase = phases[side] if phases is not None else end.phase
+        for stage_index, rates in enumerate((trial['first'], trial['second'],
+                                             trial['final'])):
             port = rates['ports'][side]
-            if (end.phase == 'wind' and
-                    (port['omega_rad_s'] <= 0 or port['reference_flux_m_s'] <= 0)):
-                raise ValueError('T2 two-reel unresolved phase reversal')
-            if (end.phase == 'release' and
+            if (side == terminal_recapture_side and stage_index == 2):
+                if (port['omega_rad_s'] < 0 or
+                        port['reference_flux_m_s'] < 0):
+                    raise ValueError('T2 two-reel recapture endpoint not winding')
+            elif phase == 'wind' and (port['omega_rad_s'] <= 0 or
+                                      port['reference_flux_m_s'] <= 0):
+                # An exactly represented transverse recapture may start its
+                # first ordinary winding step at zero. Both traces agree at
+                # zero; the later stages must wind strictly positive.
+                if not (stage_index == 0 and port['omega_rad_s'] == 0 and
+                        port['reference_flux_m_s'] == 0 and
+                        rates['reel_rates'][side][1] >
+                        RECAPTURE_MIN_SAMPLED_ACCEL_RAD_S2):
+                    raise ValueError('T2 two-reel unresolved phase reversal')
+            if (side != terminal_recapture_side and phase == 'release' and
                     (port['omega_rad_s'] >= 0 or port['reference_flux_m_s'] >= 0)):
                 raise ValueError('T2 two-reel unresolved phase reversal')
             depletion_margin = (0. if episode.event_policy != 'reject' else 1e-12)
@@ -358,7 +612,7 @@ def _reject_unresolved_event(start, trial, episode, records,
                                       depletion_margin):
                 raise ValueError('T2 two-reel inventory depletion')
             donor_margin = (0. if episode.event_policy != 'reject' else 1e-12)
-            if end.phase == 'release':
+            if phase == 'release' and side != terminal_recapture_side:
                 boundary = single._next_donor_boundary(records[side], old_cut)
                 if side == terminal_donor_side:
                     # The terminal old-donor branch may cross only this label.
@@ -396,7 +650,7 @@ def _reel_event_value(trial, side, kind, boundary=None):
     return min(_event_stage_margins(trial, side, kind, boundary))
 
 
-def _supported_event_candidates(start, trial, episode, records):
+def _supported_event_candidates(start, trial, episode, records, phases=None):
     """Return numerical stage or corrected-endpoint limit candidates."""
     candidates = []
     for side in ('left', 'right'):
@@ -404,13 +658,14 @@ def _supported_event_candidates(start, trial, episode, records):
         start_cut = start['ports'][side]['cut_label_m']
         stage = trial['second']
         final = trial['final']
-        sign = 1 if end.phase == 'wind' else -1
+        phase = phases[side] if phases is not None else end.phase
+        sign = 1 if phase == 'wind' else -1
         stage_omega = sign*stage['ports'][side]['omega_rad_s']
         final_omega = sign*trial['reels'][side][1]
         if min(stage_omega, final_omega) <= 0:
             candidates.append({'side': side, 'kind': 'reversal',
                                'boundary': None, 'unit': 'rad/s'})
-        if end.phase == 'release':
+        if phase == 'release':
             boundary = single._next_donor_boundary(records[side], start_cut)
             stage_cut = stage['ports'][side]['cut_label_m']
             final_cut = final['ports'][side]['cut_label_m']
@@ -419,7 +674,7 @@ def _supported_event_candidates(start, trial, episode, records):
                     candidates.append({'side': side, 'kind': 'donor_boundary',
                                        'boundary': boundary,
                                        'unit': 'reference m'})
-        if (end.phase == 'release' and
+        if (phase == 'release' and
                 min(trial['predicted_reels'][side][0],
                     trial['reels'][side][0]) <= DEPLETION_PROXIMITY_M):
             candidates.append({'side': side, 'kind': 'depletion',
@@ -435,7 +690,7 @@ def _supported_event_candidates(start, trial, episode, records):
 
 
 def _locate_reel_event(cells, reels, records, time_s, h, episode,
-                       candidate, upper_trial):
+                       candidate, upper_trial, phases=None):
     """Bisect one signed root using complete coupled trials from one state."""
     side, kind, boundary = (candidate[key] for key in
                             ('side', 'kind', 'boundary'))
@@ -444,7 +699,8 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     first = upper_trial['first']
     lower_value = (first['minimum_stretch']-1 if kind == 'tension_zero' else
         reels[side][0]-DEPLETION_PROXIMITY_M if kind == 'depletion' else
-        (1 if getattr(episode, side).phase == 'wind' else -1)*reels[side][1]
+        (1 if ((phases[side] if phases is not None else
+                getattr(episode, side).phase) == 'wind') else -1)*reels[side][1]
         if kind == 'reversal' else
         boundary-first['ports'][side]['cut_label_m'])
     upper_value = _reel_event_value(upper_trial, side, kind, boundary)
@@ -455,7 +711,7 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
         if upper_h-lower_h <= EVENT_BRACKET_TOLERANCE_S:
             break
         middle = (lower_h+upper_h)/2
-        probe = _advance(cells, reels, time_s, middle, records, episode)
+        probe = _advance(cells, reels, time_s, middle, records, episode, phases)
         value = _reel_event_value(probe, side, kind, boundary)
         if value > 0:
             lower_h, lower_value, lower_trial = middle, value, probe
@@ -473,7 +729,8 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     if kind in ('donor_boundary', 'reversal'):
         def corrected_margin(probe):
             if kind == 'reversal':
-                sign = 1 if getattr(episode, side).phase == 'wind' else -1
+                sign = 1 if ((phases[side] if phases is not None else
+                              getattr(episode, side).phase) == 'wind') else -1
                 return sign*probe['reels'][side][1]
             return boundary-probe['final']['ports'][side]['cut_label_m']
 
@@ -485,13 +742,15 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
             corrected_lower_h, corrected_upper_h = 0., h
             corrected_lower = (boundary-first['ports'][side]['cut_label_m']
                 if kind == 'donor_boundary' else
-                (1 if getattr(episode, side).phase == 'wind' else -1)*
+                (1 if ((phases[side] if phases is not None else
+                        getattr(episode, side).phase) == 'wind') else -1)*
                 reels[side][1])
             for _ in range(48):
                 if corrected_upper_h-corrected_lower_h <= EVENT_BRACKET_TOLERANCE_S:
                     break
                 middle = (corrected_lower_h+corrected_upper_h)/2
-                probe = _advance(cells, reels, time_s, middle, records, episode)
+                probe = _advance(cells, reels, time_s, middle, records,
+                                 episode, phases)
                 margin = corrected_margin(probe)
                 if margin > 0:
                     corrected_lower_h, corrected_lower = middle, margin
@@ -527,7 +786,7 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
 
 
 def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
-                             start, side, boundary, full_trial):
+                             start, side, boundary, full_trial, phases=None):
     """Return a one-sided corrected Heun crossing with bounded label error."""
     end = getattr(episode, side)
     old_cut = start['ports'][side]['cut_label_m']
@@ -550,7 +809,8 @@ def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
         if middle == lower_h or middle == upper_h:
             return None, 'insufficient_terminal_label_resolution'
         try:
-            probe = _advance(cells, reels, time_s, middle, records, episode)
+            probe = _advance(cells, reels, time_s, middle, records,
+                             episode, phases)
         except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
             return None, 'terminal_probe_left_admissible_domain'
         if probe['final']['ports'][side]['cut_label_m'] < boundary:
@@ -575,7 +835,7 @@ def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
             DONOR_RESTART_MAX_LABEL_ULP_M):
         return None, 'insufficient_terminal_label_resolution'
     competing = [item for item in _supported_event_candidates(
-        start, upper_trial, episode, records) if (item['side'], item['kind']) !=
+        start, upper_trial, episode, records, phases) if (item['side'], item['kind']) !=
         (side, 'donor_boundary')]
     if competing:
         return None, 'competing_numerical_limit'
@@ -610,14 +870,14 @@ def _terminal_internal_donor(cells, reels, records, time_s, h, episode,
             if look_time < knot[0] < look_end), default=look_end)
         try:
             look_start = _rates(look_cells, look_reels, look_time,
-                                records, episode)
+                                records, episode, phases=phases)
             look_trial = _advance(look_cells, look_reels, look_time,
-                                  next_time-look_time, records, episode)
+                                  next_time-look_time, records, episode, phases)
         except (_TrialCompressionLimit, _TrialDepletionLimit, ValueError):
             return None, 'competing_numerical_limit_within_tolerance'
         if (look_trial['courant'] > episode.cfl_limit*(1+1e-12) or
                 _supported_event_candidates(look_start, look_trial,
-                                            episode, records)):
+                                            episode, records, phases)):
             return None, 'competing_numerical_limit_within_tolerance'
         look_cells, look_reels, look_time = (look_trial['cells'],
                                             look_trial['reels'], next_time)
@@ -670,13 +930,15 @@ def run_two_reel_episode(episode: TwoReelEpisode):
              for side in ('left', 'right')}
     records = {side: list(getattr(episode, side).initial_records)
                for side in ('left', 'right')}
+    phases = {side: getattr(episode, side).phase for side in ('left', 'right')}
     heat = {'left': 0., 'right': 0.}
     integrated = {'left_mass_flux': 0., 'right_mass_flux': 0.}
     for side in ('left', 'right'):
         integrated[side] = {'drive_work': 0., 'angular_rhs': 0.,
                             'outward_energy': 0., 'stored_flux': 0.}
     time_s = 0.
-    initial = _state(time_s, cells, reels, records, heat, integrated, episode)
+    initial = _state(time_s, cells, reels, records, heat, integrated,
+                     episode, phases)
     accepted = [initial]
     snapshots = [initial]
     events = []
@@ -690,11 +952,24 @@ def run_two_reel_episode(episode: TwoReelEpisode):
     while time_s < episode.duration_s-1e-13:
         if len(accepted) > 12000:
             raise ValueError('T2 two-reel exceeded accepted-step budget')
-        start = _rates(cells, reels, time_s, records, episode)
+        start = _rates(cells, reels, time_s, records, episode, phases=phases)
         if start['minimum_stretch'] <= 1:
             raise ValueError('T2 two-reel initial or committed slack')
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'],
                                          start['minimum_stretch'])
+        zero_winding_sides = tuple(side for side in ('left', 'right')
+            if phases[side] == 'wind' and reels[side][1] == 0)
+        if any(start['reel_rates'][side][1] <=
+               RECAPTURE_MIN_SAMPLED_ACCEL_RAD_S2 for side in
+               zero_winding_sides):
+            events = [{'side': side, 'kind': 'reversal',
+                'root_basis': 'accepted_zero_winding_start',
+                'restart_attempt_status': 'no_positive_winding_acceleration',
+                'event_time_interpretation':
+                    'numerical_feasible_stop_not_physical_event_time',
+                'feasible_stop_time_s': time_s} for side in zero_winding_sides]
+            outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
+            break
         near_donor = []
         if episode.event_policy != 'reject':
             if start['minimum_stretch']-1 <= 1e-12:
@@ -712,7 +987,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'numerical_proximity_not_physical_event_time',
                     'feasible_stop_time_s': time_s})
             for side in ('left', 'right'):
-                if getattr(episode, side).phase != 'release':
+                if phases[side] != 'release':
                     continue
                 cut = start['ports'][side]['cut_label_m']
                 boundary = single._next_donor_boundary(records[side], cut)
@@ -772,23 +1047,52 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         h = min(episode.duration_s-time_s, knot-time_s,
                 .99*episode.cfl_limit*dx/start['maximum_signal_m_s'])
         if h <= 1e-13:
+            if zero_winding_sides:
+                events = [{'side': side, 'kind': 'reversal',
+                    'root_basis': 'bounded_zero_winding_startup_retry',
+                    'restart_attempt_status':
+                        'no_representable_positive_startup_step',
+                    'event_time_interpretation':
+                        'numerical_feasible_stop_not_physical_event_time',
+                    'feasible_stop_time_s': time_s}
+                    for side in zero_winding_sides]
+                outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
+                break
             raise ValueError('T2 two-reel step collapsed')
-        for _ in range(20):
+        accepted_trial = False
+        for _ in range(40 if zero_winding_sides else 20):
             try:
-                trial = _advance(cells, reels, time_s, h, records, episode)
+                trial = _advance(cells, reels, time_s, h, records,
+                                 episode, phases)
             except (_TrialCompressionLimit, _TrialDepletionLimit):
-                h /= 2
-                if h <= 1e-13:
-                    raise ValueError('T2 two-reel bounded probe collapsed')
-                continue
-            if trial['courant'] <= episode.cfl_limit*(1+1e-12):
+                trial = None
+            if (trial is not None and
+                    trial['courant'] <= episode.cfl_limit*(1+1e-12) and
+                    all(all(rate['ports'][side]['omega_rad_s'] > 0 and
+                                rate['ports'][side]['reference_flux_m_s'] > 0
+                            for rate in (trial['second'], trial['final']))
+                        for side in zero_winding_sides)):
+                accepted_trial = True
                 break
             h /= 2
-        else:
+            if h <= 1e-13:
+                break
+        if not accepted_trial and zero_winding_sides:
+            events = [{'side': side, 'kind': 'reversal',
+                'root_basis': 'bounded_zero_winding_startup_retry',
+                'restart_attempt_status': 'no_representable_positive_startup_step',
+                'event_time_interpretation':
+                    'numerical_feasible_stop_not_physical_event_time',
+                'feasible_stop_time_s': time_s} for side in zero_winding_sides]
+            outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
+            break
+        if not accepted_trial:
             raise ValueError('T2 two-reel CFL retry budget exhausted')
         transition_candidate = None
+        terminal_recapture_records = None
         if episode.event_policy != 'reject':
-            candidates = _supported_event_candidates(start, trial, episode, records)
+            candidates = _supported_event_candidates(start, trial, episode,
+                                                      records, phases)
             if near_donor:
                 proximity = near_donor[0]
                 side, boundary = proximity['side'], proximity['boundary']
@@ -798,11 +1102,11 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                 if not competing:
                     terminal, restart_status = _terminal_internal_donor(
                         cells, reels, records, time_s, h, episode, start,
-                        side, boundary, trial)
+                        side, boundary, trial, phases)
                 if terminal is not None:
                     try:
                         _reject_unresolved_event(start, terminal['trial'],
-                            episode, records, side)
+                            episode, records, side, phases)
                     except ValueError:
                         restart_status = 'terminal_stage_left_admissible_domain'
                     else:
@@ -816,7 +1120,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             elif candidates:
                 located = [_locate_reel_event(
                     cells, reels, records, time_s, h, episode,
-                    candidate, trial) for candidate in candidates]
+                    candidate, trial, phases) for candidate in candidates]
                 selected = min(located, key=lambda item: item['feasible_step_s'])
                 grouped = [item for item in located if
                     item['bracket_time_s'][0] <=
@@ -828,16 +1132,28 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         selected['kind'] == 'donor_boundary'):
                     terminal, restart_status = _terminal_internal_donor(
                         cells, reels, records, time_s, h, episode, start,
-                        selected['side'], selected['boundary'], trial)
+                        selected['side'], selected['boundary'], trial, phases)
                     if terminal is not None:
                         try:
                             _reject_unresolved_event(start, terminal['trial'],
-                                episode, records, selected['side'])
+                                episode, records, selected['side'], phases)
                         except ValueError:
                             restart_status = 'terminal_stage_left_admissible_domain'
                         else:
                             h, trial = terminal['step_s'], terminal['trial']
                             transition_candidate = terminal['transition']
+                if (episode.event_policy == CONTINUE_ISOLATED_RECAPTURE and
+                        not transitions and len(grouped) == 1 and
+                        selected['kind'] == 'reversal' and
+                        selected['side'] in ('left', 'right') and
+                        phases[selected['side']] == 'release'):
+                    terminal, restart_status = _terminal_recapture(
+                        cells, reels, records, time_s, h, episode, phases,
+                        start, selected['side'])
+                    if terminal is not None:
+                        h, trial = terminal['step_s'], terminal['trial']
+                        transition_candidate = terminal['transition']
+                        terminal_recapture_records = terminal['active_records']
                 if transition_candidate is None:
                     h, trial = (selected['feasible_step_s'],
                                 selected['feasible_trial'])
@@ -866,42 +1182,58 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                             bracket = item[f'{prefix}_bracket_time_s']
                             events[-1][f'{prefix}_gap_after_feasible_stop_s'] = (
                                 bracket[0]-(time_s+h) if bracket is not None else None)
-                        if (episode.event_policy == CONTINUE_ISOLATED_DONOR and
-                                item is selected and item['kind'] == 'donor_boundary'):
+                        if (episode.event_policy in (CONTINUE_ISOLATED_DONOR,
+                                CONTINUE_ISOLATED_RECAPTURE) and item is selected and
+                                item['kind'] in ('donor_boundary', 'reversal')):
                             events[-1]['restart_attempt_status'] = (
                                 restart_status or 'additional_or_competing_limit')
                     outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')
         _reject_unresolved_event(start, trial, episode, records,
-            transition_candidate['side'] if transition_candidate else None)
+            transition_candidate['side'] if transition_candidate and
+                transition_candidate['kind'] == 'internal_donor_restart' else None,
+            phases, transition_candidate['side'] if transition_candidate and
+                transition_candidate['kind'] == 'release_to_wind' else None)
         first, second = trial['first'], trial['second']
+        quadrature = ((second, 1.),) if trial['quadrature'] == \
+            'midpoint_terminal' else ((first, .5), (second, .5))
         old_mass, old_momentum, _ = fv._integrals(cells, dx)
         for side in ('left', 'right'):
-            first_port, second_port = (rate['ports'][side] for rate in (first, second))
-            for name, values in (
-                ('drive_work', (first['drive_powers'][side],
-                                second['drive_powers'][side])),
-                ('angular_rhs', (first['angular_rhs'][side],
-                                 second['angular_rhs'][side])),
-                ('outward_energy', (first_port['outward_energy_flux_w'],
-                                    second_port['outward_energy_flux_w'])),
-                ('stored_flux', (first_port['stored_strain_flux_w'],
-                                 second_port['stored_strain_flux_w']))):
-                integrated[side][name] += h*sum(values)/2
-            heat[side] += h*(first_port['dissipated_power_w']+
-                             second_port['dissipated_power_w'])/2
+            for name, field in (('drive_work', 'drive_powers'),
+                                ('angular_rhs', 'angular_rhs')):
+                integrated[side][name] += h*sum(
+                    weight*rate[field][side] for rate, weight in quadrature)
+            for name, field in (('outward_energy', 'outward_energy_flux_w'),
+                                ('stored_flux', 'stored_strain_flux_w')):
+                integrated[side][name] += h*sum(
+                    weight*rate['ports'][side][field]
+                    for rate, weight in quadrature)
+            heat[side] += h*sum(weight*rate['ports'][side]['dissipated_power_w']
+                                for rate, weight in quadrature)
         for side, factor in (('left', -1), ('right', 1)):
-            integrated[side+'_mass_flux'] += h*factor*(
-                first['ports'][side]['reference_flux_m_s']+
-                second['ports'][side]['reference_flux_m_s'])/2
+            integrated[side+'_mass_flux'] += h*factor*sum(
+                weight*rate['ports'][side]['reference_flux_m_s']
+                for rate, weight in quadrature)
         cells, reels = trial['cells'], trial['reels']
         time_s += h
         for side in ('left', 'right'):
             end = getattr(episode, side)
             old_cut = first['ports'][side]['cut_label_m']
             new_cut = end.initial_local_cut_m + end.initial_reference_length_m - reels[side][0]
-            if end.phase == 'wind':
+            if terminal_recapture_records is not None and side == \
+                    transition_candidate['side']:
+                records[side] = terminal_recapture_records
+                phases[side] = 'wind'
+            elif phases[side] == 'wind':
+                if trial['quadrature'] == 'midpoint_terminal':
+                    packet, discrepancy = _midpoint_winding_packet(
+                        side, first, second, reels, records[side], episode, h)
+                    if packet is not None:
+                        records[side].append(packet)
+                    transition_candidate[
+                        'other_winding_packet_storage_residual_j'] = discrepancy
+                    continue
                 stage_one = {'port': {'reference_flux_m_s':
                                       first['ports'][side]['reference_flux_m_s'],
                                       'span_stretch': first['ports'][side]['stretch']}}
@@ -913,7 +1245,8 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                 records[side].extend(packets)
             elif new_cut < old_cut-1e-12:
                 raise ValueError('T2 two-reel release ownership reversed')
-        state = _state(time_s, cells, reels, records, heat, integrated, episode)
+        state = _state(time_s, cells, reels, records, heat, integrated,
+                       episode, phases)
         new_mass, new_momentum = state['span_mass_kg'], state['span_momentum_kg_m_s']
         maximum['courant'] = max(maximum['courant'], trial['courant'])
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'], *(
@@ -921,12 +1254,12 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'], *(
             state['ends'][side]['span_stretch'] for side in ('left', 'right')))
         maximum['mass'] = max(maximum['mass'], abs(new_mass-old_mass+
-            span.REFERENCE_LINE_MASS_KG_M*h*((first['right_flux'][0]+
-                second['right_flux'][0]-first['left_flux'][0]-
-                second['left_flux'][0])/2)))
+            span.REFERENCE_LINE_MASS_KG_M*h*sum(weight*(
+                rate['right_flux'][0]-rate['left_flux'][0])
+                for rate, weight in quadrature)))
         maximum['momentum'] = max(maximum['momentum'], abs(new_momentum-old_momentum+
-            h*((first['right_flux'][1]+second['right_flux'][1]-
-                first['left_flux'][1]-second['left_flux'][1])/2)))
+            h*sum(weight*(rate['right_flux'][1]-rate['left_flux'][1])
+                  for rate, weight in quadrature)))
         initial_mass = initial['span_mass_kg']+span.REFERENCE_LINE_MASS_KG_M*sum(
             initial['ends'][side]['reference_length_m'] for side in ('left', 'right'))
         current_mass = new_mass+span.REFERENCE_LINE_MASS_KG_M*sum(
@@ -961,7 +1294,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             for item in events:
                 item['feasible_stop_time_s'] = time_s
                 if item['side'] in ('left', 'right'):
-                    item['phase'] = getattr(episode, item['side']).phase
+                    item['phase'] = phases[item['side']]
                     item['active_retained_stretch'] = start['ports'][item['side']][
                         'retained_stretch']
         while (observation_index < len(episode.observation_times_s) and
@@ -981,6 +1314,12 @@ def run_two_reel_episode(episode: TwoReelEpisode):
     return {'model_id': MODEL_ID, 'mode': 'preengaged_two_reel_elastic_span',
             'episode_outcome': outcome, 'event_policy': episode.event_policy,
             'events': events, 'transitions': transitions,
+            'original_initial_records': {side: [
+                {'low_label_m': item.low_label_m,
+                 'high_label_m': item.high_label_m,
+                 'retained_stretch': item.retained_stretch}
+                for item in getattr(episode, side).initial_records]
+                for side in ('left', 'right')},
             'torque_role': 'prescribed_time_only_input',
             'span_and_reel_speed_role': 'predicted_from_coupled_dynamics',
             'pickup_closure_role': 'idealized_dissipative_not_physically_validated',
@@ -1000,6 +1339,8 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                             'tautness and unsupported reel limits stop on the feasible side',
                             ('only one isolated internal donor restart supported'
                              if episode.event_policy == CONTINUE_ISOLATED_DONOR else
+                             'only one isolated release-to-wind recapture supported'
+                             if episode.event_policy == CONTINUE_ISOLATED_RECAPTURE else
                              'event continuation rejected'),
-                            'phase changes, slack and post-depletion evolution rejected',
+                            'other phase changes, slack and post-depletion evolution rejected',
                             'no rolling contact or calibrated material data']}

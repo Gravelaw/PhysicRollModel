@@ -132,6 +132,26 @@ def main():
             "and len(result['events'])==2 "
             "and result['maximum_new_strain_ownership_defect_j']<1e-14",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "import math; "
+            "from physicroll.transient_t2 import WoundRecord; "
+            "from physicroll.transient_t2_two_reel import "
+            "ReelEnd, TwoReelEpisode, run_two_reel_episode, CONTINUE_ISOLATED_RECAPTURE; "
+            "from physicroll.transient_t2a5 import _conserved; "
+            "radius=math.sqrt(.1**2+.001/math.pi); "
+            "cut=1/1.001-.5; "
+            "left=ReelEnd(cut,1.,.01/radius,(WoundRecord(cut,cut+1,1.001),),"
+            "((0.,.001),(.005,.001)),'wind'); "
+            "right=ReelEnd(.5,1.,-.01,(WoundRecord(.5,1.5,1.02),),"
+            "((0.,.1),(.005,.1)),'release'); "
+            "case=TwoReelEpisode(64,.005,tuple(_conserved(1.001,-.01) for _ in range(64)),"
+            "left,right,event_policy=CONTINUE_ISOLATED_RECAPTURE); "
+            "result=run_two_reel_episode(case); "
+            "assert result['episode_outcome']=='COMPLETED_DECLARED_DURATION' "
+            "and [(e['side'],e['kind']) for e in result['transitions']]"
+            "==[('right','release_to_wind')]",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
