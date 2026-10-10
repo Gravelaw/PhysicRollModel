@@ -1,13 +1,15 @@
 # T2A fixed-geometry shaft and elastic-span benchmark candidate
 
 **Status:** the independently reviewed, fixed-inertia massless-span **T2A1**
-benchmark is executable in `physicroll/transient_t2a1.py`. Its torque-driven
+benchmark is executable in `physicroll/transient_t2a1.py`; the restricted
+fixed-material bar/shaft **T2A2** benchmark is executable in
+`physicroll/transient_t2a2.py`. T2A1's torque-driven
 midpoint states, analytic first-zero event detection, prescribed-motion
-reaction torques and work diagnostics pass closed-form checks. The massive-bar
-and partitioned-coupling cases below remain design candidates; T2A1 has no
-public RunSpec/restart integration yet. T2A is a closed local perturbation
-problem. It has no material
-entering/leaving the span, changing reel radius, running-web inventory, roll
+reaction torques and work diagnostics pass closed-form checks. The fixed-end
+bar pulse and partitioned-coupling cases remain design candidates; neither subset
+has public RunSpec/restart integration. T2A is a closed local perturbation
+problem. It has no material entering/leaving the span, changing reel radius,
+running-web inventory, roll
 bite or strip contact. Passing it will not complete T2 or qualify a mill.
 
 This restricted stage tests the dynamic and coupling machinery needed by the
@@ -161,8 +163,8 @@ speeds zero, constant balancing torques). A monolithic linear step is the
 reference. Iterate interface tension and surface speed until consecutive
 iterates differ by at most `10⁻¹⁰ N` and `10⁻¹⁰ m/s`; compare accepted
 angles within `10⁻⁸ rad` and interface work within `10⁻⁸ J` at every
-resolution. Bar-to-shaft coupling needs a separately frozen full-system
-reference before that case can be coded or claimed as passed.
+resolution. The monolithic massive-bar/shaft case uses the separately frozen
+continuum reference below; partitioned massive-bar coupling remains gated.
 The first integrator candidate is undamped implicit midpoint; a separate
 average-acceleration Newmark formulation may be compared under the common
 constant-load cases. Record the exact
@@ -178,3 +180,84 @@ variable-mass reel angular-momentum and energy flux, ownership of span/reel/
 shaft mass and compliance, damping/slack transitions, and independent
 variable-mass benchmark outputs. T3 retains its separate full 3D and dynamic
 roll/stand gates.
+
+## Frozen T2A2 coupled massive-bar reference (2026-10-10)
+
+Independent formulation review selected a **fixed-material**, monolithic
+bar-to-shaft comparison before any moving-span solver. This is T2A2, not a
+claim of full T2. The bar owns its consistent mass; the two shafts contribute
+only endpoint masses `m_i=J_i/R_i²`. With constant equilibrium tension `T0`,
+balancing shaft torques are `(-R1 T0,+R2 T0)`. For perturbations `u` and
+`δτ`, the continuum equations and endpoint conditions are
+
+```text
+ρA u_tt = EA u_xx
+m1 u_tt(0) = δτ1/R1 + EA u_x(0)
+m2 u_tt(L) = δτ2/R2 − EA u_x(L).
+```
+
+The perturbation energy is half the integral of `ρA u_t²+EA u_x²` plus
+`½m1 u_t(0)²+½m2 u_t(L)²`; its rate equals
+`δτ1 θ̇1+δτ2 θ̇2`. Bar and shaft interface powers cancel. Do not count
+equilibrium balancing-torque work again in this perturbation ledger.
+
+For zero perturbation drive, a continuum mode `U(x) cos(ωt)` has
+`k=ω/sqrt(E/ρ)`, `z=kL`, and `μ_i=m_i/(ρAL)`. Its nonzero frequencies solve
+`(1−μ1μ2 z²)sin(z)+(μ1+μ2)z cos(z)=0`, with mode shape
+`U(x)=C[cos(kx)−μ1 z sin(kx)]`. A rigid translation is the zero mode.
+For `L=1 m`, `E=100 kPa`, `ρ=1000 kg/m³`, `A=0.01 m²`,
+`R1=R2=0.1 m`, `J1=J2=1 kg m²`, and `T0=1 N`, the first positive
+root is `z=0.4435207878818884`, `ω=4.4352078788188845 rad/s`, and
+one period is `1.4166608372937926 s`. Normalize the mode to maximum
+displacement `10⁻⁶ m`; its analytic maximum tension perturbation is below
+`0.0021 N`, so this benchmark stays taut. Initial velocity is zero.
+Run one analytic period with linear elements and consistent mass at
+`(elements, maximum step_s)=(16,0.003125),(32,0.0015625),
+(64,0.00078125)`. The final fractional step lands exactly on the period.
+These are design comparisons, not physical accuracy claims. At the finest
+resolution require normalized RMS displacement error `≤3×10⁻³`, normalized
+RMS perturbation-tension error `≤5×10⁻³`, endpoint angle error
+`≤3×10⁻⁸ rad`, endpoint speed error `≤3×10⁻⁷ rad/s`, and phase error
+`≤3×10⁻³ rad`, with decreasing field and phase errors over all three grids.
+Require scaled perturbation-energy/work defect `≤10⁻⁹`, endpoint interface
+**work** cancellation `≤10⁻¹² J` per step, and every accepted element tension
+positive. Rigid translation must produce zero strain, constant velocity and
+the combined mass `ρAL+m1+m2=210 kg` to `10⁻¹⁰` relative. Allow at most
+64 elements, 2000 steps, 256 MiB and 60 s on one CI runner. A separately
+bracketed scalar continuum root, not an assembled-matrix eigenpair, is the
+frequency oracle. The older fixed-end pulse and partitioned tests remain
+separate gates. The displacement RMS uses all nodes at every accepted time,
+divided by `10⁻⁶ m`. The tension RMS uses element midpoints at those times,
+divided by the continuum mode's maximum perturbation-tension magnitude
+`EA×10⁻⁶×k sqrt(1+(μ1 z)²)`. The phase error is the wrapped difference
+between `atan2(−u̇(0)/(ωa),u(0)/a)` and `ωt`, over accepted times. The
+per-step interface-work residual sums the bar and shaft endpoint forces
+times the same midpoint endpoint displacement increment. No fitted
+frequency from the numerical trajectory is used as the oracle.
+
+## Moving-material formulation gate
+
+For a moving control surface with velocity `v_b`, outward mass flux is
+`j=ρ(v−v_b)·n`. Its mass, linear-momentum and angular-momentum balances
+contain outward fluxes `j`, `j v` and `j(r×v)`, respectively. Mechanical
+energy must transport kinetic and recoverable strain energy and account for
+traction/shaft power and dissipation. The angular-momentum origin is fixed
+and inertial. A winding strip's incoming state therefore includes velocity
+and strain/internal state, not only material identity.
+
+A restricted **reel-only** check uses a constant-density annulus of width
+`w`, core radius `Rc`, and outer radius `R`:
+`J=Jcore+ρπw(R⁴−Rc⁴)/2` and `J̇=R² ṁ` for signed inward mass rate.
+The open control-volume balance is
+`d(Jω)/dt=τext+ṁ R vθ`. Ideal no-slip transfer `vθ=Rω` cancels the
+`J̇ω` term, yielding `Jω̇=τext`. At constant `ω` and zero net external
+torque, `d(½Jω²)/dt=½ṁ(Rω)²` checks kinetic-energy flux. This isolated
+identity does not close the moving span or winding tension/compaction.
+The moving material coordinate, boundary cuts, transfer strain, flow
+reversal, and slack behavior must be frozen before implementing coupled
+reels. [Yan (2020)](https://www.intechopen.com/chapters/68827) provides a
+published web/reel model and span continuity relations under its stated
+small-strain/no-slip assumptions, but its written `d(Jω)/dt` reel equation
+does not explicitly show this angular-momentum flux. The reference above
+is an independent control-volume derivation, not an adoption of that
+published reel equation.

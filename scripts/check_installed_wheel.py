@@ -68,6 +68,14 @@ def main():
             "assert result['episode_outcome']=='TERMINATED_TENSION_LOSS' "
             "and result['shaft_speed_role']=='predicted_from_applied_torque'",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a2 import T2A2Case, run_coupled_bar; "
+            "result=run_coupled_bar(T2A2Case(16,.003125)); "
+            "assert result['episode_outcome']=='COMPLETED_REQUESTED_DURATION' "
+            "and result['bar_material_role']=='fixed_material_no_flux' "
+            "and result['maximum_energy_defect_j']<1e-18",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
