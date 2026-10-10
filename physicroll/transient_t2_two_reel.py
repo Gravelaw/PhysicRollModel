@@ -429,6 +429,7 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     """Bisect one signed root using complete coupled trials from one state."""
     side, kind, boundary = (candidate[key] for key in
                             ('side', 'kind', 'boundary'))
+    full_trial = upper_trial
     lower_h, upper_h = 0., h
     first = upper_trial['first']
     lower_value = (first['minimum_stretch']-1 if kind == 'tension_zero' else
@@ -458,7 +459,36 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     limiting_corrected = corrected_value <= 0
     limit_source = ('both' if limiting_stage and limiting_corrected else
                     'predictor_stage' if limiting_stage else 'corrected_endpoint')
-    return {**candidate, 'root_basis': 'heun_numerical_admissibility',
+    corrected_arrival = {}
+    if kind == 'donor_boundary':
+        corrected_upper = (boundary-full_trial['final']['ports'][side][
+            'cut_label_m'])
+        if corrected_upper <= 0:
+            corrected_lower_h, corrected_upper_h = 0., h
+            corrected_lower = boundary-first['ports'][side]['cut_label_m']
+            for _ in range(48):
+                if corrected_upper_h-corrected_lower_h <= EVENT_BRACKET_TOLERANCE_S:
+                    break
+                middle = (corrected_lower_h+corrected_upper_h)/2
+                probe = _advance(cells, reels, time_s, middle, records, episode)
+                margin = boundary-probe['final']['ports'][side]['cut_label_m']
+                if margin > 0:
+                    corrected_lower_h, corrected_lower = middle, margin
+                else:
+                    corrected_upper_h, corrected_upper = middle, margin
+            corrected_arrival = {
+                'corrected_arrival_status': 'bracketed_in_complete_trial',
+                'corrected_arrival_bracket_time_s':
+                    [time_s+corrected_lower_h, time_s+corrected_upper_h],
+                'corrected_arrival_lower_margin_m': corrected_lower,
+                'corrected_arrival_upper_margin_m': corrected_upper}
+        else:
+            corrected_arrival = {
+                'corrected_arrival_status': 'not_bracketed_in_complete_trial',
+                'corrected_arrival_bracket_time_s': None,
+                'corrected_arrival_upper_margin_m': corrected_upper}
+    return {**candidate, **corrected_arrival,
+            'root_basis': 'heun_numerical_admissibility',
             'limit_source': limit_source,
             'localized_upper_stage_location': (
                 upper_trial['second']['minimum_stretch_location']
@@ -624,6 +654,10 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'corrected_margin_at_shared_stop': corrected_margin,
                         'grouping_interpretation':
                             'numerical_only_not_physical_simultaneity'})
+                    if item['kind'] == 'donor_boundary':
+                        bracket = item['corrected_arrival_bracket_time_s']
+                        events[-1]['corrected_arrival_gap_after_feasible_stop_s'] = (
+                            bracket[0]-(time_s+h) if bracket is not None else None)
                 outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')

@@ -113,6 +113,113 @@ def affine_two_release_case(count=64, duration=.055, torque_knots=100,
 
 
 class TwoReelTests(unittest.TestCase):
+    def test_corrected_donor_arrival_has_separate_constant_flow_oracle(self):
+        for count in (64, 128, 256):
+            for reflected in (False, True):
+                with self.subTest(cells=count, reflected=reflected):
+                    base = case(count, duration=.06, reflected=reflected)
+                    side = 'right' if reflected else 'left'
+                    release = getattr(base, side)
+                    cut = release.initial_local_cut_m
+                    boundary = cut+.0037
+                    end = replace(release, initial_records=(
+                        one.WoundRecord(boundary, cut+1., 1.02),
+                        one.WoundRecord(cut, boundary, 1.01)))
+                    result = two.run_two_reel_episode(replace(base,
+                        **{side: end},
+                        event_policy='stop_at_numerical_admissibility_limit'))
+                    event = result['events'][0]
+                    self.assertEqual((event['side'], event['kind']),
+                                     (side, 'donor_boundary'))
+                    self.assertEqual(event['corrected_arrival_status'],
+                                     'bracketed_in_complete_trial')
+                    lower, upper = event['corrected_arrival_bracket_time_s']
+                    self.assertLessEqual(lower, upper)
+                    self.assertLess(upper-lower, 1e-11)
+                    self.assertGreater(event['corrected_arrival_lower_margin_m'],
+                                       0.)
+                    self.assertLessEqual(event['corrected_arrival_upper_margin_m'],
+                                         0.)
+                    self.assertAlmostEqual((lower+upper)/2, .037,
+                                           delta=2e-8)
+                    self.assertLessEqual(result['accepted_states'][-1]['time_s'],
+                                         upper)
+                    self.assertLess(result['maximum_combined_energy_defect_j'],
+                                    1e-8)
+
+    def test_affine_competing_donor_arrival_estimate_uses_corrected_state(self):
+        exact_time = (1.01-1/(1/1.01+2*.002))/.2
+        def arrival(count, cfl):
+            base = affine_two_release_case(count=count, cfl=cfl)
+            cut = base.left.initial_local_cut_m
+            def end(distance):
+                boundary = cut+distance
+                return replace(base.left, initial_records=(
+                    one.WoundRecord(boundary, cut+1., 1.02),
+                    one.WoundRecord(cut, boundary, 1.01)))
+            result = two.run_two_reel_episode(replace(base,
+                left=end(.002), right=end(.003)))
+            event = result['events'][0]
+            self.assertEqual((event['side'], event['kind']),
+                             ('left', 'donor_boundary'))
+            self.assertEqual(event['corrected_arrival_status'],
+                             'bracketed_in_complete_trial')
+            lower, upper = event['corrected_arrival_bracket_time_s']
+            self.assertLessEqual(result['accepted_states'][-1]['time_s'], upper)
+            self.assertLess(result['maximum_combined_energy_defect_j'], 1e-8)
+            return abs((lower+upper)/2-exact_time)
+        spatial = [arrival(n, span.CFL_LIMIT) for n in (64, 128, 256)]
+        temporal = [spatial[0]] + [arrival(64, cfl) for cfl in
+                                   (span.CFL_LIMIT/2, span.CFL_LIMIT/4)]
+        for errors in (spatial, temporal):
+            self.assertLess(errors[2], errors[1])
+            self.assertLess(errors[1], errors[0])
+            self.assertLess(errors[2], 2e-11)
+
+    def test_predictor_to_corrected_donor_gap_shrinks_on_finer_steps(self):
+        def gap(cfl):
+            base = case(256, duration=.02, cfl=cfl)
+            left = replace(base.left, applied_torque_history=((0., 1.),
+                                                             (.02, 1.)))
+            cut = left.initial_local_cut_m
+            boundary = cut+1.9e-5
+            left = replace(left, initial_records=(
+                one.WoundRecord(boundary, cut+1., 1.02),
+                one.WoundRecord(cut, boundary, 1.01)))
+            result = two.run_two_reel_episode(replace(base, left=left,
+                event_policy='stop_at_numerical_admissibility_limit'))
+            event = result['events'][0]
+            self.assertEqual(event['limit_source'], 'predictor_stage')
+            self.assertEqual(event['corrected_arrival_status'],
+                             'bracketed_in_complete_trial')
+            self.assertGreater(event['corrected_arrival_gap_after_feasible_stop_s'],
+                               0.)
+            return event['corrected_arrival_gap_after_feasible_stop_s']
+        coarse, fine = gap(span.CFL_LIMIT), gap(span.CFL_LIMIT/4)
+        self.assertLess(fine, coarse/4)
+
+    def test_predictor_donor_limit_does_not_invent_corrected_arrival(self):
+        base = case(duration=.02)
+        left = replace(base.left, applied_torque_history=((0., 1.),
+                                                         (.02, 1.)))
+        cut = left.initial_local_cut_m
+        # The constant-torque first-step predictor advances farther than its
+        # corrected endpoint. This label lies strictly between those cuts.
+        boundary = cut+(.00002000000000016+.0000198175861768)/2
+        left = replace(left, initial_records=(
+            one.WoundRecord(boundary, cut+1., 1.02),
+            one.WoundRecord(cut, boundary, 1.01)))
+        result = two.run_two_reel_episode(replace(base, left=left,
+            event_policy='stop_at_numerical_admissibility_limit'))
+        event = result['events'][0]
+        self.assertEqual((event['side'], event['kind'],
+                          event['limit_source']),
+                         ('left', 'donor_boundary', 'predictor_stage'))
+        self.assertEqual(event['corrected_arrival_status'],
+                         'not_bracketed_in_complete_trial')
+        self.assertIsNone(event['corrected_arrival_bracket_time_s'])
+        self.assertGreater(event['corrected_arrival_upper_margin_m'], 0.)
+
     def test_depletion_stop_matches_independent_flow_and_energy_oracles(self):
         for count in (64, 128, 256):
             for reflected in (False, True):
@@ -389,6 +496,13 @@ class TwoReelTests(unittest.TestCase):
         self.assertGreater(near['events'][1]['corrected_margin_at_shared_stop'], 0.)
         self.assertEqual(near['events'][1]['grouping_interpretation'],
                          'numerical_only_not_physical_simultaneity')
+        for item in near['events']:
+            self.assertAlmostEqual(
+                item['corrected_arrival_gap_after_feasible_stop_s'],
+                item['corrected_arrival_bracket_time_s'][0]-
+                near['accepted_states'][-1]['time_s'], delta=1e-15)
+        self.assertGreater(near['events'][1][
+            'corrected_arrival_gap_after_feasible_stop_s'], 0.)
         ordered = two.run_two_reel_episode(replace(base,
             left=end(0.), right=end(5e-8)))
         self.assertEqual([(item['side'], item['kind']) for item in

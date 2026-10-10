@@ -109,6 +109,10 @@ class TwoReelWorkflowTests(unittest.TestCase):
             self.assertEqual(data['outputs']['two_reel_span_t2']['events'][0][
                 'event_time_interpretation'],
                 'numerical_bracket_not_physical_event_time')
+            event = data['outputs']['two_reel_span_t2']['events'][0]
+            self.assertEqual(event['corrected_arrival_status'],
+                             'bracketed_in_complete_trial')
+            self.assertIsNotNone(event['corrected_arrival_bracket_time_s'])
 
     def test_initial_donor_proximity_serializes_a_zero_step_stop(self):
         payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
@@ -183,6 +187,12 @@ class TwoReelWorkflowTests(unittest.TestCase):
                               'within_numerical_coincidence_tolerance'])
             self.assertEqual(events[1]['grouping_interpretation'],
                              'numerical_only_not_physical_simultaneity')
+            stop = saved.to_dict()['outputs']['completed_duration_s']
+            for event in events:
+                self.assertAlmostEqual(
+                    event['corrected_arrival_gap_after_feasible_stop_s'],
+                    event['corrected_arrival_bracket_time_s'][0]-stop,
+                    delta=1e-15)
 
 
 if __name__ == '__main__':

@@ -91,6 +91,19 @@ the common feasible stop are reported separately. Overlapping brackets do
 not establish an internal root order; grouping is not a claim that physical
 events are simultaneous.
 
+For an internal donor candidate, the solver separately bisects the corrected
+Heun endpoint cut against the exposed record label within the original
+complete trial, holding the pre-event donor fixed. It reports
+`corrected_arrival_bracket_time_s` when that
+corrected margin changes sign; a predictor-only crossing reports no corrected
+arrival bracket. `feasible_stop_time_s` still comes from the earliest
+predictor/corrected numerical admissibility limit, and no trial transfer or
+next donor is committed. The corrected bracket is an estimate for the
+discrete numerical trajectory, not a rigorous enclosure of the continuum
+event. Sign changes can miss grazing or repeated crossings; a physical
+event-time enclosure would require a separate solution-error bound and a
+nonzero crossing-speed bound.
+
 ## Independent synthetic checks
 
 At `λ=1.001`, global `v=0.1001 m/s`, the left release flux is `−0.1`
@@ -137,6 +150,17 @@ allowed CFL choices, core-radius/inertia limits, independent pickup-heat
 rate, combined inventory/work/energy/angular ledgers, prelimit completion,
 initial threshold proximity, and verified saved-run replay. These checks do
 not establish a physical event-time estimate for arbitrary trajectories.
+For internal donor arrival, a separate `0.0037 m` exposed layer at the same
+constant flux reaches its label at `0.037 s`; tests compare corrected arrival
+brackets across all three grids and reflection. A two-release affine wave has
+independent competing label-arrival times of about `0.02031990757 s` and
+`0.03041866290 s` for exposed lengths `0.002 m` and `0.003 m`, respectively.
+The first corrected-arrival error decreases across the 64/128/256 grids and
+across three CFL choices at fixed 64 cells. A predictor-limited torque case
+shows its predictor-to-corrected arrival gap falls on a finer time grid;
+forcing-knot placement can cause a plateau between adjacent CFL choices.
+A faster predictor with no corrected sign change is checked to return no
+invented corrected-arrival bracket.
 
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical
