@@ -71,6 +71,14 @@ law. Snapshot requests read accepted states
 without changing the integration trajectory. Full accepted cell fields are
 saved and source hashes bind the example to its installed solver.
 
+The shared scheduler selects the lowest feasible bracket endpoint and reports
+any other candidate within `1e-9 s`. Each grouped candidate identifies
+whether its bracket overlaps the selected bracket or is merely within that
+numerical tolerance. Predictor-trial and corrected-state signed margins at
+the common feasible stop are reported separately. Overlapping brackets do
+not establish an internal root order; grouping is not a claim that physical
+events are simultaneous.
+
 ## Independent synthetic checks
 
 At `λ=1.001`, global `v=0.1001 m/s`, the left release flux is `−0.1`
@@ -107,6 +115,9 @@ predictor reaches zero tension while the corrected endpoint remains taut.
 Tests compare tension-first and donor-first coupled cases on the same
 accepted-state scheduler. The narrower [T2A8 affine fixture](v1-transient-T2A8-design.md)
 remains a separate reaction-mode reference.
+Tests also distinguish overlapping two-donor brackets, separated brackets
+grouped by the numerical tolerance, and a clearly later donor, including
+left/right reflection.
 
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical

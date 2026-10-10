@@ -249,6 +249,43 @@ class TwoReelTests(unittest.TestCase):
         self.assertIsNone(result['events'][0]['bracket_time_s'])
         self.assertEqual(len(result['accepted_states']), 1)
 
+    def test_joint_donor_limits_distinguish_overlap_near_and_ordered(self):
+        base = affine_two_release_case()
+        cut = base.left.initial_local_cut_m
+        def end(delta):
+            boundary = cut+.001+delta
+            return replace(base.left, initial_records=(
+                one.WoundRecord(boundary, cut+1., 1.02),
+                one.WoundRecord(cut, boundary, 1.01)))
+        simultaneous = two.run_two_reel_episode(replace(base,
+            left=end(0.), right=end(0.)))
+        self.assertEqual([(item['side'], item['bracket_relation_to_selected'])
+            for item in simultaneous['events']],
+            [('left', 'selected_lowest_feasible_bracket'),
+             ('right', 'overlapping_brackets')])
+        near = two.run_two_reel_episode(replace(base,
+            left=end(0.), right=end(5e-11)))
+        self.assertEqual([(item['side'], item['bracket_relation_to_selected'])
+            for item in near['events']],
+            [('left', 'selected_lowest_feasible_bracket'),
+             ('right', 'within_numerical_coincidence_tolerance')])
+        self.assertGreater(near['events'][1]['corrected_margin_at_shared_stop'], 0.)
+        self.assertEqual(near['events'][1]['grouping_interpretation'],
+                         'numerical_only_not_physical_simultaneity')
+        ordered = two.run_two_reel_episode(replace(base,
+            left=end(0.), right=end(5e-8)))
+        self.assertEqual([(item['side'], item['kind']) for item in
+                          ordered['events']], [('left', 'donor_boundary')])
+        reflected = two.run_two_reel_episode(replace(base,
+            left=end(5e-11), right=end(0.)))
+        self.assertEqual([(item['side'], item['selection_role'],
+                           item['bracket_relation_to_selected'])
+                          for item in reflected['events']],
+                         [('left', 'grouped_candidate',
+                           'within_numerical_coincidence_tolerance'),
+                          ('right', 'selected_lowest_feasible_bracket',
+                           'selected_lowest_feasible_bracket')])
+
     def test_supported_donor_stop_matches_independent_label_oracle(self):
         for reflected in (False, True):
             for n in (64, 128, 256):

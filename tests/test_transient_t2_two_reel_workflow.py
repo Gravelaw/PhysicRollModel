@@ -133,6 +133,33 @@ class TwoReelWorkflowTests(unittest.TestCase):
             self.assertEqual(data['assessments']['scientific_qualification'],
                              'NOT_ASSESSED')
 
+    def test_grouped_numerical_limits_replay_without_simultaneity_claim(self):
+        payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
+        episode = asdict(affine_two_release_case())
+        for side, shift in (('left', 0.), ('right', 5e-11)):
+            cut = episode[side]['initial_local_cut_m']
+            boundary = cut+.001+shift
+            episode[side]['initial_records'] = [
+                {'low_label_m': boundary, 'high_label_m': cut+1.,
+                 'retained_stretch': 1.02},
+                {'low_label_m': cut, 'high_label_m': boundary,
+                 'retained_stretch': 1.01}]
+        payload['requested_inputs']['episode'] = episode
+        payload['resolved_inputs']['episode'] = episode
+        spec = RunSpec(payload)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'grouped-stop'
+            saved = create_run_bundle(spec, path)
+            self.assertEqual(verify_run_bundle(path)[1].sha256, saved.sha256)
+            self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
+            events = saved.to_dict()['outputs']['two_reel_span_t2']['events']
+            self.assertEqual([item['bracket_relation_to_selected']
+                              for item in events],
+                             ['selected_lowest_feasible_bracket',
+                              'within_numerical_coincidence_tolerance'])
+            self.assertEqual(events[1]['grouping_interpretation'],
+                             'numerical_only_not_physical_simultaneity')
+
 
 if __name__ == '__main__':
     unittest.main()

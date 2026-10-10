@@ -340,17 +340,22 @@ def _reject_unresolved_event(start, trial, episode, records):
         raise ValueError('T2 two-reel unresolved tension zero')
 
 
-def _reel_event_value(trial, side, kind, boundary=None):
+def _event_stage_margins(trial, side, kind, boundary=None):
+    """Positive signed margins for predictor and corrected complete-trial states."""
     if kind == 'tension_zero':
-        return min(trial['second']['minimum_stretch'],
-                   trial['final']['minimum_stretch'])-1
+        return (trial['second']['minimum_stretch']-1,
+                trial['final']['minimum_stretch']-1)
     if kind == 'reversal':
         sign = (1 if trial['first']['ports'][side]['reference_flux_m_s'] > 0
                 else -1)
-        return min(sign*trial['second']['ports'][side]['omega_rad_s'],
-                   sign*trial['reels'][side][1])
-    return min(boundary-trial['second']['ports'][side]['cut_label_m'],
-               boundary-trial['final']['ports'][side]['cut_label_m'])
+        return (sign*trial['second']['ports'][side]['omega_rad_s'],
+                sign*trial['reels'][side][1])
+    return (boundary-trial['second']['ports'][side]['cut_label_m'],
+            boundary-trial['final']['ports'][side]['cut_label_m'])
+
+
+def _reel_event_value(trial, side, kind, boundary=None):
+    return min(_event_stage_margins(trial, side, kind, boundary))
 
 
 def _supported_event_candidates(start, trial, episode, records):
@@ -410,16 +415,8 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
             upper_h, upper_value, upper_trial = middle, value, probe
     if lower_h <= 1e-13 or lower_trial is None:
         raise ValueError('T2 two-reel feasible event step collapsed')
-    if kind == 'tension_zero':
-        stage_value = upper_trial['second']['minimum_stretch']-1
-        corrected_value = upper_trial['final']['minimum_stretch']-1
-    elif kind == 'reversal':
-        sign = 1 if getattr(episode, side).phase == 'wind' else -1
-        stage_value = sign*upper_trial['second']['ports'][side]['omega_rad_s']
-        corrected_value = sign*upper_trial['reels'][side][1]
-    else:
-        stage_value = boundary-upper_trial['second']['ports'][side]['cut_label_m']
-        corrected_value = boundary-upper_trial['final']['ports'][side]['cut_label_m']
+    stage_value, corrected_value = _event_stage_margins(
+        upper_trial, side, kind, boundary)
     limiting_stage = stage_value <= 0
     limiting_corrected = corrected_value <= 0
     limit_source = ('both' if limiting_stage and limiting_corrected else
@@ -481,6 +478,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                     'boundary': 1., 'unit': 'stretch excess',
                     'root_basis': 'accepted_state_tautness_proximity',
                     'limit_source': 'accepted_state',
+                    'selection_role': 'accepted_state_proximity',
+                    'bracket_relation_to_selected': 'no_bracket',
+                    'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
                     'stretch_excess': start['minimum_stretch']-1,
                     'location': start['minimum_stretch_location'],
                     'bracket_time_s': None,
@@ -500,6 +500,9 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'boundary': boundary, 'unit': 'reference m',
                         'root_basis': 'accepted_state_label_proximity',
                         'limit_source': 'accepted_state',
+                        'selection_role': 'accepted_state_proximity',
+                        'bracket_relation_to_selected': 'no_bracket',
+                        'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
                         'label_distance_m': gap, 'bracket_time_s': None,
                         'event_time_interpretation':
                             'numerical_proximity_not_physical_event_time',
@@ -543,10 +546,25 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                     EVENT_COINCIDENCE_TOLERANCE_S]
                 h, trial = (selected['feasible_step_s'],
                             selected['feasible_trial'])
-                events = [{key: value for key, value in item.items()
-                           if key not in ('feasible_step_s', 'feasible_trial')}
-                          for item in sorted(grouped,
-                              key=lambda item: (item['side'], item['kind']))]
+                events = []
+                for item in sorted(grouped,
+                                   key=lambda item: (item['side'], item['kind'])):
+                    relation = ('selected_lowest_feasible_bracket' if item is selected else
+                        'overlapping_brackets' if item['bracket_time_s'][0] <=
+                            selected['bracket_time_s'][1] else
+                        'within_numerical_coincidence_tolerance')
+                    predictor_margin, corrected_margin = _event_stage_margins(
+                        trial, item['side'], item['kind'], item['boundary'])
+                    events.append({**{key: value for key, value in item.items()
+                        if key not in ('feasible_step_s', 'feasible_trial')},
+                        'selection_role': ('selected_lowest_feasible_bracket'
+                            if item is selected else 'grouped_candidate'),
+                        'bracket_relation_to_selected': relation,
+                        'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
+                        'predictor_margin_at_shared_trial': predictor_margin,
+                        'corrected_margin_at_shared_stop': corrected_margin,
+                        'grouping_interpretation':
+                            'numerical_only_not_physical_simultaneity'})
                 outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')
