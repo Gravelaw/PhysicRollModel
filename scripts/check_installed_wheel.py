@@ -100,6 +100,14 @@ def main():
             "and result['maximum_mass_balance_defect_kg']<1e-10 "
             "and result['maximum_reconstructed_stage_courant']<=result['cfl_limit']",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a6 import T2A6Case, run_append_only_reaction_reel; "
+            "result=run_append_only_reaction_reel(T2A6Case(.0005)); "
+            "assert result['mode']=='append_only_elastic_port_reaction_reel' "
+            "and result['shaft_torque_role']=='reaction_not_applied_input' "
+            "and result['maximum_storage_vs_flux_defect_j']<1e-11",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

@@ -36,10 +36,12 @@ The [T1 transport contract](docs/v1-transient-T1.md) describes a separate
 bounded prescribed-motion kinematic layer; it does not solve the requested
 drive, deformation or contact dynamics.
 The [T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
-shaft/span/reel cases. The [T2A5 moving elastic-span case](docs/v1-transient-T2A5-design.md)
-adds distributed strain and velocity with characteristic-compatible fixed
-ports. The benchmarks do not establish a coupled strain-bearing reel/rolling
-solver or physical mill accuracy.
+shaft/span/reel cases. [T2A5](docs/v1-transient-T2A5-design.md) adds
+distributed strain and velocity with characteristic-compatible fixed ports;
+[T2A6](docs/v1-transient-T2A6-design.md) checks append-only wound-strain
+ownership and a reaction reel for an analytic outgoing wave. They do not
+establish a coupled torque-driven elastic reel/rolling solver or physical
+mill accuracy.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a

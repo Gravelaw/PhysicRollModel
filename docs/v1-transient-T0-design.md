@@ -1,7 +1,7 @@
 # T0 transient solver design candidate
 
 **Status: design under renewed review for width-resolved structural dynamics;
-the restricted prescribed-motion T1 layer and T2A1–T2A5
+the restricted prescribed-motion T1 layer and T2A1–T2A6
 benchmarks are implemented, while coupled strain-bearing torque-driven
 moving-span/reel T2 and full 3D T3 contact
 remain design candidates.** This
