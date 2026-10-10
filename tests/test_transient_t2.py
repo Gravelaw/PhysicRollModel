@@ -2,6 +2,7 @@
 
 import math
 import unittest
+from dataclasses import replace
 
 from physicroll import transient_t2 as t2
 from physicroll import transient_t2a5 as span
@@ -120,6 +121,109 @@ def independent_drive_work(end_time):
 
 
 class IntegratedT2Tests(unittest.TestCase):
+    def test_hermite_pulse_cannot_hide_release_reversal(self):
+        duration = 1e-5
+        base = constant_case(64, duration=duration)
+        first = base.applied_torque_history[0][1]
+        last = base.applied_torque_history[-1][1]
+        history = ((0., first, 1.2e9), (duration, last, -1.2e9))
+        episode = replace(base, applied_torque_history=history)
+        # Independent cubic: extra torque is 12000*u*(1-u), with a 3000 Nm
+        # midpoint peak and exactly 0.02 Nm s extra applied impulse.
+        self.assertAlmostEqual(t2._history_value(history, duration/2),
+                               (first+last)/2+3000., delta=1e-9)
+        self.assertAlmostEqual(duration**2*1.2e9/6, .02, delta=1e-15)
+        self.assertLess(t2._forcing_limited_step(0., duration, episode),
+                        duration/100)
+        initial_records = tuple((item.low_label_m, item.high_label_m,
+                                 item.retained_stretch)
+                                for item in episode.initial_records)
+        try:
+            output = t2.run_torque_driven_episode(episode)
+        except ValueError as exc:
+            self.assertRegex(str(exc), 'phase or event retry collapsed|forcing resolution')
+        else:
+            self.assertNotEqual(output['episode_outcome'],
+                                'COMPLETED_DECLARED_DURATION')
+        self.assertEqual(initial_records, tuple((item.low_label_m,
+            item.high_label_m, item.retained_stretch)
+            for item in episode.initial_records))
+
+    def test_hermite_cancelling_lobes_are_resolved(self):
+        duration = 1e-5
+        base = constant_case(64, duration=duration)
+        first = base.applied_torque_history[0][1]
+        last = base.applied_torque_history[-1][1]
+        history = ((0., first, 1.2e9), (duration, last, 1.2e9))
+        episode = replace(base, applied_torque_history=history)
+        self.assertAlmostEqual(t2._history_value(history, duration/2),
+                               (first+last)/2, delta=1e-9)
+        self.assertLess(t2._forcing_limited_step(0., duration, episode),
+                        duration/100)
+        output = t2.run_torque_driven_episode(episode)
+        self.assertEqual(output['episode_outcome'], 'COMPLETED_DECLARED_DURATION')
+        initial = output['accepted_states'][0]['reel_angular_momentum_kg_m2_s']
+        self.assertGreater(max(abs(state['reel_angular_momentum_kg_m2_s']-initial)
+                               for state in output['accepted_states']), .003)
+        self.assertLess(output['accumulated_applied_torque_quadrature_bound_nm_s'],
+                        t2.TORQUE_QUADRATURE_BUDGET_NM_S)
+
+    def test_near_knot_forcing_uses_exact_segment_or_rejects(self):
+        interval = 2.**-16
+        slope = 2.**70
+        history = ((0., 0., 0.), (interval, 0., slope),
+                   (2*interval, interval*slope, slope))
+        just_before = interval-2.**-45
+        just_after = interval+2.**-47
+        self.assertEqual(t2._first_future_knot(just_before, history), interval)
+        with self.assertRaisesRegex(ValueError, 'crossed a knot'):
+            t2._history_curvature_bound(history, just_before, interval/2)
+        self.assertAlmostEqual(t2._history_value(history, just_after),
+                               slope*(just_after-interval), delta=1e-6)
+
+    def test_incoming_hermite_pulse_reaches_first_tension_zero(self):
+        duration = 1e-5
+        base = constant_case(64, duration=duration)
+        incoming = base.left_incoming_history[0][1]
+        episode = replace(base, left_incoming_history=(
+            (0., incoming, 12000.), (duration, incoming, -12000.)))
+        output = t2.run_torque_driven_episode(episode)
+        self.assertEqual(output['episode_outcome'],
+                         'STOPPED_AT_FIRST_TENSION_ZERO')
+        self.assertLessEqual(output['maximum_incoming_characteristic_chord_bound_m_s'],
+                             t2.INCOMING_CHARACTERISTIC_CHORD_BUDGET_M_S*(1+1e-12))
+
+    def test_mild_hermite_pulse_matches_refined_declared_history(self):
+        duration = .005
+        base = constant_case(64, duration=duration)
+        first = base.applied_torque_history[0][1]
+        last = base.applied_torque_history[-1][1]
+        episode = replace(base, applied_torque_history=(
+            (0., first, 1.), (duration, last, -1.)))
+        def exact_torque(time_s):
+            u = time_s/duration
+            return ((2*u**3-3*u**2+1)*first +
+                    (-2*u**3+3*u**2)*last + duration*u*(1-u))
+        reference = replace(base, applied_torque_history=tuple(
+            (i*duration/200, exact_torque(i*duration/200))
+            for i in range(201)))
+        output = t2.run_torque_driven_episode(episode)
+        refined = t2.run_torque_driven_episode(reference)
+        self.assertEqual(output['episode_outcome'], 'COMPLETED_DECLARED_DURATION')
+        self.assertAlmostEqual(output['accepted_states'][-1]['reel_angular_speed_rad_s'],
+                               refined['accepted_states'][-1]['reel_angular_speed_rad_s'],
+                               delta=2e-6)
+        expected_impulse = duration*(first+last)/2+duration**2/6
+        states = output['accepted_states']
+        applied_impulse = sum((b['time_s']-a['time_s'])*(
+            exact_torque(a['time_s'])+exact_torque(b['time_s']))/2
+            for a, b in zip(states, states[1:]))
+        self.assertLess(abs(applied_impulse-expected_impulse),
+                        output['accumulated_applied_torque_quadrature_bound_nm_s']*
+                        (1+1e-8))
+        self.assertLess(output['accumulated_applied_torque_quadrature_bound_nm_s'],
+                        t2.TORQUE_QUADRATURE_BUDGET_NM_S)
+
     def test_constant_mismatch_signed_transfer_heat_and_components(self):
         for n in (64, 128, 256):
             with self.subTest(cells=n):

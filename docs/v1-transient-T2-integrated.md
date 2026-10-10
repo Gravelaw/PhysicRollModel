@@ -29,6 +29,16 @@ linearly or by declared cubic Hermite knot slopes. Initial fields, retained
 wound records and all forcing are serialized, with no exact-solution callback
 inside the stepper.
 
+For Hermite inputs, the stepper computes the maximum absolute second time
+derivative on each proposed within-knot interval. It caps the step so the
+trapezoidal applied-torque impulse error bound `M h³/12` sums to at most
+`1e-8 N m s` over the declared duration. For an incoming-characteristic
+Hermite history it separately bounds departure from the endpoint chord by
+`M h²/8 ≤ 1e-5 m/s`. The result reports the accumulated torque bound and
+maximum incoming bound. A collapsed step or exhausted accepted-step budget
+rejects the episode. These are forcing-resolution limits, not an accuracy
+bound for the nonlinear coupled solution or a substitute for event checks.
+
 At the right port, the outgoing span characteristic is \(r=v-c\lambda\).
 For winding, \(v_s=R\omega\), \(\lambda_s=(v_s-r)/c\) and
 \(q=v_s/\lambda_s\). The accepted Heun stages deposit immutable packets

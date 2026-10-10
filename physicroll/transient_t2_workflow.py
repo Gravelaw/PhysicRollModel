@@ -18,6 +18,8 @@ NUMERICAL_SETTINGS = {
     'spatial_flux': 'minmod_muscl_hll_finite_volume',
     'time_integrator': 'heun_event_split',
     'torque_interpolation': 'linear_or_cubic_hermite_from_declared_knots',
+    'torque_quadrature_budget_nm_s': 1e-8,
+    'incoming_characteristic_chord_budget_m_s': 1e-5,
     'EA_n': 10.0,
     'reference_line_mass_kg_m': 0.1,
     'span_length_m': 1.0,
@@ -128,6 +130,10 @@ def run_t2_spec(spec: RunSpec) -> ResultBundle:
                     transport['maximum_reel_angular_impulse_defect_nm_s'],
                 'maximum_reconstructed_stage_courant':
                     transport['maximum_reconstructed_stage_courant'],
+                'accumulated_applied_torque_quadrature_bound_nm_s':
+                    transport['accumulated_applied_torque_quadrature_bound_nm_s'],
+                'maximum_incoming_characteristic_chord_bound_m_s':
+                    transport['maximum_incoming_characteristic_chord_bound_m_s'],
                 'passed_internal_balances_only': balance_passed,
             },
             'independent_benchmark_verification': 'NOT_ASSESSED_FOR_THIS_RUN',

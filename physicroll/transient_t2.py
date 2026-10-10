@@ -16,6 +16,8 @@ from . import transient_t2a8 as fv
 
 
 MODEL_ID = 'T2_TORQUE_DRIVEN_ELASTIC_RIGHT_REEL_IDEAL_PICKUP_V1'
+TORQUE_QUADRATURE_BUDGET_NM_S = 1e-8
+INCOMING_CHARACTERISTIC_CHORD_BUDGET_M_S = 1e-5
 
 
 @dataclass(frozen=True)
@@ -129,7 +131,7 @@ def _history_value(history, time_s):
     for first_knot, second_knot in zip(history, history[1:]):
         start, first = first_knot[:2]
         end, second = second_knot[:2]
-        if time_s <= end + 1e-14:
+        if time_s <= end:
             fraction = max(0.0, min(1.0, (time_s - start) / (end - start)))
             if len(first_knot) == 3:
                 u = fraction
@@ -383,7 +385,47 @@ def _state(time_s, cells, length_m, omega, angle, phase, records,
 
 def _first_future_knot(time_s, *histories):
     return min(item[0] for history in histories for item in history
-               if item[0] > time_s + 1e-13)
+               if item[0] > time_s)
+
+
+def _history_curvature_bound(history, time_s, step_s):
+    """Maximum absolute second time derivative on one declared knot interval."""
+    if len(history[0]) == 2 or step_s == 0:
+        return 0.0
+    for first, second in zip(history, history[1:]):
+        start, end = first[0], second[0]
+        if start <= time_s < end:
+            if time_s + step_s > end + 8*math.ulp(end):
+                raise ValueError('T2 forcing curvature interval crossed a knot')
+            interval = end - start
+            a = -2*(second[1]-first[1])+interval*(first[2]+second[2])
+            b = 3*(second[1]-first[1])-interval*(2*first[2]+second[2])
+            u0 = (time_s-start)/interval
+            u1 = (time_s+step_s-start)/interval
+            bound = max(abs(6*a*u0+2*b), abs(6*a*u1+2*b))/interval**2
+            if not math.isfinite(bound):
+                raise ValueError('T2 forcing curvature is nonfinite')
+            return bound
+    raise ValueError('T2 forcing interval left declared history')
+
+
+def _forcing_limited_step(time_s, candidate_s, episode):
+    """Bound unsampled Hermite torque impulse and incoming port deviation."""
+    h = candidate_s
+    torque_m = _history_curvature_bound(episode.applied_torque_history,
+                                        time_s, h)
+    if torque_m:
+        h = min(h, math.sqrt(12*TORQUE_QUADRATURE_BUDGET_NM_S/
+                             (episode.duration_s*torque_m)))
+    if episode.left_boundary_mode == 'incoming_characteristic':
+        incoming_m = _history_curvature_bound(episode.left_incoming_history,
+                                              time_s, h)
+        if incoming_m:
+            h = min(h, math.sqrt(8*INCOMING_CHARACTERISTIC_CHORD_BUDGET_M_S/
+                                 incoming_m))
+    if h <= 1e-13:
+        raise ValueError('T2 forcing resolution step collapsed')
+    return h
 
 
 def _event_value(trial, kind, threshold):
@@ -508,6 +550,8 @@ def run_torque_driven_episode(episode: T2Episode):
                 'combined_inventory': 0.0, 'angular': 0.0,
                 'reel_energy': 0.0, 'combined_energy': 0.0,
                 'storage_flux': 0.0, 'minimum_stretch': float('inf')}
+    accumulated_torque_quadrature_bound = 0.0
+    maximum_incoming_chord_bound = 0.0
     observation_index = 0
     outcome = None
     dx = span.SPAN_LENGTH_M / episode.cell_count
@@ -526,6 +570,7 @@ def run_torque_driven_episode(episode: T2Episode):
                 .99 * episode.cfl_limit * dx / start['maximum_signal_m_s'])
         if h <= 1e-13:
             raise ValueError('T2 step collapsed at forcing or event boundary')
+        h = _forcing_limited_step(time_s, h, episode)
         for _ in range(20):
             trial = _advance(cells, length_m, omega, angle, time_s, h,
                              phase, records, episode)
@@ -604,6 +649,14 @@ def run_torque_driven_episode(episode: T2Episode):
             raise ValueError('T2 phase or event retry budget exhausted')
         old_mass, old_momentum, _ = fv._integrals(cells, dx)
         old_cut = first['port']['cut_label_m']
+        accumulated_torque_quadrature_bound += (
+            _history_curvature_bound(episode.applied_torque_history,
+                                     time_s, h)*h**3/12)
+        if episode.left_boundary_mode == 'incoming_characteristic':
+            maximum_incoming_chord_bound = max(
+                maximum_incoming_chord_bound,
+                _history_curvature_bound(episode.left_incoming_history,
+                                         time_s, h)*h**2/8)
         for name in ('left_flux', 'right_flux', 'right_energy_terms'):
             for j in range(3):
                 integrated[name][j] += h * (first[name][j] + second[name][j]) / 2
@@ -724,6 +777,10 @@ def run_torque_driven_episode(episode: T2Episode):
             'maximum_reel_cumulative_energy_defect_j': maximums['reel_energy'],
             'maximum_combined_energy_defect_j': maximums['combined_energy'],
             'maximum_exact_storage_vs_transfer_flux_defect_j': maximums['storage_flux'],
+            'accumulated_applied_torque_quadrature_bound_nm_s':
+                accumulated_torque_quadrature_bound,
+            'maximum_incoming_characteristic_chord_bound_m_s':
+                maximum_incoming_chord_bound,
             'limitations': ['one reel and a fixed spatial elastic span; no roll contact',
                             'idealized transfer contact and frozen retained strain',
                             'taut subsonic only; slack and site validation unsupported']}
