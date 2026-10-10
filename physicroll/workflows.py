@@ -4,7 +4,7 @@ Other W3 workflow kinds remain explicit future adapters. No empirical
 qualification or mill feasibility is inferred from a completed replay.
 """
 
-from dataclasses import fields
+from dataclasses import fields, replace
 import hashlib
 from importlib.resources import files
 
@@ -24,6 +24,7 @@ from .operational_replay import (CONTRACT_VERSION, AppliedReference, MeasuredSig
                                  replay_operating_samples)
 from .resources import resource_file
 from .run_contract import ResultBundle, RunSpec
+from .schedule_search import OperatingChoice, SearchSpace, search_schedules
 
 
 EQUIPMENT_LIMITS = {
@@ -57,6 +58,10 @@ CONDITIONAL_ADAPTER_ID = 'shao2015_fixed_rigid_slab_prior_log_005'
 OPERATING_SOURCE_RESOURCES = {
     'physicroll/operational_replay.py': 'operational_replay.py',
     'physicroll/operating.py': 'operating.py',
+}
+SEARCH_SOURCE_RESOURCES = {
+    'physicroll/schedule_search.py': 'schedule_search.py',
+    'physicroll/checked_schedule.py': 'checked_schedule.py',
 }
 
 
@@ -440,6 +445,137 @@ def run_operating_replay_spec(spec: RunSpec) -> ResultBundle:
     })
 
 
+def run_schedule_search_spec(spec: RunSpec) -> ResultBundle:
+    """Search a finite supplied grid with complete, reproducible checked routes."""
+    if not isinstance(spec, RunSpec):
+        raise ValueError('run_schedule_search_spec requires a RunSpec')
+    data = spec.to_dict()
+    if data['workflow_kind'] != 'schedule_search':
+        raise ValueError('RunSpec is not a schedule search')
+    resolved = data['resolved_inputs']
+    expected = {'search_space', 'base_pass', 'initial_state', 'law',
+                'handoff_template', 'equipment_limits'}
+    if set(resolved) != expected or set(data['requested_inputs']) != {'search_space'}:
+        raise ValueError('search inputs have missing or unknown fields')
+    if not _same_frozen_json(data['requested_inputs']['search_space'],
+                             resolved['search_space']):
+        raise ValueError('requested and resolved search spaces differ')
+    if data['recipe_targets'] != {} or data['observations'] != {}:
+        raise ValueError('search observations or phase recipes are unsupported')
+    if set(data['source_hashes']) != set(SEARCH_SOURCE_RESOURCES):
+        raise ValueError('search source hashes must name search and checked modules')
+    for name, resource_name in SEARCH_SOURCE_RESOURCES.items():
+        digest = hashlib.sha256(files('physicroll').joinpath(resource_name).read_bytes()).hexdigest()
+        if data['source_hashes'][name] != digest:
+            raise ValueError(f'search source hash mismatch: {name}')
+    raw_space = resolved['search_space']
+    if type(raw_space) is not dict:
+        raise ValueError('search_space must be an object')
+    try:
+        space = _record(
+            SearchSpace, raw_space,
+            gauges_m=_array(raw_space['gauges_m'], 'search gauges'),
+            mandatory_checkpoints_m=_array(raw_space['mandatory_checkpoints_m'],
+                                           'mandatory checkpoints'),
+            choices_by_pass=tuple(
+                tuple(_record(OperatingChoice, choice)
+                      for choice in _array(row, 'pass choices'))
+                for row in _array(raw_space['choices_by_pass'], 'choices_by_pass')),
+        )
+        state_data = resolved['initial_state']
+        state = _record(MaterialState, state_data,
+                        history=_array(state_data['history'], 'material history'))
+        law = _record(PowerHardeningLaw, resolved['law'])
+        base = _checked_pass(resolved['base_pass'])
+        handoff = _record(InterpassHandoff, resolved['handoff_template'])
+        limits = _optional(EquipmentLimits, resolved['equipment_limits'])
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f'invalid resolved search inputs: {exc}') from exc
+    space.validate()
+    base.validate_contract()
+    state.validate()
+    law.validate()
+    if (state.alloy, state.temper) != (law.alloy, law.temper):
+        raise ValueError('search initial state and law material identity differs')
+    if limits is not None:
+        limits.validate()
+    handoff.validate(max(2, space.max_passes))
+    if handoff.after_pass != 1:
+        raise ValueError('search handoff template must follow pass 1')
+    if (base.heat_boundary is not None or base.passive_contact is not None or
+            base.fluid_observation is not None or base.roll_body_id is not None or
+            base.operating_plan.ranges or base.operating_plan.observations):
+        raise ValueError('search base pass must be isothermal and have no phase observations')
+    # The base scenario supplies invariant geometry and a valid pass-shaped
+    # template. A complete route may exceed the inherited *single-pass*
+    # reduction guard; each generated pass is screened on its own gauges.
+    if (data['model_choices'] != {'solver': base.solver, 'material': 'power_hardening',
+                                 'bite': base.bite_mode, 'thermal': 'none'} or
+            not _same_frozen_json(data['numerical_settings'],
+                                  {'cells': base.cells, 'verify_refinement': True})):
+        raise ValueError('search model choices or numerical settings disagree with base pass')
+    if (handoff.strip_mode != 'prescribed' or handoff.roll_mode != 'not_modeled' or
+            handoff.width_change_provenance is not None):
+        raise ValueError('search requires explicit prescribed strip temperature handoff')
+
+    def build_and_replay(gauges, choices):
+        passes = []
+        for index, choice in enumerate(choices, 1):
+            name = f'search_pass_{index}'
+            scenario = replace(
+                base.scenario, name=name,
+                entry_thickness_m=gauges[index-1], exit_thickness_m=gauges[index],
+                entry_speed_m_s=choice.entry_speed_m_s,
+                entry_tension_pa=choice.entry_tension_pa,
+                exit_tension_pa=choice.exit_tension_pa,
+            )
+            passes.append(replace(base, scenario=scenario,
+                                  operating_plan=replace(base.operating_plan, pass_name=name)))
+        handoffs = tuple(replace(handoff, after_pass=index)
+                         for index in range(1, len(passes)))
+        return run_checked_schedule(tuple(passes), state, law,
+                                    gauge_basis='per_layer_full_thickness', layer_count=1,
+                                    interpass_handoffs=handoffs, equipment_limits=limits)
+
+    search = search_schedules(space, build_and_replay)
+    selected = search['selected']
+    computed_count = sum(item['status'] in ('INDETERMINATE', 'VIOLATED')
+                         for item in search['candidates'])
+    violated_count = sum(item['status'] == 'VIOLATED'
+                         for item in search['candidates'])
+    bounds = (_bounds_evidence(selected['checked_replay']['passes']) if selected else
+              {'required_limit_ids': [], 'evaluations': []})
+    evaluated = bounds['evaluations']
+    coverage = ('NONE' if not evaluated else 'COMPLETE'
+                if len(evaluated) == len(bounds['required_limit_ids']) else 'PARTIAL')
+    status = ('VIOLATED' if any(item['status'] == 'VIOLATED' for item in evaluated)
+              else 'WITHIN' if coverage == 'COMPLETE' else 'INDETERMINATE')
+    return ResultBundle({
+        'schema_version': '1', 'run_spec_sha256': spec.sha256,
+        'effective_inputs': {
+            'selected_gauges_m': list(selected['gauges_m']) if selected else None,
+            'final_state': selected['checked_replay']['final_state'] if selected else None,
+        },
+        'outputs': {'schedule_search': search},
+        'checks': {'declared_bounds': bounds,
+                   'assessment_scope': 'selected_route',
+                   'candidate_computation_count': computed_count,
+                   'candidate_violation_count': violated_count,
+                   'independent_selected_replay': selected is not None},
+        'assessments': {
+            'execution': 'COMPLETED', 'input_validity': 'VALID',
+            'model_applicability': 'IN_DOMAIN' if selected else 'NOT_ASSESSED',
+            'numerical_verification': 'PASSED' if selected else 'NOT_ASSESSED',
+            'declared_bounds_status': status,
+            'declared_bounds_coverage': coverage,
+            'scientific_qualification': 'NOT_ASSESSED',
+            'operating_readiness': 'NOT_ASSESSED',
+            'predictions_computed': computed_count > 0,
+            'qualification_evidence_refs': [],
+        },
+    })
+
+
 def run_workflow(spec: RunSpec) -> ResultBundle:
     """Dispatch public checked, conditional and offline operating workflows."""
     if not isinstance(spec, RunSpec):
@@ -451,4 +587,6 @@ def run_workflow(spec: RunSpec) -> ResultBundle:
         return run_conditional_spec(spec)
     if kind == 'operating_replay':
         return run_operating_replay_spec(spec)
+    if kind == 'schedule_search':
+        return run_schedule_search_spec(spec)
     raise ValueError(f'no public adapter for workflow_kind {kind}')

@@ -20,6 +20,7 @@ python -m physicroll scenarios/baseline.json --output artifacts/baseline.result.
 python -m physicroll --run-spec scenarios/v1_checked_pass.runspec.json --output checked-result.json
 python -m physicroll --run-spec scenarios/v1_shao_benchmark.runspec.json --output benchmark.json
 python -m physicroll --run-spec scenarios/v1_operating_replay.runspec.json --output operating-replay.json
+python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --output search-result.json
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```

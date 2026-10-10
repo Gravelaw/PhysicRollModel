@@ -15,6 +15,7 @@ RESOURCE_NAMES = {
         'unloaded_transport.json', 'v03_foundations.json',
         'v1_checked_pass.runspec.json',
         'v1_operating_replay.runspec.json',
+        'v1_schedule_search.runspec.json',
         'v1_shao_benchmark.runspec.json', 'v1_shao_sensitivity.runspec.json',
     }),
     'schemas': frozenset({

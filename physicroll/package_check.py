@@ -60,8 +60,15 @@ def main():
     if (operating['assessments']['predictions_computed'] or
             len(operating['outputs']['operating_replay']['samples']) != 7):
         raise AssertionError('packaged O0 replay changed')
+    search_spec = RunSpec(read_example('v1_schedule_search.runspec.json'))
+    search_result = run_workflow(search_spec)
+    search_result.verify_run_spec(search_spec)
+    search = search_result.to_dict()['outputs']['schedule_search']
+    if (search['evaluations'] != 3 or search['selected'] is None or
+            search['status'] != 'SELECTED_DECLARED_BOUNDS_INDETERMINATE'):
+        raise AssertionError('packaged finite search changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
-          'audited Shao fixture, conditional workflows and O0 replay')
+          'audited Shao fixture, conditional workflows, O0 replay and finite search')
 
 
 if __name__ == '__main__':
