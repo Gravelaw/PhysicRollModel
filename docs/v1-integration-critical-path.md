@@ -33,6 +33,8 @@ establish an integrated torque-driven release model.
    and changed-frame-cadence and restart checks. This closes strain-bearing
    T2 software verification only within its declared taut domain.
 3. **Freeze and prototype T3 full 3D mechanics.** Resolve the outstanding
+   [first full 3D elastic/contact verification candidate](v1-transient-T3-3d-verification-candidate.md)
+   before implementation. Resolve the outstanding
    finite-strain material law, unilateral finite-sliding friction/contact,
    free-edge and entry/exit states, rigid-gap geometry, and dynamic elastic
    roll/stand supports. Test lightweight and numerical/native routes on the
