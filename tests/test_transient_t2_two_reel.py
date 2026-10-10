@@ -112,7 +112,163 @@ def affine_two_release_case(count=64, duration=.055, torque_knots=100,
         cfl_limit=cfl, event_policy='stop_at_numerical_admissibility_limit')
 
 
+def standing_reversal_exact(time):
+    """Independent symmetric material wave and required winding torque."""
+    lam0, delta, k, t_star = 1.01, .001, math.pi/2, .02
+    theta = 10*k*(time-t_star)
+    cut = .5/lam0
+    for _ in range(12):
+        stretch = lam0+delta*math.cos(k*cut)*math.cos(theta)
+        position = lam0*cut+delta/k*math.sin(k*cut)*math.cos(theta)
+        cut -= (position-.5)/stretch
+    stretch = lam0+delta*math.cos(k*cut)*math.cos(theta)
+    speed = -delta*10*math.sin(k*cut)*math.sin(theta)
+    speed_time = -delta*100*k*math.sin(k*cut)*math.cos(theta)
+    speed_label = -delta*10*k*math.cos(k*cut)*math.sin(theta)
+    acceleration = speed_time-speed/stretch*speed_label
+    initial_cut = .4946292091008748
+    length = 1+initial_cut-cut
+    radius, inertia = geometry(length)
+    flux = speed/stretch
+    radius_rate = .001/math.pi*flux/(2*radius)
+    omega = speed/radius
+    torque = (inertia*(acceleration/radius-speed*radius_rate/radius**2)+
+              radius*EA*(stretch-1))
+    return cut, length, omega, torque, stretch
+
+
+def standing_reversal_case(count=64, cfl=span.CFL_LIMIT, torque_knots=400):
+    """Cell-average FV fields integrate the exact material-label wave."""
+    lam0, delta, k, theta = 1.01, .001, math.pi/2, -math.pi/10
+    def label(position):
+        value = position/lam0
+        for _ in range(12):
+            stretch = lam0+delta*math.cos(k*value)*math.cos(theta)
+            x = lam0*value+delta/k*math.sin(k*value)*math.cos(theta)
+            value -= (x-position)/stretch
+        return value
+    fields = []
+    for index in range(count):
+        low = label(index/count-.5)
+        high = label((index+1)/count-.5)
+        reference_per_x = count*(high-low)
+        momentum_per_x = (MU*count*delta*10/k*math.sin(theta)*
+                          (math.cos(k*high)-math.cos(k*low)))
+        fields.append((reference_per_x, momentum_per_x))
+    cut = standing_reversal_exact(0.)[0]
+    history = tuple((index*.04/torque_knots,
+        standing_reversal_exact(index*.04/torque_knots)[3])
+        for index in range(torque_knots+1))
+    end = two.ReelEnd(cut, 1., standing_reversal_exact(0.)[2],
+        (one.WoundRecord(cut, cut+1., 1.0106781479918503),),
+        history, 'wind')
+    return two.TwoReelEpisode(count, .04, tuple(fields), end, end,
+        cfl_limit=cfl, event_policy='stop_at_numerical_admissibility_limit')
+
+
 class TwoReelTests(unittest.TestCase):
+    def test_corrected_reversal_matches_independent_standing_wave(self):
+        self.assertAlmostEqual(standing_reversal_exact(.02)[1],
+                               1.0000216140997287, delta=1e-14)
+        self.assertAlmostEqual(standing_reversal_exact(.02)[3],
+                               -.0010607167591660995, delta=1e-14)
+        reference_work = sum(
+            standing_reversal_exact((index+.5)*.02/2000)[2]*
+            standing_reversal_exact((index+.5)*.02/2000)[3]*.02/2000
+            for index in range(2000))
+        errors = []
+        for count in (64, 128, 256):
+            result = two.run_two_reel_episode(standing_reversal_case(count))
+            self.assertEqual(result['episode_outcome'],
+                             'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+            self.assertEqual([(item['side'], item['kind']) for item in
+                              result['events']], [('left', 'reversal'),
+                                                  ('right', 'reversal')])
+            final = result['accepted_states'][-1]
+            for event in result['events']:
+                self.assertEqual(event['corrected_reversal_status'],
+                                 'bracketed_in_complete_trial')
+                low, high = event['corrected_reversal_bracket_time_s']
+                self.assertLess(high-low, 1e-11)
+                self.assertGreater(event['corrected_reversal_lower_margin_rad_s'],
+                                   0.)
+                self.assertLessEqual(event['corrected_reversal_upper_margin_rad_s'],
+                                     0.)
+                self.assertAlmostEqual(
+                    event['corrected_reversal_gap_after_feasible_stop_s'],
+                    low-final['time_s'], delta=1e-14)
+                if event['side'] == 'left':
+                    errors.append(abs((low+high)/2-.02))
+            for side in ('left', 'right'):
+                end = final['ends'][side]
+                self.assertEqual(end['phase'], 'wind')
+                self.assertGreater(end['angular_speed_rad_s'], 0.)
+                self.assertAlmostEqual(end['reference_length_m'],
+                    standing_reversal_exact(.02)[1], delta=1e-8)
+                self.assertAlmostEqual(end['integrated_angular_rhs_nm_s'],
+                    -geometry(1.)[1]*standing_reversal_exact(0.)[2],
+                    delta=1e-10)
+                self.assertAlmostEqual(end['integrated_drive_work_j'],
+                    reference_work, delta=5e-12)
+                self.assertEqual(end['accumulated_dissipated_energy_j'], 0.)
+            self.assertLess(result['maximum_combined_inventory_defect_kg'], 1e-12)
+            self.assertLess(result['maximum_combined_energy_defect_j'], 1e-10)
+        self.assertLess(errors[2], errors[1])
+        self.assertLess(errors[1], errors[0])
+        self.assertLess(errors[2], 1e-9)
+
+    def test_corrected_reversal_refines_separately_in_time_and_forcing(self):
+        def time_at(cfl, knots):
+            result = two.run_two_reel_episode(standing_reversal_case(
+                64, cfl=cfl, torque_knots=knots))
+            bracket = result['events'][0]['corrected_reversal_bracket_time_s']
+            return sum(bracket)/2
+        cfl_times = [time_at(cfl, 20) for cfl in
+                     (span.CFL_LIMIT, span.CFL_LIMIT/2, span.CFL_LIMIT/4)]
+        forcing_times = [time_at(span.CFL_LIMIT, knots) for knots in
+                         (100, 200, 400)]
+        self.assertLess(abs(cfl_times[2]-cfl_times[1]),
+                        abs(cfl_times[1]-cfl_times[0]))
+        self.assertLess(abs(forcing_times[2]-forcing_times[1]),
+                        abs(forcing_times[1]-forcing_times[0]))
+
+    def test_predictor_reversal_does_not_invent_corrected_root(self):
+        duration = .0110198707
+        base = case(duration=duration)
+        left = replace(base.left, applied_torque_history=((0., 1.),
+                                                          (duration, 1.)))
+        result = two.run_two_reel_episode(replace(base, left=left,
+            event_policy='stop_at_numerical_admissibility_limit'))
+        event = result['events'][0]
+        self.assertEqual((event['side'], event['kind'], event['limit_source']),
+                         ('left', 'reversal', 'predictor_stage'))
+        self.assertEqual(event['corrected_reversal_status'],
+                         'not_bracketed_in_complete_trial')
+        self.assertIsNone(event['corrected_reversal_bracket_time_s'])
+        self.assertIsNone(event['corrected_reversal_gap_after_feasible_stop_s'])
+        self.assertGreater(event['corrected_reversal_upper_margin_rad_s'], 0.)
+
+    def test_rounded_winding_stage_keeps_one_owned_packet(self):
+        for first_flux, second_flux, retained in (
+                (1e-17, 2e-13, 1.011),
+                (2e-13, 1e-17, 1.01)):
+            first = {'port': {'reference_flux_m_s': first_flux,
+                              'span_stretch': 1.01}}
+            second = {'port': {'reference_flux_m_s': second_flux,
+                               'span_stretch': 1.011}}
+            packets, discrepancy = one._winding_packets(
+                1., 1.-1e-13, 1., first, second)
+            self.assertEqual(len(packets), 1)
+            self.assertEqual(packets[0].high_label_m, 1.)
+            self.assertEqual(packets[0].low_label_m, 1.-1e-13)
+            self.assertEqual(packets[0].retained_stretch, retained)
+            deposited = EA/2*(packets[0].high_label_m-
+                              packets[0].low_label_m)*(retained-1)**2
+            stage = EA/2*(first_flux/2*(1.01-1)**2+
+                          second_flux/2*(1.011-1)**2)
+            self.assertAlmostEqual(discrepancy, deposited-stage,
+                                   delta=1e-25)
+
     def test_corrected_donor_arrival_has_separate_constant_flow_oracle(self):
         for count in (64, 128, 256):
             for reflected in (False, True):

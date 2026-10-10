@@ -516,6 +516,17 @@ def _winding_packets(old_cut, new_cut, h, first, second):
             raise ValueError('T2 zero-stage packet quadrature exceeds energy budget')
         return [WoundRecord(new_cut, old_cut, owner_stretch)], discrepancy
     boundary = old_cut - transfers[0]
+    if not new_cut < boundary < old_cut:
+        # Close to reversal, a positive stage transfer can round away when
+        # placed on an absolute label. Keep the accepted whole-step packet.
+        stage_energy = sum(_record_energy(0, transfer, stretch)
+                           for transfer, stretch in zip(transfers, stretches))
+        owner_stretch = (stretches[0] if boundary <= new_cut else
+                         stretches[1])
+        discrepancy = _record_energy(new_cut, old_cut, owner_stretch) - stage_energy
+        if abs(discrepancy) > 1e-12:
+            raise ValueError('T2 rounded stage packet exceeds energy budget')
+        return [WoundRecord(new_cut, old_cut, owner_stretch)], discrepancy
     if abs(boundary - transfers[1] - new_cut) > 1e-11:
         raise ValueError('T2 winding stage packet labels are not contiguous')
     return [WoundRecord(boundary, old_cut, stretches[0]),

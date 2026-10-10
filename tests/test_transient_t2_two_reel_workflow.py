@@ -10,7 +10,8 @@ from physicroll.run_contract import RunSpec
 from physicroll.transient_t2_two_reel_workflow import episode_from_spec
 from physicroll.workflows import run_workflow
 from tests.test_transient_t2_two_reel import (affine_two_release_case,
-                                              depletion_case)
+                                              depletion_case,
+                                              standing_reversal_case)
 
 
 EXAMPLE = (Path(__file__).resolve().parents[1] /
@@ -18,6 +19,30 @@ EXAMPLE = (Path(__file__).resolve().parents[1] /
 
 
 class TwoReelWorkflowTests(unittest.TestCase):
+    def test_corrected_reversal_is_source_bound_and_replayable(self):
+        payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
+        episode = asdict(standing_reversal_case(torque_knots=100))
+        payload['requested_inputs']['episode'] = episode
+        payload['resolved_inputs']['episode'] = episode
+        spec = RunSpec(payload)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'reversal-stop'
+            saved = create_run_bundle(spec, path)
+            self.assertEqual(verify_run_bundle(path)[1].sha256, saved.sha256)
+            self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
+            data = saved.to_dict()
+            events = data['outputs']['two_reel_span_t2']['events']
+            self.assertEqual([(item['side'], item['kind']) for item in events],
+                             [('left', 'reversal'), ('right', 'reversal')])
+            for event in events:
+                low, high = event['corrected_reversal_bracket_time_s']
+                self.assertAlmostEqual(
+                    event['corrected_reversal_gap_after_feasible_stop_s'],
+                    low-data['outputs']['completed_duration_s'], delta=1e-14)
+                self.assertLess(high-low, 1e-11)
+            self.assertEqual(data['assessments']['scientific_qualification'],
+                             'NOT_ASSESSED')
+
     def test_depletion_stop_is_source_bound_and_replayable(self):
         payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
         episode = asdict(depletion_case())

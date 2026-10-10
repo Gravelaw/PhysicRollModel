@@ -104,6 +104,20 @@ event. Sign changes can miss grazing or repeated crossings; a physical
 event-time enclosure would require a separate solution-error bound and a
 nonzero crossing-speed bound.
 
+For a reversal candidate, the solver likewise bisects the **phase-signed
+corrected angular speed** within the original complete trial. It reports a
+`corrected_reversal_bracket_time_s` only if that signed corrected endpoint
+crosses zero; a predictor-only crossing leaves the field null. Each corrected
+donor or reversal bracket reports its time gap from the common accepted stop,
+including when the candidate was grouped behind another limit. The reversal
+bracket is also an estimate for the frozen pre-event numerical branch, with
+the same physical-event caveats. It does not switch phase or move a wound
+record. At a very small positive winding step, an individual Heun stage's
+label interval can round to zero; the accepted whole-step packet then keeps
+the represented material after bounding its strain-energy quadrature
+discrepancy. The public two-reel result reports aggregate storage defects,
+not an individual packet discrepancy.
+
 ## Independent synthetic checks
 
 At `λ=1.001`, global `v=0.1001 m/s`, the left release flux is `−0.1`
@@ -161,6 +175,20 @@ shows its predictor-to-corrected arrival gap falls on a finer time grid;
 forcing-knot placement can cause a plateau between adjacent CFL choices.
 A faster predictor with no corrected sign change is checked to return no
 invented corrected-arrival bracket.
+
+An independent symmetric standing-wave solution supplies two driven winding
+reels with simultaneous exact reversal at `0.02 s`, positive tension and
+cell-average initial fields integrated over exact material labels. Both
+corrected numerical reversal brackets approach `0.02 s` across 64, 128 and
+256 cells; the 256-cell error is below `1e-9 s` for 400 torque intervals.
+The bracket widths are below `1e-11 s`; separate CFL and torque-knot
+refinement checks compare successive numerical estimates. Independent
+per-reel impulse and drive work, whole-system mass, inventory and mechanical
+energy are checked, with zero winding heat. A separate predictor-only
+reversal case verifies that no corrected root is invented. This is an
+equation-level synthetic verification case, not a mill reversal validation;
+the two event records share the manufactured symmetry and do not prove
+general simultaneous-event resolution.
 
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical

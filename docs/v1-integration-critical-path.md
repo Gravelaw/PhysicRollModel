@@ -11,6 +11,10 @@ material-label ownership and separate ledgers. Its optional one-sided
 reversal, internal-donor, tautness and near-depletion stops save a feasible
 accepted state; their numerical brackets do not certify physical event times. Both
 increments have source-bound saved runs and independent synthetic checks.
+Corrected-endpoint diagnostics now separately bracket internal donor arrival
+and reel reversal when the frozen pre-event numerical branch changes sign;
+the symmetric two-reel standing-wave reversal checks spatial, temporal and
+forcing refinement without changing reel phase or ownership.
 Physical event timing, post-event transitions including depletion, bite/drive engagement, restart, T3 contact
 and full v1 coupling remain open.
 

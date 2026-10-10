@@ -459,35 +459,46 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     limiting_corrected = corrected_value <= 0
     limit_source = ('both' if limiting_stage and limiting_corrected else
                     'predictor_stage' if limiting_stage else 'corrected_endpoint')
-    corrected_arrival = {}
-    if kind == 'donor_boundary':
-        corrected_upper = (boundary-full_trial['final']['ports'][side][
-            'cut_label_m'])
+    corrected_event = {}
+    if kind in ('donor_boundary', 'reversal'):
+        def corrected_margin(probe):
+            if kind == 'reversal':
+                sign = 1 if getattr(episode, side).phase == 'wind' else -1
+                return sign*probe['reels'][side][1]
+            return boundary-probe['final']['ports'][side]['cut_label_m']
+
+        corrected_upper = corrected_margin(full_trial)
+        prefix = ('corrected_arrival' if kind == 'donor_boundary' else
+                  'corrected_reversal')
+        margin_unit = 'm' if kind == 'donor_boundary' else 'rad_s'
         if corrected_upper <= 0:
             corrected_lower_h, corrected_upper_h = 0., h
-            corrected_lower = boundary-first['ports'][side]['cut_label_m']
+            corrected_lower = (boundary-first['ports'][side]['cut_label_m']
+                if kind == 'donor_boundary' else
+                (1 if getattr(episode, side).phase == 'wind' else -1)*
+                reels[side][1])
             for _ in range(48):
                 if corrected_upper_h-corrected_lower_h <= EVENT_BRACKET_TOLERANCE_S:
                     break
                 middle = (corrected_lower_h+corrected_upper_h)/2
                 probe = _advance(cells, reels, time_s, middle, records, episode)
-                margin = boundary-probe['final']['ports'][side]['cut_label_m']
+                margin = corrected_margin(probe)
                 if margin > 0:
                     corrected_lower_h, corrected_lower = middle, margin
                 else:
                     corrected_upper_h, corrected_upper = middle, margin
-            corrected_arrival = {
-                'corrected_arrival_status': 'bracketed_in_complete_trial',
-                'corrected_arrival_bracket_time_s':
+            corrected_event = {
+                f'{prefix}_status': 'bracketed_in_complete_trial',
+                f'{prefix}_bracket_time_s':
                     [time_s+corrected_lower_h, time_s+corrected_upper_h],
-                'corrected_arrival_lower_margin_m': corrected_lower,
-                'corrected_arrival_upper_margin_m': corrected_upper}
+                f'{prefix}_lower_margin_{margin_unit}': corrected_lower,
+                f'{prefix}_upper_margin_{margin_unit}': corrected_upper}
         else:
-            corrected_arrival = {
-                'corrected_arrival_status': 'not_bracketed_in_complete_trial',
-                'corrected_arrival_bracket_time_s': None,
-                'corrected_arrival_upper_margin_m': corrected_upper}
-    return {**candidate, **corrected_arrival,
+            corrected_event = {
+                f'{prefix}_status': 'not_bracketed_in_complete_trial',
+                f'{prefix}_bracket_time_s': None,
+                f'{prefix}_upper_margin_{margin_unit}': corrected_upper}
+    return {**candidate, **corrected_event,
             'root_basis': 'heun_numerical_admissibility',
             'limit_source': limit_source,
             'localized_upper_stage_location': (
@@ -654,9 +665,11 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'corrected_margin_at_shared_stop': corrected_margin,
                         'grouping_interpretation':
                             'numerical_only_not_physical_simultaneity'})
-                    if item['kind'] == 'donor_boundary':
-                        bracket = item['corrected_arrival_bracket_time_s']
-                        events[-1]['corrected_arrival_gap_after_feasible_stop_s'] = (
+                    if item['kind'] in ('donor_boundary', 'reversal'):
+                        prefix = ('corrected_arrival' if item['kind'] ==
+                                  'donor_boundary' else 'corrected_reversal')
+                        bracket = item[f'{prefix}_bracket_time_s']
+                        events[-1][f'{prefix}_gap_after_feasible_stop_s'] = (
                             bracket[0]-(time_s+h) if bracket is not None else None)
                 outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):

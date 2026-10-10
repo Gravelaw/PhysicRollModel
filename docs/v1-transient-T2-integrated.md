@@ -42,7 +42,10 @@ bound for the nonlinear coupled solution or a substitute for event checks.
 At the right port, the outgoing span characteristic is \(r=v-c\lambda\).
 For winding, \(v_s=R\omega\), \(\lambda_s=(v_s-r)/c\) and
 \(q=v_s/\lambda_s\). The accepted Heun stages deposit immutable packets
-carrying their own material labels and computed stretch. For release,
+carrying their own material labels and computed stretch. If a positive
+stage packet rounds to zero width on an absolute label near
+reversal, one whole-step packet retains the represented material only when
+its strain-energy quadrature discrepancy is at most `1e-12 J`. For release,
 \(\lambda_w\) comes from the exposed stored record, then
 \(q=R\omega/\lambda_w\), \(\lambda_s=r/(q-c)\), and
 \(v_s=q\lambda_s\). A trial holds that donor fixed until a located layer
