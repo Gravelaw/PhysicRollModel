@@ -137,6 +137,7 @@ def main():
                      'v1_schedule_search.runspec.json',
                      'v1_prescribed_transport_t1.runspec.json',
                      'v1_torque_driven_span_reel_t2.runspec.json',
+                     'v1_two_reel_span_t2.runspec.json',
                      'v1_shao_benchmark.runspec.json',
                      'v1_shao_sensitivity.runspec.json'):
             spec = outside / name
@@ -166,7 +167,8 @@ def main():
             if name in ('v1_checked_pass.runspec.json',
                         'v1_schedule_search.runspec.json',
                         'v1_prescribed_transport_t1.runspec.json',
-                        'v1_torque_driven_span_reel_t2.runspec.json'):
+                        'v1_torque_driven_span_reel_t2.runspec.json',
+                        'v1_two_reel_span_t2.runspec.json'):
                 bundle = outside / f'{name}.run'
                 subprocess.run([str(python), '-I', '-m', 'physicroll.bundle_cli',
                                 'create', '--run-spec', str(spec), '--out', str(bundle)],

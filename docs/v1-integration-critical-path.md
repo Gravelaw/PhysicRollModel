@@ -1,13 +1,16 @@
 # V1 transient integration critical path
 
-**Status: first integrated right-reel increment.** The executable T2A1–T2A9
+**Status: pre-engaged two-reel increment.** The executable T2A1–T2A9
 modules remain restricted verification fixtures. The
 [integrated T2 increment](v1-transient-T2-integrated.md) now combines a
 torque-driven elastic span and right reel with winding, matched or mismatched
 release, stored-label ownership and an explicitly idealized dissipative
-pickup law. It has a source-bound saved-run contract and independent synthetic
-oracles. The left reel, bite/drive engagement, restart, T3 contact and full v1
-coupling remain open.
+pickup law. The [two-reel interval](v1-transient-T2-two-reel.md) adds two
+independent prescribed drive torques, predicted reel speeds, mirrored
+material-label ownership and separate ledgers. Both increments have
+source-bound saved runs and independent synthetic checks. Two-reel event
+handling, bite/drive engagement, restart, T3 contact and full v1 coupling
+remain open.
 
 ## Next decisions and executable gates
 
@@ -62,9 +65,9 @@ coupling remain open.
    and memory, numerical regression, and independent review.
 
 The right-reel pickup transition is independently reviewed and implemented as
-a labeled model proposal. Step 2 next needs two-ended reel and engagement
-ports with their own independent work/impulse and event gates; the current
-right-reel Episode is not full T2. The first T3 full 3D elastic/contact
+a labeled model proposal. Step 2 next needs a shared earliest-event scheduler
+for the two-reel port and compatible engagement, with independent work/impulse
+and event gates; the current two-reel Episode is not full T2. The first T3 full 3D elastic/contact
 candidate has equation-level independent review, while its numerical engine
 and contact enforcement remain to be built. No synthetic fixture supplies
 material calibration or transient mill measurements. Software verification

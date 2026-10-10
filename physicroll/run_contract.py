@@ -16,7 +16,7 @@ SCHEMA_VERSION = '1'
 WORKFLOWS = frozenset({
     'legacy_pass', 'checked_pass', 'checked_schedule', 'schedule_search',
     'benchmark', 'sensitivity', 'operating_replay', 'prescribed_transport_t1',
-    'torque_driven_span_reel_t2',
+    'torque_driven_span_reel_t2', 'two_reel_span_t2',
 })
 MODEL_KEYS = frozenset({'solver', 'material', 'bite', 'thermal'})
 IDENTITY_KEYS = frozenset({'code_version', 'model_version', 'material_id',
@@ -153,8 +153,9 @@ def _validate_run(data):
     for key, value in data['model_choices'].items():
         _text(value, f'model_choices.{key}')
     _object(data['unit_conventions'], 'unit_conventions', set(CONVENTIONS))
-    conventions = (T2_CONVENTIONS if data['workflow_kind'] ==
-                   'torque_driven_span_reel_t2' else CONVENTIONS)
+    conventions = (T2_CONVENTIONS if data['workflow_kind'] in
+                   ('torque_driven_span_reel_t2', 'two_reel_span_t2')
+                   else CONVENTIONS)
     for key, expected in conventions.items():
         if type(data['unit_conventions'][key]) is not type(expected) or data['unit_conventions'][key] != expected:
             raise ValueError(f'unsupported unit_conventions.{key}')

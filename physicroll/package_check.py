@@ -83,6 +83,14 @@ def main():
             t2['maximum_combined_inventory_defect_kg'] >= 1e-10 or
             t2_result['assessments']['scientific_qualification'] != 'NOT_ASSESSED'):
         raise AssertionError('packaged T2 span/reel example changed')
+    pair_spec = RunSpec(read_example('v1_two_reel_span_t2.runspec.json'))
+    pair_result = run_workflow(pair_spec).to_dict()
+    pair = pair_result['outputs']['two_reel_span_t2']
+    if (pair_result['outputs']['episode_outcome'] != 'COMPLETED_DECLARED_DURATION' or
+            pair['torque_role'] != 'prescribed_time_only_input' or
+            pair['maximum_combined_inventory_defect_kg'] >= 1e-10 or
+            pair_result['assessments']['scientific_qualification'] != 'NOT_ASSESSED'):
+        raise AssertionError('packaged two-reel T2 example changed')
     print('Installed package check passed: legacy and checked examples, schemas, '
           'audited Shao fixture, conditional workflows, O0 replay, finite search, T1 and T2')
 

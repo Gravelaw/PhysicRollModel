@@ -7,7 +7,7 @@
   "required": ["schema_version", "workflow_kind", "model_choices", "unit_conventions", "identities", "source_hashes", "card_hashes", "numerical_settings", "requested_inputs", "resolved_inputs", "recipe_targets", "observations"],
   "properties": {
     "schema_version": {"const": "1"},
-    "workflow_kind": {"enum": ["legacy_pass", "checked_pass", "checked_schedule", "schedule_search", "benchmark", "sensitivity", "operating_replay", "prescribed_transport_t1", "torque_driven_span_reel_t2"]},
+    "workflow_kind": {"enum": ["legacy_pass", "checked_pass", "checked_schedule", "schedule_search", "benchmark", "sensitivity", "operating_replay", "prescribed_transport_t1", "torque_driven_span_reel_t2", "two_reel_span_t2"]},
     "model_choices": {
       "type": "object", "additionalProperties": false,
       "required": ["solver", "material", "bite", "thermal"],
@@ -50,7 +50,7 @@
     "recipe_targets": {"type": "object"},
     "observations": {"type": "object"}
   },
-  "allOf": [{"if": {"properties": {"workflow_kind": {"const": "torque_driven_span_reel_t2"}}}, "then": {"properties": {"unit_conventions": {"properties": {"torque_sign": {"const": "winding_axis_positive"}}}}}, "else": {"properties": {"unit_conventions": {"properties": {"torque_sign": {"const": "motoring_positive_regeneration_negative"}}}}}}],
+  "allOf": [{"if": {"properties": {"workflow_kind": {"enum": ["torque_driven_span_reel_t2", "two_reel_span_t2"]}}}, "then": {"properties": {"unit_conventions": {"properties": {"torque_sign": {"const": "winding_axis_positive"}}}}}, "else": {"properties": {"unit_conventions": {"properties": {"torque_sign": {"const": "motoring_positive_regeneration_negative"}}}}}}],
   "$defs": {
     "nonempty": {"type": "string", "pattern": "\\S"},
     "nullableNonempty": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty"}]},
