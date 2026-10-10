@@ -76,9 +76,9 @@ inventory bounds, parcel crossings and independent frame cadences against
 closed formulas. Reject incompatible initial radius/length or secondary
 speed declarations rather than average them. Check constant strip volume and
 mass including the free span; no dynamics, tension, torque, plastic strain,
-contact, gauge prediction or thermal field is claimed. A restart contract must
-preserve displacement, inventory, unwrapped angles, parcel ownership, event
-consumption and source identity; restart equivalence is a separate T1 gate.
+contact, gauge prediction or thermal field is claimed. The implemented restart
+contract preserves displacement, inventory, unwrapped angles, parcel ownership,
+event consumption and source identity; restart equivalence has separate tests.
 
 Initial numerical-verification tolerances for these analytic checks are
 `1e-10 m + 1e-12 × characteristic length` for displacement/inventory,

@@ -1,7 +1,8 @@
 # T0 transient solver design candidate
 
 **Status: design under renewed review for width-resolved structural dynamics;
-no transient equations are implemented.** This
+the restricted prescribed-motion T1 layer is implemented, while T2/T3
+dynamics and contact equations remain design candidates.** This
 develops the [v1 scope amendment](v1-scope-amendment-2026-10-10.md) after an
 independent Astra review of primary technical sources. The user requires all
 three solver layers and dynamic Blender/USD animation. This document records

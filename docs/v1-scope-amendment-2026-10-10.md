@@ -95,7 +95,8 @@ remain separate. Independent rate-dependent material/contact data, drive and
 reel parameters, transient observations with uncertainty, and a specified
 accuracy decision are needed before claims of physical validation or mill use.
 
-The next executable step is T0, with a frozen synthetic acceptance set and
-integration interfaces. No algorithm, delivery date, or physical accuracy
+The restricted T1 prescribed-motion layer now has a saved-run and restart
+contract. T2/T3 remain gated by the T0 independent benchmark set and
+equation-level coupling review. No algorithm, delivery date, or physical accuracy
 claim is selected merely by this scope decision; those choices require
 measured prototypes and specialist review.
