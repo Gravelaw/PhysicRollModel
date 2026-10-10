@@ -1,9 +1,9 @@
-"""Pre-engaged two-reel elastic-span prototype with bounded reel-limit stops.
+"""Pre-engaged two-reel elastic-span prototype with admissibility stops.
 
 Both reels are driven by independent, declared time-only torques. Each local
 angular coordinate is winding-positive. This narrow increment rejects phase
-changes and donor changes can be approached and stopped on their feasible
-side under an explicit policy. A Heun predictor may reach its limit before
+changes, donor changes and first tension loss can be approached and stopped
+on their feasible side under an explicit policy. A Heun predictor may reach its limit before
 the corrected endpoint; this is a numerical admissibility stop, not a measured
 physical event time. Slack and reel depletion remain rejected.
 """
@@ -17,9 +17,14 @@ from . import transient_t2a7 as geometry
 from . import transient_t2a8 as fv
 
 
-MODEL_ID = 'T2_TWO_REEL_PREENGAGED_REEL_ADMISSIBILITY_STOP_V1'
+MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_ADMISSIBILITY_STOP_V1'
 EVENT_BRACKET_TOLERANCE_S = 1e-11
 EVENT_COINCIDENCE_TOLERANCE_S = 1e-9
+TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH = 1-1e-4
+
+
+class _TrialCompressionLimit(ValueError):
+    """A disposable numerical probe exceeded its small signed-elastic range."""
 
 
 @dataclass(frozen=True)
@@ -76,7 +81,7 @@ class TwoReelEpisode:
                 self.cfl_limit not in (span.CFL_LIMIT, span.CFL_LIMIT/2,
                                        span.CFL_LIMIT/4)):
             raise ValueError('T2 two-reel episode exceeds frozen mesh/time bounds')
-        if self.event_policy not in ('reject', 'stop_at_reel_admissibility_limit'):
+        if self.event_policy not in ('reject', 'stop_at_numerical_admissibility_limit'):
             raise ValueError('T2 two-reel event policy is unsupported')
         if not isinstance(self.left, ReelEnd) or not isinstance(self.right, ReelEnd):
             raise ValueError('T2 two-reel episode requires both named ends')
@@ -103,7 +108,8 @@ class TwoReelEpisode:
             raise ValueError('T2 two-reel observation times must be ordered')
 
 
-def _local_port(cells, side, length, omega, phase, records, end, donor=None):
+def _local_port(cells, side, length, omega, phase, records, end, donor=None,
+                trial_probe=False):
     normal = -1 if side == 'left' else 1
     if side == 'left':
         outgoing = -(3*single._characteristic(cells[0], 1) -
@@ -117,6 +123,8 @@ def _local_port(cells, side, length, omega, phase, records, end, donor=None):
     if phase == 'wind':
         speed = wound_speed
         stretch = (speed-outgoing)/span.REFERENCE_WAVE_SPEED_M_S
+        if stretch <= 0:
+            raise ValueError('T2 two-reel winding trial has nonpositive stretch')
         q = speed/stretch
         retained_stretch = stretch
         donor_role = 'newly_deposited_span_state'
@@ -128,8 +136,10 @@ def _local_port(cells, side, length, omega, phase, records, end, donor=None):
         speed = q*stretch
         donor_role = 'retained_wound_record'
     single._require_subsonic(stretch, speed)
+    if trial_probe and stretch < TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH:
+        raise _TrialCompressionLimit('T2 two-reel signed-elastic probe limit')
     if (not math.isfinite(q) or abs(q) >= span.REFERENCE_WAVE_SPEED_M_S or
-            retained_stretch <= 1):
+            retained_stretch <= 1 and not (trial_probe and phase == 'wind')):
         raise ValueError('T2 two-reel port left taut subsonic domain')
     tension = span.EA_N*(stretch-1)
     strain = span.EA_N*(stretch-1)**2/2
@@ -149,11 +159,13 @@ def _local_port(cells, side, length, omega, phase, records, end, donor=None):
             'dissipated_power_w': dissipation}
 
 
-def _rates(cells, reels, time_s, records, episode, donors=None):
+def _rates(cells, reels, time_s, records, episode, donors=None,
+           trial_probe=False):
     ports = {side: _local_port(cells, side, reels[side][0], reels[side][1],
                               getattr(episode, side).phase, records[side],
                               getattr(episode, side),
-                              None if donors is None else donors[side])
+                              None if donors is None else donors[side],
+                              trial_probe)
              for side in ('left', 'right')}
     slopes = []
     for index in range(len(cells)):
@@ -168,19 +180,28 @@ def _rates(cells, reels, time_s, records, episode, donors=None):
                 2*(cells[index+1][j]-cells[index][j])) for j in (0, 1)))
     fluxes = [fv._physical_flux(ports['left']['state'])]
     signal = 0.0
-    minimum_stretch = min(port['stretch'] for port in ports.values())
-    for cell in cells:
+    minimum_side = min(ports, key=lambda side: ports[side]['stretch'])
+    minimum_stretch = ports[minimum_side]['stretch']
+    minimum_location = minimum_side+'_port'
+    for cell_index, cell in enumerate(cells):
         stretch, speed = fv._primitive(cell)
         single._require_subsonic(stretch, speed)
-        minimum_stretch = min(minimum_stretch, stretch)
+        if trial_probe and stretch < TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH:
+            raise _TrialCompressionLimit('T2 two-reel signed-elastic probe limit')
+        if stretch < minimum_stretch:
+            minimum_stretch, minimum_location = stretch, 'cell_'+str(cell_index)
         signal = max(signal, abs(speed)+stretch*span.REFERENCE_WAVE_SPEED_M_S)
     for index in range(len(cells)-1):
         left = tuple(cells[index][j]+slopes[index][j]/2 for j in (0, 1))
         right = tuple(cells[index+1][j]-slopes[index+1][j]/2 for j in (0, 1))
-        for state in (left, right):
+        for face_side, state in (('left', left), ('right', right)):
             stretch, speed = fv._primitive(state)
             single._require_subsonic(stretch, speed)
-            minimum_stretch = min(minimum_stretch, stretch)
+            if trial_probe and stretch < TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH:
+                raise _TrialCompressionLimit('T2 two-reel signed-elastic probe limit')
+            if stretch < minimum_stretch:
+                minimum_stretch = stretch
+                minimum_location = f'face_{index}_{face_side}'
         face_flux, face_signal = fv._interface_flux(left, right)
         fluxes.append(face_flux)
         signal = max(signal, face_signal)
@@ -212,28 +233,33 @@ def _rates(cells, reels, time_s, records, episode, donors=None):
             'reel_rates': reel_rates, 'drive_powers': drive_powers,
             'angular_rhs': angular_rhs, 'left_flux': fluxes[0],
             'right_flux': fluxes[-1], 'minimum_stretch': minimum_stretch,
+            'minimum_stretch_location': minimum_location,
             'maximum_signal_m_s': signal}
 
 
 def _advance(cells, reels, time_s, h, records, episode):
+    trial_probe = episode.event_policy == 'stop_at_numerical_admissibility_limit'
     donors = {}
     for side in ('left', 'right'):
         end = getattr(episode, side)
         cut = end.initial_local_cut_m + end.initial_reference_length_m - reels[side][0]
         donors[side] = (single._donor(records[side], cut).retained_stretch
                         if end.phase == 'release' else None)
-    first = _rates(cells, reels, time_s, records, episode, donors)
+    first = _rates(cells, reels, time_s, records, episode, donors,
+                   trial_probe)
     predicted = [tuple(cell[j]+h*rate[j] for j in (0, 1))
                  for cell, rate in zip(cells, first['field_rates'])]
     predicted_reels = {side: tuple(reels[side][j]+h*first['reel_rates'][side][j]
                                    for j in range(3)) for side in ('left', 'right')}
-    second = _rates(predicted, predicted_reels, time_s+h, records, episode, donors)
+    second = _rates(predicted, predicted_reels, time_s+h, records, episode, donors,
+                    trial_probe)
     updated = [tuple((cells[i][j]+predicted[i][j]+h*second['field_rates'][i][j])/2
                      for j in (0, 1)) for i in range(len(cells))]
     updated_reels = {side: tuple((reels[side][j]+predicted_reels[side][j]+
                                   h*second['reel_rates'][side][j])/2
                                  for j in range(3)) for side in ('left', 'right')}
-    final = _rates(updated, updated_reels, time_s+h, records, episode, donors)
+    final = _rates(updated, updated_reels, time_s+h, records, episode, donors,
+                   trial_probe)
     courant = h*max(rate['maximum_signal_m_s'] for rate in
                     (first, second, final))/(span.SPAN_LENGTH_M/episode.cell_count)
     return {'cells': updated, 'reels': updated_reels, 'first': first,
@@ -302,7 +328,7 @@ def _reject_unresolved_event(start, trial, episode, records):
             if port['cut_label_m'] >= records[side][0].high_label_m - 1e-12:
                 raise ValueError('T2 two-reel inventory depletion')
             donor_margin = (0. if episode.event_policy ==
-                            'stop_at_reel_admissibility_limit' else 1e-12)
+                            'stop_at_numerical_admissibility_limit' else 1e-12)
             if end.phase == 'release' and port['cut_label_m'] >= (
                     single._next_donor_boundary(records[side], old_cut)-
                     donor_margin):
@@ -315,6 +341,9 @@ def _reject_unresolved_event(start, trial, episode, records):
 
 
 def _reel_event_value(trial, side, kind, boundary=None):
+    if kind == 'tension_zero':
+        return min(trial['second']['minimum_stretch'],
+                   trial['final']['minimum_stretch'])-1
     if kind == 'reversal':
         sign = (1 if trial['first']['ports'][side]['reference_flux_m_s'] > 0
                 else -1)
@@ -325,9 +354,8 @@ def _reel_event_value(trial, side, kind, boundary=None):
 
 
 def _supported_event_candidates(start, trial, episode, records):
-    """Return endpoint-bracketed events and predictor-only excursions."""
+    """Return numerical stage or corrected-endpoint limit candidates."""
     candidates = []
-    predictor_only = False
     for side in ('left', 'right'):
         end = getattr(episode, side)
         start_cut = start['ports'][side]['cut_label_m']
@@ -336,26 +364,23 @@ def _supported_event_candidates(start, trial, episode, records):
         sign = 1 if end.phase == 'wind' else -1
         stage_omega = sign*stage['ports'][side]['omega_rad_s']
         final_omega = sign*trial['reels'][side][1]
-        if stage_omega <= 0 and final_omega > 0:
-            predictor_only = True
-        if final_omega <= 0:
+        if min(stage_omega, final_omega) <= 0:
             candidates.append({'side': side, 'kind': 'reversal',
                                'boundary': None, 'unit': 'rad/s'})
         if end.phase == 'release':
             boundary = single._next_donor_boundary(records[side], start_cut)
             stage_cut = stage['ports'][side]['cut_label_m']
             final_cut = final['ports'][side]['cut_label_m']
-            if stage_cut >= boundary and final_cut < boundary:
-                predictor_only = True
-            if final_cut >= boundary:
+            if max(stage_cut, final_cut) >= boundary:
                 if boundary >= records[side][0].high_label_m-1e-12:
                     raise ValueError('T2 two-reel depletion remains unsupported')
                 candidates.append({'side': side, 'kind': 'donor_boundary',
                                    'boundary': boundary, 'unit': 'reference m'})
     if min(trial['second']['minimum_stretch'],
            trial['final']['minimum_stretch']) <= 1:
-        raise ValueError('T2 two-reel tension-zero localization remains unsupported')
-    return candidates, predictor_only
+        candidates.append({'side': 'span', 'kind': 'tension_zero',
+                           'boundary': 1., 'unit': 'stretch excess'})
+    return candidates
 
 
 def _locate_reel_event(cells, reels, records, time_s, h, episode,
@@ -364,10 +389,11 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     side, kind, boundary = (candidate[key] for key in
                             ('side', 'kind', 'boundary'))
     lower_h, upper_h = 0., h
-    first_port = upper_trial['first']['ports'][side]
-    lower_value = ((1 if getattr(episode, side).phase == 'wind' else -1)*
-                   reels[side][1] if kind == 'reversal' else
-                   boundary-first_port['cut_label_m'])
+    first = upper_trial['first']
+    lower_value = (first['minimum_stretch']-1 if kind == 'tension_zero' else
+        (1 if getattr(episode, side).phase == 'wind' else -1)*reels[side][1]
+        if kind == 'reversal' else
+        boundary-first['ports'][side]['cut_label_m'])
     upper_value = _reel_event_value(upper_trial, side, kind, boundary)
     if lower_value <= 0 or upper_value > 0:
         raise ValueError('T2 two-reel event lacks opposite complete-trial signs')
@@ -384,7 +410,10 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
             upper_h, upper_value, upper_trial = middle, value, probe
     if lower_h <= 1e-13 or lower_trial is None:
         raise ValueError('T2 two-reel feasible event step collapsed')
-    if kind == 'reversal':
+    if kind == 'tension_zero':
+        stage_value = upper_trial['second']['minimum_stretch']-1
+        corrected_value = upper_trial['final']['minimum_stretch']-1
+    elif kind == 'reversal':
         sign = 1 if getattr(episode, side).phase == 'wind' else -1
         stage_value = sign*upper_trial['second']['ports'][side]['omega_rad_s']
         corrected_value = sign*upper_trial['reels'][side][1]
@@ -397,6 +426,12 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
                     'predictor_stage' if limiting_stage else 'corrected_endpoint')
     return {**candidate, 'root_basis': 'heun_numerical_admissibility',
             'limit_source': limit_source,
+            'localized_upper_stage_location': (
+                upper_trial['second']['minimum_stretch_location']
+                if kind == 'tension_zero' else None),
+            'localized_upper_corrected_location': (
+                upper_trial['final']['minimum_stretch_location']
+                if kind == 'tension_zero' else None),
             'event_time_interpretation': 'numerical_bracket_not_physical_event_time',
             'localized_upper_stage_value': stage_value,
             'localized_upper_corrected_value': corrected_value,
@@ -407,7 +442,7 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
 
 
 def run_two_reel_episode(episode: TwoReelEpisode):
-    """Advance a pre-engaged interval, stopping at reel admissibility limits."""
+    """Advance a pre-engaged interval, stopping at numerical admissibility limits."""
     if not isinstance(episode, TwoReelEpisode):
         raise ValueError('T2 two-reel requires a validated episode')
     cells = [tuple(cell) for cell in episode.initial_conserved_fields]
@@ -440,7 +475,18 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             raise ValueError('T2 two-reel initial or committed slack')
         maximum['minimum_stretch'] = min(maximum['minimum_stretch'],
                                          start['minimum_stretch'])
-        if episode.event_policy == 'stop_at_reel_admissibility_limit':
+        if episode.event_policy == 'stop_at_numerical_admissibility_limit':
+            if start['minimum_stretch']-1 <= 1e-12:
+                events.append({'side': 'span', 'kind': 'tension_zero',
+                    'boundary': 1., 'unit': 'stretch excess',
+                    'root_basis': 'accepted_state_tautness_proximity',
+                    'limit_source': 'accepted_state',
+                    'stretch_excess': start['minimum_stretch']-1,
+                    'location': start['minimum_stretch_location'],
+                    'bracket_time_s': None,
+                    'event_time_interpretation':
+                        'numerical_proximity_not_physical_event_time',
+                    'feasible_stop_time_s': time_s})
             for side in ('left', 'right'):
                 if getattr(episode, side).phase != 'release':
                     continue
@@ -462,7 +508,7 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                         'active_retained_stretch':
                             start['ports'][side]['retained_stretch']})
             if events:
-                outcome = 'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT'
+                outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
                 break
         knot = single._first_future_knot(time_s,
             episode.left.applied_torque_history,
@@ -472,41 +518,36 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         if h <= 1e-13:
             raise ValueError('T2 two-reel step collapsed')
         for _ in range(20):
-            trial = _advance(cells, reels, time_s, h, records, episode)
+            try:
+                trial = _advance(cells, reels, time_s, h, records, episode)
+            except _TrialCompressionLimit:
+                h /= 2
+                if h <= 1e-13:
+                    raise ValueError('T2 two-reel signed-elastic probe collapsed')
+                continue
             if trial['courant'] <= episode.cfl_limit*(1+1e-12):
                 break
             h /= 2
         else:
             raise ValueError('T2 two-reel CFL retry budget exhausted')
-        if episode.event_policy == 'stop_at_reel_admissibility_limit':
-            for _ in range(24):
-                candidates, predictor_only = _supported_event_candidates(
-                    start, trial, episode, records)
-                if predictor_only:
-                    h /= 2
-                    if h <= 1e-13:
-                        raise ValueError('T2 two-reel predictor event retry collapsed')
-                    trial = _advance(cells, reels, time_s, h, records, episode)
-                    continue
-                if candidates:
-                    located = [_locate_reel_event(
-                        cells, reels, records, time_s, h, episode,
-                        candidate, trial) for candidate in candidates]
-                    selected = min(located, key=lambda item: item['feasible_step_s'])
-                    grouped = [item for item in located if
-                        item['bracket_time_s'][0] <=
-                        selected['bracket_time_s'][1]+
-                        EVENT_COINCIDENCE_TOLERANCE_S]
-                    h, trial = (selected['feasible_step_s'],
-                                selected['feasible_trial'])
-                    events = [{key: value for key, value in item.items()
-                               if key not in ('feasible_step_s', 'feasible_trial')}
-                              for item in sorted(grouped,
-                                  key=lambda item: (item['side'], item['kind']))]
-                    outcome = 'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT'
-                break
-            else:
-                raise ValueError('T2 two-reel predictor retry budget exhausted')
+        if episode.event_policy == 'stop_at_numerical_admissibility_limit':
+            candidates = _supported_event_candidates(start, trial, episode, records)
+            if candidates:
+                located = [_locate_reel_event(
+                    cells, reels, records, time_s, h, episode,
+                    candidate, trial) for candidate in candidates]
+                selected = min(located, key=lambda item: item['feasible_step_s'])
+                grouped = [item for item in located if
+                    item['bracket_time_s'][0] <=
+                    selected['bracket_time_s'][1]+
+                    EVENT_COINCIDENCE_TOLERANCE_S]
+                h, trial = (selected['feasible_step_s'],
+                            selected['feasible_trial'])
+                events = [{key: value for key, value in item.items()
+                           if key not in ('feasible_step_s', 'feasible_trial')}
+                          for item in sorted(grouped,
+                              key=lambda item: (item['side'], item['kind']))]
+                outcome = 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT'
         if trial['courant'] > episode.cfl_limit*(1+1e-12):
             raise ValueError('T2 two-reel localized trial exceeds CFL limit')
         _reject_unresolved_event(start, trial, episode, records)
@@ -590,9 +631,10 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         if events:
             for item in events:
                 item['feasible_stop_time_s'] = time_s
-                item['phase'] = getattr(episode, item['side']).phase
-                item['active_retained_stretch'] = start['ports'][item['side']][
-                    'retained_stretch']
+                if item['side'] in ('left', 'right'):
+                    item['phase'] = getattr(episode, item['side']).phase
+                    item['active_retained_stretch'] = start['ports'][item['side']][
+                        'retained_stretch']
         while (observation_index < len(episode.observation_times_s) and
                episode.observation_times_s[observation_index] <= time_s+1e-13):
             sample = dict(state)
@@ -626,6 +668,6 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             'maximum_reel_cumulative_energy_defect_j': maximum['reel_energy'],
             'maximum_exact_storage_vs_transfer_flux_defect_j': maximum['storage'],
             'limitations': ['pre-engaged two-reel taut subsonic interval only',
-                            'supported reel events stop on the feasible side',
+                            'tautness and supported reel limits stop on the feasible side',
                             'event continuation, slack and depletion rejected',
                             'no rolling contact or calibrated material data']}

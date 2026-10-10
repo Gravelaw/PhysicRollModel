@@ -60,7 +60,195 @@ def case(count=64, duration=.1, reflected=False, bump=0.,
         observation_times, cfl)
 
 
+def affine_exact_reel(time):
+    """Closed-form two-release reel state and required time-only torque."""
+    lam0, beta, kappa = 1.01, .2, .001/math.pi
+    lam = lam0-beta*time
+    q = -beta/(2*lam**2)
+    qdot = -beta**2/lam**3
+    length = 1-.5*(1/lam-1/lam0)
+    radius = math.sqrt(.1**2+kappa*length)
+    inertia = .01+MU*(.1**2*length+kappa*length**2/2)
+    radius_rate = kappa*q/(2*radius)
+    omega = q*lam0/radius
+    omega_rate = lam0*(qdot/radius-q*radius_rate/radius**2)
+    torque = (inertia*omega_rate+radius*EA*(lam-1)-
+              MU*q*radius*(q*lam-q*lam0))
+    return length, inertia, omega, torque, q, lam
+
+
+def affine_two_release_case(count=64, duration=.055, torque_knots=100,
+                            cfl=span.CFL_LIMIT):
+    """Independent affine wave with exact first physical tension zero at .05 s."""
+    lam0, beta = 1.01, .2
+    cut = 1/(2*lam0)
+    fields = tuple(span._conserved(lam0,
+        -beta*((index+.5)/count-.5)/lam0) for index in range(count))
+    history = tuple((time,
+        affine_exact_reel(time)[3]) for index in range(torque_knots+1)
+        for time in (duration if index == torque_knots else
+                     index*duration/torque_knots,))
+    end = two.ReelEnd(cut, 1., affine_exact_reel(0.)[2],
+        (one.WoundRecord(cut, cut+1, lam0),), history, 'release')
+    return two.TwoReelEpisode(count, duration, fields, end, end,
+        cfl_limit=cfl, event_policy='stop_at_numerical_admissibility_limit')
+
+
 class TwoReelTests(unittest.TestCase):
+    def test_affine_two_release_first_tautness_limit_refines(self):
+        time_errors = []
+        energy_errors = []
+        drive_errors = []
+        heat_errors = []
+        def exact_mechanical(time):
+            length, inertia, omega, _, _, lam = affine_exact_reel(time)
+            span_energy = (MU*.2**2/(24*lam**3)+
+                           EA*(lam-1)**2/(2*lam))
+            reel_energy = (inertia*omega**2/2+
+                           length*EA*(1.01-1)**2/2)
+            return span_energy+2*reel_energy
+        def simpson(rate, time, intervals=2000):
+            h = time/intervals
+            return h/3*sum((1 if index in (0, intervals) else
+                4 if index%2 else 2)*rate(index*h)
+                for index in range(intervals+1))
+        for n in (64, 128, 256):
+            with self.subTest(cells=n):
+                result = two.run_two_reel_episode(affine_two_release_case(n))
+                final = result['accepted_states'][-1]
+                self.assertEqual(result['episode_outcome'],
+                                 'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+                self.assertEqual([(event['side'], event['kind']) for event in
+                                  result['events']], [('span', 'tension_zero')])
+                event = result['events'][0]
+                self.assertEqual(event['root_basis'],
+                                 'heun_numerical_admissibility')
+                self.assertLess(event['bracket_width_s'], 1e-10)
+                self.assertGreater(event['lower_value'], 0.)
+                self.assertLessEqual(event['upper_value'], 0.)
+                self.assertGreater(result['minimum_used_stretch'], 1.)
+                self.assertLess(result['maximum_combined_inventory_defect_kg'],
+                                1e-10)
+                self.assertLess(result['maximum_combined_energy_defect_j'],
+                                1e-8)
+                self.assertLess(result['maximum_reel_cumulative_energy_defect_j'],
+                                1e-8)
+                self.assertLess(result['maximum_reel_angular_impulse_defect_nm_s'],
+                                1e-8)
+                self.assertAlmostEqual(final['ends']['left']['reference_length_m'],
+                    1-.5*(1/(1.01-.2*final['time_s'])-1/1.01), delta=1e-8)
+                self.assertAlmostEqual(final['ends']['right']['reference_length_m'],
+                    final['ends']['left']['reference_length_m'], delta=1e-12)
+                time_errors.append(abs(final['time_s']-.05))
+                initial = result['accepted_states'][0]
+                energy_errors.append(abs((final['total_mechanical_energy_j']-
+                    initial['total_mechanical_energy_j'])-
+                    (exact_mechanical(final['time_s'])-exact_mechanical(0.))))
+                drive = sum(end['integrated_drive_work_j']
+                            for end in final['ends'].values())
+                drive_errors.append(abs(drive-simpson(lambda time:
+                    2*affine_exact_reel(time)[3]*affine_exact_reel(time)[2],
+                    final['time_s'])))
+                heat = sum(end['accumulated_dissipated_energy_j']
+                           for end in final['ends'].values())
+                def heat_rate(time):
+                    _, _, _, _, q, lam = affine_exact_reel(time)
+                    return (-q)*(EA-MU*q**2)*(lam-1.01)**2
+                heat_errors.append(abs(heat-simpson(heat_rate, final['time_s'])))
+        self.assertLess(time_errors[2], time_errors[1])
+        self.assertLess(time_errors[1], time_errors[0])
+        self.assertLess(time_errors[2], 5e-5)
+        for errors, ceiling in ((energy_errors, 1e-9),
+                                (drive_errors, 4e-10),
+                                (heat_errors, 1e-10)):
+            self.assertLess(errors[2], errors[1])
+            self.assertLess(errors[1], errors[0])
+            self.assertLess(errors[0], ceiling)
+
+    def test_affine_timing_refines_at_fixed_mesh_and_forcing_error_is_separate(self):
+        errors = []
+        for cfl in (span.CFL_LIMIT, span.CFL_LIMIT/2,
+                    span.CFL_LIMIT/4):
+            result = two.run_two_reel_episode(
+                affine_two_release_case(cfl=cfl))
+            errors.append(abs(result['accepted_states'][-1]['time_s']-.05))
+        self.assertLess(errors[2], errors[1])
+        self.assertLess(errors[1], errors[0])
+        # This checks the declared piecewise-linear torque against the exact
+        # manufactured forcing without changing the solver time step.
+        deviations = []
+        for knots in (25, 50, 100):
+            history = affine_two_release_case(torque_knots=knots).left.applied_torque_history
+            maximum = 0.
+            for (ta, va), (tb, vb) in zip(history, history[1:]):
+                for fraction in (.25, .5, .75):
+                    time = ta+fraction*(tb-ta)
+                    linear = va+fraction*(vb-va)
+                    maximum = max(maximum, abs(linear-affine_exact_reel(time)[3]))
+            deviations.append(maximum)
+        self.assertLess(deviations[2], deviations[1])
+        self.assertLess(deviations[1], deviations[0])
+
+    def test_winding_port_tension_stop_and_shared_earliest_order(self):
+        base = case(duration=.02)
+        right = replace(base.right,
+            applied_torque_history=((0., -.1), (.02, -.1)))
+        event_case = replace(base, right=right,
+            event_policy='stop_at_numerical_admissibility_limit')
+        result = two.run_two_reel_episode(event_case)
+        self.assertEqual([(event['side'], event['kind']) for event in
+                          result['events']], [('span', 'tension_zero')])
+        event = result['events'][0]
+        self.assertEqual(event['limit_source'], 'predictor_stage')
+        self.assertEqual(event['localized_upper_stage_location'], 'right_port')
+        self.assertGreater(result['minimum_used_stretch'], 1.)
+        self.assertLess(result['maximum_combined_energy_defect_j'], 1e-8)
+        cut = base.left.initial_local_cut_m
+        boundary = cut+.001037
+        left = replace(base.left, initial_records=(
+            one.WoundRecord(boundary, cut+1., 1.02),
+            one.WoundRecord(cut, boundary, 1.01)))
+        donor_first = two.run_two_reel_episode(replace(event_case, left=left))
+        self.assertEqual([(event['side'], event['kind']) for event in
+                          donor_first['events']], [('left', 'donor_boundary')])
+        tension_first = two.run_two_reel_episode(replace(event_case,
+            left=left, right=replace(right,
+                applied_torque_history=((0., -1.), (.02, -1.)))))
+        self.assertEqual([(event['side'], event['kind']) for event in
+                          tension_first['events']], [('span', 'tension_zero')])
+
+    def test_tension_stop_reflects_and_initial_proximity_is_finite(self):
+        base = case(duration=.02)
+        right = replace(base.right,
+            applied_torque_history=((0., -.1), (.02, -.1)))
+        original = two.run_two_reel_episode(replace(base, right=right,
+            event_policy='stop_at_numerical_admissibility_limit'))
+        mirror = case(duration=.02, reflected=True)
+        left = replace(mirror.left,
+            applied_torque_history=((0., -.1), (.02, -.1)))
+        reflected = two.run_two_reel_episode(replace(mirror, left=left,
+            event_policy='stop_at_numerical_admissibility_limit'))
+        self.assertAlmostEqual(original['accepted_states'][-1]['time_s'],
+                               reflected['accepted_states'][-1]['time_s'],
+                               delta=1e-11)
+        self.assertEqual(original['events'][0]['localized_upper_stage_location'],
+                         'right_port')
+        self.assertEqual(reflected['events'][0]['localized_upper_stage_location'],
+                         'left_port')
+        outgoing = SPEED-10*STRETCH
+        surface_speed = outgoing+10*(1+5e-13)
+        near = replace(base, right=replace(base.right,
+            initial_omega_rad_s=surface_speed/geometry(1.)[0]),
+            event_policy='stop_at_numerical_admissibility_limit')
+        result = two.run_two_reel_episode(near)
+        self.assertEqual(result['accepted_states'][-1]['time_s'], 0.)
+        self.assertGreater(result['minimum_used_stretch'], 1.)
+        self.assertEqual(result['events'][0]['root_basis'],
+                         'accepted_state_tautness_proximity')
+        self.assertEqual(result['events'][0]['location'], 'right_port')
+        self.assertIsNone(result['events'][0]['bracket_time_s'])
+        self.assertEqual(len(result['accepted_states']), 1)
+
     def test_supported_donor_stop_matches_independent_label_oracle(self):
         for reflected in (False, True):
             for n in (64, 128, 256):
@@ -75,11 +263,11 @@ class TwoReelTests(unittest.TestCase):
                         one.WoundRecord(cut, boundary, 1.01))
                     episode = replace(base, **{side: replace(release,
                         initial_records=record)},
-                        event_policy='stop_at_reel_admissibility_limit')
+                        event_policy='stop_at_numerical_admissibility_limit')
                     result = two.run_two_reel_episode(episode)
                     final = result['accepted_states'][-1]
                     self.assertEqual(result['episode_outcome'],
-                                     'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+                                     'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
                     self.assertEqual(len(result['events']), 1)
                     event = result['events'][0]
                     self.assertEqual((event['side'], event['kind']),
@@ -107,10 +295,10 @@ class TwoReelTests(unittest.TestCase):
             base = case(n, duration=.02)
             episode = replace(base, left=replace(base.left,
                 applied_torque_history=((0., 1.), (.02, 1.))),
-                event_policy='stop_at_reel_admissibility_limit')
+                event_policy='stop_at_numerical_admissibility_limit')
             result = two.run_two_reel_episode(episode)
             self.assertEqual(result['episode_outcome'],
-                             'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+                             'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
             self.assertEqual([(event['side'], event['kind'])
                               for event in result['events']],
                              [('left', 'reversal')])
@@ -136,9 +324,9 @@ class TwoReelTests(unittest.TestCase):
             one.WoundRecord(cut+.0005, cut+1., 1.02),
             one.WoundRecord(cut, cut+.0005, 1.01)))
         result = two.run_two_reel_episode(replace(base, left=left,
-            event_policy='stop_at_reel_admissibility_limit'))
+            event_policy='stop_at_numerical_admissibility_limit'))
         self.assertEqual(result['episode_outcome'],
-                         'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+                         'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
         self.assertAlmostEqual(result['accepted_states'][-1]['time_s'], .005,
                                delta=1e-10)
         self.assertEqual(result['events'][0]['root_basis'],

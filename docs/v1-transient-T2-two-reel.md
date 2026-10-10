@@ -33,9 +33,10 @@ span's cell-average reference length. This is checked throughout, together
 with total span-plus-reels mass. Winding deposits accepted-stage packets of
 the computed incoming stretch. Release consumes an immutable retained donor.
 The default `event_policy=reject` raises at a donor boundary or phase
-reversal. `stop_at_reel_admissibility_limit` instead saves the last feasible
-state before either limit. It does not change the port law or resume under a
-new donor or phase.
+reversal or tension loss. `stop_at_numerical_admissibility_limit` instead saves
+the last feasible state before a reel or tautness limit. It does not change
+the accepted port law, infer slack dynamics, or resume under a new donor or
+phase.
 
 The local outward span energy flux is
 `G=q(μu_s²/2+EA(λ_s-1)²/2)-T u_s`. During release the declared idealized
@@ -50,16 +51,21 @@ contact law.
 Episodes accept 64, 128 or 256 finite-volume cells, duration from 1 ns to
 0.2 s, and CFL 0.35, 0.175 or 0.0875. The scheme uses MUSCL/HLL spatial
 flux and a coupled Heun step, split at both torque histories' knots. It
-rejects first tension zero, depletion, non-taut or supersonic states. Under
-the stop policy it locates the first **numerical admissibility limit** among
-the two reels' reversal and internal donor conditions. The complete coupled
-Heun trial is repeated while bisecting. A predictor stage can reach a limit
+rejects depletion, initially non-taut or supersonic states. Under the stop
+policy it locates the first **numerical admissibility limit** among both
+reels' reversal and internal donor conditions and the minimum tautness margin
+over ports, cells and reconstructed faces. A disposable trial may extend the
+linear elastic formula only to stretch `0.9999`; deeper signed-elastic trials
+are shortened or rejected. No compressed trial, heat or wound packet is
+committed. The complete coupled Heun trial is repeated while bisecting.
+A predictor stage can reach a limit
 before the corrected endpoint: `limit_source` identifies this, and
 `bracket_time_s` is then a numerical bracket, **not a physical event-time
-estimate**. An accepted cut within `1e-12` reference m of a donor boundary
-stops by label proximity with no time bracket. The returned duration is the
-last feasible accepted time, never post-event continuation. Tension-zero and
-depletion are still rejected. This pre-engaged interval does not include
+estimate**. An accepted cut within `1e-12` reference m of a donor boundary,
+or an accepted tautness margin within `1e-12`, stops by proximity with no
+time bracket. The returned duration is the last feasible accepted time,
+never post-event continuation. Depletion is still rejected. This pre-engaged
+interval does not include
 engagement, post-event restart, free leading edges or a roll/strip contact
 law. Snapshot requests read accepted states
 without changing the integration trajectory. Full accepted cell fields are
@@ -89,6 +95,19 @@ loss, not physical pickup heat; the public `1e-8 J` internal balance check
 fails for that case. A source-bound stopped RunSpec is replayed from a saved
 bundle and reports requested versus completed duration.
 
+The independent two-release affine reference has
+`λ(t)=1.01−0.2t`, `v(x,t)=−0.2(x−0.5)/λ(t)` and exact first physical
+zero tension at `0.05 s`. Both prescribed torque histories are independently
+manufactured from the reel angular equation, with constant retained stretch
+`1.01`. The 64/128/256-cell numerical stops occur at approximately
+`0.04999999928`, `0.04999999981` and `0.04999999994 s`; this is equation
+verification for a synthetic case, not proof that every numerical stop
+brackets a physical event. A separate winding-port case stops when its
+predictor reaches zero tension while the corrected endpoint remains taut.
+Tests compare tension-first and donor-first coupled cases on the same
+accepted-state scheduler. The narrower [T2A8 affine fixture](v1-transient-T2A8-design.md)
+remains a separate reaction-mode reference.
+
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical
 verification, scientific qualification and operating readiness as
@@ -98,8 +117,8 @@ of physical mill accuracy.
 ## Next dependencies
 
 Add a shared physical earliest-event scheduler across both reels, donor
-interfaces and the span, including tension loss, depletion, simultaneous
-events and independent physical event-time refinement. Then
+interfaces and the span, including depletion, simultaneous events, slack
+transition and independent physical event-time refinement. Then
 add a compatible boundary-engagement transition, drive train and T2/T3
 interface with a single owner for each moving material region. Full 3D
 transient strip/contact, rigid gap and compliant elastic-roll modes, dynamic

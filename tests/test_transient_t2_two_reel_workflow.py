@@ -2,12 +2,14 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from dataclasses import asdict
 import unittest
 
 from physicroll.run_bundle import create_run_bundle, replay_run_bundle, verify_run_bundle
 from physicroll.run_contract import RunSpec
 from physicroll.transient_t2_two_reel_workflow import episode_from_spec
 from physicroll.workflows import run_workflow
+from tests.test_transient_t2_two_reel import affine_two_release_case
 
 
 EXAMPLE = (Path(__file__).resolve().parents[1] /
@@ -61,7 +63,7 @@ class TwoReelWorkflowTests(unittest.TestCase):
              'retained_stretch': 1.02},
             {'low_label_m': cut, 'high_label_m': boundary,
              'retained_stretch': 1.01}]
-        episode['event_policy'] = 'stop_at_reel_admissibility_limit'
+        episode['event_policy'] = 'stop_at_numerical_admissibility_limit'
         payload['resolved_inputs']['episode'] = episode
         spec = RunSpec(payload)
         with TemporaryDirectory() as temporary:
@@ -73,7 +75,7 @@ class TwoReelWorkflowTests(unittest.TestCase):
             self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
             data = saved.to_dict()
             self.assertEqual(data['outputs']['episode_outcome'],
-                             'STOPPED_AT_REEL_ADMISSIBILITY_LIMIT')
+                             'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
             self.assertLess(data['outputs']['completed_duration_s'],
                             data['outputs']['requested_duration_s'])
             self.assertEqual(data['assessments']['model_applicability'],
@@ -94,7 +96,7 @@ class TwoReelWorkflowTests(unittest.TestCase):
              'retained_stretch': 1.02},
             {'low_label_m': cut, 'high_label_m': boundary,
              'retained_stretch': 1.01}]
-        episode['event_policy'] = 'stop_at_reel_admissibility_limit'
+        episode['event_policy'] = 'stop_at_numerical_admissibility_limit'
         payload['resolved_inputs']['episode'] = episode
         spec = RunSpec(payload)
         with TemporaryDirectory() as temporary:
@@ -107,6 +109,29 @@ class TwoReelWorkflowTests(unittest.TestCase):
             self.assertGreater(result['minimum_used_stretch'], 1.)
             self.assertEqual(result['events'][0]['root_basis'],
                              'accepted_state_label_proximity')
+
+    def test_tension_stop_is_saved_and_replayed_with_actual_duration(self):
+        payload = RunSpec.from_json(EXAMPLE.read_bytes()).to_dict()
+        episode = asdict(affine_two_release_case())
+        payload['requested_inputs']['episode'] = episode
+        payload['resolved_inputs']['episode'] = episode
+        spec = RunSpec(payload)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary)/'tension-stop'
+            saved = create_run_bundle(spec, path)
+            self.assertEqual(verify_run_bundle(path)[1].sha256, saved.sha256)
+            self.assertEqual(replay_run_bundle(path).sha256, saved.sha256)
+            data = saved.to_dict()
+            self.assertEqual(data['outputs']['episode_outcome'],
+                             'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+            self.assertEqual(data['outputs']['two_reel_span_t2']['events'][0][
+                'kind'], 'tension_zero')
+            self.assertAlmostEqual(data['outputs']['completed_duration_s'],
+                                   .05, delta=5e-5)
+            self.assertEqual(data['assessments']['model_applicability'],
+                             'INDETERMINATE')
+            self.assertEqual(data['assessments']['scientific_qualification'],
+                             'NOT_ASSESSED')
 
 
 if __name__ == '__main__':
