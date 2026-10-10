@@ -21,6 +21,7 @@ python -m physicroll --run-spec scenarios/v1_checked_pass.runspec.json --output 
 python -m physicroll --run-spec scenarios/v1_shao_benchmark.runspec.json --output benchmark.json
 python -m physicroll --run-spec scenarios/v1_operating_replay.runspec.json --output operating-replay.json
 python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --output search-result.json
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_schedule_search.runspec.json --out /tmp/physicroll-search-run
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```

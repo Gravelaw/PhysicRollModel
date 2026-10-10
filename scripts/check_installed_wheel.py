@@ -69,6 +69,16 @@ def main():
                 "assert cli.sha256 == run_workflow(spec).sha256",
                 str(spec), str(result),
             ], cwd=outside, env=clean_env, check=True)
+            if name in ('v1_checked_pass.runspec.json',
+                        'v1_schedule_search.runspec.json'):
+                bundle = outside / f'{name}.run'
+                subprocess.run([str(python), '-I', '-m', 'physicroll.bundle_cli',
+                                'create', '--run-spec', str(spec), '--out', str(bundle)],
+                               cwd=outside, env=clean_env, check=True)
+                for action in ('verify', 'replay'):
+                    subprocess.run([str(python), '-I', '-m', 'physicroll.bundle_cli',
+                                    action, str(bundle)],
+                                   cwd=outside, env=clean_env, check=True)
 
 
 if __name__ == '__main__':

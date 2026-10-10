@@ -47,7 +47,7 @@ shao = load_case(resource_directory('shao_fixture'))
 ```
 
 The packaged RunSpec examples cover the initial public W3 adapters.
-W4 still needs run-bundle manifests, resource verification for saved runs, and
-replay. Keeping the duplicate source/package records in sync is enforced in
+W4 saved run bundles now record runtime-module/resource hashes, verify exact
+files and replay with a matching installed wheel. Keeping the duplicate source/package records in sync is enforced in
 source tests and CI, but a separately tampered installed wheel is outside W2's
 integrity claim.
