@@ -29,6 +29,10 @@ continuation. None of these
 subsets has public RunSpec/restart integration, roll bite or contact. They do
 not complete full moving-web T2 or qualify a mill.
 
+The next [T2A9 matched reaction-mode reversal design candidate](v1-transient-T2A9-design-candidate.md)
+has proposed independent event and half-cycle oracles. It is not yet an
+implemented benchmark or a general torque-driven release law.
+
 The fixed-material stages test dynamic and coupling machinery needed by the
 [T0 design](v1-transient-T0-design.md) without silently applying fixed-inertia
 equations to T1's changing reels. Positive strip tension defines the taut
