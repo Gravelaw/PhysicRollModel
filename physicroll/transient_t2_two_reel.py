@@ -5,7 +5,7 @@ angular coordinate is winding-positive. This narrow increment rejects phase
 changes, donor changes and first tension loss can be approached and stopped
 on their feasible side under an explicit policy. A Heun predictor may reach its limit before
 the corrected endpoint; this is a numerical admissibility stop, not a measured
-physical event time. Slack and reel depletion remain rejected.
+physical event time. Slack and post-depletion evolution remain rejected.
 """
 
 from dataclasses import dataclass
@@ -21,10 +21,31 @@ MODEL_ID = 'T2_TWO_REEL_PREENGAGED_TAUT_ADMISSIBILITY_STOP_V1'
 EVENT_BRACKET_TOLERANCE_S = 1e-11
 EVENT_COINCIDENCE_TOLERANCE_S = 1e-9
 TRIAL_SIGNED_ELASTIC_MINIMUM_STRETCH = 1-1e-4
+TRIAL_NEGATIVE_INVENTORY_LIMIT_M = -1e-4
+DEPLETION_PROXIMITY_M = 1e-10
 
 
 class _TrialCompressionLimit(ValueError):
     """A disposable numerical probe exceeded its small signed-elastic range."""
+
+
+class _TrialDepletionLimit(ValueError):
+    """A disposable numerical probe exceeded its small inventory extension."""
+
+
+def _reel_geometry(length_m, trial_probe):
+    if not trial_probe or length_m > 0:
+        return geometry._geometry(length_m)
+    if (not math.isfinite(length_m) or
+            length_m < TRIAL_NEGATIVE_INVENTORY_LIMIT_M):
+        raise _TrialDepletionLimit('T2 two-reel inventory probe limit')
+    core = geometry.reel
+    radius_squared = core.CORE_RADIUS_M**2+core.KAPPA_M*length_m
+    inertia = core.CORE_INERTIA_KG_M2+core.LINE_MASS_KG_M*(
+        core.CORE_RADIUS_M**2*length_m+core.KAPPA_M*length_m**2/2)
+    if radius_squared <= 0 or inertia <= 0:
+        raise _TrialDepletionLimit('T2 two-reel inventory probe geometry')
+    return math.sqrt(radius_squared), inertia
 
 
 @dataclass(frozen=True)
@@ -117,7 +138,7 @@ def _local_port(cells, side, length, omega, phase, records, end, donor=None,
     else:
         outgoing = (3*single._characteristic(cells[-1], -1) -
                     single._characteristic(cells[-2], -1))/2
-    radius, inertia = geometry._geometry(length)
+    radius, inertia = _reel_geometry(length, trial_probe)
     cut = end.initial_local_cut_m + end.initial_reference_length_m - length
     wound_speed = radius*omega
     if phase == 'wind':
@@ -262,7 +283,8 @@ def _advance(cells, reels, time_s, h, records, episode):
                    trial_probe)
     courant = h*max(rate['maximum_signal_m_s'] for rate in
                     (first, second, final))/(span.SPAN_LENGTH_M/episode.cell_count)
-    return {'cells': updated, 'reels': updated_reels, 'first': first,
+    return {'cells': updated, 'reels': updated_reels,
+            'predicted_reels': predicted_reels, 'first': first,
             'second': second, 'final': final, 'courant': courant}
 
 
@@ -325,7 +347,10 @@ def _reject_unresolved_event(start, trial, episode, records):
             if (end.phase == 'release' and
                     (port['omega_rad_s'] >= 0 or port['reference_flux_m_s'] >= 0)):
                 raise ValueError('T2 two-reel unresolved phase reversal')
-            if port['cut_label_m'] >= records[side][0].high_label_m - 1e-12:
+            depletion_margin = (0. if episode.event_policy ==
+                                'stop_at_numerical_admissibility_limit' else 1e-12)
+            if port['cut_label_m'] >= (records[side][0].high_label_m -
+                                      depletion_margin):
                 raise ValueError('T2 two-reel inventory depletion')
             donor_margin = (0. if episode.event_policy ==
                             'stop_at_numerical_admissibility_limit' else 1e-12)
@@ -345,6 +370,9 @@ def _event_stage_margins(trial, side, kind, boundary=None):
     if kind == 'tension_zero':
         return (trial['second']['minimum_stretch']-1,
                 trial['final']['minimum_stretch']-1)
+    if kind == 'depletion':
+        return (trial['predicted_reels'][side][0]-DEPLETION_PROXIMITY_M,
+                trial['reels'][side][0]-DEPLETION_PROXIMITY_M)
     if kind == 'reversal':
         sign = (1 if trial['first']['ports'][side]['reference_flux_m_s'] > 0
                 else -1)
@@ -377,10 +405,18 @@ def _supported_event_candidates(start, trial, episode, records):
             stage_cut = stage['ports'][side]['cut_label_m']
             final_cut = final['ports'][side]['cut_label_m']
             if max(stage_cut, final_cut) >= boundary:
-                if boundary >= records[side][0].high_label_m-1e-12:
-                    raise ValueError('T2 two-reel depletion remains unsupported')
-                candidates.append({'side': side, 'kind': 'donor_boundary',
-                                   'boundary': boundary, 'unit': 'reference m'})
+                if boundary < records[side][0].high_label_m-1e-12:
+                    candidates.append({'side': side, 'kind': 'donor_boundary',
+                                       'boundary': boundary,
+                                       'unit': 'reference m'})
+        if (end.phase == 'release' and
+                min(trial['predicted_reels'][side][0],
+                    trial['reels'][side][0]) <= DEPLETION_PROXIMITY_M):
+            candidates.append({'side': side, 'kind': 'depletion',
+                               'boundary': records[side][0].high_label_m,
+                               'unit': 'reference m',
+                               'inventory_stop_threshold_m':
+                                   DEPLETION_PROXIMITY_M})
     if min(trial['second']['minimum_stretch'],
            trial['final']['minimum_stretch']) <= 1:
         candidates.append({'side': 'span', 'kind': 'tension_zero',
@@ -396,6 +432,7 @@ def _locate_reel_event(cells, reels, records, time_s, h, episode,
     lower_h, upper_h = 0., h
     first = upper_trial['first']
     lower_value = (first['minimum_stretch']-1 if kind == 'tension_zero' else
+        reels[side][0]-DEPLETION_PROXIMITY_M if kind == 'depletion' else
         (1 if getattr(episode, side).phase == 'wind' else -1)*reels[side][1]
         if kind == 'reversal' else
         boundary-first['ports'][side]['cut_label_m'])
@@ -493,9 +530,31 @@ def run_two_reel_episode(episode: TwoReelEpisode):
                 cut = start['ports'][side]['cut_label_m']
                 boundary = single._next_donor_boundary(records[side], cut)
                 gap = boundary-cut
-                if gap <= 1e-12:
-                    if boundary >= records[side][0].high_label_m-1e-12:
-                        raise ValueError('T2 two-reel depletion remains unsupported')
+                proximity_tolerance = max(1e-15,
+                    2*abs(start['ports'][side]['reference_flux_m_s'])*
+                    EVENT_BRACKET_TOLERANCE_S)
+                if reels[side][0]-DEPLETION_PROXIMITY_M <= proximity_tolerance:
+                    events.append({'side': side, 'kind': 'depletion',
+                        'boundary': records[side][0].high_label_m,
+                        'unit': 'reference m',
+                        'inventory_stop_threshold_m': DEPLETION_PROXIMITY_M,
+                        'root_basis': 'accepted_state_inventory_proximity',
+                        'limit_source': 'accepted_state',
+                        'selection_role': 'accepted_state_proximity',
+                        'bracket_relation_to_selected': 'no_bracket',
+                        'grouping_tolerance_s': EVENT_COINCIDENCE_TOLERANCE_S,
+                        'label_distance_m':
+                            records[side][0].high_label_m-cut,
+                        'inventory_distance_m': reels[side][0],
+                        'inventory_proximity_tolerance_m': proximity_tolerance,
+                        'bracket_time_s': None,
+                        'event_time_interpretation':
+                            'numerical_proximity_not_physical_event_time',
+                        'feasible_stop_time_s': time_s,
+                        'phase': 'release',
+                        'active_retained_stretch':
+                            start['ports'][side]['retained_stretch']})
+                elif gap <= 1e-12:
                     events.append({'side': side, 'kind': 'donor_boundary',
                         'boundary': boundary, 'unit': 'reference m',
                         'root_basis': 'accepted_state_label_proximity',
@@ -523,10 +582,10 @@ def run_two_reel_episode(episode: TwoReelEpisode):
         for _ in range(20):
             try:
                 trial = _advance(cells, reels, time_s, h, records, episode)
-            except _TrialCompressionLimit:
+            except (_TrialCompressionLimit, _TrialDepletionLimit):
                 h /= 2
                 if h <= 1e-13:
-                    raise ValueError('T2 two-reel signed-elastic probe collapsed')
+                    raise ValueError('T2 two-reel bounded probe collapsed')
                 continue
             if trial['courant'] <= episode.cfl_limit*(1+1e-12):
                 break
@@ -687,5 +746,5 @@ def run_two_reel_episode(episode: TwoReelEpisode):
             'maximum_exact_storage_vs_transfer_flux_defect_j': maximum['storage'],
             'limitations': ['pre-engaged two-reel taut subsonic interval only',
                             'tautness and supported reel limits stop on the feasible side',
-                            'event continuation, slack and depletion rejected',
+                            'event continuation, slack and post-depletion evolution rejected',
                             'no rolling contact or calibrated material data']}

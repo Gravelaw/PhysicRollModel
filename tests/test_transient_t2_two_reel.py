@@ -21,11 +21,11 @@ def geometry(length):
     return radius, inertia
 
 
-def exact_torque(side, t, bump=0.):
+def exact_torque(side, t, bump=0., initial_length=1.):
     q = -.1 if side == 'left' else .1
     outward_speed = -SPEED if side == 'left' else SPEED
     wound_speed = -.101 if side == 'left' else SPEED
-    length = 1+q*t
+    length = initial_length+q*t
     radius, inertia = geometry(length)
     radius_rate = .001/math.pi*q/(2*radius)
     omega_rate = -wound_speed*radius_rate/radius**2
@@ -58,6 +58,24 @@ def case(count=64, duration=.1, reflected=False, bump=0.,
         tuple(span._conserved(STRETCH, -SPEED if reflected else SPEED)
               for _ in range(count)), ends['left'], ends['right'],
         observation_times, cfl)
+
+
+def depletion_case(count=64, reflected=False, policy=
+                   'stop_at_numerical_admissibility_limit'):
+    """Manufactured constant flux with a finite release record ending at .01037 s."""
+    duration, initial_length = .02, .001037
+    base = case(count, duration=duration, reflected=reflected)
+    side = 'right' if reflected else 'left'
+    end = getattr(base, side)
+    cut = end.initial_local_cut_m
+    history = tuple((i*duration/100,
+        exact_torque('left', i*duration/100,
+                     initial_length=initial_length)) for i in range(101))
+    short_end = replace(end, initial_reference_length_m=initial_length,
+        initial_omega_rad_s=-.101/geometry(initial_length)[0],
+        initial_records=(one.WoundRecord(cut, cut+initial_length, 1.01),),
+        applied_torque_history=history)
+    return replace(base, **{side: short_end, 'event_policy': policy})
 
 
 def affine_exact_reel(time):
@@ -95,6 +113,105 @@ def affine_two_release_case(count=64, duration=.055, torque_knots=100,
 
 
 class TwoReelTests(unittest.TestCase):
+    def test_depletion_stop_matches_independent_flow_and_energy_oracles(self):
+        for count in (64, 128, 256):
+            for reflected in (False, True):
+                with self.subTest(cells=count, reflected=reflected):
+                    result = two.run_two_reel_episode(
+                        depletion_case(count, reflected))
+                    final = result['accepted_states'][-1]
+                    side = 'right' if reflected else 'left'
+                    end = final['ends'][side]
+                    self.assertEqual(result['episode_outcome'],
+                        'STOPPED_AT_NUMERICAL_ADMISSIBILITY_LIMIT')
+                    event = result['events'][0]
+                    self.assertEqual((event['side'], event['kind']),
+                                     (side, 'depletion'))
+                    self.assertEqual(event['inventory_stop_threshold_m'], 1e-10)
+                    self.assertGreater(event['lower_value'], 0.)
+                    self.assertLessEqual(event['upper_value'], 0.)
+                    self.assertLess(event['bracket_width_s'], 1e-11)
+                    self.assertAlmostEqual(final['time_s'], .01037,
+                                           delta=1e-8)
+                    self.assertGreater(end['reference_length_m'], 0.)
+                    self.assertLess(end['reference_length_m'], 1e-9)
+                    self.assertAlmostEqual(end['radius_m'], .1, delta=2e-11)
+                    self.assertAlmostEqual(end['inertia_kg_m2'], .01,
+                                           delta=2e-12)
+                    self.assertAlmostEqual(end['accumulated_dissipated_energy_j'],
+                                           4.049595e-5*final['time_s'],
+                                           delta=2e-10)
+                    self.assertLess(result['maximum_combined_inventory_defect_kg'],
+                                    1e-10)
+                    self.assertLess(result['maximum_combined_energy_defect_j'],
+                                    1e-8)
+                    self.assertLess(result['maximum_reel_cumulative_energy_defect_j'],
+                                    1e-8)
+                    self.assertLess(result['maximum_reel_angular_impulse_defect_nm_s'],
+                                    1e-8)
+                    self.assertTrue(all(state['ends'][side][
+                        'reference_length_m'] > 0 for state in
+                        result['accepted_states']))
+
+    def test_depletion_proximity_and_prelimit_duration(self):
+        base = depletion_case()
+        short = replace(base, duration_s=.005,
+            left=replace(base.left, applied_torque_history=
+                base.left.applied_torque_history[:26]),
+            right=replace(base.right, applied_torque_history=
+                base.right.applied_torque_history[:26]))
+        complete = two.run_two_reel_episode(short)
+        self.assertEqual(complete['episode_outcome'],
+                         'COMPLETED_DECLARED_DURATION')
+        self.assertEqual(complete['events'], [])
+        for near, split in ((5e-11, False), (5e-11, True),
+                            (two.DEPLETION_PROXIMITY_M+1e-15, False)):
+            with self.subTest(inventory=near, split=split):
+                cut = base.left.initial_local_cut_m
+                records = ((one.WoundRecord(cut+near/2, cut+near, 1.01),
+                            one.WoundRecord(cut, cut+near/2, 1.01)) if split
+                           else (one.WoundRecord(cut, cut+near, 1.01),))
+                left = replace(base.left, initial_reference_length_m=near,
+                    initial_omega_rad_s=-.101/geometry(near)[0],
+                    initial_records=records)
+                stopped = two.run_two_reel_episode(replace(base, left=left))
+                self.assertEqual(stopped['accepted_states'][-1]['time_s'], 0.)
+                self.assertEqual(stopped['events'][0]['root_basis'],
+                                 'accepted_state_inventory_proximity')
+                self.assertEqual(stopped['events'][0]['kind'], 'depletion')
+                self.assertIsNone(stopped['events'][0]['bracket_time_s'])
+
+    def test_winding_near_empty_reel_is_not_a_depletion_candidate(self):
+        duration, small = 1e-9, 5e-11
+        cut_left, cut_right = 1/STRETCH-1, 1.
+        ends = {}
+        for side, cut, length in (('left', cut_left, 1.),
+                                  ('right', cut_right, small)):
+            ends[side] = two.ReelEnd(cut, length,
+                1e-6/geometry(length)[0],
+                (one.WoundRecord(cut, cut+length, STRETCH),),
+                ((0., 0.), (duration, 0.)), 'wind')
+        base = two.TwoReelEpisode(64, duration,
+            tuple(span._conserved(STRETCH, 0.) for _ in range(64)),
+            ends['left'], ends['right'],
+            event_policy='stop_at_numerical_admissibility_limit')
+        result = two.run_two_reel_episode(base)
+        self.assertEqual(result['episode_outcome'],
+                         'COMPLETED_DECLARED_DURATION')
+        self.assertEqual(result['events'], [])
+        self.assertGreater(result['accepted_states'][-1]['ends']['right'][
+            'reference_length_m'], small)
+
+    def test_depletion_stop_is_insensitive_to_allowed_cfl_choice(self):
+        stops = [two.run_two_reel_episode(replace(
+            depletion_case(), cfl_limit=cfl))['accepted_states'][-1]['time_s']
+            for cfl in (span.CFL_LIMIT, span.CFL_LIMIT/2, span.CFL_LIMIT/4)]
+        self.assertLess(max(stops)-min(stops), 1e-8)
+
+    def test_default_policy_rejects_depletion(self):
+        with self.assertRaises(ValueError):
+            two.run_two_reel_episode(depletion_case(policy='reject'))
+
     def test_affine_two_release_first_tautness_limit_refines(self):
         time_errors = []
         energy_errors = []

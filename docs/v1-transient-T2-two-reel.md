@@ -51,21 +51,33 @@ contact law.
 Episodes accept 64, 128 or 256 finite-volume cells, duration from 1 ns to
 0.2 s, and CFL 0.35, 0.175 or 0.0875. The scheme uses MUSCL/HLL spatial
 flux and a coupled Heun step, split at both torque histories' knots. It
-rejects depletion, initially non-taut or supersonic states. Under the stop
+rejects initially non-taut or supersonic states. Under the stop
 policy it locates the first **numerical admissibility limit** among both
-reels' reversal and internal donor conditions and the minimum tautness margin
+reels' reversal, internal donor and depletion conditions and the minimum tautness margin
 over ports, cells and reconstructed faces. A disposable trial may extend the
 linear elastic formula only to stretch `0.9999`; deeper signed-elastic trials
-are shortened or rejected. No compressed trial, heat or wound packet is
-committed. The complete coupled Heun trial is repeated while bisecting.
+are shortened or rejected. Depletion trials may continue the positive-core
+radius and inertia formulas through at most `0.0001 m` of negative wound
+inventory, solely to determine which boundary limits the step. The accepted
+state retains positive inventory. No compressed or negative-inventory trial,
+heat or wound packet is committed. The complete coupled Heun trial is repeated
+while bisecting.
 A predictor stage can reach a limit
 before the corrected endpoint: `limit_source` identifies this, and
 `bracket_time_s` is then a numerical bracket, **not a physical event-time
 estimate**. An accepted cut within `1e-12` reference m of a donor boundary,
 or an accepted tautness margin within `1e-12`, stops by proximity with no
 time bracket. The returned duration is the last feasible accepted time,
-never post-event continuation. Depletion is still rejected. This pre-engaged
-interval does not include
+never post-event continuation. A release reel stops at a positive
+`1e-10 m` numerical inventory threshold. Its reported bracket locates that
+threshold, not physical zero inventory; `inventory_stop_threshold_m` and
+predictor/corrected signed margins make this explicit. A state already within
+the threshold, or within `max(1e-15 m, 2|q|·1e-11 s)` above it at its current
+release flux, stops with no time bracket. The latter distance is saved as
+`inventory_proximity_tolerance_m`. The decision uses whole-reel inventory,
+independent of retained-record segmentation. A winding reel may grow from
+below the threshold. The default reject policy still rejects depletion.
+This pre-engaged interval does not include
 engagement, post-event restart, free leading edges or a roll/strip contact
 law. Snapshot requests read accepted states
 without changing the integration trajectory. Full accepted cell fields are
@@ -118,6 +130,13 @@ remains a separate reaction-mode reference.
 Tests also distinguish overlapping two-donor brackets, separated brackets
 grouped by the numerical tolerance, and a clearly later donor, including
 left/right reflection.
+For a `0.001037 m` release record and `q=-0.1 m/s`, an independent constant-flow
+oracle reaches zero inventory at `0.01037 s`. The numerical threshold stop is
+approximately `0.010369999 s`; tests cover all three grids, reflected ends,
+allowed CFL choices, core-radius/inertia limits, independent pickup-heat
+rate, combined inventory/work/energy/angular ledgers, prelimit completion,
+initial threshold proximity, and verified saved-run replay. These checks do
+not establish a physical event-time estimate for arbitrary trajectories.
 
 Internal ledger closure for an arbitrary declared run does not prove an
 independent benchmark passed. The ResultBundle therefore reports numerical
@@ -128,7 +147,7 @@ of physical mill accuracy.
 ## Next dependencies
 
 Add a shared physical earliest-event scheduler across both reels, donor
-interfaces and the span, including depletion, simultaneous events, slack
+interfaces and the span, including post-depletion transitions, simultaneous events, slack
 transition and independent physical event-time refinement. Then
 add a compatible boundary-engagement transition, drive train and T2/T3
 interface with a single owner for each moving material region. Full 3D

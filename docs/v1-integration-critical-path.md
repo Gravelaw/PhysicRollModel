@@ -8,10 +8,10 @@ release, stored-label ownership and an explicitly idealized dissipative
 pickup law. The [two-reel interval](v1-transient-T2-two-reel.md) adds two
 independent prescribed drive torques, predicted reel speeds, mirrored
 material-label ownership and separate ledgers. Its optional one-sided
-reversal, internal-donor and tautness-limit stops save a feasible accepted
-state; their numerical brackets do not certify physical event times. Both
+reversal, internal-donor, tautness and near-depletion stops save a feasible
+accepted state; their numerical brackets do not certify physical event times. Both
 increments have source-bound saved runs and independent synthetic checks.
-Depletion, physical event timing, post-event transition, bite/drive engagement, restart, T3 contact
+Physical event timing, post-event transitions including depletion, bite/drive engagement, restart, T3 contact
 and full v1 coupling remain open.
 
 ## Next decisions and executable gates
