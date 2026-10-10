@@ -11,8 +11,15 @@ python -m physicroll.bundle_cli replay /tmp/physicroll-search-run
 Creation computes the workflow once and publishes the directory only after
 all files are complete. An existing destination is rejected. The directory
 contains `input.json` (requested and resolved inputs), `result.json`,
-`checks.json`, `candidates.jsonl`, `summary.csv` and `manifest.json`.
-`report.html` may be included when the W5 report generator is available.
+`checks.json`, `candidates.jsonl`, `summary.csv`, `report.html` and
+`manifest.json`. Open `report.html` directly in a browser; it is self-contained
+and needs no service or network. It displays the saved assessment axes,
+identities, model and unit choices, inputs and histories, observations,
+outputs and phase timelines, checks, limits, residuals, and missing values.
+Nested records can be expanded. The report does not infer a missing result or
+promote a software check to scientific or operating qualification. Verification
+regenerates it from the saved input/result and checks byte parity. Older W4
+bundles without a report remain verifiable with their matching runtime.
 Candidate records retain search rejections or declared sensitivity cases;
 an empty file means that the workflow has no candidates. The summary repeats
 the distinct status axes without converting missing limits into feasibility.

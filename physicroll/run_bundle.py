@@ -15,6 +15,7 @@ import platform
 import sys
 from tempfile import TemporaryDirectory
 
+from .report import render_report
 from .run_contract import ResultBundle, RunSpec, canonical_json
 from .workflows import run_workflow
 
@@ -91,7 +92,7 @@ def _summary(spec, result, candidate_count):
     return stream.getvalue().encode('utf-8')
 
 
-def _payloads(spec, bundle, report_html):
+def _payloads(spec, bundle, include_report):
     result = bundle.to_dict(include_runtime_metadata=False)
     candidates = _candidate_records(result)
     contents = {
@@ -101,14 +102,12 @@ def _payloads(spec, bundle, report_html):
         'candidates.jsonl': ''.join(canonical_json(item) + '\n' for item in candidates).encode('utf-8'),
         'summary.csv': _summary(spec.to_dict(), result, len(candidates)),
     }
-    if report_html is not None:
-        if type(report_html) is not str:
-            raise ValueError('report_html must be text')
-        contents['report.html'] = report_html.encode('utf-8')
+    if include_report:
+        contents['report.html'] = render_report(spec, bundle).encode('utf-8')
     return contents
 
 
-def create_run_bundle(spec: RunSpec, destination, *, report_html=None) -> ResultBundle:
+def create_run_bundle(spec: RunSpec, destination) -> ResultBundle:
     """Compute once, then atomically publish a complete new bundle directory."""
     if not isinstance(spec, RunSpec):
         raise ValueError('create_run_bundle requires a RunSpec')
@@ -118,7 +117,7 @@ def create_run_bundle(spec: RunSpec, destination, *, report_html=None) -> Result
     destination.parent.mkdir(parents=True, exist_ok=True)
     bundle = run_workflow(spec)
     bundle.verify_run_spec(spec)
-    contents = _payloads(spec, bundle, report_html)
+    contents = _payloads(spec, bundle, True)
     manifest = {
         'bundle_version': BUNDLE_VERSION,
         'workflow_kind': spec.to_dict()['workflow_kind'],
@@ -196,8 +195,8 @@ def verify_run_bundle(directory) -> tuple[RunSpec, ResultBundle]:
             manifest['run_spec_sha256'] != spec.sha256 or
             manifest['result_bundle_sha256'] != bundle.sha256):
         raise ValueError('run manifest identity differs from inputs/results')
-    expected = _payloads(spec, bundle, None)
-    for name in REQUIRED_FILES:
+    expected = _payloads(spec, bundle, 'report.html' in manifest['files'])
+    for name in expected:
         if (directory / name).read_bytes() != expected[name]:
             raise ValueError(f'run bundle derived file differs from result: {name}')
     return spec, bundle

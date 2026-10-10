@@ -22,10 +22,13 @@ python -m physicroll --run-spec scenarios/v1_shao_benchmark.runspec.json --outpu
 python -m physicroll --run-spec scenarios/v1_operating_replay.runspec.json --output operating-replay.json
 python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --output search-result.json
 python -m physicroll.bundle_cli create --run-spec scenarios/v1_schedule_search.runspec.json --out /tmp/physicroll-search-run
+python -m physicroll.bundle_cli verify /tmp/physicroll-search-run
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```
 
+The saved run includes a self-contained `report.html` that displays the verified
+inputs, status axes, checks and results; see [the run-bundle guide](docs/v1-run-bundle.md).
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a

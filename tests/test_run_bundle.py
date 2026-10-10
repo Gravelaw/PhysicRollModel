@@ -13,6 +13,7 @@ from unittest import mock
 from physicroll.run_bundle import (create_run_bundle, replay_run_bundle,
                                   verify_run_bundle)
 from physicroll.run_contract import RunSpec, canonical_json
+from physicroll.report import render_report
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,8 @@ class RunBundleTests(unittest.TestCase):
                     self.assertIn('physicroll/workflows.py'.split('/', 1)[1],
                                   manifest['runtime_package_sha256'])
                     self.assertEqual(manifest['result_bundle_sha256'], saved.sha256)
+                    self.assertEqual((path / 'report.html').read_text(encoding='utf-8'),
+                                     render_report(spec, saved))
 
     def test_missing_extra_tampered_and_linked_files_reject(self):
         with TemporaryDirectory() as temporary:
@@ -62,6 +65,16 @@ class RunBundleTests(unittest.TestCase):
                 verify_run_bundle(path)
             check.write_bytes(original)
             manifest['files']['checks.json'] = hashlib.sha256(original).hexdigest()
+            manifest_path.write_text(canonical_json(manifest) + '\n')
+            report = path / 'report.html'
+            original_report = report.read_bytes()
+            report.write_bytes(original_report + b'<!-- changed -->')
+            manifest['files']['report.html'] = hashlib.sha256(report.read_bytes()).hexdigest()
+            manifest_path.write_text(canonical_json(manifest) + '\n')
+            with self.assertRaisesRegex(ValueError, 'derived file differs'):
+                verify_run_bundle(path)
+            report.write_bytes(original_report)
+            manifest['files']['report.html'] = hashlib.sha256(original_report).hexdigest()
             manifest_path.write_text(canonical_json(manifest) + '\n')
             check.unlink()
             with self.assertRaisesRegex(ValueError, 'missing, extra'):
