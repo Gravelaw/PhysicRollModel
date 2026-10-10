@@ -48,6 +48,16 @@ def main():
             "saved=build_guided_checked(base, guided_values(base)); "
             "assert run_workflow(saved).to_dict()['assessments']['execution']=='COMPLETED'",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t1 import T1Episode, T1Trajectory; "
+            "case=T1Episode(times_s=(0.,1.),prescribed_strip_speed_m_s=(.1,.1),"
+            "free_span_length_m=1.,thickness_m=.001,width_m=1.,density_kg_m3=1000.,"
+            "left_core_radius_m=.1,right_core_radius_m=.1,left_initial_length_m=2.,"
+            "right_initial_length_m=1.); "
+            "result=T1Trajectory(case).result(); "
+            "assert result['status']=='COMPLETED' and result['strip_speed_role']=='prescribed_input'",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',

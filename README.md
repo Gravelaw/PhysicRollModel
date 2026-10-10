@@ -31,6 +31,9 @@ The saved run includes a self-contained `report.html` that displays the verified
 inputs, status axes, checks and results; see [the run-bundle guide](docs/v1-run-bundle.md).
 For guided synthetic pass editing and reopening saved runs, start the
 [loopback editor](docs/v1-editor.md) with an explicit `--runs-dir`.
+The [T1 transport contract](docs/v1-transient-T1.md) describes a separate
+bounded prescribed-motion kinematic layer; it does not solve the requested
+drive, deformation or contact dynamics.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a
@@ -118,7 +121,7 @@ No published accuracy or plant calibration is claimed.
 The [capability matrix](docs/capabilities.md) maps current calculations and future friction,
 mass-flow, thermal, metallurgy and fracture research. Foil is excluded (exit gauge below 300 µm is rejected). Roll flattening/bending, mill stretch,
 shape/flatness, residual stress, thermal effects, alloy hardening/metallurgy and control
-transients are not solved. Exit gauge is prescribed, not predicted from a screw gap.
+transients are not solved by the steady model. Exit gauge is prescribed, not predicted from a screw gap.
 Zero draft is unloaded transport, not temper rolling. Friction needs joint force/torque/slip
 identification; geometry and passing unit tests do not validate rolling accuracy.
 
