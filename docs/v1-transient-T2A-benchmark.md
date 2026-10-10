@@ -261,3 +261,89 @@ small-strain/no-slip assumptions, but its written `d(Jω)/dt` reel equation
 does not explicitly show this angular-momentum flux. The reference above
 is an independent control-volume derivation, not an adoption of that
 published reel equation.
+
+### Frozen prescribed-flow two-reel oracle (T2A3 candidate)
+
+The next **unimplemented** reference couples a translating taut span to two
+variable-mass reels in a restricted prescribed-motion setting. It checks
+mass ownership, angular-momentum flux, reaction drive torques and energy
+transfer before a torque-driven moving-web solver is attempted. It does not
+predict speed or tension. Both reel angles are positive in the direction of
+left-to-right strip transport, so the left angle is the negative of T1's
+locally winding-positive left angle.
+
+Let `S` be a reference material label, `x(S,t)=λS+Vt`, and the fixed
+spatial span be `0≤x≤L`. Its moving material boundaries are
+`S_a=−Vt/λ` and `S_b=(L−Vt)/λ`; `q=V/λ` reference metres per second and
+`ṁ=μ0 q` kg/s cross each port. The left reel loses `qt` reference metres,
+the right gains the same amount; the span always owns `μ0L/λ` kg.
+Declare the one-dimensional stored energy per reference metre
+`W(λ)=½EA0(λ−1)²`, hence `T=dW/dλ=EA0(λ−1)`. All wound layers retain
+this same stretch. At constant width and density, current strip thickness
+is `h0/λ`; transfer has matching tangential speed `V=R_iω_i` and no
+stretch change, slip, velocity capture loss or extra elastic transfer work.
+
+For signed inventory rates `s_1=−q`, `s_2=+q`, core radius `Rc`,
+`κ=h0/π`, and `μ0=ρ0A0`, each reel has
+
+```text
+L_i(t) = L_i(0) + s_i t
+R_i² = Rc² + κ L_i
+J_i = Jcore + μ0 [Rc² L_i + κ L_i²/2]
+ω_i = V/R_i                 ω̇_i = −V κ s_i/(2 R_i³)
+φ_i(t)−φ_i(0) = 2V [R_i(t)−R_i(0)]/(κ s_i).
+```
+
+For `s_i=0`, the angle limit is `Vt/R_i(0)`. The left reel's tension
+torque is `+R_1T`, the right reel's is `−R_2T`. Angular-momentum flux
+`μ0s_i R_iV` cancels `J̇_iω_i` for matched surface speed. The required
+**reaction** drive torques are therefore
+`τ_1=J_1ω̇_1−R_1T` and `τ_2=J_2ω̇_2+R_2T`. Each reel's kinetic energy
+`K_i=½J_iω_i²` and stored winding energy `U_i=W L_i` obey
+
+```text
+K̇_i + U̇_i = τ_i ω_i + τ_T,i ω_i +
+             s_i (½ μ0 V² + W).
+```
+
+The moving-span mass, momentum and total energy are constant; its two
+traction powers and two advected energy fluxes cancel. Summing the whole
+strip/reel system cancels the opposite reel fluxes and `+TV/−TV` tension
+powers, leaving `Ḣ=τ_1ω_1+τ_2ω_2`. Test each reel's angular-momentum
+and energy residual separately as well as this total identity, since only
+checking the sum could hide opposite sign errors.
+
+Freeze the SI example `λ=1.001`, `V=0.1`, `L=1`, `E=10⁷`, `A0=10⁻⁴`,
+`ρ0=1000`, `w=0.1`, `h0=0.001`, `Rc=0.1`, `Jcore=0.01`, initial
+`(L_1,L_2)=(10,1)` reference metres, and `0≤t≤2 s`. Thus `μ0=0.1`
+kg/m, `T=1 N`, `W=0.0005 J` per reference metre, and
+`q=0.09990009990009992 m/s`. At `t=2 s`, independent formula evaluation
+gives `L_1=9.8001998001998 m`, `L_2=1.1998001998002 m`,
+`R_1=0.11454038799908096 m`, `R_2=0.10189164963352833 m`,
+`ω_1=0.8730544897473402 rad/s`, `ω_2=0.9814346942037745 rad/s`,
+`τ_1=−0.11451782087351982 N m`, and
+`τ_2=0.10187478146045989 N m`. Future code must also check the `t=0`
+and `t=1 s` anchors, interval fluxes, angles and parcel ownership. Further
+anchors are `R_1(0)=0.11481767660877792 m`,
+`R_2(0)=0.10157908193217634 m`,
+`R_1(1)=0.1146791161127821 m`,
+`R_2(1)=0.10173548582285703 m`,
+`φ_1(1)=0.8714718738690714 rad`,
+`φ_2(1)=0.9836973425385772 rad`,
+`φ_1(2)=1.7439979740144906 rad`, and
+`φ_2(2)=1.9658847094223544 rad`, with zero initial angles.
+Each second transfers `0.09990009990009992` reference metres and
+`0.009990009990009992 kg` between reel and span ports. Compare closed
+formula values at `t=0,1,2 s` within `10⁻¹² m` for radius and inventory,
+`10⁻¹⁰ rad` for angle, `10⁻¹⁰ rad/s` for speed and `10⁻⁹ N m` for
+reaction torque. Require signed mass-flux balance within `10⁻¹² kg`
+per one-second interval and per-reel angular-momentum and mechanical-energy
+balance residuals below `10⁻¹⁰ N m s` and `10⁻¹⁰ J` for every accepted
+interval on `Δt=0.04,0.02,0.01 s`. Record the corresponding summed energy
+residual; do not substitute it for either per-reel check. These tolerances
+are frozen software checks of the idealized reference, not accuracy limits
+for a real winding line. Enforce nonnegative inventory; reel capacity is
+unassessed in this benchmark. Zero-speed and reversal are separate gates.
+The ideal ports omit bending
+energy, compaction, radial deformation, changing tangent/wrap-path mass and
+support work; these formulas do not validate a physical winding line.
