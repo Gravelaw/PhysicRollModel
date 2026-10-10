@@ -5,14 +5,20 @@ qualification or mill feasibility is inferred from a completed replay.
 """
 
 from dataclasses import fields
+import hashlib
+from importlib.resources import files
 
 from .checked_schedule import CheckedPass, InterpassHandoff, run_checked_schedule
+from .conditional_shao import (DECLARED_PRIOR_LOG_STRAINS, SUPPORTED_ASSUMPTIONS,
+                               SUPPORTED_CONTRACT, run_conditional_comparison,
+                               run_declared_prior_sensitivity)
 from .contact import CircularRollElasticity
 from .energy_handoff import HeatCapacityCurve, PassHeatBoundary, PassiveContactBoundary
 from .lubrication import FluidObservation
 from .materials import MaterialState, PowerHardeningLaw
 from .model import Scenario
 from .operating import EquipmentLimits, ObservedSignal, PassOperatingPlan, SignalRange
+from .resources import resource_file
 from .run_contract import ResultBundle, RunSpec
 
 
@@ -24,6 +30,26 @@ EQUIPMENT_LIMITS = {
     'entry_tension_force_n': 'max_entry_reel_tension_n',
     'exit_tension_force_n': 'max_exit_reel_tension_n',
 }
+
+CONDITIONAL_SOURCE_RESOURCES = {
+    'physicroll/conditional_shao.py': ('module', 'conditional_shao.py'),
+    'docs/research/data/shao2015_raw.json': ('shao_research', 'shao2015_raw.json'),
+    'scenarios/literature/shao2015_aa5052/inputs.csv': ('shao_fixture', 'inputs.csv'),
+    'scenarios/literature/shao2015_aa5052/measured_validation.csv':
+        ('shao_fixture', 'measured_validation.csv'),
+    'scenarios/literature/shao2015_aa5052/reference_model_outputs.csv':
+        ('shao_fixture', 'reference_model_outputs.csv'),
+    'scenarios/literature/shao2015_aa5052/sources.json': ('shao_fixture', 'sources.json'),
+}
+CONDITIONAL_CARD_RESOURCES = {
+    'docs/research/data/shao2015_conditional_adapter.json':
+        ('shao_research', 'shao2015_conditional_adapter.json'),
+    'docs/research/data/shao2015_prior_sensitivity.json':
+        ('shao_research', 'shao2015_prior_sensitivity.json'),
+    'scenarios/literature/shao2015_aa5052/assumptions.json':
+        ('shao_fixture', 'assumptions.json'),
+}
+CONDITIONAL_ADAPTER_ID = 'shao2015_fixed_rigid_slab_prior_log_005'
 
 
 def _record(cls, value, **converted):
@@ -205,3 +231,123 @@ def run_checked_spec(spec: RunSpec) -> ResultBundle:
             'qualification_evidence_refs': [],
         },
     })
+
+
+def _verify_conditional_resources(data):
+    for field, expected in (('source_hashes', CONDITIONAL_SOURCE_RESOURCES),
+                            ('card_hashes', CONDITIONAL_CARD_RESOURCES)):
+        declared = data[field]
+        if set(declared) != set(expected):
+            raise ValueError(f'{field} must identify every conditional source')
+        for name, (category, resource_name) in expected.items():
+            resource = (files('physicroll').joinpath(resource_name)
+                        if category == 'module' else resource_file(category, resource_name))
+            if hashlib.sha256(resource.read_bytes()).hexdigest() != declared[name]:
+                raise ValueError(f'conditional resource hash mismatch: {name}')
+
+
+def _same_frozen_json(actual, expected):
+    """Compare frozen declarations without treating JSON booleans as numbers."""
+    if type(actual) is not type(expected):
+        return False
+    if type(expected) is dict:
+        return (actual.keys() == expected.keys() and
+                all(_same_frozen_json(actual[key], value)
+                    for key, value in expected.items()))
+    if type(expected) is list:
+        return (len(actual) == len(expected) and
+                all(_same_frozen_json(item, value)
+                    for item, value in zip(actual, expected)))
+    return actual == expected
+
+
+def run_conditional_spec(spec: RunSpec) -> ResultBundle:
+    """Run the frozen no-fit Shao benchmark or declared prior sensitivity."""
+    if not isinstance(spec, RunSpec):
+        raise ValueError('run_conditional_spec requires a RunSpec')
+    data = spec.to_dict()
+    kind = data['workflow_kind']
+    if kind not in ('benchmark', 'sensitivity'):
+        raise ValueError(f'{kind} is not a conditional Shao workflow')
+    if data['model_choices'] != {
+            'solver': SUPPORTED_CONTRACT['solver'], 'material': 'power_hardening',
+            'bite': SUPPORTED_CONTRACT['bite_mode'], 'thermal': 'none'}:
+        raise ValueError('conditional model choices differ from frozen adapter')
+    settings = {'cells': 256, 'verify_refinement': True}
+    if kind == 'benchmark':
+        settings['comparison_cells'] = 512
+    if not _same_frozen_json(data['numerical_settings'], settings):
+        raise ValueError('conditional numerical settings differ from frozen adapter')
+    expected_inputs = {'adapter_id': CONDITIONAL_ADAPTER_ID}
+    if kind == 'benchmark':
+        expected_inputs['prior_log_thickness_strain'] = (
+            SUPPORTED_ASSUMPTIONS['prior_log_thickness_strain'])
+    else:
+        expected_inputs['prior_log_thickness_strains'] = list(DECLARED_PRIOR_LOG_STRAINS)
+    if not _same_frozen_json(data['resolved_inputs'], expected_inputs):
+        raise ValueError('conditional resolved inputs differ from frozen adapter')
+    if (not _same_frozen_json(
+            data['requested_inputs'], {**expected_inputs, 'fit_performed': False}) or
+            data['recipe_targets'] != {} or
+            data['observations'] != {
+                'source_resource':
+                    'scenarios/literature/shao2015_aa5052/measured_validation.csv',
+                'measurement_uncertainty': None} or
+            data['identities']['model_version'] != 'conditional_shao_contract_v1' or
+            any(data['identities'][name] is not None
+                for name in ('material_id', 'state_id', 'recipe_id'))):
+        raise ValueError('conditional request, observations or identities differ from frozen adapter')
+    _verify_conditional_resources(data)
+    bounds = {
+        'required_limit_ids': [f'pass:{number}:equipment:{limit}'
+                               for number in (1, 2, 3)
+                               for limit in EQUIPMENT_LIMITS.values()],
+        'evaluations': [],
+    }
+    if kind == 'benchmark':
+        output = run_conditional_comparison()
+        differences = output['numerical_differences']
+        numerical_passed = all(
+            abs(item['force_relative_change']) < 1e-5 and
+            abs(item['slip_absolute_change']) < 1e-6 for item in differences)
+        if output['fixture_differences']:
+            raise ValueError('conditional source fixture differs from audited extraction')
+        outputs = {'conditional_comparison': output}
+        checks = {'numerical_differences': differences,
+                  'fixture_differences': output['fixture_differences']}
+        effective = {'gauges_m': output['search']['selected']['gauges_m'],
+                     'prior_log_thickness_strain': expected_inputs['prior_log_thickness_strain']}
+    else:
+        output = run_declared_prior_sensitivity()
+        outputs = {'declared_prior_sensitivity': output}
+        checks = {'case_statuses': [item['status'] for item in output['cases']]}
+        effective = {'prior_log_thickness_strains': expected_inputs['prior_log_thickness_strains']}
+        numerical_passed = None
+    checks['declared_bounds'] = bounds
+    return ResultBundle({
+        'schema_version': '1', 'run_spec_sha256': spec.sha256,
+        'effective_inputs': effective, 'outputs': outputs, 'checks': checks,
+        'assessments': {
+            'execution': 'COMPLETED', 'input_validity': 'VALID',
+            'model_applicability': 'INDETERMINATE',
+            'numerical_verification': ('NOT_ASSESSED' if numerical_passed is None
+                                       else 'PASSED' if numerical_passed else 'FAILED'),
+            'declared_bounds_status': 'INDETERMINATE',
+            'declared_bounds_coverage': 'NONE',
+            'scientific_qualification': 'NOT_ASSESSED',
+            'operating_readiness': 'NOT_ASSESSED', 'predictions_computed': True,
+            'qualification_evidence_refs': [],
+        },
+    })
+
+
+def run_workflow(spec: RunSpec) -> ResultBundle:
+    """Dispatch currently public version-1 checked and conditional workflows."""
+    if not isinstance(spec, RunSpec):
+        raise ValueError('run_workflow requires a RunSpec')
+    kind = spec.to_dict()['workflow_kind']
+    if kind in ('checked_pass', 'checked_schedule'):
+        return run_checked_spec(spec)
+    if kind in ('benchmark', 'sensitivity'):
+        return run_conditional_spec(spec)
+    raise ValueError(f'no public adapter for workflow_kind {kind}')

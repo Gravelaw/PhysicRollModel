@@ -1,0 +1,67 @@
+{
+  "card_hashes": {
+    "docs/research/data/shao2015_conditional_adapter.json": "931eec727b44ad105bfc903819d25fc312127794db428bbac8ce05d1211839f6",
+    "docs/research/data/shao2015_prior_sensitivity.json": "455851fbce2c188166722bbb35c688986b27200a0ed4e4397fe6845d958d67ae",
+    "scenarios/literature/shao2015_aa5052/assumptions.json": "2ad7091bdb92896c01c99e49c16e0f6fc4aad44b0d20e4b81ebf46ca295d9918"
+  },
+  "identities": {
+    "code_version": "v1-conditional-adapter-development",
+    "material_id": null,
+    "model_version": "conditional_shao_contract_v1",
+    "recipe_id": null,
+    "state_id": null
+  },
+  "model_choices": {
+    "bite": "established",
+    "material": "power_hardening",
+    "solver": "spatial_slab",
+    "thermal": "none"
+  },
+  "numerical_settings": {
+    "cells": 256,
+    "verify_refinement": true
+  },
+  "observations": {
+    "measurement_uncertainty": null,
+    "source_resource": "scenarios/literature/shao2015_aa5052/measured_validation.csv"
+  },
+  "recipe_targets": {},
+  "requested_inputs": {
+    "adapter_id": "shao2015_fixed_rigid_slab_prior_log_005",
+    "fit_performed": false,
+    "prior_log_thickness_strains": [
+      0.0,
+      0.01,
+      0.05,
+      0.2
+    ]
+  },
+  "resolved_inputs": {
+    "adapter_id": "shao2015_fixed_rigid_slab_prior_log_005",
+    "prior_log_thickness_strains": [
+      0.0,
+      0.01,
+      0.05,
+      0.2
+    ]
+  },
+  "schema_version": "1",
+  "source_hashes": {
+    "docs/research/data/shao2015_raw.json": "7825df6a53edcfa10f6c5c679f697150d8d43b96ea25f9dda51f76c15aa6e31b",
+    "physicroll/conditional_shao.py": "1f4b9073c1e4a64ebdd1a599077026d0b31d02f6c78c0142dc1ede1866e17a4a",
+    "scenarios/literature/shao2015_aa5052/inputs.csv": "269a4e0692c7d91785f065a2811dcc15dca61355bf0c62751fbe184233f191a8",
+    "scenarios/literature/shao2015_aa5052/measured_validation.csv": "51b1f81c0d81e827d4010eb5b1382baf042ac600dbf9bd9ed296f60c14e35033",
+    "scenarios/literature/shao2015_aa5052/reference_model_outputs.csv": "a9a885a5a17158f499896ba59186f160f6de6fb7d2a70eefde52cdfc84d498c2",
+    "scenarios/literature/shao2015_aa5052/sources.json": "0d783d0714175ff40788de1ef75b2f15c5587ac41ecf5ef75c2ac194ffaeb4ac"
+  },
+  "unit_conventions": {
+    "force_sign": "separating_positive",
+    "gauge_basis": "per_layer_full_thickness",
+    "layer_count": 1,
+    "power_sign": "motoring_positive_regeneration_negative",
+    "temperature_unit": "K",
+    "torque_sign": "motoring_positive_regeneration_negative",
+    "unit_system": "SI"
+  },
+  "workflow_kind": "sensitivity"
+}

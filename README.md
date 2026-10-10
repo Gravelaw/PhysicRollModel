@@ -18,6 +18,7 @@ python -m unittest discover -s tests -v
 python scripts/check_installed_wheel.py
 python -m physicroll scenarios/baseline.json --output artifacts/baseline.result.json
 python -m physicroll --run-spec scenarios/v1_checked_pass.runspec.json --output checked-result.json
+python -m physicroll --run-spec scenarios/v1_shao_benchmark.runspec.json --output benchmark.json
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```

@@ -11,7 +11,7 @@ The package-data list in `pyproject.toml` declares four resource groups:
 
 | Group | Reviewed source copy | Use |
 |---|---|---|
-| `examples` | `scenarios/*.json` (nine named files) | Legacy baseline and W1 checked example now; further public adapters in W3 |
+| `examples` | `scenarios/*.json` (eleven named files) | Legacy baseline, W1 checked example and two conditional Shao templates; further public adapters in W3 |
 | `schemas` | `schema/*.json` | V1 contract and legacy scenario schemas |
 | `shao_fixture` | `scenarios/literature/shao2015_aa5052/*` | Established audited CSV/assumptions source fixture |
 | `shao_research` | `docs/research/data/shao2015_*.json` | Raw transcription, conditional adapter, prior sensitivity |

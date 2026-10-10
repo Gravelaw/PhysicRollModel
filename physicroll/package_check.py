@@ -9,7 +9,7 @@ from .literature import load_case
 from .model import Scenario, solve
 from .resources import read_example, resource_directory, resource_file
 from .run_contract import RunSpec
-from .workflows import run_checked_spec
+from .workflows import run_checked_spec, run_workflow
 
 
 def main():
@@ -46,6 +46,13 @@ def main():
             'CONDITIONAL_REPLAY_INDETERMINATE',
             'CONDITIONAL_REPLAY_INDETERMINATE']:
         raise AssertionError('packaged prior sensitivity changed')
+    for name in ('v1_shao_benchmark.runspec.json',
+                 'v1_shao_sensitivity.runspec.json'):
+        conditional_spec = RunSpec(read_example(name))
+        conditional_result = run_workflow(conditional_spec)
+        conditional_result.verify_run_spec(conditional_spec)
+        if conditional_result.to_dict()['assessments']['scientific_qualification'] != 'NOT_ASSESSED':
+            raise AssertionError('conditional result gained unsupported qualification')
     print('Installed package check passed: legacy and checked examples, schemas, '
           'audited Shao fixture, conditional replay and sensitivity')
 

@@ -14,6 +14,7 @@ RESOURCE_NAMES = {
         'higher_reduction.json', 'higher_speed.json', 'passive_contact_demo.json',
         'unloaded_transport.json', 'v03_foundations.json',
         'v1_checked_pass.runspec.json',
+        'v1_shao_benchmark.runspec.json', 'v1_shao_sensitivity.runspec.json',
     }),
     'schemas': frozenset({
         'scenario.schema.json', 'run-spec-v1.schema.json',
