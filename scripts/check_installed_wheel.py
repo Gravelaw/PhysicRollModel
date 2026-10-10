@@ -92,6 +92,14 @@ def main():
             "and result['shaft_speed_role']=='predicted_from_applied_torque' "
             "and abs(result['completed_transfer_m']-.2)<1e-12",
         ], cwd=outside, env=clean_env, check=True)
+        subprocess.run([
+            str(python), '-I', '-c',
+            "from physicroll.transient_t2a5 import T2A5Case, run_moving_elastic_span; "
+            "result=run_moving_elastic_span(T2A5Case(64)); "
+            "assert result['mode']=='distributed_moving_elastic_span_with_characteristic_inputs' "
+            "and result['maximum_mass_balance_defect_kg']<1e-10 "
+            "and result['maximum_reconstructed_stage_courant']<=result['cfl_limit']",
+        ], cwd=outside, env=clean_env, check=True)
         for name in ('v1_checked_pass.runspec.json',
                      'v1_operating_replay.runspec.json',
                      'v1_schedule_search.runspec.json',
