@@ -26,7 +26,8 @@ INPUT_FIELDS = {
 
 
 def load_case(directory):
-    directory = Path(directory)
+    if isinstance(directory, (str, Path)):
+        directory = Path(directory)
     assumptions = json.loads((directory/'assumptions.json').read_text())
     audit, passes, measurements, references = [], [], [], []
     def convert(value,unit,dimension,convention,source,location,category,pass_id,field):

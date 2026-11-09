@@ -1,0 +1,701 @@
+{
+  "card_hashes": {},
+  "identities": {
+    "code_version": "v1-operating-adapter-development",
+    "material_id": null,
+    "model_version": "O0_OPERATING_CONTRACT_V1",
+    "recipe_id": "recipe-A",
+    "state_id": null
+  },
+  "model_choices": {
+    "bite": "none",
+    "material": "none",
+    "solver": "none",
+    "thermal": "none"
+  },
+  "numerical_settings": {},
+  "observations": {
+    "samples": [
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "absent",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 10.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 10.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 10.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 10.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 10.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "prepared",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 10.0,
+        "transition_provenance": null
+      },
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "absent",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 11.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 11.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 11.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 11.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 11.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "threading",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 11.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      },
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "established",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 12.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 12.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 12.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 12.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 12.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "ramp_up",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 12.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      },
+      {
+        "applied_references": [
+          {
+            "acknowledged_at_s": 12.9,
+            "commanded_at_s": 12.8,
+            "provenance": "synthetic acknowledged trim",
+            "quantity": "entry_speed_m_s",
+            "unit": "m/s",
+            "value": 1.9
+          }
+        ],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "established",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 13.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 13.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 13.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 13.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 13.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "steady",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [
+          {
+            "alignment_provenance": "synthetic parcel/location/timebase alignment assertion",
+            "end_s": 13.0,
+            "max_measurement_age_s": 0.1,
+            "model": "spatial_slab",
+            "provenance": "synthetic stationarity and output error-budget assertion",
+            "start_s": 12.5
+          }
+        ],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 13.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      },
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "established",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 14.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 14.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 14.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 14.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 14.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "deceleration",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": 20.0,
+        "remaining_length_provenance": "synthetic supplied estimator",
+        "remaining_length_uncertainty_m": 2.0,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 14.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      },
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "absent",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 15.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 15.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 15.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 15.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 15.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "tailout",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 15.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      },
+      {
+        "applied_references": [],
+        "boundary_provenance": "synthetic bite and span boundary record",
+        "boundary_state": "absent",
+        "coil_id": "coil-1",
+        "coordinate_reference": "entry-material-reference",
+        "measurements": [
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 16.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.002
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 16.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_thickness_m",
+            "uncertainty_si": 1e-06,
+            "unit": "m",
+            "value": 0.00151
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 16.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_speed_m_s",
+            "uncertainty_si": 0.01,
+            "unit": "m/s",
+            "value": 1.8
+          },
+          {
+            "location": "entry",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 16.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "entry_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 0.0
+          },
+          {
+            "location": "exit",
+            "material_coordinate_m": 12.0,
+            "observed_at_s": 16.0,
+            "provenance": "synthetic observation",
+            "quality": "valid",
+            "quantity": "exit_tension_pa",
+            "uncertainty_si": 100.0,
+            "unit": "Pa",
+            "value": 14000000.0
+          }
+        ],
+        "phase": "complete",
+        "phase_basis": "observed",
+        "phase_provenance": "synthetic event annotation",
+        "recipe_id": "recipe-A",
+        "recipe_revision": "r1",
+        "remaining_length_m": null,
+        "remaining_length_provenance": null,
+        "remaining_length_uncertainty_m": null,
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "steady_evidence": [],
+        "timebase_id": "synthetic_clock",
+        "timestamp_s": 16.0,
+        "transition_provenance": "synthetic recorded phase transition"
+      }
+    ]
+  },
+  "recipe_targets": {
+    "recipes": [
+      {
+        "provenance": "Synthetic O0 contract example; no actual mill recipe",
+        "recipe_id": "recipe-A",
+        "revision": "r1",
+        "scope": {
+          "alloy": "Al-synthetic",
+          "entry_thickness_m": 0.002,
+          "exit_thickness_m": 0.0015,
+          "pass_name": "pass-1",
+          "temper": "unknown"
+        },
+        "targets": [
+          {
+            "phase": "steady",
+            "provenance": "synthetic recipe",
+            "quantity": "entry_speed_m_s",
+            "unit": "m/s",
+            "value": 2.0
+          },
+          {
+            "phase": "steady",
+            "provenance": "synthetic recipe",
+            "quantity": "exit_thickness_m",
+            "unit": "m",
+            "value": 0.0015
+          },
+          {
+            "phase": "steady",
+            "provenance": "synthetic recipe",
+            "quantity": "entry_tension_pa",
+            "unit": "Pa",
+            "value": 10000000.0
+          },
+          {
+            "phase": "steady",
+            "provenance": "synthetic recipe",
+            "quantity": "exit_tension_pa",
+            "unit": "Pa",
+            "value": 15000000.0
+          },
+          {
+            "phase": "ramp_up",
+            "provenance": "synthetic recipe",
+            "quantity": "entry_speed_m_s",
+            "unit": "m/s",
+            "value": 1.0
+          },
+          {
+            "phase": "deceleration",
+            "provenance": "synthetic recipe",
+            "quantity": "entry_speed_m_s",
+            "unit": "m/s",
+            "value": 0.5
+          }
+        ]
+      }
+    ]
+  },
+  "requested_inputs": {
+    "replay_id": "synthetic-o0-phase-trace"
+  },
+  "resolved_inputs": {
+    "replay_id": "synthetic-o0-phase-trace"
+  },
+  "schema_version": "1",
+  "source_hashes": {
+    "physicroll/operating.py": "ed677104966907427294c7164c31a23d9319b8fe3554825a630c2f83b3761b49",
+    "physicroll/operational_replay.py": "ce4c20936b9bfa6ef862e8e080aeb35597840393d9188b2f97e67f404ae5dcc0"
+  },
+  "unit_conventions": {
+    "force_sign": "separating_positive",
+    "gauge_basis": "per_layer_full_thickness",
+    "layer_count": 1,
+    "power_sign": "motoring_positive_regeneration_negative",
+    "temperature_unit": "K",
+    "torque_sign": "motoring_positive_regeneration_negative",
+    "unit_system": "SI"
+  },
+  "workflow_kind": "operating_replay"
+}

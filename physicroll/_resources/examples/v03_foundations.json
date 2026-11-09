@@ -1,0 +1,66 @@
+{
+  "warning": "ALL PARAMETERS SYNTHETIC; illustrative exercise, not aluminium calibration or plant setpoints",
+  "material_state": {
+    "alloy": "Al-demo-not-a-qualified-grade",
+    "temper": "demo-prior-cold-work",
+    "accumulated_equivalent_plastic_strain": 0.1,
+    "history": ["synthetic-prior-processing"],
+    "temperature_k": 293.15
+  },
+  "hardening_law": {
+    "alloy": "Al-demo-not-a-qualified-grade",
+    "temper": "demo-prior-cold-work",
+    "yield_stress_pa": 100000000.0,
+    "strength_coefficient_pa": 100000000.0,
+    "exponent": 0.3,
+    "provenance": "SYNTHETIC_DEMONSTRATION_NOT_A_FIT",
+    "synthetic": true
+  },
+  "thermal_step": {
+    "strip_temperature_k": 300.0,
+    "roll_temperature_k": 295.0,
+    "strip_mass_kg": 2.0,
+    "roll_mass_kg": 500.0,
+    "strip_heat_capacity_j_kg_k": 900.0,
+    "roll_heat_capacity_j_kg_k": 460.0,
+    "duration_s": 0.01,
+    "deforming_volume_m3": 0.0006,
+    "contact_area_m2": 0.2,
+    "plastic_power_w": 100000.0,
+    "plastic_heat_fraction": 0.7,
+    "signed_solid_traction_pa": 1000000.0,
+    "signed_relative_slip_m_s": 0.1,
+    "strip_slip_heat_fraction": 0.5,
+    "contact_conductance_w_m2_k": 1000.0,
+    "strip_cooling_conductance_w_k": 20.0,
+    "roll_cooling_conductance_w_k": 100.0,
+    "strip_coolant_temperature_k": 290.0,
+    "roll_coolant_temperature_k": 290.0,
+    "contact_law": "conductive_only"
+  },
+  "fluid": {
+    "identity": "demo-neat-oil-unqualified",
+    "fluid_type": "neat_oil",
+    "flow_m3_s": null,
+    "supply_temperature_k": 290.0,
+    "dynamic_viscosity_pa_s": null,
+    "roll_rms_roughness_m": null,
+    "strip_rms_roughness_m": null,
+    "source": "SYNTHETIC_DEMONSTRATION",
+    "quality": "synthetic"
+  },
+  "effective_friction": {
+    "coefficient": 0.1,
+    "source": "SYNTHETIC_DEMONSTRATION_NOT_A_FIT",
+    "fit_uses_force_torque_slip": false,
+    "calibrated": false
+  },
+  "supplied_profile": {
+    "width_positions_m": [-0.5, -0.25, 0.0, 0.25, 0.5],
+    "thickness_m": [0.0015, 0.00151, 0.00152, 0.00151, 0.0015],
+    "membrane_strain_mismatch": [0.0001, 0.0, -0.0001, 0.0, 0.0001],
+    "through_thickness_curvature_inv_m": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "temperature_k": 300.0,
+    "applied_tension_pa": 10000000.0
+  }
+}

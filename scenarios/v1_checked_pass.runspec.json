@@ -1,0 +1,124 @@
+{
+  "card_hashes": {
+    "scenarios/flowing_energy_demo.json": "5ca667a5bb6c5243de0a2e0fcd63e9c329203d8fa122c4749c37db0ac23d6848"
+  },
+  "identities": {
+    "code_version": "9d775f7623a5345b44db961064f24cf938f22b8d",
+    "material_id": null,
+    "model_version": "checked_schedule at 9d775f76",
+    "recipe_id": null,
+    "state_id": null
+  },
+  "model_choices": {
+    "bite": "unassisted",
+    "material": "power_hardening",
+    "solver": "spatial_slab",
+    "thermal": "none"
+  },
+  "numerical_settings": {
+    "cells": 128,
+    "verify_refinement": true
+  },
+  "observations": {},
+  "recipe_targets": {},
+  "requested_inputs": {
+    "exit_gauge_role": "prescribed input",
+    "mean_flow_stress_role": "positive placeholder",
+    "scenario": {
+      "density_kg_m3": 2700.0,
+      "drive_efficiency": 0.9,
+      "entry_speed_m_s": 2.0,
+      "entry_tension_pa": 10000000.0,
+      "entry_thickness_m": 0.002,
+      "exit_tension_pa": 15000000.0,
+      "exit_thickness_m": 0.0015,
+      "friction_coefficient": 0.08,
+      "mean_flow_stress_pa": 120000000.0,
+      "name": "synthetic_aluminium_baseline",
+      "synthetic": true,
+      "width_m": 1.0,
+      "work_roll_radius_m": 0.25
+    }
+  },
+  "resolved_inputs": {
+    "checked_pass": {
+      "assumed_strain_range": [
+        0.0,
+        3.0
+      ],
+      "assumed_temperature_range_k": [
+        273.15,
+        420.0
+      ],
+      "bite_mode": "unassisted",
+      "cells": 128,
+      "elasticity": null,
+      "fluid_observation": null,
+      "heat_boundary": null,
+      "operating_plan": {
+        "boundary_provenance": null,
+        "coolant_flow_kg_s": null,
+        "cooling_boundary": null,
+        "lubricant_flow_kg_s": null,
+        "lubrication_boundary": null,
+        "observations": [],
+        "pass_name": "synthetic_aluminium_baseline",
+        "ranges": []
+      },
+      "passive_contact": null,
+      "roll_body_id": null,
+      "scenario": {
+        "density_kg_m3": 2700.0,
+        "drive_efficiency": 0.9,
+        "entry_speed_m_s": 2.0,
+        "entry_tension_pa": 10000000.0,
+        "entry_thickness_m": 0.002,
+        "exit_tension_pa": 15000000.0,
+        "exit_thickness_m": 0.0015,
+        "friction_coefficient": 0.08,
+        "mean_flow_stress_pa": 120000000.0,
+        "name": "synthetic_aluminium_baseline",
+        "synthetic": true,
+        "width_m": 1.0,
+        "work_roll_radius_m": 0.25
+      },
+      "solver": "spatial_slab"
+    },
+    "gauge_basis": "per_layer_full_thickness",
+    "initial_state": {
+      "accumulated_equivalent_plastic_strain": 0.1,
+      "alloy": "Al-demo-not-a-qualified-grade",
+      "history": [
+        "synthetic-prior-processing"
+      ],
+      "temper": "demo-prior-cold-work",
+      "temperature_k": 300.0
+    },
+    "interpass_handoffs": [],
+    "law": {
+      "alloy": "Al-demo-not-a-qualified-grade",
+      "exponent": 0.3,
+      "provenance": "SYNTHETIC_EXERCISE_UNCALIBRATED",
+      "strength_coefficient_pa": 100000000.0,
+      "synthetic": true,
+      "temper": "demo-prior-cold-work",
+      "yield_stress_pa": 100000000.0
+    },
+    "layer_count": 1
+  },
+  "schema_version": "1",
+  "source_hashes": {
+    "physicroll/checked_schedule.py": "831ac024cd220cf4ab6cf820ac52a5bced0c55ea2e3cb33b5f46772f953e9783",
+    "scenarios/baseline.json": "46400358b613f0f8240a2e0779ca26ea2af62e22789a6c35ee174a5a454a39d0"
+  },
+  "unit_conventions": {
+    "force_sign": "separating_positive",
+    "gauge_basis": "per_layer_full_thickness",
+    "layer_count": 1,
+    "power_sign": "motoring_positive_regeneration_negative",
+    "temperature_unit": "K",
+    "torque_sign": "motoring_positive_regeneration_negative",
+    "unit_system": "SI"
+  },
+  "workflow_kind": "checked_pass"
+}

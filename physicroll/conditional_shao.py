@@ -3,20 +3,19 @@ import csv
 import hashlib
 import json
 import math
-from pathlib import Path
 
 from .checked_schedule import CheckedPass, InterpassHandoff
 from .materials import MaterialState, PowerHardeningLaw
 from .model import Scenario
 from .operating import PassOperatingPlan
 from .schedule_search import OperatingChoice, SearchSpace, checked_replay, search_schedules
+from .resources import resource_directory, resource_file
 
 
-ROOT = Path(__file__).resolve().parents[1]
-RAW_PATH = ROOT / 'docs/research/data/shao2015_raw.json'
-ADAPTER_PATH = ROOT / 'docs/research/data/shao2015_conditional_adapter.json'
-SENSITIVITY_PATH = ROOT / 'docs/research/data/shao2015_prior_sensitivity.json'
-EXISTING = ROOT / 'scenarios/literature/shao2015_aa5052'
+RAW_PATH = resource_file('shao_research', 'shao2015_raw.json')
+ADAPTER_PATH = resource_file('shao_research', 'shao2015_conditional_adapter.json')
+SENSITIVITY_PATH = resource_file('shao_research', 'shao2015_prior_sensitivity.json')
+EXISTING = resource_directory('shao_fixture')
 TEMPER_LABEL = 'unknown_source_temper_conditional'
 RAW_SHA256 = '7825df6a53edcfa10f6c5c679f697150d8d43b96ea25f9dda51f76c15aa6e31b'
 DECLARED_PRIOR_LOG_STRAINS = (0.0, 0.01, 0.05, 0.2)

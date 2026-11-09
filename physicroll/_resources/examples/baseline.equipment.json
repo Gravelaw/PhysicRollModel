@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "stand_stiffness_n_m": 10000000000.0,
+  "entry_reel_radius_m": 0.7,
+  "exit_reel_radius_m": 0.7,
+  "entry_reel_inertia_kg_m2": 800.0,
+  "exit_reel_inertia_kg_m2": 800.0
+}

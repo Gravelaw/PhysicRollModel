@@ -1,0 +1,27 @@
+{
+  "S1": {
+    "authors": "Jian Shao; Wenquan Sun; Anrui He; Bo Li",
+    "year": 2015,
+    "title_as_published": "Research on the Thermal Calculaion Model of High Strength Aluminum Strip Rolling Based on Finite Diffreence Method",
+    "doi": "https://doi.org/10.18280/ijht.330113",
+    "primary_html": "https://www.iieta.org/journals/ijht/paper/10.18280/ijht.330113",
+    "primary_pdf": "https://www.iieta.org/download/file/fid/24141",
+    "evidence": "Original HTML equations/tables read; PDF p94 checked by parent against original table; no raw plant traces supplied",
+    "limitations": ["Incoming temper and prior strain unknown", "Eq3 accumulation coefficient a unspecified", "K/n reference18 concerns Al-Si continuous casting, not an identifiable AA5052 flow-curve dataset", "Table1 says roll radius; Eq6 prose says diameter", "Rolling-speed measurement location unresolved", "No measured torque or temperature validation", "Measurement uncertainty and independent coils unavailable"]
+  },
+  "S2": {
+    "author": "Hulamin",
+    "year": null,
+    "title": "5052 Data Sheet",
+    "primary_pdf": "https://www.hulamin.com/sites/default/files/downloads/5052%20Data%20Sheet.pdf",
+    "evidence": "Primary one-page PDF text read; generic density and application categories only",
+    "limitations": ["Generic manufacturer properties do not identify benchmark temper", "No H32/H34 strength or bend certification inferred"]
+  },
+  "S3": {
+    "authors": "Erfanian et al.",
+    "year": 2024,
+    "title": "Through-Thickness Modelling of Metal Rolling using Multiple-Scale Asymptotics",
+    "primary_html": "https://arxiv.org/html/2408.01347v1",
+    "equation_context": "Equations21-28: rigid-roll perfectly-plastic leading-order pressure branches; no hardening/elastic/thermal validation"
+  }
+}

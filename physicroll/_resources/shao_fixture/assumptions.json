@@ -1,0 +1,86 @@
+{
+  "case_id": "shao2015_aa5052_three_pass",
+  "product": "AA5052 strip, 1360 mm wide, 4.10 to 1.72 mm in three passes",
+  "proposed_application": "Cut-to-length stock for appliance panels/general sheet-metal work (S2 application categories); S1 end use is not stated",
+  "incoming_temper": null,
+  "outgoing_temper": null,
+  "material": {
+    "K_original": {
+      "value": 276.5,
+      "unit": "MPa",
+      "source_id": "S1",
+      "location": "p94 section4, Eq2 p92"
+    },
+    "n": 0.26,
+    "baseline_prior_log_thickness_strain": 0.05,
+    "prior_log_strain_sensitivity": [
+      0.0,
+      0.01,
+      0.05,
+      0.2
+    ],
+    "strain_convention": "ASSUMED log-thickness law; alternate unconverted equivalent-strain interpretation tested separately",
+    "accumulation": "ASSUMED additive log strain, no anneal/reset; does not reproduce missing-a Eq3",
+    "temperature_dependence": "not modelled; temperature and strain-rate calibration ranges unknown",
+    "calibration_range": null,
+    "K_sensitivity_factors": [
+      0.9,
+      1.0,
+      1.1
+    ],
+    "coefficient_conversion": "For the stated log-law assumption only: epsilon_eq=2/sqrt(3)*epsilon_log and K_eq=K_log*(sqrt(3)/2)^n",
+    "stress_convention": "UNRESOLVED: compare assumed uniaxial flow stress versus plane-strain stress difference"
+  },
+  "density": {
+    "value": 2.68,
+    "unit": "g/cm3",
+    "source_id": "S2",
+    "location": "p1 Physical Properties",
+    "status": "generic manufacturer value, not measured benchmark density"
+  },
+  "contact": {
+    "mode": "rigid circular, constant mean yield per pass; established rolling diagnostic",
+    "radius_interpretation": "use Table1 radius label; source prose inconsistency disclosed",
+    "radius_factors_tested": [
+      1.0,
+      0.5
+    ],
+    "flattening": "not solved; source Rprime retained as model output, not measurement"
+  },
+  "speed": {
+    "resolved_mapping": null,
+    "analysis_interpretations": [
+      "roll_surface",
+      "entry_strip",
+      "exit_strip"
+    ],
+    "status": "UNRESOLVED; each executed interpretation is explicitly selected, never inferred as observed"
+  },
+  "optimisation": {
+    "objective": "minimise maximum predicted separating force",
+    "variables": [
+      "pass1 exit gauge",
+      "pass2 exit gauge"
+    ],
+    "fixed": "reported pass speeds, tensions, friction; initial/final gauges and three passes",
+    "reduction_min": 0.22126137546973335,
+    "reduction_max": 0.29209756097560957,
+    "trust_region_status": "ASSUMED observed extrema, not source-certified safe envelope",
+    "mill_force_torque_power_ratings": null,
+    "safe_tension_limits": null,
+    "global_optimum_proven": false
+  },
+  "friction_sensitivity_factors": [
+    0.9,
+    1.0,
+    1.1
+  ],
+  "uncertainty": "Sensitivity ranges are declared engineering assumptions, not confidence intervals; no fitting to the three observations",
+  "generic_strip_E": {
+    "value": 70,
+    "unit": "GPa",
+    "source_id": "S2",
+    "location": "p1 Physical Properties",
+    "used_in_model": false
+  }
+}

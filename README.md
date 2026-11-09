@@ -6,6 +6,13 @@ an editable scene and portable USD geometry.
 This is an initial digital-twin prototype, **not a plant replica or validated production model**.
 No actual material/plant data, live connections or production setpoints are included.
 
+The **9 November 2026 development checkpoint** brings the checked workflows,
+saved runs, guided editor and bounded transient transport/reel mechanics onto
+`main`. Full v1 remains in development; the
+[checkpoint decision](docs/v1-scope-amendment-2026-10-10.md) and
+[integration critical path](docs/v1-integration-critical-path.md) record the
+remaining physics, animation and release gates.
+
 ![Generic mill and analytical roll bite](artifacts/preview.png)
 
 ## Start here — no dependencies or Blender needed
@@ -15,11 +22,49 @@ Use Python 3.10+ (tested with 3.12.14), from this directory:
 ```bash
 python scripts/smoke.py
 python -m unittest discover -s tests -v
+python scripts/check_installed_wheel.py
 python -m physicroll scenarios/baseline.json --output artifacts/baseline.result.json
+python -m physicroll --run-spec scenarios/v1_checked_pass.runspec.json --output checked-result.json
+python -m physicroll --run-spec scenarios/v1_shao_benchmark.runspec.json --output benchmark.json
+python -m physicroll --run-spec scenarios/v1_operating_replay.runspec.json --output operating-replay.json
+python -m physicroll --run-spec scenarios/v1_schedule_search.runspec.json --output search-result.json
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_schedule_search.runspec.json --out /tmp/physicroll-search-run
+python -m physicroll.bundle_cli verify /tmp/physicroll-search-run
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_prescribed_transport_t1.runspec.json --out /tmp/physicroll-t1-run
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_torque_driven_span_reel_t2.runspec.json --out /tmp/physicroll-t2-run
+python -m physicroll.bundle_cli create --run-spec scenarios/v1_two_reel_span_t2.runspec.json --out /tmp/physicroll-two-reel-run
 python scenarios/run_sweep.py
 python scripts/build_extended.py
 ```
 
+The saved run includes a self-contained `report.html` that displays the verified
+inputs, status axes, checks and results; see [the run-bundle guide](docs/v1-run-bundle.md).
+For guided synthetic pass editing and reopening saved runs, start the
+[loopback editor](docs/v1-editor.md) with an explicit `--runs-dir`.
+The [T1 transport contract](docs/v1-transient-T1.md) describes a separate
+bounded prescribed-motion kinematic layer; it does not solve the requested
+drive, deformation or contact dynamics.
+The [integrated T2 increment](docs/v1-transient-T2-integrated.md) adds a bounded
+torque-driven elastic span and right reel with labeled idealized release pickup;
+the [two-reel interval](docs/v1-transient-T2-two-reel.md) adds independent
+drive torques, mirrored reel ownership and optional one-sided numerical
+admissibility stops for reversal, internal donor and tautness limits.
+Both remain short of the full v1 transient solver. The
+[T2A benchmarks](docs/v1-transient-T2A-benchmark.md) test restricted
+shaft/span/reel cases. [T2A5](docs/v1-transient-T2A5-design.md) adds
+distributed strain and velocity with characteristic-compatible fixed ports;
+[T2A6](docs/v1-transient-T2A6-design.md) checks append-only wound-strain
+ownership and a reaction reel for an analytic outgoing wave.
+[T2A7](docs/v1-transient-T2A7-design.md) adds a restricted torque-driven,
+two-way elastic span/reel coupling with append-only transfer.
+[T2A8](docs/v1-transient-T2A8-design.md) checks retained-strain reaction
+release and stops at first tension zero. [T2A9](docs/v1-transient-T2A9-design-candidate.md)
+checks a matched reaction-mode winding-to-release reversal with stored-layer
+pickup. These benchmarks do not establish arbitrary torque-driven reversal,
+slack continuation, rolling contact, full T2 or physical mill accuracy.
+The [transient integration critical path](docs/v1-integration-critical-path.md)
+lists the remaining equation, solver, full 3D contact, animation and release
+gates.
 The smoke test uses only the standard library and checks bundled artifact hashes. Scenario
 values are **SI**: metres, seconds, kilograms, pascals, newtons, watts, radians. Edit a copy of
 `scenarios/baseline.json`; retain `synthetic: true`. Invalid and unsupported cases raise a
@@ -107,7 +152,7 @@ No published accuracy or plant calibration is claimed.
 The [capability matrix](docs/capabilities.md) maps current calculations and future friction,
 mass-flow, thermal, metallurgy and fracture research. Foil is excluded (exit gauge below 300 µm is rejected). Roll flattening/bending, mill stretch,
 shape/flatness, residual stress, thermal effects, alloy hardening/metallurgy and control
-transients are not solved. Exit gauge is prescribed, not predicted from a screw gap.
+transients are not solved by the steady model. Exit gauge is prescribed, not predicted from a screw gap.
 Zero draft is unloaded transport, not temper rolling. Friction needs joint force/torque/slip
 identification; geometry and passing unit tests do not validate rolling accuracy.
 
