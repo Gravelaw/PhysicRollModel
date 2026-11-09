@@ -3,9 +3,18 @@
 This amendment records the user's decisions after the directly attached
 `PhysicRollModel-v1-plan.md` was used for W0/W1. It changes the project scope;
 the attached plan remains the provenance record for the original W0–W6
-sequence. The v1 pull request stays open through the full release gate. A
-review agent will publish findings for the user, and merging requires the
-user's explicit approval even if CI passes.
+sequence. The original decision kept the v1 pull request open through the
+full release gate and required the user's explicit approval to merge even
+if CI passed.
+
+**Checkpoint merge decision — 9 November 2026:** the user authorized merging
+the implemented development checkpoint into `main` before the full v1 release
+gate closes. This supersedes the original keep-open decision for PR #3.
+The merge does not complete v1 or change its acceptance requirements. The
+[integration critical path](v1-integration-critical-path.md) retains the
+remaining T2 transitions, T3 full 3D contact, coupled dynamics, animation and
+release checks. Software verification, physical validation and site
+qualification remain separate.
 
 The following are now **required for v1**:
 

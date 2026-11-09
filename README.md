@@ -6,6 +6,13 @@ an editable scene and portable USD geometry.
 This is an initial digital-twin prototype, **not a plant replica or validated production model**.
 No actual material/plant data, live connections or production setpoints are included.
 
+The **9 November 2026 development checkpoint** brings the checked workflows,
+saved runs, guided editor and bounded transient transport/reel mechanics onto
+`main`. Full v1 remains in development; the
+[checkpoint decision](docs/v1-scope-amendment-2026-10-10.md) and
+[integration critical path](docs/v1-integration-critical-path.md) record the
+remaining physics, animation and release gates.
+
 ![Generic mill and analytical roll bite](artifacts/preview.png)
 
 ## Start here — no dependencies or Blender needed
