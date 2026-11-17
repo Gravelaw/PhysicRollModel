@@ -484,6 +484,73 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(flat['status'], 'NO_LOCAL_STRIPES_ABOVE_THRESHOLD')
         self.assertLess(flat['max_abs_deviation_m'], 1e-15)
 
+    def test_local_stripes_alternating_signs_split_between_samples(self):
+        z = [i * 0.01 for i in range(7)]
+        y = [v * 1e-6 for v in [-3, 1, -3, 1, -3, 1, -3]]
+        res = local_stripes(z, y, 0.03, 0.06, smooth_order=0)
+        dumps(res)
+        dev = res['local_radius_deviation_m']
+        thr = res['threshold_m']
+        stripes = res['stripes']
+        self.assertEqual([s['sign'] for s in stripes],
+                         ['COLD_LOW', 'HOT_HIGH'] * 3 + ['COLD_LOW'])
+        for k, s in enumerate(stripes):
+            self.assertGreater(s['width_m'], 0.0)
+            self.assertGreater(s['width_at_half_peak_m'], 0.0)
+            self.assertLessEqual(s['width_at_half_peak_m'], s['width_m'] + 1e-15)
+            # each stripe owns exactly sample k; its extent stays within one spacing of it
+            self.assertLess(z[k] - s['start_m'], 0.01)
+            self.assertLess(s['end_m'] - z[k], 0.01)
+            self.assertLessEqual(s['start_m'], z[k])
+            self.assertGreaterEqual(s['end_m'], z[k])
+        for a, b in zip(stripes, stripes[1:]):
+            self.assertLess(a['end_m'], b['start_m'])            # no overlap
+            # linear interpolation of the signed residual between the two samples
+            i = z.index(a['peak_position_m'])
+            sa = 1 if a['sign'] == 'HOT_HIGH' else -1
+            expect_end = z[i] + (sa * thr - dev[i]) / (dev[i + 1] - dev[i]) * 0.01
+            expect_start = z[i] + (-sa * thr - dev[i]) / (dev[i + 1] - dev[i]) * 0.01
+            self.assertAlmostEqual(a['end_m'], expect_end, delta=1e-15)
+            self.assertAlmostEqual(b['start_m'], expect_start, delta=1e-15)
+            self.assertTrue(z[i] < a['end_m'] < b['start_m'] < z[i + 1])
+
+    def test_local_stripes_isolated_bump_boundaries_unchanged(self):
+        z = [i * 0.01 for i in range(11)]
+        y = [0.0, 0.0, 0.0, 1e-7, 4e-7, 6e-7, 4e-7, 1e-7, 0.0, 0.0, 0.0]
+        for sign in (1, -1):
+            res = local_stripes(z, [sign * v for v in y], 0.05, 0.1, threshold_m=5e-8,
+                                smooth_order=None)
+            (s,) = res['stripes']
+            # same as the former |residual| interpolation: crossings at 0.5 of the
+            # 0 -> 1e-7 intervals and half peak (3e-7) at 2/3 of 1e-7 -> 4e-7
+            self.assertAlmostEqual(s['start_m'], 0.025, delta=1e-15)
+            self.assertAlmostEqual(s['end_m'], 0.075, delta=1e-15)
+            self.assertAlmostEqual(s['width_at_half_peak_m'], 0.02 + 2 * 0.01 / 3,
+                                   delta=1e-15)
+            self.assertEqual(s['sign'], 'HOT_HIGH' if sign > 0 else 'COLD_LOW')
+
+    def test_local_stripes_without_detrending_on_difference_profile(self):
+        z = [(j + 0.5) * 0.005 for j in range(200)]
+        diff = [3e-6 * math.exp(-0.5 * ((x - 0.6) / 0.03) ** 2) for x in z]
+        diff = [d if d > 1e-9 else 0.0 for d in diff]
+        res = local_stripes(z, diff, 0.5, 0.9, smooth_order=None)
+        dumps(res)
+        self.assertIsNone(res['smooth_order'])
+        self.assertEqual(len(res['stripes']), 1)
+        self.assertEqual(res['stripes'][0]['sign'], 'HOT_HIGH')
+        self.assertAlmostEqual(res['stripes'][0]['peak_position_m'], 0.5975, delta=0.003)
+        self.assertEqual(max(abs(v) for v in res['smooth_profile_m']), 0.0)
+        inside = [d for x, d in zip(z, diff) if abs(x - 0.5) <= 0.45]
+        self.assertEqual(res['local_radius_deviation_m'], inside)
+        # the strip mean (smooth_order=0) makes the zero background a spurious COLD_LOW
+        mean0 = local_stripes(z, diff, 0.5, 0.9, smooth_order=0)
+        self.assertIn('COLD_LOW', [s['sign'] for s in mean0['stripes']])
+        for bad in (-1, 13, 2.0, True, 'none'):
+            with self.assertRaises(ValueError):
+                local_stripes(z, diff, 0.5, 0.9, smooth_order=bad)
+        with self.assertRaises(ValueError):
+            local_stripes([0.0, 0.1], [0.0, 0.0], 0.0, 0.01, smooth_order=None)
+
     def test_history_metrics(self):
         m = history_metrics([0.0, 1.0, 2.0, 3.0], [1.0, 2.0, 5.0, 3.0])
         self.assertEqual(m['peak_change'], 4.0)

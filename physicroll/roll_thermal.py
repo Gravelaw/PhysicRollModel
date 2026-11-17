@@ -992,8 +992,9 @@ def _project_out(y, basis):
 
 
 def _crossing(z, res, i, j, level):
-    """Position between samples i and j where |res| crosses ``level`` (linear)."""
-    a, b = abs(res[i]), abs(res[j])
+    """Position between samples i and j where the SIGNED residual crosses the signed
+    ``level`` (linear interpolation; clamped to the interval)."""
+    a, b = res[i], res[j]
     if a == b:
         return (z[i] + z[j]) / 2
     t = (level - a) / (b - a)
@@ -1009,8 +1010,15 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
     residual with ``|residual| > threshold_m``; ``HOT_HIGH`` = roll locally larger (strip
     locally over-rolled), ``COLD_LOW`` = locally smaller. Start/end are interpolated threshold
     crossings; ``width_at_half_peak_m`` is the full width where |residual| >= peak/2 around the
-    peak. Runs touching the strip edge are marked: there the polynomial cannot follow the
-    crown roll-off, so they are likely fit artefacts.
+    peak. Crossings are interpolated on the signed residual against the signed threshold
+    (signed half-peak level), so adjacent opposite-sign stripes are separated between samples
+    and never overlap. Runs touching the strip edge are marked: there the polynomial cannot
+    follow the crown roll-off, so they are likely fit artefacts.
+
+    ``smooth_order=None``: no de-trending (residual = the input within the strip). This is the
+    recommended setting for a difference profile (actual header minus healthy header), whose
+    zero background ``smooth_order=0`` (strip mean removed) would turn into a spurious
+    ``COLD_LOW`` stripe.
     """
     z = [_num(f'z_m[{i}]', v) for i, v in enumerate(_seq('z_m', z_m))]
     y = [_num(f'radius_growth_m[{i}]', v, lo=-1e-2, hi=1e-2)
@@ -1022,17 +1030,20 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
     centre = _num('strip_centre_m', strip_centre_m)
     width = _num('strip_width_m', strip_width_m, positive=True, hi=20.0)
     thr = _num('threshold_m', threshold_m, positive=True, hi=1e-3)
-    order = _int('smooth_order', smooth_order, lo=0, hi=12)
+    order = None if smooth_order is None else _int('smooth_order', smooth_order, lo=0, hi=12)
     tol = 1e-9 * max(1.0, width)
     idx = [i for i, x in enumerate(z) if abs(x - centre) <= width / 2 + tol]
-    if len(idx) < order + 3:
+    if len(idx) < (2 if order is None else order + 3):
         raise ValueError('too few samples inside the strip for the requested smooth_order')
     zs = [z[i] for i in idx]
     ys = [y[i] for i in idx]
-    xs = [(x - centre) / (width / 2) for x in zs]
-    leg = [_legendre(x, order) for x in xs]
-    basis = [[row[n] for row in leg] for n in range(order + 1)]
-    res = _project_out(ys, basis)
+    if order is None:
+        res = list(ys)
+    else:
+        xs = [(x - centre) / (width / 2) for x in zs]
+        leg = [_legendre(x, order) for x in xs]
+        basis = [[row[n] for row in leg] for n in range(order + 1)]
+        res = _project_out(ys, basis)
     smooth = [a - b for a, b in zip(ys, res)]
     n = len(res)
     stripes = []
@@ -1045,8 +1056,8 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
         j = i
         while j + 1 < n and abs(res[j + 1]) > thr and (res[j + 1] > 0) == (sgn > 0):
             j += 1
-        start = _crossing(zs, res, i - 1, i, thr) if i > 0 else zs[i]
-        end = _crossing(zs, res, j, j + 1, thr) if j + 1 < n else zs[j]
+        start = _crossing(zs, res, i - 1, i, sgn * thr) if i > 0 else zs[i]
+        end = _crossing(zs, res, j, j + 1, sgn * thr) if j + 1 < n else zs[j]
         k_pk = max(range(i, j + 1), key=lambda k: abs(res[k]))
         peak = res[k_pk]
         half = abs(peak) / 2
@@ -1056,8 +1067,8 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
         b = k_pk
         while b + 1 < n and abs(res[b + 1]) >= half and (res[b + 1] > 0) == (sgn > 0):
             b += 1
-        left = _crossing(zs, res, a - 1, a, half) if a > 0 else zs[a]
-        right = _crossing(zs, res, b, b + 1, half) if b + 1 < n else zs[b]
+        left = _crossing(zs, res, a - 1, a, sgn * half) if a > 0 else zs[a]
+        right = _crossing(zs, res, b, b + 1, sgn * half) if b + 1 < n else zs[b]
         stripes.append({'start_m': start, 'end_m': end, 'center_m': (start + end) / 2,
                         'width_m': end - start, 'peak_deviation_m': peak,
                         'peak_position_m': zs[k_pk], 'width_at_half_peak_m': right - left,
@@ -1077,7 +1088,9 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
         'rms_deviation_m': math.sqrt(sum(r * r for r in res) / n),
         'threshold_m': thr, 'smooth_order': order,
         'reasons': [f'{len(interior)} interior and {len(stripes) - len(interior)} strip-edge '
-                    f'zone(s) exceed {thr:.1e} m after removing a degree-{order} polynomial.'],
+                    f'zone(s) exceed {thr:.1e} m '
+                    + ('without de-trending.' if order is None else
+                       f'after removing a degree-{order} polynomial.')],
         'flags': flags,
         'limitations': ['The polynomial also absorbs part of a broad stripe and creates side '
                         'lobes of opposite sign; compare against a healthy-header run when '
@@ -1087,9 +1100,11 @@ def local_stripes(z_m, radius_growth_m, strip_centre_m, strip_width_m, *, thresh
                         'degree-4 fit even for a healthy header; the default 5e-8 m threshold '
                         'is far below that, so apply this to the difference from a '
                         'healthy-header run before reading interior stripes as nozzle '
-                        'effects.',
+                        'effects; for such a difference profile use smooth_order=None (no '
+                        'de-trending), since smooth_order=0 subtracts the strip mean and turns '
+                        'the zero background into a spurious COLD_LOW stripe.',
                         'Radius deviation of one roll; strip thickness/flatness effects need '
                         'both work rolls and the strip model.'],
         'threshold_basis': 'Threshold and polynomial degree are analyst choices '
-                           '(default 5e-8 m, degree 4) [D].',
+                           '(default 5e-8 m, degree 4; None = no de-trending) [D].',
         'sources': [SOURCES['lloyd_2010'], SOURCES['tucker_2006']]})
