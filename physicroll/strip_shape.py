@@ -70,9 +70,15 @@ W2.2 Crown heredity, elongation, flatness
 - I-units [V: IHI; Vollmer 2019]: ``I(z) = 1e5*(eps(z) - mean(eps))``; sinusoidal wave
   ``I = (pi*H_w/(2*L_w))^2*1e5`` [V: QCA-1; Bailey].
 - ``sigma_res(z) = -E*(eps(z) - mean(eps))`` (0.7 MPa per I-unit for E = 70 GPa) [D];
-  local total ``sigma_T + sigma_res``; LATENT when every band stays above ``-sigma_cr``,
-  MANIFEST where ``sigma_T + sigma_res < -sigma_cr(band width)`` [V description:
-  Abdelkhalek et al. 2008; Lloyd 2010].
+  local total ``sigma_T + sigma_res`` [V description of latent/manifest: Abdelkhalek et al.
+  2008; Lloyd 2010]. In-mill criterion [D, planner]: only NET compression buckles;
+  ``S = -min(sigma_T + sigma_res)`` over the band, LATENT if ``S <= 0``, else ``b`` = half-peak
+  width of the net compression (interpolated edges; analyst choice) and MANIFEST_BUCKLE iff
+  ``S >= sigma_cr(b)``. Near onset b shrinks with S, so onset S ~ t*sqrt(K*c/2) for stress
+  curvature c. After tension release the compression is ``-sigma_res`` itself (same rule,
+  ``S_rel``, ``b_rel``): this carries the t^2 gauge trend. Known weakness: an overshoot spike
+  at a sharp stripe edge sets a narrow half-peak width and can hide a broad compressed
+  plateau (see the test of the 3 um top-hat).
 - Narrow-band buckling ``sigma_cr = k*pi^2*E/(12*(1-nu^2))*(t/b)^2``, k = 4 [M, Timoshenko].
 - Shohet-Townsend dead band [V: Qu 2025; Zambrano et al. 2006; Hajduk & Bernardes 2009]:
   ``-80*(h/w)^beta < C_H/H - C_h/h < +40*(h/w)^beta``; beta 1.86 (attributed to Somers et
@@ -663,16 +669,44 @@ def _bands(z, i_units, thr):
     return bands
 
 
+def _half_peak_width(z, comp, p):
+    """Width around ``p`` where ``comp >= comp[p]/2`` (comp > 0 = compression), edges
+    linearly interpolated between samples; at the grid ends half a spacing is added."""
+    level = comp[p] / 2
+    n = len(z)
+    i = p
+    while i > 0 and comp[i - 1] >= level:
+        i -= 1
+    if i == 0:
+        left = z[0] - (z[1] - z[0]) / 2
+    else:
+        f = (level - comp[i - 1]) / (comp[i] - comp[i - 1])
+        left = z[i - 1] + f * (z[i] - z[i - 1])
+    j = p
+    while j < n - 1 and comp[j + 1] >= level:
+        j += 1
+    if j == n - 1:
+        right = z[-1] + (z[-1] - z[-2]) / 2
+    else:
+        f = (comp[j] - level) / (comp[j] - comp[j + 1])
+        right = z[j] + f * (z[j + 1] - z[j])
+    return right - left
+
+
 def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_ratio, thickness_m,
                              mean_tension_pa,
                              reporting_threshold_i_units=DEFAULT_REPORTING_THRESHOLD_I_UNITS,
                              buckling_coefficient=PLATE_BUCKLING_COEFFICIENT,
                              yield_stress_pa=None):
-    """I-unit and residual-stress profiles plus latent/manifest bands.
+    """I-unit and residual-stress profiles plus in-mill and tension-released band states.
 
-    ``I = 1e5*(eps - mean)``; ``sigma_res = -E*(eps - mean)``; a band (contiguous |I| above
-    the reporting threshold, one sign) is MANIFEST when ``sigma_T + sigma_res`` at its peak
-    is below ``-sigma_cr(band width)``.
+    ``I = 1e5*(eps - mean)``; ``sigma_res = -E*(eps - mean)``. Bands are contiguous |I| above
+    the reporting threshold (one sign). In the mill only NET compression can buckle: with
+    ``S = -min(sigma_T + sigma_res)`` over the band, a band is LATENT if ``S <= 0``; otherwise
+    ``b`` is the half-peak width of the net compression (interpolated edges) and the band is
+    MANIFEST_BUCKLE iff ``S >= sigma_cr(b)``. After tension release the compression is the
+    residual stress itself: ``S_rel = -min(sigma_res)``, ``b_rel`` its half-peak width,
+    MANIFEST_AFTER_TENSION_RELEASE iff ``S_rel >= sigma_cr(b_rel)``.
     """
     z = _grid(z_m)
     eps = _list('elongation', elongation, min_len=2, lo=-0.5, hi=0.5)
@@ -691,26 +725,58 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     iu = [d / I_UNIT for d in dev]
     resid = [-e * d for d in dev]
     total = [sig_t + r for r in resid]
+    comp_mill = [-v for v in total]
+    comp_rel = [-v for v in resid]
     bands = []
     for k, j, start, end, p, sign in _bands(z, iu, thr):
         width = end - start
-        s_cr = narrow_band_buckling_stress_pa(t, width, e, nu, k_b)
-        manifest = total[p] < -s_cr
+        q = min(range(k, j + 1), key=lambda i: total[i])   # most compressed sample
+        s_net = comp_mill[q]
+        if s_net > 0:
+            b_eff = _half_peak_width(z, comp_mill, q)
+            s_cr = narrow_band_buckling_stress_pa(t, b_eff, e, nu, k_b)
+            basis = 'NET_COMPRESSION_HALF_PEAK_WIDTH'
+            manifest = s_net >= s_cr
+        else:
+            b_eff = None
+            s_cr = narrow_band_buckling_stress_pa(t, width, e, nu, k_b)
+            basis = 'REPORTING_CONTOUR_WIDTH_NOT_IN_NET_COMPRESSION'
+            manifest = False
+        s_rel = comp_rel[q]
+        if s_rel > 0:
+            b_rel = _half_peak_width(z, comp_rel, q)
+            s_cr_rel = narrow_band_buckling_stress_pa(t, b_rel, e, nu, k_b)
+            released = s_rel >= s_cr_rel
+        else:
+            b_rel = s_cr_rel = None
+            released = False
         bands.append({
             'start_m': start, 'end_m': end, 'center_m': (start + end) / 2, 'width_m': width,
             'peak_position_m': z[p], 'peak_i_units': iu[p],
             'sense': 'LOOSE_LONG' if sign > 0 else 'TIGHT_SHORT',
             'residual_stress_at_peak_pa': resid[p], 'local_total_stress_pa': total[p],
             'band_buckling_stress_pa': s_cr,
-            'buckling_margin_pa': total[p] + s_cr,
-            'state': 'MANIFEST_BUCKLE' if manifest else 'LATENT_UNDER_TENSION'})
+            'band_buckling_width_basis': basis,
+            'buckling_margin_pa': total[q] + s_cr,
+            'net_compression_peak_pa': s_net,
+            'effective_buckling_width_m': b_eff,
+            'state': 'MANIFEST_BUCKLE' if manifest else 'LATENT_UNDER_TENSION',
+            'released_compression_peak_pa': s_rel,
+            'released_buckling_width_m': b_rel,
+            'released_buckling_stress_pa': s_cr_rel,
+            'state_after_tension_release': ('MANIFEST_AFTER_TENSION_RELEASE' if released
+                                            else 'FLAT_AFTER_TENSION_RELEASE')})
     if any(b['state'] == 'MANIFEST_BUCKLE' for b in bands):
         status = 'MANIFEST_BUCKLE_BANDS'
     elif bands:
         status = 'LATENT_BANDS_UNDER_TENSION'
     else:
         status = 'NO_BANDS_ABOVE_THRESHOLD'
-    flags = ['BUCKLING_FORMULA_FROM_MEMORY', 'RESIDUAL_STRESS_RELATION_PLANNER_DERIVED']
+    n_rel = sum(1 for b in bands
+                if b['state_after_tension_release'] == 'MANIFEST_AFTER_TENSION_RELEASE')
+    released_status = 'MANIFEST_AFTER_RELEASE_BANDS' if n_rel else 'FLAT_AFTER_RELEASE'
+    flags = ['BUCKLING_FORMULA_FROM_MEMORY', 'RESIDUAL_STRESS_RELATION_PLANNER_DERIVED',
+             'HALF_PEAK_BUCKLING_WIDTH_ANALYST_CHOICE']
     if not _uniform(z)[0]:
         flags.append('NONUNIFORM_GRID_ARITHMETIC_MEAN')
     if sy is not None and max(abs(v) for v in total) > sy:
@@ -719,14 +785,18 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     reasons = [f'{len(bands)} band(s) above {thr:g} I-units ({len(loose)} loose); peak '
                f'{max(iu):.2f} / min {min(iu):.2f} I-units under mean tension '
                f'{sig_t / 1e6:.3f} MPa.',
-               'Latent bands stay flat under tension (stress stripes on a shapemeter) and can '
-               'appear after tension release; manifest bands buckle in the mill.']
+               'Latent bands stay flat under tension (stress stripes on a shapemeter); only '
+               'net compression can buckle in the mill.',
+               f'{n_rel} band(s) buckle once tension is released (coil surface, slitter, '
+               'inspection table): the released buckling stress falls as t^2.']
     return _checked({
-        'status': status, 'z_m': z, 'i_units': iu, 'residual_stress_pa': resid,
+        'status': status, 'released_status': released_status,
+        'z_m': z, 'i_units': iu, 'residual_stress_pa': resid,
         'total_stress_pa': total, 'mean_elongation': m,
         'max_i_units': max(iu), 'min_i_units': min(iu),
         'peak_to_peak_i_units': max(iu) - min(iu), 'bands': bands,
         'manifest_band_count': sum(1 for b in bands if b['state'] == 'MANIFEST_BUCKLE'),
+        'manifest_after_release_band_count': n_rel,
         'mean_tension_pa': sig_t, 'thickness_m': t,
         'reporting_threshold_i_units': thr, 'buckling_coefficient': k_b,
         'stress_per_i_unit_pa': e * I_UNIT,
@@ -734,15 +804,25 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
         'formula_basis': {'i_units': '[V] IHI; Vollmer 2019',
                           'residual_stress': '[D] sigma_res = -E*(eps - mean)',
                           'buckling': '[M] Timoshenko plate, k = 4 simply supported',
-                          'latent_manifest': '[V description] Abdelkhalek 2008; Lloyd 2010'},
-        'threshold_basis': f'Reporting threshold {thr:g} I-units (analyst choice); band '
-                           'buckling width = band width where |I| exceeds it; k = 4 ignores '
-                           'the elastic restraint of tensioned neighbours (conservative) [M].',
+                          'latent_manifest': '[V description] Abdelkhalek 2008; Lloyd 2010',
+                          'net_compression_width': '[D] planner: half-peak width of the net '
+                                                   '(in-mill) or residual (released) '
+                                                   'compression'},
+        'threshold_basis': f'Reporting threshold {thr:g} I-units (analyst choice) delimits '
+                           'bands only; buckling width = half-peak width of the net '
+                           'compression in the mill, of the residual compression after '
+                           'release (ANALYST_CHOICE, interpolated edges); the reporting-'
+                           'contour width is used for sigma_cr only when a band is not in net '
+                           'compression; k = 4 ignores the elastic restraint of neighbours '
+                           '(conservative) [M].',
         'reasons': reasons, 'flags': flags,
         'limitations': ['Linear elastic flat-strip stresses: after buckling the real stress is '
                         'relieved and the residual stress shown is the would-be value.',
-                        'Bands are delimited by the reporting threshold; the buckling stress '
-                        'depends on that width as (t/b)^2.', NOT_VALIDATED],
+                        'The buckling stress depends on the half-peak compression width as '
+                        '(t/b)^2; the half-peak choice is an analyst convention, not a plate '
+                        'solution for a non-uniform stress field.',
+                        'The released state assumes the residual stress is unchanged by '
+                        'coiling, slitting or levelling.', NOT_VALIDATED],
         'sources': [SOURCES['ihi_sheetflat'], SOURCES['vollmer_2019'],
                     SOURCES['abdelkhalek_2008'], SOURCES['lloyd_2010'],
                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
@@ -774,7 +854,8 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     result (``Q_eff``), which is then the main ``flatness``/``bands``.
 
     Saturation (approximate, band-wise) [D, planner]: a LOOSE band that the linear feedback
-    leaves MANIFEST cannot lose more tension than ``sigma_T + sigma_cr``; its force increase is
+    leaves MANIFEST (net-compression criterion, half-peak width b) cannot lose more tension
+    than ``sigma_T + sigma_cr(b)``; its force increase is
     capped at ``dP'_max = N_x'*(sigma_T + sigma_cr)`` and the peak thickness change becomes
     ``|dh| = (n*dR_peak - 2*C(2b)*dP'_max)/(1 + 2*C(2b)*Q)`` (floored at the linear-feedback
     value); the band's samples are scaled by the peak ratio and flatness recomputed.
@@ -852,6 +933,8 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
             saturated.append({
                 'start_m': b['start_m'], 'end_m': b['end_m'],
                 'linear_feedback_peak_i_units': b['peak_i_units'],
+                'band_buckling_stress_pa': b['band_buckling_stress_pa'],
+                'effective_buckling_width_m': b['effective_buckling_width_m'],
                 'dominant_wavelength_m': lam, 'capped_force_increase_per_width_n_m': dp_max,
                 'linear_feedback_peak_thickness_change_m': -dh_pk,
                 'saturated_peak_thickness_change_m': -mag, 'scale_factor': mag / dh_pk})
@@ -904,6 +987,9 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
         'compliance_only_peak_local_thickness_change_m':
             tr_c['peak_local_thickness_change_m'],
         'compliance_only_status': fl_c['status'],
+        'released_status': fl['released_status'],
+        'manifest_after_release_band_count': fl['manifest_after_release_band_count'],
+        'compliance_only_released_status': fl_c['released_status'],
         'linear_feedback_peak_i_units': None if fl_lin is None else _peak_abs(fl_lin['i_units']),
         'feedback_peak_i_units': peak_abs_i if feedback else None,
         'compliant_to_rigid_i_unit_ratio': peak_abs_i / rigid_i if rigid_i > 0 else None,

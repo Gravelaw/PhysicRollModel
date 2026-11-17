@@ -289,25 +289,46 @@ class TestTensionFeedback(unittest.TestCase):
         dumps(r)
 
     def test_large_stripe_saturates_and_is_manifest(self):
-        r = thermal_stripe_flatness(Z, stripe(3e-6), **self.THIN,
-                                    exit_tension_force_sensitivity_per_width_m=5.9e-3)
+        # 0.6 mm gauge of the worked example, 6 um stripe (3 um is latent in the mill under
+        # the half-peak net-compression rule: see test_three_micron_stripe_states)
+        mid = dict(self.THIN, exit_thickness_m=0.6e-3, strip_stiffness_per_width_pa=8e9,
+                   bite_half_length_m=4.47e-3)
+        r = thermal_stripe_flatness(Z, stripe(6e-6), **mid,
+                                    exit_tension_force_sensitivity_per_width_m=3.9e-3)
         self.assertEqual(r['status'], 'MANIFEST_BUCKLE_BANDS')
         self.assertIn('TENSION_FEEDBACK_SATURATED_BAND_SLACK', r['flags'])
         self.assertEqual(len(r['saturated_bands']), 1)
         s = r['saturated_bands'][0]
-        # |dh| = (n*dR - 2*C*dP_max)/(1 + 2*C*Q) with lam = 2*b = 0.1 m
-        c = roll_line_compliance_m2_n(0.1, 4.87e-3)
-        s_cr = narrow_band_buckling_stress_pa(0.21e-3, 0.05)
-        dp = 5.9e-3 * (30e6 + s_cr)
+        # cap uses sigma_cr of the new effective width;
+        # |dh| = (n*dR - 2*C*dP_max)/(1 + 2*C*Q) with lam = 2*b_report = 0.1 m
+        self.assertAlmostEqual(s['band_buckling_stress_pa'],
+                               narrow_band_buckling_stress_pa(0.6e-3,
+                                                              s['effective_buckling_width_m']))
+        dp = 3.9e-3 * (30e6 + s['band_buckling_stress_pa'])
         self.assertAlmostEqual(s['capped_force_increase_per_width_n_m'], dp, delta=1e-6)
-        self.assertAlmostEqual(-s['saturated_peak_thickness_change_m'],
-                               (2 * 3e-6 - 2 * c * dp) / (1 + 2 * c * 1.1e10), delta=1e-15)
+        self.assertAlmostEqual(s['dominant_wavelength_m'], 0.1, delta=1e-9)
+        c = roll_line_compliance_m2_n(0.1, 4.47e-3)
+        expected = max((2 * 6e-6 - 2 * c * dp) / (1 + 2 * c * 8e9),
+                       -s['linear_feedback_peak_thickness_change_m'])
+        self.assertAlmostEqual(-s['saturated_peak_thickness_change_m'], expected, delta=1e-15)
+        self.assertGreater(s['scale_factor'], 1.5)
         loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
         self.assertTrue(loose['saturated'])
         self.assertEqual(loose['state'], 'MANIFEST_BUCKLE')
+        self.assertEqual(loose['state_after_tension_release'], 'MANIFEST_AFTER_TENSION_RELEASE')
         self.assertGreater(loose['peak_i_units'], loose['linear_feedback_peak_i_units'])
         self.assertLess(loose['peak_i_units'], r['compliance_only_peak_i_units'])
         dumps(r)
+
+    def test_three_micron_stripe_states(self):
+        r = thermal_stripe_flatness(Z, stripe(3e-6), **self.THIN,
+                                    exit_tension_force_sensitivity_per_width_m=5.9e-3)
+        loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
+        self.assertGreater(loose['net_compression_peak_pa'], 0)
+        self.assertEqual(loose['band_buckling_width_basis'], 'NET_COMPRESSION_HALF_PEAK_WIDTH')
+        self.assertEqual(loose['state'], 'LATENT_UNDER_TENSION')
+        self.assertEqual(r['released_status'], 'MANIFEST_AFTER_RELEASE_BANDS')
+        self.assertEqual(loose['state_after_tension_release'], 'MANIFEST_AFTER_TENSION_RELEASE')
 
     def test_monotonic_in_sensitivity(self):
         peaks = [thermal_stripe_flatness(Z, stripe(0.2e-6), **self.THIN,
@@ -333,6 +354,123 @@ class TestTensionFeedback(unittest.TestCase):
                                     strip_stiffness_per_width_pa=1e10, roll_radius_m=0.2,
                                     exit_tension_force_sensitivity_per_width_m=1e-3,
                                     exit_thickness_m=1e-3, xi=0.0)
+
+
+def gaussian_stripe(height_m, fwhm_m=0.2):
+    return [height_m * math.exp(-4 * math.log(2) * (z - 0.75) ** 2 / fwhm_m ** 2) for z in Z]
+
+
+# feedback settings: 0.21 mm as in the worked example; 1.4 mm chosen for this test
+GAUGES = {1.4e-3: dict(strip_stiffness_per_width_pa=3e9, bite_half_length_m=6.0e-3,
+                       exit_tension_force_sensitivity_per_width_m=3.0e-3),
+          0.21e-3: dict(strip_stiffness_per_width_pa=1.1e10, bite_half_length_m=4.87e-3,
+                        exit_tension_force_sensitivity_per_width_m=5.9e-3)}
+
+
+def _run(shape, height, gauge):
+    return thermal_stripe_flatness(Z, shape(height), exit_thickness_m=gauge, roll_radius_m=0.2,
+                                   strip_width_m=1.5, mean_tension_pa=30e6, **GAUGES[gauge])
+
+
+def _onset(shape, gauge, key, value):
+    lo, hi = 1e-8, 3e-5          # geometric bisection on the stripe height [m]
+    for _ in range(16):
+        mid = math.sqrt(lo * hi)
+        if _run(shape, mid, gauge)[key] == value:
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+class TestNetCompressionCriterion(unittest.TestCase):
+    def test_onset_gauge_trends(self):
+        for shape in (gaussian_stripe, stripe):
+            with self.subTest(shape=shape.__name__):
+                mill = {g: _onset(shape, g, 'status', 'MANIFEST_BUCKLE_BANDS') for g in GAUGES}
+                rel = {g: _onset(shape, g, 'released_status', 'MANIFEST_AFTER_RELEASE_BANDS')
+                       for g in GAUGES}
+                self.assertLess(mill[0.21e-3], mill[1.4e-3])
+                self.assertLess(rel[0.21e-3], rel[1.4e-3])
+                self.assertLess(rel[0.21e-3], mill[0.21e-3])
+                fall_mill = mill[1.4e-3] / mill[0.21e-3]
+                fall_rel = rel[1.4e-3] / rel[0.21e-3]
+                self.assertGreater(fall_rel, 1.5 * fall_mill)
+
+    def test_residual_below_tension_is_latent_at_any_gauge(self):
+        eps = [3e-4 if abs(z - 0.75) < 0.05 else 0.0 for z in Z]   # resid ~ -20 MPa < 30 MPa
+        for t in (2e-3, 0.6e-3, 0.21e-3, 0.05e-3):
+            r = flatness_from_elongation(Z, eps, youngs_modulus_pa=E_AL, poisson_ratio=NU_AL,
+                                         thickness_m=t, mean_tension_pa=30e6)
+            loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
+            self.assertLess(loose['net_compression_peak_pa'], 0)
+            self.assertIsNone(loose['effective_buckling_width_m'])
+            self.assertEqual(loose['band_buckling_width_basis'],
+                             'REPORTING_CONTOUR_WIDTH_NOT_IN_NET_COMPRESSION')
+            self.assertEqual(loose['state'], 'LATENT_UNDER_TENSION')
+        # released: sigma_cr(~0.1 m) is 0.04 MPa at 0.05 mm but 64 MPa at 2 mm
+        self.assertEqual(r['released_status'], 'MANIFEST_AFTER_RELEASE_BANDS')
+        thick = flatness_from_elongation(Z, eps, youngs_modulus_pa=E_AL, poisson_ratio=NU_AL,
+                                         thickness_m=2e-3, mean_tension_pa=30e6)
+        self.assertEqual(thick['released_status'], 'FLAT_AFTER_RELEASE')
+        self.assertEqual(thick['manifest_after_release_band_count'], 0)
+
+    def test_half_peak_width_interpolated_and_continuous(self):
+        prof = [math.exp(-4 * math.log(2) * (z - 0.75) ** 2 / 0.2 ** 2) for z in Z]
+        widths, prev = [], None
+        for k in range(120):
+            amp = 6e-4 * (1 + 0.01 * k)            # residual 42 .. 92 MPa > 30 MPa tension
+            r = flatness_from_elongation(Z, [amp * p for p in prof], youngs_modulus_pa=E_AL,
+                                         poisson_ratio=NU_AL, thickness_m=0.21e-3,
+                                         mean_tension_pa=30e6, reporting_threshold_i_units=0.0)
+            b = [x for x in r['bands'] if x['sense'] == 'LOOSE_LONG'][0]
+            w = b['effective_buckling_width_m']
+            self.assertIsNotNone(w)
+            if prev is not None:
+                self.assertLess(abs(w - prev) / prev, 0.03)
+            prev = w
+            widths.append(w)
+            # released width: half-peak of the residual compression of the Gaussian
+            self.assertGreater(b['released_buckling_width_m'], 0.15)
+        self.assertGreater(len({round(w / DZ, 3) for w in widths}), 50)   # not grid-quantised
+        self.assertTrue(all(a < b for a, b in zip(widths, widths[1:])))
+        # a single-sample spike still gets a positive interpolated width < one spacing
+        eps = [0.0] * len(Z)
+        eps[150] = 1e-3
+        r = flatness_from_elongation(Z, eps, youngs_modulus_pa=E_AL, poisson_ratio=NU_AL,
+                                     thickness_m=0.21e-3, mean_tension_pa=30e6)
+        loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG']
+        w = loose[0]['effective_buckling_width_m']
+        self.assertGreater(w, 0.0)
+        self.assertLess(w, DZ)
+
+    def test_keys_and_json(self):
+        r = _run(gaussian_stripe, 1e-6, 0.21e-3)
+        for k in ('released_status', 'manifest_after_release_band_count', 'status',
+                  'compliance_only_released_status'):
+            self.assertIn(k, r)
+        self.assertIn('released_status', r['flatness'])
+        for b in r['bands']:
+            for k in ('start_m', 'end_m', 'center_m', 'width_m', 'peak_position_m',
+                      'peak_i_units', 'sense', 'residual_stress_at_peak_pa',
+                      'local_total_stress_pa', 'band_buckling_stress_pa', 'buckling_margin_pa',
+                      'state', 'band_buckling_width_basis', 'net_compression_peak_pa',
+                      'effective_buckling_width_m', 'released_compression_peak_pa',
+                      'released_buckling_width_m', 'released_buckling_stress_pa',
+                      'state_after_tension_release', 'saturated',
+                      'linear_feedback_peak_i_units'):
+                self.assertIn(k, b)
+            if b['sense'] == 'TIGHT_SHORT':
+                self.assertEqual(b['state'], 'LATENT_UNDER_TENSION')
+                self.assertEqual(b['state_after_tension_release'], 'FLAT_AFTER_TENSION_RELEASE')
+        off = thermal_stripe_flatness(Z, gaussian_stripe(1e-6), exit_thickness_m=0.21e-3,
+                                      roll_radius_m=0.2, strip_width_m=1.5,
+                                      mean_tension_pa=30e6, strip_stiffness_per_width_pa=1.1e10,
+                                      bite_half_length_m=4.87e-3)
+        self.assertFalse(off['tension_feedback_applied'])
+        self.assertIn('released_status', off)
+        dumps(r)
+        dumps(off)
 
 
 class TestCoilRidge(unittest.TestCase):
