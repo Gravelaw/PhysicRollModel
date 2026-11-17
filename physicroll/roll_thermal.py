@@ -698,7 +698,12 @@ def _base_flags(prob, header):
 # --------------------------------------------------------------------------- public API
 def steady_state(roll, header, segment, *, axial_cell_m=0.005, radial_cells=16,
                  expansion_constraint='axially_free', reference_temperature_k=None):
-    """Steady roll temperature and thermal radius profile for one operating segment."""
+    """Steady roll temperature and thermal radius profile for one operating segment.
+
+    ``segment.duration_s`` is ignored. ``reference_temperature_k`` (default: the coolant
+    temperature) is the zero of the radius growth. Rates are reported as ``heat_in_w``,
+    ``heat_out_w``, ``residual_w`` (the steady energy ledger).
+    """
     grid, factor = _common(roll, header, axial_cell_m, radial_cells, expansion_constraint)
     if not isinstance(segment, ThermalSegment):
         raise ValueError('segment must be ThermalSegment')
@@ -813,7 +818,16 @@ def history_metrics(time_s, values):
 def simulate(roll, header, segments, *, initial='uniform_coolant', time_step_s=1.0,
              axial_cell_m=0.005, radial_cells=16, record_times_s=(), monitor_positions_m=(),
              expansion_constraint='axially_free', reference_temperature_k=None):
-    """Transient roll temperature / thermal radius for a sequence of operating segments."""
+    """Transient roll temperature / thermal radius for a sequence of operating segments.
+
+    ``initial``: 'uniform_coolant' (first segment's coolant temperature) or a previous
+    ``steady_state``/``simulate`` result (or its ``field``) on the same grid.
+    ``time_step_s`` is the largest step (internally capped at ``dz^2/a``; steps also land
+    exactly on segment boundaries and ``record_times_s``). Snapshots are taken at
+    ``record_times_s``; monitor histories (every step, linear interpolation between cell
+    centres) at ``monitor_positions_m``. ``reference_temperature_k`` (default: first
+    segment's coolant temperature) is the zero of the radius growth.
+    """
     grid, factor = _common(roll, header, axial_cell_m, radial_cells, expansion_constraint)
     segs = _seq('segments', segments)
     if not segs:
