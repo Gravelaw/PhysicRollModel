@@ -6,6 +6,7 @@ once with cells 64) so that the lever table does not re-derive bites. The plante
 are generated from the model inputs (nozzle, event, ridge, two-tone and trough positions).
 """
 import copy
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -500,6 +501,164 @@ class LengthwiseIntegrationTests(unittest.TestCase):
         self.assertEqual(r['family_summary']['observed_family'], 'lengthwise')
         self.assertTrue(2e-6 < r['width']['thermal_steady']['healthy_thermal_crown_m'] < 16e-6)
         # (the two phase-1 demos are run in tests.test_band_diagnosis)
+
+
+NAN_RE = re.compile(r'\b(nan|inf|infinity)\b', re.IGNORECASE)
+H2_RE = re.compile(r'<h2[^>]*>([^<]*)</h2>')
+NEW_HEADINGS = ('Which family of causes', 'Across the width: predicted against observed bands',
+                'Short-lived bands', 'Why thin gauge is worse',
+                'Process: friction, flow stress, pass heating',
+                'Gauge control, drive and incoming variation',
+                'Transverse-band (chatter) screening: supporting detail for this case')
+STATES = {'NOT_SUPPLIED': {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                           'reason': 'reason-ns-x'},
+          'FAILED': {'status': 'FAILED', 'not_supplied': False, 'error': 'error-fail-x'},
+          'NOT_ASSESSABLE': {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                             'reason': 'reason-na-x'}}
+
+
+def _section(html, heading):
+    """HTML of the <section> whose h2 starts with ``heading``."""
+    i = html.index('<h2>' + heading)
+    return html[html.rindex('<section', 0, i):html.index('</section>', i)]
+
+
+class LengthwiseReportTests(unittest.TestCase):
+    """Phase-2 report sections, rendered from the generated v2 demo result (fast)."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = ROOT / 'artifacts' / 'band_diagnosis' / 'lengthwise-bands-demo.result.json'
+        cls.demo = json.loads(path.read_text())
+        cls.html = render_band_report(cls.demo)
+
+    def render(self, r):
+        html = render_band_report(r)
+        self.assertIsNone(NAN_RE.search(html))
+        self.assertEqual(html, render_band_report(r))
+        return html
+
+    def test_v2_demo_renders_every_new_section_in_order(self):
+        self.assertEqual(self.demo['case_schema'], CASE_SCHEMA_V2)
+        heads = H2_RE.findall(self.html)
+        for h in NEW_HEADINGS:
+            self.assertTrue(any(x.startswith(h) for x in heads), h)
+        order = [heads.index(x) for x in heads if x.startswith(
+            ('Which family', 'Leading hypotheses', 'Next measurements', 'Across the width',
+             'Short-lived', 'Why thin', 'Hypotheses', 'Transverse-band', 'Chatter stability',
+             'Process:', 'Gauge control', 'Limitations'))]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(len(order), 12)
+        self.assertIsNone(NAN_RE.search(self.html))
+        self.assertNotIn('<script', self.html)
+        self.assertEqual(self.html, render_band_report(self.demo))
+        # numbers taken from the result: observed positions, event band life, family counts
+        self.assertIn('observed 1.093 m', self.html)
+        life = self.demo['width']['thermal_events']['events'][0]['band_life_s']
+        self.assertIn(f'band life {life:.3g} s', self.html)
+        self.assertIn(escape(self.demo['width']['gauge_trend']['text']), self.html)
+        self.assertIn('<th scope="col">family</th>', self.html)
+        width = _section(self.html, 'Across the width')
+        self.assertIn('aria-label="across the width"', width)
+        for k in ('nozzle_pitch_m', 'cooling_zone_pitch_m'):
+            self.assertIn({'nozzle_pitch_m': 'nozzle pitch',
+                           'cooling_zone_pitch_m': 'cooling-zone pitch'}[k], width)
+
+    def test_transverse_v2_appends_new_sections_after_chatter(self):
+        r = copy.deepcopy(self.demo)
+        r['family_summary'].update(observed_family='transverse', leading_family='transverse')
+        heads = H2_RE.findall(self.render(r))
+        self.assertNotIn('Transverse-band (chatter) screening: supporting detail for this case',
+                         heads)
+        self.assertLess(heads.index('Levers'), heads.index(
+            'Across the width: predicted against observed bands'))
+        self.assertLess(heads.index('Gauge control, drive and incoming variation'),
+                        heads.index('Hypotheses'))
+
+    def test_each_new_section_state_renders_a_line_and_no_chart(self):
+        cases = [('width', ('Across the width', 'Short-lived bands', 'Why thin gauge')),
+                 ('process', ('Process:',)),
+                 ('gauge_control', ('Gauge control, drive',)),
+                 ('drive', ('Gauge control, drive',)),
+                 ('incoming_variation', ('Gauge control, drive',))]
+        for key, headings in cases:
+            for state, value in STATES.items():
+                r = copy.deepcopy(self.demo)
+                r[key] = dict(value)
+                html = self.render(r)
+                text = value.get('reason', value.get('error'))
+                label = state.lower().replace('_', ' ')
+                for h in headings:
+                    sec = _section(html, h)
+                    self.assertIn(f'{label}: {text}', sec, (key, state, h))
+                    if key in ('width', 'process') and not h.startswith('Process'):
+                        self.assertNotIn('<svg', sec, (key, state, h))
+                if key == 'process':
+                    self.assertNotIn('Friction against exit speed', html)
+        for sub in ('thermal_events', 'gauge_trend', 'positions', 'thermal_steady'):
+            for state, value in STATES.items():
+                r = copy.deepcopy(self.demo)
+                r['width'][sub] = dict(value)
+                self.render(r)
+        r = copy.deepcopy(self.demo)
+        r['width']['thermal_events'] = dict(STATES['NOT_SUPPLIED'])
+        sec = _section(self.render(r), 'Short-lived bands')
+        self.assertNotIn('<svg', sec)
+        self.assertIn('not supplied: reason-ns-x', sec)
+
+    def test_tension_release_keys_used_when_present(self):
+        self.assertNotIn('after-release threshold', _section(self.html, 'Short-lived'))
+        r = copy.deepcopy(self.demo)
+        for lv in r['width']['shape']['steady']['levels'].values():
+            for b in lv['bands']:
+                b['state_after_tension_release'] = 'MANIFEST_AFTER_TENSION_RELEASE'
+        for row in r['width']['shape']['steady_stripe_table']:
+            row['with_feedback']['state_after_tension_release'] = 'FLAT_AFTER_TENSION_RELEASE'
+        for i, row in enumerate(r['width']['gauge_trend']['rows']):
+            row.update(released_onset_stripe_height_m=1e-6 / (i + 1),
+                       released_onset_height_50mm_reference_m=2e-6 / (i + 1),
+                       state_after_tension_release='MANIFEST_AFTER_TENSION_RELEASE')
+        for e in r['width']['thermal_events']['events']:
+            e.update(released_threshold_m=0.6e-6, time_to_released_threshold_s=8.0,
+                     peak_state_after_tension_release='MANIFEST_AFTER_TENSION_RELEASE')
+        html = self.render(r)
+        self.assertIn('after release: buckled', _section(html, 'Across the width'))
+        self.assertIn('after-release threshold 0.6 µm', _section(html, 'Short-lived'))
+        self.assertIn('after tension release, model stripe', _section(html, 'Why thin'))
+        self.assertIn('manifest after tension release', html)
+
+    def test_hostile_text_is_escaped(self):
+        bad = '<script>alert(1)</script>'
+        r = copy.deepcopy(self.demo)
+        r['case_name'] = bad
+        r['inputs']['notes'] = [bad]
+        r['hypotheses'][0]['title'] = bad
+        r['hypotheses'][0]['mechanism'] = bad
+        r['family_summary']['text'] = bad
+        r['width']['thermal_events']['growth_rate_note'] = bad
+        r['width']['gauge_trend']['rows'][0]['label'] = bad
+        r['process']['flow_stress']['passes'][0]['label'] = bad
+        html = self.render(r)
+        self.assertNotIn('<script', html)
+        self.assertGreaterEqual(html.count('&lt;script&gt;'), 8)
+
+    def test_planted_v2_results_render(self):
+        """Live v2 results with other sections populated (two-tone, ridges, troughs)."""
+        def w(**kw):
+            m = width_model(**kw)
+            m['numerics'] = dict(COARSE, axial_cell_m=0.05)
+            return m
+        c = v2(**LONG, band_positions_across_width_m=[0.25, 1.45],
+               follows_previous_strip_edges=True)
+        c['width_model'] = w(previous_strip_widths_m=[1.2], incoming_ridges=[
+            {'position_m': 0.85, 'height_m': 4e-6, 'width_m': 0.03}])
+        html = self.render(diagnose(c))
+        for h in ('Across the width', 'Why thin gauge is worse'):
+            self.assertIn(h, html)
+        self.assertIn('Two-tone', html)
+        self.assertIn('Incoming ridges and coil build-up', html)
+        self.assertIn('Tension troughs', html)
+        self.assertIn('not supplied: no width_model.events', html)
 
 
 if __name__ == '__main__':

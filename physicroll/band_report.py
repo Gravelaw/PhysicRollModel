@@ -3,6 +3,14 @@
 Every number shown is read from the ``diagnose`` result dict (display-unit conversions such
 as m -> mm are labelled). No JavaScript, no external assets; charts are inline SVG with axis
 labels, units, a key, and dash patterns as well as colours. All text is escaped.
+
+A ``physicroll.band_case.v1`` result renders the phase-1 (transverse-band) page unchanged. A
+v2 result adds the family statement, the lengthwise sections (across the width, short-lived
+bands, why thin gauge is worse), process and dynamics sections and a family column in the
+hypothesis table; when the observed or leading family is lengthwise those lead the page and
+the chatter sections follow as supporting detail. Sections in a NOT_SUPPLIED / FAILED /
+NOT_ASSESSABLE state render one line instead of charts. Optional result keys (the
+after-tension-release states and thresholds) are used when present and omitted when absent.
 """
 from html import escape
 import math
@@ -461,9 +469,13 @@ def _reason(h):
             f'contradicted by {", ".join(con) or "nothing"}')
 
 
-def _hypothesis_rows(result):
+def _hypothesis_rows(result, family=None):
+    """Hypothesis table; with ``family`` (v2) a family column, observed family first."""
     out = []
-    for h in result['hypotheses']:
+    hyps = result['hypotheses']
+    if family is not None:
+        hyps = sorted(hyps, key=lambda h: (h.get('family') != family, h['rank']))
+    for h in hyps:
         ev_rows = [[_e(e['criterion']), _e(e['observed']), _e(e['expected']),
                     f'<span class="v-{_e(e["verdict"].lower())}">{_e(e["verdict"])}</span>',
                     _e(e['weight'] or '-'), _e(e['basis'])] for e in h['evidence']]
@@ -482,9 +494,16 @@ def _hypothesis_rows(result):
                f'{_e("; ".join(h["computed_lever_directions"]))}</p>'
                if h.get('computed_lever_directions') else '')
             + '</details>')
-        out.append([str(h['rank']), f'<code>{_e(h["id"])}</code>{details}',
-                    _standing_badge(h['standing']), str(h['score']),
-                    f'{t["support_points"]} / {t["contradiction_points"]}'])
+        row = [str(h['rank']), f'<code>{_e(h["id"])}</code>{details}',
+               _standing_badge(h['standing']), str(h['score']),
+               f'{t["support_points"]} / {t["contradiction_points"]}']
+        if family is not None:
+            row.insert(2, _e(h.get('family') or 'n/a'))
+        out.append(row)
+    if family is not None:
+        return _table(('rank', 'hypothesis (click for evidence)', 'family', 'standing', 'score',
+                       'points + / -'), out, 'hyp fixed', ('3.2rem', 'auto', '6.6rem', '11.5rem',
+                                                           '3.8rem', '5.5rem'))
     return _table(('rank', 'hypothesis (click for evidence)', 'standing', 'score',
                    'points + / -'), out, 'hyp fixed', ('3.2rem', 'auto', '11.5rem', '3.8rem',
                                                        '5.5rem'))
@@ -520,35 +539,1332 @@ CSS = ('body{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;max-width
        '@media print{details{display:block}summary{display:none}}')
 
 
-def render_band_report(result):
-    """Render the screening result as one self-contained HTML string (deterministic)."""
-    r = result
+# ------------------------------------------------------------------------------ phase-2 helpers
+# Lengthwise-band (case schema v2) sections. Every value is read from the result dict; the
+# keys of the engine's follow-up work (tension-release states and thresholds) are used when
+# present and the column / line is omitted when absent.
+V1_SCHEMA = 'physicroll.band_case.v1'
+BAD_STATES = ('NOT_SUPPLIED', 'FAILED', 'NOT_ASSESSABLE')
+CSS2 = ('.wide{overflow-x:auto;margin:.4rem 0}.wide .chart{min-width:600px;max-width:none;'
+        'margin:0}.state{color:#4b5563;font-style:italic}'
+        '.family{border-left:5px solid #7e22ce;background:#faf5ff;padding:.6rem 1rem;'
+        'margin:.8rem 0}.family p{margin:.3rem 0}'
+        '.divider{border-top:3px double #9aa5b8;margin-top:2.5rem}'
+        '.match{color:#15803d;font-weight:600}.miss{color:#6b7280}'
+        'table.num td{white-space:nowrap}table.num td:first-child,table.wrapall td,'
+        'table.num td .wrap{white-space:normal}table.num td:first-child{min-width:7rem}'
+        'table.hyp{min-width:46rem}table.evidence{min-width:38rem}'
+        '.legend{font-size:.85rem;color:#374151;margin:.2rem 0 .6rem}')
+C_ACT, C_HEALTHY = '#c2410c', '#374151'
+C_RIGID, C_COMP, C_FB = '#a16207', '#7e22ce', '#0b62a4'
+C_THR, C_OBS, C_BLOCK, C_EVENT = '#15803d', '#111827', '#b91c1c', '#0e7490'
+SOURCE_NAMES = {'steady_stripes': 'steady model stripe (peak)',
+                'blocked_or_low_level_nozzles': 'blocked / low-level nozzle',
+                'event_nozzles': 'cooling-zone event nozzle',
+                'event_stripe_peaks': 'cooling-zone event stripe peak',
+                'incoming_ridges': 'incoming ridge',
+                'two_tone': 'two-tone edge of a previous (narrower) strip'}
+PITCH_NAMES = {'nozzle_pitch_m': 'nozzle pitch', 'cooling_zone_pitch_m': 'cooling-zone pitch',
+               'grinding_feed_pitch_m': 'grinding feed pitch',
+               'trough_wavelength_entry_span_m': 'trough wavelength, entry span',
+               'trough_wavelength_exit_span_m': 'trough wavelength, exit span'}
+
+
+def _ok(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _f(v, scale=1.0, digits=3, unit=''):
+    """Finite-safe number with an optional display scale (labelled by ``unit``)."""
+    if not _ok(v):
+        return 'n/a'
+    x = v * scale
+    text = f'{x:.{digits}g}'
+    if text in ('-0', '-0.0'):
+        text = '0'
+    return text + (f' {unit}' if unit else '')
+
+
+def _um(v, d=3):
+    return _f(v, 1e6, d, 'µm')
+
+
+def _mm2(v, d=3):
+    return _f(v, 1e3, d, 'mm')
+
+
+def _mpa(v, d=3):
+    return _f(v, 1e-6, d, 'MPa')
+
+
+def _txt(code):
+    """State code in plain words (escaped)."""
+    return 'n/a' if not code else _e(str(code).lower().replace('_', ' '))
+
+
+SHORT_STATES = {'MANIFEST_BUCKLE': 'buckled', 'LATENT_UNDER_TENSION': 'latent (pulled flat)',
+                'MANIFEST_AFTER_TENSION_RELEASE': 'buckled', 'FLAT_AFTER_TENSION_RELEASE': 'flat',
+                'BELOW_REPORTING_THRESHOLD': 'below threshold'}
+
+
+def _short(code):
+    """Short chart label for a band state (escaped)."""
+    return _e(SHORT_STATES.get(code, str(code or 'n/a').lower().replace('_', ' ')))
+
+
+def _get(d, *path):
+    for k in path:
+        if isinstance(d, dict):
+            d = d.get(k)
+        elif isinstance(d, list) and isinstance(k, int) and -len(d) <= k < len(d):
+            d = d[k]
+        else:
+            return None
+    return d
+
+
+def _bad(sec):
+    """State line for an absent / not-supplied / failed / not-assessable section, else ''."""
+    if sec is None:
+        return 'not computed: the inputs it needs are absent'
+    if not isinstance(sec, dict):
+        return ''
+    st = sec.get('status')
+    if sec.get('not_supplied') or st == 'NOT_SUPPLIED':
+        return 'not supplied: ' + str(sec.get('reason', 'no reason given'))
+    if st == 'FAILED':
+        return 'failed: ' + str(sec.get('error', sec.get('reason', 'no error text')))
+    if st == 'NOT_ASSESSABLE':
+        return 'not assessable: ' + str(sec.get('reason', 'no reason given'))
+    return ''
+
+
+def _state_p(text):
+    return f'<p class="state">{_e(text)}</p>'
+
+
+def _ul(items):
+    items = [x for x in items if x]
+    return '<ul>' + ''.join(f'<li>{x}</li>' for x in items) + '</ul>' if items else ''
+
+
+def _wide(svg):
+    return f'<div class="wide">{svg}</div>'
+
+
+def _key2(entries, x0=ML, width=W):
+    """Key rows like ``_Chart._key`` plus marker shapes (cross, triangle, diamond, band)."""
+    parts, x, y, rows = [], x0, 16, 1
+    for label, colour, dash, kind in entries:
+        wdt = 34 + 6.3 * len(label)
+        if x + wdt > width - MR and x > x0:
+            x, y, rows = x0, y + 15, rows + 1
+        cx, cy = x + 11, y - 4
+        if kind == 'cross':
+            parts.append(_cross(cx, cy, colour))
+        elif kind == 'tri':
+            parts.append(_tri(cx, cy, colour))
+        elif kind == 'diamond':
+            parts.append(_diamond(cx, cy, colour))
+        elif kind == 'dot':
+            parts.append(f'<circle cx="{cx}" cy="{cy}" r="4.5" fill="{colour}" '
+                         'stroke="#111" stroke-width="0.6"/>')
+        elif kind == 'square':
+            parts.append(f'<rect x="{cx - 5}" y="{cy - 5}" width="10" height="10" '
+                         f'fill="{colour}" stroke="#111" stroke-width="0.6"/>')
+        elif kind == 'band':
+            parts.append(f'<rect x="{x}" y="{y - 10}" width="22" height="12" fill="{colour}" '
+                         'stroke="#9aa5b8"/>')
+        else:
+            sw = 3.4 if kind == 'thick' else 2.4
+            parts.append(f'<line x1="{x}" y1="{cy}" x2="{x + 22}" y2="{cy}" stroke="{colour}" '
+                         f'stroke-width="{sw}" stroke-dasharray="{dash}"/>')
+        parts.append(f'<text x="{x + 27}" y="{y}" class="key">{_e(label)}</text>')
+        x += wdt
+    return parts, rows
+
+
+def _cross(x, y, colour, r=5):
+    return (f'<path d="M{x - r:.1f} {y - r:.1f} L{x + r:.1f} {y + r:.1f} M{x - r:.1f} '
+            f'{y + r:.1f} L{x + r:.1f} {y - r:.1f}" stroke="{colour}" stroke-width="2.4"/>')
+
+
+def _tri(x, y, colour, r=5.5):
+    return (f'<path d="M{x:.1f} {y - r:.1f} L{x + r:.1f} {y + r * 0.8:.1f} '
+            f'L{x - r:.1f} {y + r * 0.8:.1f} Z" fill="{colour}" stroke="#111" '
+            'stroke-width="0.6"/>')
+
+
+def _diamond(x, y, colour, r=6):
+    return (f'<path d="M{x:.1f} {y - r:.1f} L{x + r:.1f} {y:.1f} L{x:.1f} {y + r:.1f} '
+            f'L{x - r:.1f} {y:.1f} Z" fill="{colour}" stroke="#fff" stroke-width="1"/>')
+
+
+class _Chart2(_Chart):
+    """``_Chart`` with the extended key markers of ``_key2``."""
+    _key = staticmethod(_key2)
+
+
+class _SymLog:
+    """Signed-log axis: f(v) = sign(v) log10(1 + |v|/c), so small thresholds and large peaks
+    share one axis (I-units). Ticks at 0 and signed decades."""
+
+    def __init__(self, lo, hi, p0, p1, c=1.0):
+        self.c, self.p0, self.p1 = c, p0, p1
+        self.lo, self.hi = min(lo, 0.0), max(hi, 0.0)
+        if self.hi - self.lo <= 0:
+            self.hi = 1.0
+        self.a, self.b = self._f(self.lo), self._f(self.hi)
+
+    def _f(self, v):
+        return math.copysign(math.log10(1 + abs(v) / self.c), v)
+
+    def __call__(self, v):
+        return self.p0 + (self._f(v) - self.a) / (self.b - self.a) * (self.p1 - self.p0)
+
+    def ticks(self):
+        top = max(abs(self.lo), abs(self.hi))
+        dec = [10.0 ** k for k in range(0, 9) if 10.0 ** k <= top * (1 + 1e-9)]
+        if len(dec) >= 3:
+            dec = dec[1:]
+        elif len(dec) < 2:
+            dec = [v for v in (0.5, 1.0, 2.0, 5.0) if v <= top] or [top]
+        out = [0.0]
+        for v in dec:
+            if v <= self.hi * (1 + 1e-9):
+                out.append(v)
+            if -v >= self.lo * (1 + 1e-9):
+                out.append(-v)
+        return sorted(out)
+
+
+def _place_labels(items, y_rows, char_w=6.4, x_lo=ML, x_hi=W - MR):
+    """Greedy label rows: items (x, text) -> list of (x, y, anchor, text) without overlap."""
+    placed, out = [], []
+    for x, text in sorted(items, key=lambda t: t[0]):
+        w = char_w * len(text) + 6
+        anchor, a = 'middle', x - w / 2
+        if a < x_lo:
+            anchor, a = 'start', x_lo + 1
+        elif a + w > x_hi:
+            anchor, a = 'end', x_hi - 1 - w
+        for y in y_rows:
+            if all(not (a < b1 and b0 < a + w) for (b0, b1, yy) in placed if yy == y):
+                placed.append((a, a + w, y))
+                tx = {'middle': x, 'start': a, 'end': a + w}[anchor]
+                out.append((tx, y, anchor, text))
+                break
+    return out
+
+
+def _pts(xs, ys, fx, fy):
+    return ' '.join(f'{fx(a):.1f},{fy(b):.1f}' for a, b in zip(xs, ys) if _ok(a) and _ok(b))
+
+
+# ------------------------------------------------------------------------------ across the width
+def _width_chart(r):
+    w = r['width']
+    ts, st = w['thermal_steady'], _get(w, 'shape', 'steady')
+    obs = [p for p in (_get(r, 'inputs', 'observation', 'band_positions_across_width_m') or [])
+           if _ok(p)]
+    z = ts['z_m']
+    barrel = _get(r, 'inputs', 'width_model', 'roll', 'barrel_length_m')
+    if not _ok(barrel):
+        barrel = z[-1] + (z[-1] - z[-2]) / 2 if len(z) > 1 else z[-1]
+    shape_ok = isinstance(st, dict) and not _bad(st) and st.get('z_m')
+    levels = st.get('levels', {}) if shape_ok else {}
+    nl = ts.get('nozzle_levels') or []
+    npos = ts.get('nozzle_positions_m') or []
+    events = _get(w, 'thermal_events', 'events') or []
+    ev_noz = {}
+    for k, e in enumerate(events):
+        for i in e.get('nozzle_indices') or []:
+            ev_noz.setdefault(i, []).append(k + 1)
+    low = [i for i, lv in enumerate(nl) if _ok(lv) and lv < 1.0]
+    key = [('roll radius growth, actual header', C_ACT, '', 'line'),
+           ('healthy header (all nozzles at level 1)', C_HEALTHY, '7 4', 'line'),
+           ('strip extent', '#e9eef6', '', 'band'),
+           ('nozzle', '#6b7280', '', 'line')]
+    if low:
+        key.append(('blocked / low-level nozzle', C_BLOCK, '', 'cross'))
+    if ev_noz:
+        key.append(('cooling-zone event nozzle', C_EVENT, '', 'tri'))
+    if obs:
+        key.append(('observed band position', C_OBS, '6 3', 'diamond'))
+    if shape_ok:
+        key += [('flatness, rigid roll (bound)', C_RIGID, '2 3', 'line'),
+                ('compliance only', C_COMP, '9 3 2 3', 'line'),
+                ('with exit-tension feedback (reported)', C_FB, '', 'thick'),
+                (f'reporting threshold ±{_f(st.get("reporting_threshold_i_units"))} I',
+                 C_THR, '4 2', 'line')]
+    key_parts, rows = _key2(key)
+    top0 = 14 + 15 * rows + 8
+    lab_rows = (top0 + 12, top0 + 26) if obs else ()
+    t1 = top0 + (32 if obs else 6)          # upper panel top
+    b1 = t1 + 180                           # upper panel bottom
+    nz = b1 + 22                            # nozzle row
+    t2 = nz + 34 if shape_ok else nz
+    b2 = t2 + 230 if shape_ok else nz
+    height = b2 + MB + (0 if shape_ok else 10)
+    sx = _Axis(0.0, barrel, ML, W - MR)
+    g_act = [v * 1e6 for v in ts['radius_growth_m']]
+    g_h = [v * 1e6 for v in ts.get('healthy_radius_growth_m') or []]
+    vals = [v for v in g_act + g_h if _ok(v)]
+    lo, hi = min(vals), max(vals)
+    pad = 0.08 * (hi - lo or 1.0)
+    sy = _Axis(lo - pad, hi + pad * 2.5, b1, t1)
+    p = [f'<svg viewBox="0 0 {W} {height}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="across the width"><title>Roll radius growth and strip '
+         'flatness across the width, with observed band positions</title>']
+    s0, s1 = ts.get('strip_start_m'), ts.get('strip_end_m')
+    panels = [(t1, b1)] + ([(t2, b2)] if shape_ok else [])
+    for (ta, tb) in panels:
+        p.append(f'<rect x="{ML}" y="{ta}" width="{W - ML - MR}" height="{tb - ta}" '
+                 'fill="#fbfcfe" stroke="#9aa5b8"/>')
+        if _ok(s0) and _ok(s1):
+            p.append(f'<rect x="{sx(s0):.1f}" y="{ta}" width="{sx(s1) - sx(s0):.1f}" '
+                     f'height="{tb - ta}" fill="#e9eef6"/>')
+        for v in sx.ticks():
+            p.append(f'<line x1="{sx(v):.1f}" y1="{ta}" x2="{sx(v):.1f}" y2="{tb}" '
+                     'stroke="#d8dee8"/>')
+    for v in sy.ticks():
+        p.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        p.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    cy = (t1 + b1) / 2
+    p.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">radius growth [µm]</text>')
+    if g_h:
+        p.append(f'<polyline points="{_pts(z, g_h, sx, sy)}" fill="none" stroke="{C_HEALTHY}" '
+                 'stroke-width="1.8" stroke-dasharray="7 4"/>')
+    p.append(f'<polyline points="{_pts(z, g_act, sx, sy)}" fill="none" stroke="{C_ACT}" '
+             'stroke-width="2.4"/>')
+    if _ok(s0) and _ok(s1):
+        p.append(f'<text x="{sx(s0) + 4:.1f}" y="{b1 - 6}" class="small">strip '
+                 f'{_e(_f(s0))}–{_e(_f(s1))} m</text>')
+    # model stripes: peak annotated
+    for sp in ts.get('stripes') or []:
+        x = sp.get('peak_position_m')
+        if not _ok(x):
+            continue
+        k = min(range(len(z)), key=lambda i: abs(z[i] - x))
+        py = sy(g_act[k])
+        p.append(f'<circle cx="{sx(x):.1f}" cy="{py:.1f}" r="3.5" fill="{C_ACT}"/>')
+        txt = f'model stripe {"+" if (sp.get("peak_deviation_m") or 0) > 0 else ""}' \
+              f'{_um(sp.get("peak_deviation_m"))} at {_f(x, 1, 4)} m'
+        anchor = 'start' if sx(x) < W / 2 else 'end'
+        dx = 7 if anchor == 'start' else -7
+        p.append(f'<text x="{sx(x) + dx:.1f}" y="{max(py - 6, t1 + 12):.1f}" '
+                 f'text-anchor="{anchor}" class="lab" fill="{C_ACT}">{_e(txt)}</text>')
+    # nozzle row
+    p.append(f'<text x="{ML - 6}" y="{nz + 4}" text-anchor="end" class="tick">nozzles</text>')
+    p.append(f'<line x1="{ML}" y1="{nz}" x2="{W - MR}" y2="{nz}" stroke="#cbd2dc"/>')
+    marks = []
+    for i, x in enumerate(npos):
+        if not _ok(x):
+            continue
+        px = sx(x)
+        p.append(f'<line x1="{px:.1f}" y1="{nz - 4}" x2="{px:.1f}" y2="{nz + 4}" '
+                 'stroke="#6b7280" stroke-width="1.4"/>')
+        if i in low:
+            p.append(_cross(px, nz - 10, C_BLOCK))
+            lv = nl[i]
+            marks.append((px, f'#{i} {"off" if lv == 0 else "level " + _f(lv)}'))
+        if i in ev_noz:
+            p.append(_tri(px, nz + 11, C_EVENT))
+    for tx, ty, anc, text in _place_labels(marks, (nz - 17, nz - 30)):
+        p.append(f'<text x="{tx:.1f}" y="{ty}" text-anchor="{anc}" class="lab" '
+                 f'fill="{C_BLOCK}">{_e(text)}</text>')
+    ev_lab = []
+    for k, e in enumerate(events):
+        xs_ = [x for x in e.get('nozzle_positions_m') or [] if _ok(x)]
+        if xs_:
+            ev_lab.append((sx(sum(xs_) / len(xs_)), f'event {k + 1}'))
+    for tx, ty, anc, text in _place_labels(ev_lab, (nz + 29,)):
+        p.append(f'<text x="{tx:.1f}" y="{ty}" text-anchor="{anc}" class="lab" '
+                 f'fill="{C_EVENT}">{_e(text)}</text>')
+    # lower panel: flatness at three levels
+    if shape_ok:
+        sz = st['z_m']
+        series = [('i_units_rigid', C_RIGID, '2 3', 1.4), ('i_units_compliance_only', C_COMP,
+                                                          '9 3 2 3', 1.6),
+                  ('i_units_with_feedback', C_FB, '', 3.0)]
+        allv = [v for k, *_ in series for v in st.get(k) or [] if _ok(v)]
+        thr = st.get('reporting_threshold_i_units')
+        lo2 = min(allv + [-(thr or 1.0)]) * 6
+        hi2 = max(allv + [thr or 1.0]) * 6
+        yy = _SymLog(lo2, hi2, b2, t2)
+        for v in yy.ticks():
+            p.append(f'<line x1="{ML}" y1="{yy(v):.1f}" x2="{W - MR}" y2="{yy(v):.1f}" '
+                     f'stroke="{"#111" if v == 0 else "#d8dee8"}" '
+                     f'stroke-width="{1 if v == 0 else 0.8}"/>')
+            p.append(f'<text x="{ML - 6}" y="{yy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                     f'{_e(_tick_label(v))}</text>')
+        cy2 = (t2 + b2) / 2
+        p.append(f'<text x="14" y="{cy2:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+                 f'{cy2:.1f})" class="axis">flatness [I] (signed log; + long)</text>')
+        if _ok(thr):
+            for v in (thr, -thr):
+                p.append(f'<line x1="{ML}" y1="{yy(v):.1f}" x2="{W - MR}" y2="{yy(v):.1f}" '
+                         f'stroke="{C_THR}" stroke-width="1.3" stroke-dasharray="4 2"/>')
+        for k, colour, dash, wdt in series:
+            ys = st.get(k) or []
+            if ys:
+                p.append(f'<polyline points="{_pts(sz, ys, sx, yy)}" fill="none" '
+                         f'stroke="{colour}" stroke-width="{wdt}" stroke-dasharray="{dash}" '
+                         'stroke-linejoin="round"/>')
+        fb = (levels.get('with_feedback') or {}).get('bands') or []
+        up, dn = [], []
+        for b in fb:
+            x = b.get('center_m')
+            if not _ok(x):
+                continue
+            t = f'in mill: {_short(b.get("state"))}'
+            if b.get('state_after_tension_release'):
+                t += f' · after release: {_short(b.get("state_after_tension_release"))}'
+            pk = b.get('peak_i_units')
+            (up if (pk or 0) >= 0 else dn).append((sx(x), t))
+        for items, rows_y in ((up, (t2 + 15, t2 + 29)), (dn, (b2 - 7, b2 - 21))):
+            for tx, ty, anc, text in _place_labels(items, rows_y, char_w=6.0):
+                p.append(f'<text x="{tx:.1f}" y="{ty}" text-anchor="{anc}" class="lab" '
+                         f'fill="{C_FB}">{text}</text>')
+    # observed band positions across both panels
+    labs = _place_labels([(sx(x), f'observed {_f(x, 1, 4)} m') for x in obs], lab_rows) \
+        if obs else []
+    for x in obs:
+        px = sx(x)
+        p.append(f'<line x1="{px:.1f}" y1="{t1}" x2="{px:.1f}" y2="{b2 if shape_ok else b1}" '
+                 f'stroke="{C_OBS}" stroke-width="1.6" stroke-dasharray="6 3"/>')
+        p.append(_diamond(px, t1, C_OBS, 6.5))
+    for tx, ty, anc, text in labs:
+        p.append(f'<text x="{tx:.1f}" y="{ty}" text-anchor="{anc}" class="lab" '
+                 f'fill="{C_OBS}">{_e(text)}</text>')
+    xb = b2 if shape_ok else nz + 30
+    for v in sx.ticks():
+        p.append(f'<text x="{sx(v):.1f}" y="{xb + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    p.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{xb + 36}" text-anchor="middle" '
+             'class="axis">position along the roll barrel [m] (to scale; same axis for both '
+             'panels)</text>')
+    return ''.join(p + key_parts + ['</svg>'])
+
+
+def _stripe_table(w):
+    rows_src = _get(w, 'shape', 'steady_stripe_table') or []
+    if not rows_src:
+        return '<p>No steady stripe above the stripe threshold.</p>'
+    rel = any(_get(x, lv, 'state_after_tension_release') for x in rows_src
+              for lv in ('rigid', 'compliance_only', 'with_feedback'))
+    head = ['position', 'peak radius growth', 'half-peak width', 'rigid [I]',
+            'compliance only [I]', 'with feedback [I]', 'in-mill state']
+    if rel:
+        head.append('after tension release')
+    head.append('stripe height for manifest onset (in mill)')
+    out = []
+    for x in rows_src:
+        fb = x.get('with_feedback') or {}
+        row = [_f(x.get('position_m'), 1, 4, 'm'), _um(x.get('peak_radius_deviation_m')),
+               _mm2(x.get('width_at_half_peak_m')),
+               _f(_get(x, 'rigid', 'peak_i_units'), digits=4),
+               _f(_get(x, 'compliance_only', 'peak_i_units'), digits=4),
+               '<strong>' + _f(fb.get('peak_i_units'), digits=4) + '</strong>'
+               + (' (feedback saturated)' if fb.get('saturated') else ''),
+               _txt(fb.get('state')) + (f' ({_txt(fb.get("sense"))})' if fb.get('sense')
+                                        else '')]
+        if rel:
+            row.append(_txt(fb.get('state_after_tension_release')))
+        row.append(_um(x.get('manifest_onset_peak_height_m')))
+        out.append(row)
+    return _table(head, out, 'num')
+
+
+def _ripple_line(w):
+    rp = _get(w, 'shape', 'nozzle_pattern_ripple')
+    if rp is None:
+        return '<p>Nozzle-pattern ripple: none (no ripple between nozzles).</p>'
+    if _bad(rp):
+        return _state_p('Nozzle-pattern ripple ' + _bad(rp))
+    return ('<p><strong>Nozzle-pattern ripple</strong> (the regular fan-overlap pattern, not a '
+            f'fault): peak-to-peak {_um(rp.get("peak_to_peak_m"))} radius; '
+            f'{_f(rp.get("feedback_peak_i_units"))} I-units with the exit-tension feedback '
+            f'({_f(rp.get("compliance_only_peak_i_units"))} compliance only, '
+            f'{_f(rp.get("rigid_transfer_bound_i_units"))} rigid bound); '
+            f'{_f(rp.get("band_count_with_feedback"))} bands; status '
+            f'{_txt(rp.get("status"))}.</p>')
+
+
+def _match_tables(pos):
+    obs = pos.get('observed_positions_m') or []
+    pred = pos.get('predicted_positions_m') or {}
+    pm = pos.get('position_matches') or {}
+    out = [f'<p>Observed positions {_e(", ".join(_f(x, 1, 4) for x in obs) or "none")} m; '
+           f'match tolerance {_mm2(pos.get("tolerance_m"))} '
+           f'({_e(pos.get("tolerance_basis") or "basis not given")}).</p>']
+    if obs and pm:
+        found = {i: [] for i in range(len(obs))}
+        for name, m in pm.items():
+            for j, row in enumerate(m.get('matches') or []):
+                if row.get('matched') and j in found:
+                    found[j].append(f'{SOURCE_NAMES.get(name, name.replace("_", " "))} '
+                                    f'({_f(row.get("nearest_predicted_position_m"), 1, 4)} m)')
+        items = [f'<strong>{_f(x, 1, 4)} m</strong>: '
+                 + (_e('; '.join(found[i])) if found[i]
+                    else '<span class="miss">no predicted source within tolerance</span>')
+                 for i, x in enumerate(obs)]
+        out.append('<h3>Which predicted source each observed band matches</h3>' + _ul(items))
+        rows = []
+        for name, plist in pred.items():
+            m = pm.get(name) or {}
+            cells = []
+            for row in m.get('matches') or []:
+                d = row.get('distance_m')
+                if row.get('matched'):
+                    cells.append(f'<span class="match">match</span> '
+                                 f'{_f(row.get("nearest_predicted_position_m"), 1, 4)} m '
+                                 f'(Δ {_mm2(d, 2)})')
+                elif _ok(d):
+                    cells.append(f'<span class="miss">nearest '
+                                 f'{_f(row.get("nearest_predicted_position_m"), 1, 4)} m '
+                                 f'(Δ {_mm2(d, 3)})</span>')
+                else:
+                    cells.append('<span class="miss">nothing predicted</span>')
+            cells += [''] * (len(obs) - len(cells))
+            rows.append([_e(SOURCE_NAMES.get(name, name.replace('_', ' '))),
+                         _e(', '.join(_f(x, 1, 4) for x in plist) or 'none')] + cells[:len(obs)]
+                        + [_txt(m.get('status'))])
+        out.append(_table(['predicted source', 'predicted positions [m]']
+                          + [f'observed {_f(x, 1, 4)} m' for x in obs] + ['status'], rows))
+    elif not obs:
+        out.append('<p>No observed band positions supplied: positions not matched.</p>')
+    gaps = pos.get('observed_gaps_m')
+    sa = pos.get('spacing_analysis')
+    sm = pos.get('spacing_matches') or {}
+    if gaps:
+        line = (f'Gaps between bands: {_e(", ".join(_mm2(g, 4) for g in gaps))} '
+                f'({_e(pos.get("observed_gaps_basis") or "")})')
+        if isinstance(sa, dict):
+            line += (f'; mean {_mm2(sa.get("mean_gap_m"), 4)}, coefficient of variation '
+                     f'{_f(sa.get("coefficient_of_variation"), digits=2)}: '
+                     f'{_txt(sa.get("status"))}')
+        out.append(f'<h3>Which pitch the gaps are multiples of</h3><p>{line}.</p>')
+        rows = []
+        pitches = pos.get('pitches_m') or {}
+        for name, m in sm.items():
+            cells = []
+            for g in m.get('gaps') or []:
+                dev = g.get('deviation_in_pitches')
+                txt = (f'{_f(g.get("nearest_multiple"))} × ({"+" if (dev or 0) >= 0 else ""}'
+                       f'{_f(dev, digits=2)} pitch)')
+                cells.append(f'<span class="match">{_e(txt)}</span>' if g.get('matched')
+                             else f'<span class="miss">no ({_e(txt)})</span>')
+            cells += [''] * (len(gaps) - len(cells))
+            rows.append([_e(PITCH_NAMES.get(name, name.replace('_', ' '))),
+                         _mm2(pitches.get(name), 4)] + cells[:len(gaps)]
+                        + [_txt(m.get('status'))])
+        if rows:
+            out.append(_table(['pitch', 'value'] + [f'gap {_mm2(g, 4)}' for g in gaps]
+                              + ['status'], rows))
+    return ''.join(out)
+
+
+def _other_width_results(w):
+    out = []
+    tr = w.get('troughs')
+    if isinstance(tr, dict) and tr:
+        rows = []
+        for name in ('entry_span', 'exit_span'):
+            t = tr.get(name)
+            if not isinstance(t, dict):
+                continue
+            if 'error' in t:
+                rows.append([_e(name.replace('_', ' ')), f'<em>{_e(t["error"])}</em>', '', '', '',
+                             '', ''])
+                continue
+            ratio = t.get('observed_spacing_to_wavelength_ratio')
+            rows.append([_e(name.replace('_', ' ')), _txt(t.get('status')),
+                         _mm2(t.get('wrinkle_wavelength_m'), 4),
+                         _f(t.get('expected_trough_count_across_width'), digits=3),
+                         _mpa(t.get('trough_critical_lateral_stress_pa')),
+                         _mpa(t.get('roller_wrinkle_critical_lateral_stress_pa')),
+                         'not observed' if ratio is None else _f(ratio, digits=3)])
+        out.append('<h3>Tension troughs (span wrinkling)</h3>'
+                   + _table(('span', 'status', 'wrinkle wavelength', 'expected troughs across '
+                             'the width', 'trough onset lateral stress', 'roller wrinkle lateral '
+                             'stress', 'observed spacing / wavelength'), rows))
+    tt = w.get('two_tone')
+    if isinstance(tt, dict):
+        out.append(f'<p><strong>Two-tone (previous strip edges):</strong> {_txt(tt.get("status"))}'
+                   '; band positions '
+                   + _e(', '.join(_f(x, 1, 4) for x in tt.get('band_positions_m') or []) or 'none')
+                   + ' m.</p>')
+    elif 'two_tone' in w:
+        out.append('<p><strong>Two-tone:</strong> not supplied (no previous strip widths).</p>')
+    if 'grinding_feed_pitch_m' in w:
+        g = w.get('grinding_feed_pitch_m')
+        out.append('<p><strong>Grinding feed marks:</strong> '
+                   + (f'feed pitch {_mm2(g, 4)} (tested against the gaps above).</p>' if _ok(g)
+                      else 'not supplied.</p>'))
+    ridges = _get(w, 'shape', 'ridges')
+    if ridges:
+        rows = []
+        for x in ridges:
+            if 'rejected' in x:
+                rows.append([_f(x.get('position_m'), 1, 4, 'm'),
+                             f'<em>rejected: {_e(x["rejected"])}</em>', '', '', '', '', ''])
+                continue
+            c = x.get('coil') or {}
+            rows.append([_f(x.get('position_m'), 1, 4, 'm'), _um(x.get('entry_ridge_height_m')),
+                         _um(x.get('exit_ridge_height_m')),
+                         _f(x.get('peak_i_units'), digits=3), _txt(x.get('state')),
+                         _txt(c.get('status')) if c else 'no coil data',
+                         _f(c.get('ridge_to_critical_ratio'), digits=3) if c else 'n/a'])
+        out.append('<h3>Incoming ridges and coil build-up</h3>'
+                   + _table(('position', 'entry ridge', 'exit ridge', 'flatness [I]',
+                             'in-mill state', 'coil build-up', 'ridge / critical (outer wrap)'),
+                            rows, 'num'))
+    elif ridges is not None:
+        out.append('<p><strong>Incoming ridges:</strong> none supplied.</p>')
+    cr = _get(w, 'shape', 'crown')
+    if isinstance(cr, dict):
+        if _bad(cr):
+            out.append(_state_p('Crown: ' + _bad(cr)))
+        else:
+            win = cr.get('shohet_townsend_window') or {}
+            out.append(f'<p><strong>Crown:</strong> healthy-header thermal crown '
+                       f'{_um(cr.get("healthy_thermal_crown_m"))}; Shohet–Townsend flatness '
+                       f'window {_f(win.get("lower_bound_i_units"), digits=3)} to '
+                       f'{_f(win.get("upper_bound_i_units"), digits=3)} I-units at this gauge; '
+                       'profile heredity '
+                       + (_e(cr['heredity_status']) if cr.get('heredity_status')
+                          else _txt(cr.get('classification'))) + '.</p>')
+    fails = w.get('failures') or []
+    if fails:
+        out.append('<p class="warn">Parts of the width model failed: '
+                   + _e('; '.join(str(f) for f in fails)) + '</p>')
+    return ''.join(out)
+
+
+def _width_section(r):
+    w = r.get('width')
+    head = '<section><h2>Across the width: predicted against observed bands</h2>'
+    if _bad(w):
+        return head + _state_p(_bad(w)) + '</section>'
+    ts = w.get('thermal_steady')
+    if not isinstance(ts, dict) or _bad(ts) or not ts.get('z_m'):
+        body = _state_p('Steady roll thermal solution ' + (_bad(ts) or 'not available'))
+    else:
+        st = _get(w, 'shape', 'steady')
+        intro = ('<p>Upper panel: steady roll radius growth with the actual spray header and '
+                 'with a healthy header, nozzle positions on the axis. Lower panel, same x '
+                 'axis: flatness of the exit strip at three levels of the strip-shape chain. '
+                 'Dashed vertical lines: the observed band positions. The reported level is '
+                 'the one with the exit-tension feedback.')
+        if isinstance(st, dict) and not _bad(st):
+            intro += (f' Peak flatness {_f(st.get("feedback_peak_i_units"), digits=4)} I-units '
+                      f'with feedback ({_f(st.get("compliance_only_peak_i_units"), digits=4)} '
+                      f'compliance only, {_f(st.get("rigid_transfer_bound_i_units"), digits=4)} '
+                      f'rigid bound); status {_txt(st.get("status"))}.')
+            if st.get('released_status'):
+                intro += f' After tension release: {_txt(st.get("released_status"))}.'
+        intro += '</p>'
+        body = intro + _wide(_width_chart(r))
+        if isinstance(st, dict) and _bad(st):
+            body += _state_p('Flatness (shape chain) ' + _bad(st))
+        body += ('<h3>Steady stripes</h3>' + _stripe_table(w) + _ripple_line(w))
+    pos = w.get('positions')
+    if isinstance(pos, dict) and not _bad(pos):
+        body += _match_tables(pos)
+    else:
+        body += _state_p('Position match ' + (_bad(pos) or 'not available'))
+    body += _other_width_results(w)
+    return head + body + '</section>'
+
+
+# ------------------------------------------------------------------------------ short-lived bands
+def _event_chart(e, k):
+    h = e.get('history') or {}
+    ts = h.get('time_s') or []
+    ys = [v * 1e6 if _ok(v) else None for v in h.get('radius_deviation_m') or []]
+    if len(ts) < 2 or not any(_ok(v) for v in ys):
+        return '<p>No history recorded for this event.</p>'
+    dur = e.get('duration_s') or 0.0
+    life = e.get('band_life_s') or e.get('band_life_lower_bound_s') or 0.0
+    xmax = min(ts[-1], max(2.5 * max(dur, life), dur * 1.5, ts[1] * 10))
+    sel = [(t, v) for t, v in zip(ts, ys) if _ok(v) and t <= xmax * 1.0001]
+    thr = [('manifest_threshold_m', 'in-mill manifest threshold', C_THR, '4 2')]
+    if _ok(e.get('released_threshold_m')):
+        thr.append(('released_threshold_m', 'after-release threshold', C_COMP, '9 3 2 3'))
+    vals = [v for _, v in sel] + [e[k_] * 1e6 for k_, *_ in thr if _ok(e.get(k_))] + [0.0]
+    key = [(f'radius deviation at {_f(e.get("monitor_position_m"), 1, 4)} m', C_ACT, '',
+            'line'),
+           (f'event interval ({_f(dur)} s, nozzles off / reduced)'
+            + (f'; band life {_f(life, digits=3)} s from the event start' if _ok(life) and life
+               else ''), '#fde7d4', '', 'band')]
+    for k_, label, colour, dash in thr:
+        if _ok(e.get(k_)):
+            key.append((f'{label} {_um(e[k_])}', colour, dash, 'line'))
+    if _ok(e.get('time_to_manifest_threshold_s')):
+        key.append(('above the in-mill threshold: band visible in the mill', C_THR, '',
+                    'thick'))
+    c = _Chart2(f'Event {k + 1}: radius deviation against time', key, 280)
+    c.axes(_Axis(0.0, xmax, ML, W - MR), _Axis(min(vals) * 1.1, max(vals) * 1.18, c.h - MB,
+                                               c.mt),
+           'time from the event start [s]', 'radius deviation [µm]')
+    c.inner.append(f'<rect x="{c.x(0):.1f}" y="{c.mt}" width="{c.x(dur) - c.x(0):.1f}" '
+                   f'height="{c.h - MB - c.mt}" fill="#fde7d4"/>')
+    for k_, label, colour, dash in thr:
+        v = e.get(k_)
+        if not _ok(v):
+            continue
+        py = c.y(v * 1e6)
+        c.inner.append(f'<line x1="{ML}" y1="{py:.1f}" x2="{W - MR}" y2="{py:.1f}" '
+                       f'stroke="{colour}" stroke-width="1.6" stroke-dasharray="{dash}"/>')
+    c.poly(sel, C_ACT, '', 2.4)
+    # time above the in-mill threshold: bracket on the threshold line
+    t_on = e.get('time_to_manifest_threshold_s')
+    fade = e.get('fade_time_below_manifest_threshold_s')
+    if _ok(t_on) and _ok(e.get('manifest_threshold_m')):
+        py = c.y(e['manifest_threshold_m'] * 1e6)
+        t_off = dur + fade if _ok(fade) else xmax
+        c.inner.append(f'<line x1="{c.x(t_on):.1f}" y1="{py:.1f}" x2="{c.x(min(t_off, xmax)):.1f}"'
+                       f' y2="{py:.1f}" stroke="{C_THR}" stroke-width="5" opacity="0.55"/>')
+        for t in (t_on, t_off):
+            if t <= xmax:
+                c.inner.append(f'<circle cx="{c.x(t):.1f}" cy="{py:.1f}" r="4" '
+                               f'fill="{C_THR}" stroke="#111" stroke-width="0.6"/>')
+        above = e.get('time_above_manifest_threshold_s')
+        if _ok(above):
+            c.inner.append(f'<text x="{c.x((t_on + min(t_off, xmax)) / 2):.1f}" '
+                           f'y="{py + 17:.1f}" text-anchor="middle" class="lab" '
+                           f'fill="{C_THR}">visible {_e(_f(above, digits=3))} s</text>')
+    tp, pk = e.get('time_of_peak_s'), e.get('peak_deviation_m')
+    if _ok(tp) and _ok(pk) and tp <= xmax:
+        c.inner.append(f'<text x="{c.x(tp) + 6:.1f}" y="{c.y(pk * 1e6) - 6:.1f}" class="lab" '
+                       f'fill="{C_ACT}">peak {_e(_um(pk))}</text>')
+    note = ''
+    if ts[-1] > xmax:
+        note = (f'<p class="note">Time axis cut at {_f(xmax, digits=3)} s; the simulated trace '
+                f'runs to {_f(ts[-1], digits=4)} s and ends at {_um(h["radius_deviation_m"][-1])}.'
+                '</p>')
+    return _wide(c.render(f'ev{k}')) + note
+
+
+def _event_table(events):
+    def nozz(e):
+        ids = ', '.join(f'#{i}' for i in e.get('nozzle_indices') or [])
+        ps = ', '.join(_f(x, 1, 4) for x in e.get('nozzle_positions_m') or [])
+        return f'{_e(ids)} at {_e(ps)} m, level {_f(e.get("level"))}'
+
+    def rate(e, k):
+        return _f(e.get(k), 1e6, 3, 'µm/s')
+
+    def life(e):
+        if _ok(e.get('band_life_s')):
+            return (f'<strong>{_f(e["band_life_s"], digits=3)} s</strong> '
+                    f'({_e(e.get("band_life_basis") or "")} threshold)')
+        if _ok(e.get('band_life_lower_bound_s')):
+            return f'> {_f(e["band_life_lower_bound_s"], digits=3)} s (fades beyond the run)'
+        return 'no band (threshold not reached)'
+    rows = [('start in the timeline', lambda e: _f(e.get('start_s'), unit='s')),
+            ('nozzles', nozz),
+            ('duration', lambda e: _f(e.get('duration_s'), unit='s')),
+            ('initial growth rate, analytic',
+             lambda e: rate(e, 'analytic_initial_growth_rate_m_s')),
+            ('initial growth rate, simulated',
+             lambda e: rate(e, 'simulated_initial_growth_rate_m_s')
+             + f' (first {_f(e.get("initial_rate_window_s"))} s)'),
+            ('peak radius deviation', lambda e: _um(e.get('peak_deviation_m'))
+             + f' at {_f(e.get("time_of_peak_s"), unit="s")}'),
+            ('time to half peak', lambda e: _f(e.get('time_to_half_peak_s'), unit='s')),
+            ('in-mill manifest threshold', lambda e: _um(e.get('manifest_threshold_m'))),
+            ('time to the in-mill threshold', lambda e: _f(e.get('time_to_manifest_threshold_s'),
+                                                           unit='s')
+             if _ok(e.get('time_to_manifest_threshold_s')) else 'not reached')]
+    if any('released_threshold_m' in e for e in events):
+        rows += [('after-release threshold', lambda e: _um(e.get('released_threshold_m'))),
+                 ('time to the after-release threshold',
+                  lambda e: _f(e.get('time_to_released_threshold_s'), unit='s')
+                  if _ok(e.get('time_to_released_threshold_s')) else 'not reached')]
+    rows += [('reporting threshold (2 I-units)', lambda e: _um(e.get('reporting_threshold_m'))),
+             ('time to the reporting threshold',
+              lambda e: _f(e.get('time_to_reporting_threshold_s'), unit='s')
+              if _ok(e.get('time_to_reporting_threshold_s')) else 'not reached'),
+             ('fade time after the event (below in-mill threshold)',
+              lambda e: _f(e.get('fade_time_below_manifest_threshold_s'), unit='s')
+              if _ok(e.get('fade_time_below_manifest_threshold_s')) else 'n/a'),
+             ('time above the in-mill threshold',
+              lambda e: _f(e.get('time_above_manifest_threshold_s'), unit='s')),
+             ('band life', life),
+             ('state at peak, in mill (with feedback)',
+              lambda e: _txt(e.get('peak_state_with_feedback')))]
+    if any('peak_state_after_tension_release' in e for e in events):
+        rows.append(('state at peak, after tension release',
+                     lambda e: _txt(e.get('peak_state_after_tension_release'))))
+    rows += [('flatness at peak, rigid / compliance / feedback [I]',
+              lambda e: ' / '.join(_f(_get(e, 'peak_stripe_states', lv, 'peak_i_units'),
+                                      digits=4)
+                                   for lv in ('rigid', 'compliance_only', 'with_feedback'))),
+             ('local cooling before / during',
+              lambda e: f'{_f(e.get("local_htc_before_w_m2k"), digits=4)} / '
+                        f'{_f(e.get("local_htc_during_w_m2k"), digits=4)} W/(m²K)')]
+    body = []
+    for label, fn in rows:
+        cells = []
+        for e in events:
+            if 'shape_error' in e and label.startswith('state'):
+                cells.append(f'<em>shape failed: {_e(e["shape_error"])}</em>')
+            else:
+                cells.append(fn(e))
+        body.append([_e(label)] + cells)
+    return _table(['quantity'] + [f'event {k + 1}' for k in range(len(events))], body,
+                  'num wrapall')
+
+
+def _events_section(r):
+    head = '<section><h2>Short-lived bands (cooling-zone switching events)</h2>'
+    w = r.get('width')
+    if _bad(w):
+        return head + _state_p(_bad(w)) + '</section>'
+    te = w.get('thermal_events')
+    if not isinstance(te, dict) or _bad(te):
+        return head + _state_p(_bad(te) or 'not available') + '</section>'
+    events = te.get('events') or []
+    obs = _get(r, 'inputs', 'observation') or {}
+    out = ['<p>A spray zone switched off (or down) heats the roll locally; the band appears '
+           'when the stripe crosses the threshold for a manifest buckle and disappears after '
+           'the zone returns, once the stripe falls below it again. '
+           f'{_e(te.get("band_life_definition") or "")}</p>']
+    seen = []
+    if _ok(obs.get('intermittent_duration_s')):
+        seen.append(f'observed short-lived band duration '
+                    f'<strong>{_f(obs["intermittent_duration_s"], digits=3)} s</strong>')
+    if obs.get('lengthwise_continuity'):
+        seen.append(f'lengthwise continuity: {_e(obs["lengthwise_continuity"])}')
+    if seen:
+        out.append('<p>Observation: ' + '; '.join(seen) + '.</p>')
+    if not events:
+        out.append('<p>No events.</p>')
+    for k, e in enumerate(events):
+        out.append(f'<h3>Event {k + 1}: nozzles '
+                   f'{_e(", ".join("#" + str(i) for i in e.get("nozzle_indices") or []))}, '
+                   f'{_f(e.get("duration_s"))} s</h3>' + _event_chart(e, k))
+    if events:
+        out.append(_event_table(events))
+    for name, label in (('growth_rate_note', 'Why the band appears within seconds'),
+                        ('open_discrepancy', 'Open discrepancy')):
+        if te.get(name):
+            out.append(f'<p><strong>{_e(label)}.</strong> {_e(te[name])}</p>')
+    return head + ''.join(out) + '</section>'
+
+
+# ------------------------------------------------------------------------------ thin gauge
+def _gauge_charts(rows, ref_peak=None):
+    ok = [x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))]
+    if len(ok) < 2:
+        return ''
+    hs = [x['exit_thickness_m'] * 1e3 for x in ok]
+    xa = _Axis(min(hs) / 1.3, max(hs) * 1.3, ML, W - MR, log=True)
+    series = [('manifest_onset_stripe_height_m', 'in mill, model stripe shape', C_FB, '', 'o'),
+              ('manifest_onset_height_50mm_reference_m', 'in mill, 50 mm reference stripe',
+               C_ACT, '7 4', 's')]
+    if any('released_onset_stripe_height_m' in x for x in ok):
+        series.append(('released_onset_stripe_height_m', 'after tension release, model stripe',
+                       C_COMP, '2 3', 'o'))
+    if any('released_onset_height_50mm_reference_m' in x for x in ok):
+        series.append(('released_onset_height_50mm_reference_m',
+                       'after tension release, 50 mm reference', C_RIGID, '9 3 2 3', 's'))
+    out = []
+    vals = [x[k] * 1e6 for k, *_ in series for x in ok if _ok(x.get(k)) and x[k] > 0]
+    ref = abs(ref_peak) * 1e6 if _ok(ref_peak) and ref_peak else None
+    if vals:
+        key = [(lab, col, d, 'line') for _, lab, col, d, _m in series]
+        if ref:
+            key.append((f'model stripe peak {_f(ref)} µm (a band where the line is above a curve)',
+                        C_OBS, '3 3', 'line'))
+            vals.append(ref)
+        c = _Chart2('Stripe height needed for a visible band against exit gauge', key, 300)
+        c.axes(xa, _Axis(min(vals) / 1.5, max(vals) * 1.5, c.h - MB, c.mt, log=True),
+               'exit gauge [mm] (log scale)', 'stripe height for onset [µm] (log)')
+        if ref:
+            c.inner.append(f'<line x1="{ML}" y1="{c.y(ref):.1f}" x2="{W - MR}" '
+                           f'y2="{c.y(ref):.1f}" stroke="{C_OBS}" stroke-width="1.6" '
+                           'stroke-dasharray="3 3"/>')
+        _pass_labels(c, ok)
+        for k, lab, col, d, mk in series:
+            pts = [(x['exit_thickness_m'] * 1e3, x[k] * 1e6) for x in ok
+                   if _ok(x.get(k)) and x[k] > 0]
+            if len(pts) > 1:
+                c.poly(pts, col, d, 2.2)
+            for a, b in pts:
+                if mk == 'o':
+                    c.inner.append(f'<circle cx="{c.x(a):.1f}" cy="{c.y(b):.1f}" r="4" '
+                                   f'fill="{col}"/>')
+                else:
+                    c.inner.append(f'<rect x="{c.x(a) - 4:.1f}" y="{c.y(b) - 4:.1f}" '
+                                   f'width="8" height="8" fill="{col}"/>')
+        out.append(_wide(c.render('onset')))
+    iser = [('feedback_i_units', 'reported flatness (with feedback)', C_FB, '', 'thick'),
+            ('linear_feedback_i_units', 'linear feedback, unsaturated', C_FB, '2 3', 'line'),
+            ('compliance_only_i_units', 'compliance only', C_COMP, '9 3 2 3', 'line'),
+            ('shohet_townsend_half_width_i_units', 'Shohet–Townsend half-width (dead band)',
+             C_THR, '7 4', 'line')]
+    vals = [x[k] for k, *_ in iser for x in ok if _ok(x.get(k)) and x[k] > 0]
+    if vals:
+        c = _Chart2('Flatness of the same roll stripe and the flatness dead band against gauge',
+                   [(lab, col, d, kind) for _, lab, col, d, kind in iser], 300)
+        c.axes(xa, _Axis(min(vals) / 1.6, max(vals) * 1.6, c.h - MB, c.mt, log=True),
+               'exit gauge [mm] (log scale)', 'I-units (log)')
+        _pass_labels(c, ok)
+        for k, lab, col, d, kind in iser:
+            pts = [(x['exit_thickness_m'] * 1e3, x[k]) for x in ok if _ok(x.get(k)) and x[k] > 0]
+            if len(pts) > 1:
+                c.poly(pts, col, d, 3.2 if kind == 'thick' else 2.0)
+            for a, b in pts:
+                c.inner.append(f'<circle cx="{c.x(a):.1f}" cy="{c.y(b):.1f}" r="3.2" '
+                               f'fill="{col}"/>')
+        out.append(_wide(c.render('gaugei')))
+    return ''.join(out)
+
+
+def _pass_labels(c, rows):
+    """Short pass names (first word of the label) along the top of a gauge chart."""
+    items = [(c.x(x['exit_thickness_m'] * 1e3), str(x.get('label', '')).split(' ')[0][:8])
+             for x in rows]
+    for tx, ty, anc, text in _place_labels(items, (c.mt + 13,), char_w=6.4):
+        c.inner.append(f'<text x="{tx:.1f}" y="{ty}" text-anchor="{anc}" class="small">'
+                       f'{_e(text)}</text>')
+
+
+def _gauge_section(r):
+    head = '<section><h2>Why thin gauge is worse</h2>'
+    w = r.get('width')
+    if _bad(w):
+        return head + _state_p(_bad(w)) + '</section>'
+    g = w.get('gauge_trend')
+    if not isinstance(g, dict) or _bad(g):
+        return head + _state_p(_bad(g) or 'not available') + '</section>'
+    rows = g.get('rows') or []
+    out = [f'<p class="lead">{_e(g.get("text") or "")}</p>',
+           f'<p class="note">Reference stripe: {_e(g.get("reference_stripe_basis") or "n/a")} '
+           f'(peak {_um(g.get("reference_stripe_peak_m"))} at '
+           f'{_f(g.get("reference_stripe_position_m"), 1, 4)} m). 50 mm reference: '
+           f'{_e(g.get("onset_50mm_reference_basis") or "n/a")}.</p>']
+    out.append(_gauge_charts(rows, g.get('reference_stripe_peak_m')))
+    rel_state = any('state_after_tension_release' in x for x in rows)
+    rel_h = any('released_onset_stripe_height_m' in x for x in rows)
+    rel_50 = any('released_onset_height_50mm_reference_m' in x for x in rows)
+    head_t = ['pass', 'exit gauge', 'exit tension', 'in-mill state']
+    if rel_state:
+        head_t.append('after release')
+    head_t += ['reported [I] (feedback)', 'linear feedback [I]', 'compliance only [I]',
+               'rigid bound [I]', 'S–T half-width [I]', 'band buckling stress',
+               'onset height, model stripe']
+    if rel_h:
+        head_t.append('after-release onset, model stripe')
+    head_t.append('onset height, 50 mm stripe')
+    if rel_50:
+        head_t.append('after-release onset, 50 mm')
+    head_t.append('critical ridge height (coil)')
+    body = []
+    for x in rows:
+        if 'rejected' in x:
+            body.append([_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+                         f'<em>rejected: {_e(x["rejected"])}</em>']
+                        + [''] * (len(head_t) - 3))
+            continue
+        row = [_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+               _mpa(x.get('exit_tension_pa')),
+               _txt(x.get('state')) + (' (saturated)' if x.get('saturated') else '')]
+        if rel_state:
+            row.append(_txt(x.get('state_after_tension_release')))
+        row += [f'<strong>{_f(x.get("feedback_i_units"), digits=4)}</strong>',
+                _f(x.get('linear_feedback_i_units'), digits=4),
+                _f(x.get('compliance_only_i_units'), digits=4),
+                _f(x.get('rigid_i_units'), digits=4),
+                _f(x.get('shohet_townsend_half_width_i_units'), digits=3),
+                _mpa(x.get('band_buckling_stress_pa')),
+                _um(x.get('manifest_onset_stripe_height_m'))]
+        if rel_h:
+            row.append(_um(x.get('released_onset_stripe_height_m')))
+        row.append(_um(x.get('manifest_onset_height_50mm_reference_m')))
+        if rel_50:
+            row.append(_um(x.get('released_onset_height_50mm_reference_m')))
+        row.append(_um(x.get('critical_ridge_height_m')))
+        body.append(row)
+    out.append(_table(head_t, body, 'num'))
+    return head + ''.join(out) + '</section>'
+
+
+# ------------------------------------------------------------------------------ process
+def _friction_chart(fc, used=None):
+    pts = [(q['exit_speed_m_s'], q['friction_coefficient']) for q in fc.get('points') or []
+           if _ok(q.get('exit_speed_m_s')) and _ok(q.get('friction_coefficient'))]
+    if len(pts) < 2:
+        return ''
+    sup = fc.get('supplied_friction_coefficient')
+    u_op, mu_op = fc.get('operating_exit_speed_m_s'), fc.get('operating_friction_coefficient')
+    key = [('placeholder closure mu(u) (slope is the useful output)', C_FB, '', 'line')]
+    if _ok(u_op) and _ok(mu_op):
+        key.append((f'closure at the operating speed {_f(u_op)} m/s: {_f(mu_op)}', C_ACT, '',
+                    'dot'))
+    if _ok(sup):
+        key.append((f'supplied friction {_f(sup)}', C_THR, '7 4', 'line'))
+    if _ok(used) and _ok(u_op):
+        key.append((f'used in the model at the operating speed: {_f(used)}', C_THR, '',
+                    'square'))
+    c = _Chart2('Friction against exit speed', key, 300)
+    ys = [b for _, b in pts] + [v for v in (sup, used) if _ok(v)]
+    lo, hi = min(ys), max(ys)
+    pad = 0.08 * (hi - lo or 0.01)
+    c.axes(_Axis(pts[0][0], pts[-1][0], ML, W - MR, log=True),
+           _Axis(max(0.0, lo - pad), hi + pad, c.h - MB, c.mt),
+           'exit speed [m/s] (log scale)', 'friction coefficient [-]')
+    c.poly(pts, C_FB, '', 2.4)
+    if _ok(sup):
+        py = c.y(sup)
+        c.inner.append(f'<line x1="{ML}" y1="{py:.1f}" x2="{W - MR}" y2="{py:.1f}" '
+                       f'stroke="{C_THR}" stroke-width="1.8" stroke-dasharray="7 4"/>')
+    if _ok(u_op) and _ok(mu_op):
+        c.vline(u_op, '#111', '3 3', f'operating {_f(u_op)} m/s',
+                c.mt + 14, 'end' if c.x(u_op) > W / 2 else 'start')
+        if _ok(used):
+            c.inner.append(f'<rect x="{c.x(u_op) - 5:.1f}" y="{c.y(used) - 5:.1f}" width="10" '
+                           f'height="10" fill="{C_THR}" stroke="#111" stroke-width="0.6"/>')
+        c.inner.append(f'<circle cx="{c.x(u_op):.1f}" cy="{c.y(mu_op):.1f}" r="5.5" '
+                       f'fill="{C_ACT}" stroke="#111" stroke-width="0.8"/>')
+    return _wide(c.render('fric'))
+
+
+def _sub_bad(sec, name):
+    b = _bad(sec)
+    return _state_p(f'{name} {b}') if b else ''
+
+
+def _process_section(r):
+    head = '<section><h2>Process: friction, flow stress, pass heating</h2>'
+    pr = r.get('process')
+    out = []
+    if _bad(pr):
+        out.append(_state_p(_bad(pr)))
+    else:
+        fc, fr = pr.get('friction_speed_curve'), pr.get('friction')
+        out.append('<h3>Friction against speed</h3>')
+        if _bad(fc) and _bad(fr):
+            out.append(_state_p('Friction ' + _bad(fc)))
+        else:
+            if not _bad(fc):
+                notes = [fc.get('note')] + ([fr.get('note')] if isinstance(fr, dict)
+                                            and fr.get('note') else [])
+                flags = sorted(set((fc.get('flags') or [])
+                                   + ((fr or {}).get('flags') or [] if isinstance(fr, dict)
+                                      else [])))
+                out.append('<p class="warn"><strong>Placeholder closure.</strong> '
+                           + _e(' '.join(n for n in notes if n))
+                           + (f' Flags: {_e(", ".join(flags))}.' if flags else '') + '</p>')
+                sl = fc.get('mean_slope_per_m_s')
+                sp = fc.get('mean_slope_speeds_m_s') or []
+                out.append(f'<p>Mean slope {_f(sl, digits=3)} per m/s'
+                           + (f' between {_f(sp[0])} and {_f(sp[-1])} m/s' if len(sp) == 2
+                              else '') + '.</p>'
+                           + _friction_chart(fc, _get(fr, 'operating',
+                                                      'used_friction_coefficient')))
+            else:
+                out.append(_sub_bad(fc, 'Friction-speed curve'))
+            if isinstance(fr, dict) and not _bad(fr):
+                rows = []
+                for x in [fr.get('operating')] + list(fr.get('schedule') or []):
+                    if not isinstance(x, dict):
+                        continue
+                    rows.append([_e(x.get('label', '')), _f(x.get('exit_speed_m_s'), unit='m/s'),
+                                 _f(x.get('supplied_friction_coefficient')),
+                                 _f(x.get('computed_friction_coefficient')),
+                                 f'<strong>{_f(x.get("used_friction_coefficient"))}</strong>',
+                                 _txt(x.get('regime')), _f(x.get('film_ratio'), digits=3),
+                                 _f(x.get('dmu_dexit_speed_per_m_s'), digits=3)])
+                out.append(_table(('pass', 'exit speed', 'supplied', 'closure (placeholder)',
+                                   'used', 'regime', 'film ratio Λ', 'dμ/du [1/(m/s)]'),
+                                  rows, 'num'))
+            else:
+                out.append(_sub_bad(fr, 'Friction per pass'))
+        fs = pr.get('flow_stress')
+        out.append('<h3>Flow stress per pass</h3>')
+        if _bad(fs):
+            out.append(_state_p(_bad(fs)))
+        else:
+            law = fs.get('law') or {}
+            out.append(f'<p>{_e(fs.get("law_type") or "")} law '
+                       f'({_e(law.get("provenance") or "")}); '
+                       f'{"computed" if fs.get("use_computed_flow_stress") else "supplied"} '
+                       f'values used. {_e(fs.get("note") or "")} Flags: '
+                       f'{_e(", ".join(fs.get("flags") or []) or "none")}.</p>')
+            rows = [[_e(x.get('label', '')),
+                     f'{_mm2(x.get("entry_thickness_m"))} → {_mm2(x.get("exit_thickness_m"))}',
+                     f'{_f(x.get("entry_equivalent_strain"))} → '
+                     f'{_f(x.get("exit_equivalent_strain"))}',
+                     _mpa(x.get('supplied_mean_flow_stress_pa'), 4),
+                     _mpa(x.get('computed_mean_flow_stress_pa'), 4),
+                     f'<strong>{_mpa(x.get("used_mean_flow_stress_pa"), 4)}</strong>']
+                    for x in fs.get('passes') or []]
+            out.append(_table(('pass', 'gauge', 'equivalent strain', 'supplied', 'computed',
+                               'used'), rows, 'num'))
+        he = pr.get('heating')
+        out.append('<h3>Pass heating</h3>')
+        if _bad(he):
+            out.append(_state_p(_bad(he)))
+        else:
+            out.append(f'<p>{_e(he.get("note") or "")}</p>')
+            rows = []
+            for x in [he.get('operating')] + list(he.get('schedule') or []):
+                if not isinstance(x, dict):
+                    continue
+                t = x.get('exit_temperature_k')
+                lim = x.get('temperature_limit_k')
+                hot = _ok(t) and _ok(lim) and t > lim
+                rows.append([_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+                             _f(x.get('exit_speed_m_s'), unit='m/s'),
+                             _f(x.get('bite_heat_per_width_w_m'), 1e-3, 4, 'kW/m'),
+                             _f(x.get('plastic_power_per_width_w_m'), 1e-3, 4, 'kW/m'),
+                             _f(x.get('friction_power_per_width_w_m'), 1e-3, 4, 'kW/m'),
+                             _f(x.get('strip_temperature_rise_k'), digits=3, unit='K'),
+                             ('<strong>' if hot else '') + _f(t, digits=4, unit='K')
+                             + (f' ({_f(t - 273.15, digits=3)} °C)' if _ok(t) else '')
+                             + (' above limit</strong>' if hot else ''),
+                             _f(lim, digits=4, unit='K'),
+                             _f(x.get('heat_to_each_work_roll_per_width_w_m'), 1e-3, 4,
+                                'kW/m')])
+            out.append(_table(('pass', 'exit gauge', 'exit speed', 'bite heat per width',
+                               'plastic work', 'interface slip', 'strip temperature rise',
+                               'strip exit temperature', 'limit', 'heat to each work roll'),
+                              rows, 'num'))
+    out.append(_speed_consistent_block(r))
+    return head + ''.join(out) + '</section>'
+
+
+def _speed_consistent_block(r):
+    ch = r.get('chatter') or {}
+    out = ['<h3>Chatter critical speed with speed-dependent friction</h3>']
+    if _bad(ch):
+        return ''.join(out) + _state_p('Chatter ' + _bad(ch))
+    sc = ch.get('speed_consistent')
+    if 'speed_consistent' not in ch:
+        out.append(_state_p('not computed by this engine version'))
+    elif _bad(sc):
+        out.append(_state_p(_bad(sc)))
+    else:
+        rows = [[f'fixed friction {_f(sc.get("fixed_friction_coefficient"))}',
+                 _f(sc.get('fixed_friction_critical_exit_speed_m_s'), digits=4, unit='m/s'),
+                 _f(sc.get('fixed_friction_critical_exit_speed_without_bite_damping_m_s'),
+                    digits=4, unit='m/s'), ''],
+                [f'speed-consistent μ(u), {_f(sc.get("friction_used_at_operating_speed"))} at '
+                 'the operating speed',
+                 '<strong>' + _f(sc.get('speed_consistent_critical_exit_speed_m_s'), digits=4,
+                                 unit='m/s') + '</strong>',
+                 _f(sc.get('speed_consistent_critical_exit_speed_without_bite_damping_m_s'),
+                    digits=4, unit='m/s'),
+                 f'{_txt(sc.get("status"))} / {_txt(sc.get("status_without_bite_damping"))}']]
+        beta = sc.get('bite_damping_transit_fraction')
+        out.append(_table(('friction', f'critical exit speed, beta = {_f(beta)}',
+                           'critical, beta = 0', 'status (beta / 0)'), rows, 'num'))
+        out.append(f'<p class="note">{_e(sc.get("friction_law") or "")} '
+                   f'{_e(sc.get("note") or "")}</p>')
+    if ch.get('reliability') or _ok(ch.get('span_wave_limit_hz')):
+        out.append(f'<p>Model reliability: <strong>{_txt(ch.get("reliability"))}</strong>; '
+                   f'span-wave limit {_f(ch.get("span_wave_limit_hz"), digits=4, unit="Hz")} '
+                   f'({_e(ch.get("span_wave_limit_basis") or "basis not given")}).</p>')
+    return ''.join(out)
+
+
+# ------------------------------------------------------------------------------ dynamics
+def _gc_block(gc):
+    out = ['<h3>Gauge control (AGC)</h3>']
+    if _bad(gc):
+        return out[0] + _state_p(_bad(gc))
+    inp = gc.get('inputs') or {}
+    ff = inp.get('force_filter_hz')
+    out.append(f'<p>Loop: bandwidth {_f(inp.get("bandwidth_hz"), unit="Hz")}, compensation '
+               f'gain {_f(inp.get("compensation_gain"))}, force filter '
+               f'{_f(ff, unit="Hz") if ff is not None else "none"}. '
+               f'Eccentricity amplification with the loop against without: '
+               f'<strong>×{_f(gc.get("eccentricity_amplification_vs_no_agc"))}</strong>. '
+               f'Static numbers: {_e(gc.get("static_formulas_label") or "n/a")}.</p>')
+    rows = []
+    for dk, label in (('runout', 'roll run-out'), ('entry_thickness', 'incoming thickness')):
+        d = gc.get(dk) or {}
+        for x in d.get('responses') or []:
+            rows.append([_e(label), _txt(x.get('source')), _f(x.get('frequency_hz'), digits=4),
+                         _f(x.get('no_agc_exit_thickness_per_unit_disturbance')),
+                         _f(x.get('with_agc_exit_thickness_per_unit_disturbance')),
+                         f'<strong>{_f(x.get("agc_to_no_agc_magnitude_ratio"))}</strong>'])
+    if rows:
+        out.append(_table(('disturbance', 'roll order', 'frequency [Hz]',
+                           'exit / disturbance, no loop [m/m]', 'with loop [m/m]',
+                           'loop / no loop'), rows, 'num'))
+    cl = gc.get('chatter_with_loop') or {}
+    rows, flag_lines = [], []
+    for k, label in (('supplied_loop', 'supplied loop'),
+                     ('with_25_hz_force_filter', 'with a 25 Hz force filter')):
+        x = cl.get(k)
+        if not isinstance(x, dict):
+            continue
+        if _bad(x):
+            rows.append([_e(label), f'<em>{_e(_bad(x))}</em>', '', '', '', ''])
+            continue
+        rows.append([_e(label), _f(x.get('critical_exit_speed_without_agc_m_s'), digits=4),
+                     f'<strong>{_f(x.get("critical_exit_speed_with_agc_m_s"), digits=4)}</strong>',
+                     _f(x.get('critical_speed_relative_change'), 100, 3, '%'),
+                     _f(x.get('critical_exit_speed_with_agc_without_bite_damping_m_s'), digits=4)
+                     + f' ({_txt(x.get("critical_status_with_agc_without_bite_damping"))})',
+                     _n(x.get('stable_at_operating_speed'))])
+        if x.get('flags'):
+            flag_lines.append(f'{_e(label)}: {_e(", ".join(x["flags"]))}')
+    if rows:
+        out.append('<p><strong>Chatter critical speed with the loop.</strong> '
+                   + _e(' '.join(gc.get('limitations') or [])) + '</p>')
+        out.append(_table(('loop', 'u_crit, no loop [m/s]', 'u_crit with loop [m/s]', 'change',
+                           'with loop, beta = 0 [m/s]', 'stable at operating speed'),
+                          rows, 'num'))
+        if flag_lines:
+            out.append('<p class="note">Flags. ' + '; '.join(flag_lines) + '.</p>')
+    sc = gc.get('speed_change_gauge_shift')
+    if isinstance(sc, dict) and not _bad(sc):
+        out.append(f'<p><strong>Gauge shift for the speed change</strong> '
+                   f'{_f(sc.get("from_exit_speed_m_s"))} → {_f(sc.get("to_exit_speed_m_s"))} '
+                   f'm/s (friction {_f(sc.get("friction_at_low_speed"))} → '
+                   f'{_f(sc.get("friction_at_operating_speed"))}, placeholder closure slope): '
+                   f'exit gauge {_um(sc.get("exit_thickness_change_m"))} with the loop, '
+                   f'{_um(sc.get("exit_thickness_change_without_agc_m"))} without; separating '
+                   f'force {_f(sc.get("separating_force_change_n"), 1e-3, 3, "kN")}.</p>')
+    return ''.join(out)
+
+
+def _drive_block(dr):
+    out = ['<h3>Drive train (torsional)</h3>']
+    if _bad(dr):
+        return out[0] + _state_p(_bad(dr))
+    pitch = {x.get('name'): x for x in dr.get('pitch_at_operating_speed_m') or []}
+    resp = {}
+    for x in _get(dr, 'roll_speed_ripple', 'responses') or []:
+        resp[x.get('frequency_hz')] = x
+    rows = []
+    for m in dr.get('catalogue_modes') or []:
+        f = m.get('frequency_hz')
+        rr = resp.get(f) or {}
+        rows.append([_e(m.get('name', '')), _f(f, digits=4, unit='Hz'),
+                     _mm2(_get(pitch, m.get('name'), 'strip_pitch_m'), 4),
+                     _f(rr.get('exit_thickness_per_unit_disturbance'), 1e6, 3, 'µm per m/s')])
+    if rows:
+        out.append(_table(('mode', 'frequency', 'strip pitch at the operating speed',
+                           'exit gauge per roll-speed ripple'), rows, 'num'))
+    else:
+        out.append('<p>No elastic torsional mode.</p>')
+    return ''.join(out)
+
+
+def _incoming_block(iv):
+    out = ['<h3>Incoming hardness variation</h3>']
+    if _bad(iv):
+        return out[0] + _state_p(_bad(iv))
+    st = iv.get('static') or {}
+    out.append(f'<p>Flow-stress variation amplitude {_mpa(iv.get("flow_stress_amplitude_pa"))}'
+               f' ({_f(_get(iv, "inputs", "flow_stress_variation_fraction"), 100, 3, "%")}). '
+               f'Static exit-gauge change {_um(st.get("exit_thickness_change_m"))} with the '
+               f'loop, {_um(st.get("exit_thickness_change_without_agc_m"))} without '
+               f'({_f(st.get("relative_exit_thickness_change"), 100, 3, "%")} of the gauge).</p>')
+    cs = iv.get('coil_synchronous')
+    if isinstance(cs, dict) and cs.get('harmonics'):
+        rows = [[_f(x.get('order')), _f(x.get('frequency_hz'), digits=4, unit='Hz'),
+                 _f(x.get('exit_strip_pitch_m'), digits=4, unit='m'),
+                 _um(x.get('exit_thickness_amplitude_no_agc_m')),
+                 _um(x.get('exit_thickness_amplitude_with_agc_m'))] for x in cs['harmonics']]
+        out.append(f'<p>Coil-synchronous (decoiler {_f(cs.get("decoiler_rotation_hz"), digits=4)}'
+                   ' Hz):</p>' + _table(('order', 'frequency', 'pitch on the exit strip',
+                                         'exit gauge amplitude, no loop', 'with loop'), rows,
+                                        'num'))
+    return ''.join(out)
+
+
+def _dynamics_section(r):
+    return ('<section><h2>Gauge control, drive and incoming variation</h2>'
+            + _gc_block(r.get('gauge_control')) + _drive_block(r.get('drive'))
+            + _incoming_block(r.get('incoming_variation')) + '</section>')
+
+
+# ------------------------------------------------------------------------------ family + layout
+def _family_block(r):
+    fs = r.get('family_summary') or {}
+    counts = fs.get('not_contradicted_per_family') or {}
+    obs = _get(r, 'inputs', 'observation') or {}
+    seen = []
+    if obs.get('orientation'):
+        seen.append(f'orientation {_e(obs["orientation"])}')
+    if obs.get('lengthwise_continuity'):
+        seen.append(f'continuity {_e(obs["lengthwise_continuity"])}')
+    pos = [x for x in obs.get('band_positions_across_width_m') or [] if _ok(x)]
+    if pos:
+        seen.append(f'positions {_e(", ".join(_f(x, 1, 4) for x in pos))} m across the width')
+    if _ok(obs.get('intermittent_duration_s')):
+        seen.append(f'short-lived bands last about {_f(obs["intermittent_duration_s"])} s')
+    for k, label in (('worse_at_thinner_gauge', 'worse at thinner gauge'),
+                     ('visible_only_after_tension_release',
+                      'visible only after tension release'),
+                     ('positions_repeat_across_coils', 'positions repeat across coils')):
+        if obs.get(k) is not None:
+            seen.append(f'{label}: {"yes" if obs[k] else "no"}')
+    cnt = ', '.join(f'{_e(k)} {_f(v)}' for k, v in sorted(counts.items()))
+    return ('<div class="family"><h2 style="margin-top:.2rem">Which family of causes</h2>'
+            f'<p>{_e(fs.get("text") or "No family summary in the result.")}</p>'
+            f'<p>Observed family: <strong>{_txt(fs.get("observed_family"))}</strong>; '
+            f'family of the leading hypothesis: <strong>{_txt(fs.get("leading_family"))}'
+            f'</strong>. Not-contradicted hypotheses per family: {cnt or "n/a"}.</p>'
+            + (f'<p class="note">Observed: {"; ".join(seen)}.</p>' if seen else '') + '</div>')
+
+
+def _runners_up(r, family):
+    hs = [h for h in r['hypotheses'] if h.get('family') == family
+          and h['standing'] == 'CONSISTENT' and h['score'] > 0][:3]
+    if not hs:
+        return ''
+    items = ''.join(f'<li>{_e(h["title"])} (<code>{_e(h["id"])}</code>): {_e(_reason(h))}</li>'
+                    for h in hs)
+    return (f'<p>Also consistent in the {_e(family)} family (no strong contradiction, lower '
+            f'score):</p><ul>{items}</ul>')
+
+
+# ------------------------------------------------------------------------------ phase-1 blocks
+def _head_blocks(r):
     synthetic = r['synthetic']
-    p = r['inputs']['pass']
-    s = []
-    s.append(f'<h1>Band / chatter-mark root-cause screening</h1>'
-             f'<p>Case: <strong>{_e(r["case_name"])}</strong></p>')
+    s = [f'<h1>Band / chatter-mark root-cause screening</h1>'
+         f'<p>Case: <strong>{_e(r["case_name"])}</strong></p>']
     origin = 'synthetic' if synthetic else 'user-supplied (not verified)'
     s.append(f'<div class="warn"><strong>{_e(r["status"])}.</strong> This is an unvalidated '
              f'screening result on <strong>{_e(origin)}</strong> inputs. It ranks candidate '
              'mechanisms by an ordinal evidence tally; it does not certify a cause. '
              f'{_e(r["score_note"])}</div>')
     s.append(f'<p class="small-p">Provenance: {_e(r["provenance"])}</p>')
+    return s
+
+
+def _lead_block(r, extra=''):
     lead = [h for h in r['hypotheses'] if h['standing'] == 'CONSISTENT_LEADING']
     if lead:
         items = ''.join(f'<li><strong>{_e(h["title"])}</strong> (<code>{_e(h["id"])}</code>): '
                         f'{_e(_reason(h))}</li>' for h in lead)
-        s.append(f'<div class="lead"><h2 style="margin-top:.2rem">Leading hypotheses</h2>'
-                 f'<ul>{items}</ul></div>')
-    else:
-        s.append('<div class="lead"><h2 style="margin-top:.2rem">Leading hypotheses</h2>'
-                 '<p>None: no hypothesis reaches a score of 3 without a strong contradiction. '
-                 'Take the measurements below.</p></div>')
-    nm = ''.join(f'<li>{_e(x)}</li>' for x in r['recommended_next_measurements'])
-    s.append(f'<h2>Next measurements</h2><ol>{nm}</ol>')
-    s.append(f'<p>Flags: {_e(", ".join(r["flags"]) or "none")}</p>')
+        return (f'<div class="lead"><h2 style="margin-top:.2rem">Leading hypotheses</h2>'
+                f'<ul>{items}</ul>{extra}</div>')
+    return ('<div class="lead"><h2 style="margin-top:.2rem">Leading hypotheses</h2>'
+            '<p>None: no hypothesis reaches a score of 3 without a strong contradiction. '
+            f'Take the measurements below.</p>{extra}</div>')
 
-    # key numbers
+
+def _next_blocks(r):
+    nm = ''.join(f'<li>{_e(x)}</li>' for x in r['recommended_next_measurements'])
+    return [f'<h2>Next measurements</h2><ol>{nm}</ol>',
+            f'<p>Flags: {_e(", ".join(r["flags"]) or "none")}</p>']
+
+
+def _key_numbers(r):
+    p = r['inputs']['pass']
     rows = [['operating exit speed', _n(p['exit_speed_m_s'], unit='m/s')],
             ['pass gauge', f'{_mm(p["entry_thickness_m"])} -> {_mm(p["exit_thickness_m"])}'],
             ['friction coefficient', _n(p['friction_coefficient'])]]
@@ -567,84 +1883,86 @@ def render_band_report(result):
     for m in sm['structural_modes_for_catalogue']:
         rows.append([f'mode {_e(m["name"])} ({_e(m["family"])})',
                      _n(m['frequency_hz'], unit='Hz')])
-    s.append('<h3>Key model numbers</h3>' + _table(('quantity', 'value'), rows))
+    return '<h3>Key model numbers</h3>' + _table(('quantity', 'value'), rows)
 
-    # 2 strip map
+
+def _strip_section(r):
     sm2 = r['strip_map']
-    s.append('<section><h2>What the model predicts on the strip</h2>'
-             f'<p>Bands drawn at the predicted pitch of the leading vibration-type hypothesis '
-             f'(<code>{_e(sm2["hypothesis_id"] or "none")}</code>); ticks below the strip at the '
-             'observed pitch. Horizontal axis to scale.</p>' + _strip_map(r) + '</section>')
+    return ('<section><h2>What the model predicts on the strip</h2>'
+            f'<p>Bands drawn at the predicted pitch of the leading vibration-type hypothesis '
+            f'(<code>{_e(sm2["hypothesis_id"] or "none")}</code>); ticks below the strip at the '
+            'observed pitch. Horizontal axis to scale.</p>' + _strip_map(r) + '</section>')
 
-    # 3 chatter
+
+def _chatter_section(r):
     ch = r['chatter']
     if ch.get('status') == 'NOT_ASSESSABLE':
-        s.append(f'<section><h2>Chatter stability</h2><p>NOT_ASSESSABLE: '
-                 f'{_e(ch["reason"])}</p></section>')
-    else:
-        wb, nb = ch['with_bite_damping'], ch['without_bite_damping']
-        rows = []
-        for label, d in ((f'beta = {_n(wb["bite_damping_transit_fraction"])}', wb),
-                         ('beta = 0', nb)):
-            rows.append([label, _n(d['critical_exit_speed_m_s'], unit='m/s'),
-                         _e(d['critical_status']), _n(d['speed_ratio'], 3),
-                         _n(d['onset_frequency_hz'], unit='Hz'), _mm(d['onset_strip_pitch_m']),
-                         _n(d['max_growth_rate_per_s'], unit='1/s'),
-                         _n(d['stable_at_operating_speed'])])
-        s.append('<section><h2>Chatter stability</h2>'
-                 '<p>Largest real part of the eigenvalues of the linear third-octave model versus '
-                 'exit speed. Positive = growing vibration. The bite-damping closure (fraction '
-                 'beta of the transit time) is a declared heuristic, so the beta = 0 curve is '
-                 'shown as the cautious bound.</p>' + _growth_chart(r)
-                 + _table(('closure', 'critical exit speed', 'status', 'operating / critical',
-                           'onset frequency', 'onset pitch', 'growth at operating speed',
-                           'stable at operating speed'), rows, 'num') + '</section>')
+        return (f'<section><h2>Chatter stability</h2><p>NOT_ASSESSABLE: '
+                f'{_e(ch["reason"])}</p></section>')
+    wb, nb = ch['with_bite_damping'], ch['without_bite_damping']
+    rows = []
+    for label, d in ((f'beta = {_n(wb["bite_damping_transit_fraction"])}', wb),
+                     ('beta = 0', nb)):
+        rows.append([label, _n(d['critical_exit_speed_m_s'], unit='m/s'),
+                     _e(d['critical_status']), _n(d['speed_ratio'], 3),
+                     _n(d['onset_frequency_hz'], unit='Hz'), _mm(d['onset_strip_pitch_m']),
+                     _n(d['max_growth_rate_per_s'], unit='1/s'),
+                     _n(d['stable_at_operating_speed'])])
+    return ('<section><h2>Chatter stability</h2>'
+            '<p>Largest real part of the eigenvalues of the linear third-octave model versus '
+            'exit speed. Positive = growing vibration. The bite-damping closure (fraction '
+            'beta of the transit time) is a declared heuristic, so the beta = 0 curve is '
+            'shown as the cautious bound.</p>' + _growth_chart(r)
+            + _table(('closure', 'critical exit speed', 'status', 'operating / critical',
+                      'onset frequency', 'onset pitch', 'growth at operating speed',
+                      'stable at operating speed'), rows, 'num') + '</section>')
 
-    # 4 schedule
+
+def _schedule_section(r):
     sw = r['schedule_sweep']
-    if sw:
-        rows = []
-        for x in sw['rows']:
-            if 'rejected' in x:
-                rows.append([_e(x['label']), _mm(x['entry_thickness_m']),
-                             _mm(x['exit_thickness_m']), _n(x['exit_speed_m_s']),
-                             _n(x['friction_coefficient']),
-                             f'<em>rejected: {_e(x["rejected"])}</em>', '', '', '', '', '', '',
-                             '', ''])
-                continue
-            rows.append([_e(x['label']), _mm(x['entry_thickness_m']), _mm(x['exit_thickness_m']),
-                         _n(x['exit_speed_m_s']), _n(x['friction_coefficient']),
-                         _n(x['contact_radius_ratio'], 3), _n(x['strip_to_mill_modulus_ratio'], 3),
-                         _n(x['critical_exit_speed_m_s'], 4),
-                         _n(x['critical_exit_speed_without_bite_damping_m_s'], 4),
-                         f'<strong>{_n(x["speed_ratio"], 3)}</strong>',
-                         _n(x['onset_frequency_hz'], 4), _mm(x['pitch_at_operating_speed_m']),
-                         _n(x['relative_ripple_per_um_runout_at_work_roll_2x'], 3),
-                         _n(x['thermal_gap_closure_fraction_upper_bound'], 3)])
-        rows2 = []
-        for x in sw['rows']:
-            same = x['at_case_friction']
-            rows2.append([_e(x['label']), _n(x['friction_coefficient']),
-                          _n(same['friction_coefficient']),
-                          _n(same.get('critical_exit_speed_m_s'), 4) if 'rejected' not in same
-                          else f'<em>rejected: {_e(same["rejected"])}</em>',
-                          _n(same.get('critical_exit_speed_without_bite_damping_m_s'), 4),
-                          _n(x.get('bending_strain_smallest_deflector'), 3)])
-        s.append('<section><h2>Pass-schedule sweep</h2>'
-                 f'<p>{_e(sw["note"])}</p>' + _schedule_chart(sw)
-                 + _table(('pass', 'entry', 'exit', 'speed [m/s]', 'friction', "R'/R",
-                           'Q_s/K_mill', 'u_crit beta [m/s]', 'u_crit 0 [m/s]',
-                           'operating / u_crit', 'onset [Hz]', 'pitch at speed',
-                           'rel. ripple per um run-out (WR 2x)',
-                           'thermal gap closure (upper bound)'), rows, 'num')
-                 + '<h3>Same passes at the case friction (gauge effect alone)</h3>'
-                 + _table(('pass', 'schedule friction', 'case friction', 'u_crit beta [m/s]',
-                           'u_crit 0 [m/s]', 'bending strain t/D, smallest deflector'), rows2,
-                          'num') + '</section>')
-    else:
-        s.append('<section><h2>Pass-schedule sweep</h2><p>No schedule supplied.</p></section>')
+    if not sw:
+        return '<section><h2>Pass-schedule sweep</h2><p>No schedule supplied.</p></section>'
+    rows = []
+    for x in sw['rows']:
+        if 'rejected' in x:
+            rows.append([_e(x['label']), _mm(x['entry_thickness_m']),
+                         _mm(x['exit_thickness_m']), _n(x['exit_speed_m_s']),
+                         _n(x['friction_coefficient']),
+                         f'<em>rejected: {_e(x["rejected"])}</em>', '', '', '', '', '', '',
+                         '', ''])
+            continue
+        rows.append([_e(x['label']), _mm(x['entry_thickness_m']), _mm(x['exit_thickness_m']),
+                     _n(x['exit_speed_m_s']), _n(x['friction_coefficient']),
+                     _n(x['contact_radius_ratio'], 3), _n(x['strip_to_mill_modulus_ratio'], 3),
+                     _n(x['critical_exit_speed_m_s'], 4),
+                     _n(x['critical_exit_speed_without_bite_damping_m_s'], 4),
+                     f'<strong>{_n(x["speed_ratio"], 3)}</strong>',
+                     _n(x['onset_frequency_hz'], 4), _mm(x['pitch_at_operating_speed_m']),
+                     _n(x['relative_ripple_per_um_runout_at_work_roll_2x'], 3),
+                     _n(x['thermal_gap_closure_fraction_upper_bound'], 3)])
+    rows2 = []
+    for x in sw['rows']:
+        same = x['at_case_friction']
+        rows2.append([_e(x['label']), _n(x['friction_coefficient']),
+                      _n(same['friction_coefficient']),
+                      _n(same.get('critical_exit_speed_m_s'), 4) if 'rejected' not in same
+                      else f'<em>rejected: {_e(same["rejected"])}</em>',
+                      _n(same.get('critical_exit_speed_without_bite_damping_m_s'), 4),
+                      _n(x.get('bending_strain_smallest_deflector'), 3)])
+    return ('<section><h2>Pass-schedule sweep</h2>'
+            f'<p>{_e(sw["note"])}</p>' + _schedule_chart(sw)
+            + _table(('pass', 'entry', 'exit', 'speed [m/s]', 'friction', "R'/R",
+                      'Q_s/K_mill', 'u_crit beta [m/s]', 'u_crit 0 [m/s]',
+                      'operating / u_crit', 'onset [Hz]', 'pitch at speed',
+                      'rel. ripple per um run-out (WR 2x)',
+                      'thermal gap closure (upper bound)'), rows, 'num')
+            + '<h3>Same passes at the case friction (gauge effect alone)</h3>'
+            + _table(('pass', 'schedule friction', 'case friction', 'u_crit beta [m/s]',
+                      'u_crit 0 [m/s]', 'bending strain t/D, smallest deflector'), rows2,
+                     'num') + '</section>')
 
-    # 5 frequency-speed
+
+def _freq_section(r):
     sig = r['signatures']
     pse = sig['pitch_speed_exponent']
     law = (f'Pitch-speed exponent {_n(pse["slope"], 3)}: {_e(pse["classification"])}.'
@@ -661,63 +1979,65 @@ def render_band_report(result):
             res_rows.append([_e(name), _n(rs['mode_frequency_hz'], unit='Hz'), _e(c['id']),
                              _n(c['resonant_exit_speed_m_s'], unit='m/s'),
                              _mm(c['strip_pitch_m'])])
-    s.append('<section><h2>Frequency-speed map</h2>'
-             '<p>Order-locked sources (roll orders, gear meshes, bearing defects, deflectors) '
-             'are straight lines through the origin; stand modes are horizontal. Observed '
-             f'points are (exit speed, u/p). {law}</p>' + _freq_speed_chart(r)
-             + (_table(('exit speed', 'pitch', 'implied frequency u/p',
-                        'catalogue matches (pitch mismatch)'), obs_rows) if obs_rows else '')
-             + '<details><summary>Source catalogue at the operating speed ('
-             + str(len(sig['catalogue'])) + ' entries)</summary>'
-             + _table(('source', 'kind', 'order of work-roll rotation', 'frequency',
-                       'strip pitch', 'pitch-speed law'),
-                      [[_e(e['id']), _e(e['kind']), _n(e['order_of_work_roll_rotation']),
-                        _n(e['frequency_hz'], unit='Hz'), _mm(e['strip_pitch_m']),
-                        _e(e['pitch_speed_law'])] for e in sig['catalogue']]) + '</details>'
-             + ('<h3>Resonant crossings (order-locked source meets a stand mode, up to '
-                f'{_n(_speed_envelope(r))} m/s)</h3>' + _table(('mode', 'mode frequency', 'source',
-                                                          'resonant exit speed', 'pitch'),
-                                                         res_rows)
-                if res_rows else '<p>No order-locked source crosses the listed modes within '
-                'the realistic speed envelope.</p>') + '</section>')
+    return ('<section><h2>Frequency-speed map</h2>'
+            '<p>Order-locked sources (roll orders, gear meshes, bearing defects, deflectors) '
+            'are straight lines through the origin; stand modes are horizontal. Observed '
+            f'points are (exit speed, u/p). {law}</p>' + _freq_speed_chart(r)
+            + (_table(('exit speed', 'pitch', 'implied frequency u/p',
+                       'catalogue matches (pitch mismatch)'), obs_rows) if obs_rows else '')
+            + '<details><summary>Source catalogue at the operating speed ('
+            + str(len(sig['catalogue'])) + ' entries)</summary>'
+            + _table(('source', 'kind', 'order of work-roll rotation', 'frequency',
+                      'strip pitch', 'pitch-speed law'),
+                     [[_e(e['id']), _e(e['kind']), _n(e['order_of_work_roll_rotation']),
+                       _n(e['frequency_hz'], unit='Hz'), _mm(e['strip_pitch_m']),
+                       _e(e['pitch_speed_law'])] for e in sig['catalogue']]) + '</details>'
+            + ('<h3>Resonant crossings (order-locked source meets a stand mode, up to '
+               f'{_n(_speed_envelope(r))} m/s)</h3>' + _table(('mode', 'mode frequency', 'source',
+                                                         'resonant exit speed', 'pitch'),
+                                                        res_rows)
+               if res_rows else '<p>No order-locked source crosses the listed modes within '
+               'the realistic speed envelope.</p>') + '</section>')
 
-    # 6 forced response + trace
+
+def _forced_section(r):
     fr = r['forced_response']
     if fr.get('status') == 'NOT_ASSESSABLE':
-        s.append(f'<section><h2>Forced response and time trace</h2><p>NOT_ASSESSABLE: '
-                 f'{_e(fr["reason"])}</p></section>')
-    else:
-        rows = []
-        for dist, label in (('work_backup_runout', 'per 1 um work/backup run-out'),
-                            ('entry_thickness', 'per 1 um incoming thickness ripple')):
-            for row in fr[dist]['roll_orders']:
-                rows.append([_e(label), _e(row['source']), _n(row['frequency_hz'], unit='Hz'),
-                             _n(row['exit_ripple_per_um_m'] * 1e9, 4, 'nm'),
-                             _n(row['relative_exit_ripple_per_um'], 3)])
-        warn = ''
-        if fr['operating_point_unstable']:
-            warn = ('<p class="warn">The operating point is linearly unstable, so this forced '
-                    'response is formal only (no steady state exists).</p>')
-        sim = r['time_simulation']
-        trace = ''
-        if sim:
-            trace = ('<h3>Simulated exit thickness trace</h3>'
-                     '<p>Initial gap perturbation '
-                     f'{_n(sim["initial_gap_perturbation_m"] * 1e6)} um; '
-                     f'measured from the trace: {_n(sim["dominant_frequency_hz"])} Hz, growth '
-                     f'{_n(sim["growth_rate_per_s"])} 1/s (eigenvalues: '
-                     f'{_n(sim["eigen_dominant_frequency_hz"])} Hz, '
-                     f'{_n(sim["eigen_max_growth_rate_per_s"])} 1/s); predicted strip pitch '
-                     f'{_mm(sim["predicted_strip_pitch_from_trace_m"])}; linear range exceeded: '
-                     f'{_n(sim["linear_range_exceeded"])}.</p>' + _trace_chart(sim))
-        s.append('<section><h2>Forced response and time trace</h2>' + warn
-                 + '<p>Exit-thickness response per unit roll run-out (eccentricity, '
-                 'out-of-round, backup-roll marks) and per unit incoming thickness ripple.</p>'
-                 + _spectrum_chart(fr)
-                 + _table(('disturbance', 'source', 'frequency', 'exit ripple',
-                           'relative to exit gauge'), rows, 'num') + trace + '</section>')
+        return (f'<section><h2>Forced response and time trace</h2><p>NOT_ASSESSABLE: '
+                f'{_e(fr["reason"])}</p></section>')
+    rows = []
+    for dist, label in (('work_backup_runout', 'per 1 um work/backup run-out'),
+                        ('entry_thickness', 'per 1 um incoming thickness ripple')):
+        for row in fr[dist]['roll_orders']:
+            rows.append([_e(label), _e(row['source']), _n(row['frequency_hz'], unit='Hz'),
+                         _n(row['exit_ripple_per_um_m'] * 1e9, 4, 'nm'),
+                         _n(row['relative_exit_ripple_per_um'], 3)])
+    warn = ''
+    if fr['operating_point_unstable']:
+        warn = ('<p class="warn">The operating point is linearly unstable, so this forced '
+                'response is formal only (no steady state exists).</p>')
+    sim = r['time_simulation']
+    trace = ''
+    if sim:
+        trace = ('<h3>Simulated exit thickness trace</h3>'
+                 '<p>Initial gap perturbation '
+                 f'{_n(sim["initial_gap_perturbation_m"] * 1e6)} um; '
+                 f'measured from the trace: {_n(sim["dominant_frequency_hz"])} Hz, growth '
+                 f'{_n(sim["growth_rate_per_s"])} 1/s (eigenvalues: '
+                 f'{_n(sim["eigen_dominant_frequency_hz"])} Hz, '
+                 f'{_n(sim["eigen_max_growth_rate_per_s"])} 1/s); predicted strip pitch '
+                 f'{_mm(sim["predicted_strip_pitch_from_trace_m"])}; linear range exceeded: '
+                 f'{_n(sim["linear_range_exceeded"])}.</p>' + _trace_chart(sim))
+    return ('<section><h2>Forced response and time trace</h2>' + warn
+            + '<p>Exit-thickness response per unit roll run-out (eccentricity, '
+            'out-of-round, backup-roll marks) and per unit incoming thickness ripple.</p>'
+            + _spectrum_chart(fr)
+            + _table(('disturbance', 'source', 'frequency', 'exit ripple',
+                      'relative to exit gauge'), rows, 'num') + trace + '</section>')
 
-    # 7 levers + spray
+
+def _levers_blocks(r):
+    s = []
     lv = r['levers']
     if lv.get('status') == 'NOT_ASSESSABLE':
         s.append(f'<section><h2>Levers</h2><p>NOT_ASSESSABLE: {_e(lv["reason"])}</p>')
@@ -754,8 +2074,6 @@ def render_band_report(result):
     else:
         s.append('<p>No coolant data supplied: spray coverage not screened.</p>')
     s.append('</section>')
-
-    # other screens summary
     rows = [['Lueders susceptibility', _e(scr['luders_susceptibility']['status'])],
             ['pass reduction vs Lueders', _e(scr['pass_reduction_vs_luders']['status'])],
             ['herringbone', _e(scr['herringbone']['status']) + ', contact length '
@@ -772,25 +2090,91 @@ def render_band_report(result):
                      f'{_n(scr["film_regime"]["film_ratio"], 3)} '
                      f'({_e(scr["film_regime"]["regime"])})'])
     s.append('<h3>Other screens</h3>' + _table(('screen', 'result'), rows))
+    return s
 
-    # 8 hypotheses
-    s.append('<section><h2>Hypotheses</h2>'
-             f'<p>{_e(r["score_note"])} Standing CONTRADICTED = at least one strong '
-             'contradiction; CONSISTENT_LEADING = highest non-contradicted score, at least 3; '
-             'NOT_ASSESSABLE = no supporting or contradicting evidence.</p>'
-             + _hypothesis_rows(r) + '</section>')
 
-    # 9 limitations and sources
+def _hyp_section(r, family=None):
+    extra = ''
+    if family is not None:
+        extra = (' Grouped by family, the observed family'
+                 + (f' ({_e(family)})' if family else '') + ' first; rank is the overall rank.')
+    return ('<section><h2>Hypotheses</h2>'
+            f'<p>{_e(r["score_note"])} Standing CONTRADICTED = at least one strong '
+            'contradiction; CONSISTENT_LEADING = highest non-contradicted score, at least 3; '
+            f'NOT_ASSESSABLE = no supporting or contradicting evidence.{extra}</p>'
+            + _hypothesis_rows(r, family) + '</section>')
+
+
+def _lim_section(r):
     lim = ''.join(f'<li>{_e(x)}</li>' for x in r['limitations'])
     dis = ''.join(f'<li>{_e(x)}</li>' for x in r['source_disagreements'])
     src = ''.join(f'<li>{_e(x)}</li>' for x in r['sources'])
-    s.append('<section><h2>Limitations and sources</h2>'
-             f'<ul>{lim}</ul><h3>Known disagreements in the literature</h3><ul>{dis}</ul>'
-             f'<h3>Sources</h3><ol>{src}</ol></section>')
+    return ('<section><h2>Limitations and sources</h2>'
+            f'<ul>{lim}</ul><h3>Known disagreements in the literature</h3><ul>{dis}</ul>'
+            f'<h3>Sources</h3><ol>{src}</ol></section>')
+
+
+def _notes_block(r):
+    notes = [x for x in _get(r, 'inputs', 'notes') or [] if isinstance(x, str)]
+    if not notes:
+        return ''
+    return '<p class="note">Case notes:</p>' + _ul([_e(x) for x in notes])
+
+
+# ------------------------------------------------------------------------------ entry point
+def render_band_report(result):
+    """Render the screening result as one self-contained HTML string (deterministic).
+
+    A ``physicroll.band_case.v1`` result renders exactly the phase-1 page. Any other schema
+    also gets the family statement, the lengthwise sections, the process / dynamics sections
+    and a family column; when the observed or leading family is ``lengthwise`` the page leads
+    with those and moves the transverse (chatter) sections to a supporting-detail block.
+    """
+    r = result
+    v1 = r.get('case_schema', V1_SCHEMA) == V1_SCHEMA
+    css = CSS
+    s = _head_blocks(r)
+    if v1:
+        s.append(_lead_block(r))
+        s += _next_blocks(r)
+        s.append(_key_numbers(r))
+        s += [_strip_section(r), _chatter_section(r), _schedule_section(r), _freq_section(r),
+              _forced_section(r)]
+        s += _levers_blocks(r)
+        s.append(_hyp_section(r))
+    else:
+        css = CSS + CSS2
+        fs = r.get('family_summary') or {}
+        lengthwise = 'lengthwise' in (fs.get('observed_family'), fs.get('leading_family'))
+        fam = fs.get('observed_family') or fs.get('leading_family')
+        s.append(_notes_block(r))
+        s.append(_family_block(r))
+        s.append(_lead_block(r, _runners_up(r, fam) if fam else ''))
+        s += _next_blocks(r)
+        transverse = [_key_numbers(r), _strip_section(r), _chatter_section(r),
+                      _schedule_section(r), _freq_section(r), _forced_section(r)]
+        transverse += _levers_blocks(r)
+        new = [_width_section(r), _events_section(r), _gauge_section(r)]
+        tail = [_process_section(r), _dynamics_section(r)]
+        if lengthwise:
+            s += new
+            s.append(_hyp_section(r, fam or ''))
+            s.append('<section class="divider"><h2>Transverse-band (chatter) screening: '
+                     'supporting detail for this case</h2><p>The sections below test the '
+                     'transverse family (marks across the strip, repeating along its length). '
+                     'The evidence for this case points to the lengthwise family, so they are '
+                     'kept as supporting detail and for the exclusions they give.</p></section>')
+            s += transverse
+            s += tail
+        else:
+            s += transverse
+            s += new + tail
+            s.append(_hyp_section(r, fam or ''))
+    s.append(_lim_section(r))
     title = f'Band screening: {r["case_name"]}'
     return ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            f'<title>{_e(title)}</title><style>{CSS}</style></head><body>'
+            f'<title>{_e(title)}</title><style>{css}</style></head><body>'
             + ''.join(s) + '</body></html>\n')
 
 

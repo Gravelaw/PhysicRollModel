@@ -402,6 +402,21 @@ class BandDiagnosisTests(unittest.TestCase):
             self.assertIn('Hypotheses', out)
             self.assertIsNone(re.search(r'\b(nan|inf|infinity)\b', out, re.IGNORECASE))
 
+    def test_report_v1_structure_unchanged_by_phase2(self):
+        """A v1 result keeps the phase-1 page: same h2 headings, no phase-2 section."""
+        v1 = ['Leading hypotheses', 'Next measurements', 'What the model predicts on the strip',
+              'Chatter stability', 'Pass-schedule sweep', 'Frequency-speed map',
+              'Forced response and time trace', 'Levers', 'Hypotheses',
+              'Limitations and sources']
+        for res in (self.chatter, self.bearing, self.nozzle):
+            self.assertEqual(res['case_schema'], 'physicroll.band_case.v1')
+            html = render_band_report(res)
+            self.assertEqual(re.findall(r'<h2[^>]*>([^<]*)</h2>', html), v1)
+            for absent in ('Which family of causes', 'Across the width', 'Short-lived bands',
+                           'Why thin gauge is worse', 'Process:', 'Gauge control, drive',
+                           '<th scope="col">family</th>'):
+                self.assertNotIn(absent, html)
+
     def test_cli_writes_both_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             case = Path(tmp) / 'case.json'
