@@ -208,6 +208,133 @@ class TestCrownAndFlatness(unittest.TestCase):
         dumps(hi)
 
 
+class TestTensionFeedback(unittest.TestCase):
+    # worked-example geometry: R = 0.2 m, 50 mm stripe on both rolls, 1.5 m strip, 30 MPa
+    THIN = dict(exit_thickness_m=0.21e-3, strip_stiffness_per_width_pa=1.1e10,
+                bite_half_length_m=4.87e-3, roll_radius_m=0.2, strip_width_m=1.5,
+                mean_tension_pa=30e6)
+
+    def test_feedback_off_reproduces_previous_numbers(self):
+        r = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN)
+        same = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
+                                       exit_tension_force_sensitivity_per_width_m=None)
+        self.assertEqual(r, same)
+        self.assertFalse(r['tension_feedback_applied'])
+        self.assertEqual(r['tension_feedback_stiffness_per_width_pa'], 0.0)
+        self.assertEqual(r['effective_strip_stiffness_per_width_pa'], 1.1e10)
+        self.assertIsNone(r['feedback_peak_i_units'])
+        self.assertEqual(r['compliance_only_peak_i_units'], r['flatness']['max_i_units'])
+        # values reported before the feedback was added (pre-change run)
+        self.assertAlmostEqual(r['flatness']['max_i_units'], 410.58, delta=0.01)
+        self.assertAlmostEqual(r['peak_local_thickness_change_m'], -8.9031e-7, delta=1e-11)
+        self.assertEqual(r['status'], 'MANIFEST_BUCKLE_BANDS')
+        # composition of the lower-level functions, bit for bit
+        tr = transfer_radius_profile(Z, stripe(0.5e-6), bite_half_length_m=4.87e-3,
+                                     strip_stiffness_per_width_pa=1.1e10, roll_radius_m=0.2)
+        self.assertEqual(tr['local_thickness_change_m'], r['local_thickness_change_m'])
+        lb = local_bump_transfer(0.05, 0.002, 5e10)
+        self.assertEqual(lb['transfer_factor'], lb['compliance_only_transfer_factor'])
+
+    def test_effective_stiffness_formula(self):
+        nx, h, q = 5.9e-3, 0.21e-3, 1.1e10
+        r = local_bump_transfer(0.1, 4.87e-3, q, exit_tension_force_sensitivity_per_width_m=nx,
+                                exit_thickness_m=h, strip_youngs_modulus_pa=E_AL, xi=0.8)
+        q_fb = nx * 70e9 * 0.8 / h
+        self.assertAlmostEqual(r['tension_feedback_stiffness_per_width_pa'] / q_fb, 1.0,
+                               places=12)
+        self.assertAlmostEqual(r['effective_strip_stiffness_per_width_pa'] / (q + q_fb), 1.0,
+                               places=12)
+        c = roll_line_compliance_m2_n(0.1, 4.87e-3)
+        self.assertAlmostEqual(r['transfer_factor'], 1 / (1 + 2 * c * (q + q_fb)), places=14)
+        self.assertTrue(r['tension_feedback_applied'])
+        self.assertIn('EXIT_TENSION_FEEDBACK_LINEAR', r['flags'])
+
+    def test_gauge_independent_limit(self):
+        # tiny Q, large N_x': eps = xi*n*T*dR/h -> n*dR/(2*C*N_x'*E), whatever h and xi
+        dr, nx, c = 1e-7, 1.0, roll_line_compliance_m2_n(0.1, 0.003)
+        limit = 2 * dr / (2 * c * nx * 70e9)
+        for h, xi in ((2e-3, 1.0), (0.2e-3, 1.0), (0.2e-3, 0.5)):
+            r = local_bump_transfer(0.1, 0.003, 1.0, exit_tension_force_sensitivity_per_width_m=nx,
+                                    exit_thickness_m=h, xi=xi, radius_deviation_m=dr)
+            eps = -xi * r['local_thickness_change_m'] / h
+            self.assertAlmostEqual(eps / limit, 1.0, delta=2e-3)
+
+    def test_mean_component_keeps_q(self):
+        z = [i * 0.005 for i in range(40)]
+        r = transfer_radius_profile(z, [1e-7] * 40, bite_half_length_m=0.003,
+                                    strip_stiffness_per_width_pa=1e10, roll_radius_m=0.2,
+                                    exit_tension_force_sensitivity_per_width_m=5e-3,
+                                    exit_thickness_m=0.2e-3)
+        t_r = local_bump_transfer(0.2, 0.003, 1e10)['transfer_factor']
+        for v in r['local_thickness_change_m']:
+            self.assertAlmostEqual(v, -2 * t_r * 1e-7, delta=1e-18)
+
+    def test_worked_example_latent_with_feedback(self):
+        r = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
+                                    exit_tension_force_sensitivity_per_width_m=5.9e-3)
+        self.assertTrue(r['tension_feedback_applied'])
+        self.assertEqual(r['status'], 'LATENT_BANDS_UNDER_TENSION')
+        self.assertEqual(r['compliance_only_status'], 'MANIFEST_BUCKLE_BANDS')
+        self.assertNotIn('TENSION_FEEDBACK_SATURATED_BAND_SLACK', r['flags'])
+        self.assertNotIn('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL', r['flags'])   # 0.47 < 0.75
+        self.assertAlmostEqual(r['transfer']['long_wavelength_energy_fraction'], 0.47,
+                               delta=0.01)
+        self.assertLess(r['feedback_peak_i_units'], 0.1 * r['compliance_only_peak_i_units'])
+        self.assertLess(r['compliance_only_peak_i_units'], r['rigid_transfer_bound_i_units'])
+        self.assertEqual(r['feedback_peak_i_units'], r['linear_feedback_peak_i_units'])
+        loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG']
+        self.assertEqual(len(loose), 1)
+        self.assertFalse(loose[0]['saturated'])
+        self.assertAlmostEqual(loose[0]['center_m'], 0.75, delta=DZ)
+        dumps(r)
+
+    def test_large_stripe_saturates_and_is_manifest(self):
+        r = thermal_stripe_flatness(Z, stripe(3e-6), **self.THIN,
+                                    exit_tension_force_sensitivity_per_width_m=5.9e-3)
+        self.assertEqual(r['status'], 'MANIFEST_BUCKLE_BANDS')
+        self.assertIn('TENSION_FEEDBACK_SATURATED_BAND_SLACK', r['flags'])
+        self.assertEqual(len(r['saturated_bands']), 1)
+        s = r['saturated_bands'][0]
+        # |dh| = (n*dR - 2*C*dP_max)/(1 + 2*C*Q) with lam = 2*b = 0.1 m
+        c = roll_line_compliance_m2_n(0.1, 4.87e-3)
+        s_cr = narrow_band_buckling_stress_pa(0.21e-3, 0.05)
+        dp = 5.9e-3 * (30e6 + s_cr)
+        self.assertAlmostEqual(s['capped_force_increase_per_width_n_m'], dp, delta=1e-6)
+        self.assertAlmostEqual(-s['saturated_peak_thickness_change_m'],
+                               (2 * 3e-6 - 2 * c * dp) / (1 + 2 * c * 1.1e10), delta=1e-15)
+        loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
+        self.assertTrue(loose['saturated'])
+        self.assertEqual(loose['state'], 'MANIFEST_BUCKLE')
+        self.assertGreater(loose['peak_i_units'], loose['linear_feedback_peak_i_units'])
+        self.assertLess(loose['peak_i_units'], r['compliance_only_peak_i_units'])
+        dumps(r)
+
+    def test_monotonic_in_sensitivity(self):
+        peaks = [thermal_stripe_flatness(Z, stripe(0.2e-6), **self.THIN,
+                                         exit_tension_force_sensitivity_per_width_m=nx)
+                 ['feedback_peak_i_units'] for nx in (1e-4, 1e-3, 5.9e-3, 2e-2)]
+        self.assertTrue(all(a > b for a, b in zip(peaks, peaks[1:])))
+        ts = [local_bump_transfer(0.1, 0.003, 1e10, exit_tension_force_sensitivity_per_width_m=nx,
+                                  exit_thickness_m=0.6e-3)['transfer_factor']
+              for nx in (1e-4, 1e-3, 1e-2)]
+        self.assertTrue(all(a > b for a, b in zip(ts, ts[1:])))
+
+    def test_feedback_validation(self):
+        with self.assertRaises(ValueError):
+            local_bump_transfer(0.1, 0.003, 1e10, exit_tension_force_sensitivity_per_width_m=1e-3)
+        with self.assertRaises(ValueError):
+            local_bump_transfer(0.1, 0.003, 1e10, exit_tension_force_sensitivity_per_width_m=-1e-3,
+                                exit_thickness_m=1e-3)
+        with self.assertRaises(ValueError):
+            local_bump_transfer(0.1, 0.003, 1e10, exit_tension_force_sensitivity_per_width_m=True,
+                                exit_thickness_m=1e-3)
+        with self.assertRaises(ValueError):
+            transfer_radius_profile(Z[:20], [0.0] * 20, bite_half_length_m=0.003,
+                                    strip_stiffness_per_width_pa=1e10, roll_radius_m=0.2,
+                                    exit_tension_force_sensitivity_per_width_m=1e-3,
+                                    exit_thickness_m=1e-3, xi=0.0)
+
+
 class TestCoilRidge(unittest.TestCase):
     ARGS = dict(inner_radius_m=0.305, outer_radius_m=0.9, yield_stress_pa=200e6,
                 winding_tension_pa=30e6, youngs_modulus_pa=E_AL)

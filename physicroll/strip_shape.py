@@ -42,8 +42,25 @@ With strip stiffness per unit width ``Q = -d(F/width)/dh_exit`` [Pa] and ``n_rol
 
 ``transfer_radius_profile`` applies ``T`` per DFT component of the already de-trended local
 deviation (periodic over the supplied window). Components with ``lam < 4a`` are attenuated
-with ``T(4a)``; components with ``lam > R`` (including the mean) with ``T(R)``; each class is
-flagged when it carries more than 5 % of the spectrum energy.
+with ``T(4a)``; components with ``lam > R`` (including the mean) with ``T(R)``; short content
+is flagged above 5 %, long content above 75 % of the spectrum energy (an isolated stripe of
+width w always carries about 2w/R of its energy at wavelengths > R).
+
+Exit-tension feedback [D, planner; re-derived here], optional: a locally over-rolled fibre
+is longer, so its exit tension drops, which raises the local roll force and flattens the
+bump. With ``N_x' = -d(F/width)/d(sigma_exit)`` [m] > 0::
+
+    dp' = -Q*dh - N_x'*dsigma_x,  dsigma_x = -E_strip*eps,  eps = -xi*dh/h_exit
+    => Q_eff = Q + N_x'*E_strip*xi/h_exit,   T(lam) = 1/(1 + 2*C(lam)*Q_eff)
+
+Pointwise, so it applies per Fourier component like Q, except the mean (k = 0): a uniform
+elongation does not change the reel-controlled mean tension, so k = 0 keeps Q (strictly,
+``dsigma_x = -E*(eps - mean(eps))``). When the feedback term dominates,
+``eps -> n_rolls*dR/(2*C*N_x'*E_strip)``, independent of gauge: the thin-gauge trend then
+comes from the buckling stress (t^2) and the dead band, not from raw I-units. Entry-tension
+redistribution is ignored (entry tension uniform); it would attenuate further. The feedback
+needs a tensioned fibre: ``thermal_stripe_flatness`` caps it band-wise for slack (manifest)
+bands (approximate, see there).
 
 W2.2 Crown heredity, elongation, flatness
 -----------------------------------------
@@ -94,8 +111,9 @@ lateral flow no longer absorbs crown changes; narrow-band buckling stress falls 
 critical coil ridge height and the trough threshold scale with h, the trough wavelength with
 sqrt(h).
 
-NOT modelled: lateral metal flow beyond the constant xi, feedback of the local tension
-redistribution on local roll force (in a real bite it opposes the thickness change), roll
+NOT modelled: lateral metal flow beyond the constant xi, entry-tension redistribution, the
+exit-tension feedback beyond its linear form and an approximate band-wise saturation (and
+not at all unless N_x' is supplied), shear lag of the tension field, roll
 bending/backup-roll contact (crown model), post-buckling stress relief, plasticity of the
 strip outside the bite, interlayer slip/pressure in coils, strip tracking/oscillation that
 spreads ridges, temperature fields (see ``roll_thermal``), orthotropy and roll friction in
@@ -146,7 +164,8 @@ GAMMA_EULER = 0.5772156649015329
 COMPLIANCE_CONSTANT = 1.0 - GAMMA_EULER  # 0.42278, quoted as 0.4228 in the spec
 I_UNIT = 1e-5
 SHORT_WAVELENGTH_FACTOR = 4.0          # lam < 4a outside compliance validity (spec)
-SPECTRUM_FLAG_FRACTION = 0.05          # analyst choice (spec)
+SPECTRUM_FLAG_FRACTION = 0.05          # analyst choice (spec), short-wavelength flag
+LONG_WAVELENGTH_FLAG_FRACTION = 0.75   # raised from 0.05: isolated stripes carry ~2w/R
 DEFAULT_REPORTING_THRESHOLD_I_UNITS = 2.0
 DEFAULT_BETA = 1.86
 SHOHET_UPPER_COEFFICIENT = 40.0
@@ -263,24 +282,59 @@ def roll_line_compliance_m2_n(wavelength_m, bite_half_length_m,
     return _compliance(lam, a, e, nu)
 
 
-def _transfer_limitations():
+def _transfer_limitations(feedback=False):
+    fb = ('Exit-tension feedback included as a linear effective stiffness (elastic, unbuckled '
+          'fibres); entry tension is assumed uniform (its redistribution, ignored, would '
+          'attenuate further) and the exit-side compatibility is local (no shear lag).'
+          if feedback else
+          'No feedback of the local tension redistribution on the local roll force; in a '
+          'real bite it opposes the thickness change, so dh is an upper estimate for the '
+          'given Q (pass exit_tension_force_sensitivity_per_width_m to include it).')
     return ['Half-space compliance (2a << lam << R): roll bending, backup-roll contact and '
-            'the finite roll radius are outside it.',
-            'No feedback of the local tension redistribution on the local roll force; in a '
-            'real bite it opposes the thickness change, so dh is an upper estimate for the '
-            'given Q.',
-            'The strip stiffness per unit width Q is supplied; it is not computed here.',
+            'the finite roll radius are outside it.', fb,
+            'The strip stiffness per unit width Q (and N_x\', if used) is supplied; it is not '
+            'computed here.',
             NOT_VALIDATED]
+
+
+def _feedback(sensitivity_m, exit_thickness_m, strip_youngs_modulus_pa, xi):
+    """Return ``(N_x', N_x'*E_strip*xi/h_exit)`` or ``(None, 0.0)`` when feedback is off."""
+    if sensitivity_m is None:
+        return None, 0.0
+    nx = _num('exit_tension_force_sensitivity_per_width_m', sensitivity_m, positive=True,
+              hi=10.0)
+    if exit_thickness_m is None:
+        raise ValueError('exit_thickness_m is required with '
+                         'exit_tension_force_sensitivity_per_width_m')
+    h = _thickness('exit_thickness_m', exit_thickness_m)
+    e = _modulus('strip_youngs_modulus_pa', strip_youngs_modulus_pa)
+    x = _num('xi', xi, lo=0.0, hi=1.0, lo_open=True)
+    return nx, nx * e * x / h
+
+
+def _feedback_keys(q, nx, q_fb):
+    return {'effective_strip_stiffness_per_width_pa': q + q_fb,
+            'tension_feedback_applied': nx is not None,
+            'tension_feedback_stiffness_per_width_pa': q_fb,
+            'exit_tension_force_sensitivity_per_width_m': nx}
+
+
+FEEDBACK_BASIS = ('[D] planner: dp\' = -Q*dh - N_x\'*dsigma_x, dsigma_x = -E*eps, '
+                  'eps = -xi*dh/h -> Q_eff = Q + N_x\'*E*xi/h')
 
 
 def local_bump_transfer(wavelength_m, bite_half_length_m, strip_stiffness_per_width_pa, *,
                         n_rolls=2, roll_youngs_modulus_pa=STEEL_E_PA,
                         roll_poisson_ratio=STEEL_NU, roll_radius_m=None,
-                        radius_deviation_m=None):
-    """Transfer factor ``T = 1/(1+2*C*Q)`` of a sinusoidal roll bump into strip thickness [D].
+                        radius_deviation_m=None,
+                        exit_tension_force_sensitivity_per_width_m=None,
+                        exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA, xi=1.0):
+    """Transfer factor ``T = 1/(1+2*C*Q_eff)`` of a sinusoidal roll bump into thickness [D].
 
-    ``dh = -n_rolls*T*dR``. Optional ``radius_deviation_m`` gives the thickness change;
-    optional ``roll_radius_m`` flags ``lam > R`` (belongs to the crown model).
+    ``dh = -n_rolls*T*dR``. ``Q_eff = Q`` unless the exit-tension feedback is switched on
+    with ``exit_tension_force_sensitivity_per_width_m`` (N_x' [m], needs ``exit_thickness_m``):
+    then ``Q_eff = Q + N_x'*E_strip*xi/h_exit``. Optional ``radius_deviation_m`` gives the
+    thickness change; optional ``roll_radius_m`` flags ``lam > R`` (crown model).
     """
     lam = _num('wavelength_m', wavelength_m, positive=True, hi=100.0)
     a = _num('bite_half_length_m', bite_half_length_m, positive=True, hi=0.1)
@@ -289,27 +343,41 @@ def local_bump_transfer(wavelength_m, bite_half_length_m, strip_stiffness_per_wi
     n = _n_rolls(n_rolls)
     radius = _opt('roll_radius_m', roll_radius_m, positive=True, hi=5.0)
     dr = _opt('radius_deviation_m', radius_deviation_m, lo=-1e-3, hi=1e-3)
+    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                         strip_youngs_modulus_pa, xi)
+    q_eff = q + q_fb
     c = roll_line_compliance_m2_n(lam, a, roll_youngs_modulus_pa, roll_poisson_ratio)
-    t = 1.0 / (1.0 + 2.0 * c * q)
+    t = 1.0 / (1.0 + 2.0 * c * q_eff)
+    t_c = 1.0 / (1.0 + 2.0 * c * q)
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA']
+    if nx is not None:
+        flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
     if radius is not None and lam > radius:
         flags.append('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL')
-    reasons = [f'Compliance {c:.3e} m2/N x stiffness {q:.3e} Pa: 2CQ = {2 * c * q:.3f}, so '
-               f'{t:.3f} of the radius deviation on each of {n} roll(s) reaches the strip.']
+    reasons = [f'Compliance {c:.3e} m2/N x stiffness {q_eff:.3e} Pa: 2CQ = '
+               f'{2 * c * q_eff:.3f}, so {t:.3f} of the radius deviation on each of {n} '
+               'roll(s) reaches the strip.']
+    if nx is not None:
+        reasons.append(f'Exit-tension feedback adds {q_fb:.3e} Pa to Q = {q:.3e} Pa '
+                       f'(compliance-only transfer {t_c:.3f}).')
     return _checked({
         'status': 'UNVALIDATED_LOCAL_TRANSFER_ESTIMATE',
         'wavelength_m': lam, 'bite_half_length_m': a, 'n_rolls': n,
         'roll_radius_m': radius, 'compliance_m2_n': c, 'strip_stiffness_per_width_pa': q,
-        'compliance_stiffness_product': 2 * c * q, 'transfer_factor': t,
+        **_feedback_keys(q, nx, q_fb),
+        'compliance_stiffness_product': 2 * c * q_eff, 'transfer_factor': t,
+        'compliance_only_transfer_factor': t_c,
         'thickness_change_per_radius_deviation': -n * t,
         'rigid_thickness_change_per_radius_deviation': float(-n),
         'radius_deviation_m': dr,
         'local_thickness_change_m': None if dr is None else -n * t * dr,
         'rigid_local_thickness_change_m': None if dr is None else -n * dr,
         'formula_basis': {'compliance': '[D] Boussinesq over the bite; Johnson s13.2 check',
-                          'transfer': '[D] T = 1/(1+2*C*Q), dh = -n*T*dR'},
+                          'transfer': '[D] T = 1/(1+2*C*Q_eff), dh = -n*T*dR',
+                          'tension_feedback': FEEDBACK_BASIS},
         'threshold_basis': 'Validity lam >= 4a enforced; lam > R flagged (spec choices) [D].',
-        'reasons': reasons, 'flags': flags, 'limitations': _transfer_limitations(),
+        'reasons': reasons, 'flags': flags,
+        'limitations': _transfer_limitations(nx is not None),
         'sources': [SOURCES['johnson_contact']]})
 
 
@@ -321,12 +389,17 @@ def _dft(x, sign=-1):
 
 def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m,
                             strip_stiffness_per_width_pa, roll_radius_m, n_rolls=2,
-                            roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU):
+                            roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU,
+                            exit_tension_force_sensitivity_per_width_m=None,
+                            exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA,
+                            xi=1.0):
     """Apply ``T(lam)`` per DFT component of a de-trended local radius deviation [D].
 
     ``z_m`` must be uniformly spaced (the window is treated as one period). Components with
-    ``lam < 4a`` use ``T(4a)``, with ``lam > R`` (and the mean) use ``T(R)``; each class is
-    flagged above 5 % of the spectrum energy. Returns ``local_thickness_change_m``.
+    ``lam < 4a`` use ``T(4a)``, with ``lam > R`` (and the mean) use ``T(R)``. Short content is
+    flagged above 5 %, long content above 75 % of the spectrum energy. With the exit-tension
+    feedback on, every non-zero component uses ``Q_eff``; the mean (k = 0) keeps ``Q`` because
+    a uniform elongation does not redistribute the reel-controlled mean tension.
     """
     z = _grid(z_m, min_len=4)
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
@@ -345,6 +418,9 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     n_r = _n_rolls(n_rolls)
     e = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
     nu = _poisson('roll_poisson_ratio', roll_poisson_ratio)
+    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                         strip_youngs_modulus_pa, xi)
+    q_eff = q + q_fb
     lam_short = SHORT_WAVELENGTH_FACTOR * a
     if radius <= lam_short:
         raise ValueError('roll_radius_m must exceed 4*bite_half_length_m')
@@ -367,7 +443,7 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
             lam_eff = radius
         else:
             lam_eff = lam
-        t = _transfer(lam_eff, a, e, nu, q)
+        t = _transfer(lam_eff, a, e, nu, q if kk == 0 else q_eff)
         t_used.append(t)
         gains.append(-n_r * t)
     total = math.fsum(energy)
@@ -376,11 +452,13 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     f_short = e_short / total if total > 0 else 0.0
     f_long = e_long / total if total > 0 else 0.0
     t_weighted = (math.fsum(t * p for t, p in zip(t_used, energy)) / total
-                  if total > 0 else _transfer(radius, a, e, nu, q))
+                  if total > 0 else _transfer(radius, a, e, nu, q_eff))
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
+    if nx is not None:
+        flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
     if f_short > SPECTRUM_FLAG_FRACTION:
         flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
-    if f_long > SPECTRUM_FLAG_FRACTION:
+    if f_long > LONG_WAVELENGTH_FLAG_FRACTION:
         flags.append('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL')
     i_pk = max(range(n), key=lambda i: abs(dr[i]))
     j_pk = max(range(n), key=lambda i: abs(dh[i]))
@@ -389,10 +467,11 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     reasons = [f'Energy-weighted transfer factor {t_weighted:.3f}; peak thickness change '
                f'{peak_dh:.3e} m from peak radius deviation {peak_dr:.3e} m on {n_r} roll(s).',
                f'Spectrum energy below lam = 4a ({lam_short:.4f} m): {f_short:.3f}; above '
-               f'lam = R ({radius:.4f} m, incl. mean): {f_long:.3f}.']
-    if f_long > SPECTRUM_FLAG_FRACTION:
-        reasons.append('An isolated stripe of width w carries roughly 2w/R of its energy at '
-                       'wavelengths > R; those components are clamped to T(R).')
+               f'lam = R ({radius:.4f} m, incl. mean): {f_long:.3f}. An isolated stripe of '
+               'width w carries roughly 2w/R of its energy at wavelengths > R; those '
+               'components are clamped to T(R).']
+    if nx is not None:
+        reasons.append(f'Exit-tension feedback: Q_eff = {q_eff:.3e} Pa (Q = {q:.3e} Pa).')
     return _checked({
         'status': 'UNVALIDATED_LOCAL_TRANSFER_ESTIMATE',
         'z_m': z, 'local_radius_deviation_m': dr, 'local_thickness_change_m': dh,
@@ -400,16 +479,18 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
         'n_rolls': n_r, 'sample_spacing_m': dz, 'period_m': period,
         'nyquist_wavelength_m': 2 * dz, 'short_wavelength_limit_m': lam_short,
         'long_wavelength_limit_m': radius,
+        'strip_stiffness_per_width_pa': q, **_feedback_keys(q, nx, q_fb),
         'short_wavelength_energy_fraction': f_short, 'long_wavelength_energy_fraction': f_long,
         'transfer_factor_min': min(t_used), 'transfer_factor_max': max(t_used),
         'energy_weighted_transfer_factor': t_weighted,
         'peak_radius_deviation_m': peak_dr, 'peak_local_thickness_change_m': peak_dh,
         'peak_transfer_ratio': ratio,
-        'formula_basis': {'transfer': '[D] dh_k = -n*T(lam_k)*dR_k per DFT component'},
-        'threshold_basis': 'lam < 4a -> T(4a), lam > R -> T(R), flag above 5 % energy '
-                           '(spec/analyst choices) [D].',
+        'formula_basis': {'transfer': '[D] dh_k = -n*T(lam_k)*dR_k per DFT component',
+                          'tension_feedback': FEEDBACK_BASIS + '; k = 0 keeps Q'},
+        'threshold_basis': 'lam < 4a -> T(4a), lam > R -> T(R); flags above 5 % (short) / '
+                           '75 % (long) of the spectrum energy (spec/analyst choices) [D].',
         'reasons': reasons, 'flags': flags,
-        'limitations': _transfer_limitations()
+        'limitations': _transfer_limitations(nx is not None)
         + ['The DFT treats the window as periodic: content near one end wraps to the other.'],
         'sources': [SOURCES['johnson_contact']]})
 
@@ -594,7 +675,7 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     is below ``-sigma_cr(band width)``.
     """
     z = _grid(z_m)
-    eps = _list('elongation', elongation, min_len=2, lo=-0.1, hi=0.1)
+    eps = _list('elongation', elongation, min_len=2, lo=-0.5, hi=0.5)
     if len(eps) != len(z):
         raise ValueError('elongation must have the same length as z_m')
     e = _modulus('youngs_modulus_pa', youngs_modulus_pa)
@@ -667,6 +748,14 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
 
 
+def _peak_abs(values):
+    return max(abs(v) for v in values)
+
+
+def _signed_peak(values):
+    return max(values, key=abs)
+
+
 def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                             strip_stiffness_per_width_pa, bite_half_length_m, roll_radius_m,
                             strip_width_m, mean_tension_pa, strip_centre_m=None, n_rolls=2,
@@ -674,11 +763,21 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                             strip_youngs_modulus_pa=ALUMINIUM_E_PA,
                             strip_poisson_ratio=ALUMINIUM_NU, xi=1.0,
                             reporting_threshold_i_units=DEFAULT_REPORTING_THRESHOLD_I_UNITS,
-                            yield_stress_pa=None):
+                            yield_stress_pa=None,
+                            exit_tension_force_sensitivity_per_width_m=None):
     """Chain W2.1 -> elongation -> flatness for a local roll-radius profile (flat entry).
 
     Samples with ``|z - centre| <= width/2`` are used (centre defaults to the middle of the
-    z range). Also returns the rigid-transfer bound ``I = 1e5*n_rolls*max|dR|/h``.
+    z range). Three levels are reported: the rigid-transfer bound
+    ``I = 1e5*n_rolls*max|dR|/h``, the compliance-only result (``Q``) and, when
+    ``exit_tension_force_sensitivity_per_width_m`` (N_x') is given, the exit-tension feedback
+    result (``Q_eff``), which is then the main ``flatness``/``bands``.
+
+    Saturation (approximate, band-wise) [D, planner]: a LOOSE band that the linear feedback
+    leaves MANIFEST cannot lose more tension than ``sigma_T + sigma_cr``; its force increase is
+    capped at ``dP'_max = N_x'*(sigma_T + sigma_cr)`` and the peak thickness change becomes
+    ``|dh| = (n*dR_peak - 2*C(2b)*dP'_max)/(1 + 2*C(2b)*Q)`` (floored at the linear-feedback
+    value); the band's samples are scaled by the peak ratio and flatness recomputed.
     """
     z = _grid(z_m, min_len=4)
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
@@ -691,54 +790,137 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                                                                strip_centre_m, lo=-100.0,
                                                                hi=100.0)
     n_r = _n_rolls(n_rolls)
+    sig_t = _num('mean_tension_pa', mean_tension_pa, nonnegative=True, hi=2e9)
+    e_r = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
+    nu_r = _poisson('roll_poisson_ratio', roll_poisson_ratio)
     idx = [i for i, v in enumerate(z) if abs(v - c) <= w / 2 * (1 + 1e-12)]
     if len(idx) < 4:
         raise ValueError('fewer than 4 samples lie inside the strip width')
     zs, drs = [z[i] for i in idx], [dr[i] for i in idx]
-    tr = transfer_radius_profile(
-        zs, drs, bite_half_length_m=bite_half_length_m,
-        strip_stiffness_per_width_pa=strip_stiffness_per_width_pa, roll_radius_m=roll_radius_m,
-        n_rolls=n_r, roll_youngs_modulus_pa=roll_youngs_modulus_pa,
-        roll_poisson_ratio=roll_poisson_ratio)
-    dh = tr['local_thickness_change_m']
-    exit_profile = [h + v for v in dh]
-    if min(exit_profile) <= 0:
-        raise ValueError('local thickness change exceeds the exit thickness')
-    el = differential_elongation(zs, [h] * len(zs), exit_profile, xi=xi)
-    fl = flatness_from_elongation(
-        zs, el['elongation'], youngs_modulus_pa=strip_youngs_modulus_pa,
-        poisson_ratio=strip_poisson_ratio, thickness_m=h, mean_tension_pa=mean_tension_pa,
-        reporting_threshold_i_units=reporting_threshold_i_units, yield_stress_pa=yield_stress_pa)
+    common = dict(bite_half_length_m=bite_half_length_m,
+                  strip_stiffness_per_width_pa=strip_stiffness_per_width_pa,
+                  roll_radius_m=roll_radius_m, n_rolls=n_r, roll_youngs_modulus_pa=e_r,
+                  roll_poisson_ratio=nu_r)
+
+    def chain(dh):
+        exit_profile = [h + v for v in dh]
+        if min(exit_profile) <= 0:
+            raise ValueError('local thickness change exceeds the exit thickness')
+        el = differential_elongation(zs, [h] * len(zs), exit_profile, xi=xi)
+        fl = flatness_from_elongation(
+            zs, el['elongation'], youngs_modulus_pa=strip_youngs_modulus_pa,
+            poisson_ratio=strip_poisson_ratio, thickness_m=h, mean_tension_pa=sig_t,
+            reporting_threshold_i_units=reporting_threshold_i_units,
+            yield_stress_pa=yield_stress_pa)
+        return exit_profile, el, fl
+
+    tr_c = transfer_radius_profile(zs, drs, **common)
+    feedback = exit_tension_force_sensitivity_per_width_m is not None
+    if not feedback:
+        tr = tr_c
+        dh = tr['local_thickness_change_m']
+        exit_profile, el, fl = chain(dh)
+        fl_c, fl_lin, saturated = fl, None, []
+    else:
+        _, _, fl_c = chain(tr_c['local_thickness_change_m'])
+        tr = transfer_radius_profile(
+            zs, drs, **common,
+            exit_tension_force_sensitivity_per_width_m=exit_tension_force_sensitivity_per_width_m,
+            exit_thickness_m=h, strip_youngs_modulus_pa=strip_youngs_modulus_pa, xi=xi)
+        dh_lin = tr['local_thickness_change_m']
+        _, _, fl_lin = chain(dh_lin)
+        nx = tr['exit_tension_force_sensitivity_per_width_m']
+        q = tr['strip_stiffness_per_width_pa']
+        a = tr['short_wavelength_limit_m'] / SHORT_WAVELENGTH_FACTOR
+        radius = tr['long_wavelength_limit_m']
+        dh = list(dh_lin)
+        saturated = []
+        for b in fl_lin['bands']:
+            if b['sense'] != 'LOOSE_LONG' or b['state'] != 'MANIFEST_BUCKLE':
+                continue
+            members = [i for i, v in enumerate(zs) if b['start_m'] < v < b['end_m']]
+            dr_pk = max(drs[i] for i in members)
+            dh_pk = max(-dh_lin[i] for i in members)
+            if dr_pk <= 0 or dh_pk <= 0:
+                continue
+            lam = min(max(2 * b['width_m'], SHORT_WAVELENGTH_FACTOR * a), radius)
+            cc = _compliance(lam, a, e_r, nu_r)
+            dp_max = nx * (sig_t + b['band_buckling_stress_pa'])
+            mag = max((n_r * dr_pk - 2 * cc * dp_max) / (1 + 2 * cc * q), dh_pk)
+            for i in members:
+                dh[i] *= mag / dh_pk
+            saturated.append({
+                'start_m': b['start_m'], 'end_m': b['end_m'],
+                'linear_feedback_peak_i_units': b['peak_i_units'],
+                'dominant_wavelength_m': lam, 'capped_force_increase_per_width_n_m': dp_max,
+                'linear_feedback_peak_thickness_change_m': -dh_pk,
+                'saturated_peak_thickness_change_m': -mag, 'scale_factor': mag / dh_pk})
+        exit_profile, el, fl = chain(dh)
+        for b in fl['bands']:
+            hit = [s for s in saturated if s['start_m'] <= b['peak_position_m'] <= s['end_m']]
+            members = [i for i, v in enumerate(zs) if b['start_m'] < v < b['end_m']]
+            b['saturated'] = bool(hit)
+            b['linear_feedback_peak_i_units'] = (
+                hit[0]['linear_feedback_peak_i_units'] if hit
+                else _signed_peak([fl_lin['i_units'][i] for i in members]))
     peak_dr = max(abs(v) for v in drs)
     rigid_i = n_r * peak_dr / h / I_UNIT
     peak_abs_i = max(abs(fl['max_i_units']), abs(fl['min_i_units']))
-    rel_dh = tr['peak_local_thickness_change_m'] / h
-    flags = sorted(set(tr['flags'] + el['flags'] + fl['flags']))
-    reasons = [f'Peak local thickness change {tr["peak_local_thickness_change_m"]:.3e} m = '
-               f'{rel_dh:.3e} of the {h:.3e} m gauge; flatness peak {peak_abs_i:.1f} I-units '
-               f'vs rigid-transfer bound {rigid_i:.1f} I-units.',
+    peak_dh = _signed_peak(dh)
+    rel_dh = peak_dh / h
+    flags = sorted(set(tr['flags'] + el['flags'] + fl['flags']
+                       + (['TENSION_FEEDBACK_SATURATED_BAND_SLACK'] if saturated else [])))
+    comp_i = _peak_abs(fl_c['i_units'])
+    reasons = [f'Peak local thickness change {peak_dh:.3e} m = {rel_dh:.3e} of the {h:.3e} m '
+               f'gauge; flatness peak {peak_abs_i:.1f} I-units vs compliance-only '
+               f'{comp_i:.1f} and rigid-transfer bound {rigid_i:.1f} I-units.',
                'The same roll stripe is a larger relative thickness error on thinner strip, '
-               'and the band buckling stress falls as thickness squared.'] + fl['reasons']
+               'and the band buckling stress falls as thickness squared.']
+    if feedback:
+        reasons.append('With exit-tension feedback dominant, eps tends to '
+                       'n*dR/(2*C*N_x\'*E_strip), independent of gauge; the thin-gauge trend '
+                       'then comes from the t^2 buckling stress and the shrinking dead band.')
+    if saturated:
+        reasons.append(f'{len(saturated)} loose band(s) slack: tension feedback saturated at '
+                       'sigma_T + sigma_cr; band-wise peak correction applied (approximate).')
+    reasons += fl['reasons']
+    limitations = ['Entry strip assumed flat (no incoming profile).'] + tr['limitations'] \
+        + fl['limitations'][:2]
+    if feedback:
+        limitations.append('Saturation is an approximate band-wise peak correction: the band '
+                           'samples are scaled by one factor, the dominant wavelength is taken '
+                           'as twice the band width, and no iteration is made.')
+    sub = ('z_m', 'local_radius_deviation_m', 'local_thickness_change_m', 'reasons',
+           'limitations', 'sources', 'status')
     return _checked({
         'status': fl['status'], 'z_m': zs, 'strip_centre_m': c, 'strip_width_m': w,
         'exit_thickness_m': h, 'n_rolls': n_r,
         'local_radius_deviation_m': drs, 'local_thickness_change_m': dh,
         'exit_profile_m': exit_profile, 'elongation': el['elongation'],
+        'peak_local_thickness_change_m': peak_dh,
         'peak_relative_thickness_change': rel_dh,
         'rigid_transfer_bound_i_units': rigid_i,
+        'compliance_only_peak_i_units': comp_i,
+        'compliance_only_peak_local_thickness_change_m':
+            tr_c['peak_local_thickness_change_m'],
+        'compliance_only_status': fl_c['status'],
+        'linear_feedback_peak_i_units': None if fl_lin is None else _peak_abs(fl_lin['i_units']),
+        'feedback_peak_i_units': peak_abs_i if feedback else None,
         'compliant_to_rigid_i_unit_ratio': peak_abs_i / rigid_i if rigid_i > 0 else None,
-        'transfer': {k: v for k, v in tr.items()
-                     if k not in ('z_m', 'local_radius_deviation_m', 'local_thickness_change_m',
-                                  'reasons', 'limitations', 'sources', 'status')},
+        **{k: tr[k] for k in ('effective_strip_stiffness_per_width_pa',
+                              'tension_feedback_applied',
+                              'tension_feedback_stiffness_per_width_pa',
+                              'exit_tension_force_sensitivity_per_width_m')},
+        'saturated_bands': saturated,
+        'transfer': {k: v for k, v in tr.items() if k not in sub},
         'flatness': {k: v for k, v in fl.items()
                      if k not in ('z_m', 'reasons', 'limitations', 'sources')},
         'bands': fl['bands'], 'formula_basis': {**tr['formula_basis'], **el['formula_basis'],
                                                 **fl['formula_basis'],
-                                                'rigid_bound': '[D] I = 1e5*n*dR/h'},
+                                                'rigid_bound': '[D] I = 1e5*n*dR/h',
+                                                'saturation': '[D] planner, approximate'},
         'threshold_basis': fl['threshold_basis'] + ' ' + tr['threshold_basis'],
-        'reasons': reasons, 'flags': flags,
-        'limitations': ['Entry strip assumed flat (no incoming profile).']
-        + tr['limitations'] + fl['limitations'][:2],
+        'reasons': reasons, 'flags': flags, 'limitations': limitations,
         'sources': tr['sources'] + el['sources'] + fl['sources']})
 
 
