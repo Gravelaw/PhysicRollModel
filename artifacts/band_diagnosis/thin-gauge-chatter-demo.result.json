@@ -2360,7 +2360,7 @@
         {
           "basis": "observation",
           "criterion": "visible only after tension release vs steady model band",
-          "expected": "LATENT model band",
+          "expected": "true: LATENT in mill and MANIFEST after release; false: MANIFEST in mill",
           "observed": "not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -2692,8 +2692,8 @@
         },
         {
           "basis": "observation",
-          "criterion": "intermittent duration vs band life",
-          "expected": "within 0.3-3 x band life",
+          "criterion": "intermittent duration vs model visible time",
+          "expected": "within 0.3-3 x model visible time",
           "observed": "not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -2741,7 +2741,7 @@
         {
           "basis": "observation",
           "criterion": "visible only after tension release vs event peak band",
-          "expected": "LATENT model band",
+          "expected": "true: LATENT in mill and MANIFEST after release; false: MANIFEST in mill",
           "observed": "not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null

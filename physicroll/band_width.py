@@ -19,8 +19,20 @@ Integration choices (SPEC6 6.2 / 6.7; each is reported in the result):
   against the steady state they start from.
 - The exit-tension feedback ``N_x' = -dF/dsigma_exit / width`` [m] is ALWAYS passed to the
   shape chain; three levels are reported (rigid-transfer bound, compliance only, with
-  feedback). A LATENT band (tension stripe, flat in the mill) counts as a model band: it shows
-  on a shapemeter and appears once tension is released.
+  feedback), plus the with-feedback profile before the band-wise saturation scaling
+  (``i_units_linear_feedback``, the one to plot). Band states come from strip_shape's
+  Rayleigh-quotient rule: in the mill (``state``, ``buckling_utilisation``; tension beside a
+  compressed zone stabilises it) and after tension release (``state_after_tension_release``,
+  local mode). A LATENT band (flat in the mill) still counts as a model band: it shows on a
+  shapemeter and may buckle once tension is released.
+- Onsets: stripe heights at which a band first buckles in the mill and after release, found
+  by geometric bisection of the scaled shape on a >= 10 mm grid; an after-release onset that
+  coincides with the height at which the band first exceeds the 2 I-unit reporting threshold
+  is flagged as limited by that threshold (an upper bound). ``gauge_trend`` uses the model
+  stripe and a smooth Gaussian reference (half-peak width 100 mm); a top-hat's sharp edges
+  give spike artefacts.
+- Event visible time: time above the in-mill manifest threshold when reached, else above the
+  after-release threshold, else above the reporting threshold (``visible_time_basis``).
 - The healthy-header nozzle-pattern ripple (healthy growth minus its moving average over one
   nozzle pitch, interior of the strip) is reported and fed through the shape chain.
 - The smooth thermal crown (centre minus strip-edge mean) goes to the crown / heredity model:
@@ -48,11 +60,13 @@ from .band_process import (failed, int_list, keys, not_supplied, num, num_list,
                            opt_num)
 
 STRIPE_THRESHOLD_M = 1e-7          # analyst choice: reporting threshold for radius stripes
-REFERENCE_STRIPE_HEIGHT_M = 0.5e-6  # SPEC6 6.2 gauge_trend reference stripe
-REFERENCE_STRIPE_WIDTH_M = 0.05     # SPEC6 6.7 50 mm reference stripe
+REFERENCE_STRIPE_HEIGHT_M = 0.5e-6  # SPEC6 6.2 gauge_trend reference stripe (no model stripe)
+REFERENCE_HALF_PEAK_WIDTH_M = 0.1   # smooth Gaussian reference, ~one cooling zone (analyst)
+ONSET_GRID_M = 0.01                 # onset bisections and gauge_trend on a >= 10 mm grid
+REPORTING_LIMIT_FACTOR = 1.05       # onset within 5 % of the reporting-threshold height
 ISOLATION_MARGIN_M = 0.1            # stripe isolated over [start - margin, end + margin]
 ONSET_SEARCH_MAX_M = 50e-6
-ONSET_ITERATIONS = 12               # geometric bisection: ~0.3 % on the onset height
+ONSET_RELATIVE_TOL = 0.015          # geometric bisection to a 1.5 % bracket
 RECOVERY_MIN_S = 600.0
 RECORD_INTERVAL_S = 2.0
 HISTORY_MAX_POINTS = 300
@@ -143,7 +157,11 @@ def validate_width_model(w, pass_):
                                         lo=0.0, hi=1.0)
     events = []
     for i, e in enumerate(_listv('width_model.events', w.get('events', []))):
-        keys(f'width_model.events[{i}]', e, ('start_s', 'duration_s', 'nozzle_indices', 'level'))
+        keys(f'width_model.events[{i}]', e, ('start_s', 'duration_s', 'nozzle_indices', 'level'),
+             ('label',))
+        label = e.get('label')
+        if label is not None and (not isinstance(label, str) or not label.strip()):
+            raise ValueError(f'width_model.events[{i}].label must be a nonempty string or null')
         idx = int_list(f'width_model.events[{i}].nozzle_indices', e['nozzle_indices'])
         if not idx:
             raise ValueError(f'width_model.events[{i}].nozzle_indices must not be empty')
@@ -153,7 +171,8 @@ def validate_width_model(w, pass_):
                                          positive=True, hi=1e5),
                        'nozzle_indices': idx,
                        'level': num(f'width_model.events[{i}].level', e['level'], lo=0.0,
-                                    hi=1.0)})
+                                    hi=1.0),
+                       'label': label})
     out['events'] = events
     if w.get('numerics') is not None:
         keys('width_model.numerics', w['numerics'], ('axial_cell_m', 'radial_cells',
@@ -345,20 +364,33 @@ def _tsf(z, dev, sp, feedback=True):
     return ss.thermal_stripe_flatness(z, dev, **kw)
 
 
-BAND_KEYS = ('start_m', 'end_m', 'center_m', 'width_m', 'peak_position_m', 'peak_i_units',
-             'sense', 'state', 'band_buckling_stress_pa', 'local_total_stress_pa',
-             'buckling_margin_pa', 'residual_stress_at_peak_pa')
-
-
 def _bands(bands):
-    out = []
-    for b in bands:
-        row = {k: b[k] for k in BAND_KEYS}
-        if 'saturated' in b:
-            row['saturated'] = b['saturated']
-            row['linear_feedback_peak_i_units'] = b['linear_feedback_peak_i_units']
-        out.append(row)
-    return out
+    """Band dicts of strip_shape.flatness_from_elongation, passed through unchanged (in-mill
+    Rayleigh state and utilisation, tension-released local and global modes)."""
+    return [dict(b) for b in bands]
+
+
+def _linear_feedback_i_units(fb, sp):
+    """With-feedback I-unit profile BEFORE the band-wise saturation scaling (for plotting:
+    the saturated profile jumps at the band edges). Same transfer and elongation chain as
+    strip_shape.thermal_stripe_flatness; I = 1e5*(eps - mean(eps))."""
+    if not fb['saturated_bands']:
+        return list(fb['flatness']['i_units'])
+    zs, drs, h = fb['z_m'], fb['local_radius_deviation_m'], sp['exit_thickness_m']
+    tr = ss.transfer_radius_profile(
+        zs, drs, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], n_rolls=sp['n_rolls'],
+        roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'],
+        exit_tension_force_sensitivity_per_width_m=sp[
+            'exit_tension_force_sensitivity_per_width_m'],
+        exit_thickness_m=h, strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'], xi=sp['xi'])
+    el = ss.differential_elongation(zs, [h] * len(zs),
+                                    [h + v for v in tr['local_thickness_change_m']], xi=sp['xi'])
+    eps = el['elongation']
+    m = math.fsum(eps) / len(eps)
+    return [(v - m) / ss.I_UNIT for v in eps]
 
 
 def shape_levels(z, dev, sp):
@@ -377,10 +409,15 @@ def shape_levels(z, dev, sp):
     peak_dr = max(fb['local_radius_deviation_m'], key=abs)
     peak_dh = fb['peak_local_thickness_change_m']
     return {
-        'status': fb['status'], 'z_m': fb['z_m'],
+        'status': fb['status'], 'released_status': fb['released_status'],
+        'manifest_after_release_band_count': fb['manifest_after_release_band_count'],
+        'released_global_status': fb['released_global_status'],
+        'released_global_max_utilisation': fb['released_global_max_utilisation'],
+        'z_m': fb['z_m'],
         'local_radius_deviation_m': fb['local_radius_deviation_m'],
         'local_thickness_change_m': fb['local_thickness_change_m'],
         'i_units_with_feedback': fb['flatness']['i_units'],
+        'i_units_linear_feedback': _linear_feedback_i_units(fb, sp),
         'i_units_compliance_only': co['flatness']['i_units'],
         'i_units_rigid': rg['i_units'],
         'rigid_transfer_bound_i_units': fb['rigid_transfer_bound_i_units'],
@@ -401,13 +438,16 @@ def shape_levels(z, dev, sp):
         'reporting_threshold_i_units': fb['flatness']['reporting_threshold_i_units'],
         'mean_tension_pa': sp['mean_tension_pa'],
         'levels': {
-            'rigid': {'status': rg['status'], 'peak_abs_i_units':
+            'rigid': {'status': rg['status'], 'released_status': rg['released_status'],
+                      'peak_abs_i_units':
                       max(abs(rg['max_i_units']), abs(rg['min_i_units'])),
                       'bands': _bands(rg['bands'])},
             'compliance_only': {'status': co['status'],
+                                'released_status': co['released_status'],
                                 'peak_abs_i_units': co['compliance_only_peak_i_units'],
                                 'bands': _bands(co['bands'])},
             'with_feedback': {'status': fb['status'],
+                              'released_status': fb['released_status'],
                               'peak_abs_i_units': fb['feedback_peak_i_units'],
                               'bands': _bands(fb['bands']),
                               'saturated_bands': fb['saturated_bands']}},
@@ -425,32 +465,56 @@ def stripe_states(levels, x):
     for name in ('rigid', 'compliance_only', 'with_feedback'):
         b = _band_at(levels['levels'][name]['bands'], x)
         out[name] = ({'peak_i_units': b['peak_i_units'], 'state': b['state'],
+                      'state_after_tension_release': b['state_after_tension_release'],
+                      'buckling_utilisation': b['buckling_utilisation'],
+                      'released_buckling_utilisation': b['released_buckling_utilisation'],
+                      'effective_buckling_width_m': b['effective_buckling_width_m'],
+                      'released_buckling_width_m': b['released_buckling_width_m'],
                       'sense': b['sense'], 'band_width_m': b['width_m'],
                       'band_buckling_stress_pa': b['band_buckling_stress_pa'],
                       'local_total_stress_pa': b['local_total_stress_pa'],
                       'saturated': b.get('saturated', False)}
-                     if b else {'peak_i_units': None, 'state': 'BELOW_REPORTING_THRESHOLD'})
+                     if b else {'peak_i_units': None, 'state': 'BELOW_REPORTING_THRESHOLD',
+                                'state_after_tension_release': 'BELOW_REPORTING_THRESHOLD',
+                                'buckling_utilisation': None,
+                                'released_buckling_utilisation': None})
     return out
 
 
-def manifest_onset_scale(z, shape, sp, hi=None):
-    """Smallest factor s with a MANIFEST band for s*shape (geometric bisection), or None."""
+ONSET_KINDS = {'mill': ('status', 'MANIFEST_BUCKLE_BANDS'),
+               'released': ('released_status', 'MANIFEST_AFTER_RELEASE_BANDS')}
+
+
+def coarse_grid(z, prof):
+    """Linear resampling onto a uniform grid of at least ONSET_GRID_M (cheaper onsets)."""
+    if z[1] - z[0] >= ONSET_GRID_M * 0.999:
+        return list(z), list(prof)
+    n = max(4, int(round((z[-1] - z[0]) / ONSET_GRID_M)))
+    zc = [z[0] + i * (z[-1] - z[0]) / n for i in range(n + 1)]
+    return zc, [_interp(z, prof, x) for x in zc]
+
+
+def onset_scale(z, shape, sp, kind='mill', hi=None, lo=None):
+    """Smallest factor s with a MANIFEST band (kind 'mill': in the mill; 'released': after
+    tension release) for s*shape, by geometric bisection to ONSET_RELATIVE_TOL; None if not
+    reached at ``hi``. ``lo``: a scale known not to exceed the onset (bracket)."""
     peak = max(abs(v) for v in shape)
     if peak <= 0:
         return None
+    key, value = ONSET_KINDS[kind]
     s_hi = (ONSET_SEARCH_MAX_M if hi is None else hi) / peak
 
-    def manifest(s):
+    def manifest(sc):
         try:
-            return _tsf(z, [s * v for v in shape], sp)['status'] == 'MANIFEST_BUCKLE_BANDS'
+            return _tsf(z, [sc * v for v in shape], sp)[key] == value
         except ValueError:
             return True        # thickness change exceeds the gauge: far beyond onset
     if not manifest(s_hi):
         return None
-    s_lo = s_hi * 1e-4
+    s_lo = s_hi * 1e-4 if lo is None or lo >= s_hi else lo
     if manifest(s_lo):
         return s_lo
-    for _ in range(ONSET_ITERATIONS):
+    while s_hi / s_lo > 1 + ONSET_RELATIVE_TOL:
         mid = math.sqrt(s_lo * s_hi)
         if manifest(mid):
             s_hi = mid
@@ -459,14 +523,48 @@ def manifest_onset_scale(z, shape, sp, hi=None):
     return s_hi
 
 
+def manifest_onset_scale(z, shape, sp, hi=None):
+    return onset_scale(z, shape, sp, 'mill', hi)
+
+
+def onsets(z, shape, sp):
+    """In-mill and after-release onset scales on the coarse grid, plus the scale at which the
+    linear-feedback peak reaches the reporting threshold (bands exist only above it). The
+    reporting scale brackets the after-release onset from below (a band must be reported
+    before it can buckle), the after-release onset brackets the in-mill one (tension only
+    stabilises)."""
+    zc, pc = coarse_grid(z, shape)
+    out = {'mill': None, 'released': None, 'reporting': None}
+    peak = max(abs(v) for v in pc)
+    if peak <= 0:
+        return out
+    lin = _tsf(zc, [v * REFERENCE_STRIPE_HEIGHT_M / peak for v in pc], sp)
+    li = lin['linear_feedback_peak_i_units'] or 0.0
+    thr = lin['flatness']['reporting_threshold_i_units']
+    if li > 0:
+        out['reporting'] = REFERENCE_STRIPE_HEIGHT_M / peak * thr / li
+    lo = None if out['reporting'] is None else out['reporting'] * (1 - 1e-6)
+    out['released'] = onset_scale(zc, pc, sp, 'released', lo=lo)
+    out['mill'] = onset_scale(zc, pc, sp, 'mill',
+                              lo=None if out['released'] is None else out['released'] * 0.999)
+    return out
+
+
+def _limited(onset, reporting):
+    return (onset is not None and reporting is not None
+            and onset <= reporting * REPORTING_LIMIT_FACTOR)
+
+
 def _isolate(z, dev, stripe):
     a, b = stripe['start_m'] - ISOLATION_MARGIN_M, stripe['end_m'] + ISOLATION_MARGIN_M
     return [v if a <= x <= b else 0.0 for x, v in zip(z, dev)]
 
 
-def _reference_stripe(z, centre):
-    return [REFERENCE_STRIPE_HEIGHT_M if abs(x - centre) <= REFERENCE_STRIPE_WIDTH_M / 2 + 1e-12
-            else 0.0 for x in z]
+def _reference_stripe(z, centre, height=REFERENCE_STRIPE_HEIGHT_M):
+    """Smooth Gaussian reference stripe, half-peak width REFERENCE_HALF_PEAK_WIDTH_M (a
+    top-hat's sharp edges give spike artefacts in the shape chain)."""
+    sig = REFERENCE_HALF_PEAK_WIDTH_M / (2 * math.sqrt(2 * math.log(2)))
+    return [height * math.exp(-0.5 * ((x - centre) / sig) ** 2) for x in z]
 
 
 # ============================================================================= thermal
@@ -619,7 +717,8 @@ def _events_section(th, sp, actual, events):
         prof = [v if lo <= zz <= hi else 0.0 for zz, v in zip(z, prof)]
         at_mon = _interp(z, prof, x)
         k_pk = max(range(len(z)), key=lambda i: abs(prof[i]))
-        row = {'index': k, 'start_s': e['start_s'], 'duration_s': e['duration_s'],
+        row = {'index': k, 'label': e.get('label') or f'event {k}',
+               'start_s': e['start_s'], 'duration_s': e['duration_s'],
                'nozzle_indices': e['nozzle_indices'], 'level': e['level'],
                'nozzle_positions_m': [th.positions[i] for i in e['nozzle_indices']],
                'monitor_position_m': x,
@@ -637,21 +736,26 @@ def _events_section(th, sp, actual, events):
         try:
             shape = shape_levels(z, prof, sp)
             row['peak_shape'] = shape
-            scale = manifest_onset_scale(z, prof, sp)
-            row['manifest_threshold_m'] = None if scale is None else scale * at_mon
-            pk_i = shape['linear_feedback_peak_i_units'] or 0.0
-            thr_i = shape['reporting_threshold_i_units']
-            # latent regime: the linear-feedback I-units scale with the stripe height
-            row['reporting_threshold_m'] = (at_mon * thr_i / pk_i) if pk_i > 0 else None
-            row['peak_state_with_feedback'] = _peak_state(shape, x)
-            row['peak_stripe_states'] = stripe_states(shape, z[k_pk])
+            on = onsets(z, prof, sp)
+            for name in ('mill', 'released', 'reporting'):
+                key = {'mill': 'manifest', 'released': 'released',
+                       'reporting': 'reporting'}[name]
+                row[f'{key}_threshold_m'] = None if on[name] is None else on[name] * at_mon
+            row['released_threshold_limited_by_reporting_threshold'] = _limited(
+                on['released'], on['reporting'])
+            states = stripe_states(shape, z[k_pk])
+            row['peak_state_with_feedback'] = states['with_feedback']['state']
+            row['peak_state_after_tension_release'] = states['with_feedback'][
+                'state_after_tension_release']
+            row['peak_stripe_states'] = states
         except ValueError as exc:
             row['shape_error'] = str(exc)
             row['manifest_threshold_m'] = row['reporting_threshold_m'] = None
-            row['peak_state_with_feedback'] = None
+            row['released_threshold_m'] = None
+            row['peak_state_with_feedback'] = row['peak_state_after_tension_release'] = None
         sign = 1.0 if met['peak_change'] >= 0 else -1.0
         sdev = [sign * v for v in dev]
-        for name in ('manifest', 'reporting'):
+        for name in ('manifest', 'released', 'reporting'):
             thr = row[f'{name}_threshold_m']
             t_on = fade = None
             if thr is not None and thr * sign > 0:
@@ -661,20 +765,29 @@ def _events_section(th, sp, actual, events):
                     fade = None if t_off is None else t_off - te
             row[f'time_to_{name}_threshold_s'] = None if t_on is None else t_on - ts
             row[f'fade_time_below_{name}_threshold_s'] = fade
+            row[f'time_above_{name}_threshold_s'] = (
+                None if t_on is None or fade is None else te + fade - t_on)
         basis = ('manifest' if row['time_to_manifest_threshold_s'] is not None
                  else 'reporting' if row['time_to_reporting_threshold_s'] is not None else None)
         row['band_life_basis'] = basis
         fade = row[f'fade_time_below_{basis}_threshold_s'] if basis else None
         row['band_life_s'] = None if (basis is None or fade is None) else e['duration_s'] + fade
-        row['time_above_manifest_threshold_s'] = (
-            None if row['time_to_manifest_threshold_s'] is None
-            or row['fade_time_below_manifest_threshold_s'] is None
-            else e['duration_s'] - row['time_to_manifest_threshold_s']
-            + row['fade_time_below_manifest_threshold_s'])
         row['band_life_lower_bound_s'] = None
         if basis and fade is None:
             row['flags'] = ['FADE_BEYOND_SIMULATED_RECOVERY']
             row['band_life_lower_bound_s'] = end - ts
+        # visible time: in the mill if it buckles there, else after tension release, else
+        # the time it stays above the reporting threshold (a shapemeter stripe only)
+        vis = next((n for n in ('manifest', 'released', 'reporting')
+                    if row[f'time_to_{n}_threshold_s'] is not None), None)
+        row['visible_time_basis'] = {'manifest': 'in_mill_manifest',
+                                     'released': 'manifest_after_tension_release',
+                                     'reporting': 'above_reporting_threshold_only',
+                                     None: None}[vis]
+        row['visible_time_s'] = None if vis is None else row[f'time_above_{vis}_threshold_s']
+        row['visible_time_lower_bound_s'] = (
+            end - (ts + row[f'time_to_{vis}_threshold_s'])
+            if vis is not None and row['visible_time_s'] is None else None)
         stride = max(1, int(math.ceil(len(sel) / HISTORY_MAX_POINTS)))
         keep = sel[::stride]
         if keep[-1] != sel[-1]:
@@ -702,12 +815,13 @@ def _events_section(th, sp, actual, events):
                                  'per-revolution effects.'),
             'band_life_definition': 'band_life_s = event duration + time after the event ends '
                                     'for the stripe to fall below the manifest threshold (or the '
-                                    'reporting threshold when it never becomes manifest)'}
-
-
-def _peak_state(shape, x):
-    st = stripe_states(shape, x)['with_feedback']
-    return st['state']
+                                    'reporting threshold when it never becomes manifest)',
+            'visible_time_definition': 'visible_time_s = time above the in-mill manifest '
+                                       'threshold if reached, else above the after-release '
+                                       'threshold, else above the reporting threshold '
+                                       '(visible_time_basis says which); thresholds are '
+                                       'stripe heights at the monitor position, from the peak '
+                                       'profile scaled (onsets on a >= 10 mm grid)'}
 
 
 def _first_cross(times, values, after, thr, up):
@@ -892,10 +1006,23 @@ def _positions(case, w, obs, steady, events, ridges, troughs, two_tone, grinding
         for name, p in pitches.items():
             if p is None:
                 continue
-            m = ss.match_spacing(gaps, p)
-            out['spacing_matches'][name] = {'status': m['status'], 'multiples': m['multiples'],
-                                            'gaps': m['gaps']}
+            out['spacing_matches'][name] = spacing_match(gaps, p)
     return out
+
+
+MAX_SPACING_MULTIPLE = 8.5     # strip_shape.match_spacing caps the multiple at 8
+
+
+def spacing_match(gaps, pitch):
+    """match_spacing, or NOT_COMPARABLE when every gap exceeds 8.5 pitches (the module caps
+    the multiple at 8 and would report misleading deviations of many pitches)."""
+    min_ratio = min(gaps) / pitch
+    if min_ratio > MAX_SPACING_MULTIPLE:
+        return {'status': 'NOT_COMPARABLE_GAP_EXCEEDS_8_PITCHES', 'candidate_pitch_m': pitch,
+                'min_gap_in_pitches': min_ratio}
+    m = ss.match_spacing(gaps, pitch)
+    return {'status': m['status'], 'candidate_pitch_m': pitch, 'multiples': m['multiples'],
+            'gaps': m['gaps']}
 
 
 def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
@@ -905,15 +1032,15 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
         big = max(steady['stripes'], key=lambda s: abs(s['peak_deviation_m']))
         shape = _isolate(th_z, steady['local_deviation_m'], big)
         basis = (f'largest steady stripe (peak {big["peak_deviation_m"]:.3e} m at '
-                 f'{big["peak_position_m"]:.4g} m), isolated; manifest onset by scaling its '
-                 'own shape')
+                 f'{big["peak_position_m"]:.4g} m), isolated; onsets by scaling its own shape')
     else:
         shape = _reference_stripe(th_z, sp_op['strip_centre_m'])
-        basis = (f'{REFERENCE_STRIPE_HEIGHT_M:g} m x {REFERENCE_STRIPE_WIDTH_M:g} m top-hat '
-                 'reference stripe at the strip centre (no steady stripe)')
-    peak_ref = max(shape, key=abs)
-    peak_x = th_z[max(range(len(shape)), key=lambda i: abs(shape[i]))]
-    ref50 = _reference_stripe(th_z, peak_x)
+        basis = (f'{REFERENCE_STRIPE_HEIGHT_M:g} m Gaussian reference stripe (half-peak width '
+                 f'{REFERENCE_HALF_PEAK_WIDTH_M:g} m) at the strip centre (no steady stripe)')
+    zc, shape_c = coarse_grid(th_z, shape)
+    peak_ref = max(shape_c, key=abs)
+    peak_x = zc[max(range(len(shape_c)), key=lambda i: abs(shape_c[i]))]
+    ref = _reference_stripe(zc, peak_x)
     rows = []
     for src in rows_src:
         row = {'label': src['label'], 'entry_thickness_m': src['entry_thickness_m'],
@@ -924,11 +1051,14 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
         try:
             bite = get_bite(src)
             sp = shape_params(case, bite, w, src)
-            lv = shape_levels(th_z, shape, sp)
+            lv = shape_levels(zc, shape_c, sp)
             st = stripe_states(lv, peak_x)['with_feedback']
             win = ss.shohet_townsend_window(src['exit_thickness_m'], case['pass']['width_m'])
-            scale = manifest_onset_scale(th_z, shape, sp)
-            scale50 = manifest_onset_scale(th_z, ref50, sp)
+            on = onsets(zc, shape_c, sp)
+            on_ref = onsets(zc, ref, sp)
+
+            def h(scale, height):
+                return None if scale is None else scale * height
             row.update(
                 bite_source=bite.source, bite_flags=list(bite.flags),
                 strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
@@ -942,15 +1072,29 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
                 feedback_i_units=lv['feedback_peak_i_units'],
                 linear_feedback_i_units=lv['linear_feedback_peak_i_units'],
                 saturated=bool(lv['levels']['with_feedback']['saturated_bands']),
-                state=st['state'], band_buckling_stress_pa=st.get('band_buckling_stress_pa'),
+                state=st['state'],
+                state_after_tension_release=st['state_after_tension_release'],
+                buckling_utilisation=st['buckling_utilisation'],
+                released_buckling_utilisation=st['released_buckling_utilisation'],
+                band_buckling_stress_pa=st.get('band_buckling_stress_pa'),
                 band_width_m=st.get('band_width_m'),
+                effective_buckling_width_m=st.get('effective_buckling_width_m'),
                 shohet_townsend_half_width_i_units=(win['upper_bound_i_units']
                                                     - win['lower_bound_i_units']) / 2,
                 shohet_townsend_upper_i_units=win['upper_bound_i_units'],
                 shohet_townsend_lower_i_units=win['lower_bound_i_units'],
-                manifest_onset_stripe_height_m=None if scale is None else scale * abs(peak_ref),
-                manifest_onset_height_50mm_reference_m=(None if scale50 is None
-                                                        else scale50 * REFERENCE_STRIPE_HEIGHT_M))
+                manifest_onset_stripe_height_m=h(on['mill'], abs(peak_ref)),
+                released_onset_stripe_height_m=h(on['released'], abs(peak_ref)),
+                reporting_onset_stripe_height_m=h(on['reporting'], abs(peak_ref)),
+                released_onset_limited_by_reporting_threshold=_limited(on['released'],
+                                                                       on['reporting']),
+                manifest_onset_height_reference_m=h(on_ref['mill'], REFERENCE_STRIPE_HEIGHT_M),
+                released_onset_height_reference_m=h(on_ref['released'],
+                                                    REFERENCE_STRIPE_HEIGHT_M),
+                reporting_onset_height_reference_m=h(on_ref['reporting'],
+                                                     REFERENCE_STRIPE_HEIGHT_M),
+                released_onset_reference_limited_by_reporting_threshold=_limited(
+                    on_ref['released'], on_ref['reporting']))
         except ValueError as exc:
             row['rejected'] = str(exc)
         h1 = src['exit_thickness_m']
@@ -977,8 +1121,11 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
         rows.append(row)
     return {'reference_stripe_peak_m': peak_ref, 'reference_stripe_position_m': peak_x,
             'reference_stripe_basis': basis,
-            'onset_50mm_reference_basis': (f'{REFERENCE_STRIPE_WIDTH_M:g} m wide top-hat stripe '
-                                           f'at {peak_x:.4g} m, height bisected'),
+            'reference_stripe_description': (
+                f'smooth Gaussian stripe, half-peak width {REFERENCE_HALF_PEAK_WIDTH_M:g} m (about '
+                f'one cooling zone), centred at {peak_x:.4g} m; its height is bisected for the '
+                '*_onset_height_reference_m columns'),
+            'evaluation_grid_m': zc[1] - zc[0],
             'rows': rows, 'text': _trend_text(rows, peak_ref)}
 
 
@@ -990,42 +1137,60 @@ def _trend_text(rows, peak):
                 else 'No pass assessable.')
     a, b = ok[0], ok[-1]
 
-    def um(x):
-        return 'not reached below 50 um' if x is None else f'{x * 1e6:.3g} um'
+    def um(x, limited=False):
+        if x is None:
+            return 'not reached below 50 um'
+        return f'{x * 1e6:.3g} um' + (' (reporting-threshold limited)' if limited else '')
 
-    def mpa(x):
-        return 'n/a' if x is None else f'{x / 1e6:.3g} MPa'
+    def ratio(x, y):
+        return x / y if x and y else None
+    ga, gb = a['exit_thickness_m'] * 1e3, b['exit_thickness_m'] * 1e3
     la, lb = a['linear_feedback_i_units'], b['linear_feedback_i_units']
-    ratio = lb / la if la else None
-    if ratio is not None and ratio <= 1.5:
-        lin = (f'nearly gauge independent ({la:.3g} -> {lb:.3g} I-units, x{ratio:.2f}, against '
-               f'x{b["rigid_i_units"] / a["rigid_i_units"]:.2f} for the rigid bound)')
-    else:
-        lin = (f'{la:.3g} -> {lb:.3g} I-units (x{ratio:.2f}; rigid bound '
-               f'x{b["rigid_i_units"] / a["rigid_i_units"]:.2f})' if ratio else 'not available')
-    sat = [r['label'] for r in ok if r['saturated']]
-    text = (f'Same {abs(peak) * 1e6:.3g} um roll stripe on every pass, '
-            f'{a["exit_thickness_m"] * 1e3:.3g} mm -> {b["exit_thickness_m"] * 1e3:.3g} mm: '
-            f'with the linear exit-tension feedback the I-units are {lin}. ')
-    if sat:
-        text += (f'The band is slack (MANIFEST, feedback saturated) on {len(sat)} of {len(ok)} '
-                 f'passes, where the reported I-units ({a["feedback_i_units"]:.3g} -> '
-                 f'{b["feedback_i_units"]:.3g}) rise toward the compliance-only values. ')
-    text += ('The thin-gauge trend comes from the band buckling stress (proportional to '
-             f'thickness squared: {mpa(a["band_buckling_stress_pa"])} -> '
-             f'{mpa(b["band_buckling_stress_pa"])} for the reported band), the saturation of '
-             'the feedback once a band goes slack, and the flatness dead band (half-width '
+    text = (f'Same {abs(peak) * 1e6:.3g} um roll stripe on every pass, {ga:.3g} mm -> '
+            f'{gb:.3g} mm: linear-feedback I-units {la:.3g} -> {lb:.3g} (x{lb / la:.2f}; '
+            f'rigid bound x{b["rigid_i_units"] / a["rigid_i_units"]:.2f}). ')
+    states = [(r['label'], r['state'], r['state_after_tension_release']) for r in ok]
+    mill = sum(1 for _, m, _ in states if m == 'MANIFEST_BUCKLE')
+    rel = sum(1 for _, _, x in states if x == 'MANIFEST_AFTER_TENSION_RELEASE')
+    text += (f'In the mill this stripe buckles on {mill} of {len(ok)} passes (utilisation '
+             f'{a["buckling_utilisation"] or 0:.2g} -> {b["buckling_utilisation"] or 0:.2g}); '
+             f'after tension release on {rel} of {len(ok)} (utilisation '
+             f'{a["released_buckling_utilisation"] or 0:.2g} -> '
+             f'{b["released_buckling_utilisation"] or 0:.2g}). ')
+    changes = [f'{r["label"]}: {r["state"]} / {r["state_after_tension_release"]}'
+               for prev, r in zip(ok, ok[1:])
+               if (prev['state'], prev['state_after_tension_release'])
+               != (r['state'], r['state_after_tension_release'])]
+    if changes:
+        text += 'State changes along the schedule at ' + '; '.join(changes) + '. '
+    carriers = []
+    for label, mk, rk, lk in (
+            ('model stripe', 'manifest_onset_stripe_height_m', 'released_onset_stripe_height_m',
+             'released_onset_limited_by_reporting_threshold'),
+            ('Gaussian reference', 'manifest_onset_height_reference_m',
+             'released_onset_height_reference_m',
+             'released_onset_reference_limited_by_reporting_threshold')):
+        rm, rr = ratio(a[mk], b[mk]), ratio(a[rk], b[rk])
+        text += (f'Onset stripe height, {label}: in the mill {um(a[mk])} -> {um(b[mk])}, after '
+                 f'release {um(a[rk], a[lk])} -> {um(b[rk], b[lk])}. ')
+        if rm is not None and rr is not None:
+            carriers.append((label, rm, rr))
+    for label, rm, rr in carriers:
+        if max(rm, rr) < 1.5:
+            text += f'For the {label} neither onset changes much with gauge. '
+        else:
+            which = 'after-release onset' if rr >= rm else 'in-mill onset'
+            text += (f'For the {label} the gauge trend is carried by the {which} (thick/thin '
+                     f'ratio {max(rm, rr):.2g} against {min(rm, rr):.2g}). ')
+    lim = [r['label'] for r in ok if r['released_onset_limited_by_reporting_threshold']
+           or r['released_onset_reference_limited_by_reporting_threshold']]
+    if lim:
+        text += ('After-release onsets on ' + ', '.join(lim) + ' are limited by the 2 I-unit '
+                 'reporting threshold (a band must first be reported), so they are upper '
+                 'bounds of the buckling onset. ')
+    text += ('Flatness dead band half-width '
              f'{a["shohet_townsend_half_width_i_units"]:.3g} -> '
-             f'{b["shohet_townsend_half_width_i_units"]:.3g} I-units). The stripe height at '
-             'which the band first buckles under the pass tension is '
-             f'{um(a["manifest_onset_height_50mm_reference_m"])} -> '
-             f'{um(b["manifest_onset_height_50mm_reference_m"])} for a 50 mm stripe and '
-             f'{um(a["manifest_onset_stripe_height_m"])} -> '
-             f'{um(b["manifest_onset_stripe_height_m"])} for the model stripe shape.')
-    sa, sb = a['manifest_onset_stripe_height_m'], b['manifest_onset_stripe_height_m']
-    if sa and sb and sa / sb < 1.5:
-        text += (' The broad thermal stripe gives a wide band whose buckling stress is small at '
-                 'every gauge, so its onset is set mainly by the pass tension.')
+             f'{b["shohet_townsend_half_width_i_units"]:.3g} I-units.')
     return text
 
 
@@ -1064,6 +1229,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
         return failed('width', 'bite heat per width not supplied and not computable')
     th = _Thermal(case, w, heat, fraction)
     sp = shape_params(case, bite, w)
+    out['barrel_length_m'] = th.length
     out['inputs_used'] = {
         'roll_heat_fraction_per_roll': fraction, 'roll_heat_fraction_basis': fbasis,
         'bite_heat_per_width_w_m': heat, 'bite_heat_basis': hbasis,
@@ -1094,10 +1260,15 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
                      **stripe_states(lv, s['peak_position_m']))
                 for s in steady['stripes']]
             for s, row in zip(steady['stripes'], shape['steady_stripe_table']):
-                scale = manifest_onset_scale(steady['z_m'], _isolate(
-                    steady['z_m'], steady['local_deviation_m'], s), sp)
-                row['manifest_onset_peak_height_m'] = (None if scale is None
-                                                       else scale * abs(s['peak_deviation_m']))
+                on = onsets(steady['z_m'], _isolate(steady['z_m'], steady['local_deviation_m'],
+                                                    s), sp)
+                pk = abs(s['peak_deviation_m'])
+                for key, name in (('manifest_onset_peak_height_m', 'mill'),
+                                  ('released_onset_peak_height_m', 'released'),
+                                  ('reporting_onset_peak_height_m', 'reporting')):
+                    row[key] = None if on[name] is None else on[name] * pk
+                row['released_onset_limited_by_reporting_threshold'] = _limited(
+                    on['released'], on['reporting'])
         except ValueError as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])
@@ -1106,9 +1277,11 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
             if max(abs(v) for v in rip) > 0:
                 lv = shape_levels(steady['z_m'], rip, sp)
                 shape['nozzle_pattern_ripple'] = {
-                    k: lv[k] for k in ('status', 'rigid_transfer_bound_i_units',
+                    k: lv[k] for k in ('status', 'released_status',
+                                       'rigid_transfer_bound_i_units',
                                        'compliance_only_peak_i_units', 'feedback_peak_i_units',
-                                       'i_units_with_feedback')}
+                                       'linear_feedback_peak_i_units', 'i_units_with_feedback',
+                                       'i_units_linear_feedback')}
                 shape['nozzle_pattern_ripple']['peak_to_peak_m'] = steady[
                     'nozzle_pattern_ripple']['peak_to_peak_m']
                 shape['nozzle_pattern_ripple']['band_count_with_feedback'] = len(
@@ -1286,8 +1459,9 @@ class Facts:
             self.l1_predicted = sorted(set(low + hot))
             self.l1_source = 'model steady stripes and blocked / low-level nozzles'
             table = (width['shape'] or {}).get('steady_stripe_table') or []
-            self.steady_bands = [(r['position_m'], r['with_feedback']['state']) for r in table
-                                 if r['peak_radius_deviation_m'] > 0]
+            self.steady_bands = [(r['position_m'], r['with_feedback']['state'],
+                                  r['with_feedback']['state_after_tension_release'])
+                                 for r in table if r['peak_radius_deviation_m'] > 0]
             te = width.get('thermal_events') or {}
             self.events = te.get('events', []) if isinstance(te, dict) else []
             self.event_positions = sorted({x for e in self.events
@@ -1311,41 +1485,50 @@ class Facts:
         if not self.steady_bands:
             return []
         if self.positions:
-            return [(x, s) for x, s in self.steady_bands
-                    if any(abs(x - p) <= self.tol for p in self.positions)]
+            return [b for b in self.steady_bands
+                    if any(abs(b[0] - p) <= self.tol for p in self.positions)]
         return list(self.steady_bands)
 
 
 def _tension_release_rules(facts, states, label):
-    """SPEC6 6.7 rules: latent bands and tension release; manifest bands and loose appearance."""
+    """Tension-release rules (coordinator follow-up to SPEC6 6.7). ``states``: (in-mill state,
+    state after tension release) of the model bands. Observation 'visible only after tension
+    release' true: SUPPORTS moderate with a band LATENT in the mill and MANIFEST after release,
+    CONTRADICTS weak with a band MANIFEST in the mill; false: SUPPORTS moderate with a band
+    MANIFEST in the mill, CONTRADICTS weak with only in-mill-LATENT bands. Plus the unchanged
+    rule: MANIFEST (in the mill) band with appearance loose_or_buckle SUPPORTS moderate."""
     obs = facts.obs
     out = []
     crit = f'visible only after tension release vs {label}'
+    exp = 'true: LATENT in mill and MANIFEST after release; false: MANIFEST in mill'
     v = obs['visible_only_after_tension_release']
-    if not states:
-        out.append(ev(crit, 'not observed' if v is None else str(v).lower(),
-                      'LATENT model band', 'NOT_OBSERVED' if v is None else 'NEUTRAL'))
-    elif v is None:
-        out.append(ev(crit, 'not observed', 'LATENT model band', 'NOT_OBSERVED'))
-    elif v and any(s == 'LATENT_UNDER_TENSION' for s in states):
-        out.append(ev(crit, f'true; model {", ".join(states)}', 'LATENT model band',
-                      'SUPPORTS', 'moderate'))
-    elif not v and all(s == 'LATENT_UNDER_TENSION' for s in states):
-        out.append(ev(crit, f'false; model only {", ".join(states)}', 'LATENT model band',
-                      'CONTRADICTS', 'weak'))
+    mill = [m for m, _ in states]
+    txt_states = ', '.join(f'{m} / {r}' for m, r in states) or 'no band'
+    if v is None:
+        out.append(ev(crit, 'not observed', exp, 'NOT_OBSERVED'))
+    elif not states:
+        out.append(ev(crit, f'{str(v).lower()}; model no band', exp, 'NEUTRAL'))
+    elif v and any(m == 'LATENT_UNDER_TENSION' and r == 'MANIFEST_AFTER_TENSION_RELEASE'
+                   for m, r in states):
+        out.append(ev(crit, f'true; model {txt_states}', exp, 'SUPPORTS', 'moderate'))
+    elif v and any(m == 'MANIFEST_BUCKLE' for m in mill):
+        out.append(ev(crit, f'true; model {txt_states}', exp, 'CONTRADICTS', 'weak'))
+    elif not v and any(m == 'MANIFEST_BUCKLE' for m in mill):
+        out.append(ev(crit, f'false; model {txt_states}', exp, 'SUPPORTS', 'moderate'))
+    elif not v and all(m == 'LATENT_UNDER_TENSION' for m in mill):
+        out.append(ev(crit, f'false; model {txt_states}', exp, 'CONTRADICTS', 'weak'))
     else:
-        out.append(ev(crit, f'{str(v).lower()}; model {", ".join(states)}',
-                      'LATENT model band', 'NEUTRAL'))
+        out.append(ev(crit, f'{str(v).lower()}; model {txt_states}', exp, 'NEUTRAL'))
     crit2 = f'loose / buckle appearance vs MANIFEST {label}'
     a = obs['appearance']
     if a is None:
         out.append(ev(crit2, 'not observed', 'MANIFEST model band and loose_or_buckle',
                       'NOT_OBSERVED'))
-    elif a == 'loose_or_buckle' and any(s == 'MANIFEST_BUCKLE' for s in states):
+    elif a == 'loose_or_buckle' and any(m == 'MANIFEST_BUCKLE' for m in mill):
         out.append(ev(crit2, f'{a}; model MANIFEST', 'MANIFEST model band and loose_or_buckle',
                       'SUPPORTS', 'moderate'))
     else:
-        out.append(ev(crit2, f'{a}; model {", ".join(states) or "no band"}',
+        out.append(ev(crit2, f'{a}; model {", ".join(mill) or "no band"}',
                       'MANIFEST model band and loose_or_buckle', 'NEUTRAL'))
     return out
 
@@ -1357,7 +1540,7 @@ def _spacing_multiple(facts, pitch, criterion, weight, pitch_name):
     if pitch is None:
         return ev(criterion, f'gaps {_fmt_pos(facts.gaps)}', f'{pitch_name} not known',
                   'NOT_OBSERVED', basis='input')
-    m = ss.match_spacing(facts.gaps, pitch)
+    m = spacing_match(facts.gaps, pitch)
     obs_txt = f'gaps {_fmt_pos(facts.gaps)} ({facts.gap_basis}); {pitch_name} {pitch:.4g} m'
     if m['status'] == 'ALL_GAPS_MATCH':
         return ev(criterion, obs_txt + f'; multiples {m["multiples"]}',
@@ -1407,20 +1590,21 @@ def _h_nozzle(f):
     elif not f.positions:
         e.append(ev(crit, 'positions not observed', 'latent or manifest band', 'NOT_OBSERVED'))
     else:
-        reported = [(x, s) for x, s in bands if s != 'BELOW_REPORTING_THRESHOLD']
+        reported = [(x, s, r) for x, s, r in bands if s != 'BELOW_REPORTING_THRESHOLD']
         if reported:
-            e.append(ev(crit, '; '.join(f'{x:.4g} m: {s}' for x, s in reported),
+            e.append(ev(crit, '; '.join(f'{x:.4g} m: {s} / {r}' for x, s, r in reported),
                         'latent or manifest band', 'SUPPORTS', 'moderate', 'model'))
         else:
             e.append(ev(crit, 'no model stripe band at the observed positions',
                         'latent or manifest band', 'NEUTRAL', basis='model'))
-    states = [s for _, s in bands if s != 'BELOW_REPORTING_THRESHOLD']
+    states = [(s, r) for _, s, r in bands if s != 'BELOW_REPORTING_THRESHOLD']
     e += _tension_release_rules(f, states, 'steady model band')
     e.append(_worse_thin(o, 'weak', 'relative thickness error and buckling stress'))
     e.append(_choice(o, 'faces', 'faces', 'both', {'both': ('SUPPORTS', 'weak')}))
     pred = {'model_positions_m': f.l1_predicted, 'model_position_source': f.l1_source,
             'position_tolerance_m': f.tol, 'steady_model_bands': [
-                {'position_m': x, 'state': s} for x, s in f.steady_bands]}
+                {'position_m': x, 'state': s, 'state_after_tension_release': r}
+                for x, s, r in f.steady_bands]}
     return e, pred
 
 
@@ -1433,20 +1617,22 @@ def _h_zone(f):
     e.append(_rule(o, 'changes_with_coolant_zone_switching', 'changes with coolant zone switching',
                    'true', ('SUPPORTS', 'strong'), ('CONTRADICTS', 'strong')))
     d = o['intermittent_duration_s']
-    lives = [x['band_life_s'] for x in f.events if x.get('band_life_s')]
-    bounds = [x['band_life_lower_bound_s'] for x in f.events
-              if x.get('band_life_lower_bound_s') and not x.get('band_life_s')]
-    crit = 'intermittent duration vs band life'
+    lives = [(x['visible_time_s'], x['visible_time_basis']) for x in f.events
+             if x.get('visible_time_s')]
+    bounds = [x['visible_time_lower_bound_s'] for x in f.events
+              if x.get('visible_time_lower_bound_s') and not x.get('visible_time_s')]
+    crit = 'intermittent duration vs model visible time'
     if d is None:
-        e.append(ev(crit, 'not observed', 'within 0.3-3 x band life', 'NOT_OBSERVED'))
+        e.append(ev(crit, 'not observed', 'within 0.3-3 x model visible time', 'NOT_OBSERVED'))
     elif not lives and bounds:
-        e.append(ev(crit, f'{d:.4g} s; model band life beyond the simulated recovery (> '
+        e.append(ev(crit, f'{d:.4g} s; model visible time beyond the simulated recovery (> '
                     f'{", ".join(f"{b:.4g} s" for b in bounds)})',
-                    'within 0.3-3 x model band life', 'NEUTRAL', basis='model'))
+                    'within 0.3-3 x model visible time', 'NEUTRAL', basis='model'))
     elif lives:
-        ok = [L for L in lives if 0.3 * L <= d <= 3 * L]
-        e.append(ev(crit, f'{d:.4g} s; model band life {", ".join(f"{L:.4g} s" for L in lives)}',
-                    'within 0.3-3 x model band life', 'SUPPORTS' if ok else 'NEUTRAL',
+        ok = [L for L, _ in lives if 0.3 * L <= d <= 3 * L]
+        e.append(ev(crit, f'{d:.4g} s; model visible time '
+                    + ', '.join(f'{L:.4g} s ({b})' for L, b in lives),
+                    'within 0.3-3 x model visible time', 'SUPPORTS' if ok else 'NEUTRAL',
                     'moderate' if ok else None, 'model'))
     else:
         lo, hi = LITERATURE_BAND_LIFE_S
@@ -1476,13 +1662,17 @@ def _h_zone(f):
     e.append(_choice(o, 'appearance', 'appearance', 'loose_or_buckle or tight',
                      {'loose_or_buckle': ('SUPPORTS', 'weak'), 'tight': ('SUPPORTS', 'weak')}))
     e.append(_worse_thin(o, 'weak', 'manifest threshold falls with gauge'))
-    states = [x['peak_state_with_feedback'] for x in f.events
+    states = [(x['peak_state_with_feedback'], x['peak_state_after_tension_release'])
+              for x in f.events
               if x.get('peak_state_with_feedback') not in (None, 'BELOW_REPORTING_THRESHOLD')]
     e += _tension_release_rules(f, states, 'event peak band')
     pred = {'event_positions_m': f.event_positions,
-            'events': [{k: x.get(k) for k in ('index', 'monitor_position_m', 'peak_deviation_m',
+            'events': [{k: x.get(k) for k in ('index', 'label', 'monitor_position_m',
+                                              'peak_deviation_m',
                                               'time_to_manifest_threshold_s', 'band_life_s',
-                                              'band_life_basis', 'peak_state_with_feedback')}
+                                              'band_life_basis', 'visible_time_s',
+                                              'visible_time_basis', 'peak_state_with_feedback',
+                                              'peak_state_after_tension_release')}
                        for x in f.events],
             'literature_band_life_s': list(LITERATURE_BAND_LIFE_S)}
     return e, pred

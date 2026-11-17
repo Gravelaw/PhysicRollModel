@@ -2,10 +2,10 @@
   "case_schema": "physicroll.band_case.v2",
   "name": "lengthwise_bands_demo",
   "synthetic": true,
-  "provenance": "SYNTHETIC demonstration, not plant data, modelled on the plant description (thicker coil rolled to thin gauge; bands along the length at several width positions, some continuous, some short-lived, worse at thinner gauge). Same single-stand four-high aluminium mill as thin_gauge_chatter_demo, final pass 0.30 -> 0.21 mm at 12 m/s, friction 0.03 supplied (the placeholder tribology closure is shown beside it, not used), flow stress computed from a synthetic Voce law (use_computed_flow_stress true), schedule 2.2 -> 0.21 mm in six passes. Work-roll spray header: 32 nozzles at 52 mm pitch, 0.2 m standoff, 0.8 rad fans, mean spray coefficient 3 kW/m2K; nozzle 12 blocked (continuous band); zone switching: nozzles 20-21 off for 60 s and nozzle 6 off for 150 s (short-lived bands). The roll heat share (0.08 per roll, strip_heat_fraction 0.84) and the spray coefficient were CHOSEN so that the thermal crown lands in the 2-16 um reported for mills (model: 9.7 um). Observations were GENERATED FROM THE MODEL ITSELF (cells 256, default thermal numerics): band positions = model steady stripe peak and the two event stripe peaks rounded to 1 mm (0.357, 0.667, 1.093 m), intermittent duration = mean model band life rounded to 10 s (130 s), continuity both, loose/buckle appearance (model bands MANIFEST), visible in the mill (not only after tension release), positions repeat across coils and do not move after a work-roll change, worse at thinner gauge. The case therefore tests the screening logic, not the physics.",
+  "provenance": "SYNTHETIC demonstration, not plant data, modelled on the plant description (thicker coil rolled to thin gauge; bands along the length at several width positions, some continuous, some short-lived, worse at thinner gauge). Same single-stand four-high aluminium mill as thin_gauge_chatter_demo, final pass 0.30 -> 0.21 mm at 12 m/s, friction 0.03 supplied (the placeholder tribology closure is shown beside it, not used), flow stress computed from a synthetic Voce law (use_computed_flow_stress true), schedule 2.2 -> 0.21 mm in six passes. Work-roll spray header: 32 nozzles at 52 mm pitch, 0.2 m standoff, 0.8 rad fans, mean spray coefficient 3 kW/m2K; nozzle 12 PARTLY blocked (flow level 0.45, continuous band of 2.72 um, chosen so that it stays latent in the mill on the thicker passes and buckles in the mill only at final gauge); zone switching: nozzles 20-21 off for 60 s and nozzle 6 off for 150 s (short-lived bands). The roll heat share (0.08 per roll, strip_heat_fraction 0.84) and the spray coefficient were CHOSEN so that the thermal crown lands in the 2-16 um reported for mills (model: 9.2 um). Observations were GENERATED FROM THE MODEL ITSELF (cells 256, default thermal numerics): band positions = model steady stripe peak and the two event stripe peaks rounded to 1 mm (0.357, 0.667, 1.093 m), intermittent duration = mean model visible time of the event bands (time above the in-mill manifest threshold) rounded to 10 s (40 s), continuity both, loose/buckle appearance and visible in the mill (the model bands are MANIFEST in the mill at the final pass), positions repeat across coils and do not move after a work-roll change, worse at thinner gauge. The case therefore tests the screening logic, not the physics.",
   "notes": [
     "Closed-loop demo: planted causes are a blocked nozzle (continuous band, nozzle_thermal_stripe) and cooling-zone switching (short-lived bands, cooling_zone_switching_transient); the continuous stripe is the stronger finding.",
-    "Phase-1 coolant section kept consistent with width_model.spray_header (same geometry and blocked nozzle); its free-expansion screen uses an assumed 10 K excess temperature.",
+    "Phase-1 coolant section kept consistent with width_model.spray_header (same geometry); its geometric screen can only represent a FULLY blocked nozzle, so nozzle 12 is listed as blocked there although width_model gives it flow level 0.45; its free-expansion screen uses an assumed 10 K excess temperature.",
     "Grinding data (4 mm/s traverse at 0.5 roll rev/s, 8 mm feed pitch) are supplied so that the grinding hypothesis is tested against the observed spacing."
   ],
   "pass": {
@@ -111,7 +111,7 @@
     ],
     "measured_vibration_hz": null,
     "lengthwise_continuity": "both",
-    "intermittent_duration_s": 130.0,
+    "intermittent_duration_s": 40.0,
     "band_width_m": null,
     "band_spacing_m": null,
     "positions_repeat_across_coils": true,
@@ -208,10 +208,41 @@
     "strip_centre_m": null,
     "roll_heat_fraction_per_roll": null,
     "bite_heat_per_width_w_m": null,
-    "blocked_nozzle_indices": [
-      12
+    "blocked_nozzle_indices": [],
+    "nozzle_levels": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.45,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
     ],
-    "nozzle_levels": null,
     "events": [
       {
         "start_s": 0.0,
@@ -220,7 +251,8 @@
           20,
           21
         ],
-        "level": 0.0
+        "level": 0.0,
+        "label": "zone 20-21 valve closed"
       },
       {
         "start_s": 300.0,
@@ -228,7 +260,8 @@
         "nozzle_indices": [
           6
         ],
-        "level": 0.0
+        "level": 0.0,
+        "label": "nozzle 6 intermittently blocked"
       }
     ],
     "numerics": null,
