@@ -230,3 +230,19 @@ recipe targets, applied references and measured samples separately. The
 histories and reports per-model readiness with explicit missing-data reasons.
 Readiness permits only a separate domain check; replay computes no predictions,
 advances no material state and implements no dynamic physics or control.
+
+## Band / chatter-mark root-cause screening
+
+Opt-in, **unvalidated** screening for transverse or lengthwise strip bands: a linear
+third-octave chatter model, pitch-law / roll / bearing / coil signatures and material,
+lubrication and spray screens are tallied against plant observations (an ordinal evidence
+score, not a probability), with a lever table and a pass-schedule sweep. Two synthetic demos:
+
+```
+python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
+```
+
+Start a real case from `scenarios/band_diagnosis_template.json`; see
+[band diagnosis](docs/band-diagnosis.md) for the equations, evidence rules, what the model
+says about thin gauges, and where the derived roll-bite path stops.

@@ -1,0 +1,119 @@
+{
+  "case_schema": "physicroll.band_case.v1",
+  "name": "plant_case_template",
+  "synthetic": false,
+  "provenance": "REPLACE: who measured what, where and when (coil ids, dates, instruments).",
+  "notes": [
+    "TEMPLATE for a real problem: replace every mill, pass and material value with your own (SI units: m, Pa, kg, N/m, m/s, Hz, rad). The values shown are the synthetic demo mill, not your mill. Leave an observation null when you have not looked: null means 'not observed' and never counts against a hypothesis.",
+    "schedule (optional): add your pass schedule as a list of {label, entry_thickness_m, exit_thickness_m, mean_flow_stress_pa, friction_coefficient, entry_tension_pa, exit_tension_pa, exit_speed_m_s} to get the per-pass chatter margin and ripple table.",
+    "observation.orientation: how the marks run across the strip: 'transverse' (straight across), 'diagonal', 'chevron' (herringbone V shapes), 'longitudinal' (lengthwise bands along the rolling direction), 'irregular', or null.",
+    "observation.pitch_observations: MOST VALUABLE. Stone or etch a strip sample and measure the distance between successive marks along the rolling direction (pitch_m), together with the steady exit speed the sample was rolled at (exit_speed_m_s). Do it at two clearly different speeds (at least 20 % apart): if the pitch grows in proportion to speed the source is a fixed-frequency vibration (chatter, resonance); if the pitch stays the same the source is locked to a roll, bearing, gear or coil.",
+    "observation.faces: 'both' if the marks are visible on top and bottom strip faces, 'one' if only on one face.",
+    "observation.gauge_variation_detected: true if the exit thickness gauge / X-ray shows a periodic thickness variation at the mark frequency, false if the gauge is clean at that frequency; gauge_variation_amplitude_m: its peak-to-peak size in metres if known (recorded only).",
+    "observation.first_seen: 'bite_exit' if the marks appear straight out of the roll bite, 'incoming_strip' if the entry coil already has them, 'after_bending_or_levelling' if they appear only after a deflector roll, coiler or leveller.",
+    "observation.disappears_after_work_roll_change / disappears_after_backup_roll_change: true/false from a roll-change test, null if not tried.",
+    "observation.onset_above_exit_speed_m_s: the exit speed above which the marks start, if there is such a threshold.",
+    "observation.worse_at_thinner_gauge: true if the marks are more frequent or stronger at thinner exit gauge.",
+    "observation.band_positions_across_width_m: for lengthwise bands only: band positions measured on the same barrel coordinate as the coolant header (0 at the header start), after removing strip tracking offset.",
+    "observation.measured_vibration_hz: dominant stand vibration frequency from a chock accelerometer at the operating speed, if measured.",
+    "kinematics: list work-roll and backup-roll bearings (rolling elements, element and pitch diameters, contact angle), gear meshes (teeth and shaft speed ratio to the work roll) and known grinder-mark counts; without them the drive/bearing hypothesis cannot be checked.",
+    "coolant: header geometry and any blocked nozzles; lubrication: base-oil viscosity, pressure-viscosity coefficient and roll/strip roughness. Set either to null if unknown.",
+    "model_options.bite_response_override: for gauges where the slab model rejects (thin hard strip, foil; see docs/band-diagnosis.md), supply bite force and sensitivities from a plant or foil mill model here instead of null."
+  ],
+  "pass": {
+    "entry_thickness_m": 0.0003,
+    "exit_thickness_m": 0.00021,
+    "width_m": 1.5,
+    "work_roll_radius_m": 0.2,
+    "mean_flow_stress_pa": 270000000.0,
+    "friction_coefficient": 0.03,
+    "entry_tension_pa": 25000000.0,
+    "exit_tension_pa": 30000000.0,
+    "exit_speed_m_s": 16.0
+  },
+  "material": {
+    "alloy": "AA3104",
+    "temper": "H19",
+    "yield_stress_pa": 285000000.0,
+    "youngs_modulus_pa": 70000000000.0,
+    "luders_strain": null,
+    "magnesium_wt_pct": 1.1,
+    "grain_size_m": null
+  },
+  "stand": {
+    "work_roll_mass_kg": 3000.0,
+    "backup_roll_mass_kg": 22000.0,
+    "work_backup_contact_stiffness_n_m": 40000000000.0,
+    "housing_stiffness_n_m": 14000000000.0,
+    "modal_damping_ratio": 0.03,
+    "roll_youngs_modulus_pa": 210000000000.0,
+    "roll_poisson_ratio": 0.3
+  },
+  "spans": {
+    "strip_youngs_modulus_pa": 70000000000.0,
+    "entry_span_length_m": 4.0,
+    "exit_span_length_m": 4.0
+  },
+  "kinematics": {
+    "backup_roll_diameter_m": 1.15,
+    "gear_meshes": [
+      {
+        "name": "pinion_stand_mesh",
+        "teeth": 23,
+        "shaft_speed_ratio_to_work_roll": 1.0
+      }
+    ],
+    "bearings": [
+      {
+        "name": "WR_chock_4row_TRB",
+        "shaft": "work_roll",
+        "elements": 35,
+        "element_diameter_m": 0.0235,
+        "pitch_diameter_m": 0.34,
+        "contact_angle_rad": 0.2618
+      }
+    ],
+    "grinder_marks": [],
+    "deflector_roll_diameters_m": [
+      0.3
+    ],
+    "entry_coil_diameter_m": 1.2,
+    "exit_coil_diameter_m": 1.0
+  },
+  "lubrication": {
+    "viscosity_pa_s": 0.004,
+    "pressure_viscosity_coefficient_per_pa": 1.5e-08,
+    "roll_roughness_rq_m": 2.5e-07,
+    "strip_roughness_rq_m": 3e-07
+  },
+  "coolant": {
+    "barrel_length_m": 1.7,
+    "nozzle_pitch_m": 0.052,
+    "standoff_m": 0.15,
+    "spray_angle_rad": 0.6,
+    "offset_angle_rad": 0.17,
+    "blocked_nozzle_indices": [],
+    "roll_expansion_coefficient_per_k": 1.2e-05,
+    "assumed_excess_temperature_k": 5.0
+  },
+  "model_options": {
+    "bite_damping_transit_fraction": 0.5,
+    "max_radius_ratio": 1.5,
+    "cells": 256,
+    "bite_response_override": null
+  },
+  "observation": {
+    "orientation": null,
+    "pitch_observations": [],
+    "faces": null,
+    "gauge_variation_detected": null,
+    "gauge_variation_amplitude_m": null,
+    "first_seen": null,
+    "disappears_after_work_roll_change": null,
+    "disappears_after_backup_roll_change": null,
+    "onset_above_exit_speed_m_s": null,
+    "worse_at_thinner_gauge": null,
+    "band_positions_across_width_m": [],
+    "measured_vibration_hz": null
+  }
+}
