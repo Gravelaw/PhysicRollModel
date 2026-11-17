@@ -78,7 +78,12 @@ W2.2 Crown heredity, elongation, flatness
   ``t*(pi/lam)^2*integral q*sin^2 = D*pi^4*(1/b^2+1/lam^2)^2*b/2`` is minimised at lam = b,
   giving ``q_w = (2/b)*integral q*sin^2(pi*(x-x1)/b) dx >= sigma_cr(b)``. The band buckles
   iff ``max over [x1, x1+b] of q_w/sigma_cr(b) >= 1``. After tension release
-  ``q = -sigma_res`` (same rule): this carries the t^2 gauge trend.
+  ``q = -sigma_res``. The per-band released state uses a LOCAL mode: buckle width at most
+  2x (analyst choice) the band's half-peak width of residual compression; this carries the
+  t^2 gauge trend. The unrestricted (GLOBAL) released mode is reported for information only:
+  it is the whole-sheet shape (overall wave or centre fullness), scales with strip width,
+  ignores the sheet's weight flattening it on a table and its finite unsupported length, and
+  is an upper-bound indicator, not a prediction of a visible band.
 - Narrow-band buckling ``sigma_cr = k*pi^2*E/(12*(1-nu^2))*(t/b)^2``, k = 4 [M, Timoshenko].
 - Shohet-Townsend dead band [V: Qu 2025; Zambrano et al. 2006; Hajduk & Bernardes 2009]:
   ``-80*(h/w)^beta < C_H/H - C_h/h < +40*(h/w)^beta``; beta 1.86 (attributed to Somers et
@@ -672,6 +677,7 @@ def _bands(z, i_units, thr):
 
 RAYLEIGH_WIDTH_RATIO = 1.15         # geometric step of the coarse width grid
 RAYLEIGH_REFINE_TOLERANCE = 1e-2    # pattern-search stop, fraction of the min sample spacing
+LOCAL_RELEASED_WIDTH_FACTOR = 2.0   # analyst choice: local buckle <= 2 x half-peak width
 
 
 def _seg_exp(a, c, qa, qc, kappa):
@@ -682,6 +688,28 @@ def _seg_exp(a, c, qa, qc, kappa):
     ea, ec = cmath.exp(1j * kappa * a), cmath.exp(1j * kappa * c)
     return qa * (ec - ea) / (1j * kappa) + s * ((c - a) * ec / (1j * kappa)
                                               + (ec - ea) / kappa ** 2)
+
+
+def _half_peak_width(z, comp, p):
+    """Width around ``p`` where ``comp >= comp[p]/2``, edges linearly interpolated; at the
+    grid ends half a spacing is added."""
+    level = comp[p] / 2
+    n = len(z)
+    i = p
+    while i > 0 and comp[i - 1] >= level:
+        i -= 1
+    if i == 0:
+        left = z[0] - (z[1] - z[0]) / 2
+    else:
+        left = z[i - 1] + (level - comp[i - 1]) / (comp[i] - comp[i - 1]) * (z[i] - z[i - 1])
+    j = p
+    while j < n - 1 and comp[j + 1] >= level:
+        j += 1
+    if j == n - 1:
+        right = z[-1] + (z[-1] - z[-2]) / 2
+    else:
+        right = z[j] + (comp[j] - level) / (comp[j] - comp[j + 1]) * (z[j + 1] - z[j])
+    return right - left
 
 
 class _SineModeSearch:
@@ -730,10 +758,10 @@ class _SineModeSearch:
             h += vals[m] * de / ik + (vals[m + 1] - vals[m]) / d * (d * ex[m + 1] / ik + de / k2)
         return (g - h.real) / b
 
-    def _coarse(self, band_lo, band_hi, offset):
+    def _coarse(self, band_lo, band_hi, offset, b_max):
         """Max utilisation over node-aligned starts and geometric widths (prefix sums)."""
         xs, qs, n = self.xs, self.qs, len(self.xs)
-        width_total = self.hi - self.lo
+        width_total = min(self.hi - self.lo, b_max)
         widths, b = [], 2 * self.h_min
         while b < width_total:
             widths.append(b)
@@ -770,14 +798,16 @@ class _SineModeSearch:
                         best[key] = (u, x1, b)
         return best
 
-    def _admissible(self, x1, b, band_lo, band_hi):
-        return (b >= 2 * self.h_min and x1 >= self.lo - 1e-12 and x1 + b <= self.hi + 1e-12
+    def _admissible(self, x1, b, band_lo, band_hi, b_max):
+        return (2 * self.h_min <= b <= b_max + 1e-12 and x1 >= self.lo - 1e-12
+                and x1 + b <= self.hi + 1e-12
                 and x1 < band_hi and x1 + b > band_lo)
 
-    def search(self, band_lo, band_hi, offsets):
+    def search(self, band_lo, band_hi, offsets, max_width_m=None):
         """Best (U, x1, b, q_w_minus_offset, sigma_cr) for each offset key (pattern-refined)."""
         out = {}
-        for key, (u, x1, b) in self._coarse(band_lo, band_hi, offsets).items():
+        b_max = self.hi - self.lo if max_width_m is None else max(max_width_m, 2 * self.h_min)
+        for key, (u, x1, b) in self._coarse(band_lo, band_hi, offsets, b_max).items():
             off = offsets[key]
             step = self.h_min / 2
             while step > RAYLEIGH_REFINE_TOLERANCE * self.h_min:
@@ -786,7 +816,7 @@ class _SineModeSearch:
                                (-step, 2 * step), (step, -2 * step),
                                (-step, step), (step, step), (-step, -step)):
                     nx, nb = x1 + dx, b + db
-                    if not self._admissible(nx, nb, band_lo, band_hi):
+                    if not self._admissible(nx, nb, band_lo, band_hi, b_max):
                         continue
                     nu_ = (self.weighted(nx, nb) - off) * nb * nb / self.kc
                     if nu_ > u + 1e-15 * abs(u):
@@ -813,8 +843,11 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     ``sin(pi*(x-x1)/b)*sin(pi*y/b)``, ``q_w = (2/b)*integral q*sin^2(pi*(x-x1)/b) dx`` and
     ``U = q_w/sigma_cr(b)``; the band's U is the maximum over intervals overlapping it (widths
     from two sample spacings to the strip width). MANIFEST_BUCKLE / MANIFEST_AFTER_TENSION_
-    RELEASE iff ``U >= 1``. A band with no compression at its samples, or no positive U, gets
-    U = 0 (LATENT / FLAT) and no search is made.
+    RELEASE iff ``U >= 1``. The released (per-band) state uses the LOCAL mode, buckle width
+    at most ``LOCAL_RELEASED_WIDTH_FACTOR`` x the half-peak width of the band's residual
+    compression; the unrestricted GLOBAL released mode (whole-sheet wave, an upper-bound
+    indicator that scales with strip width) is reported as ``released_global_*``. A band with
+    no compression at its samples, or no positive U, gets U = 0 (LATENT / FLAT).
     """
     z = _grid(z_m)
     eps = _list('elongation', elongation, min_len=2, lo=-0.5, hi=0.5)
@@ -843,12 +876,18 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
         q = min(range(k, j + 1), key=lambda i: total[i])   # most compressed sample
         s_net = comp_mill[q]
         s_rel = comp_rel[q]
-        res = {}
+        res, hp = {}, None
         if s_rel > 0:              # band holds released compression somewhere: search it
-            offsets = {'released': 0.0}
+            offsets = {'global': 0.0}
             if s_net > 0:
                 offsets['mill'] = sig_t
             res = search.search(start, end, offsets)
+            hp = _half_peak_width(z, comp_rel, q)
+            res.update(search.search(start, end, {'released': 0.0},
+                                     max_width_m=LOCAL_RELEASED_WIDTH_FACTOR * hp))
+        u_glob, _, b_glob, _, _ = res.get('global', (0.0, None, None, None, None))
+        if b_glob is None or u_glob <= 0:
+            u_glob, b_glob = 0.0, None
         util, x_m, b_eff, mean_c, s_cr = res.get('mill', (0.0, None, None, None, None))
         if b_eff is None or util <= 0:
             util, x_m, b_eff, mean_c = 0.0, None, None, None
@@ -882,6 +921,9 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
             'released_buckling_mean_compression_pa': mean_rel,
             'released_buckling_stress_pa': s_cr_rel,
             'released_buckling_utilisation': util_rel,
+            'released_half_peak_width_m': hp,
+            'released_global_buckling_utilisation': u_glob,
+            'released_global_buckling_width_m': b_glob,
             'state_after_tension_release': ('MANIFEST_AFTER_TENSION_RELEASE' if util_rel >= 1.0
                                             else 'FLAT_AFTER_TENSION_RELEASE')})
     if any(b['state'] == 'MANIFEST_BUCKLE' for b in bands):
@@ -893,6 +935,9 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     n_rel = sum(1 for b in bands
                 if b['state_after_tension_release'] == 'MANIFEST_AFTER_TENSION_RELEASE')
     released_status = 'MANIFEST_AFTER_RELEASE_BANDS' if n_rel else 'FLAT_AFTER_RELEASE'
+    u_global = max([b['released_global_buckling_utilisation'] for b in bands], default=0.0)
+    released_global_status = ('GLOBAL_BUCKLE_AFTER_RELEASE' if u_global >= 1.0
+                              else 'NO_GLOBAL_BUCKLE_AFTER_RELEASE')
     flags = ['BUCKLING_FORMULA_FROM_MEMORY', 'RESIDUAL_STRESS_RELATION_PLANNER_DERIVED',
              'RAYLEIGH_SINE_MODE_BUCKLING_RULE_ANALYST_CHOICE']
     if not _uniform(z)[0]:
@@ -915,6 +960,8 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
         'peak_to_peak_i_units': max(iu) - min(iu), 'bands': bands,
         'manifest_band_count': sum(1 for b in bands if b['state'] == 'MANIFEST_BUCKLE'),
         'manifest_after_release_band_count': n_rel,
+        'released_global_status': released_global_status,
+        'released_global_max_utilisation': u_global,
         'mean_tension_pa': sig_t, 'thickness_m': t,
         'reporting_threshold_i_units': thr, 'buckling_coefficient': k_b,
         'stress_per_i_unit_pa': e * I_UNIT,
@@ -936,7 +983,11 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
                            'manifest at U >= 1. effective_buckling_mean_compression_pa is '
                            'q_w; buckling_margin_pa = sigma_cr - q_w at the maximising '
                            'interval (or sigma_cr of the reporting-contour width minus the net '
-                           'compression peak when not in net compression) [D].',
+                           'compression peak when not in net compression) [D]. Released '
+                           'state: local mode, width <= '
+                           f'{LOCAL_RELEASED_WIDTH_FACTOR:g} x the half-peak width of the '
+                           'residual compression (ANALYST_CHOICE); global mode unrestricted, '
+                           'informational.',
         'reasons': reasons, 'flags': flags,
         'limitations': ['Linear elastic flat-strip stresses: after buckling the real stress is '
                         'relieved and the residual stress shown is the would-be value.',
@@ -947,7 +998,12 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
                         'interaction between neighbouring bands; finite strip length is '
                         'ignored (the mode length grows with b).',
                         'The released state assumes the residual stress is unchanged by '
-                        'coiling, slitting or levelling.', NOT_VALIDATED],
+                        'coiling, slitting or levelling.',
+                        'The global released mode is the whole-sheet shape (overall wave or '
+                        'centre fullness): it scales with strip width, ignores the sheet\'s '
+                        'own weight flattening it on a table and its finite unsupported '
+                        'length, and is an upper-bound indicator, not a prediction of a '
+                        'visible band.', NOT_VALIDATED],
         'sources': [SOURCES['ihi_sheetflat'], SOURCES['vollmer_2019'],
                     SOURCES['abdelkhalek_2008'], SOURCES['lloyd_2010'],
                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
@@ -1117,6 +1173,8 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
         'released_status': fl['released_status'],
         'manifest_after_release_band_count': fl['manifest_after_release_band_count'],
         'compliance_only_released_status': fl_c['released_status'],
+        'released_global_status': fl['released_global_status'],
+        'released_global_max_utilisation': fl['released_global_max_utilisation'],
         'linear_feedback_peak_i_units': None if fl_lin is None else _peak_abs(fl_lin['i_units']),
         'feedback_peak_i_units': peak_abs_i if feedback else None,
         'compliant_to_rigid_i_unit_ratio': peak_abs_i / rigid_i if rigid_i > 0 else None,

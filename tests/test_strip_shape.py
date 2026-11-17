@@ -337,7 +337,9 @@ class TestTensionFeedback(unittest.TestCase):
             self.assertEqual(loose['band_buckling_width_basis'], 'RAYLEIGH_QUOTIENT_SINE_MODE')
             self.assertGreater(loose['effective_buckling_width_m'], 0.1)
             self.assertLessEqual(loose['effective_buckling_start_m'], loose['end_m'])
-            self.assertAlmostEqual(loose['released_buckling_width_m'], 1.5, places=6)
+            self.assertAlmostEqual(loose['released_global_buckling_width_m'], 1.5, places=6)
+            self.assertLessEqual(loose['released_buckling_width_m'],
+                                 2 * loose['released_half_peak_width_m'] + 1e-12)
             self.assertAlmostEqual(loose['band_buckling_stress_pa'],
                                    narrow_band_buckling_stress_pa(
                                        h, loose['effective_buckling_width_m']))
@@ -353,7 +355,9 @@ class TestTensionFeedback(unittest.TestCase):
         self.assertGreater(loose['buckling_utilisation'], 0.4)
         self.assertLess(loose['buckling_utilisation'], 0.8)
         self.assertFalse(loose['saturated'])
-        self.assertEqual(r['released_status'], 'MANIFEST_AFTER_RELEASE_BANDS')
+        # local released U 0.75 at 2.0 mm (FLAT); global 7.0 (whole-sheet)
+        self.assertEqual(r['released_status'], 'FLAT_AFTER_RELEASE')
+        self.assertEqual(r['released_global_status'], 'GLOBAL_BUCKLE_AFTER_RELEASE')
         for h in (0.6e-3, 0.21e-3):
             r, loose = out[h]
             self.assertEqual(loose['state'], 'MANIFEST_BUCKLE')
@@ -418,10 +422,12 @@ def _onset(shape, gauge, key, value):
 
 class TestNetCompressionCriterion(unittest.TestCase):
     def test_onset_gauge_trends(self):
-        # Rayleigh rule (feedback on, 30 MPa). Top-hat: in-mill onset 2.97 -> 1.55 um,
-        # released 0.227 -> 0.035 um (1.4 -> 0.21 mm). Gaussian: in-mill 1.72 -> 1.88 um
-        # (about gauge-independent: the residual must first exceed the tension); released
-        # onsets sit at the 2 I-unit reporting threshold at both gauges (whole-width mode).
+        # Rayleigh rule (feedback on, 30 MPa), local released mode. Top-hat: in-mill onset
+        # 2.97 -> 1.55 um, released 2.10 -> 0.90 um (1.4 -> 0.21 mm; at 0.21 mm the local
+        # width is limited by the edge-spike half-peak width, 22 mm). Gaussian: in-mill
+        # 1.72 -> 1.88 um (about gauge-independent: the residual must first exceed the
+        # tension); released 0.204 um at 1.4 mm (7.5 I), 0.082 um at 0.21 mm (2 I-unit
+        # reporting threshold).
         top = {g: (_onset(stripe, g, 'status', 'MANIFEST_BUCKLE_BANDS'),
                    _onset(stripe, g, 'released_status', 'MANIFEST_AFTER_RELEASE_BANDS'))
                for g in GAUGES}
@@ -429,7 +435,7 @@ class TestNetCompressionCriterion(unittest.TestCase):
         self.assertLess(top[0.21e-3][1], top[1.4e-3][1])
         fall_mill = top[1.4e-3][0] / top[0.21e-3][0]
         fall_rel = top[1.4e-3][1] / top[0.21e-3][1]
-        self.assertGreater(fall_rel, 1.5 * fall_mill)
+        self.assertGreater(fall_rel, fall_mill)
         for g in GAUGES:
             self.assertLess(top[g][1], top[g][0])
             mill, rel = (_onset(gaussian_stripe, g, key, val) for key, val in
@@ -437,7 +443,10 @@ class TestNetCompressionCriterion(unittest.TestCase):
                           ('released_status', 'MANIFEST_AFTER_RELEASE_BANDS')))
             self.assertLess(rel, mill)
             r = _run(gaussian_stripe, rel, g)
-            self.assertLess(r['flatness']['max_i_units'], 2.5)        # threshold-limited
+            if g == 0.21e-3:
+                self.assertLess(r['flatness']['max_i_units'], 2.5)    # threshold-limited
+            else:
+                self.assertGreater(r['flatness']['max_i_units'], 5.0)
             self.assertGreater(mill, 1.5e-6)
             self.assertLess(mill, 2.1e-6)
 
@@ -469,9 +478,10 @@ class TestNetCompressionCriterion(unittest.TestCase):
         self.assertLess(qw, 3e6)
 
     def test_released_width_dependence(self):
-        # same 50 mm, 1e-4 elongation stripe on a 1.0 m and a 2.0 m strip: the released
-        # optimum is the whole-width mode (b = W) and U_rel scales with W (30.6 vs 61.4 at
-        # 0.21 mm) - NOT insensitive to the strip width (reported to the coordinator)
+        # same 50 mm, 1e-4 elongation stripe on a 1.0 m and a 2.0 m strip at 0.21 mm.
+        # Local released mode: U 4.679 vs 4.848 (+3.6 %); residual peak 6.650 vs 6.825 MPa
+        # (+2.6 %, mean shift), so after the mean shift they agree within 1 %. Global mode:
+        # b = W, U 30.6 vs 61.4 (ratio 2).
         out = {}
         for width in (1.0, 2.0):
             n = int(round(width / DZ))
@@ -480,20 +490,39 @@ class TestNetCompressionCriterion(unittest.TestCase):
             r = flatness_from_elongation(zz, eps, youngs_modulus_pa=E_AL, poisson_ratio=NU_AL,
                                          thickness_m=0.21e-3, mean_tension_pa=30e6)
             loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
-            self.assertAlmostEqual(loose['released_buckling_width_m'], width, places=6)
-            out[width] = loose['released_buckling_utilisation']
+            self.assertAlmostEqual(loose['released_global_buckling_width_m'], width, places=6)
+            self.assertLessEqual(loose['released_buckling_width_m'],
+                                 2 * loose['released_half_peak_width_m'] + 1e-12)
+            out[width] = loose
             self.assertEqual(loose['state'], 'LATENT_UNDER_TENSION')
-        self.assertAlmostEqual(out[2.0] / out[1.0], 2.0, delta=0.1)
+            self.assertEqual(r['released_global_status'], 'GLOBAL_BUCKLE_AFTER_RELEASE')
+        u1, u2 = (out[w]['released_buckling_utilisation'] for w in (1.0, 2.0))
+        self.assertAlmostEqual(u2 / u1, 1.0, delta=0.05)
+        shift = out[2.0]['released_compression_peak_pa'] / out[1.0]['released_compression_peak_pa']
+        self.assertAlmostEqual(u2 / u1 / shift, 1.0, delta=0.015)
+        g1, g2 = (out[w]['released_global_buckling_utilisation'] for w in (1.0, 2.0))
+        self.assertAlmostEqual(g2 / g1, 2.0, delta=0.1)
 
     def test_released_gaussian_and_top_hat(self):
-        for shape in (gaussian_stripe, stripe):
+        # 0.5 um stripe, 0.21 mm, feedback on. Gaussian: local U_rel 72 (b 0.36 m = 2 x the
+        # 0.18 m half-peak width), MANIFEST; global 261. Top-hat: the half-peak width is the
+        # 11 mm edge spike, local U_rel 0.55 (b 22 mm), FLAT; global 65 at b = 1.5 m.
+        expect = {gaussian_stripe: ('MANIFEST_AFTER_TENSION_RELEASE', 50.0, 100.0),
+                  stripe: ('FLAT_AFTER_TENSION_RELEASE', 0.4, 0.7)}
+        for shape, (state, lo, hi) in expect.items():
             r = _run(shape, 0.5e-6, 0.21e-3)
             loose = [b for b in r['bands'] if b['sense'] == 'LOOSE_LONG'][0]
             self.assertEqual(loose['state'], 'LATENT_UNDER_TENSION')
-            self.assertEqual(loose['state_after_tension_release'],
-                             'MANIFEST_AFTER_TENSION_RELEASE')
-            self.assertAlmostEqual(loose['released_buckling_width_m'], 1.5, places=6)
-            self.assertGreater(loose['released_buckling_utilisation'], 10.0)
+            self.assertEqual(loose['state_after_tension_release'], state)
+            self.assertGreater(loose['released_buckling_utilisation'], lo)
+            self.assertLess(loose['released_buckling_utilisation'], hi)
+            self.assertAlmostEqual(loose['released_buckling_width_m'],
+                                   2 * loose['released_half_peak_width_m'], delta=1e-3)
+            self.assertAlmostEqual(loose['released_global_buckling_width_m'], 1.5, places=6)
+            self.assertGreater(loose['released_global_buckling_utilisation'], 10.0)
+            self.assertEqual(r['released_global_status'], 'GLOBAL_BUCKLE_AFTER_RELEASE')
+            self.assertEqual(r['released_global_max_utilisation'],
+                             loose['released_global_buckling_utilisation'])
 
     def test_residual_below_tension_is_latent_at_any_gauge(self):
         eps = [3e-4 if abs(z - 0.75) < 0.05 else 0.0 for z in Z]   # resid ~ -20 MPa < 30 MPa
@@ -551,8 +580,10 @@ class TestNetCompressionCriterion(unittest.TestCase):
     def test_keys_and_json(self):
         r = _run(gaussian_stripe, 1e-6, 0.21e-3)
         for k in ('released_status', 'manifest_after_release_band_count', 'status',
-                  'compliance_only_released_status'):
+                  'compliance_only_released_status', 'released_global_status',
+                  'released_global_max_utilisation'):
             self.assertIn(k, r)
+        self.assertIn('released_global_status', r['flatness'])
         self.assertIn('released_status', r['flatness'])
         for b in r['bands']:
             for k in ('start_m', 'end_m', 'center_m', 'width_m', 'peak_position_m',
@@ -564,6 +595,8 @@ class TestNetCompressionCriterion(unittest.TestCase):
                       'state_after_tension_release', 'saturated',
                       'effective_buckling_mean_compression_pa', 'buckling_utilisation',
                       'effective_buckling_start_m', 'released_buckling_start_m',
+                      'released_half_peak_width_m', 'released_global_buckling_utilisation',
+                      'released_global_buckling_width_m',
                       'released_buckling_mean_compression_pa',
                       'released_buckling_utilisation',
                       'linear_feedback_peak_i_units'):
