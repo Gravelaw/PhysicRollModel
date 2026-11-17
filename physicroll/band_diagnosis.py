@@ -2,14 +2,21 @@
 
 Status: ``SCREENING_RESULT_NOT_PLANT_VALIDATED``. This module wires the linear chatter
 model (``physicroll.chatter``) and the kinematic / material / lubrication / spray screens
-(``physicroll.band_signatures``) to one case file, then tallies observations against twelve
-candidate band mechanisms. It does NOT certify a cause and does NOT produce probabilities:
-each hypothesis gets an ordinal evidence tally (score = sum of supports 3/2/1 minus sum of
-contradictions 6/2/1 for strong/moderate/weak), and a standing.
+(``physicroll.band_signatures``) to one case file, then tallies observations against nineteen
+candidate band mechanisms in two families: ten TRANSVERSE (marks across the strip) and nine
+LENGTHWISE (bands along the strip at fixed width positions, ``physicroll.band_width``). It
+does NOT certify a cause and does NOT produce probabilities: each hypothesis gets an ordinal
+evidence tally (score = sum of supports 3/2/1 minus sum of contradictions 6/2/1 for
+strong/moderate/weak), and a standing.
 
-Case file: JSON ``physicroll.band_case.v1`` with strict keys (see ``docs/band-diagnosis.md``).
-All quantities SI; unit suffix in every field name. ``null`` observations mean "not observed"
-and always give ``NOT_OBSERVED`` evidence, never a contradiction.
+Case file: JSON ``physicroll.band_case.v1`` or ``physicroll.band_case.v2`` with strict keys
+(see ``docs/band-diagnosis.md``). v2 = v1 plus optional sections ``width_model``,
+``tribology``, ``hardening``, ``gauge_control``, ``drive``, ``incoming_variation``, the option
+``model_options.bite_model`` and thirteen lengthwise observation fields; the coupled process
+sections live in ``physicroll.band_process``, the lengthwise physics and hypotheses in
+``physicroll.band_width``. All quantities SI; unit suffix in every field name. ``null``
+observations mean "not observed" and always give ``NOT_OBSERVED`` evidence, never a
+contradiction.
 
 Physics used (see the two modules for the equations and sign conventions):
 - third-octave chatter: tension-feedback instability of the symmetric (gap-changing) stack
@@ -40,20 +47,33 @@ Rule CHANGED against the written spec: ``CONSISTENT_LEADING`` also needs at leas
 SUPPORTS item based on a plant observation (model-only support could otherwise make a
 hypothesis 'leading' with every observation null; see ``rank_hypotheses``).
 
-NOT modelled: anything band_signatures / chatter do not model (limit cycles, strip break,
-roll bending, cross-width effects, film dynamics, friction-speed law, time-domain
-fifth-octave regeneration, temperature fields), and any plant calibration.
+Phase-2 fixes (SPEC6 6.0): lever directions are NOT_ASSESSABLE when the variant input equals
+the baseline (zero tension) or both ratios are within 1e-9 of 1; span / damping variants are
+built inside the handler, so a rejected variant is a rejected row, not an aborted diagnosis.
+
+NOT modelled: anything band_signatures / chatter / the phase-2 modules do not model (limit
+cycles, strip break, roll bending, film dynamics beyond the placeholder closure, time-domain
+fifth-octave regeneration), and any plant calibration.
 """
+import copy
 from dataclasses import replace
 import json
 import math
 
+from . import band_process as bp
 from . import band_signatures as bs
+from . import band_width as bw
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
+from .foil_bite import derive_bite_response_mattress
 
-CASE_SCHEMA = 'physicroll.band_case.v1'
+CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
+CASE_SCHEMA_V2 = 'physicroll.band_case.v2'
+CASE_SCHEMA = CASE_SCHEMA_V1          # phase-1 name kept (the v1 schema)
+CASE_SCHEMAS = (CASE_SCHEMA_V1, CASE_SCHEMA_V2)
+BITE_MODELS = ('hitchcock', 'mattress', 'auto')
+MATTRESS_MIN_CELLS = 200
 STATUS = 'SCREENING_RESULT_NOT_PLANT_VALIDATED'
 REALISTIC_MAX_EXIT_SPEED_M_S = 35.0     # analyst choice: resonant speeds above are dropped
 SPEED_SCAN_M_S = (0.05, 60.0)
@@ -63,6 +83,7 @@ SPECTRUM_RANGE_HZ = (1.0, 2000.0)
 TRACE_PERIODS = 40
 TRACE_MAX_SAMPLES = 1200
 RUNOUT_REFERENCE_M = 1e-6
+TORSIONAL_GENERIC_BAND_HZ = (5.0, 30.0)
 LEVER_UNITY_TOLERANCE = 1e-9
 WEIGHT_POINTS_SUPPORT = {'strong': 3, 'moderate': 2, 'weak': 1}
 WEIGHT_POINTS_CONTRADICT = {'strong': 6, 'moderate': 2, 'weak': 1}
@@ -135,12 +156,15 @@ LIMITATIONS = (
     'supplied bite sensitivities (model_options.bite_response_override).',
     'The bite-damping closure (fraction beta of transit time) is a declared heuristic; results '
     'without it (beta = 0) are reported alongside.',
-    'Friction is an input: no friction-speed or film-thickness-friction law is modelled, so '
-    'the usual drop of friction with speed must be represented by the schedule inputs.',
+    'Friction is an input unless tribology.use_computed_friction is set; the friction-speed '
+    'closure of bite_tribology is an unfitted placeholder whose slope, not level, is used.',
     'Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated '
     'in time; the antisymmetric mode frequency is an undamped lumped estimate.',
-    'Spray coverage is a geometric footprint count; thermal growth is a free-expansion upper '
-    'bound with no axial conduction.',
+    'Spray coverage is a geometric footprint count; the phase-1 thermal growth is a '
+    'free-expansion upper bound with no axial conduction (the v2 width_model solves the '
+    'roll temperature field instead).',
+    'The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on '
+    'planner-derived and memory formulas flagged in each result; no plant validation.',
 )
 
 # confirming tests and levers per hypothesis (drawn from mill practice; plain words)
@@ -217,20 +241,12 @@ HYPOTHESES = (
      'Measure forward slip from roll and strip speed sensors; look for irregular skid marks '
      'and matte patches.',
      ('raise friction (lubricant change)', 'lower speed', 'raise reduction slightly')),
-    ('lengthwise_coolant_or_thermal_band', 'Lengthwise coolant / thermal band',
-     'An under-cooled stripe (spray gap or blocked nozzle) gives a local thermal crown and '
-     'differential oil plate-out, printing a lengthwise band at that width position.',
-     'Nozzle footprint check (spray-pattern paper or water test) and header inspection; '
-     'compare band positions with the nozzle stripes on the barrel coordinate.',
-     ('clear or replace blocked nozzles', 'adjust spray overlap / offset angle',
-      'check header pressure and filtration')),
-    ('lengthwise_roll_surface_band', 'Lengthwise roll-surface band',
-     'A wear band, roll-coating step or grinding streak on the work roll prints a lengthwise '
-     'band at a fixed width position.',
-     'Inspect the work-roll surface at the band position; work-roll change test.',
-     ('change / regrind the work rolls', 'check roll coating / wear pattern')),
 )
+TRANSVERSE_HYPOTHESES = HYPOTHESES
+HYPOTHESES = (tuple(h + ('transverse',) for h in TRANSVERSE_HYPOTHESES)
+              + tuple(h + (bw.FAMILY,) for h in bw.LENGTHWISE_HYPOTHESES))
 HYPOTHESIS_IDS = tuple(h[0] for h in HYPOTHESES)
+HYPOTHESIS_FAMILIES = {h[0]: h[5] for h in HYPOTHESES}
 
 
 # ============================================================================= validation
@@ -302,6 +318,7 @@ COOLANT_KEYS = ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_
                 'assumed_excess_temperature_k')
 OPTION_KEYS = ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
                'bite_response_override')
+OPTION_OPTIONAL = ('bite_model',)
 OBS_KEYS = ('orientation', 'pitch_observations', 'faces', 'gauge_variation_detected',
             'gauge_variation_amplitude_m', 'first_seen', 'disappears_after_work_roll_change',
             'disappears_after_backup_roll_change', 'onset_above_exit_speed_m_s',
@@ -312,6 +329,8 @@ OVERRIDE_KEYS = tuple(k for k in BiteResponse.__dataclass_fields__ if k not in (
 TOP_REQUIRED = ('case_schema', 'name', 'synthetic', 'provenance', 'pass', 'material', 'stand',
                 'spans', 'kinematics', 'lubrication', 'coolant', 'model_options', 'observation')
 TOP_OPTIONAL = ('notes', 'schedule')
+V2_SECTIONS = ('width_model', 'tribology', 'hardening', 'gauge_control', 'drive',
+               'incoming_variation')
 
 
 def _speed_value(where, value):
@@ -324,10 +343,24 @@ def validate_case(case):
     Raises ValueError naming the offending key. Physics-domain checks that need the models
     (bite domain, roll geometry) are repeated by the models themselves.
     """
-    _keys('case', case, TOP_REQUIRED, TOP_OPTIONAL)
-    if case['case_schema'] != CASE_SCHEMA:
-        raise ValueError(f'case_schema must be {CASE_SCHEMA!r}')
-    out = {'case_schema': CASE_SCHEMA, 'name': _text('name', case['name'])}
+    if not isinstance(case, dict) or case.get('case_schema') not in CASE_SCHEMAS:
+        raise ValueError(f'case_schema must be one of {CASE_SCHEMAS}')
+    v2 = case['case_schema'] == CASE_SCHEMA_V2
+    if not v2:
+        # a validated v1 case carries the v2 sections as null: accept exactly that
+        extra = [k for k in V2_SECTIONS if k in case and case[k] is not None]
+        if extra:
+            raise ValueError(f'sections {extra} need case_schema {CASE_SCHEMA_V2!r}')
+        case = {k: v for k, v in case.items() if k not in V2_SECTIONS}
+        ob = case.get('observation')
+        if isinstance(ob, dict):
+            extra = [k for k in bw.OBS_V2_KEYS if k in ob and ob[k] is not None]
+            if extra:
+                raise ValueError(f'observation fields {extra} need case_schema '
+                                 f'{CASE_SCHEMA_V2!r}')
+            case['observation'] = {k: v for k, v in ob.items() if k not in bw.OBS_V2_KEYS}
+    _keys('case', case, TOP_REQUIRED, TOP_OPTIONAL + (V2_SECTIONS if v2 else ()))
+    out = {'case_schema': case['case_schema'], 'name': _text('name', case['name'])}
     if not isinstance(case['synthetic'], bool):
         raise ValueError('synthetic must be true or false')
     out['synthetic'] = case['synthetic']
@@ -412,7 +445,7 @@ def validate_case(case):
         out['coolant']['blocked_nozzle_indices'] = sorted(set(blocked))
 
     o = case['model_options']
-    _keys('model_options', o, OPTION_KEYS)
+    _keys('model_options', o, OPTION_KEYS, OPTION_OPTIONAL)
     cells = o['cells']
     if isinstance(cells, bool) or not isinstance(cells, int) or not 64 <= cells <= 4096:
         raise ValueError('model_options.cells must be an integer in [64, 4096]')
@@ -426,10 +459,13 @@ def validate_case(case):
                                               o['bite_damping_transit_fraction'], lo=0, hi=5),
         'max_radius_ratio': _num('model_options.max_radius_ratio', o['max_radius_ratio'],
                                  lo=1.0, hi=3.0),
-        'cells': cells, 'bite_response_override': override}
+        'cells': cells, 'bite_response_override': override,
+        'bite_model': o.get('bite_model', 'hitchcock')}
+    if out['model_options']['bite_model'] not in BITE_MODELS:
+        raise ValueError(f'model_options.bite_model must be one of {BITE_MODELS}')
 
     ob = case['observation']
-    _keys('observation', ob, OBS_KEYS)
+    _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()))
     if ob['orientation'] is not None and ob['orientation'] not in ORIENTATIONS:
         raise ValueError(f'observation.orientation must be one of {ORIENTATIONS} or null')
     if ob['faces'] is not None and ob['faces'] not in ('both', 'one'):
@@ -468,6 +504,10 @@ def validate_case(case):
                                         ob['band_positions_across_width_m']))],
         'measured_vibration_hz': _opt_num('observation.measured_vibration_hz',
                                           ob['measured_vibration_hz'], positive=True)}
+    if v2:
+        out['observation'].update(bw.validate_observation_v2(ob))
+    else:
+        out['observation'].update({k: None for k in bw.OBS_V2_KEYS})
 
     sched = case.get('schedule', [])
     labels = set()
@@ -483,7 +523,34 @@ def validate_case(case):
             entry[k2] = _num(f'schedule[{i}].{k2}', row[k2], nonnegative=True)
         _speed_value(f'schedule[{i}].exit_speed_m_s', row['exit_speed_m_s'])
         out['schedule'].append(entry)
+    out.update(_validate_v2_sections(case if v2 else {}, out))
     return out
+
+
+def _validate_v2_sections(case, out):
+    """v2 optional sections (null/absent = not supplied), strict keys inside each."""
+    sec = {k: case.get(k) for k in V2_SECTIONS}
+    res = {}
+    res['tribology'] = (None if sec['tribology'] is None
+                        else bp.validate_tribology(sec['tribology']))
+    res['hardening'] = (None if sec['hardening'] is None
+                        else bp.validate_hardening(sec['hardening'], out['material']))
+    res['gauge_control'] = (None if sec['gauge_control'] is None
+                            else bp.validate_gauge_control(sec['gauge_control']))
+    res['drive'] = None if sec['drive'] is None else bp.validate_drive(sec['drive'])
+    res['incoming_variation'] = (None if sec['incoming_variation'] is None
+                                 else bp.validate_incoming_variation(sec['incoming_variation']))
+    res['width_model'] = (None if sec['width_model'] is None
+                          else bw.validate_width_model(sec['width_model'], out['pass']))
+    w = res['width_model']
+    if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
+        raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
+                         'is null (otherwise it is (1 - tribology.strip_heat_fraction)/2)')
+    if (res['hardening'] is not None and res['hardening']['use_computed_flow_stress']
+            and out['pass']['entry_thickness_m'] > res['hardening']['reference_thickness_m']
+            * (1 + 1e-9)):
+        raise ValueError('hardening.reference_thickness_m must be >= pass.entry_thickness_m')
+    return res
 
 
 def load_case(path):
@@ -531,31 +598,65 @@ def _bite_pass(case, row=None):
 
 
 class _BiteCache:
-    """Caches derive_bite_response per (BitePass, options) within one diagnose call."""
+    """Caches bite derivations per (BitePass, options) within one diagnose call.
+
+    ``model_options.bite_model``: 'hitchcock' (slab + circular flattening), 'mattress' (the
+    EXPERIMENTAL elastic-foundation model, ``foil_bite``) or 'auto' (Hitchcock, and the
+    mattress model when Hitchcock rejects the pass). Mattress bites carry the flag
+    ``BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL``.
+    """
 
     def __init__(self, case):
         self.case = case
         self.store = {}
         self.derivations = 0
+        self.fallbacks = {}
+
+    def _mattress(self, bite_pass):
+        s, o = self.case['stand'], self.case['model_options']
+        bite = derive_bite_response_mattress(
+            bite_pass, roll_youngs_modulus_pa=s['roll_youngs_modulus_pa'],
+            roll_poisson_ratio=s['roll_poisson_ratio'], cells=max(o['cells'], MATTRESS_MIN_CELLS))
+        return bp.replace_bite_flags(bite, (bp.MATTRESS_FLAG,))
 
     def get(self, bite_pass):
         s, o = self.case['stand'], self.case['model_options']
+        model = o['bite_model']
         key = (bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'], o['cells'],
-               o['max_radius_ratio'])
+               o['max_radius_ratio'], model)
         if key not in self.store:
             try:
                 bite_pass.validate()
                 self.derivations += 1
-                self.store[key] = derive_bite_response(
-                    bite_pass, roll_youngs_modulus_pa=s['roll_youngs_modulus_pa'],
-                    roll_poisson_ratio=s['roll_poisson_ratio'], cells=o['cells'],
-                    max_radius_ratio=o['max_radius_ratio'])
+                if model == 'mattress':
+                    self.store[key] = self._mattress(bite_pass)
+                else:
+                    try:
+                        self.store[key] = derive_bite_response(
+                            bite_pass, roll_youngs_modulus_pa=s['roll_youngs_modulus_pa'],
+                            roll_poisson_ratio=s['roll_poisson_ratio'], cells=o['cells'],
+                            max_radius_ratio=o['max_radius_ratio'])
+                    except ValueError as exc:
+                        if model != 'auto':
+                            raise
+                        try:
+                            self.store[key] = self._mattress(bite_pass)
+                        except ValueError as exc2:
+                            raise ValueError(f'{exc}; experimental mattress fallback also '
+                                             f'rejected: {exc2}') from exc2
+                        self.fallbacks[key] = str(exc)
             except ValueError as exc:
                 self.store[key] = exc
         value = self.store[key]
         if isinstance(value, Exception):
             raise ValueError(str(value))
         return value
+
+    def derive_options(self):
+        s, o = self.case['stand'], self.case['model_options']
+        return {'roll_youngs_modulus_pa': s['roll_youngs_modulus_pa'],
+                'roll_poisson_ratio': s['roll_poisson_ratio'], 'cells': o['cells'],
+                'max_radius_ratio': o['max_radius_ratio']}
 
 
 def _opts(beta):
@@ -1123,7 +1224,8 @@ def _h_chatter(ctx):
     o = ctx.obs
     ev = [_orientation_chatter(o['orientation']),
           _law_ev(ctx, {'FIXED_FREQUENCY': 'strong'}, {'SPEED_INDEPENDENT_PITCH': 'strong'})]
-    model_f = [f for f in (ctx.dominant_hz, ctx.onset_hz) if f]
+    model_f = [] if ctx.chatter_unreliable else [f for f in (ctx.dominant_hz, ctx.onset_hz)
+                                                 if f]
 
     def rule(f):
         if model_f and any(abs(f - m) <= 0.15 * m for m in model_f):
@@ -1149,6 +1251,10 @@ def _h_chatter(ctx):
     if ctx.chatter is None:
         ev.append(_ev('speed margin', f'operating {u:.4g} m/s',
                       f'NOT_ASSESSABLE: {ctx.bite_error}', 'NEUTRAL', basis='model'))
+    elif ctx.chatter_unreliable:
+        ev.append(_ev('speed margin', f'operating {u:.4g} m/s; onset frequency above the span '
+                      'wave limit c/(2L)', 'NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT: no model-based '
+                      'evidence', 'NEUTRAL', basis='model'))
     else:
         uc, uc0 = ctx.ucrit, ctx.ucrit0
         obs_txt = (f'operating {u:.4g} m/s; u_crit(beta={ctx.beta:g}) = {_fmt(uc, "m/s")}, '
@@ -1372,14 +1478,28 @@ def _h_order(ctx):
 
 def _h_torsional(ctx):
     o = ctx.obs
+    modes = [m['frequency_hz'] for m in ctx.drive_modes]
+    if modes:
+        # SPEC6 6.2: computed torsional modes replace the generic 5-30 Hz band
+        top = max(TORSIONAL_GENERIC_BAND_HZ[1] * 2, 1.5 * max(modes))
 
-    def rule(f):
-        if 5 <= f <= 30:
-            return ('SUPPORTS', 'strong')
-        if f > 60:
-            return ('CONTRADICTS', 'strong')
-        return ('NEUTRAL', None)
-    ev = [_per_freq(ctx, 'observed frequency u/p', '5-30 Hz; above 60 Hz contradicts', rule),
+        def rule(f):
+            if any(abs(f - m) <= 0.15 * m for m in modes):
+                return ('SUPPORTS', 'strong')
+            if f > top:
+                return ('CONTRADICTS', 'strong')
+            return ('NEUTRAL', None)
+        expected = (f'within +-15 % of a torsional mode ({", ".join(f"{m:.4g}" for m in modes)} '
+                    f'Hz); above {top:.4g} Hz contradicts')
+    else:
+        def rule(f):
+            if 5 <= f <= 30:
+                return ('SUPPORTS', 'strong')
+            if f > 60:
+                return ('CONTRADICTS', 'strong')
+            return ('NEUTRAL', None)
+        expected = '5-30 Hz; above 60 Hz contradicts'
+    ev = [_per_freq(ctx, 'observed frequency u/p', expected, rule),
           _per_pitch(ctx, 'pitch 0.1-3 m', '0.1-3 m',
                      lambda p: ('SUPPORTS', 'weak', '') if 0.1 <= p['pitch_m'] <= 3
                      else ('NEUTRAL', None, '')),
@@ -1390,6 +1510,9 @@ def _h_torsional(ctx):
                   ('CONTRADICTS' if ori == 'longitudinal' else 'NEUTRAL'),
                   'strong' if ori == 'longitudinal' else None))
     pred = {'pitch_range_at_operating_speed_m': [ctx.u_op / 30, ctx.u_op / 5]}
+    if modes:
+        pred = {'torsional_modes_hz': modes,
+                'pitch_at_operating_speed_m': [ctx.u_op / m for m in modes]}
     return ev, pred
 
 
@@ -1578,68 +1701,6 @@ def _h_skid(ctx):
     return ev, pred
 
 
-def _lengthwise_orientation(ori):
-    if ori is None:
-        return _ev('orientation', 'not observed', 'longitudinal', 'NOT_OBSERVED')
-    if ori == 'longitudinal':
-        return _ev('orientation', ori, 'longitudinal', 'SUPPORTS', 'strong')
-    return _ev('orientation', ori, 'longitudinal', 'CONTRADICTS', 'strong')
-
-
-def _h_coolant(ctx):
-    o = ctx.obs
-    scr = ctx.screens
-    ev = [_lengthwise_orientation(o['orientation'])]
-    crit = 'band positions vs under-cooled stripes'
-    if scr['spray_coverage'] is None:
-        ev.append(_ev(crit, 'no coolant data', 'match', 'NOT_OBSERVED', basis='input'))
-    else:
-        risk = scr['band_risk_stripes']
-        pos = o['band_positions_across_width_m']
-        if not risk:
-            ev.append(_ev(crit, f'coverage status {scr["spray_coverage"]["status"]}: no '
-                          'blocked-nozzle or uncovered stripe', 'an under-cooled stripe',
-                          'CONTRADICTS', 'weak', 'model'))
-        elif not pos:
-            ev.append(_ev(crit, 'band positions not observed (risk stripes at ' +
-                          ', '.join(f'{s["center_m"]:.4g} m' for s in risk) + ')', 'match',
-                          'NOT_OBSERVED'))
-        else:
-            m = scr['band_position_match']
-            if m['status'] == 'ALL_OBSERVED_POSITIONS_MATCHED':
-                ev.append(_ev(crit, 'all observed positions match: ' +
-                              ', '.join(f'{x:.4g} m' for x in pos), 'match within '
-                              f'{scr["band_position_tolerance_m"]:.3g} m', 'SUPPORTS', 'strong'))
-            elif m['status'] == 'SOME_OBSERVED_POSITIONS_MATCHED':
-                ev.append(_ev(crit, 'some observed positions match; unmatched: ' +
-                              ', '.join(f'{x:.4g} m' for x in m['unmatched_positions_m']),
-                              'match', 'SUPPORTS', 'moderate'))
-            else:
-                ev.append(_ev(crit, 'no observed position matches a risk stripe',
-                              'match (no match: CONTRADICTS weak, filled rule)', 'CONTRADICTS',
-                              'weak'))
-    ev.append(_worse_thin(o, 'SUPPORTS', 'weak'))
-    th = scr['thermal']
-    pred = {'band_risk_stripe_centres_m': [s['center_m'] for s in (scr['band_risk_stripes']
-                                                                  or [])],
-            'coverage_status': scr['spray_coverage']['status'] if scr['spray_coverage'] else None,
-            'thermal_gap_closure_fraction_upper_bound': th['local_gap_closure_fraction']
-            if th else None}
-    return ev, pred
-
-
-def _h_roll_surface(ctx):
-    o = ctx.obs
-    ev = [_lengthwise_orientation(o['orientation'])]
-    wr = o['disappears_after_work_roll_change']
-    ev.append(_ev('work-roll change', 'not observed' if wr is None else str(wr).lower(),
-                  'disappears', 'NOT_OBSERVED' if wr is None else
-                  ('SUPPORTS' if wr else 'CONTRADICTS'),
-                  None if wr is None else ('strong' if wr else 'moderate')))
-    ev.append(_faces(ctx, one=('SUPPORTS', 'moderate', 'one')))
-    return ev, {'note': 'no model quantity; settle by roll inspection'}
-
-
 _BUILDERS = {
     'third_octave_self_excited_chatter': _h_chatter,
     'fifth_octave_roll_stack_resonance': _h_fifth,
@@ -1651,8 +1712,6 @@ _BUILDERS = {
     'yield_point_bending_marks': _h_yield,
     'herringbone_lubricant_film_breakdown': _h_herringbone,
     'skidding_loss_of_forward_slip': _h_skid,
-    'lengthwise_coolant_or_thermal_band': _h_coolant,
-    'lengthwise_roll_surface_band': _h_roll_surface,
 }
 
 
@@ -1708,10 +1767,15 @@ def rank_hypotheses(hyps):
 
 def _hypotheses(ctx):
     out = []
-    for hid, title, mech, test, levers in HYPOTHESES:
-        evidence, pred = _BUILDERS[hid](ctx)
+    facts = bw.Facts(ctx.case, ctx.width, ctx.screens, ctx.process)
+    for hid, title, mech, test, levers, family in HYPOTHESES:
+        if family == bw.FAMILY:
+            evidence, pred = bw.LENGTHWISE_BUILDERS[hid](facts)
+        else:
+            evidence, pred = _BUILDERS[hid](ctx)
         tallies, score, standing = score_evidence(evidence)
-        h = {'id': hid, 'title': title, 'mechanism': mech, 'model_prediction': pred,
+        h = {'id': hid, 'family': family, 'title': title, 'mechanism': mech,
+             'model_prediction': pred,
              'evidence': evidence, 'tallies': tallies, 'score': score, 'standing': standing,
              'confirming_test': test, 'levers': list(levers)}
         if hid == 'third_octave_self_excited_chatter' and ctx.lever_directions:
@@ -1726,24 +1790,30 @@ def _next_measurements(hyps, obs, law):
     for h in hyps[:3]:
         if h['confirming_test'] not in lines:
             lines.append(h['confirming_test'])
-    if law is None:
+    longitudinal = obs['orientation'] == 'longitudinal'
+    if law is None and not longitudinal:
         lines.append('Measure the mark pitch at two clearly different steady speeds (at least '
                      '20 % apart): this single measurement separates fixed-frequency vibration '
                      '(pitch scales with speed) from roll-, order- or coil-locked marks (pitch '
                      'constant).')
-    if obs['gauge_variation_detected'] is None:
+    if obs['gauge_variation_detected'] is None and not longitudinal:
         lines.append('Check the exit thickness gauge / X-ray trace for a periodic thickness '
                      'variation at the mark frequency (gauge chatter) or its absence '
                      '(fifth-octave / surface marks).')
     if obs['faces'] is None:
         lines.append('Record whether the marks appear on both strip faces or only one.')
-    if (obs['disappears_after_work_roll_change'] is None
-            or obs['disappears_after_backup_roll_change'] is None):
+    if (not longitudinal and (obs['disappears_after_work_roll_change'] is None
+                              or obs['disappears_after_backup_roll_change'] is None)):
         lines.append('Note whether the marks disappear after a work-roll change and after a '
                      'backup-roll change (roll-change test).')
     if obs['orientation'] is None:
         lines.append('Record the mark orientation (transverse, diagonal, chevron, '
                      'longitudinal or irregular).')
+    if obs['orientation'] in (None, 'longitudinal'):
+        for line in bw.lengthwise_next_measurements(obs):
+            topic = bw.measurement_topic(line)
+            if topic is None or not any(topic in x for x in lines):
+                lines.append(line)
     out = []
     for line in lines:
         if line not in out:
@@ -1796,6 +1866,61 @@ def _strip_map(hyps, ctx):
 
 
 # ============================================================================= main entry
+def _process_inputs(eff, cache, flags):
+    """Flow stress and friction from the process models (before the bite is derived).
+
+    When ``use_computed_*`` is set the computed value replaces the supplied one in the
+    effective case (pass and every schedule pass), and so in every downstream section.
+    """
+    out = {'flow_stress': None, 'friction': None, 'heating': None, 'friction_speed_curve': None}
+    if eff['hardening'] is not None:
+        try:
+            fs = bp.flow_stress_section(eff, eff['hardening'])
+            if eff['hardening']['use_computed_flow_stress']:
+                bp.apply_flow_stress(eff, fs)
+                flags.append('FLOW_STRESS_FROM_HARDENING_LAW')
+            else:
+                for r in fs['passes']:
+                    r['used_mean_flow_stress_pa'] = r['supplied_mean_flow_stress_pa']
+            out['flow_stress'] = fs
+        except ValueError as exc:
+            out['flow_stress'] = bp.failed('process.flow_stress', exc)
+    if eff['tribology'] is not None:
+        try:
+            fr = bp.friction_section(eff, eff['tribology'], cache)
+            if eff['tribology']['use_computed_friction']:
+                bp.apply_friction(eff, fr)
+                flags.append('FRICTION_FROM_PLACEHOLDER_CLOSURE')
+            else:
+                for r in [fr['operating']] + fr['schedule']:
+                    r['used_friction_coefficient'] = r['supplied_friction_coefficient']
+            out['friction'] = fr
+        except ValueError as exc:
+            out['friction'] = bp.failed('process.friction', exc)
+    return out
+
+
+def _family_summary(obs, hyps, leading):
+    ori = obs['orientation']
+    fam = (bw.FAMILY if ori == 'longitudinal' else None if ori is None else 'transverse')
+    lead_fam = HYPOTHESIS_FAMILIES[leading[0]] if leading else None
+    if fam is None:
+        text = ('The observed orientation is not recorded, so the observations do not yet '
+                'point to the transverse (across the strip) or the lengthwise (along the '
+                'strip) family.')
+    else:
+        text = (f'The observed orientation ({ori}) points to the {fam} family of band '
+                'mechanisms' + (' (bands along the rolling direction at fixed width '
+                                'positions).' if fam == bw.FAMILY else
+                                ' (marks across the strip, repeating along its length).'))
+    if lead_fam is not None:
+        text += f' The leading hypothesis ({leading[0]}) belongs to the {lead_fam} family.'
+    counts = {f: sum(1 for h in hyps if h['family'] == f and h['standing'] != 'CONTRADICTED')
+              for f in ('transverse', bw.FAMILY)}
+    return {'observed_family': fam, 'leading_family': lead_fam,
+            'not_contradicted_per_family': counts, 'text': text}
+
+
 def diagnose(case):
     """Run the band screening on a case dict (validated here). Returns a JSON-safe dict."""
     case = validate_case(case)
@@ -1804,20 +1929,33 @@ def diagnose(case):
         flags.append('USER_SUPPLIED_INPUTS_NOT_VERIFIED')
     else:
         flags.append('SYNTHETIC_INPUTS')
-    p, obs = case['pass'], case['observation']
-    beta = case['model_options']['bite_damping_transit_fraction']
+    if case['model_options']['bite_model'] != 'hitchcock':
+        flags.append(f'BITE_MODEL_{case["model_options"]["bite_model"].upper()}')
+    eff = copy.deepcopy(case)          # effective inputs (computed values may replace supplied)
+    cache = _BiteCache(eff)
+    process = _process_inputs(eff, cache, flags)
+    p, obs = eff['pass'], eff['observation']
+    beta = eff['model_options']['bite_damping_transit_fraction']
     u_op = p['exit_speed_m_s']
     h0, h1 = p['entry_thickness_m'], p['exit_thickness_m']
-    stand, spans = _stand(case), _spans(case)
-    cache = _BiteCache(case)
-    bite, bite_error = _section_bite(case, cache, flags)
-    override = case['model_options']['bite_response_override']
+    stand, spans = _stand(eff), _spans(eff)
+    bite, bite_error = _section_bite(eff, cache, flags)
+    override = eff['model_options']['bite_response_override']
+    trib = eff['tribology']
 
-    result = {'status': STATUS, 'case_schema': CASE_SCHEMA, 'case_name': case['name'],
+    result = {'status': STATUS, 'case_schema': case['case_schema'], 'case_name': case['name'],
               'synthetic': case['synthetic'], 'provenance': case['provenance'],
               'score_note': SCORE_NOTE, 'inputs': case}
+    if eff['pass'] != case['pass'] or eff['schedule'] != case['schedule']:
+        result['effective_inputs'] = {
+            'pass': eff['pass'], 'schedule': eff['schedule'],
+            'note': 'Computed flow stress and/or friction replaced the supplied values; every '
+                    'downstream section uses these.'}
     result['bite'] = bite.to_dict() if bite is not None else None
     result['bite_error'] = bite_error
+    if bite is not None and bp.is_mattress(bite):
+        fb = [v for k, v in cache.fallbacks.items() if k[0] == _bite_pass(eff)]
+        result['bite_fallback_reason'] = fb[0] if fb else None
 
     q_s = bite.strip_modulus_n_m if bite is not None else 0.0
     nf = natural_frequencies(stand, q_s)
@@ -1831,6 +1969,10 @@ def diagnose(case):
                   'family': 'third_octave_symmetric'},
                  {'name': 'symmetric_upper_loaded', 'frequency_hz': nf['symmetric_hz'][1],
                   'family': 'symmetric'}] + modes
+    drive_modes = []
+    if eff['drive'] is not None:
+        _, drive_modes = bp.drive_modes(eff['drive'])
+        modes = modes + drive_modes
     result['stand_modes'] = {
         'natural_frequencies': nf, 'mill_modulus_n_m': km,
         'strip_modulus_n_m': q_s if bite is not None else None,
@@ -1840,11 +1982,13 @@ def diagnose(case):
         'Symmetric (loaded) modes need the strip modulus: NOT_ASSESSABLE without a bite.'}
 
     ctx = _Ctx()
-    ctx.case, ctx.obs, ctx.u_op, ctx.beta = case, obs, u_op, beta
+    ctx.case, ctx.obs, ctx.u_op, ctx.beta = eff, obs, u_op, beta
     ctx.bite_error = bite_error
     ctx.reduction = (h0 - h1) / h0
-    ctx.dw, ctx.db = 2 * p['work_roll_radius_m'], case['kinematics']['backup_roll_diameter_m']
+    ctx.dw, ctx.db = 2 * p['work_roll_radius_m'], eff['kinematics']['backup_roll_diameter_m']
     ctx.anti_upper_hz = nf['antisymmetric_hz'][1]
+    ctx.drive_modes = drive_modes
+    ctx.chatter_unreliable = False
     if bite is not None:
         ctx.slip = bite.forward_slip_fraction
     else:
@@ -1853,6 +1997,18 @@ def diagnose(case):
 
     if bite is not None:
         chat = _section_chatter(stand, bite, spans, u_op, beta)
+        limit = bp.span_wave_limit_hz(eff)
+        onset = [f for f in (chat['with_bite_damping']['onset_frequency_hz'],
+                             chat['without_bite_damping']['onset_frequency_hz'],
+                             chat['stability']['dominant_frequency_hz']) if f]
+        chat['span_wave_limit_hz'] = limit
+        chat['span_wave_limit_basis'] = (f'c/(2L) of the shorter span, c = sqrt(E/rho), rho = '
+                                         f'{bp.STRIP_DENSITY_KG_M3:g} kg/m3')
+        chat['reliability'] = 'WITHIN_SPAN_WAVE_LIMIT'
+        if onset and max(onset) > limit:
+            chat['reliability'] = 'NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT'
+            flags.append('CHATTER_NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT')
+            ctx.chatter_unreliable = True
         result['chatter'] = chat
         ctx.chatter = chat
         ctx.ucrit = _crit_value(chat['critical_speed'])
@@ -1864,11 +2020,26 @@ def diagnose(case):
         unstable = not chat['stability']['stable']
         if unstable:
             flags.append('OPERATING_POINT_LINEARLY_UNSTABLE')
+        if trib is not None and override is None:
+            try:
+                sc = bp.speed_consistent_critical_speed(eff, trib, cache, stand, spans, beta,
+                                                        bite, SPEED_SCAN_M_S)
+                sc['fixed_friction_critical_exit_speed_m_s'] = \
+                    chat['with_bite_damping']['critical_exit_speed_m_s']
+                sc['fixed_friction_critical_exit_speed_without_bite_damping_m_s'] = \
+                    chat['without_bite_damping']['critical_exit_speed_m_s']
+                sc['fixed_friction_coefficient'] = p['friction_coefficient']
+                chat['speed_consistent'] = sc
+            except ValueError as exc:
+                chat['speed_consistent'] = bp.failed('chatter.speed_consistent', exc)
+        else:
+            chat['speed_consistent'] = bp.not_supplied(
+                'needs tribology and a derived (not supplied) bite')
         result['time_simulation'] = (_section_time(stand, bite, spans, u_op, beta,
                                                    ctx.dominant_hz) if ctx.dominant_hz else None)
-        result['forced_response'] = _section_forced(case, stand, bite, spans, u_op, beta,
+        result['forced_response'] = _section_forced(eff, stand, bite, spans, u_op, beta,
                                                     unstable)
-        levers = _lever_rows(case, cache, stand, spans, bite, beta, override)
+        levers = _lever_rows(eff, cache, stand, spans, bite, beta, override)
         result['levers'] = levers
         ctx.lever_directions = levers['directions']
     else:
@@ -1879,7 +2050,7 @@ def diagnose(case):
         ctx.ucrit = ctx.ucrit0 = ctx.onset_hz = ctx.dominant_hz = ctx.speed_ratio = None
         ctx.lever_directions = None
 
-    sig = _section_signatures(case, modes, ctx.slip, u_op, h0 / h1, obs, flags)
+    sig = _section_signatures(eff, modes, ctx.slip, u_op, h0 / h1, obs, flags)
     result['signatures'] = sig
     ctx.signatures = sig
     ctx.catalogue = sig['catalogue']
@@ -1893,15 +2064,86 @@ def diagnose(case):
 
     contact = bite.contact_length_m if bite is not None else None
     ratio = bite.contact_radius_ratio if bite is not None else 1.0
-    result['screens'] = _section_screens(case, bite, ctx.slip, contact, ratio, flags)
+    result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
     ctx.screens = result['screens']
 
-    result['schedule_sweep'] = (_schedule_rows(case, cache, stand, spans, beta)
-                                if case['schedule'] else None)
+    result['schedule_sweep'] = (_schedule_rows(eff, cache, stand, spans, beta)
+                                if eff['schedule'] else None)
+
+    # ---- v2 process sections
+    s_ = eff['stand']
+    heat_row = None
+    if bite is not None and (trib is not None or eff['width_model'] is not None):
+        try:
+            if trib is not None:
+                process['heating'] = bp.heating_section(
+                    eff, trib, cache, bite, eff['model_options']['cells'],
+                    s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+                heat_row = process['heating']['operating']
+            else:
+                heat_row = bp.heating_row(eff, p, bite, None, eff['model_options']['cells'],
+                                          s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+        except ValueError as exc:
+            process['heating'] = bp.failed('process.heating', exc)
+    if trib is not None and bite is not None:
+        try:
+            process['friction_speed_curve'] = bp.friction_curve(eff, trib, bite)
+        except ValueError as exc:
+            process['friction_speed_curve'] = bp.failed('process.friction_speed_curve', exc)
+    if eff['tribology'] is None and eff['hardening'] is None:
+        result['process'] = bp.not_supplied('tribology and hardening are null or absent')
+    else:
+        process.update(status=STATUS, not_supplied=False)
+        result['process'] = process
+    ctx.process = result['process']
+
+    derive_opts = cache.derive_options()
+    gc = eff['gauge_control']
+    if gc is None:
+        result['gauge_control'] = bp.not_supplied('gauge_control is null or absent')
+    elif bite is None:
+        result['gauge_control'] = {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                                   'reason': bite_error}
+    else:
+        try:
+            result['gauge_control'] = bp.gauge_control_section(
+                eff, gc, stand, bite, spans, beta, _roll_freqs(eff, u_op, ctx.slip), trib,
+                derive_opts, SPEED_SCAN_M_S)
+            flags.append('AGC_CHATTER_INTERACTION_DEPENDS_ON_LOOP_ROLL_OFF')
+        except ValueError as exc:
+            result['gauge_control'] = bp.failed('gauge_control', exc)
+    if eff['drive'] is None:
+        result['drive'] = bp.not_supplied('drive is null or absent')
+    else:
+        try:
+            result['drive'] = bp.drive_section(eff, eff['drive'], stand, bite, spans, beta, gc)
+        except ValueError as exc:
+            result['drive'] = bp.failed('drive', exc)
+    iv = eff['incoming_variation']
+    if iv is None:
+        result['incoming_variation'] = bp.not_supplied('incoming_variation is null or absent')
+    elif bite is None:
+        result['incoming_variation'] = {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                                        'reason': bite_error}
+    else:
+        try:
+            result['incoming_variation'] = bp.incoming_section(eff, iv, stand, bite, spans,
+                                                               beta, gc, derive_opts)
+        except ValueError as exc:
+            result['incoming_variation'] = bp.failed('incoming_variation', exc)
+
+    def get_bite(src):
+        return cache.get(bp.bite_pass(eff, src))
+    try:
+        result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags)
+    except ValueError as exc:
+        result['width'] = bp.failed('width', exc)
+    ctx.width = result['width']
 
     hyps, leading = _hypotheses(ctx)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
+    result['family_summary'] = _family_summary(obs, hyps, leading)
     result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law)
     result['strip_map'] = _strip_map(hyps, ctx)
     result['bite_derivations'] = cache.derivations

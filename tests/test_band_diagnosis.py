@@ -188,7 +188,9 @@ class BandDiagnosisTests(unittest.TestCase):
 
     def test_planted_blocked_nozzle_band_leads(self):
         r = self.nozzle
-        self.assertEqual(r['leading_hypotheses'], ['lengthwise_coolant_or_thermal_band'])
+        # SPEC6 6.3 replaced lengthwise_coolant_or_thermal_band by nozzle_thermal_stripe; with
+        # a v1 coolant section (no width model) its position rule uses the band-risk stripes
+        self.assertEqual(r['leading_hypotheses'], ['nozzle_thermal_stripe'])
         risk = r['screens']['band_risk_stripes']
         self.assertTrue(risk and all(s['cause'] == 'BLOCKED_NOZZLE' or s['kind'] == 'UNCOVERED'
                                      for s in risk))
@@ -214,7 +216,8 @@ class BandDiagnosisTests(unittest.TestCase):
             for e in h['evidence']:
                 if e['basis'] == 'observation':
                     self.assertEqual(e['verdict'], 'NOT_OBSERVED', (h['id'], e))
-        self.assertEqual(len(self.empty['hypotheses']), 12)
+        # SPEC6 6.3: ten transverse + nine lengthwise hypotheses (was 12 in phase 1)
+        self.assertEqual(len(self.empty['hypotheses']), 19)
         self.assertEqual(sorted(h['id'] for h in self.empty['hypotheses']),
                          sorted(HYPOTHESIS_IDS))
         lines = ' '.join(self.empty['recommended_next_measurements'])
@@ -267,7 +270,7 @@ class BandDiagnosisTests(unittest.TestCase):
         margin = next(e for e in h['evidence'] if e['criterion'] == 'speed margin')
         self.assertEqual(margin['verdict'], 'NEUTRAL')
         self.assertIn('NOT_ASSESSABLE', margin['expected'])
-        self.assertEqual(len(r['hypotheses']), 12)
+        self.assertEqual(len(r['hypotheses']), 19)
         self.assertGreater(r['stand_modes']['natural_frequencies']['fifth_octave_candidate_hz'],
                            0)
 
@@ -301,6 +304,33 @@ class BandDiagnosisTests(unittest.TestCase):
         keys = [abs(math.log(x['ratio_to_baseline'])) for x in rows
                 if x['ratio_to_baseline']]
         self.assertEqual(keys, sorted(keys, reverse=True))
+
+    def test_zero_tension_lever_is_not_assessable(self):
+        # SPEC6 6.0 bug 2: a x0.5 / x1.5 change of a zero tension equals the baseline
+        c = baseline(orientation='transverse')
+        c['pass']['exit_tension_pa'] = 0.0
+        r = diagnose(c)
+        rows = [x for x in r['levers']['rows'] if x['lever'] == 'exit_tension']
+        self.assertTrue(all(x.get('variant_equals_baseline') for x in rows))
+        d = {x['lever']: x for x in r['levers']['directions']}
+        self.assertEqual(d['exit_tension']['raising_parameter_effect_on_critical_speed'],
+                         'NOT_ASSESSABLE')
+        self.assertIn('not assessable', d['exit_tension']['direction'])
+        self.assertNotIn('lowers', d['exit_tension']['direction'])
+        self.assertNotEqual(d['friction']['raising_parameter_effect_on_critical_speed'],
+                            'NOT_ASSESSABLE')
+
+    def test_high_damping_variant_is_a_rejected_row(self):
+        # SPEC6 6.0 bug 3: doubled modal damping 0.5 -> 1.0 is rejected by StandModel; the
+        # diagnosis must complete with that lever row marked rejected
+        c = baseline(orientation='transverse')
+        c['stand']['modal_damping_ratio'] = 0.5
+        r = diagnose(c)
+        rows = {x['factor']: x for x in r['levers']['rows']
+                if x['lever'] == 'structural_damping'}
+        self.assertIn('rejected', rows[2.0])
+        self.assertNotIn('rejected', rows[0.5])
+        self.assertEqual(len(r['hypotheses']), len(HYPOTHESIS_IDS))
 
     # ------------------------------------------------------------- validation, output
     def test_strict_validation(self):
@@ -411,7 +441,7 @@ class BandDiagnosisTests(unittest.TestCase):
                 self.assertTrue(all('rejected' not in x for x in rows))
                 self.assertLess(rows[0]['speed_ratio'], 1.0)
                 self.assertGreater(rows[-1]['speed_ratio'], 1.0)
-
+        # the v2 lengthwise demo is run in tests.test_band_lengthwise (time budget)
 
 if __name__ == '__main__':
     unittest.main()

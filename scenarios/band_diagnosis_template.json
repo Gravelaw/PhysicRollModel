@@ -1,5 +1,5 @@
 {
-  "case_schema": "physicroll.band_case.v1",
+  "case_schema": "physicroll.band_case.v2",
   "name": "plant_case_template",
   "synthetic": false,
   "provenance": "REPLACE: who measured what, where and when (coil ids, dates, instruments).",
@@ -18,7 +18,22 @@
     "observation.measured_vibration_hz: dominant stand vibration frequency from a chock accelerometer at the operating speed, if measured.",
     "kinematics: list work-roll and backup-roll bearings (rolling elements, element and pitch diameters, contact angle), gear meshes (teeth and shaft speed ratio to the work roll) and known grinder-mark counts; without them the drive/bearing hypothesis cannot be checked.",
     "coolant: header geometry and any blocked nozzles; lubrication: base-oil viscosity, pressure-viscosity coefficient and roll/strip roughness. Set either to null if unknown.",
-    "model_options.bite_response_override: for gauges where the slab model rejects (thin hard strip, foil; see docs/band-diagnosis.md), supply bite force and sensitivities from a plant or foil mill model here instead of null."
+    "model_options.bite_response_override: for gauges where the slab model rejects (thin hard strip, foil; see docs/band-diagnosis.md), supply bite force and sensitivities from a plant or foil mill model here instead of null.",
+    "case_schema physicroll.band_case.v2: every v1 key stays; the six sections below are optional (null = not supplied, the result section then says NOT_SUPPLIED). Values shown are the synthetic demo mill, not your mill.",
+    "width_model (lengthwise bands): work-roll thermal and strip-shape model. roll = work-roll steel properties and barrel length; spray_header = nozzle pitch, standoff, fan angle, offset angle, mean spray heat-transfer coefficient and background coefficient; coolant_temperature_k; blocked_nozzle_indices (0 = first nozzle from the header start) or nozzle_levels (one flow level 0..1 per nozzle); events = valve switching or intermittent blockage [{start_s, duration_s, nozzle_indices, level}]; rolls_carrying_stripe = 1 if one header is affected, 2 if both; roll_heat_fraction_per_roll and bite_heat_per_width_w_m may stay null (computed); crowns, heredity coefficient, incoming ridges, coil, previous widths, grinding, cooling-zone pitch, deflector radius and lateral compressive stress are optional and switch on the corresponding screens.",
+    "tribology: rolling-oil viscosity law, roll/strip roughness and temperatures. The friction closure is a PLACEHOLDER (not fitted): the computed friction is shown beside your value; it replaces it only with use_computed_friction true. Its slope with speed is the useful output (speed-consistent chatter critical speed).",
+    "hardening: 'power' {yield_stress_pa, strength_coefficient_pa, exponent} or 'voce' {initial_stress_pa, saturation_stress_pa, characteristic_strain, stage_iv_slope_pa} with provenance, prior_equivalent_strain and the reference (annealed) thickness; with use_computed_flow_stress true the computed flow stress replaces the supplied one on every pass.",
+    "gauge_control: gaugemeter AGC compensation gain (0..1), cylinder bandwidth and optional force filter; drive: drive-train inertias and shaft stiffnesses (torsional modes); incoming_variation: relative hardness variation of the incoming coil and whether it repeats once per decoiler revolution.",
+    "observation.lengthwise_continuity: 'continuous' if a band runs along the whole coil, 'intermittent' if bands appear only for a while, 'both' if you see both kinds.",
+    "observation.intermittent_duration_s: typical time a short-lived band lasts (seconds of rolling).",
+    "observation.band_width_m / band_spacing_m: typical width of one band across the strip, and the distance between neighbouring bands if they are roughly regular.",
+    "observation.band_positions_across_width_m (lengthwise bands): measure on the barrel coordinate of the coolant header (0 at the header start), as for v1.",
+    "observation.positions_repeat_across_coils: true if the bands sit at the same width positions on successive coils; positions_change_after_work_roll_change: true if they move (or vanish) after a work-roll change.",
+    "observation.changes_with_coolant_zone_switching: true if the bands come and go when coolant zones (flatness control valves) switch.",
+    "observation.appearance: 'gloss_or_shade' (bright/dull stripe), 'loose_or_buckle' (wavy, loose band), 'tight' (tight stripe), 'stain' (oil/coolant stain, often after annealing), 'crease_or_flute' (sharp fold or flute).",
+    "observation.visible_only_after_tension_release: true if the bands are invisible in the mill and show only on the coil or after slitting (latent tension stripes).",
+    "observation.worse_toward_outer_wraps: true if the band is stronger toward the outside of the wound coil; changes_with_tension: true if changing the strip tension changes the bands.",
+    "observation.follows_previous_strip_edges: true if band edges line up with the edges of narrower strip rolled earlier on the same work rolls; worse_at_higher_speed: true if the bands get worse as the mill speeds up."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -100,7 +115,8 @@
     "bite_damping_transit_fraction": 0.5,
     "max_radius_ratio": 1.5,
     "cells": 256,
-    "bite_response_override": null
+    "bite_response_override": null,
+    "bite_model": "hitchcock"
   },
   "observation": {
     "orientation": null,
@@ -114,6 +130,87 @@
     "onset_above_exit_speed_m_s": null,
     "worse_at_thinner_gauge": null,
     "band_positions_across_width_m": [],
-    "measured_vibration_hz": null
-  }
+    "measured_vibration_hz": null,
+    "lengthwise_continuity": null,
+    "intermittent_duration_s": null,
+    "band_width_m": null,
+    "band_spacing_m": null,
+    "positions_repeat_across_coils": null,
+    "positions_change_after_work_roll_change": null,
+    "changes_with_coolant_zone_switching": null,
+    "appearance": null,
+    "visible_only_after_tension_release": null,
+    "worse_toward_outer_wraps": null,
+    "changes_with_tension": null,
+    "follows_previous_strip_edges": null,
+    "worse_at_higher_speed": null
+  },
+  "width_model": {
+    "roll": {
+      "barrel_length_m": 1.7,
+      "conductivity_w_mk": 40.0,
+      "density_kg_m3": 7850.0,
+      "specific_heat_j_kgk": 470.0,
+      "expansion_coefficient_per_k": 1.17e-05,
+      "poisson_ratio": 0.3,
+      "expansion_constraint": "axially_free"
+    },
+    "spray_header": {
+      "nozzle_pitch_m": 0.052,
+      "standoff_m": 0.15,
+      "spray_angle_rad": 0.6,
+      "offset_angle_rad": 0.17,
+      "spray_mean_htc_w_m2k": 3000.0,
+      "background_htc_w_m2k": 50.0
+    },
+    "coolant_temperature_k": 318.15,
+    "strip_centre_m": null,
+    "roll_heat_fraction_per_roll": null,
+    "bite_heat_per_width_w_m": null,
+    "blocked_nozzle_indices": [],
+    "nozzle_levels": null,
+    "events": [],
+    "numerics": null,
+    "rolls_carrying_stripe": 1,
+    "shape_disturbing_coefficient": null,
+    "heredity_coefficient": null,
+    "gap_crown_m": null,
+    "entry_crown_m": null,
+    "incoming_ridges": [],
+    "coil": null,
+    "previous_strip_widths_m": [],
+    "grinding": null,
+    "cooling_zone_pitch_m": null,
+    "deflector_roll_radius_m": null,
+    "lateral_compressive_stress_pa": null
+  },
+  "tribology": {
+    "lubricant": {
+      "viscosity_ref_pa_s": 0.0018,
+      "reference_temperature_k": 313.15,
+      "temperature_viscosity_coefficient_per_k": 0.015,
+      "pressure_viscosity_coefficient_per_pa": 1.2e-08,
+      "conductivity_w_mk": null,
+      "name": "kerosene-based rolling oil"
+    },
+    "surface_finish": {
+      "roll_roughness_rq_m": 2.5e-07,
+      "strip_roughness_rq_m": 3e-07
+    },
+    "friction_closure": null,
+    "inlet_temperature_k": 318.15,
+    "strip_entry_temperature_k": 313.15,
+    "strip_heat_fraction": 0.84,
+    "temperature_limit_k": null,
+    "thermal_correction": false,
+    "use_computed_friction": false
+  },
+  "hardening": null,
+  "gauge_control": {
+    "compensation_gain": 0.9,
+    "bandwidth_hz": 25.0,
+    "force_filter_hz": null
+  },
+  "drive": null,
+  "incoming_variation": null
 }

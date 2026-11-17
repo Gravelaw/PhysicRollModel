@@ -372,6 +372,14 @@
       "Symmetric (gap-changing) mode only; no roll bending, cross-width or drive dynamics."
     ],
     "operating_exit_speed_m_s": 7.8333,
+    "reliability": "WITHIN_SPAN_WAVE_LIMIT",
+    "span_wave_limit_basis": "c/(2L) of the shorter span, c = sqrt(E/rho), rho = 2700 kg/m3",
+    "span_wave_limit_hz": 636.4688465216444,
+    "speed_consistent": {
+      "not_supplied": true,
+      "reason": "needs tribology and a derived (not supplied) bite",
+      "status": "NOT_SUPPLIED"
+    },
     "stability": {
       "bite_damping_transit_fraction": 0.5,
       "bite_source": "derived_slab_hitchcock",
@@ -455,6 +463,20 @@
       "speed_ratio": 1.912836611467682,
       "stable_at_operating_speed": false
     }
+  },
+  "drive": {
+    "not_supplied": true,
+    "reason": "drive is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
+  "family_summary": {
+    "leading_family": "transverse",
+    "not_contradicted_per_family": {
+      "lengthwise": 0,
+      "transverse": 4
+    },
+    "observed_family": "transverse",
+    "text": "The observed orientation (transverse) points to the transverse family of band mechanisms (marks across the strip, repeating along its length). The leading hypothesis (order_locked_drive_or_bearing_excitation) belongs to the transverse family."
   },
   "flags": [
     "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
@@ -1736,6 +1758,11 @@
       ]
     }
   },
+  "gauge_control": {
+    "not_supplied": true,
+    "reason": "gauge_control is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "hypotheses": [
     {
       "confirming_test": "Chock accelerometer speed-ramp order map: a line at a fixed order of work-roll rotation matching the mark pitch; bearing inspection (inner/outer race) or gearbox check.",
@@ -1781,6 +1808,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "order_locked_drive_or_bearing_excitation",
       "levers": [
         "replace the defective bearing / gear",
@@ -1895,6 +1923,7 @@
           "weight": "weak"
         }
       ],
+      "family": "transverse",
       "id": "herringbone_lubricant_film_breakdown",
       "levers": [
         "lower the pass reduction",
@@ -1951,6 +1980,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "coil_or_mandrel_locked_marks",
       "levers": [
         "inspect the mandrel / sleeve and coil lead-end step",
@@ -2014,6 +2044,7 @@
           "weight": "weak"
         }
       ],
+      "family": "transverse",
       "id": "skidding_loss_of_forward_slip",
       "levers": [
         "raise friction (lubricant change)",
@@ -2109,6 +2140,7 @@
           "weight": "weak"
         }
       ],
+      "family": "transverse",
       "id": "fifth_octave_roll_stack_resonance",
       "levers": [
         "change speed away from the resonant speed of the exciting order",
@@ -2236,6 +2268,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "third_octave_self_excited_chatter",
       "levers": [
         "reduce exit speed below the critical speed",
@@ -2269,6 +2302,230 @@
         "supports": 3
       },
       "title": "Third-octave self-excited gauge chatter"
+    },
+    {
+      "confirming_test": "Compare band appearance with oil temperature and speed; check whether the bands wander between coils.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "gauge variation",
+          "expected": "not detected",
+          "observed": "false",
+          "verdict": "SUPPORTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at higher speed",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "tribology regime / exit strip temperature at the operating point",
+          "expected": "BOUNDARY or above the temperature limit",
+          "observed": "no tribology",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "heat_streak_or_film_variation",
+      "levers": [
+        "lower the oil inlet temperature",
+        "increase coolant flow",
+        "reduce speed"
+      ],
+      "mechanism": "Local oil-film variation from heat: milky bands that wander in width and position (QCA-1).",
+      "model_prediction": {
+        "exit_temperature_above_limit": null,
+        "regime_at_operating_point": null
+      },
+      "rank": 7,
+      "score": -5,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 6,
+        "observation_supports": 1,
+        "strong_contradictions": 1,
+        "support_points": 1,
+        "supports": 1
+      },
+      "title": "Heat streak / oil-film variation"
+    },
+    {
+      "confirming_test": "Spray footprint check (pattern paper or water test) and header inspection; compare the band positions on three consecutive coils with the nozzle positions on the barrel coordinate; shapemeter zone map.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "band positions vs model stripes / blocked or low-level nozzles",
+          "expected": "match",
+          "observed": "positions not observed (model: none)",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "continuous",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false (same place)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "spacing vs nozzle pitch",
+          "expected": "integer multiple of the nozzle pitch",
+          "observed": "spacing not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "loose_or_buckle",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "model band at an observed position above the reporting threshold",
+          "expected": "latent or manifest band",
+          "observed": "no width model",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "visible only after tension release vs steady model band",
+          "expected": "LATENT model band",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "loose / buckle appearance vs MANIFEST steady model band",
+          "expected": "MANIFEST model band and loose_or_buckle",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "faces",
+          "expected": "both",
+          "observed": "both",
+          "verdict": "SUPPORTS",
+          "weight": "weak"
+        }
+      ],
+      "family": "lengthwise",
+      "id": "nozzle_thermal_stripe",
+      "levers": [
+        "clear or replace the blocked nozzle",
+        "check header pressure and filtration",
+        "adjust spray overlap / offset angle"
+      ],
+      "mechanism": "A blocked, partly blocked or mis-aimed nozzle leaves an under-cooled stripe; the work roll grows locally and over-rolls the strip there, giving a loose band (latent under tension, manifest once it buckles).",
+      "model_prediction": {
+        "model_position_source": "phase-1 spray coverage band-risk stripes (no width model)",
+        "model_positions_m": [],
+        "position_tolerance_m": 0.013,
+        "steady_model_bands": []
+      },
+      "rank": 8,
+      "score": -5,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 10,
+        "observation_supports": 1,
+        "strong_contradictions": 1,
+        "support_points": 1,
+        "supports": 1
+      },
+      "title": "Nozzle thermal stripe (blocked / partly blocked / mis-aimed)"
     },
     {
       "confirming_test": "Inspect the backup-roll barrel; compare the pitch with the backup-roll circumference times (1 + forward slip); backup-roll change test.",
@@ -2322,6 +2579,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "backup_roll_borne_marks",
       "levers": [
         "change / regrind the backup rolls",
@@ -2334,7 +2592,7 @@
         "pitch_two_marks_m": 1.883042518178468,
         "roll_diameter_m": 1.15
       },
-      "rank": 7,
+      "rank": 9,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2348,6 +2606,566 @@
         "supports": 1
       },
       "title": "Backup-roll-borne marks"
+    },
+    {
+      "confirming_test": "Log the coolant valve states against the shapemeter zones and the band appearance times; compare the band duration with the valve-off intervals.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with coolant zone switching",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "intermittent duration vs band life",
+          "expected": "within 0.3-3 x band life",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "band positions vs event nozzle positions",
+          "expected": "match",
+          "observed": "no zone-switching events supplied",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "spacing vs cooling-zone (or nozzle) pitch",
+          "expected": "integer multiple of the nozzle pitch",
+          "observed": "spacing not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false (positions wander with the controller)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "loose_or_buckle or tight",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "visible only after tension release vs event peak band",
+          "expected": "LATENT model band",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "loose / buckle appearance vs MANIFEST event peak band",
+          "expected": "MANIFEST model band and loose_or_buckle",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "cooling_zone_switching_transient",
+      "levers": [
+        "retune the flatness controller (zone dead band, rate limits)",
+        "check valve hysteresis and intermittent nozzle blockage",
+        "review the zone-to-nozzle mapping"
+      ],
+      "mechanism": "Selective zone cooling (flatness control valves) or an intermittently blocking nozzle switches a zone off and on; each switch grows a thermal stripe for tens of seconds and it fades over about a minute after the zone returns: short-lived bands.",
+      "model_prediction": {
+        "event_positions_m": [],
+        "events": [],
+        "literature_band_life_s": [
+          20.0,
+          120.0
+        ]
+      },
+      "rank": 10,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 10,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Cooling-zone switching transient"
+    },
+    {
+      "confirming_test": "Measure the band spacing and compare with the grinder traverse per revolution; inspect the roll surface; roll-change test.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "input",
+          "criterion": "spacing vs grinding feed pitch (1-3 x, within 10 %)",
+          "expected": "match",
+          "observed": "no grinding data",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "regular fine spacing (CV < 0.15, spacing < 30 mm)",
+          "expected": "regular and < 30 mm",
+          "observed": "fewer than three observed positions",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "continuous",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "grinding_feed_marks",
+      "levers": [
+        "change the grinding traverse / spark-out",
+        "regrind the work rolls"
+      ],
+      "mechanism": "Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution.",
+      "model_prediction": {
+        "grinding_feed_pitch_m": null
+      },
+      "rank": 11,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 5,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Grinding feed marks"
+    },
+    {
+      "confirming_test": "Entry profile scan of the incoming coil and an outside-profile scan of the wound coil; check whether the band is worse toward the outer wraps and follows the mother coil.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false (fixed to the mother coil, not the mill)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse toward outer wraps",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "band positions vs supplied incoming ridges",
+          "expected": "match",
+          "observed": "no incoming ridges supplied",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "model coil build-up of a supplied ridge",
+          "expected": "RIDGE_YIELDS_STRIP",
+          "observed": "no ridge with coil data",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "intermittent band with partial affected coil length",
+          "expected": "both/intermittent, fraction 0.05-0.95",
+          "observed": "continuity not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "visible only after tension release",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "incoming_ridge_coil_buildup",
+      "levers": [
+        "oscillate the winding (tracking offset)",
+        "lower the winding tension",
+        "correct the upstream profile"
+      ],
+      "mechanism": "A local high spot in the incoming profile stacks up wrap by wrap in the coil, stretches the band beyond yield, and leaves a tight-then-loose band, worse toward the outer wraps.",
+      "model_prediction": {
+        "ridges": []
+      },
+      "rank": 12,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 8,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Incoming ridge, coil build-up"
+    },
+    {
+      "confirming_test": "Anneal a sample and look for stain; inspect wipers and drip shields.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "stain",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "faces",
+          "expected": "one",
+          "observed": "both",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with tension",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "oil_carryover_drips_or_stain",
+      "levers": [
+        "repair wipers / air knives",
+        "check drip shields",
+        "adjust oil filtration"
+      ],
+      "mechanism": "Coolant carried past the wipers, drips, or staining seen after annealing.",
+      "model_prediction": {
+        "note": "no model quantity; settle by annealing a sample and checking wipers"
+      },
+      "rank": 13,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 1,
+        "not_observed": 4,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Oil carry-over, drips or stain"
+    },
+    {
+      "confirming_test": "Entry and exit profile measurements; shapemeter map; compare the relative crowns.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "input",
+          "criterion": "crown change vs Shohet-Townsend dead band",
+          "expected": "outside the dead band",
+          "observed": "entry / gap crowns or heredity coefficient not supplied",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "band positions: edges or centre vs spread across the width",
+          "expected": "all near the edges or all near the centre",
+          "observed": "positions not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "band width",
+          "expected": "> 150 mm",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "loose_or_buckle",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "visible only after tension release",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "profile_flatness_mismatch",
+      "levers": [
+        "adjust roll bending / thermal crown",
+        "match the gap crown to the entry crown"
+      ],
+      "mechanism": "Relative crown change between entry and exit outside the Shohet-Townsend dead band: smooth edge waves or a centre buckle rather than narrow stripes.",
+      "model_prediction": {
+        "crown_classification": null
+      },
+      "rank": 14,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 6,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Profile / flatness mismatch (edge wave, centre buckle)"
+    },
+    {
+      "confirming_test": "Vary the span tension and watch the bands; check roll alignment and crown of the deflector / idler rolls; measure the trough spacing.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "transverse",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "input",
+          "criterion": "spacing vs trough wavelength",
+          "expected": "0.5-2 x wavelength",
+          "observed": "no trough model",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "crease_or_flute",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with tension",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "model trough status (either span)",
+          "expected": "TROUGHS_EXPECTED (needs lateral_compressive_stress_pa)",
+          "observed": "no trough model",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "tension_troughs_or_creases",
+      "levers": [
+        "align / re-crown the deflector rolls",
+        "adjust span tension",
+        "shorten the free span"
+      ],
+      "mechanism": "Lateral buckling of thin strip under tension in a free span (troughs), which can be ironed into a crease on a roll.",
+      "model_prediction": {
+        "trough_status": [],
+        "trough_wavelengths_m": {}
+      },
+      "rank": 15,
+      "score": -6,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 6,
+        "contradicts": 1,
+        "neutral": 0,
+        "not_observed": 7,
+        "observation_supports": 0,
+        "strong_contradictions": 1,
+        "support_points": 0,
+        "supports": 0
+      },
+      "title": "Tension troughs or creases"
     },
     {
       "confirming_test": "Motor current / torque and tension signals: a 5-30 Hz component; check whether the mark pitch scales with speed.",
@@ -2385,6 +3203,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "torsional_or_low_frequency_drive_vibration",
       "levers": [
         "retune drive speed / tension controllers",
@@ -2397,7 +3216,7 @@
           1.5666600000000002
         ]
       },
-      "rank": 8,
+      "rank": 16,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2456,6 +3275,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "work_roll_borne_marks",
       "levers": [
         "change the work rolls",
@@ -2469,7 +3289,7 @@
         "pitch_two_marks_m": 0.4650296305762478,
         "roll_diameter_m": 0.284
       },
-      "rank": 9,
+      "rank": 17,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2485,7 +3305,7 @@
       "title": "Work-roll-borne marks (damage, ovality, grinder chatter)"
     },
     {
-      "confirming_test": "Nozzle footprint check (spray-pattern paper or water test) and header inspection; compare band positions with the nozzle stripes on the barrel coordinate.",
+      "confirming_test": "Inspect the work-roll surface at the band positions; work-roll change test; compare the positions with the edges of earlier narrower widths.",
       "evidence": [
         {
           "basis": "observation",
@@ -2496,100 +3316,88 @@
           "weight": "strong"
         },
         {
-          "basis": "model",
-          "criterion": "band positions vs under-cooled stripes",
-          "expected": "an under-cooled stripe",
-          "observed": "coverage status PERIODIC_COVERAGE_VARIATION_AT_NOZZLE_PITCH: no blocked-nozzle or uncovered stripe",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
           "basis": "observation",
-          "criterion": "worse at thinner gauge",
+          "criterion": "positions change / band disappears after work-roll change",
           "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        }
-      ],
-      "id": "lengthwise_coolant_or_thermal_band",
-      "levers": [
-        "clear or replace blocked nozzles",
-        "adjust spray overlap / offset angle",
-        "check header pressure and filtration"
-      ],
-      "mechanism": "An under-cooled stripe (spray gap or blocked nozzle) gives a local thermal crown and differential oil plate-out, printing a lengthwise band at that width position.",
-      "model_prediction": {
-        "band_risk_stripe_centres_m": [],
-        "coverage_status": "PERIODIC_COVERAGE_VARIATION_AT_NOZZLE_PITCH",
-        "thermal_gap_closure_fraction_upper_bound": 0.024342857142857142
-      },
-      "rank": 10,
-      "score": -7,
-      "standing": "CONTRADICTED",
-      "tallies": {
-        "contradiction_points": 7,
-        "contradicts": 2,
-        "neutral": 0,
-        "not_observed": 1,
-        "observation_supports": 0,
-        "strong_contradictions": 1,
-        "support_points": 0,
-        "supports": 0
-      },
-      "title": "Lengthwise coolant / thermal band"
-    },
-    {
-      "confirming_test": "Inspect the work-roll surface at the band position; work-roll change test.",
-      "evidence": [
-        {
-          "basis": "observation",
-          "criterion": "orientation",
-          "expected": "longitudinal",
-          "observed": "transverse",
-          "verdict": "CONTRADICTS",
-          "weight": "strong"
-        },
-        {
-          "basis": "observation",
-          "criterion": "work-roll change",
-          "expected": "disappears",
-          "observed": "false",
+          "observed": "disappears after work-roll change: false",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
         },
         {
           "basis": "observation",
+          "criterion": "follows previous strip edges / two-tone position",
+          "expected": "true or on a two-tone position",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "continuous",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
           "criterion": "faces",
-          "expected": "n/a",
+          "expected": "one",
           "observed": "both",
           "verdict": "NEUTRAL",
           "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with coolant zone switching",
+          "expected": "false",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
         }
       ],
-      "id": "lengthwise_roll_surface_band",
+      "family": "lengthwise",
+      "id": "roll_surface_band",
       "levers": [
         "change / regrind the work rolls",
-        "check roll coating / wear pattern"
+        "schedule wide-to-narrow",
+        "check roll coating"
       ],
-      "mechanism": "A wear band, roll-coating step or grinding streak on the work roll prints a lengthwise band at a fixed width position.",
+      "mechanism": "A wear band, roll-coating (pick-up) streak, or a two-tone step at the edges of previously rolled narrower strip prints a band at a fixed width position until the work rolls are changed.",
       "model_prediction": {
-        "note": "no model quantity; settle by roll inspection"
+        "note": "settle by roll inspection and a work-roll change test",
+        "two_tone_positions_m": []
       },
-      "rank": 11,
+      "rank": 18,
       "score": -8,
       "standing": "CONTRADICTED",
       "tallies": {
         "contradiction_points": 8,
         "contradicts": 2,
         "neutral": 1,
-        "not_observed": 0,
+        "not_observed": 5,
         "observation_supports": 0,
         "strong_contradictions": 1,
         "support_points": 0,
         "supports": 0
       },
-      "title": "Lengthwise roll-surface band"
+      "title": "Roll-surface band (wear band, pick-up streak, two-tone step)"
     },
     {
       "confirming_test": "Tensile test of the incoming strip for a yield-point plateau; check where the marks first appear (incoming coil, deflector roll, leveller).",
@@ -2643,6 +3451,7 @@
           "weight": null
         }
       ],
+      "family": "transverse",
       "id": "yield_point_bending_marks",
       "levers": [
         "temper / light pre-stretch (about 1-2 %) before bending",
@@ -2671,7 +3480,7 @@
         "luders_susceptibility": "NOT_SUSCEPTIBLE_COLD_WORKED",
         "pass_reduction_vs_luders": "BITE_CANNOT_LEAVE_LUDERS_BANDS"
       },
-      "rank": 12,
+      "rank": 19,
       "score": -15,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2687,6 +3496,11 @@
       "title": "Yield-point (Lueders Type A / coil-break) bending marks"
     }
   ],
+  "incoming_variation": {
+    "not_supplied": true,
+    "reason": "incoming_variation is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "inputs": {
     "case_schema": "physicroll.band_case.v1",
     "coolant": {
@@ -2699,6 +3513,10 @@
       "spray_angle_rad": 0.6,
       "standoff_m": 0.15
     },
+    "drive": null,
+    "gauge_control": null,
+    "hardening": null,
+    "incoming_variation": null,
     "kinematics": {
       "backup_roll_diameter_m": 1.15,
       "bearings": [
@@ -2742,6 +3560,7 @@
     },
     "model_options": {
       "bite_damping_transit_fraction": 0.5,
+      "bite_model": "hitchcock",
       "bite_response_override": null,
       "cells": 256,
       "max_radius_ratio": 1.5
@@ -2751,13 +3570,21 @@
       "Closed-loop demo: the planted cause is an order-locked work-roll bearing defect (2 x BPFI)."
     ],
     "observation": {
+      "appearance": null,
       "band_positions_across_width_m": [],
+      "band_spacing_m": null,
+      "band_width_m": null,
+      "changes_with_coolant_zone_switching": null,
+      "changes_with_tension": null,
       "disappears_after_backup_roll_change": false,
       "disappears_after_work_roll_change": false,
       "faces": "both",
       "first_seen": "bite_exit",
+      "follows_previous_strip_edges": null,
       "gauge_variation_amplitude_m": null,
       "gauge_variation_detected": false,
+      "intermittent_duration_s": null,
+      "lengthwise_continuity": null,
       "measured_vibration_hz": 314.3,
       "onset_above_exit_speed_m_s": null,
       "orientation": "transverse",
@@ -2771,7 +3598,12 @@
           "pitch_m": 0.024921
         }
       ],
-      "worse_at_thinner_gauge": null
+      "positions_change_after_work_roll_change": null,
+      "positions_repeat_across_coils": null,
+      "visible_only_after_tension_release": null,
+      "worse_at_higher_speed": null,
+      "worse_at_thinner_gauge": null,
+      "worse_toward_outer_wraps": null
     },
     "pass": {
       "entry_tension_pa": 20000000.0,
@@ -2800,7 +3632,9 @@
       "work_backup_contact_stiffness_n_m": 40000000000.0,
       "work_roll_mass_kg": 3000.0
     },
-    "synthetic": true
+    "synthetic": true,
+    "tribology": null,
+    "width_model": null
   },
   "leading_hypotheses": [
     "order_locked_drive_or_bearing_excitation"
@@ -2972,10 +3806,16 @@
     "Strip spans are lumped springs (inaccurate near the span wave resonance c/(2L)).",
     "Circular (Hitchcock) roll flattening is not valid toward foil gauges; thinner passes need supplied bite sensitivities (model_options.bite_response_override).",
     "The bite-damping closure (fraction beta of transit time) is a declared heuristic; results without it (beta = 0) are reported alongside.",
-    "Friction is an input: no friction-speed or film-thickness-friction law is modelled, so the usual drop of friction with speed must be represented by the schedule inputs.",
+    "Friction is an input unless tribology.use_computed_friction is set; the friction-speed closure of bite_tribology is an unfitted placeholder whose slope, not level, is used.",
     "Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated in time; the antisymmetric mode frequency is an undamped lumped estimate.",
-    "Spray coverage is a geometric footprint count; thermal growth is a free-expansion upper bound with no axial conduction."
+    "Spray coverage is a geometric footprint count; the phase-1 thermal growth is a free-expansion upper bound with no axial conduction (the v2 width_model solves the roll temperature field instead).",
+    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation."
   ],
+  "process": {
+    "not_supplied": true,
+    "reason": "tribology and hardening are null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "provenance": "SYNTHETIC demonstration modelled on the published aluminium case described by Innoval Technology (Farley): 20-25 mm transverse bands whose pitch does not change with speed, 315 Hz at 470 m/min equal to 2 x BPFI of a work-roll bearing. Same synthetic stand and spans as the thin-gauge demo, BUT the work roll is 0.284 m diameter (radius 0.142 m): with a 0.40 m roll a BPFI order of 18.66 gives a 35 mm pitch and 221 Hz at 470 m/min, so the published numbers (BPFI ~18.66, 315 Hz, ~25 mm) are only mutually consistent with a ~0.28 m work roll. Bearing: 35 rollers, 16.47 mm, pitch diameter 0.24 m, 15 deg contact angle -> BPFI order 18.66. Pass 1.0 -> 0.70 mm, flow stress 230 MPa, friction 0.06, tensions 20/25 MPa at 7.8333 m/s. Pitch = pi*D_w*(1+f)/(2*BPFI) with the model forward slip; observed at 6.0 and 7.8333 m/s (same pitch), measured stand vibration 2*BPFI*f_wr at 470 m/min; no gauge variation, both faces, persists after work- and backup-roll change.",
   "recommended_next_measurements": [
     "Chock accelerometer speed-ramp order map: a line at a fixed order of work-roll rotation matching the mark pitch; bearing inspection (inner/outer race) or gearbox check.",
@@ -4286,9 +5126,10 @@
         "Krueger, Richard, Peretic (SMS group) AISTech 2019 \"Chatter Management at Cold Rolling Mills Today\" (order analysis, mark distance = circumference/order)"
       ],
       "status": "SPEED_INDEPENDENT_PITCH",
-      "threshold_basis": "ANALYST_CHOICE_PROJECT_SPEC (classification bands are not sourced)",
+      "threshold_basis": "ANALYST_CHOICE_PROJECT_SPEC (classification bands are not sourced); min_ln_speed_spread = ln(1.05) is an ANALYST_THRESHOLD",
       "thresholds": {
         "fixed_frequency_min_slope": 0.7,
+        "min_ln_speed_spread": 0.04879016416943205,
         "speed_independent_max_abs_slope": 0.3
       }
     },
@@ -10367,5 +11208,10 @@
     ],
     "time_step_s": 1.1724768865449437e-05,
     "trace_metrics_method": "zero crossings and half-cycle peak envelope, second half of record"
+  },
+  "width": {
+    "not_supplied": true,
+    "reason": "width_model is null or absent",
+    "status": "NOT_SUPPLIED"
   }
 }

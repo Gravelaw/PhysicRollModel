@@ -23,7 +23,7 @@ def slug(name):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Band / chatter-mark root-cause screening (unvalidated, SI units)')
-    parser.add_argument('case', type=Path, help='band case JSON (physicroll.band_case.v1)')
+    parser.add_argument('case', type=Path, help='band case JSON (physicroll.band_case.v1 or v2)')
     parser.add_argument('--out', type=Path, required=True, help='output directory')
     args = parser.parse_args(argv)
     try:
