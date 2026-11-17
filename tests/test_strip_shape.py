@@ -397,6 +397,22 @@ class TestTroughs(unittest.TestCase):
         # ratio identity (a/(pi*R))*sqrt(E/sigma_x)
         self.assertAlmostEqual(wr / tr, 2.0 / (math.pi * 0.1) * math.sqrt(70e9 / 30e6))
 
+    def test_short_span_large_roller_wrinkle_first(self):
+        # trough: -(pi*1e-4/0.05)*sqrt(70e9*30e6/(3*0.8911)) = -5.57 MPa;
+        # roller: -70e9*1e-4/(1.0*sqrt(3*0.8911)) = -4.28 MPa -> wrinkle before troughs
+        r = tension_trough_screen(1e-4, 0.05, 30e6, 0.04, roller_radius_m=1.0,
+                                  lateral_compressive_stress_pa=4.5e6)
+        self.assertAlmostEqual(r['trough_critical_lateral_stress_pa'] / 1e6, -5.57, delta=0.01)
+        self.assertAlmostEqual(r['roller_wrinkle_critical_lateral_stress_pa'] / 1e6, -4.28,
+                               delta=0.01)
+        self.assertEqual(r['status'], 'ROLLER_WRINKLE_EXPECTED')
+        self.assertIn('ROLLER_WRINKLE_THRESHOLD_BELOW_TROUGH_THRESHOLD_SHORT_SPAN', r['flags'])
+        low = tension_trough_screen(1e-4, 0.05, 30e6, 0.04, roller_radius_m=1.0,
+                                    lateral_compressive_stress_pa=1e6)
+        self.assertEqual(low['status'], 'BELOW_TROUGH_THRESHOLD')
+        self.assertIn('ROLLER_WRINKLE_THRESHOLD_BELOW_TROUGH_THRESHOLD_SHORT_SPAN', low['flags'])
+        dumps(r)
+
     def test_scalings(self):
         args = (2.0, 30e6, E_AL, NU_AL)
         self.assertAlmostEqual(trough_critical_lateral_stress_pa(0.4e-3, *args)
@@ -421,6 +437,11 @@ class TestTroughs(unittest.TestCase):
         self.assertEqual(tension_trough_screen(**base, roller_radius_m=0.1,
                                                lateral_compressive_stress_pa=100e6)['status'],
                          'ROLLER_WRINKLE_EXPECTED')
+        long_span = tension_trough_screen(**base, roller_radius_m=0.1,
+                                          lateral_compressive_stress_pa=1e6)
+        self.assertNotIn('ROLLER_WRINKLE_THRESHOLD_BELOW_TROUGH_THRESHOLD_SHORT_SPAN',
+                         long_span['flags'])
+        self.assertGreater(long_span['wrinkle_to_trough_threshold_ratio'], 1.0)
         ok = tension_trough_screen(**base, observed_spacing_m=0.3)
         self.assertTrue(ok['observed_spacing_consistent'])
         self.assertFalse(tension_trough_screen(**base, observed_spacing_m=0.05)

@@ -1063,10 +1063,10 @@ def tension_trough_screen(thickness_m, span_length_m, tension_stress_pa, strip_w
     ratio = None if wrinkle is None else wrinkle / trough
     if lat is None:
         status = 'LATERAL_STRESS_UNKNOWN_THRESHOLDS_ONLY'
+    elif wrinkle is not None and lat >= abs(wrinkle):
+        status = 'ROLLER_WRINKLE_EXPECTED'      # independent of the trough comparison
     elif lat < abs(trough):
         status = 'BELOW_TROUGH_THRESHOLD'
-    elif wrinkle is not None and lat >= abs(wrinkle):
-        status = 'ROLLER_WRINKLE_EXPECTED'
     else:
         status = 'TROUGHS_EXPECTED'
     spacing_ratio = consistent = None
@@ -1081,9 +1081,16 @@ def tension_trough_screen(thickness_m, span_length_m, tension_stress_pa, strip_w
         flags.append('ROLLER_RADIUS_NOT_GIVEN_WRINKLE_NOT_ASSESSED')
     reasons = [f'Trough wavelength {lam:.4f} m ({w / lam:.2f} across the {w:g} m width), '
                f'trough onset at {trough / 1e6:.4f} MPa lateral stress.']
-    if wrinkle is not None:
+    short_span = wrinkle is not None and abs(wrinkle) < abs(trough)
+    if short_span:
+        flags.append('ROLLER_WRINKLE_THRESHOLD_BELOW_TROUGH_THRESHOLD_SHORT_SPAN')
+        reasons.append(f'Roller wrinkle threshold {wrinkle / 1e6:.3f} MPa is below the trough '
+                       f'threshold in magnitude (ratio {ratio:.3f}): the usual ordering '
+                       '(troughs first) does not hold for this span/roller, whatever the '
+                       'lateral stress.')
+    elif wrinkle is not None:
         reasons.append(f'Roller wrinkle threshold {wrinkle / 1e6:.3f} MPa, {ratio:.0f}x the '
-                       'trough threshold: troughs always come first.')
+                       'trough threshold: troughs come first for this span/roller.')
     if obs is not None:
         reasons.append(f'Observed spacing / wavelength = {spacing_ratio:.3f}: '
                        + ('within' if consistent else 'outside') + ' the 0.5-2 band.')
