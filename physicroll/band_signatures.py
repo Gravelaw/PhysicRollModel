@@ -102,6 +102,7 @@ LAW_COIL = 'drifts_with_coil_diameter'
 
 FIXED_FREQUENCY_MIN_SLOPE = 0.7
 SPEED_INDEPENDENT_MAX_ABS_SLOPE = 0.3
+MIN_LN_SPEED_SPREAD = math.log(1.05)  # analyst choice: speeds within 5 % give no pitch law
 MARGINAL_FORWARD_SLIP = 0.005
 HERRINGBONE_ELEVATED_REDUCTION = 0.40
 HERRINGBONE_HIGH_REDUCTION = 0.45
@@ -216,7 +217,9 @@ def pitch_speed_exponent(observations):
 
     Returns status == classification: 'FIXED_FREQUENCY' (slope >= 0.7),
     'SPEED_INDEPENDENT_PITCH' (|slope| <= 0.3) or 'INDETERMINATE'. Thresholds are the
-    project-spec analyst choices, not literature values.
+    project-spec analyst choices, not literature values. If the ln(speed) spread is below
+    ``MIN_LN_SPEED_SPREAD`` (ln 1.05, analyst choice) the slope is reported but the result is
+    'INDETERMINATE' with flag SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW.
     """
     if isinstance(observations, (str, bytes, dict)) or not hasattr(observations, '__iter__'):
         raise ValueError('observations must be a sequence of (exit_speed_m_s, pitch_m) pairs')
@@ -233,7 +236,15 @@ def pitch_speed_exponent(observations):
     slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
     intercept = my - slope * mx
     rms = math.sqrt(sum((y - intercept - slope * x) ** 2 for x, y in zip(xs, ys)) / len(xs))
-    if slope >= FIXED_FREQUENCY_MIN_SLOPE:
+    spread = max(xs) - min(xs)
+    too_close = spread < MIN_LN_SPEED_SPREAD
+    if too_close:
+        status = 'INDETERMINATE'
+        reasons = [f'Exit speeds span only {math.expm1(spread) * 100:.3g} % (< 5 %): the '
+                   'speeds are too close together to determine a pitch-speed law; measure '
+                   'pitch at two clearly different steady speeds. The fitted exponent '
+                   f'{slope:.3g} is reported but not classified.']
+    elif slope >= FIXED_FREQUENCY_MIN_SLOPE:
         status = 'FIXED_FREQUENCY'
         reasons = [f'Pitch rises with speed (exponent {slope:.3f} >= 0.7): consistent with a '
                    'fixed-frequency source such as a structural resonance or self-excited chatter.']
@@ -248,20 +259,32 @@ def pitch_speed_exponent(observations):
     flags = []
     if len(pairs) == 2:
         flags.append('TWO_POINT_FIT_NO_RESIDUAL_CHECK')
-    if max(xs) - min(xs) < math.log(1.2):
+    if too_close:
+        flags.append('SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW')
+    if spread < math.log(1.2):
         flags.append('NARROW_SPEED_RANGE_BELOW_20_PERCENT')
-    if slope > 1.3:
+    if slope > 1.3 and not too_close:
         flags.append('EXPONENT_ABOVE_UNITY_UNEXPLAINED')
+    try:
+        unit_pitch = math.exp(intercept)
+    except OverflowError:
+        unit_pitch = None
+    if unit_pitch is not None and not (unit_pitch > 0 and math.isfinite(unit_pitch)):
+        unit_pitch = None
+    if unit_pitch is None:
+        flags.append('UNIT_SPEED_PITCH_NOT_REPRESENTABLE')
     obs = [{'exit_speed_m_s': u, 'pitch_m': p, 'implied_frequency_hz': u / p} for u, p in pairs]
     return _checked({
         'status': status, 'classification': status,
         'slope': slope, 'intercept_ln_pitch': intercept,
-        'pitch_at_unit_speed_m': math.exp(intercept), 'residual_rms_ln': rms,
+        'pitch_at_unit_speed_m': unit_pitch, 'residual_rms_ln': rms,
         'observation_count': len(pairs), 'distinct_speed_count': distinct,
         'observations': obs, 'implied_frequency_hz': [o['implied_frequency_hz'] for o in obs],
         'thresholds': {'fixed_frequency_min_slope': FIXED_FREQUENCY_MIN_SLOPE,
-                       'speed_independent_max_abs_slope': SPEED_INDEPENDENT_MAX_ABS_SLOPE},
-        'threshold_basis': 'ANALYST_CHOICE_PROJECT_SPEC (classification bands are not sourced)',
+                       'speed_independent_max_abs_slope': SPEED_INDEPENDENT_MAX_ABS_SLOPE,
+                       'min_ln_speed_spread': MIN_LN_SPEED_SPREAD},
+        'threshold_basis': 'ANALYST_CHOICE_PROJECT_SPEC (classification bands are not sourced); '
+                           'min_ln_speed_spread = ln(1.05) is an ANALYST_THRESHOLD',
         'reasons': reasons, 'flags': flags,
         'limitations': ['Pitch-speed regression discriminates kinematic families only; it does '
                         'not identify which source within a family.',

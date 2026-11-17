@@ -68,6 +68,54 @@ class PitchLawTests(unittest.TestCase):
                 pitch_speed_exponent(bad)
 
 
+class PitchExponentRobustnessTests(unittest.TestCase):
+    def test_nearly_equal_speeds_are_indeterminate_not_an_error(self):
+        r = pitch_speed_exponent([(10, 0.031), (10.0001, 0.03)])
+        dumps(r)
+        self.assertEqual(r['status'], 'INDETERMINATE')
+        self.assertEqual(r['classification'], 'INDETERMINATE')
+        self.assertIn('SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW', r['flags'])
+        self.assertLess(r['slope'], -1000)
+        self.assertAlmostEqual(r['implied_frequency_hz'][0], 10 / 0.031)
+        self.assertAlmostEqual(r['implied_frequency_hz'][1], 10.0001 / 0.03)
+        self.assertIn('too close', r['reasons'][0])
+        self.assertAlmostEqual(r['thresholds']['min_ln_speed_spread'], math.log(1.05))
+
+    def test_four_percent_apart_is_indeterminate(self):
+        for pitch_of in (lambda u: u / 100.0, lambda u: 0.022):
+            r = pitch_speed_exponent([(10.0, pitch_of(10.0)), (10.4, pitch_of(10.4))])
+            self.assertEqual(r['status'], 'INDETERMINATE')
+            self.assertIn('SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW', r['flags'])
+
+    def test_ten_and_thirty_percent_still_classify(self):
+        for factor in (1.1, 1.3):
+            speeds = (10.0, 10.0 * factor)
+            fixed = pitch_speed_exponent([(u, u / 150.0) for u in speeds])
+            flat = pitch_speed_exponent([(u, 0.022) for u in speeds])
+            self.assertEqual(fixed['status'], 'FIXED_FREQUENCY')
+            self.assertAlmostEqual(fixed['slope'], 1.0, places=9)
+            self.assertEqual(flat['status'], 'SPEED_INDEPENDENT_PITCH')
+            self.assertAlmostEqual(flat['slope'], 0.0, places=9)
+            for r in (fixed, flat):
+                self.assertNotIn('SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW', r['flags'])
+                self.assertEqual('NARROW_SPEED_RANGE_BELOW_20_PERCENT' in r['flags'],
+                                 factor < 1.2)
+
+    def test_extreme_intercept_gives_none(self):
+        # slope = ln(1e-8)/ln(1.06) ~ -316; intercept ~ +1460 -> exp overflows a float
+        r = pitch_speed_exponent([(100.0, 100.0), (106.0, 1e-6)])
+        dumps(r)
+        self.assertIsNone(r['pitch_at_unit_speed_m'])
+        self.assertIn('UNIT_SPEED_PITCH_NOT_REPRESENTABLE', r['flags'])
+        # opposite sign: exp underflows to 0.0, also reported as None
+        low = pitch_speed_exponent([(100.0, 1e-6), (106.0, 100.0)])
+        self.assertIsNone(low['pitch_at_unit_speed_m'])
+        self.assertIn('UNIT_SPEED_PITCH_NOT_REPRESENTABLE', low['flags'])
+        normal = pitch_speed_exponent([(5.0, 0.05), (10.0, 0.1)])
+        self.assertAlmostEqual(normal['pitch_at_unit_speed_m'], 0.01)
+        self.assertNotIn('UNIT_SPEED_PITCH_NOT_REPRESENTABLE', normal['flags'])
+
+
 class BearingTests(unittest.TestCase):
     def test_identities(self):
         o = bearing_defect_orders(9, 0.02, 0.1, 0.2)
