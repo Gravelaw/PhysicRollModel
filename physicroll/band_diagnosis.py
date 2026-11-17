@@ -63,6 +63,7 @@ SPECTRUM_RANGE_HZ = (1.0, 2000.0)
 TRACE_PERIODS = 40
 TRACE_MAX_SAMPLES = 1200
 RUNOUT_REFERENCE_M = 1e-6
+LEVER_UNITY_TOLERANCE = 1e-9
 WEIGHT_POINTS_SUPPORT = {'strong': 3, 'moderate': 2, 'weak': 1}
 WEIGHT_POINTS_CONTRADICT = {'strong': 6, 'moderate': 2, 'weak': 1}
 VERDICTS = ('SUPPORTS', 'CONTRADICTS', 'NEUTRAL', 'NOT_OBSERVED')
@@ -880,11 +881,15 @@ def _lever_rows(case, cache, stand, spans, bite, beta, override):
     for lever, param, k, change in specs:
         row = {'lever': lever, 'parameter': param, 'factor': k,
                'change': f'{param} x{k:g}'}
+        variant = replace(bp, **change)
+        if variant == bp:
+            # SPEC6 6.0 bug 2: a multiplicative change of a zero parameter is no change
+            row['variant_equals_baseline'] = True
         try:
             if override is not None:
                 raise ValueError('bite sensitivities were supplied: this lever needs a '
                                  're-derived or re-supplied bite response')
-            b = cache.get(replace(bp, **change))
+            b = cache.get(variant)
             c, c0 = _crit_pair(stand, b, spans, beta)
             row.update(critical_exit_speed_m_s=c['critical_exit_speed_m_s'],
                        critical_exit_speed_without_bite_damping_m_s=c0['critical_exit_speed_m_s'],
@@ -892,13 +897,17 @@ def _lever_rows(case, cache, stand, spans, bite, beta, override):
         except ValueError as exc:
             row['rejected'] = str(exc)
         rows.append(row)
-    for lever, param, k, st, sp in (
-            ('entry_span', 'entry_span_length_m', 0.5, stand, _spans(case, 0.5)),
-            ('entry_span', 'entry_span_length_m', 2.0, stand, _spans(case, 2.0)),
-            ('structural_damping', 'modal_damping_ratio', 0.5, _stand(case, 0.5), spans),
-            ('structural_damping', 'modal_damping_ratio', 2.0, _stand(case, 2.0), spans)):
+    # SPEC6 6.0 bug 3: each span / damping variant is built inside the handler, so a rejected
+    # variant (e.g. a doubled modal damping ratio >= 1) becomes a rejected row instead of
+    # aborting the whole diagnosis
+    for lever, param, k, build in (
+            ('entry_span', 'entry_span_length_m', 0.5, lambda: (stand, _spans(case, 0.5))),
+            ('entry_span', 'entry_span_length_m', 2.0, lambda: (stand, _spans(case, 2.0))),
+            ('structural_damping', 'modal_damping_ratio', 0.5, lambda: (_stand(case, 0.5), spans)),
+            ('structural_damping', 'modal_damping_ratio', 2.0, lambda: (_stand(case, 2.0), spans))):
         row = {'lever': lever, 'parameter': param, 'factor': k, 'change': f'{param} x{k:g}'}
         try:
+            st, sp = build()
             c, c0 = _crit_pair(st, bite, sp, beta)
             row.update(critical_exit_speed_m_s=c['critical_exit_speed_m_s'],
                        critical_exit_speed_without_bite_damping_m_s=c0['critical_exit_speed_m_s'],
@@ -927,7 +936,16 @@ def _lever_rows(case, cache, stand, spans, bite, beta, override):
         lo, hi = pair[0], pair[1]
         rl, rh = lo['ratio_to_baseline'], hi['ratio_to_baseline']
         nm = names[lever]
-        if rl is None and rh is None:
+        same_input = all(r.get('variant_equals_baseline') for r in pair)
+        unity = (rl is not None and rh is not None and abs(rl - 1) <= LEVER_UNITY_TOLERANCE
+                 and abs(rh - 1) <= LEVER_UNITY_TOLERANCE)
+        if same_input or unity:
+            reason = ('both variants equal the baseline input (the parameter is zero, so a '
+                      'multiplicative change has no effect)' if same_input else
+                      f'both ratios are within {LEVER_UNITY_TOLERANCE:g} of 1')
+            text = f'{nm}: not assessable ({reason})'
+            trend = 'NOT_ASSESSABLE'
+        elif rl is None and rh is None:
             text = f'{nm}: not assessable (both variants rejected or outside the scan)'
             trend = 'NOT_ASSESSABLE'
         elif rl is not None and rh is not None and (rl - 1) * (rh - 1) > 0:

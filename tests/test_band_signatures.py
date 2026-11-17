@@ -315,6 +315,29 @@ class SprayTests(unittest.TestCase):
         self.assertAlmostEqual(offset['effective_footprint_width_m'],
                                0.2 * math.cos(math.radians(10)))
 
+    def test_non_overlapping_fans_keep_every_gap(self):
+        # SPEC6 6.0 bug 1: 1 m barrel, 0.1 m pitch, 0.02 m footprint -> gaps dominate, the modal
+        # coverage count is 0, and every zero-coverage zone must still be reported.
+        r = spray_coverage(1.0, 0.1, 0.1, 2 * math.atan(0.1))
+        dumps(r)
+        self.assertAlmostEqual(r['effective_footprint_width_m'], 0.02)
+        self.assertEqual(r['modal_coverage_count'], 0)
+        self.assertEqual(r['status'], 'UNCOVERED_STRIPES_PRESENT')
+        gaps = [s for s in r['stripes'] if s['coverage_count'] == 0]
+        interior = [s for s in gaps if not s['at_barrel_edge']]
+        self.assertEqual(len(gaps), 11)
+        self.assertEqual(len(interior), 9)
+        self.assertTrue(all(s['cause'] == 'NOZZLE_PATTERN' and s['kind'] == 'UNCOVERED'
+                            for s in interior))
+        self.assertAlmostEqual(interior[0]['start_m'], 0.06)
+        self.assertAlmostEqual(interior[0]['end_m'], 0.14)
+        self.assertFalse(any(s['coverage_count'] > 0 for s in r['stripes']))
+        blocked = spray_coverage(1.0, 0.1, 0.1, 2 * math.atan(0.1), blocked_nozzle_indices=(4,))
+        merged = [s for s in blocked['stripes'] if s['cause'] == 'BLOCKED_NOZZLE']
+        self.assertEqual(len(merged), 1)
+        self.assertAlmostEqual(merged[0]['start_m'], 0.36)
+        self.assertAlmostEqual(merged[0]['end_m'], 0.54)
+
     def test_blocked_nozzle_stripe(self):
         w = 2 * 0.15 * math.tan(math.radians(30))
         r = spray_coverage(1.0, 0.1, 0.15, math.radians(60), blocked_nozzle_indices=(4,))

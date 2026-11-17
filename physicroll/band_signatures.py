@@ -877,7 +877,9 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
     blocked_x = [positions[i] for i in blocked]
     stripes = []
     for a, b, c in merged:
-        if c >= modal:
+        # zero-coverage zones are always kept: when gaps between fans dominate the barrel the
+        # modal count is 0 and a ``c >= modal`` test alone would discard every gap
+        if c >= modal and c > 0:
             continue
         edge = a <= tol or b >= length - tol
         if any(x - w_eff / 2 < b and x + w_eff / 2 > a for x in blocked_x):
