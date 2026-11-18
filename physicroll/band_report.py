@@ -2393,6 +2393,9 @@ def _key_numbers(r):
 
 def _strip_section(r):
     sm2 = r['strip_map']
+    if sm2.get('status') == 'FAILED':
+        return ('<section><h2>What the model predicts on the strip</h2>'
+                + _state_p('FAILED: ' + str(sm2.get('error'))) + '</section>')
     return ('<section><h2>What the model predicts on the strip</h2>'
             f'<p>Bands drawn at the predicted pitch of the leading vibration-type hypothesis '
             f'(<code>{_e(sm2["hypothesis_id"] or "none")}</code>); ticks below the strip at the '

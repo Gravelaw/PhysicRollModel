@@ -1989,14 +1989,35 @@ def rank_hypotheses(hyps):
     return [h['id'] for h in hyps if h['standing'] == 'CONSISTENT_LEADING']
 
 
+def _failed_hypothesis(exc):
+    """Evidence of a hypothesis whose evaluation raised a domain error (ValueError): one
+    NEUTRAL item with the reason, so it scores 0 and is NOT_ASSESSABLE."""
+    reason = f'evaluation failed: {exc}'
+    return ([_ev('hypothesis evaluation', f'NOT_ASSESSABLE: {reason}', 'evaluable inputs',
+                 'NEUTRAL', basis='model not assessable')],
+            {'evaluation_error': str(exc)})
+
+
 def _hypotheses(ctx):
     out = []
-    facts = bw.Facts(ctx.case, ctx.width, ctx.screens, ctx.process)
+    ctx.hypothesis_failures = []
+    try:
+        facts, facts_error = bw.Facts(ctx.case, ctx.width, ctx.screens, ctx.process), None
+    except ValueError as exc:
+        # review fix: a domain error in the shared lengthwise facts fails those hypotheses
+        # softly instead of aborting the diagnosis
+        facts, facts_error = None, exc
     for hid, title, mech, test, levers, family in HYPOTHESES:
-        if family == bw.FAMILY:
-            evidence, pred = bw.LENGTHWISE_BUILDERS[hid](facts)
-        else:
-            evidence, pred = _BUILDERS[hid](ctx)
+        try:
+            if family == bw.FAMILY:
+                if facts is None:
+                    raise facts_error
+                evidence, pred = bw.LENGTHWISE_BUILDERS[hid](facts)
+            else:
+                evidence, pred = _BUILDERS[hid](ctx)
+        except ValueError as exc:
+            evidence, pred = _failed_hypothesis(exc)
+            ctx.hypothesis_failures.append({'id': hid, 'error': str(exc)})
         if getattr(ctx, 'credibility_gate_note', None):
             _gate_not_credible(evidence, ctx.credibility_gate_note)
         tallies, score, standing = score_evidence(evidence)
@@ -2648,10 +2669,44 @@ def _family_summary(obs, hyps, leading):
             'not_contradicted_per_family': counts, 'text': text}
 
 
+POSITION_MERGE_TOLERANCE_M = 1e-3   # band positions closer than 1 mm are one band
+DUPLICATE_POSITIONS_FLAG = 'DUPLICATE_BAND_POSITIONS_MERGED'
+HYPOTHESIS_FAILED_FLAG = 'HYPOTHESIS_EVALUATION_FAILED'
+
+
+def merge_band_positions(positions, tol=POSITION_MERGE_TOLERANCE_M):
+    """(positions used, number merged): positions within ``tol`` of the previous one (sorted)
+    are one band at their mean; the list is returned unchanged when nothing merges."""
+    srt = sorted(positions)
+    if all(b - a > tol for a, b in zip(srt, srt[1:])):
+        return list(positions), 0
+    groups = [[srt[0]]]
+    for x in srt[1:]:
+        if x - groups[-1][-1] <= tol:
+            groups[-1].append(x)
+        else:
+            groups.append([x])
+    return [sum(g) / len(g) for g in groups], len(srt) - len(groups)
+
+
 def diagnose(case):
     """Run the band screening on a case dict (validated here). Returns a JSON-safe dict."""
     case = validate_case(case)
     flags = []
+    # review fix: repeated band positions (closer than 1 mm) are one band, merged before any
+    # gap, count or spacing is derived; every consumer reads the merged list from the case
+    merged, n_merged = merge_band_positions(
+        case['observation']['band_positions_across_width_m'])
+    adjustments = None
+    if n_merged:
+        adjustments = {'band_positions_supplied_m':
+                       list(case['observation']['band_positions_across_width_m']),
+                       'band_positions_used_m': merged, 'merged_count': n_merged,
+                       'merge_tolerance_m': POSITION_MERGE_TOLERANCE_M,
+                       'note': 'band positions closer than the merge tolerance are one band '
+                               '(their mean); every section uses the merged list'}
+        case['observation']['band_positions_across_width_m'] = merged
+        flags.append(DUPLICATE_POSITIONS_FLAG)
     if not case['synthetic']:
         flags.append('USER_SUPPLIED_INPUTS_NOT_VERIFIED')
     else:
@@ -2674,6 +2729,8 @@ def diagnose(case):
     result = {'status': STATUS, 'case_schema': case['case_schema'], 'case_name': case['name'],
               'synthetic': case['synthetic'], 'provenance': case['provenance'],
               'score_note': SCORE_NOTE, 'inputs': case}
+    if adjustments is not None:        # key only then
+        result['observation_adjustments'] = adjustments
     if eff['pass'] != case['pass'] or eff['schedule'] != case['schedule']:
         result['effective_inputs'] = {
             'pass': eff['pass'], 'schedule': eff['schedule'],
@@ -2904,6 +2961,9 @@ def diagnose(case):
     hyps, leading = _hypotheses(ctx)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
+    if ctx.hypothesis_failures:          # keys only then
+        result['hypothesis_evaluation_failures'] = ctx.hypothesis_failures
+        flags.append(HYPOTHESIS_FAILED_FLAG)
     result['family_summary'] = _family_summary(obs, hyps, leading)
     result['foil_regime'] = _foil_regime(eff, bite, bite_error, result, flags)
     pc = _product_check(eff, flags)
@@ -2917,14 +2977,26 @@ def diagnose(case):
             if (isinstance(sec, dict) and not sec.get('not_supplied')
                     and sec.get('status') not in ('NOT_ASSESSABLE', 'FAILED')):
                 sec['foil_regime_note'] = note
-    result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law,
-                                                                 h1)
-    result['strip_map'] = _strip_map(hyps, ctx)
+    try:
+        result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law, h1)
+    except ValueError as exc:
+        result['recommended_next_measurements'] = [f'not available: {exc}']
+        flags.append('NEXT_MEASUREMENTS_FAILED')
+    try:
+        result['strip_map'] = _strip_map(hyps, ctx)
+    except ValueError as exc:
+        result['strip_map'] = {'status': 'FAILED', 'error': f'strip_map: {exc}',
+                               'hypothesis_id': None}
+        flags.append('STRIP_MAP_FAILED')
     result['bite_derivations'] = cache.derivations
     if bite is not None:
         flags.extend(bite.flags)
     result['flags'] = sorted(set(flags))
     result['limitations'] = list(LIMITATIONS)
+    for f_ in ctx.hypothesis_failures:
+        result['limitations'].append(
+            f'Hypothesis {f_["id"]} could not be evaluated ({f_["error"]}); it is '
+            'NOT_ASSESSABLE with score 0, the other hypotheses and sections are unaffected.')
     ext_flags = set(flags) | {f for x in (result.get('schedule_sweep') or {}).get('rows') or []
                               for f in x.get('bite_flags') or []}
     if EXTENDED_GAUGE_FLAG in ext_flags:
