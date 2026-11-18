@@ -416,6 +416,9 @@ class BandDiagnosisTests(unittest.TestCase):
                            'Why thin gauge is worse', 'Process:', 'Gauge control, drive',
                            '<th scope="col">family</th>'):
                 self.assertNotIn(absent, html)
+            # phase-1 CSS only: the hypothesis and evidence tables keep a minimum width so the
+            # hypothesis column does not collapse at phone width (they scroll in place)
+            self.assertIn('table.hyp{min-width:46rem}table.evidence{min-width:38rem}', html)
 
     def test_cli_writes_both_files(self):
         with tempfile.TemporaryDirectory() as tmp:

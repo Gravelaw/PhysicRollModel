@@ -536,6 +536,7 @@ CSS = ('body{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;max-width
        '.weakened{background:#fef9c3}.not_assessable{background:#f3f4f6}'
        '.v-supports{color:#15803d;font-weight:600}.v-contradicts{color:#b91c1c;font-weight:600}'
        '.v-not_observed{color:#6b7280}code{font-size:.85em}'
+       'table.hyp{min-width:46rem}table.evidence{min-width:38rem}'
        '@media print{details{display:block}summary{display:none}}')
 
 
@@ -553,7 +554,6 @@ CSS2 = ('.wide{overflow-x:auto;margin:.4rem 0}.wide .chart{min-width:600px;max-w
         '.match{color:#15803d;font-weight:600}.miss{color:#6b7280}'
         'table.num td{white-space:nowrap}table.num td:first-child,table.wrapall td,'
         'table.num td .wrap{white-space:normal}table.num td:first-child{min-width:7rem}'
-        'table.hyp{min-width:46rem}table.evidence{min-width:38rem}'
         '.legend{font-size:.85rem;color:#374151;margin:.2rem 0 .6rem}')
 C_ACT, C_HEALTHY = '#c2410c', '#374151'
 C_RIGID, C_COMP, C_FB = '#a16207', '#7e22ce', '#0b62a4'
@@ -602,9 +602,34 @@ def _txt(code):
     return 'n/a' if not code else _e(str(code).lower().replace('_', ' '))
 
 
-SHORT_STATES = {'MANIFEST_BUCKLE': 'buckled', 'LATENT_UNDER_TENSION': 'latent (pulled flat)',
-                'MANIFEST_AFTER_TENSION_RELEASE': 'buckled', 'FLAT_AFTER_TENSION_RELEASE': 'flat',
-                'BELOW_REPORTING_THRESHOLD': 'below threshold'}
+SHORT_STATES = {'MANIFEST_BUCKLE': 'buckled in the mill',
+                'LATENT_UNDER_TENSION': 'hidden under mill tension',
+                'MANIFEST_AFTER_TENSION_RELEASE': 'visible after tension release',
+                'FLAT_AFTER_TENSION_RELEASE': 'flat after tension release',
+                'BELOW_REPORTING_THRESHOLD': 'below the reporting threshold'}
+VISIBLE_BASIS = {'in_mill_manifest': 'band buckled in the mill',
+                 'manifest_after_tension_release': 'band visible only after tension release',
+                 'above_reporting_threshold_only': 'above the 2 I-unit reporting threshold only'}
+FLAT_AXIS = 'linear'
+
+
+def _states(in_mill, released=None):
+    """The two band states in plain words (escaped)."""
+    text = _short(in_mill)
+    return text + (f'; {_short(released)}' if released else '')
+
+
+def _util(v):
+    """Buckling utilisation: only values below 1 are meaningful magnitudes."""
+    if not _ok(v):
+        return 'n/a'
+    return '≥ 1' if v >= 1 else f'{v:.2g}'
+
+
+def _fb_profile_key(st):
+    """Linear-feedback I-unit profile when present (the saturated one jumps at band edges)."""
+    return 'i_units_linear_feedback' if st.get('i_units_linear_feedback') else \
+        'i_units_with_feedback'
 
 
 def _short(code):
@@ -669,6 +694,9 @@ def _key2(entries, x0=ML, width=W):
         elif kind == 'dot':
             parts.append(f'<circle cx="{cx}" cy="{cy}" r="4.5" fill="{colour}" '
                          'stroke="#111" stroke-width="0.6"/>')
+        elif kind == 'hollow':
+            parts.append(f'<circle cx="{cx}" cy="{cy}" r="4.5" fill="#fff" stroke="#374151" '
+                         'stroke-width="2"/>')
         elif kind == 'square':
             parts.append(f'<rect x="{cx - 5}" y="{cy - 5}" width="10" height="10" '
                          f'fill="{colour}" stroke="#111" stroke-width="0.6"/>')
@@ -768,7 +796,9 @@ def _width_chart(r):
     obs = [p for p in (_get(r, 'inputs', 'observation', 'band_positions_across_width_m') or [])
            if _ok(p)]
     z = ts['z_m']
-    barrel = _get(r, 'inputs', 'width_model', 'roll', 'barrel_length_m')
+    barrel = w.get('barrel_length_m')
+    if not _ok(barrel):
+        barrel = _get(r, 'inputs', 'width_model', 'roll', 'barrel_length_m')
     if not _ok(barrel):
         barrel = z[-1] + (z[-1] - z[-2]) / 2 if len(z) > 1 else z[-1]
     shape_ok = isinstance(st, dict) and not _bad(st) and st.get('z_m')
@@ -792,9 +822,12 @@ def _width_chart(r):
     if obs:
         key.append(('observed band position', C_OBS, '6 3', 'diamond'))
     if shape_ok:
-        key += [('flatness, rigid roll (bound)', C_RIGID, '2 3', 'line'),
-                ('compliance only', C_COMP, '9 3 2 3', 'line'),
-                ('with exit-tension feedback (reported)', C_FB, '', 'thick'),
+        key += [('flatness, rigid roll (upper bound)', C_RIGID, '2 3', 'line'),
+                ('compliance only (bound)', C_COMP, '9 3 2 3', 'line'),
+                ('with exit-tension feedback' + (', linear (unsaturated)'
+                                                  if _fb_profile_key(st) ==
+                                                  'i_units_linear_feedback' else ''),
+                 C_FB, '', 'thick'),
                 (f'reporting threshold ±{_f(st.get("reporting_threshold_i_units"))} I',
                  C_THR, '4 2', 'line')]
     key_parts, rows = _key2(key)
@@ -887,14 +920,18 @@ def _width_chart(r):
     # lower panel: flatness at three levels
     if shape_ok:
         sz = st['z_m']
-        series = [('i_units_rigid', C_RIGID, '2 3', 1.4), ('i_units_compliance_only', C_COMP,
-                                                          '9 3 2 3', 1.6),
-                  ('i_units_with_feedback', C_FB, '', 3.0)]
-        allv = [v for k, *_ in series for v in st.get(k) or [] if _ok(v)]
+        fb_key = _fb_profile_key(st)
+        series = [('i_units_rigid', C_RIGID, '2 3', 1.1), ('i_units_compliance_only', C_COMP,
+                                                          '9 3 2 3', 1.2),
+                  (fb_key, C_FB, '', 3.0)]
         thr = st.get('reporting_threshold_i_units')
-        lo2 = min(allv + [-(thr or 1.0)]) * 6
-        hi2 = max(allv + [thr or 1.0]) * 6
-        yy = _SymLog(lo2, hi2, b2, t2)
+        if FLAT_AXIS == 'linear':
+            fbv = [v for v in st.get(fb_key) or [] if _ok(v)] + [thr or 1.0, -(thr or 1.0)]
+            span = max(fbv) - min(fbv)
+            yy = _Axis(min(fbv) - 0.3 * span, max(fbv) + 0.45 * span, b2, t2)
+        else:
+            allv = [v for k, *_ in series for v in st.get(k) or [] if _ok(v)]
+            yy = _SymLog(min(allv + [-(thr or 1.0)]) * 6, max(allv + [thr or 1.0]) * 6, b2, t2)
         for v in yy.ticks():
             p.append(f'<line x1="{ML}" y1="{yy(v):.1f}" x2="{W - MR}" y2="{yy(v):.1f}" '
                      f'stroke="{"#111" if v == 0 else "#d8dee8"}" '
@@ -903,7 +940,10 @@ def _width_chart(r):
                      f'{_e(_tick_label(v))}</text>')
         cy2 = (t2 + b2) / 2
         p.append(f'<text x="14" y="{cy2:.1f}" text-anchor="middle" transform="rotate(-90 14 '
-                 f'{cy2:.1f})" class="axis">flatness [I] (signed log; + long)</text>')
+                 f'{cy2:.1f})" class="axis">flatness [I] '
+                 f'({"+ long" if FLAT_AXIS == "linear" else "signed log; + long"})</text>')
+        p.append(f'<clipPath id="clip-wlow"><rect x="{ML}" y="{t2}" width="{W - ML - MR}" '
+                 f'height="{b2 - t2}"/></clipPath><g clip-path="url(#clip-wlow)">')
         if _ok(thr):
             for v in (thr, -thr):
                 p.append(f'<line x1="{ML}" y1="{yy(v):.1f}" x2="{W - MR}" y2="{yy(v):.1f}" '
@@ -914,15 +954,16 @@ def _width_chart(r):
                 p.append(f'<polyline points="{_pts(sz, ys, sx, yy)}" fill="none" '
                          f'stroke="{colour}" stroke-width="{wdt}" stroke-dasharray="{dash}" '
                          'stroke-linejoin="round"/>')
+        p.append('</g>')
         fb = (levels.get('with_feedback') or {}).get('bands') or []
         up, dn = [], []
         for b in fb:
             x = b.get('center_m')
             if not _ok(x):
                 continue
-            t = f'in mill: {_short(b.get("state"))}'
+            t = _short(b.get('state'))
             if b.get('state_after_tension_release'):
-                t += f' · after release: {_short(b.get("state_after_tension_release"))}'
+                t += f' · {_short(b.get("state_after_tension_release"))}'
             pk = b.get('peak_i_units')
             (up if (pk or 0) >= 0 else dn).append((sx(x), t))
         for items, rows_y in ((up, (t2 + 15, t2 + 29)), (dn, (b2 - 7, b2 - 21))):
@@ -954,29 +995,68 @@ def _stripe_table(w):
     rows_src = _get(w, 'shape', 'steady_stripe_table') or []
     if not rows_src:
         return '<p>No steady stripe above the stripe threshold.</p>'
-    rel = any(_get(x, lv, 'state_after_tension_release') for x in rows_src
-              for lv in ('rigid', 'compliance_only', 'with_feedback'))
-    head = ['position', 'peak radius growth', 'half-peak width', 'rigid [I]',
-            'compliance only [I]', 'with feedback [I]', 'in-mill state']
-    if rel:
+    has = lambda k: any(k in x for x in rows_src)  # noqa: E731
+    head = ['position', 'peak radius growth', 'half-peak width', 'rigid [I] (bound)',
+            'compliance only [I] (bound)', 'with feedback [I]', 'in the mill',
+            'after tension release', 'buckling utilisation, mill / released',
+            'stripe height for a band: in the mill']
+    if has('released_onset_peak_height_m'):
         head.append('after tension release')
-    head.append('stripe height for manifest onset (in mill)')
+    if has('reporting_onset_peak_height_m'):
+        head.append('to reach 2 I-units')
     out = []
     for x in rows_src:
         fb = x.get('with_feedback') or {}
+        rel = _um(x.get('released_onset_peak_height_m'))
+        if x.get('released_onset_limited_by_reporting_threshold'):
+            rel += ' (upper bound: limited by the reporting threshold)'
         row = [_f(x.get('position_m'), 1, 4, 'm'), _um(x.get('peak_radius_deviation_m')),
                _mm2(x.get('width_at_half_peak_m')),
                _f(_get(x, 'rigid', 'peak_i_units'), digits=4),
                _f(_get(x, 'compliance_only', 'peak_i_units'), digits=4),
                '<strong>' + _f(fb.get('peak_i_units'), digits=4) + '</strong>'
-               + (' (feedback saturated)' if fb.get('saturated') else ''),
-               _txt(fb.get('state')) + (f' ({_txt(fb.get("sense"))})' if fb.get('sense')
-                                        else '')]
-        if rel:
-            row.append(_txt(fb.get('state_after_tension_release')))
-        row.append(_um(x.get('manifest_onset_peak_height_m')))
+               + (' (saturated: indicative only)' if fb.get('saturated') else ''),
+               _short(fb.get('state')),
+               _short(fb.get('state_after_tension_release'))
+               if fb.get('state_after_tension_release') else 'n/a',
+               f'{_util(fb.get("buckling_utilisation"))} / '
+               f'{_util(fb.get("released_buckling_utilisation"))}',
+               _um(x.get('manifest_onset_peak_height_m'))]
+        if has('released_onset_peak_height_m'):
+            row.append(rel)
+        if has('reporting_onset_peak_height_m'):
+            row.append(_um(x.get('reporting_onset_peak_height_m')))
         out.append(row)
-    return _table(head, out, 'num')
+    return (_table(head, out, 'num wrapall')
+            + '<p class="note">Buckling utilisation = compression / buckling stress of the band; '
+              'it is shown only below 1, because once a band buckles the saturation of the '
+              'feedback inflates the number and it is no longer a meaningful magnitude.</p>')
+
+
+def _shape_notes(st):
+    """Saturated bands (indicative peak) and the whole-sheet after-release indicator."""
+    out = []
+    fbl = _get(st, 'levels', 'with_feedback') or {}
+    sat = [b for b in fbl.get('bands') or [] if b.get('saturated')]
+    sb = fbl.get('saturated_bands') or []
+    for k, b in enumerate(sat):
+        lin = b.get('linear_feedback_peak_i_units')
+        out.append(f'Band {_f(b.get("start_m"), 1, 4)}–{_f(b.get("end_m"), 1, 4)} m is slack '
+                   'in the mill, so the exit-tension feedback saturates there: saturated peak '
+                   f'{_f(b.get("peak_i_units"), digits=3)} I-units (indicative only; the '
+                   f'linear-feedback peak plotted is {_f(lin, digits=3)} I-units'
+                   + (f', scale factor {_f(sb[k].get("scale_factor"), digits=3)}'
+                      if k < len(sb) else '') + ').')
+    if st.get('released_global_status'):
+        out.append('Whole-sheet indicator after tension release (upper-bound indicator only, '
+                   'not charted): ' + _txt(st.get('released_global_status'))
+                   + f', utilisation {_util(st.get("released_global_max_utilisation"))}.')
+    if st.get('released_status'):
+        out.append(f'Bands after tension release: {_txt(st.get("released_status"))}'
+                   + (f' ({_f(st.get("manifest_after_release_band_count"))} band(s))'
+                      if st.get('manifest_after_release_band_count') is not None else '')
+                   + '.')
+    return ''.join(f'<p class="note">{x}</p>' for x in out)
 
 
 def _ripple_line(w):
@@ -987,8 +1067,11 @@ def _ripple_line(w):
         return _state_p('Nozzle-pattern ripple ' + _bad(rp))
     return ('<p><strong>Nozzle-pattern ripple</strong> (the regular fan-overlap pattern, not a '
             f'fault): peak-to-peak {_um(rp.get("peak_to_peak_m"))} radius; '
-            f'{_f(rp.get("feedback_peak_i_units"))} I-units with the exit-tension feedback '
-            f'({_f(rp.get("compliance_only_peak_i_units"))} compliance only, '
+            + (f'{_f(rp.get("linear_feedback_peak_i_units"))} I-units with the linear '
+               'exit-tension feedback '
+               if _ok(rp.get('linear_feedback_peak_i_units')) else
+               f'{_f(rp.get("feedback_peak_i_units"))} I-units with the exit-tension feedback ')
+            + f'({_f(rp.get("compliance_only_peak_i_units"))} compliance only, '
             f'{_f(rp.get("rigid_transfer_bound_i_units"))} rigid bound); '
             f'{_f(rp.get("band_count_with_feedback"))} bands; status '
             f'{_txt(rp.get("status"))}.</p>')
@@ -1048,9 +1131,21 @@ def _match_tables(pos):
                      f'{_f(sa.get("coefficient_of_variation"), digits=2)}: '
                      f'{_txt(sa.get("status"))}')
         out.append(f'<h3>Which pitch the gaps are multiples of</h3><p>{line}.</p>')
-        rows = []
+        rows, notes = [], []
         pitches = pos.get('pitches_m') or {}
         for name, m in sm.items():
+            pname = PITCH_NAMES.get(name, name.replace('_', ' '))
+            if not isinstance(m, dict):
+                continue
+            if 'gaps' not in m:
+                if str(m.get('status', '')).startswith('NOT_COMPARABLE'):
+                    notes.append(f'The {_e(pname)} ({_mm2(m.get("candidate_pitch_m"), 4)}) is '
+                                 'not compared: the smallest gap is '
+                                 f'{_f(m.get("min_gap_in_pitches"), digits=3)} pitches, beyond '
+                                 'the 8 pitches over which a multiple can be told apart.')
+                else:
+                    notes.append(f'{_e(pname)}: {_txt(m.get("status"))}.')
+                continue
             cells = []
             for g in m.get('gaps') or []:
                 dev = g.get('deviation_in_pitches')
@@ -1059,12 +1154,13 @@ def _match_tables(pos):
                 cells.append(f'<span class="match">{_e(txt)}</span>' if g.get('matched')
                              else f'<span class="miss">no ({_e(txt)})</span>')
             cells += [''] * (len(gaps) - len(cells))
-            rows.append([_e(PITCH_NAMES.get(name, name.replace('_', ' '))),
-                         _mm2(pitches.get(name), 4)] + cells[:len(gaps)]
+            pv = m.get('candidate_pitch_m', pitches.get(name))
+            rows.append([_e(pname), _mm2(pv, 4)] + cells[:len(gaps)]
                         + [_txt(m.get('status'))])
         if rows:
             out.append(_table(['pitch', 'value'] + [f'gap {_mm2(g, 4)}' for g in gaps]
                               + ['status'], rows))
+        out += [f'<p>{x}</p>' for x in notes]
     return ''.join(out)
 
 
@@ -1158,19 +1254,24 @@ def _width_section(r):
         intro = ('<p>Upper panel: steady roll radius growth with the actual spray header and '
                  'with a healthy header, nozzle positions on the axis. Lower panel, same x '
                  'axis: flatness of the exit strip at three levels of the strip-shape chain. '
-                 'Dashed vertical lines: the observed band positions. The reported level is '
-                 'the one with the exit-tension feedback.')
+                 'Dashed vertical lines: the observed band positions. The thick line is the '
+                 'level with the exit-tension feedback (linear, before saturation); the rigid '
+                 'and compliance-only curves are bounds and run off the scale.')
         if isinstance(st, dict) and not _bad(st):
-            intro += (f' Peak flatness {_f(st.get("feedback_peak_i_units"), digits=4)} I-units '
-                      f'with feedback ({_f(st.get("compliance_only_peak_i_units"), digits=4)} '
+            lin = st.get('linear_feedback_peak_i_units')
+            intro += ((f' Peak flatness {_f(lin, digits=3)} I-units with linear feedback'
+                       if _ok(lin) else
+                       f' Peak flatness {_f(st.get("feedback_peak_i_units"), digits=4)} I-units '
+                       'with feedback')
+                      + f' (bounds: {_f(st.get("compliance_only_peak_i_units"), digits=4)} '
                       f'compliance only, {_f(st.get("rigid_transfer_bound_i_units"), digits=4)} '
-                      f'rigid bound); status {_txt(st.get("status"))}.')
-            if st.get('released_status'):
-                intro += f' After tension release: {_txt(st.get("released_status"))}.'
+                      f'rigid); status {_txt(st.get("status"))}.')
         intro += '</p>'
         body = intro + _wide(_width_chart(r))
         if isinstance(st, dict) and _bad(st):
             body += _state_p('Flatness (shape chain) ' + _bad(st))
+        if isinstance(st, dict) and not _bad(st):
+            body += _shape_notes(st)
         body += ('<h3>Steady stripes</h3>' + _stripe_table(w) + _ripple_line(w))
     pos = w.get('positions')
     if isinstance(pos, dict) and not _bad(pos):
@@ -1182,6 +1283,22 @@ def _width_section(r):
 
 
 # ------------------------------------------------------------------------------ short-lived bands
+def _visible(e):
+    """(threshold [m], start, end, colour, visible time) of the visible band, or None."""
+    basis = e.get('visible_time_basis')
+    name, colour = {'manifest_after_tension_release': ('released', C_COMP),
+                    'above_reporting_threshold_only': ('reporting', C_HEALTHY)}.get(
+                        basis, ('manifest', C_THR))
+    thr = e.get(f'{name}_threshold_m')
+    t_on = e.get(f'time_to_{name}_threshold_s')
+    if not (_ok(thr) and _ok(t_on)):
+        return None
+    fade = e.get(f'fade_time_below_{name}_threshold_s')
+    t_off = (e.get('duration_s') or 0.0) + fade if _ok(fade) else None
+    above = e.get('visible_time_s', e.get(f'time_above_{name}_threshold_s'))
+    return thr, t_on, t_off, colour, above
+
+
 def _event_chart(e, k):
     h = e.get('history') or {}
     ts = h.get('time_s') or []
@@ -1203,10 +1320,15 @@ def _event_chart(e, k):
                else ''), '#fde7d4', '', 'band')]
     for k_, label, colour, dash in thr:
         if _ok(e.get(k_)):
-            key.append((f'{label} {_um(e[k_])}', colour, dash, 'line'))
-    if _ok(e.get('time_to_manifest_threshold_s')):
-        key.append(('above the in-mill threshold: band visible in the mill', C_THR, '',
-                    'thick'))
+            lim = (k_ == 'released_threshold_m'
+                   and e.get('released_threshold_limited_by_reporting_threshold'))
+            key.append((f'{label} {_um(e[k_])}'
+                        + (' (set by the 2 I-unit reporting threshold)' if lim else ''),
+                        colour, dash, 'line'))
+    vis = _visible(e)
+    if vis:
+        basis = VISIBLE_BASIS.get(e.get('visible_time_basis'), 'above the threshold')
+        key.append((f'visible: {basis}', vis[3], '', 'thick'))
     c = _Chart2(f'Event {k + 1}: radius deviation against time', key, 280)
     c.axes(_Axis(0.0, xmax, ML, W - MR), _Axis(min(vals) * 1.1, max(vals) * 1.18, c.h - MB,
                                                c.mt),
@@ -1221,23 +1343,22 @@ def _event_chart(e, k):
         c.inner.append(f'<line x1="{ML}" y1="{py:.1f}" x2="{W - MR}" y2="{py:.1f}" '
                        f'stroke="{colour}" stroke-width="1.6" stroke-dasharray="{dash}"/>')
     c.poly(sel, C_ACT, '', 2.4)
-    # time above the in-mill threshold: bracket on the threshold line
-    t_on = e.get('time_to_manifest_threshold_s')
-    fade = e.get('fade_time_below_manifest_threshold_s')
-    if _ok(t_on) and _ok(e.get('manifest_threshold_m')):
-        py = c.y(e['manifest_threshold_m'] * 1e6)
-        t_off = dur + fade if _ok(fade) else xmax
-        c.inner.append(f'<line x1="{c.x(t_on):.1f}" y1="{py:.1f}" x2="{c.x(min(t_off, xmax)):.1f}"'
-                       f' y2="{py:.1f}" stroke="{C_THR}" stroke-width="5" opacity="0.55"/>')
+    # time the band is visible: bracket on the threshold that defines it
+    if vis:
+        thr_m, t_on, t_off, colour, above = vis
+        py = c.y(thr_m * 1e6)
+        t_off = t_off if _ok(t_off) else xmax
+        c.inner.append(f'<line x1="{c.x(t_on):.1f}" y1="{py:.1f}" '
+                       f'x2="{c.x(min(t_off, xmax)):.1f}" y2="{py:.1f}" stroke="{colour}" '
+                       'stroke-width="5" opacity="0.55"/>')
         for t in (t_on, t_off):
             if t <= xmax:
                 c.inner.append(f'<circle cx="{c.x(t):.1f}" cy="{py:.1f}" r="4" '
-                               f'fill="{C_THR}" stroke="#111" stroke-width="0.6"/>')
-        above = e.get('time_above_manifest_threshold_s')
+                               f'fill="{colour}" stroke="#111" stroke-width="0.6"/>')
         if _ok(above):
             c.inner.append(f'<text x="{c.x((t_on + min(t_off, xmax)) / 2):.1f}" '
                            f'y="{py + 17:.1f}" text-anchor="middle" class="lab" '
-                           f'fill="{C_THR}">visible {_e(_f(above, digits=3))} s</text>')
+                           f'fill="{colour}">visible {_e(_f(above, digits=3))} s</text>')
     tp, pk = e.get('time_of_peak_s'), e.get('peak_deviation_m')
     if _ok(tp) and _ok(pk) and tp <= xmax:
         c.inner.append(f'<text x="{c.x(tp) + 6:.1f}" y="{c.y(pk * 1e6) - 6:.1f}" class="lab" '
@@ -1266,6 +1387,18 @@ def _event_table(events):
         if _ok(e.get('band_life_lower_bound_s')):
             return f'> {_f(e["band_life_lower_bound_s"], digits=3)} s (fades beyond the run)'
         return 'no band (threshold not reached)'
+    def visible(e):
+        v = e.get('visible_time_s')
+        if _ok(v):
+            return (f'<strong>{_f(v, digits=3)} s</strong> '
+                    f'({_e(VISIBLE_BASIS.get(e.get("visible_time_basis"), "basis not given"))})')
+        if _ok(e.get('visible_time_lower_bound_s')):
+            return f'> {_f(e["visible_time_lower_bound_s"], digits=3)} s (beyond the run)'
+        return 'not visible' if 'visible_time_s' in e else 'n/a'
+
+    def opt(k, unit='s'):
+        return lambda e: (_f(e.get(k), unit=unit) if _ok(e.get(k)) else
+                          'not reached' if k.startswith('time_to') else 'n/a')
     rows = [('start in the timeline', lambda e: _f(e.get('start_s'), unit='s')),
             ('nozzles', nozz),
             ('duration', lambda e: _f(e.get('duration_s'), unit='s')),
@@ -1282,10 +1415,16 @@ def _event_table(events):
                                                            unit='s')
              if _ok(e.get('time_to_manifest_threshold_s')) else 'not reached')]
     if any('released_threshold_m' in e for e in events):
-        rows += [('after-release threshold', lambda e: _um(e.get('released_threshold_m'))),
-                 ('time to the after-release threshold',
-                  lambda e: _f(e.get('time_to_released_threshold_s'), unit='s')
-                  if _ok(e.get('time_to_released_threshold_s')) else 'not reached')]
+        rows += [('after-release threshold',
+                  lambda e: _um(e.get('released_threshold_m'))
+                  + (' (set by the reporting threshold)'
+                     if e.get('released_threshold_limited_by_reporting_threshold') else '')),
+                 ('time to the after-release threshold', opt('time_to_released_threshold_s'))]
+        if any('time_above_released_threshold_s' in e for e in events):
+            rows += [('time above the after-release threshold',
+                      opt('time_above_released_threshold_s')),
+                     ('fade time after the event (below after-release threshold)',
+                      opt('fade_time_below_released_threshold_s'))]
     rows += [('reporting threshold (2 I-units)', lambda e: _um(e.get('reporting_threshold_m'))),
              ('time to the reporting threshold',
               lambda e: _f(e.get('time_to_reporting_threshold_s'), unit='s')
@@ -1295,12 +1434,14 @@ def _event_table(events):
               if _ok(e.get('fade_time_below_manifest_threshold_s')) else 'n/a'),
              ('time above the in-mill threshold',
               lambda e: _f(e.get('time_above_manifest_threshold_s'), unit='s')),
-             ('band life', life),
-             ('state at peak, in mill (with feedback)',
-              lambda e: _txt(e.get('peak_state_with_feedback')))]
+             ('band life (from the event start)', life),
+             ('visible time', visible),
+             ('state at peak, in the mill (with feedback)',
+              lambda e: _short(e.get('peak_state_with_feedback')))]
     if any('peak_state_after_tension_release' in e for e in events):
         rows.append(('state at peak, after tension release',
-                     lambda e: _txt(e.get('peak_state_after_tension_release'))))
+                     lambda e: _short(e.get('peak_state_after_tension_release'))
+                     if e.get('peak_state_after_tension_release') else 'n/a'))
     rows += [('flatness at peak, rigid / compliance / feedback [I]',
               lambda e: ' / '.join(_f(_get(e, 'peak_stripe_states', lv, 'peak_i_units'),
                                       digits=4)
@@ -1317,7 +1458,9 @@ def _event_table(events):
             else:
                 cells.append(fn(e))
         body.append([_e(label)] + cells)
-    return _table(['quantity'] + [f'event {k + 1}' for k in range(len(events))], body,
+    return _table(['quantity'] + [f'event {k + 1}' + (f': {_e(e["label"])}' if e.get('label')
+                                                      else '')
+                                  for k, e in enumerate(events)], body,
                   'num wrapall')
 
 
@@ -1334,7 +1477,9 @@ def _events_section(r):
     out = ['<p>A spray zone switched off (or down) heats the roll locally; the band appears '
            'when the stripe crosses the threshold for a manifest buckle and disappears after '
            'the zone returns, once the stripe falls below it again. '
-           f'{_e(te.get("band_life_definition") or "")}</p>']
+           f'{_e(te.get("band_life_definition") or "")}'
+           + (f' {_e(te["visible_time_definition"])}' if te.get('visible_time_definition')
+              else '') + '</p>']
     seen = []
     if _ok(obs.get('intermittent_duration_s')):
         seen.append(f'observed short-lived band duration '
@@ -1346,9 +1491,10 @@ def _events_section(r):
     if not events:
         out.append('<p>No events.</p>')
     for k, e in enumerate(events):
-        out.append(f'<h3>Event {k + 1}: nozzles '
+        lab = f': {_e(e["label"])}' if e.get('label') else ''
+        out.append(f'<h3>Event {k + 1}{lab} (nozzles '
                    f'{_e(", ".join("#" + str(i) for i in e.get("nozzle_indices") or []))}, '
-                   f'{_f(e.get("duration_s"))} s</h3>' + _event_chart(e, k))
+                   f'{_f(e.get("duration_s"))} s)</h3>' + _event_chart(e, k))
     if events:
         out.append(_event_table(events))
     for name, label in (('growth_rate_note', 'Why the band appears within seconds'),
@@ -1359,53 +1505,70 @@ def _events_section(r):
 
 
 # ------------------------------------------------------------------------------ thin gauge
+ONSET_SERIES = (
+    # key, label, colour, dash, marker, key of the "limited by the reporting threshold" flag
+    ('manifest_onset_stripe_height_m', 'in the mill, model stripe', C_FB, '', 'o', None),
+    ('released_onset_stripe_height_m', 'after tension release, model stripe', C_FB, '2 3', 'o',
+     'released_onset_limited_by_reporting_threshold'),
+    ('manifest_onset_height_reference_m', 'in the mill, Gaussian reference', C_ACT, '7 4', 's',
+     None),
+    ('released_onset_height_reference_m', 'after tension release, Gaussian reference', C_ACT,
+     '9 3 2 3', 's', 'released_onset_reference_limited_by_reporting_threshold'),
+    ('reporting_onset_stripe_height_m', 'to reach 2 I-units (reporting), model stripe',
+     '#6b7280', '1 3', '', None))
+
+
 def _gauge_charts(rows, ref_peak=None):
     ok = [x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))]
     if len(ok) < 2:
         return ''
     hs = [x['exit_thickness_m'] * 1e3 for x in ok]
     xa = _Axis(min(hs) / 1.3, max(hs) * 1.3, ML, W - MR, log=True)
-    series = [('manifest_onset_stripe_height_m', 'in mill, model stripe shape', C_FB, '', 'o'),
-              ('manifest_onset_height_50mm_reference_m', 'in mill, 50 mm reference stripe',
-               C_ACT, '7 4', 's')]
-    if any('released_onset_stripe_height_m' in x for x in ok):
-        series.append(('released_onset_stripe_height_m', 'after tension release, model stripe',
-                       C_COMP, '2 3', 'o'))
-    if any('released_onset_height_50mm_reference_m' in x for x in ok):
-        series.append(('released_onset_height_50mm_reference_m',
-                       'after tension release, 50 mm reference', C_RIGID, '9 3 2 3', 's'))
+    series = [x for x in ONSET_SERIES if any(_ok(r.get(x[0])) for r in ok)]
     out = []
     vals = [x[k] * 1e6 for k, *_ in series for x in ok if _ok(x.get(k)) and x[k] > 0]
     ref = abs(ref_peak) * 1e6 if _ok(ref_peak) and ref_peak else None
+    limited = any(x.get(lk) for *_, lk in series if lk for x in ok)
     if vals:
-        key = [(lab, col, d, 'line') for _, lab, col, d, _m in series]
+        key = [(lab, col, d, 'thick' if not d else 'line') for _, lab, col, d, _m, _l in series]
         if ref:
-            key.append((f'model stripe peak {_f(ref)} µm (a band where the line is above a curve)',
+            key.append((f'model stripe peak {_f(ref)} µm: a band where it lies above a curve',
                         C_OBS, '3 3', 'line'))
             vals.append(ref)
-        c = _Chart2('Stripe height needed for a visible band against exit gauge', key, 300)
-        c.axes(xa, _Axis(min(vals) / 1.5, max(vals) * 1.5, c.h - MB, c.mt, log=True),
-               'exit gauge [mm] (log scale)', 'stripe height for onset [µm] (log)')
+        if limited:
+            key.append(('hollow marker: limited by the reporting threshold (upper bound)',
+                        '#ffffff', '', 'hollow'))
+        c = _Chart2('Stripe height needed for a band against exit gauge', key, 330)
+        c.axes(xa, _Axis(min(vals) / 1.5, max(vals) * 2.6, c.h - MB, c.mt, log=True),
+               'exit gauge [mm] (log scale)', 'stripe height for a band [µm] (log)')
         if ref:
             c.inner.append(f'<line x1="{ML}" y1="{c.y(ref):.1f}" x2="{W - MR}" '
                            f'y2="{c.y(ref):.1f}" stroke="{C_OBS}" stroke-width="1.6" '
                            'stroke-dasharray="3 3"/>')
         _pass_labels(c, ok)
-        for k, lab, col, d, mk in series:
-            pts = [(x['exit_thickness_m'] * 1e3, x[k] * 1e6) for x in ok
-                   if _ok(x.get(k)) and x[k] > 0]
+        for k, lab, col, d, mk, lk in series:
+            pts = [(x['exit_thickness_m'] * 1e3, x[k] * 1e6, bool(lk and x.get(lk)))
+                   for x in ok if _ok(x.get(k)) and x[k] > 0]
             if len(pts) > 1:
-                c.poly(pts, col, d, 2.2)
-            for a, b in pts:
+                c.poly([(a, b) for a, b, _ in pts], col, d, 2.4 if not d else 1.8)
+            for a, b, lim in pts:
+                fill = '#fff' if lim else col
                 if mk == 'o':
-                    c.inner.append(f'<circle cx="{c.x(a):.1f}" cy="{c.y(b):.1f}" r="4" '
-                                   f'fill="{col}"/>')
-                else:
-                    c.inner.append(f'<rect x="{c.x(a) - 4:.1f}" y="{c.y(b) - 4:.1f}" '
-                                   f'width="8" height="8" fill="{col}"/>')
+                    c.inner.append(f'<circle cx="{c.x(a):.1f}" cy="{c.y(b):.1f}" r="4.5" '
+                                   f'fill="{fill}" stroke="{col}" stroke-width="2"/>')
+                elif mk == 's':
+                    c.inner.append(f'<rect x="{c.x(a) - 4.5:.1f}" y="{c.y(b) - 4.5:.1f}" '
+                                   f'width="9" height="9" fill="{fill}" stroke="{col}" '
+                                   'stroke-width="2"/>')
         out.append(_wide(c.render('onset')))
-    iser = [('feedback_i_units', 'reported flatness (with feedback)', C_FB, '', 'thick'),
-            ('linear_feedback_i_units', 'linear feedback, unsaturated', C_FB, '2 3', 'line'),
+        if limited:
+            out.append('<p class="note">Hollow markers: the after-release onset there is set by '
+                       'the 2 I-unit reporting threshold (a band must first be reported), so '
+                       'those heights are upper bounds of the buckling onset; the stripe would '
+                       'buckle after tension release at a lower height.</p>')
+    iser = [('linear_feedback_i_units', 'with feedback, linear (unsaturated)', C_FB, '', 'thick'),
+            ('feedback_i_units', 'with feedback, saturated (indicative only)', C_FB, '2 3',
+             'line'),
             ('compliance_only_i_units', 'compliance only', C_COMP, '9 3 2 3', 'line'),
             ('shohet_townsend_half_width_i_units', 'Shohet–Townsend half-width (dead band)',
              C_THR, '7 4', 'line')]
@@ -1413,7 +1576,7 @@ def _gauge_charts(rows, ref_peak=None):
     if vals:
         c = _Chart2('Flatness of the same roll stripe and the flatness dead band against gauge',
                    [(lab, col, d, kind) for _, lab, col, d, kind in iser], 300)
-        c.axes(xa, _Axis(min(vals) / 1.6, max(vals) * 1.6, c.h - MB, c.mt, log=True),
+        c.axes(xa, _Axis(min(vals) / 1.6, max(vals) * 2.8, c.h - MB, c.mt, log=True),
                'exit gauge [mm] (log scale)', 'I-units (log)')
         _pass_labels(c, ok)
         for k, lab, col, d, kind in iser:
@@ -1445,54 +1608,63 @@ def _gauge_section(r):
     if not isinstance(g, dict) or _bad(g):
         return head + _state_p(_bad(g) or 'not available') + '</section>'
     rows = g.get('rows') or []
+    ref_desc = g.get('reference_stripe_description') or g.get('onset_50mm_reference_basis')
     out = [f'<p class="lead">{_e(g.get("text") or "")}</p>',
-           f'<p class="note">Reference stripe: {_e(g.get("reference_stripe_basis") or "n/a")} '
+           f'<p class="note">Model stripe: {_e(g.get("reference_stripe_basis") or "n/a")} '
            f'(peak {_um(g.get("reference_stripe_peak_m"))} at '
-           f'{_f(g.get("reference_stripe_position_m"), 1, 4)} m). 50 mm reference: '
-           f'{_e(g.get("onset_50mm_reference_basis") or "n/a")}.</p>']
+           f'{_f(g.get("reference_stripe_position_m"), 1, 4)} m). Reference stripe: '
+           f'{_e(ref_desc or "n/a")}.</p>']
     out.append(_gauge_charts(rows, g.get('reference_stripe_peak_m')))
-    rel_state = any('state_after_tension_release' in x for x in rows)
-    rel_h = any('released_onset_stripe_height_m' in x for x in rows)
-    rel_50 = any('released_onset_height_50mm_reference_m' in x for x in rows)
-    head_t = ['pass', 'exit gauge', 'exit tension', 'in-mill state']
-    if rel_state:
-        head_t.append('after release')
-    head_t += ['reported [I] (feedback)', 'linear feedback [I]', 'compliance only [I]',
-               'rigid bound [I]', 'S–T half-width [I]', 'band buckling stress',
-               'onset height, model stripe']
-    if rel_h:
-        head_t.append('after-release onset, model stripe')
-    head_t.append('onset height, 50 mm stripe')
-    if rel_50:
-        head_t.append('after-release onset, 50 mm')
-    head_t.append('critical ridge height (coil)')
+
+    def onset(x, k, lk=None):
+        v = _um(x.get(k))
+        return ('≤ ' + v + ' (limited)') if lk and x.get(lk) else v
+    cols = [('in the mill', lambda x: _short(x.get('state'))
+             + (' (feedback saturated)' if x.get('saturated') else '')),
+            ('after tension release', lambda x: _short(x.get('state_after_tension_release'))
+             if x.get('state_after_tension_release') else 'n/a'),
+            ('utilisation mill / released',
+             lambda x: f'{_util(x.get("buckling_utilisation"))} / '
+                       f'{_util(x.get("released_buckling_utilisation"))}')]
+    short = {'manifest_onset_stripe_height_m': 'onset in mill, model',
+             'released_onset_stripe_height_m': 'onset released, model',
+             'manifest_onset_height_reference_m': 'onset in mill, Gaussian',
+             'released_onset_height_reference_m': 'onset released, Gaussian',
+             'reporting_onset_stripe_height_m': '2 I-units, model'}
+    for k, lab, *_r, lk in ONSET_SERIES:
+        if any(k in x for x in rows):
+            cols.append((short.get(k, lab), lambda x, k=k, lk=lk: onset(x, k, lk)))
+    if any('reporting_onset_height_reference_m' in x for x in rows):
+        cols.append(('2 I-units, Gaussian',
+                     lambda x: _um(x.get('reporting_onset_height_reference_m'))))
+    cols += [('linear feedback [I]', lambda x: '<strong>' + _f(x.get('linear_feedback_i_units'),
+                                                               digits=3) + '</strong>'),
+             ('saturated feedback [I] (indicative)',
+              lambda x: _f(x.get('feedback_i_units'), digits=3) if x.get('saturated')
+              else 'not saturated'),
+             ('compliance only [I]', lambda x: _f(x.get('compliance_only_i_units'), digits=4)),
+             ('S–T half-width [I]',
+              lambda x: _f(x.get('shohet_townsend_half_width_i_units'), digits=3)),
+             ('band buckling stress', lambda x: _mpa(x.get('band_buckling_stress_pa'))),
+             ('effective buckling width', lambda x: _mm2(x.get('effective_buckling_width_m'))),
+             ('critical ridge height (coil)', lambda x: _um(x.get('critical_ridge_height_m')))]
     body = []
     for x in rows:
+        lead = [_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+                _mpa(x.get('exit_tension_pa'))]
         if 'rejected' in x:
-            body.append([_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
-                         f'<em>rejected: {_e(x["rejected"])}</em>']
-                        + [''] * (len(head_t) - 3))
+            body.append(lead + [f'<em>rejected: {_e(x["rejected"])}</em>']
+                        + [''] * (len(cols) - 1))
             continue
-        row = [_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
-               _mpa(x.get('exit_tension_pa')),
-               _txt(x.get('state')) + (' (saturated)' if x.get('saturated') else '')]
-        if rel_state:
-            row.append(_txt(x.get('state_after_tension_release')))
-        row += [f'<strong>{_f(x.get("feedback_i_units"), digits=4)}</strong>',
-                _f(x.get('linear_feedback_i_units'), digits=4),
-                _f(x.get('compliance_only_i_units'), digits=4),
-                _f(x.get('rigid_i_units'), digits=4),
-                _f(x.get('shohet_townsend_half_width_i_units'), digits=3),
-                _mpa(x.get('band_buckling_stress_pa')),
-                _um(x.get('manifest_onset_stripe_height_m'))]
-        if rel_h:
-            row.append(_um(x.get('released_onset_stripe_height_m')))
-        row.append(_um(x.get('manifest_onset_height_50mm_reference_m')))
-        if rel_50:
-            row.append(_um(x.get('released_onset_height_50mm_reference_m')))
-        row.append(_um(x.get('critical_ridge_height_m')))
-        body.append(row)
-    out.append(_table(head_t, body, 'num'))
+        body.append(lead + [fn(x) for _, fn in cols])
+    out.append(_table(['pass', 'exit gauge', 'exit tension'] + [c for c, _ in cols], body,
+                      'num wrapall'))
+    out.append('<p class="note">Onset columns: stripe height for a band in the mill and after '
+               'tension release, for the model stripe shape and the Gaussian reference; '
+               '"2 I-units": height to reach the reporting threshold; "≤ ... (limited)": set by '
+               'the reporting threshold, an upper bound. Buckling utilisation is shown only '
+               'below 1: above 1 the band has buckled and the feedback saturation inflates the '
+               'number.</p>')
     return head + ''.join(out) + '</section>'
 
 

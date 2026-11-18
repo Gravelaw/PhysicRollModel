@@ -296,27 +296,66 @@ class LengthwiseReportTests(unittest.TestCase):
         self.assertNotIn('<svg', sec)
         self.assertIn('not supplied: reason-ns-x', sec)
 
-    def test_tension_release_keys_used_when_present(self):
-        # the regenerated demo carries released thresholds, so the report shows them
-        self.assertIn('after-release threshold', _section(self.html, 'Short-lived'))
+    def test_engine_follow_up_keys_rendered(self):
+        html = self.html
+        width = _section(html, 'Across the width')
+        # both band states in plain words; linear-feedback profile; saturated peak indicative
+        self.assertIn('hidden under mill tension', width)
+        self.assertIn('visible after tension release', width)
+        self.assertIn('with exit-tension feedback, linear (unsaturated)', width)
+        self.assertIn('indicative only', width)
+        self.assertIn('Whole-sheet indicator after tension release (upper-bound indicator only',
+                      width)
+        self.assertIn('not compared: the smallest gap is', width)
+        # utilisations above 1 are capped, never printed as magnitudes
+        thin = _section(html, 'Why thin')
+        self.assertIn('≥ 1', thin)
+        cells = re.findall(r'<td>([^<]*) / ([^<]*)</td>', thin)
+        self.assertEqual(len(cells), len(self.demo['width']['gauge_trend']['rows']))
+        for v in (v for pair in cells for v in pair):
+            self.assertTrue(v == '≥ 1' or float(v) < 1, v)
+        # gauge chart: in mill / after release, model stripe / reference, limited markers
+        for lab in ('in the mill, model stripe', 'after tension release, model stripe',
+                    'in the mill, Gaussian reference', 'after tension release, Gaussian reference',
+                    'hollow marker: limited by the reporting threshold (upper bound)',
+                    'upper bounds of the buckling onset', '(limited)'):
+            self.assertIn(lab, thin)
+        self.assertNotIn('50 mm reference', html)
+        # events: label as title, visible time with its basis, both thresholds on the chart
+        short = _section(html, 'Short-lived')
+        for e in self.demo['width']['thermal_events']['events']:
+            self.assertIn(escape(e['label']), short)
+            self.assertIn(f'{e["visible_time_s"]:.3g} s', short)
+        self.assertIn('band buckled in the mill', short)
+        self.assertIn('in-mill manifest threshold', short)
+        self.assertIn('after-release threshold', short)
+        self.assertIn('set by the 2 I-unit reporting threshold', short)
+
+    def test_older_result_without_follow_up_keys_still_renders(self):
         r = copy.deepcopy(self.demo)
-        for lv in r['width']['shape']['steady']['levels'].values():
+        w = r['width']
+        w.pop('barrel_length_m')
+        st = w['shape']['steady']
+        for k in ('i_units_linear_feedback', 'released_status', 'released_global_status',
+                  'released_global_max_utilisation', 'manifest_after_release_band_count'):
+            st.pop(k, None)
+        for lv in st['levels'].values():
             for b in lv['bands']:
-                b['state_after_tension_release'] = 'MANIFEST_AFTER_TENSION_RELEASE'
-        for row in r['width']['shape']['steady_stripe_table']:
-            row['with_feedback']['state_after_tension_release'] = 'FLAT_AFTER_TENSION_RELEASE'
-        for i, row in enumerate(r['width']['gauge_trend']['rows']):
-            row.update(released_onset_stripe_height_m=1e-6 / (i + 1),
-                       released_onset_height_reference_m=2e-6 / (i + 1),
-                       state_after_tension_release='MANIFEST_AFTER_TENSION_RELEASE')
-        for e in r['width']['thermal_events']['events']:
-            e.update(released_threshold_m=0.6e-6, time_to_released_threshold_s=8.0,
-                     peak_state_after_tension_release='MANIFEST_AFTER_TENSION_RELEASE')
+                b.pop('state_after_tension_release', None)
+        for row in w['gauge_trend']['rows']:
+            for k in [k for k in row if 'released' in k or 'reporting_onset' in k
+                      or 'reference' in k]:
+                row.pop(k)
+        for e in w['thermal_events']['events']:
+            for k in [k for k in e if 'released' in k or 'visible' in k or k == 'label']:
+                e.pop(k)
+        for m in w['positions']['spacing_matches'].values():
+            m.setdefault('gaps', [])
         html = self.render(r)
-        self.assertIn('after release: buckled', _section(html, 'Across the width'))
-        self.assertIn('after-release threshold 0.6 µm', _section(html, 'Short-lived'))
-        self.assertIn('after tension release, model stripe', _section(html, 'Why thin'))
-        self.assertIn('manifest after tension release', html)
+        self.assertIn('with exit-tension feedback', html)
+        self.assertNotIn('after-release threshold 0', _section(html, 'Short-lived'))
+        self.assertIn('in-mill manifest threshold', _section(html, 'Short-lived'))
+        self.assertIn('aria-label="across the width"', html)
 
     def test_hostile_text_is_escaped(self):
         bad = '<script>alert(1)</script>'
