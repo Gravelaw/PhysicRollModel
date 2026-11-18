@@ -149,6 +149,29 @@ def event_scales(case, case_frac):
     return [share_to_fraction(s) / case_frac for s, _ in share_rows(case_frac)[1:]]
 
 
+def thermal_shape_off_case_share(case, th, steady, bw):
+    """For the gauge trend when the case heat share has no steady stripe above the detection
+    threshold: the thermal stripe's isolated shape (case-share profile, window = the stripe
+    extent at the first share of ``share_rows`` at which the detector finds one, as the
+    partition-mode sensitivity rows use), so that per-pass onsets belong to the stripe the
+    per-pass table compares with. None when the block is off or no share has a stripe."""
+    mode = case['model_options'].get('thermal_sensitivity', DEFAULT_MODE)
+    frac = th.fraction
+    if mode == 'off' or steady is None or not frac or frac <= 0:
+        return None
+    z, dev = steady['z_m'], steady['local_deviation_m']
+    idx = bw._inside(z, th.centre, th.width)
+    zi = [z[i] for i in idx]
+    for share, _ in share_rows(frac):
+        k = share_to_fraction(share) / frac
+        runs = bw._runs(zi, [dev[i] * k for i in idx], bw.STRIPE_THRESHOLD_M)
+        if runs:
+            big = max(runs, key=lambda x: abs(x['peak_deviation_m']))
+            return {'shape': bw._isolate(z, dev, big), 'window_share': share,
+                    'position_m': big['peak_position_m']}
+    return None
+
+
 def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_table=None):
     """The sensitivity block (see the module docstring). ``bw`` is ``band_width``."""
     mode = case['model_options'].get('thermal_sensitivity', DEFAULT_MODE)
@@ -368,7 +391,7 @@ def steady_build_up(th, x):
            'simulated_s': BUILD_UP_S,
            'basis': 'transient from the healthy steady state with the case nozzle levels, '
                     'monitor at the stripe peak (case pass, case heat share and spray)'}
-    for f in (0.5, 0.632, 0.9, 0.95):
+    for f in (0.5, 0.632, 0.9, 0.95):           # BUILD_UP_PERCENTAGES
         t = None
         if target:
             prev = (mon['time_s'][0], 0.0)
@@ -381,7 +404,42 @@ def steady_build_up(th, x):
                 prev = (tt, d / target)
         out[f'time_to_{int(round(f * 100))}_percent_s'] = t
     out['fraction_at_end'] = dev[-1] / target if target else None
+    # a percentage not reached inside the simulated horizon keeps None; say so explicitly
+    out['percentages_not_reached'] = [p for p in BUILD_UP_PERCENTAGES
+                                      if out[f'time_to_{p}_percent_s'] is None]
+    out['not_reached_note'] = (
+        None if not out['percentages_not_reached'] else
+        f'{_pct_list(out["percentages_not_reached"])} not reached within the simulated '
+        f'{BUILD_UP_S:.0f} s' + ('' if out['fraction_at_end'] is None else
+                                 f' ({out["fraction_at_end"] * 100:.3g} % at its end)'))
     return out
+
+
+BUILD_UP_PERCENTAGES = (50, 63, 90, 95)
+
+
+def _pct_list(ps):
+    ps = [f'{p} %' for p in ps]
+    return ps[0] if len(ps) == 1 else ', '.join(ps[:-1]) + ' and ' + ps[-1]
+
+
+def build_up_text(b):
+    """Words for the 50 and 90 % build-up times; a percentage not reached inside the simulated
+    horizon is said to be not reached (with the horizon), never formatted as a number."""
+    horizon = b.get('simulated_s') or BUILD_UP_S
+    reached = [(p, b.get(f'time_to_{p}_percent_s')) for p in (50, 90)]
+    done = [f'to {p} % in {t:.3g} s' for p, t in reached if t is not None]
+    missing = [p for p, t in reached if t is None]
+    parts = []
+    if done:
+        parts.append('the steady stripe builds up ' + ' and '.join(done))
+    if missing:
+        frac = b.get('fraction_at_end')
+        parts.append(('but does not reach ' if done else 'the steady stripe does not reach ')
+                     + ' or '.join(f'{p} %' for p in missing)
+                     + f' within the simulated {horizon:.0f} s'
+                     + ('' if frac is None else f', {frac * 100:.3g} % at its end'))
+    return ' '.join(parts)
 
 
 def strip_rise_at_share(h, share):
@@ -453,6 +511,29 @@ def attach_per_pass(result):
     peak0 = base_row.get('largest_deviation_in_strip_m') or 0.0
     thr = STRIPE_THRESHOLD_M
     op_heat = None if op.get('rejected') else op.get('bite_heat_per_width_w_m')
+    # SPEC14 review: the onsets must belong to the stripe they are compared with. With a model
+    # steady stripe the gauge trend's onsets are that stripe's; with the Gaussian reference
+    # stripe they are not, so the thermal stripe's own per-pass onsets (computed by the gauge
+    # trend for the window the sensitivity rows use) are taken, or none
+    gaussian = gt.get('reference_stripe_kind') == 'gaussian_reference'
+    tso = gt.get('thermal_shape_onsets')
+    if not gaussian:
+        on_keys = ('manifest_onset_stripe_height_m', 'released_onset_stripe_height_m')
+        shape_basis = ('the case-share steady stripe (gauge trend, its isolated shape at each '
+                       'pass)')
+        shape_reason = None
+    elif tso:
+        on_keys = ('thermal_shape_manifest_onset_height_m',
+                   'thermal_shape_released_onset_height_m')
+        shape_basis = ('the thermal stripe shape found at strip share '
+                       f'{tso["window_strip_heat_share"]:.3g} (no stripe above the detection '
+                       'threshold at the case share; gauge trend, thermal_shape_onsets)')
+        shape_reason = None
+    else:
+        on_keys = None
+        shape_basis = None
+        shape_reason = ('the gauge-trend onsets are for the Gaussian reference stripe, not for '
+                        'a thermal stripe shape')
     out = []
     for g in gt['rows']:
         h = by_label.get(g['label'])
@@ -473,8 +554,8 @@ def attach_per_pass(result):
             k = share_to_fraction(share) / ts['case_roll_heat_fraction_per_roll']
             height = None if heat is None else peak0 * k * heat / op_heat
             stripe = height if height is not None and height > thr else None
-            on = None if g.get('rejected') else g.get('manifest_onset_stripe_height_m')
-            ron = None if g.get('rejected') else g.get('released_onset_stripe_height_m')
+            on = None if g.get('rejected') or on_keys is None else g.get(on_keys[0])
+            ron = None if g.get('rejected') or on_keys is None else g.get(on_keys[1])
             t_exit = None
             if h_ok and h.get('strip_temperature_rise_k') is not None:
                 t_exit = h['entry_temperature_k'] + strip_rise_at_share(h, share)
@@ -483,6 +564,7 @@ def attach_per_pass(result):
                    'stripe_peak_m': stripe, 'scaled_largest_deviation_m': height,
                    'below_detection_threshold': height is not None and stripe is None,
                    'in_mill_onset_height_m': on, 'after_release_onset_height_m': ron,
+                   'onset_shape_basis': shape_basis,
                    'ratio_stripe_to_in_mill_onset': (None if stripe is None or not on
                                                      else stripe / on),
                    'ratio_stripe_to_after_release_onset': (None if stripe is None or not ron
@@ -492,6 +574,8 @@ def attach_per_pass(result):
                                                     else t_exit - 273.15 > 80.0)}
             if reasons:
                 row['not_assessable_reason'] = '; '.join(reasons)
+            elif shape_reason and stripe is not None:
+                row['not_assessable_reason'] = shape_reason
             out.append(row)
     ts['per_pass'] = out
     own = [r for r in out if r['strip_heat_share'] == case_share]
@@ -500,9 +584,21 @@ def attach_per_pass(result):
            and r['ratio_stripe_to_in_mill_onset'] < 1]
     below = [r['label'].split()[0] for r in own if r['below_detection_threshold']]
     na = [r['label'].split()[0] for r in own if r.get('not_assessable_reason')]
+    held = (f'the case-pass stripe ({peak0 * 1e6:.3g} um)' if not gaussian else
+            f'a {gt.get("reference_stripe_peak_m", 0.0) * 1e6:.3g} um Gaussian reference stripe '
+            '(no steady stripe above the detection threshold at the case heat share)')
+    if gaussian and tso:
+        onset_words = (' The onsets compared are those of the thermal stripe shape (window at '
+                       f'strip share {tso["window_strip_heat_share"]:.3g}), not of the Gaussian '
+                       'reference stripe.')
+    elif gaussian:
+        onset_words = (' No ratio is given: ' + shape_reason + ' (no thermal stripe above the '
+                       'detection threshold at any heat share of the case pass).')
+    else:
+        onset_words = ''
     ts['per_pass_text'] = (
-        'Two questions, two answers. The gauge trend holds the case-pass stripe '
-        f'({peak0 * 1e6:.3g} um) unchanged on every pass. The stripe each pass would itself '
+        f'Two questions, two answers. The gauge trend holds {held} unchanged on every pass. '
+        'The stripe each pass would itself '
         'produce scales with that pass\'s bite heat (same spray, same nozzle, steady state; the '
         'roll needs minutes to reach it, radial time constant about 4-7 min computed for a '
         '260 mm roll [PT-T25]): at the case heat share '
@@ -511,15 +607,23 @@ def attach_per_pass(result):
             f'it would stay latent on {", ".join(lat)}' if lat else '',
             f'no stripe above the detection threshold on {", ".join(below)}' if below else '',
             f'not assessable on {", ".join(na)}' if na else '') if x)
-        + ('' if (man or lat or below or na) else 'no pass to assess') + '.')
+        + ('' if (man or lat or below or na) else 'no pass to assess') + '.' + onset_words)
+    ts['per_pass_onset_shape_basis'] = shape_basis
+    if shape_reason:
+        ts['per_pass_onsets_not_given_reason'] = shape_reason
     # beside the gauge-trend text (which band_diagnosis may rebuild for credibility)
-    gt['own_stripe_text'] = ('The text above holds the case-pass stripe on every pass. '
+    gt['own_stripe_text'] = ('The text above holds '
+                             + ('the case-pass stripe' if not gaussian
+                                else 'the Gaussian reference stripe') + ' on every pass. '
                              + ts['per_pass_text'].split('. ', 2)[-1]
                              + ' (width.thermal_sensitivity.per_pass)')
     ts['per_pass_note'] = (
         'Stripe at a pass = the case-pass stripe x (that pass\'s bite heat / the case pass\'s) x '
         '(roll share / case roll share), at the case spray coefficient (linear model, same '
-        'stripe shape); onsets from the gauge trend (the case stripe\'s shape at each pass). '
+        'stripe shape); onsets from the gauge trend '
+        + ('(the case stripe\'s shape at each pass)' if not gaussian
+           else 'for ' + shape_basis if shape_basis
+           else '(none: ' + shape_reason + ')') + '. '
         'Strip exit temperature = entry + pass-heating rise x (share / the strip fraction that '
         'pass-heating row used, tribology.strip_heat_fraction); a strip '
         'exit temperature is not a coil temperature (the 80 C battery limit is for the coil '
@@ -719,16 +823,19 @@ def thermal_check(result, case):
     build = (ts or {}).get('steady_build_up') if isinstance(ts, dict) else None
     if isinstance(build, dict) and build.get('status') == 'EVALUATED':
         growth['steady_build_up'] = {k: build[k] for k in build if k.startswith('time_to_')}
+        growth['steady_build_up'].update(
+            simulated_s=build.get('simulated_s', BUILD_UP_S),
+            fraction_at_end=build.get('fraction_at_end'),
+            percentages_not_reached=build.get('percentages_not_reached', [
+                p for p in BUILD_UP_PERCENTAGES if build.get(f'time_to_{p}_percent_s') is None]))
     parts = []
     if ev and growth['event_time_to_half_peak_s'][0] is not None:
         parts.append(f'the short event reaches half its peak in '
                      f'{growth["event_time_to_half_peak_s"][0]:.3g} s (axial decay time constant '
                      f'of a 52 mm stripe about {tau:.0f} s, computed)')
-    if 'steady_build_up' in growth and growth['steady_build_up']['time_to_50_percent_s']:
-        b = growth['steady_build_up']
-        parts.append(f'the steady stripe builds up to 50 % in {b["time_to_50_percent_s"]:.3g} s '
-                     f'and to 90 % in {b["time_to_90_percent_s"]:.3g} s (radial time constant '
-                     '4-7 min computed for a 260 mm roll)')
+    if 'steady_build_up' in growth:
+        parts.append(build_up_text(growth['steady_build_up'])
+                     + ' (radial time constant 4-7 min computed for a 260 mm roll)')
     growth['text'] = ('Growth: ' + '; '.join(parts) + '. A plant-identified flatness response '
                       'of about 20 s is of the order of the short local (axial) time scale and '
                       'of an event\'s rise, not of the minutes a steady stripe needs to build.'

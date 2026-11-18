@@ -1,7 +1,11 @@
 """Review of 7c494fd (band_thermal): a sensitivity row must report what a direct diagnosis at
 that heat share reports (stripe detected per row), and rejected pass-heating rows must not
-crash the thermal post-processing."""
+crash the thermal post-processing. Review of 6ad7e48: per-pass onsets belong to the stripe
+they are compared with (never the Gaussian reference stripe's), and the case-pass rows of the
+per-pass table agree with the sensitivity rows."""
 import copy
+import json
+import pathlib
 import unittest
 
 from physicroll import band_thermal as bt
@@ -73,6 +77,116 @@ class PerRowDetectionTests(unittest.TestCase):
         self.assertEqual(ts['combinations_changing_a_state'], [])
         self.assertEqual(ts['steady_build_up']['status'], 'NOT_ASSESSABLE')
         render_band_report(r)
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+# the partition-mode / own-window onset difference documented for the sensitivity rows
+WINDOW_TOL = 0.02
+
+
+def assert_case_pass_agrees(test, ts, case_exit_m, tol=WINDOW_TOL):
+    """The case-pass rows of the per-pass table against the sensitivity rows at the same share
+    (case spray coefficient): same stripe, same state in the mill and after release, ratios
+    within the onset-window tolerance. Returns the number of rows compared."""
+    rows = {round(x['strip_heat_share'], 9): x for x in ts['rows']
+            if x['spray_htc_w_m2k'] == ts['case_spray_htc_w_m2k']}
+    n = 0
+    for p in ts['per_pass']:
+        if p['exit_thickness_m'] is None or abs(p['exit_thickness_m'] - case_exit_m) > 1e-12:
+            continue
+        s = rows[round(p['strip_heat_share'], 9)]
+        n += 1
+        if s['status'] != 'EVALUATED':
+            test.assertIsNone(p['stripe_peak_m'])
+            continue
+        test.assertAlmostEqual(p['stripe_peak_m'] / s['stripe_peak_m'], 1.0, delta=1e-6)
+        for state, ratio in (('state_in_mill', 'ratio_stripe_to_in_mill_onset'),
+                             ('state_after_tension_release',
+                              'ratio_stripe_to_after_release_onset')):
+            manifest = s[state].startswith('MANIFEST')
+            rp = p[ratio]
+            test.assertIsNotNone(rp, (p['label'], p['strip_heat_share'], ratio))
+            if manifest:
+                test.assertGreaterEqual(rp, 1.0 - tol, (p['strip_heat_share'], ratio))
+            else:
+                test.assertLess(rp, 1.0 + tol, (p['strip_heat_share'], ratio))
+            test.assertAlmostEqual(rp / s[ratio], 1.0, delta=tol)
+    return n
+
+
+def _gauss_case(mode='partition', heat=1800.0):
+    # reviewer: tribology on, bite heat 1800 W/m, roll heat fraction 0.08 (strip share 0.84):
+    # no steady stripe at the case share, so the gauge trend uses its Gaussian reference
+    c = _case(0.08, heat=heat, mode=mode)
+    c['tribology'] = dict(TRIBOLOGY)
+    return c
+
+
+class PerPassOnsetShapeTests(unittest.TestCase):
+    def test_reviewer_case_onsets_belong_to_the_thermal_stripe(self):
+        for mode in ('partition', 'full'):
+            r = diagnose(_gauss_case(mode))
+            gt, ts = r['width']['gauge_trend'], r['width']['thermal_sensitivity']
+            self.assertEqual(gt['reference_stripe_kind'], 'gaussian_reference')
+            self.assertEqual(gt['thermal_shape_onsets']['window_strip_heat_share'], 0.33)
+            g = gt['rows'][0]
+            row = _rows(r)[0.11]
+            self.assertEqual(row['state_after_tension_release'], 'MANIFEST_AFTER_TENSION_RELEASE')
+            p = next(x for x in ts['per_pass'] if round(x['strip_heat_share'], 9) == 0.11)
+            self.assertIn('thermal stripe shape', p['onset_shape_basis'])
+            # never the Gaussian reference stripe's onset (before: 0.152 um, ratio 0.922)
+            self.assertNotEqual(p['after_release_onset_height_m'],
+                                g['released_onset_stripe_height_m'])
+            self.assertEqual(p['after_release_onset_height_m'],
+                             g['thermal_shape_released_onset_height_m'])
+            self.assertGreaterEqual(p['ratio_stripe_to_after_release_onset'], 1.0)
+            if mode == 'partition':      # same window as the sensitivity row: same onset
+                self.assertAlmostEqual(p['ratio_stripe_to_after_release_onset']
+                                       / row['ratio_stripe_to_after_release_onset'], 1.0,
+                                       delta=1e-9)
+            self.assertEqual(assert_case_pass_agrees(self, ts, 0.42e-3), len(ts['shares']))
+            self.assertIn('Gaussian reference stripe', ts['per_pass_text'])
+            self.assertIn('not of the Gaussian reference stripe', ts['per_pass_text'])
+            self.assertNotIn('holds the case-pass stripe', ts['per_pass_text'])
+            html = render_band_report(r)
+            self.assertIn('The per-pass onsets are those of the thermal stripe shape', html)
+
+    def test_no_thermal_stripe_shape_gives_no_onset(self):
+        r = diagnose(_gauss_case(heat=300.0))
+        gt, ts = r['width']['gauge_trend'], r['width']['thermal_sensitivity']
+        self.assertEqual(gt['reference_stripe_kind'], 'gaussian_reference')
+        self.assertNotIn('thermal_shape_onsets', gt)
+        for p in ts['per_pass']:
+            self.assertIsNone(p['in_mill_onset_height_m'])
+            self.assertIsNone(p['after_release_onset_height_m'])
+            self.assertIsNone(p['onset_shape_basis'])
+        self.assertIn('Gaussian reference stripe', ts['per_pass_onsets_not_given_reason'])
+        self.assertIn('No ratio is given', ts['per_pass_text'])
+        # a pass that would carry a stripe (synthetic: a larger unthresholded deviation) gets
+        # no ratio, and the reason, never a ratio against the Gaussian's onset
+        r2 = copy.deepcopy(r)
+        ts2 = r2['width']['thermal_sensitivity']
+        for x in ts2['rows']:
+            x['largest_deviation_in_strip_m'] = 1e-6
+        bt.attach_per_pass(r2)
+        p = ts2['per_pass'][0]
+        self.assertIsNotNone(p['stripe_peak_m'])
+        self.assertIsNone(p['ratio_stripe_to_in_mill_onset'])
+        self.assertIsNone(p['ratio_stripe_to_after_release_onset'])
+        self.assertIn('Gaussian reference stripe', p['not_assessable_reason'])
+        self.assertIn('not assessable on case', ts2['per_pass_text'])
+        self.assertIn('No per-pass onset or ratio', render_band_report(r2))
+
+    def test_battery_demo_case_pass_agrees_with_sensitivity_rows(self):
+        r = json.loads((ROOT / 'artifacts' / 'band_diagnosis'
+                        / 'battery-foil-demo.result.json').read_text(encoding='utf-8'))
+        ts = r['width']['thermal_sensitivity']
+        self.assertEqual(r['width']['gauge_trend']['reference_stripe_kind'],
+                         'model_steady_stripe')
+        self.assertEqual(assert_case_pass_agrees(self, ts, r['inputs']['pass']['exit_thickness_m']),
+                         len(ts['shares']))
+        self.assertTrue(all('case-share steady stripe' in p['onset_shape_basis']
+                            for p in ts['per_pass']))
 
 
 class RejectedPassHeatingTests(unittest.TestCase):

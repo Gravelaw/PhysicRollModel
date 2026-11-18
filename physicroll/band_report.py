@@ -2454,6 +2454,12 @@ def _thermal_block(r):
                              'event visible [s]'], rows, 'wrapall'))
         if ts.get('per_pass_text'):
             out.append(f'<p>{_e(ts["per_pass_text"])}</p>')
+        if ts.get('per_pass_onset_shape_basis'):
+            out.append('<p class="note">The per-pass onsets are those of '
+                       f'{_e(ts["per_pass_onset_shape_basis"])}.</p>')
+        elif ts.get('per_pass_onsets_not_given_reason'):
+            out.append('<p class="note">No per-pass onset or ratio: '
+                       f'{_e(ts["per_pass_onsets_not_given_reason"])}.</p>')
     out.append('</section>')
     return ''.join(out)
 

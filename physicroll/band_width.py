@@ -1419,11 +1419,15 @@ def spacing_match(gaps, pitch):
             'gaps': m['gaps']}
 
 
-def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape_reason):
+def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape_reason,
+                 thermal_shape=None):
     """Same stripe on every schedule pass. ``steady`` may be None (Gaussian reference stripe
     on ``z_grid``). Per pass the shape parameters come from the pass's own bite; the case pass
     uses ``width_model.shape_inputs`` when supplied (SPEC9 9.1) and is rejected with the bite
-    error when it has neither. ``op_bite``: the case-pass bite (or None)."""
+    error when it has neither. ``op_bite``: the case-pass bite (or None). ``thermal_shape``
+    (``band_thermal.thermal_shape_off_case_share``): with the Gaussian reference stripe, the
+    thermal stripe found at another heat share; its per-pass onsets are added
+    (``thermal_shape_*_onset_height_m``) for the sensitivity per-pass table."""
     th_z = steady['z_m'] if steady else z_grid
     rows_src = case['schedule'] or [dict(case['pass'], label='case pass')]
     if steady and steady['stripes']:
@@ -1437,6 +1441,10 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                  f'{REFERENCE_HALF_PEAK_WIDTH_M:g} m) at the strip centre (no steady stripe)')
     zc, shape_c = coarse_grid(th_z, shape)
     peak_ref = max(shape_c, key=abs)
+    if steady and steady['stripes']:
+        thermal_shape = None              # the model stripe's own onsets already serve
+    shape_t = None if thermal_shape is None else coarse_grid(th_z, thermal_shape['shape'])[1]
+    peak_t = None if shape_t is None else abs(max(shape_t, key=abs))
     peak_x = zc[max(range(len(shape_c)), key=lambda i: abs(shape_c[i]))]
     ref = _reference_stripe(zc, peak_x)
     rows = []
@@ -1507,6 +1515,10 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                                                      REFERENCE_STRIPE_HEIGHT_M),
                 released_onset_reference_limited_by_reporting_threshold=_limited(
                     on_ref['released'], on_ref['reporting']))
+            if shape_t is not None and peak_t > 0:
+                on_t = onsets(zc, shape_t, sp)
+                row.update(thermal_shape_manifest_onset_height_m=h(on_t['mill'], peak_t),
+                           thermal_shape_released_onset_height_m=h(on_t['released'], peak_t))
             for o, height, keys_ in (
                     (on, abs(peak_ref), {'mill': 'manifest_onset_stripe_height_m',
                                          'released': 'released_onset_stripe_height_m'}),
@@ -1558,6 +1570,17 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                '*_onset_height_reference_m columns'),
            'evaluation_grid_m': zc[1] - zc[0],
            'rows': rows, 'text': _trend_text(rows, peak_ref)}
+    out['reference_stripe_kind'] = ('model_steady_stripe' if steady and steady['stripes']
+                                    else 'gaussian_reference')
+    if shape_t is not None:
+        out['thermal_shape_onsets'] = {
+            'window_strip_heat_share': thermal_shape['window_share'],
+            'position_m': thermal_shape['position_m'],
+            'basis': ('no steady stripe above the detection threshold at the case heat share; '
+                      'thermal_shape_*_onset_height_m are the onsets of the thermal stripe '
+                      'shape (case-share profile, isolated over the stripe extent at strip '
+                      f'share {thermal_shape["window_share"]:.3g}, the window the sensitivity '
+                      'rows use) with each pass\'s own shape parameters')}
     # Bite-free span thresholds per pass and their trend sentence: only for a foil-regime case
     # or a schedule with a pass without a bite (the passes they matter for), so that sheet
     # results without such passes keep their exact content
@@ -1941,8 +1964,12 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         out['positions'] = failed('positions', exc)
         out['failures'].append(out['positions']['error'])
     try:
+        from . import band_thermal
+        t_shape = (band_thermal.thermal_shape_off_case_share(case, th, steady,
+                                                              sys.modules[__name__])
+                   if steady and not steady['stripes'] else None)
         out['gauge_trend'] = _gauge_trend(case, w, get_bite, steady, th.centre, w['coil'], z,
-                                          bite, shape_reason)
+                                          bite, shape_reason, t_shape)
     except ValueError as exc:
         out['gauge_trend'] = failed('gauge_trend', exc)
         out['failures'].append(out['gauge_trend']['error'])
