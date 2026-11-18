@@ -407,15 +407,25 @@ def apply_flow_stress(case, section):
 
 
 # ============================================================================= friction
-def friction_single(case, src, trib, cache):
+def case_pass_bite(case, src, op_bite):
+    """The operating bite when ``src`` IS the case pass (``band_width.is_case_pass`` on the
+    effective case) and one exists, else None (the caller derives). Review finding: with a
+    supplied bite the case-pass row of a per-row table re-derived a different bite."""
+    from .band_width import is_case_pass     # local import: band_width imports this module
+    return op_bite if op_bite is not None and is_case_pass(case, src) else None
+
+
+def friction_single(case, src, trib, cache, op_bite=None):
     """Closure friction at the bite of the SUPPLIED friction (no fixed point): used for display
-    when the computed friction does not replace the supplied one (that bite is derived anyway)."""
+    when the computed friction does not replace the supplied one (that bite is derived anyway,
+    except for the case pass with a supplied operating bite, which is used)."""
     radius = case['pass']['work_roll_radius_m']
     u = src['exit_speed_m_s']
     out = {'exit_speed_m_s': u, 'supplied_friction_coefficient': src['friction_coefficient'],
            'method': 'single evaluation at the contact radius of the supplied-friction bite'}
     try:
-        bite = cache.get(bite_pass(case, src))
+        bite = (case_pass_bite(case, src, op_bite)
+                or cache.get(bite_pass(case, src)))
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
         out['bite_source'] = 'experimental_mattress' if is_mattress(bite) else bite.source
     except ValueError as exc:
@@ -476,12 +486,16 @@ def friction_fixed_point(case, src, trib, cache):
     return out
 
 
-def friction_section(case, trib, cache):
+def friction_section(case, trib, cache, op_bite=None):
+    """Per-pass friction. ``op_bite``: the supplied operating bite (or None), used by the
+    single evaluation for the case pass and any identical schedule row; the fixed point
+    (use_computed_friction) iterates friction, so its bites are genuinely different passes."""
     rows = []
-    solve = friction_fixed_point if trib['use_computed_friction'] else friction_single
+    fixed = trib['use_computed_friction']
     for label, src in pass_rows(case):
         try:
-            row = solve(case, src, trib, cache)
+            row = (friction_fixed_point(case, src, trib, cache) if fixed
+                   else friction_single(case, src, trib, cache, op_bite))
         except ValueError as exc:
             row = {'exit_speed_m_s': src['exit_speed_m_s'],
                    'supplied_friction_coefficient': src['friction_coefficient'],
@@ -597,7 +611,8 @@ def heating_section(case, trib, cache, op_bite, cells, roll_e, roll_nu):
         row = {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
                'exit_speed_m_s': src['exit_speed_m_s']}
         try:
-            bite = op_bite if i == 0 else cache.get(bite_pass(case, src))
+            bite = op_bite if i == 0 else (case_pass_bite(case, src, op_bite)
+                                           or cache.get(bite_pass(case, src)))
             if bite is None:
                 raise ValueError('no bite response for the case pass')
             row.update(heating_row(case, src, bite, trib, cells, roll_e, roll_nu))

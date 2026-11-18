@@ -734,18 +734,27 @@ def _least_favourable(items):
 
 
 # ============================================================================= sections
-def _section_bite(case, cache, flags):
+def _supplied_bite(case):
+    """The operating bite from ``model_options.bite_response_override`` (validated), or None.
+    Built once per diagnosis so every section that needs the operating bite uses this object."""
     override = case['model_options']['bite_response_override']
+    if override is None:
+        return None
     bp = _bite_pass(case)
-    if override is not None:
-        bite = BiteResponse(**override, source='supplied',
-                            flags=('SUPPLIED_BITE_SENSITIVITIES_NOT_VERIFIED',))
-        bite.validate()
-        if (abs(bite.entry_thickness_m - bp.entry_thickness_m) > 1e-12
-                or abs(bite.exit_thickness_m - bp.exit_thickness_m) > 1e-12):
-            raise ValueError('bite_response_override thicknesses must equal the pass thicknesses')
+    bite = BiteResponse(**override, source='supplied',
+                        flags=('SUPPLIED_BITE_SENSITIVITIES_NOT_VERIFIED',))
+    bite.validate()
+    if (abs(bite.entry_thickness_m - bp.entry_thickness_m) > 1e-12
+            or abs(bite.exit_thickness_m - bp.exit_thickness_m) > 1e-12):
+        raise ValueError('bite_response_override thicknesses must equal the pass thicknesses')
+    return bite
+
+
+def _section_bite(case, cache, flags, supplied=None):
+    bp = _bite_pass(case)
+    if supplied is not None:
         flags.append('BITE_RESPONSE_SUPPLIED')
-        return bite, None
+        return supplied, None
     try:
         return cache.get(bp), None
     except ValueError as exc:
@@ -1096,7 +1105,16 @@ def _lever_rows(case, cache, stand, spans, bite, beta, override):
                     'variant over the baseline with the supplied bite-damping fraction.'}
 
 
-def _schedule_rows(case, cache, stand, spans, beta):
+def _case_bite(case, cache, op_bite, bite_pass_, src):
+    """Bite of a schedule pass: the operating bite when the row IS the case pass (every
+    bite-defining parameter equal, ``bw.is_case_pass`` on the effective case) and one exists
+    (review finding: with a supplied bite the row re-derived a different one); else derived."""
+    if op_bite is not None and bw.is_case_pass(case, src):
+        return op_bite
+    return cache.get(bite_pass_)
+
+
+def _schedule_rows(case, cache, stand, spans, beta, op_bite=None):
     rows = []
     p = case['pass']
     k = case['kinematics']
@@ -1122,7 +1140,7 @@ def _schedule_rows(case, cache, stand, spans, beta):
                    else None)}
         try:
             bp = _bite_pass(case, row)
-            b = cache.get(bp)
+            b = _case_bite(case, cache, op_bite, bp, row)
             cr, cr0 = _crit_pair(stand, b, spans, beta)
             uc, uc0 = cr['critical_exit_speed_m_s'], cr0['critical_exit_speed_m_s']
             fr = _roll_freqs(case, u, b.forward_slip_fraction)['work_roll_2x']
@@ -1158,7 +1176,9 @@ def _schedule_rows(case, cache, stand, spans, beta):
         ref_mu = p['friction_coefficient']
         same = {'friction_coefficient': ref_mu}
         try:
-            b2 = cache.get(replace(_bite_pass(case, row), friction_coefficient=ref_mu))
+            b2 = _case_bite(case, cache, op_bite,
+                            replace(_bite_pass(case, row), friction_coefficient=ref_mu),
+                            dict(row, friction_coefficient=ref_mu))
             c2, c20 = _crit_pair(stand, b2, spans, beta)
             same.update(critical_exit_speed_m_s=c2['critical_exit_speed_m_s'],
                         critical_exit_speed_without_bite_damping_m_s=c20[
@@ -1920,7 +1940,7 @@ def _strip_map(hyps, ctx):
 
 
 # ============================================================================= main entry
-def _process_inputs(eff, cache, flags):
+def _process_inputs(eff, cache, flags, supplied=None):
     """Flow stress and friction from the process models (before the bite is derived).
 
     When ``use_computed_*`` is set the computed value replaces the supplied one in the
@@ -1941,7 +1961,7 @@ def _process_inputs(eff, cache, flags):
             out['flow_stress'] = bp.failed('process.flow_stress', exc)
     if eff['tribology'] is not None:
         try:
-            fr = bp.friction_section(eff, eff['tribology'], cache)
+            fr = bp.friction_section(eff, eff['tribology'], cache, supplied)
             if eff['tribology']['use_computed_friction']:
                 bp.apply_friction(eff, fr)
                 flags.append('FRICTION_FROM_PLACEHOLDER_CLOSURE')
@@ -2180,13 +2200,14 @@ def diagnose(case):
         flags.append(f'BITE_MODEL_{case["model_options"]["bite_model"].upper()}')
     eff = copy.deepcopy(case)          # effective inputs (computed values may replace supplied)
     cache = _BiteCache(eff)
-    process = _process_inputs(eff, cache, flags)
+    supplied = _supplied_bite(eff)
+    process = _process_inputs(eff, cache, flags, supplied)
     p, obs = eff['pass'], eff['observation']
     beta = eff['model_options']['bite_damping_transit_fraction']
     u_op = p['exit_speed_m_s']
     h0, h1 = p['entry_thickness_m'], p['exit_thickness_m']
     stand, spans = _stand(eff), _spans(eff)
-    bite, bite_error = _section_bite(eff, cache, flags)
+    bite, bite_error = _section_bite(eff, cache, flags, supplied)
     override = eff['model_options']['bite_response_override']
     trib = eff['tribology']
 
@@ -2314,7 +2335,7 @@ def diagnose(case):
     result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
     ctx.screens = result['screens']
 
-    result['schedule_sweep'] = (_schedule_rows(eff, cache, stand, spans, beta)
+    result['schedule_sweep'] = (_schedule_rows(eff, cache, stand, spans, beta, bite)
                                 if eff['schedule'] else None)
 
     # ---- v2 process sections

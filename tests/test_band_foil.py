@@ -543,6 +543,44 @@ class SuppliedBiteGaugeTrendTests(unittest.TestCase):
         self.assertNotEqual(rows[0]['strip_stiffness_per_width_pa'], steady_q)
 
 
+class SuppliedBiteScheduleTablesTests(unittest.TestCase):
+    """Review finding: with a supplied bite, the schedule sweep, heating and friction rows of
+    the case pass used a freshly derived bite instead of the supplied operating bite."""
+
+    def test_case_pass_rows_use_the_supplied_bite(self):
+        c = v2(orientation='longitudinal')
+        o = c['model_options']['bite_response_override']
+        o['dforce_dexit_thickness_n_m'] *= 2
+        p = c['pass']
+        c['schedule'] = [
+            {'label': 'thicker', 'entry_thickness_m': 0.9e-3, 'exit_thickness_m': 0.6e-3,
+             'mean_flow_stress_pa': 240e6, 'friction_coefficient': 0.05,
+             'entry_tension_pa': 20e6, 'exit_tension_pa': 25e6, 'exit_speed_m_s': 8.0},
+            dict({k: p[k] for k in ('entry_thickness_m', 'exit_thickness_m',
+                                    'mean_flow_stress_pa', 'friction_coefficient',
+                                    'entry_tension_pa', 'exit_tension_pa', 'exit_speed_m_s')},
+                 label='case pass row')]
+        c['tribology'] = dict(TRIBOLOGY)
+        r = diagnose(c)
+        q_sup = -o['dforce_dexit_thickness_n_m']
+        self.assertAlmostEqual(r['bite']['strip_modulus_n_m'], q_sup)
+        thick, same = r['schedule_sweep']['rows']
+        self.assertEqual(same['strip_modulus_n_m'], r['bite']['strip_modulus_n_m'])
+        self.assertEqual(same['separating_force_n'], r['bite']['separating_force_n'])
+        self.assertEqual(same['bite_model'], 'supplied')
+        uc = r['chatter']['with_bite_damping']['critical_exit_speed_m_s']
+        self.assertEqual(same['critical_exit_speed_m_s'], uc)
+        self.assertEqual(same['at_case_friction']['critical_exit_speed_m_s'], uc)
+        self.assertEqual(thick['bite_model'], 'hitchcock')
+        heat = r['process']['heating']
+        self.assertEqual(heat['schedule'][1], dict(heat['operating'], label='case pass row'))
+        self.assertIn('Hitchcock', heat['schedule'][0]['friction_power_basis'])
+        fr = r['process']['friction']
+        self.assertEqual(fr['operating']['bite_source'], 'supplied')
+        self.assertEqual(fr['schedule'][1]['bite_source'], 'supplied')
+        self.assertEqual(fr['schedule'][0]['bite_source'], 'derived_slab_hitchcock')
+
+
 class CollectorFoilBelowFloorTests(unittest.TestCase):
     """SPEC9 addendum: a 0.030 -> 0.017 mm case pass (below the 20 um roll-bite floor)."""
 
