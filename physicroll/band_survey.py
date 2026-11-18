@@ -772,7 +772,11 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
                onset_frequency_hz=sw['onset_frequency_hz'])
     limit = mill.desc['span_wave_limit_hz']
     bite = cache.get(bd._bite_pass(case, row))
-    c0 = bd._crit_pair(mill.stand, bite, mill.spans, mill.beta)[1]
+    c, c0 = bd._crit_pair(mill.stand, bite, mill.spans, mill.beta)
+    # review of ad3f3dc: keep the scan status of both critical speeds and the scan range; a
+    # null critical speed is read from its status (chatter_state), never as 'stable'
+    out['critical_status_without_bite_damping'] = c0['status']
+    out['critical_speed_scan_range_m_s'] = list(c['speed_range_m_s'])
     onsets_hz = [f for f in (sw['onset_frequency_hz'], c0['onset_frequency_hz']) if f]
     out['chatter_reliability'] = ('NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT'
                                   if onsets_hz and max(onsets_hz) > limit
@@ -793,6 +797,55 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
         out['stripe'] = _stripe(mill, case, bite, row)
     except ValueError as exc:
         out['stripe_error'] = str(exc)
+    return out
+
+
+# --------------------------------------------------------------------------- chatter states
+# One mapping, in one place, from a critical-speed scan status to what the survey says and
+# does (ranking, cell, summary, battery grade matrix). Unknown statuses are not assessable.
+CHATTER_STATES = {
+    'UNSTABLE_ABOVE_CRITICAL_SPEED': 'CRITICAL_SPEED',          # crossing inside the scan
+    'CROSSING_FOUND': 'CRITICAL_SPEED',
+    'STABLE_OVER_SCANNED_RANGE': 'STABLE_OVER_SCAN',
+    'NO_CROSSING_IN_SCAN': 'STABLE_OVER_SCAN',
+    'UNSTABLE_AT_LOWEST_SCANNED_SPEED': 'ALREADY_UNSTABLE',
+    'UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED': 'ALREADY_UNSTABLE'}
+
+
+def chatter_state(r, closure='without'):
+    """What a survey row's critical speed means, from its scan status (never from a null):
+    ``{'state', 'critical_m_s', 'bound_m_s', 'margin', 'margin_is_lower_bound', 'text'}``.
+    ``closure``: 'with' (the mill's bite damping) or 'without' (beta = 0)."""
+    if r.get('bite_status') != 'BITE':
+        return {'state': 'NOT_ASSESSABLE', 'critical_m_s': None, 'bound_m_s': None,
+                'margin': None, 'margin_is_lower_bound': False,
+                'text': r.get('rejected') or r.get('bite_note') or 'no roll bite'}
+    key = 'critical_status' if closure == 'with' else 'critical_status_without_bite_damping'
+    status = r.get(key)
+    uc = r.get('critical_exit_speed_m_s' if closure == 'with'
+               else 'critical_exit_speed_without_bite_damping_m_s')
+    u = r['exit_speed_m_s']
+    state = CHATTER_STATES.get(status, 'NOT_ASSESSABLE')
+    out = {'state': state, 'status': status, 'critical_m_s': None, 'bound_m_s': None,
+           'margin': None, 'margin_is_lower_bound': False}
+    if bd._outside_scan(u):
+        out.update(state='OUTSIDE_SCAN', text=f'survey speed {u:.3g} m/s outside the scanned '
+                   'range (the margin is not assessable there)')
+    elif state == 'CRITICAL_SPEED' and uc:
+        out.update(critical_m_s=uc, margin=u / uc, text=f'{uc:.3g} m/s')
+    elif state == 'STABLE_OVER_SCAN':
+        out['text'] = 'stable over scan'
+    elif state == 'ALREADY_UNSTABLE':
+        rng = r.get('critical_speed_scan_range_m_s')
+        lo = rng[0] if rng else None
+        out.update(bound_m_s=lo, margin=None if not lo else u / lo,
+                   margin_is_lower_bound=bool(lo),
+                   text=('unstable from the lowest scanned speed'
+                         + (f' (critical speed below {lo:.3g} m/s; margin >= '
+                            f'{u / lo:.3g})' if lo else '')))
+    else:
+        out.update(state='NOT_ASSESSABLE',
+                   text=f'not assessable (critical-speed status {status!r})')
     return out
 
 
@@ -839,7 +892,7 @@ def _domain(r, key):
 def rankings(rows):
     out = []
     for key, title, get, scale, unit, needs_bite, small_first, meaning in MECHANISMS:
-        ranked, excluded = [], []
+        ranked, excluded, unstable = [], [], []
         for r in rows:
             why = None
             if r.get('bite_status') == 'REJECTED':
@@ -855,6 +908,19 @@ def rankings(rows):
             elif key == 'chatter_margin' and r.get('chatter_reliability') != \
                     'WITHIN_SPAN_WAVE_LIMIT':
                 why = 'chatter onset above the span-wave limit (not reliable)'
+            elif key == 'chatter_margin' and chatter_state(r)['state'] != 'CRITICAL_SPEED':
+                # from the scan status (CHATTER_STATES), never from the null critical speed
+                st = chatter_state(r)
+                if st['state'] == 'ALREADY_UNSTABLE':
+                    why = 'unstable from the lowest scanned speed (the most chatter-prone)'
+                    unstable.append({'label': r['label'], 'product_id': r['product_id'],
+                                     'exit_thickness_m': r['exit_thickness_m'],
+                                     'critical_speed_below_m_s': st['bound_m_s'],
+                                     'margin_lower_bound': st['margin'], 'mill': r['mill']})
+                elif st['state'] == 'STABLE_OVER_SCAN':
+                    why = 'stable over the scanned speed range even without bite damping'
+                else:
+                    why = st['text']
             elif key in ('troughs', 'roller_wrinkles') and r.get('trough_error'):
                 why = r['trough_not_assessable_reason']
             elif key == 'coil_ridges' and r.get('critical_ridge_error'):
@@ -880,6 +946,12 @@ def rankings(rows):
                          'unvalidated_extended_bite': bool(r.get('extended_domain_flags'))}
                         for i, r in enumerate(ranked)],
                     'excluded': excluded})
+        if unstable:
+            # already unstable at the lowest scanned speed: more chatter-prone than every
+            # ranked product, but its margin is only a lower bound, so it is listed first
+            # here and kept out of the ranked values and the rank correlation
+            unstable.sort(key=lambda x: (-(x['margin_lower_bound'] or 0.0), x['label']))
+            out[-1]['already_unstable'] = unstable
     return out
 
 
@@ -942,12 +1014,16 @@ def summary(rows, ranks, user_mill=False):
              'with an assumed flow stress.']
     for rk in ranks:
         top = rk['most_sensitive_first']
+        au = rk.get('already_unstable')
+        head = (f'{rk["title"]}: already unstable from the lowest scanned speed, the most '
+                f'chatter-prone (margin only a lower bound, not ranked): '
+                f'{_names(au, n=len(au))}; ' if au else f'{rk["title"]}: ')
         if not top:
-            parts.append(f'{rk["title"]}: no product ranked'
+            parts.append(head + ('no other product ranked' if au else 'no product ranked')
                          + (f'; {len(rk["excluded"])} excluded' if rk['excluded'] else '')
                          + '.')
             continue
-        parts.append(f'{rk["title"]}: most sensitive {_names(top)}; '
+        parts.append(f'{head}most sensitive {"of the others " if au else ""}{_names(top)}; '
                      f'{_trend_words(gauge_correlation(rk))}'
                      + (f'; {len(rk["excluded"])} excluded' if rk['excluded'] else '') + '.')
     parts.append(('These are model sensitivities on the user\'s mill with literature inputs '
@@ -1003,6 +1079,8 @@ _CELL_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'reduction_fraction', 'mi
               'dead_band_half_width_i_units', 'trough_onset_lateral_stress_pa',
               'roller_wrinkle_threshold_pa', 'stripe', 'critical_exit_speed_m_s',
               'critical_exit_speed_without_bite_damping_m_s', 'speed_ratio_without_bite_damping',
+              'critical_status', 'critical_status_without_bite_damping',
+              'critical_speed_scan_range_m_s',
               'chatter_reliability', 'rejected', 'trough_error', 'trough_not_assessable_reason',
               'dead_band_error')
 
@@ -1280,11 +1358,9 @@ def _marks(r):
 def _chatter_cell(r):
     if r['bite_status'] != 'BITE':
         return _cell_bite(r, '')
-    uc, uc0 = r['critical_exit_speed_m_s'], r['critical_exit_speed_without_bite_damping_m_s']
     if bd._outside_scan(r['exit_speed_m_s']):
         return _e(f'survey speed {r["exit_speed_m_s"]:.3g} m/s outside the scanned range')
-    a = 'stable over scan' if uc is None else f'{uc:.3g} m/s'
-    b = 'stable over scan' if uc0 is None else f'{uc0:.3g} m/s'
+    a, b = chatter_state(r, 'with')['text'], chatter_state(r, 'without')['text']
     rel = '' if r['chatter_reliability'] == 'WITHIN_SPAN_WAVE_LIMIT' else ' <em>(not reliable: ' \
         'above the span-wave limit)</em>'
     return f'{_e(a)} / {_e(b)} at {r["exit_speed_m_s"]:.3g} m/s{rel}'
@@ -1421,9 +1497,11 @@ def _matrix_section(m):
             stripe = _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
                         f'{_onset(st.get("in_mill_onset_height_m"), st.get("in_mill_onset_domain_limit_m"))}; '
                         f'after release {_onset(st.get("after_release_onset_height_m"), st.get("after_release_onset_domain_limit_m"))}')
-            uc, uc0 = c.get('critical_exit_speed_m_s'), c.get('critical_exit_speed_without_bite_damping_m_s')
-            chat = _e(f'{"stable" if uc is None else _f(uc)} / '
-                      f'{"stable" if uc0 is None else _f(uc0)} m/s')
+            def short(cl):
+                st = chatter_state(c, cl)
+                return {'CRITICAL_SPEED': _f(st['critical_m_s']),
+                        'STABLE_OVER_SCAN': 'stable'}.get(st['state'], st['text'])
+            chat = _e(f'{short("with")} / {short("without")} m/s')
         else:
             bite = '<strong>' + _e(c.get('bite_excluded_reason', 'excluded')) + '</strong>'
             stripe = chat = 'excluded'

@@ -24,7 +24,7 @@ import math
 from dataclasses import replace
 
 from . import band_products as bp
-from .band_width import STRIPE_THRESHOLD_M
+from .band_width import STRIPE_THRESHOLD_M, is_case_pass
 from . import roll_thermal as rt
 
 MODES = ('off', 'partition', 'full')
@@ -646,6 +646,14 @@ QUARTER_BARREL = (0.20, 0.25)
 SHEET_FROM_M = 100e-6          # the engine's foil-regime threshold (band_width.FOIL_GAUGE_M)
 
 
+STRIP_EXIT_RULE = (
+    'One row per pass: the schedule rows in order (row_index i >= 1 = schedule row i-1) and the '
+    'operating pass (row_index 0) unless a schedule row IS the case pass (band_width.'
+    'is_case_pass: same gauges, flow stress, friction and tensions); then that pass is listed '
+    'once, with the operating pass\'s own value when the identical schedule row was not '
+    'assessable, and it is final when either index is a final pass.')
+
+
 def _k_to_c(k):
     return None if k is None else k - 273.15
 
@@ -756,13 +764,39 @@ def thermal_check(result, case):
     rows = []
     heat = (result.get('process') or {}).get('heating') if isinstance(
         result.get('process'), dict) else None
+    merged = {}
     if isinstance(heat, dict) and 'operating' in heat:
-        src = [(j + 1, x) for j, x in enumerate(heat.get('schedule') or [])]
+        sched = list(heat.get('schedule') or [])
         op = heat['operating']
-        if not any(abs(x.get('exit_thickness_m', -1) - op.get('exit_thickness_m', -2)) < 1e-12
-                   and abs(x.get('exit_speed_m_s', -1) - op.get('exit_speed_m_s', -2)) < 1e-12
-                   for _, x in src):
+        # review of ad3f3dc: "the schedule lists the case pass" is the engine's pass identity
+        # (band_width.is_case_pass on the case's schedule rows, by position), never exit gauge
+        # and speed: a different pass at the same exit gauge and speed keeps the operating
+        # pass's own temperature beside it
+        case_rows = case.get('schedule') or []
+        same = ([j + 1 for j, r in enumerate(case_rows) if is_case_pass(case, r)]
+                if len(case_rows) == len(sched) else [])
+        src = [(j + 1, x) for j, x in enumerate(sched)]
+        if not same:
             src = [(0, op)] + src        # the case pass when the schedule does not list it
+        else:
+            j0 = same[0]
+            sj = sched[j0 - 1]
+            if sj.get('rejected') and not op.get('rejected'):
+                # the identical schedule row was not assessable: show the operating pass's
+                # own value in its place (one row), and say so
+                src = [(0, op) if i == j0 else (i, x) for i, x in src]
+                merged[0] = {'identical_schedule_row_index': j0,
+                             'identical_schedule_row_label': sj.get('label'),
+                             'identical_schedule_row_status': 'NOT_ASSESSABLE',
+                             'identical_schedule_row_reason': sj['rejected']}
+            else:
+                merged[j0] = {'is_the_case_pass': True}
+                if op.get('rejected') and not sj.get('rejected'):
+                    merged[j0].update(operating_row_status='NOT_ASSESSABLE',
+                                      operating_row_reason=op['rejected'])
+            # the case pass and its identical schedule row are one pass: final if either is
+            finals_extra = {0, j0} if (0 in finals or j0 in finals) else set()
+            finals = finals | finals_extra
         for i, h in src:
             rows.append((h['label'], None if h.get('rejected') else _k_to_c(
                 h.get('exit_temperature_k')), i in finals, h.get('rejected'), i))
@@ -778,7 +812,7 @@ def thermal_check(result, case):
                           'basis': 'no pass-heating result for this pass',
                           'reason': why or 'no exit temperature', 'sources': [],
                           'read_status': None, 'note': why or '', 'is_final_pass': final,
-                          'above_90c': None})
+                          'above_90c': None} | merged.get(idx, {}))
             continue
         if collector:
             f = bp.check_thermal(prod, coil_temperature_leaving_final_pass_c=t)[0]
@@ -792,6 +826,13 @@ def thermal_check(result, case):
         f['row_index'] = idx
         f['is_final_pass'] = final
         f['above_90c'] = t > bp.COIL_OUT_FINAL_LIMIT_LOOSE.high
+        f.update(merged.get(idx, {}))
+        if 'identical_schedule_row_index' in f:
+            f['note'] = ((f.get('note') or '') + '; ' + (
+                f'the identical schedule row {f["identical_schedule_row_label"]} (row '
+                f'{f["identical_schedule_row_index"]}) was not assessable: '
+                f'{f["identical_schedule_row_reason"]}; the operating pass\'s own value is '
+                'shown')).strip('; ')
         temps.append(f)
     risk = [f for f in temps if collector and f['verdict'] == 'ABOVE_PUBLISHED_LIMIT'
             and (f['is_final_pass'] or not finals)]
@@ -875,6 +916,7 @@ def thermal_check(result, case):
     return {'status': bp.STATUS, 'not_supplied': False, 'product_id': pid,
             'battery_coil_limits_apply': collector,
             'inputs': inputs, 'strip_exit_temperatures': temps,
+            'strip_exit_temperature_rule': STRIP_EXIT_RULE,
             'coil_limits_c': {'entering_final_pass': bp.COIL_IN_FINAL_LIMIT.high,
                               'leaving_final_pass': bp.COIL_OUT_FINAL_LIMIT.high,
                               'elongation_decay_above': bp.COIL_OUT_FINAL_LIMIT_LOOSE.high},

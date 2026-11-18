@@ -26,6 +26,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 5.242193493359046,
         "critical_ridge_height_at_flow_stress_m": 1.3714285714285712e-07,
         "critical_ridge_height_m": 1.1806028833523809e-07,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.007776602930684861,
         "entry_tension_pa": 42000000.0,
         "entry_thickness_m": 3.4e-05,
@@ -98,6 +104,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 5.383422509492755,
         "critical_ridge_height_at_flow_stress_m": 1.4476190476190476e-07,
         "critical_ridge_height_m": 1.2477064220190475e-07,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.007776602930684861,
         "entry_tension_pa": 44000000.0,
         "entry_thickness_m": 3.4e-05,
@@ -168,6 +180,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 4.9932164811180275,
         "critical_ridge_height_at_flow_stress_m": 1.2342857142857145e-07,
         "critical_ridge_height_m": 1.0625425950171428e-07,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.006392650955733692,
         "entry_tension_pa": 42000000.0,
         "entry_thickness_m": 2.9999999999999997e-05,
@@ -239,6 +257,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 5.240736382348628,
         "critical_ridge_height_at_flow_stress_m": 1.302857142857143e-07,
         "critical_ridge_height_m": 1.1229357798171428e-07,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.006392650955733692,
         "entry_tension_pa": 44000000.0,
         "entry_thickness_m": 2.9999999999999997e-05,
@@ -309,6 +333,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 4.594625807408326,
         "critical_ridge_height_at_flow_stress_m": 8.857142857142857e-08,
         "critical_ridge_height_m": 7.596330275257142e-08,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.004554113756391179,
         "entry_tension_pa": 37000000.0,
         "entry_thickness_m": 3.2e-05,
@@ -386,6 +416,12 @@
         "critical_exit_speed_without_bite_damping_m_s": null,
         "critical_ridge_height_at_flow_stress_m": 1.0857142857142856e-07,
         "critical_ridge_height_m": 9.357798165142856e-08,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "STABLE_OVER_SCANNED_RANGE",
         "dead_band_half_width_i_units": 0.004554113756391179,
         "entry_tension_pa": 44000000.0,
         "entry_thickness_m": 3.2e-05,
@@ -462,6 +498,12 @@
         "critical_exit_speed_without_bite_damping_m_s": 4.112572396889143,
         "critical_ridge_height_at_flow_stress_m": 7.428571428571429e-08,
         "critical_ridge_height_m": 6.365399737889525e-08,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "dead_band_half_width_i_units": 0.003489866131012635,
         "entry_tension_pa": 36000000.0,
         "entry_thickness_m": 2e-05,
@@ -579,6 +621,12 @@
         "critical_exit_speed_without_bite_damping_m_s": null,
         "critical_ridge_height_at_flow_stress_m": 6.857142857142857e-08,
         "critical_ridge_height_m": 5.875753604205716e-08,
+        "critical_speed_scan_range_m_s": [
+          0.05,
+          60.0
+        ],
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "critical_status_without_bite_damping": "STABLE_OVER_SCANNED_RANGE",
         "dead_band_half_width_i_units": 0.0030071234017636306,
         "entry_tension_pa": 36000000.0,
         "entry_thickness_m": 2.4999999999999998e-05,
@@ -2351,7 +2399,12 @@
       "critical_exit_speed_m_s": null,
       "critical_exit_speed_without_bite_damping_m_s": 4.112572396889143,
       "critical_ridge_height_m": 7.428571428571429e-08,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.003489866131012635,
       "doubled": false,
       "engine_bite_credibility": "FORCE_OUTSIDE_REPORTED_RANGE",
@@ -2686,7 +2739,12 @@
       "critical_exit_speed_m_s": null,
       "critical_exit_speed_without_bite_damping_m_s": 5.334707007484055,
       "critical_ridge_height_m": 1.7142857142857146e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.016531781877673547,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -2918,7 +2976,12 @@
       "critical_exit_speed_m_s": null,
       "critical_exit_speed_without_bite_damping_m_s": 5.593820822756559,
       "critical_ridge_height_m": 1.8659047619047623e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.01820925200842572,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -3166,7 +3229,12 @@
       "critical_exit_speed_m_s": null,
       "critical_exit_speed_without_bite_damping_m_s": 3.545616449776827,
       "critical_ridge_height_m": 6.872380952380952e-08,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.005376302420802887,
       "doubled": false,
       "engine_bite_credibility": "FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED",
@@ -3399,7 +3467,12 @@
       "critical_exit_speed_m_s": 8.580077669254013,
       "critical_exit_speed_without_bite_damping_m_s": 3.4197904847785017,
       "critical_ridge_height_m": 3.131428571428572e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.05069976794061838,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -3611,7 +3684,12 @@
       "critical_exit_speed_m_s": 5.269457762763675,
       "critical_exit_speed_without_bite_damping_m_s": 1.0626138008437302,
       "critical_ridge_height_m": 4.948571428571429e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.118756506106758,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -3819,7 +3897,12 @@
       "critical_exit_speed_m_s": 5.613500501512489,
       "critical_exit_speed_without_bite_damping_m_s": 1.21715157332345,
       "critical_ridge_height_m": 4.64e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.1053533493621181,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -4033,7 +4116,12 @@
       "critical_exit_speed_m_s": 24.91808774890147,
       "critical_exit_speed_without_bite_damping_m_s": 5.679380463888389,
       "critical_ridge_height_m": 1.9771428571428575e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.02155537965508278,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -4490,7 +4578,12 @@
       "critical_exit_speed_m_s": 9.21805547709366,
       "critical_exit_speed_without_bite_damping_m_s": 4.063261525448214,
       "critical_ridge_height_m": 2.9714285714285715e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.04598755835149354,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -4759,7 +4852,12 @@
       "critical_exit_speed_m_s": null,
       "critical_exit_speed_without_bite_damping_m_s": 5.514856833191978,
       "critical_ridge_height_m": 1.805714285714286e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.01820925200842572,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -5969,7 +6067,12 @@
       "critical_exit_speed_m_s": 19.61824080836486,
       "critical_exit_speed_without_bite_damping_m_s": 5.8038836099474365,
       "critical_ridge_height_m": 2.1371428571428574e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.024912385338174504,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -6233,7 +6336,12 @@
       "critical_exit_speed_m_s": 6.286820759775418,
       "critical_exit_speed_without_bite_damping_m_s": 1.5814983826900808,
       "critical_ridge_height_m": 4.1542857142857147e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.08576856361885717,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -6498,7 +6606,12 @@
       "critical_exit_speed_m_s": 3.166510815183943,
       "critical_exit_speed_without_bite_damping_m_s": 0.46938787578572166,
       "critical_ridge_height_m": 7.657142857142859e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.2674786100296358,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -6752,7 +6865,12 @@
       "critical_exit_speed_m_s": 4.95364237685187,
       "critical_exit_speed_without_bite_damping_m_s": 0.936884381542367,
       "critical_ridge_height_m": 5.240000000000001e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.13209339339823836,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -7005,7 +7123,12 @@
       "critical_exit_speed_m_s": 6.866485568987528,
       "critical_exit_speed_without_bite_damping_m_s": 2.306992144688773,
       "critical_ridge_height_m": 4.001714285714286e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.12599749698779988,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -7246,7 +7369,12 @@
       "critical_exit_speed_m_s": 7.802236924160612,
       "critical_exit_speed_without_bite_damping_m_s": 2.2446498815519695,
       "critical_ridge_height_m": 1.9405714285714286e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.7094867326840982,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -7479,7 +7607,12 @@
       "critical_exit_speed_m_s": 7.341492542971555,
       "critical_exit_speed_without_bite_damping_m_s": 2.4452480775001564,
       "critical_ridge_height_m": 4.5550500244918915e-07,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.10841950535381634,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -7729,7 +7862,12 @@
       "critical_exit_speed_m_s": 3.7643859915092435,
       "critical_exit_speed_without_bite_damping_m_s": 0.8781644263473718,
       "critical_ridge_height_m": 1.3404482142857147e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.6589393170317901,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -7984,7 +8122,12 @@
       "critical_exit_speed_m_s": 7.757256205652142,
       "critical_exit_speed_without_bite_damping_m_s": 2.225910009429616,
       "critical_ridge_height_m": 1.9885714285714283e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.7424749138336727,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -8212,7 +8355,12 @@
       "critical_exit_speed_m_s": 7.86859178965592,
       "critical_exit_speed_without_bite_damping_m_s": 2.273622527851355,
       "critical_ridge_height_m": 1.8788571428571426e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.6680939752551005,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -8450,7 +8598,12 @@
       "critical_exit_speed_m_s": 7.2762139074894225,
       "critical_exit_speed_without_bite_damping_m_s": 2.1359072579019935,
       "critical_ridge_height_m": 1.1584285714285713e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 0.4145779596903071,
       "doubled": false,
       "engine_bite_credibility": null,
@@ -8684,7 +8837,12 @@
       "critical_exit_speed_m_s": 6.731068291268381,
       "critical_exit_speed_without_bite_damping_m_s": 1.9085004323356696,
       "critical_ridge_height_m": 3.6274285714285705e-06,
+      "critical_speed_scan_range_m_s": [
+        0.05,
+        60.0
+      ],
       "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "critical_status_without_bite_damping": "UNSTABLE_ABOVE_CRITICAL_SPEED",
       "dead_band_half_width_i_units": 2.2711669437817235,
       "doubled": false,
       "engine_bite_credibility": null,

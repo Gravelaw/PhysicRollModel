@@ -6981,6 +6981,7 @@
       ]
     },
     "status": "LITERATURE_SURVEY_UNVALIDATED",
+    "strip_exit_temperature_rule": "One row per pass: the schedule rows in order (row_index i >= 1 = schedule row i-1) and the operating pass (row_index 0) unless a schedule row IS the case pass (band_width.is_case_pass: same gauges, flow stress, friction and tensions); then that pass is listed once, with the operating pass's own value when the identical schedule row was not assessable, and it is final when either index is a final pass.",
     "strip_exit_temperatures": [
       {
         "above_90c": false,
@@ -7066,6 +7067,7 @@
         "above_90c": true,
         "basis": "no coil temperature limit published for this product",
         "is_final_pass": false,
+        "is_the_case_pass": true,
         "item": "modelled_strip_exit_temperature",
         "label": "P6 0.30->0.21 mm",
         "note": "",
