@@ -118,6 +118,19 @@ def _base_result():
 # ----------------------------------------------------------------------------- inputs
 
 
+# Bite-pass domain (SPEC12 stage A). The reduction limit was this project's own planner guard
+# (SPEC section 1: 0.5); probes of slab + Hitchcock and of the mattress model from 0.44 to 0.65
+# found converged, continuous forces and sensitivities with an interior neutral point, and
+# published foil passes run to 64 %, so it is 0.65 now; passes above 0.5 carry
+# REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN. The exit-gauge floor of a BitePass is 8 um
+# (the lower gauge of GB/T 33143-2022) for the experimental mattress model; the slab +
+# Hitchcock derivation keeps its own 20 um floor (HITCHCOCK_MIN_EXIT_THICKNESS_M).
+BITE_MIN_EXIT_THICKNESS_M = 8e-6
+HITCHCOCK_MIN_EXIT_THICKNESS_M = 2e-5
+BITE_MAX_REDUCTION = 0.65
+REDUCTION_EXTENDED_FLAG = 'REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN'
+
+
 @dataclass(frozen=True)
 class BitePass:
     """Nominal pass (SI). Thicknesses are full thickness; tensions are tensile stresses."""
@@ -136,10 +149,11 @@ class BitePass:
                                  'friction_coefficient'))
         _require_nonnegative(self, ('entry_tension_pa', 'exit_tension_pa'))
         h0, h1 = self.entry_thickness_m, self.exit_thickness_m
-        if not 2e-5 <= h1 < h0:
-            raise ValueError('chatter bite domain requires 2e-5 m <= exit thickness < entry')
-        if not 0.02 <= (h0 - h1) / h0 <= 0.5:
-            raise ValueError('chatter bite domain requires reduction in [0.02, 0.5]')
+        if not BITE_MIN_EXIT_THICKNESS_M <= h1 < h0:
+            raise ValueError(f'bite domain requires {BITE_MIN_EXIT_THICKNESS_M:g} m <= exit '
+                             'thickness < entry')
+        if not 0.02 <= (h0 - h1) / h0 <= BITE_MAX_REDUCTION:
+            raise ValueError(f'bite domain requires reduction in [0.02, {BITE_MAX_REDUCTION:g}]')
         if h0 / self.work_roll_radius_m > 0.05 or self.width_m / h0 < 20:
             raise ValueError('requires thin, wide strip: h0/R <= 0.05 and width/h0 >= 20')
         if self.friction_coefficient > 0.3:
@@ -302,6 +316,10 @@ def derive_bite_response(bite_pass, *, roll_youngs_modulus_pa=210e9, roll_poisso
     if not isinstance(bite_pass, BitePass):
         raise ValueError('bite_pass must be a BitePass')
     bite_pass.validate()
+    if bite_pass.exit_thickness_m < HITCHCOCK_MIN_EXIT_THICKNESS_M:
+        raise ValueError(f'slab/Hitchcock bite domain requires exit thickness >= '
+                         f'{HITCHCOCK_MIN_EXIT_THICKNESS_M:g} m (the experimental mattress '
+                         'model may be used below it)')
     if not _finite(roll_youngs_modulus_pa) or not 1e9 <= roll_youngs_modulus_pa <= 1e14:
         raise ValueError('roll Young modulus must be in [1e9, 1e14] Pa')
     if not _finite(roll_poisson_ratio) or not 0 <= roll_poisson_ratio < 0.5:
@@ -339,6 +357,8 @@ def derive_bite_response(bite_pass, *, roll_youngs_modulus_pa=210e9, roll_poisso
     flags = []
     if h1 < 3e-4:
         flags.append('THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN')
+    if (h0 - h1) / h0 > 0.5:
+        flags.append(REDUCTION_EXTENDED_FLAG)
     if ratio > 1.5:
         flags.append('HITCHCOCK_RATIO_BEYOND_REVIEWED_ENVELOPE')
     for key in full:

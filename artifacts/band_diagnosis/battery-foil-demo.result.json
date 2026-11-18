@@ -27,7 +27,7 @@
     "source": "supplied",
     "strip_modulus_n_m": 88665051318.04382
   },
-  "bite_derivations": 24,
+  "bite_derivations": 26,
   "bite_error": null,
   "bite_fallback_reason": "Hitchcock contact radius ratio 2.481 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed",
   "case_name": "battery_foil_demo",
@@ -697,7 +697,6 @@
     "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED",
     "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
     "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
-    "EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR",
     "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
     "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
     "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
@@ -710,18 +709,9 @@
   "foil_regime": {
     "below_bite_model_floor": {
       "case_pass_below_floor": false,
-      "floor_exit_thickness_m": 2e-05,
-      "passes": [
-        {
-          "exit_thickness_m": 1.8e-05,
-          "label": "F2 0.030->0.018 mm (plant pass 2, final)"
-        },
-        {
-          "exit_thickness_m": 1.2e-05,
-          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)"
-        }
-      ],
-      "text": "No roll-bite result exists for F2 0.030->0.018 mm (plant pass 2, final) (18 um), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um): the exit gauge is below the 20 um floor of both roll-bite models (chatter.BitePass.validate). For such a pass the chatter, lever, process-friction fixed point (and pass heating) and gauge-control sections are not assessable, and its strip-shape chain runs only with supplied width_model.shape_inputs (case pass). The case states (material.final_pass_doubled false) that this pass is rolled single-sheet, so the missing roll-bite result is a limit of the tool (the 20 um floor of both bite models and no closed-gap load path), not of an unmodelled doubled pass; a single-sheet pass at this gauge is closed-gap rolling, where the gauge is set by tension, speed and lubrication rather than load [V S8, S16, S17]."
+      "floor_exit_thickness_m": 8e-06,
+      "passes": [],
+      "text": null
     },
     "bite": {
       "bite_error": null,
@@ -785,10 +775,33 @@
       }
     ],
     "exit_thickness_m": 3e-05,
+    "extended_bite_domain": {
+      "passes": [
+        {
+          "exit_thickness_m": 1.8e-05,
+          "extended_domain_flags": [
+            "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
+          ],
+          "force_per_width_within_reported_range": true,
+          "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+          "separating_force_per_width_n_m": 1536047.3999197013
+        },
+        {
+          "exit_thickness_m": 1.2e-05,
+          "extended_domain_flags": [
+            "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+            "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
+          ],
+          "force_per_width_within_reported_range": false,
+          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+          "separating_force_per_width_n_m": 6037575.414857484
+        }
+      ],
+      "text": "Roll-bite results in the EXTENDED domain for F2 0.030->0.018 mm (plant pass 2, final) (EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN, EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN). Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only. Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated. Chatter, levers and gauge control for these passes are open-gap screening only; a critical speed there is not a prediction."
+    },
     "final_pass_doubled": false,
     "flags": [
-      "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED",
-      "EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR"
+      "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED"
     ],
     "implications": [
       "In closed gap the load is no longer a gauge actuator: more screw-down only bends the rolls and changes flatness; the gauge is set by tension, speed and lubrication [V S8, S16, S17].",
@@ -800,7 +813,9 @@
     ],
     "limitations": [
       "No roll-kissing (closed-gap) model; the bite models see only the strip contact.",
-      "Foil facts are cited from a research pass (tags V / D / M), not plant-validated."
+      "Foil facts are cited from a research pass (tags V / D / M), not plant-validated.",
+      "Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only.",
+      "Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated."
     ],
     "product_question": {
       "case_temper": "H18",
@@ -836,18 +851,27 @@
         "separating_force_per_width_n_m": 958604.665939781
       },
       {
-        "bite_model": null,
+        "bite_model": "experimental_mattress",
         "exit_thickness_m": 1.8e-05,
+        "extended_domain_flags": [
+          "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
+        ],
+        "force_per_width_within_reported_range": true,
         "label": "F2 0.030->0.018 mm (plant pass 2, final)",
-        "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-        "separating_force_per_width_n_m": null
+        "rejected": null,
+        "separating_force_per_width_n_m": 1536047.3999197013
       },
       {
-        "bite_model": null,
+        "bite_model": "experimental_mattress",
         "exit_thickness_m": 1.2e-05,
+        "extended_domain_flags": [
+          "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+          "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
+        ],
+        "force_per_width_within_reported_range": false,
         "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-        "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-        "separating_force_per_width_n_m": null
+        "rejected": null,
+        "separating_force_per_width_n_m": 6037575.414857484
       }
     ],
     "sources": [
@@ -4830,7 +4854,9 @@
     "Friction is an input unless tribology.use_computed_friction is set; the friction-speed closure of bite_tribology is an unfitted placeholder whose slope, not level, is used.",
     "Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated in time; the antisymmetric mode frequency is an undamped lumped estimate.",
     "Spray coverage is a geometric footprint count; the phase-1 thermal growth is a free-expansion upper bound with no axial conduction (the v2 width_model solves the roll temperature field instead).",
-    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation."
+    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation.",
+    "Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only.",
+    "Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated."
   ],
   "process": {
     "flow_stress": null,
@@ -4931,38 +4957,38 @@
           "used_friction_coefficient": 0.03
         },
         {
-          "bite_error": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-          "computed_friction_coefficient": 0.05186408408067776,
-          "contact_radius_ratio": 1.0,
+          "bite_source": "experimental_mattress",
+          "computed_friction_coefficient": 0.039046251951323455,
+          "contact_radius_ratio": 3.3132552239190787,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0018294931400814987,
-          "dmu_droll_speed_per_m_s": -0.0018294931400814987,
+          "dmu_dexit_speed_per_m_s": -0.002010226512701163,
+          "dmu_droll_speed_per_m_s": -0.0026291080740145985,
           "exit_speed_m_s": 15.0,
-          "film_ratio": 0.6256233923150413,
-          "film_thickness_m": 1.564058480787603e-07,
-          "forward_slip_fraction": 0.0,
+          "film_ratio": 0.97124115627312,
+          "film_thickness_m": 2.4281028906828e-07,
+          "forward_slip_fraction": 0.3078665799118516,
           "iterations": [],
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
-          "method": "single evaluation at the contact radius of the supplied-friction bite (bite rejected: undeformed roll radius used)",
+          "method": "single evaluation at the contact radius of the supplied-friction bite",
           "regime": "BOUNDARY",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
         {
-          "bite_error": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-          "computed_friction_coefficient": 0.0546010164236461,
-          "contact_radius_ratio": 1.0,
+          "bite_source": "experimental_mattress",
+          "computed_friction_coefficient": 0.02590954857811665,
+          "contact_radius_ratio": 11.248373508070705,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0017556059790045189,
-          "dmu_droll_speed_per_m_s": -0.0017556059790045189,
+          "dmu_dexit_speed_per_m_s": -0.0018164881936492494,
+          "dmu_droll_speed_per_m_s": -0.0025725168232010945,
           "exit_speed_m_s": 15.0,
-          "film_ratio": 0.5650968947042984,
-          "film_thickness_m": 1.4127422367607458e-07,
-          "forward_slip_fraction": 0.0,
+          "film_ratio": 1.521385236527897,
+          "film_thickness_m": 3.8034630913197424e-07,
+          "forward_slip_fraction": 0.4162034370468519,
           "iterations": [],
           "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-          "method": "single evaluation at the contact radius of the supplied-friction bite (bite rejected: undeformed roll radius used)",
-          "regime": "BOUNDARY",
+          "method": "single evaluation at the contact radius of the supplied-friction bite",
+          "regime": "MIXED",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         }
@@ -5246,16 +5272,46 @@
           "temperature_limit_k": 393.15
         },
         {
+          "bite_heat_per_width_w_m": 77726.40813936808,
+          "entry_temperature_k": 313.15,
           "exit_speed_m_s": 15.0,
+          "exit_temperature_k": 412.6625481436811,
           "exit_thickness_m": 1.8e-05,
+          "flags": [
+            "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED",
+            "EXIT_TEMPERATURE_ABOVE_SUPPLIED_LIMIT",
+            "EXIT_TEMPERATURE_ABOVE_TYPICAL_100C"
+          ],
+          "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
+          "friction_power_per_width_w_m": 49059.66787223547,
+          "heat_to_each_work_roll_per_width_w_m": 6218.112651149448,
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
-          "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)"
+          "plastic_power_per_width_w_m": 28666.74026713262,
+          "roll_heat_fraction_per_roll": 0.08000000000000002,
+          "strip_heat_fraction": 0.84,
+          "strip_temperature_rise_k": 99.51254814368113,
+          "temperature_limit_k": 393.15
         },
         {
+          "bite_heat_per_width_w_m": 63832.15757990832,
+          "entry_temperature_k": 313.15,
           "exit_speed_m_s": 15.0,
+          "exit_temperature_k": 435.7357621562025,
           "exit_thickness_m": 1.2e-05,
+          "flags": [
+            "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED",
+            "EXIT_TEMPERATURE_ABOVE_SUPPLIED_LIMIT",
+            "EXIT_TEMPERATURE_ABOVE_TYPICAL_100C"
+          ],
+          "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
+          "friction_power_per_width_w_m": 36386.746310640934,
+          "heat_to_each_work_roll_per_width_w_m": 5106.572606392667,
           "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-          "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)"
+          "plastic_power_per_width_w_m": 27445.41126926739,
+          "roll_heat_fraction_per_roll": 0.08000000000000002,
+          "strip_heat_fraction": 0.84,
+          "strip_temperature_rise_k": 122.58576215620252,
+          "temperature_limit_k": 393.15
         }
       ],
       "status": "UNVALIDATED_PASS_HEATING_ESTIMATE"
@@ -5459,39 +5515,106 @@
       },
       {
         "at_case_friction": {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 4.671672512445534,
           "friction_coefficient": 0.03,
-          "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)"
+          "strip_modulus_n_m": 300971741843.6271
         },
         "bending_strain_smallest_deflector": 7.2e-05,
+        "bite_flags": [
+          "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+          "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+          "MATTRESS_REGIME_FOIL",
+          "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+          "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+          "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+          "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
+          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+        ],
+        "bite_model": "experimental_mattress",
+        "chatter_reliability": "NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT",
+        "contact_radius_ratio": 3.3132552239190787,
+        "critical_exit_speed_m_s": null,
+        "critical_exit_speed_without_bite_damping_m_s": 4.671672512445534,
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
         "entry_tension_pa": 38000000.0,
         "entry_thickness_m": 3e-05,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 3.02137906325478e-09,
         "exit_speed_m_s": 15.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.8e-05,
+        "extended_domain_note": "roll bite from the extended domain (EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN): the critical speeds of this row are open-gap screening numbers, not predictions",
+        "forward_slip_fraction": 0.3078665799118516,
         "friction_coefficient": 0.03,
         "label": "F2 0.030->0.018 mm (plant pass 2, final)",
         "mean_flow_stress_pa": 180000000.0,
+        "onset_frequency_hz": null,
+        "onset_strip_pitch_m": null,
+        "pitch_at_operating_speed_m": null,
         "reduction_fraction": 0.4,
-        "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-        "thermal_gap_closure_fraction_upper_bound": 1.755
+        "relative_ripple_per_um_runout_at_work_roll_2x": 0.00016785439240304332,
+        "separating_force_n": 1843256.8799036415,
+        "separating_force_per_width_n_m": 1536047.3999197013,
+        "speed_ratio": null,
+        "speed_ratio_without_bite_damping": 3.210841504844221,
+        "stable_at_operating_speed": true,
+        "strip_modulus_n_m": 300971741843.6271,
+        "strip_to_mill_modulus_ratio": 130.42108813223842,
+        "thermal_gap_closure_fraction_upper_bound": 1.755,
+        "work_roll_2x_frequency_hz": 27.04233419124146
       },
       {
         "at_case_friction": {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": null,
           "friction_coefficient": 0.03,
-          "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)"
+          "strip_modulus_n_m": 4287374342946.522
         },
         "bending_strain_smallest_deflector": 4.8e-05,
+        "bite_flags": [
+          "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+          "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+          "MATTRESS_REGIME_FOIL",
+          "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+          "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+          "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+          "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+          "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
+          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+        ],
+        "bite_model": "experimental_mattress",
+        "chatter_reliability": "WITHIN_SPAN_WAVE_LIMIT",
+        "contact_radius_ratio": 11.248373508070705,
+        "critical_exit_speed_m_s": null,
+        "critical_exit_speed_without_bite_damping_m_s": null,
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
         "entry_tension_pa": 38000000.0,
         "entry_thickness_m": 2.45e-05,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 4.5334216954572627e-10,
         "exit_speed_m_s": 15.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.2e-05,
+        "extended_domain_note": "roll bite from the extended domain (REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN, EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN): the critical speeds of this row are open-gap screening numbers, not predictions",
+        "forward_slip_fraction": 0.4162034370468519,
         "friction_coefficient": 0.03,
         "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
         "mean_flow_stress_pa": 185000000.0,
+        "onset_frequency_hz": null,
+        "onset_strip_pitch_m": null,
+        "pitch_at_operating_speed_m": null,
         "reduction_fraction": 0.5102040816326531,
-        "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
-        "thermal_gap_closure_fraction_upper_bound": 2.6325
+        "relative_ripple_per_um_runout_at_work_roll_2x": 3.777851412881052e-05,
+        "separating_force_n": 7245090.497828981,
+        "separating_force_per_width_n_m": 6037575.414857484,
+        "speed_ratio": null,
+        "speed_ratio_without_bite_damping": null,
+        "stable_at_operating_speed": true,
+        "strip_modulus_n_m": 4287374342946.522,
+        "strip_to_mill_modulus_ratio": 1857.8622152768264,
+        "thermal_gap_closure_fraction_upper_bound": 2.6325,
+        "work_roll_2x_frequency_hz": 24.973647292710414
       }
     ],
     "smallest_deflector_roll_diameter_m": 0.25,
@@ -12700,7 +12823,7 @@
       "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
     ],
     "gauge_trend": {
-      "bite_free_text": "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um), including passes without a roll bite (F2 0.030->0.018 mm (plant pass 2, final), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -25.6 kPa (x0.11, in magnitude falls on every pass); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.39 MPa (x0.094, in magnitude falls on every pass).",
+      "bite_free_text": "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -25.6 kPa (x0.11, in magnitude falls on every pass); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.39 MPa (x0.094, in magnitude falls on every pass).",
       "evaluation_grid_m": 0.009966666666666667,
       "reference_stripe_basis": "largest steady stripe (peak 9.589e-07 m at 0.6225 m), isolated; onsets by scaling its own shape",
       "reference_stripe_description": "smooth Gaussian stripe, half-peak width 0.1 m (about one cooling zone), centred at 0.6204 m; its height is bisected for the *_onset_height_reference_m columns",
@@ -12914,43 +13037,122 @@
           "trough_critical_lateral_stress_pa": -32151.7813071739
         },
         {
+          "band_buckling_stress_pa": 3746.3876394747854,
+          "band_width_m": 0.14949999999999997,
+          "bite_flags": [
+            "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+            "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+            "MATTRESS_REGIME_FOIL",
+            "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+            "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+            "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+            "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
+            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+          ],
+          "bite_half_length_m": 0.0011583904202328449,
+          "bite_model": "experimental_mattress",
+          "bite_source": "supplied",
+          "buckling_utilisation": 0.0,
+          "compliance_only_i_units": 667.9615867723811,
           "critical_ridge_height_m": 9.257142857142858e-08,
+          "effective_buckling_width_m": null,
           "entry_thickness_m": 3e-05,
           "exit_tension_pa": 42000000.0,
           "exit_thickness_m": 1.8e-05,
+          "feedback_i_units": 3.228818374602977,
           "friction_coefficient": 0.03,
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+          "linear_feedback_i_units": 3.228818374602977,
+          "manifest_onset_height_reference_m": 1.6232491376876244e-05,
+          "manifest_onset_stripe_height_m": 1.753693075259939e-05,
           "mean_flow_stress_pa": 180000000.0,
-          "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
+          "released_buckling_utilisation": 2326.2960595178906,
+          "released_onset_height_reference_m": 5.366321941588611e-07,
+          "released_onset_limited_by_reporting_threshold": true,
+          "released_onset_reference_limited_by_reporting_threshold": true,
+          "released_onset_stripe_height_m": 5.943548239870816e-07,
+          "reporting_onset_height_reference_m": 5.366327307915919e-07,
+          "reporting_onset_stripe_height_m": 5.943554183424999e-07,
+          "rigid_i_units": 5327.09919588614,
           "roller_wrinkle_critical_lateral_stress_entry_span_pa": -10275085.21991483,
           "roller_wrinkle_critical_lateral_stress_exit_span_pa": -6165051.131948898,
+          "saturated": false,
+          "separating_force_per_width_n_m": 1536047.3999197013,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 0.006392650955733692,
           "shohet_townsend_lower_i_units": -0.008523534607644923,
           "shohet_townsend_upper_i_units": 0.004261767303822462,
+          "state": "LATENT_UNDER_TENSION",
+          "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+          "strip_stiffness_per_width_pa": 250809784869.68924,
+          "tension_feedback_stiffness_per_width_pa": 60893645766854.45,
+          "transfer_factor_compliance_only": 0.15196712808815235,
+          "transfer_factor_with_feedback": 0.02736173390190196,
           "trough_critical_lateral_stress_entry_span_pa": -31337.680022029715,
           "trough_critical_lateral_stress_exit_span_pa": -19767.463205550666,
           "trough_critical_lateral_stress_pa": -19767.463205550666
         },
         {
+          "band_buckling_stress_pa": null,
+          "band_width_m": null,
+          "bite_flags": [
+            "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+            "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+            "MATTRESS_REGIME_FOIL",
+            "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+            "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+            "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+            "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+            "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
+            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+          ],
+          "bite_half_length_m": 0.00217839564214523,
+          "bite_model": "experimental_mattress",
+          "bite_source": "supplied",
+          "buckling_utilisation": null,
+          "compliance_only_i_units": 96.79692596311567,
           "critical_ridge_height_m": 6.171428571428573e-08,
+          "effective_buckling_width_m": null,
           "entry_thickness_m": 2.45e-05,
           "exit_tension_pa": 42000000.0,
           "exit_thickness_m": 1.2e-05,
+          "feedback_i_units": 0.2547639810205942,
           "friction_coefficient": 0.03,
           "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+          "linear_feedback_i_units": 0.2547639810205942,
+          "manifest_onset_height_reference_m": null,
+          "manifest_onset_stripe_height_m": null,
           "mean_flow_stress_pa": 185000000.0,
-          "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
+          "released_buckling_utilisation": null,
+          "released_onset_height_reference_m": 6.793861539540133e-06,
+          "released_onset_limited_by_reporting_threshold": true,
+          "released_onset_reference_limited_by_reporting_threshold": true,
+          "released_onset_stripe_height_m": 7.528315139669498e-06,
+          "reporting_onset_height_reference_m": 6.793868333408467e-06,
+          "reporting_onset_stripe_height_m": 7.528322667992166e-06,
+          "rigid_i_units": 7990.64879382921,
           "roller_wrinkle_critical_lateral_stress_entry_span_pa": -8391319.596263777,
           "roller_wrinkle_critical_lateral_stress_exit_span_pa": -4110034.0879659317,
+          "saturated": false,
+          "separating_force_per_width_n_m": 6037575.414857484,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 0.0030071234017636306,
           "shohet_townsend_lower_i_units": -0.004009497869018174,
           "shohet_townsend_upper_i_units": 0.002004748934509087,
+          "state": "BELOW_REPORTING_THRESHOLD",
+          "state_after_tension_release": "BELOW_REPORTING_THRESHOLD",
+          "strip_stiffness_per_width_pa": 3572811952455.435,
+          "tension_feedback_stiffness_per_width_pa": 1374118905899261.8,
+          "transfer_factor_compliance_only": 0.014698093446272669,
+          "transfer_factor_with_feedback": 0.002618698038473087,
           "trough_critical_lateral_stress_entry_span_pa": -25592.438684657598,
           "trough_critical_lateral_stress_exit_span_pa": -13178.308803700442,
           "trough_critical_lateral_stress_pa": -13178.308803700442
         }
       ],
-      "text": "Same 0.959 um roll stripe on every pass, 0.135 mm -> 0.03 mm: linear-feedback I-units 42.3 -> 8.05 (x0.19; rigid bound x4.50). In the mill this stripe buckles on 0 of 4 passes (utilisation 0 -> 0); after tension release on 4 of 4 (utilisation 5.4e+02 -> 2.1e+03). Onset stripe height, model stripe: in the mill 1.19 um -> 6.83 um, after release 0.046 um (reporting-threshold limited) -> 0.241 um (reporting-threshold limited). Onset stripe height, Gaussian reference: in the mill 1.11 um -> 6.3 um, after release 0.0415 um (reporting-threshold limited) -> 0.218 um (reporting-threshold limited). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.17 in the mill, 0.19 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.18 in the mill, 0.19 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.0165 I-units. Not assessable (excluded from the trend): F2 0.030->0.018 mm (plant pass 2, final) (not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)); ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness))."
+      "text": "Same 0.959 um roll stripe on every pass, 0.135 mm -> 0.012 mm: linear-feedback I-units 42.3 -> 0.255 (x0.01; rigid bound x11.25). In the mill this stripe buckles on 0 of 6 passes (utilisation 0 -> 0); after tension release on 5 of 6 (utilisation 5.4e+02 -> 0). State changes along the schedule at ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed): BELOW_REPORTING_THRESHOLD / BELOW_REPORTING_THRESHOLD. Onset stripe height, model stripe: in the mill 1.19 um -> not reached below 50 um, after release 0.046 um (reporting-threshold limited) -> 7.53 um (reporting-threshold limited). For the model stripe the in-mill onset rises beyond the 50 um search ceiling on the thin pass (thick/thin ratio below 0.024). Onset stripe height, Gaussian reference: in the mill 1.11 um -> not reached below 50 um, after release 0.0415 um (reporting-threshold limited) -> 6.79 um (reporting-threshold limited). For the Gaussian reference the in-mill onset rises beyond the 50 um search ceiling on the thin pass (thick/thin ratio below 0.022). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.024 in the mill, 0.0061 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.022 in the mill, 0.0061 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed), F2 0.030->0.018 mm (plant pass 2, final), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.00301 I-units."
     },
     "grinding_feed_pitch_m": null,
     "inputs_used": {

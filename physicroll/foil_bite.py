@@ -91,9 +91,31 @@ yield, strain hardening and rate effects, lubricant films, roll heating, thermal
 """
 import math
 
-from .chatter import BitePass, BiteResponse
+from .chatter import (BITE_MAX_REDUCTION, BITE_MIN_EXIT_THICKNESS_M, REDUCTION_EXTENDED_FLAG,
+                      BitePass, BiteResponse)
 
 STATUS = 'UNVALIDATED_EXPERIMENTAL_MATTRESS_FOIL_BITE'
+# SPEC12 stage A: extended domain (see chatter.py for the reduction limit). Below 20 um exit
+# gauge (the former floor of both bite models) the mattress model converged and was continuous
+# through 20 um in probes, but no source validates it there; such bites are flagged.
+EXTENDED_GAUGE_M = 2e-5
+EXTENDED_GAUGE_FLAG = 'EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN'
+EXTENDED_GAUGE_LIMITATION = (
+    'Exit gauge below 20 um (extended domain): the same experimental model and the same missing '
+    'closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude '
+    'only.')
+EXTENDED_REDUCTION_LIMITATION = (
+    'Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in '
+    'probes; published foil passes reach 64 %; not validated.')
+
+
+def _domain_flags(h0, h1):
+    flags = []
+    if (h0 - h1) / h0 > 0.5:
+        flags.append(REDUCTION_EXTENDED_FLAG)
+    if h1 < EXTENDED_GAUGE_M:
+        flags.append(EXTENDED_GAUGE_FLAG)
+    return flags
 FOUNDATION_COEFFICIENT = 3 * math.pi / 8   # K_p = coefficient * E_star / a  (= 1.178)
 _FIXED_POINT_TOL = 1e-10
 _FIXED_POINT_MAX = 300
@@ -172,10 +194,12 @@ def _check_inputs(h0, h1, width, radius, y, mu, tb, tf, e_roll, nu, kp, cells, e
     for name, value in (('entry_tension_pa', tb), ('exit_tension_pa', tf)):
         if not _finite(value) or value < 0:
             raise ValueError(f'{name} must be a finite nonnegative number in SI units')
-    if not 2e-5 <= h1 < h0:
-        raise ValueError('mattress bite domain requires 2e-5 m <= exit thickness < entry')
-    if not 0.02 <= (h0 - h1) / h0 <= 0.5:
-        raise ValueError('mattress bite domain requires reduction in [0.02, 0.5]')
+    if not BITE_MIN_EXIT_THICKNESS_M <= h1 < h0:
+        raise ValueError(f'mattress bite domain requires {BITE_MIN_EXIT_THICKNESS_M:g} m <= exit '
+                         'thickness < entry')
+    if not 0.02 <= (h0 - h1) / h0 <= BITE_MAX_REDUCTION:
+        raise ValueError(f'mattress bite domain requires reduction in [0.02, '
+                         f'{BITE_MAX_REDUCTION:g}]')
     if h0 / radius > 0.05 or width / h0 < 20:
         raise ValueError('requires thin, wide strip: h0/R <= 0.05 and width/h0 >= 20')
     if mu > 0.3:
@@ -589,6 +613,7 @@ def solve_mattress_bite(entry_thickness_m, exit_thickness_m, width_m, work_roll_
         flags.append('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES')
     if h1 < 2 * core['limiting_thickness_m']:
         flags.append('NEAR_MATTRESS_LIMITING_THICKNESS')
+    flags += _domain_flags(h0, h1)
     stone = _stone(mu, radius, y, tb, tf, roll_youngs_modulus_pa)
     if h1 < stone:
         flags.append('BELOW_STONE_MINIMUM_THICKNESS_CONTEXT_ONLY')
@@ -655,7 +680,9 @@ def solve_mattress_bite(entry_thickness_m, exit_thickness_m, width_m, work_roll_
         'profile': core['profile'],
         'basis': dict(BASIS),
         'flags': flags,
-        'limitations': list(_LIMITATIONS),
+        'limitations': list(_LIMITATIONS)
+        + ([EXTENDED_GAUGE_LIMITATION] if EXTENDED_GAUGE_FLAG in flags else [])
+        + ([EXTENDED_REDUCTION_LIMITATION] if REDUCTION_EXTENDED_FLAG in flags else []),
     }
     _assert_finite(result)
     return result
@@ -748,6 +775,7 @@ def derive_bite_response_mattress(bite_pass, *, roll_youngs_modulus_pa=210e9,
         flags.append('THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN')
     if len(regimes) > 1:
         flags.append('REGIME_CHANGE_WITHIN_FINITE_DIFFERENCE_STENCIL')
+    flags += _domain_flags(h0, h1)
     if full.pop('one_sided', False) or half.pop('one_sided', False):
         flags.append('ONE_SIDED_TENSION_DIFFERENCE_AT_ZERO_TENSION')
     for key in full:

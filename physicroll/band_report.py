@@ -1645,6 +1645,7 @@ def _pass_labels(c, rows):
 
 
 GAUGE_HEADING = 'How the result changes with gauge'
+ONSET_SEARCH_CEILING_M = 50e-6   # band_width.ONSET_SEARCH_MAX_M: onsets are searched up to it
 GAUGE_TREND_TOL = 1.1   # thin/thick onset ratio within 1/1.1 .. 1.1: "roughly unchanged"
 
 
@@ -1652,8 +1653,17 @@ def _onset_direction(ok, key, limited_key):
     """(phrase, sign) for one onset column across the assessable passes, thick -> thin.
     sign: -1 falls toward the thin pass, +1 rises, 0 roughly unchanged, None not stated."""
     vals = [x.get(key) for x in ok]
+    above = []
     if not all(_ok(v) and v > 0 for v in vals):
-        return 'is not stated (not reached on every assessable pass)', None
+        # SPEC12 stage A: an onset not reached on the THIN end of the assessable passes lies
+        # above the engine's 50 um search ceiling (a lower bound); anything else is not stated
+        n = len(vals)
+        while n and not (_ok(vals[n - 1]) and vals[n - 1] > 0):
+            n -= 1
+        if n < 1 or n == len(vals) or not all(_ok(v) and v > 0 for v in vals[:n]):
+            return 'is not stated (not reached on every assessable pass)', None
+        above = [str(x.get('label', '')) for x in ok[n:]]
+        vals = vals[:n] + [ONSET_SEARCH_CEILING_M] * (len(vals) - n)
     a, b = vals[0], vals[-1]
     lim = [bool(limited_key and x.get(limited_key)) for x in ok]
     ua = ('≤ ' if lim[0] else '') + _um(a)
@@ -1671,6 +1681,12 @@ def _onset_direction(ok, key, limited_key):
     note = ('on every pass' if every else 'overall, not on every pass') if len(vals) > 2 else ''
     if any(lim):
         note += ('; ' if note else '') + 'reporting-threshold upper bounds'
+    if above:
+        ub = f'above {_um(ONSET_SEARCH_CEILING_M)}'
+        note += (('; ' if note else '') + 'not reached within the '
+                 f'{_um(ONSET_SEARCH_CEILING_M)} search on ' + ', '.join(above))
+        return (f'{verb} from {ua} to {ub} (x{_f(q, digits=2)} or more'
+                f'{", " + note if note else ""})', sign)
     return f'{verb} from {ua} to {ub} (x{_f(q, digits=2)}{", " + note if note else ""})', sign
 
 
@@ -2150,6 +2166,9 @@ def _foil_block(r):
                if b.get('fallback_reason') else '')
             + (f' Bite error: {_e(b["bite_error"])}.' if b.get('bite_error') else '')
             + '</p>' + sched
+            + (f'<p class="warn"><strong>Extended roll-bite domain.</strong> '
+               f'{_e(_get(fr, "extended_bite_domain", "text"))}</p>'
+               if _get(fr, 'extended_bite_domain', 'text') else '')
             + (f'<p class="warn"><strong>Below the roll-bite model floor.</strong> '
                f'{_e(_get(fr, "below_bite_model_floor", "text"))}</p>'
                if _get(fr, 'below_bite_model_floor', 'text') else '')

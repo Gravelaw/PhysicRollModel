@@ -1536,6 +1536,13 @@ def _trend_text(rows, peak):
         rm, rr = ratio(a[mk], b[mk]), ratio(a[rk], b[rk])
         text += (f'Onset stripe height, {label}: in the mill {um(a[mk])} -> {um(b[mk])}, after '
                  f'release {um(a[rk], a[lk])} -> {um(b[rk], b[lk])}. ')
+        if rm is None and a[mk] and b[mk] is None:
+            # SPEC12 stage A: not reached on the thin pass = above the 50 um search ceiling,
+            # so the thick/thin ratio is at most a/50 um (a rise beyond the search)
+            rm = a[mk] / ONSET_SEARCH_MAX_M
+            text += (f'For the {label} the in-mill onset rises beyond the '
+                     f'{ONSET_SEARCH_MAX_M * 1e6:.3g} um search ceiling on the thin pass '
+                     f'(thick/thin ratio below {rm:.2g}). ')
         if rm is not None and rr is not None:
             carriers.append((label, rm, rr))
     for label, rm, rr in carriers:

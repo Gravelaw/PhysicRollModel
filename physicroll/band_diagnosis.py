@@ -76,7 +76,10 @@ from . import band_width as bw
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
-from .foil_bite import derive_bite_response_mattress
+from .chatter import BITE_MIN_EXIT_THICKNESS_M as chatter_BITE_MIN_EXIT_THICKNESS_M
+from .chatter import REDUCTION_EXTENDED_FLAG
+from .foil_bite import (EXTENDED_GAUGE_FLAG, EXTENDED_GAUGE_LIMITATION,
+                        EXTENDED_REDUCTION_LIMITATION, derive_bite_response_mattress)
 
 CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
 CASE_SCHEMA_V2 = 'physicroll.band_case.v2'
@@ -617,13 +620,18 @@ def _bite_pass(case, row=None):
                     src['friction_coefficient'], src['entry_tension_pa'], src['exit_tension_pa'])
 
 
-# chatter.BitePass.validate requires 2e-5 m <= exit thickness; both roll-bite models (slab /
-# Hitchcock and the experimental mattress model) take a BitePass, so neither can represent a
-# thinner pass (e.g. a collector-foil final pass below 20 um). Not changed here.
-BITE_FLOOR_M = 2e-5
+# chatter.BitePass.validate requires exit >= 8 um (SPEC12 stage A; it was 20 um): the slab /
+# Hitchcock derivation keeps its own 20 um floor, the experimental mattress model reaches 8 um
+# (the lower gauge of GB/T 33143-2022) with the flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_
+# DOMAIN below 20 um. A pass below 8 um has no roll-bite result at all.
+BITE_FLOOR_M = chatter_BITE_MIN_EXIT_THICKNESS_M
 BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
-BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 20 um floor of the roll-bite '
-                     'models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)')
+BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 8 um floor of the roll-bite '
+                     'models: chatter.BitePass.validate requires 8e-06 m <= exit thickness; the '
+                     'slab / Hitchcock model stops at 20 um)')
+EXTENDED_BITE_FLAGS = (REDUCTION_EXTENDED_FLAG, EXTENDED_GAUGE_FLAG)
+PRODUCT_CLUE_GAUGE_M = 2e-5          # collector-foil final gauges (product clue only)
+_span_wave_limit_hz = bp.span_wave_limit_hz   # (bp is shadowed inside _schedule_rows)
 
 
 class _BiteCache:
@@ -1179,6 +1187,19 @@ def _schedule_rows(case, cache, stand, spans, beta, op_bite=None):
                 relative_ripple_per_um_runout_at_work_roll_2x=ripple / h1)
             if not st['stable']:
                 out['note'] = ('operating point linearly unstable: forced ripple is formal only')
+            ext = [f for f in EXTENDED_BITE_FLAGS if f in b.flags]
+            if ext:
+                # SPEC12 A3: extended-domain rows say how far their chatter numbers carry (keys
+                # only on such rows, so other results keep their content)
+                limit = _span_wave_limit_hz(case)
+                onsets = [f for f in (cr['onset_frequency_hz'], cr0['onset_frequency_hz'])
+                          if f]
+                out['chatter_reliability'] = ('NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT'
+                                              if onsets and max(onsets) > limit else
+                                              'WITHIN_SPAN_WAVE_LIMIT')
+                out['extended_domain_note'] = (
+                    'roll bite from the extended domain (' + ', '.join(ext) + '): the critical '
+                    'speeds of this row are open-gap screening numbers, not predictions')
         except ValueError as exc:
             out['rejected'] = str(exc)
         # same pass at the case (final-pass) friction: separates gauge from friction effects
@@ -2087,11 +2108,34 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     passes = []
     sw = result.get('schedule_sweep') or {}
     for row in sw.get('rows') or []:
-        passes.append({'label': row['label'], 'exit_thickness_m': row['exit_thickness_m'],
-                       'bite_model': row.get('bite_model'),
-                       'separating_force_per_width_n_m': row.get(
-                           'separating_force_per_width_n_m'),
-                       'rejected': row.get('rejected')})
+        rf = row.get('separating_force_per_width_n_m')
+        entry = {'label': row['label'], 'exit_thickness_m': row['exit_thickness_m'],
+                 'bite_model': row.get('bite_model'),
+                 'separating_force_per_width_n_m': rf,
+                 'rejected': row.get('rejected')}
+        ext = [f for f in EXTENDED_BITE_FLAGS if f in (row.get('bite_flags') or [])]
+        if ext:
+            # extended-domain rows only (SPEC12 stage A), so earlier foil results keep their keys
+            entry['extended_domain_flags'] = ext
+            entry['force_per_width_within_reported_range'] = (
+                FOIL_LOAD_RANGE_N_M[0] <= rf <= FOIL_LOAD_RANGE_N_M[1])
+        passes.append(entry)
+    extended = [{'label': x['label'], 'exit_thickness_m': x['exit_thickness_m'],
+                 'extended_domain_flags': x['extended_domain_flags'],
+                 'separating_force_per_width_n_m': x['separating_force_per_width_n_m'],
+                 'force_per_width_within_reported_range':
+                     x['force_per_width_within_reported_range']}
+                for x in passes if x.get('extended_domain_flags')]
+    case_ext = [f for f in EXTENDED_BITE_FLAGS if bite is not None and f in bite.flags]
+    if case_ext and not any(bw.is_case_pass(eff, r) for r in eff['schedule']):
+        extended.insert(0, {'label': 'case pass', 'exit_thickness_m': h1,
+                            'extended_domain_flags': case_ext,
+                            'separating_force_per_width_n_m': fpw,
+                            'force_per_width_within_reported_range':
+                                FOIL_LOAD_RANGE_N_M[0] <= fpw <= FOIL_LOAD_RANGE_N_M[1]})
+    all_ext = {f for x in extended for f in x['extended_domain_flags']}
+    extended_lims = ([EXTENDED_GAUGE_LIMITATION] if EXTENDED_GAUGE_FLAG in all_ext else []) + \
+        ([EXTENDED_REDUCTION_LIMITATION] if REDUCTION_EXTENDED_FLAG in all_ext else [])
     e_strip = m['youngs_modulus_pa']
     wrinkle = 1e5 * p['exit_tension_pa'] / e_strip
     band = _largest_model_band(result.get('width'))
@@ -2113,7 +2157,7 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     # worded from the case (thinnest exit gauge of the case pass and schedule), never from one
     # plant's statement
     thinnest = min([h1] + [r['exit_thickness_m'] for r in eff['schedule']])
-    if thinnest < BITE_FLOOR_M:
+    if thinnest < PRODUCT_CLUE_GAUGE_M:
         gauge_clue = (f'The thinnest pass in this case exits at {thinnest * 1e6:.3g} um; a final '
                       'gauge below about 20 um points to cathode current-collector foil in H18 '
                       'with 25-60 um as intermediate passes. ')
@@ -2145,7 +2189,7 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     if doubled is False:
         floor_tail = ('The case states (material.final_pass_doubled false) that this pass is '
                       'rolled single-sheet, so the missing '
-                      'roll-bite result is a limit of the tool (the 20 um floor of both bite '
+                      'roll-bite result is a limit of the tool (the 8 um floor of the bite '
                       'models and no closed-gap load path), not of an unmodelled doubled pass; '
                       'a single-sheet pass at this gauge is closed-gap rolling, where the gauge '
                       'is set by tension, speed and lubrication rather than load '
@@ -2182,6 +2226,15 @@ def _foil_regime(eff, bite, bite_error, result, flags):
         'implications': implications,
         'bite': bite_block,
         'schedule_bites': passes,
+        'extended_bite_domain': {
+            'passes': extended,
+            'text': (None if not extended else
+                     'Roll-bite results in the EXTENDED domain for '
+                     + ', '.join(f'{x["label"]} ({", ".join(x["extended_domain_flags"])})'
+                                 for x in extended)
+                     + '. ' + ' '.join(extended_lims)
+                     + ' Chatter, levers and gauge control for these passes are open-gap '
+                       'screening only; a critical speed there is not a prediction.')},
         'below_bite_model_floor': {
             'floor_exit_thickness_m': BITE_FLOOR_M,
             'passes': below,
@@ -2190,8 +2243,9 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                      'No roll-bite result exists for '
                      + ', '.join(f'{x["label"]} ({x["exit_thickness_m"] * 1e6:.3g} um)'
                                  for x in below)
-                     + ': the exit gauge is below the 20 um floor of both roll-bite models '
-                       '(chatter.BitePass.validate). For such a pass the chatter, lever, '
+                     + ': the exit gauge is below the 8 um floor of the roll-bite models '
+                       '(chatter.BitePass.validate; the slab / Hitchcock model stops at 20 um). '
+                       'For such a pass the chatter, lever, '
                        'process-friction fixed point (and pass heating) and gauge-control '
                        'sections are not assessable, and its strip-shape chain runs only with '
                        'supplied width_model.shape_inputs (case pass). ' + floor_tail)},
@@ -2216,10 +2270,13 @@ def _foil_regime(eff, bite, bite_error, result, flags):
         'flags': flist,
         'limitations': [
             'No roll-kissing (closed-gap) model; the bite models see only the strip contact.',
-            'Foil facts are cited from a research pass (tags V / D / M), not plant-validated.'],
+            'Foil facts are cited from a research pass (tags V / D / M), not plant-validated.']
+        + extended_lims,
         'sources': list(FOIL_SOURCES)}
     if doubled is not None:
         out['final_pass_doubled'] = doubled
+    if not extended:
+        del out['extended_bite_domain']
     return out
 
 
@@ -2497,6 +2554,12 @@ def diagnose(case):
         flags.extend(bite.flags)
     result['flags'] = sorted(set(flags))
     result['limitations'] = list(LIMITATIONS)
+    ext_flags = set(flags) | {f for x in (result.get('schedule_sweep') or {}).get('rows') or []
+                              for f in x.get('bite_flags') or []}
+    if EXTENDED_GAUGE_FLAG in ext_flags:
+        result['limitations'].append(EXTENDED_GAUGE_LIMITATION)
+    if REDUCTION_EXTENDED_FLAG in ext_flags:
+        result['limitations'].append(EXTENDED_REDUCTION_LIMITATION)
     result['sources'] = list(SOURCES)
     result['source_disagreements'] = list(DISAGREEMENTS)
     json.dumps(result, allow_nan=False)

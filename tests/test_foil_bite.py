@@ -246,6 +246,58 @@ class DerivedResponseTests(unittest.TestCase):
         json.dumps(r, allow_nan=False)
 
 
+class ExtendedDomainTests(unittest.TestCase):
+    """SPEC12 stage A: the mattress model below 20 um exit gauge (floor 8 um) and above 50 %
+    reduction (to 65 %): converged, continuous, flagged; its own physical rejections stay."""
+    FOIL = dict(width_m=1.2, work_roll_radius_m=0.135, mean_flow_stress_pa=180e6,
+                friction_coefficient=0.03, entry_tension_pa=38e6, exit_tension_pa=42e6)
+
+    def solve(self, h0, h1, cells=128):
+        f = self.FOIL
+        return solve_mattress_bite(h0, h1, f['width_m'], f['work_roll_radius_m'],
+                                   f['mean_flow_stress_pa'], f['friction_coefficient'],
+                                   f['entry_tension_pa'], f['exit_tension_pa'], cells=cells)
+
+    def test_continuity_across_20_um(self):
+        exits = (22e-6, 21e-6, 20e-6, 19e-6, 18e-6)
+        res = [self.solve(h1 / 0.6, h1) for h1 in exits]       # fixed 40 % reduction
+        forces = [r['force_per_width_n_m'] for r in res]
+        steps = [b - a for a, b in zip(forces, forces[1:])]
+        self.assertTrue(all(s > 0 for s in steps))              # force rises as gauge falls
+        # no jump at 20 um: neighbouring increments within a factor 2 of each other
+        for a, b in zip(steps, steps[1:]):
+            self.assertLess(max(a, b) / min(a, b), 2.0)
+        for h1, r in zip(exits, res):
+            self.assertEqual(r['regime'], 'foil')
+            below = 'EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN' in r['flags']
+            self.assertEqual(below, h1 < 20e-6 - 1e-12, h1)
+            self.assertEqual(any('Exit gauge below 20 um' in x for x in r['limitations']), below)
+
+    def test_final_passes_below_20_um(self):
+        r = self.solve(30e-6, 18e-6)
+        self.assertLess(r['convergence']['force_relative_change_on_refinement'], 1e-3)
+        self.assertIn('EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN', r['flags'])
+        b = derive_bite_response_mattress(BitePass(30e-6, 18e-6, 1.2, 0.135, 180e6, 0.03, 38e6,
+                                                   42e6), cells=128)
+        self.assertIn('EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN', b.flags)
+        r12 = self.solve(25e-6, 12e-6)                          # 52 %: both extensions
+        self.assertIn('REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN', r12['flags'])
+        # the model's own physical rejection still applies (sticking exit not modelled)
+        with self.assertRaisesRegex(ValueError, 'sticking exit'):
+            self.solve(15e-6, 9e-6)
+        with self.assertRaisesRegex(ValueError, 'exit'):
+            self.solve(10e-6, 7e-6)                             # below the 8 um floor
+
+    def test_continuity_across_50_percent(self):
+        sheet = (1.5, 0.2, 250e6, 0.05, 25e6, 30e6)
+        forces = [solve_mattress_bite(0.6e-3, 0.6e-3 * (1 - r), *sheet, cells=128)[
+            'force_per_width_n_m'] for r in (0.48, 0.50, 0.52)]
+        self.assertLess(forces[0], forces[1])
+        self.assertLess(forces[1], forces[2])
+        self.assertLess(abs(forces[2] - 2 * forces[1] + forces[0]),
+                        0.1 * (forces[2] - forces[0]))
+
+
 class ValidationAndJsonTests(unittest.TestCase):
 
     def test_invalid_inputs_raise(self):

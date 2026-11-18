@@ -326,9 +326,10 @@ class BiteDerivationTests(unittest.TestCase):
             derive_bite_response(foil, max_radius_ratio=3.5)
 
     def test_domain_checks(self):
-        bad = [replace(ORIENTATION, exit_thickness_m=1e-5, entry_thickness_m=1.2e-5),
+        # SPEC12 stage A: the BitePass domain is exit >= 8 um and reduction <= 0.65
+        bad = [replace(ORIENTATION, exit_thickness_m=5e-6, entry_thickness_m=7e-6),
                replace(ORIENTATION, exit_thickness_m=0.595e-3),        # 0.8 % reduction
-               replace(ORIENTATION, exit_thickness_m=0.25e-3),         # 58 % reduction
+               replace(ORIENTATION, exit_thickness_m=0.18e-3),         # 70 % reduction
                replace(ORIENTATION, friction_coefficient=0.0),
                replace(ORIENTATION, friction_coefficient=0.31),
                replace(ORIENTATION, entry_tension_pa=-1.0),
@@ -343,6 +344,11 @@ class BiteDerivationTests(unittest.TestCase):
         for cells in (32, 5000, 256.0, True):
             with self.assertRaises(ValueError):
                 derive_bite_response(ORIENTATION, cells=cells)
+        # the slab/Hitchcock derivation keeps its own 20 um exit floor
+        thin = replace(ORIENTATION, entry_thickness_m=30e-6, exit_thickness_m=18e-6)
+        thin.validate()
+        with self.assertRaisesRegex(ValueError, 'slab/Hitchcock bite domain'):
+            derive_bite_response(thin)
 
     def test_supplied_response_validation(self):
         good = _supplied(1e10, 1e-2)
@@ -356,6 +362,34 @@ class BiteDerivationTests(unittest.TestCase):
                 replace(good, **change).validate()
         with self.assertRaises(ValueError):
             stability(_stand(), replace(good, separating_force_n=-1.0), SPANS, 1.0)
+
+
+class ExtendedReductionDomainTests(unittest.TestCase):
+    """SPEC12 stage A: reductions up to 0.65; slab + Hitchcock is continuous across 0.5."""
+
+    def test_continuity_across_50_percent(self):
+        out = {}
+        for r in (0.48, 0.50, 0.52):
+            p = replace(ORIENTATION, exit_thickness_m=0.6e-3 * (1 - r))
+            out[r] = derive_bite_response(p, cells=128)
+        f = {r: b.separating_force_n for r, b in out.items()}
+        q = {r: b.strip_modulus_n_m for r, b in out.items()}
+        for v in (f, q):
+            self.assertLess(v[0.48], v[0.50])
+            self.assertLess(v[0.50], v[0.52])
+            # smooth: the second difference is small against the first difference
+            self.assertLess(abs(v[0.52] - 2 * v[0.50] + v[0.48]), 0.1 * (v[0.52] - v[0.48]))
+        self.assertIn('REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN', out[0.52].flags)
+        self.assertNotIn('REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN', out[0.50].flags)
+        for b in out.values():
+            self.assertNotIn('SENSITIVITY_STEP_NOT_CONVERGED', b.flags)
+
+    def test_published_57_percent_sheet_pass_solves(self):
+        b = derive_bite_response(replace(ORIENTATION, exit_thickness_m=0.26e-3), cells=128)
+        self.assertIn('REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN', b.flags)
+        self.assertGreater(b.forward_slip_fraction, 0)
+        with self.assertRaises(ValueError):
+            replace(ORIENTATION, exit_thickness_m=0.6e-3 * 0.34).validate()   # 66 %
 
 
 class CriticalSpeedTests(unittest.TestCase):
