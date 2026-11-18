@@ -372,5 +372,60 @@ class DocumentTests(unittest.TestCase):
         self.assertTrue(re.search(r'\d+ sourced facts', render_reference_markdown()))
 
 
+class PackagedSurveyDefaultsTests(unittest.TestCase):
+    """Packaging review: the product survey's default mills ship inside the package
+    (``physicroll.band_survey_mills``), not as files read from the repository checkout."""
+
+    SCEN = Path(__file__).resolve().parents[1] / 'scenarios'
+
+    def test_packaged_mills_equal_the_demo_machine_sections(self):
+        if not self.SCEN.is_dir():
+            self.skipTest('scenarios directory not present (installed package): no drift '
+                          'guard source')
+        from physicroll import band_diagnosis as bd
+        from physicroll import band_survey as bs
+        from physicroll.band_survey_mills import MACHINES
+        for kind, meta in bs.MILLS.items():
+            case = bd.load_case(self.SCEN / meta['scenario'])
+            for sec, keys in bs.MACHINE_KEYS.items():
+                want = case.get(sec)
+                if want is not None and keys != 'all':
+                    want = {k: want[k] for k in keys if k in want}
+                self.assertEqual(MACHINES[kind][sec], want, f'{kind}.{sec}')
+            # the default mill case carries exactly those machine values
+            mc = bs.default_mill_case(kind)
+            self.assertEqual(bs.machine_keys_taken(mc), bs.machine_keys_taken(case))
+
+    def test_survey_and_entry_points_run_without_the_checkout(self):
+        import shutil
+        import subprocess
+        import sys
+        import tempfile
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(root / 'physicroll', Path(tmp) / 'physicroll',
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            outside = Path(tmp) / 'outside'
+            outside.mkdir()
+            code = ("import json, sys; sys.path.insert(0, %r); "
+                    "from physicroll import band_survey as bs; "
+                    "r = bs.survey(['litho_sheet', 'battery_pouch_laminate_foil']); "
+                    "assert [x['mill'] for x in r['rows']] == ['foil', 'sheet']; "
+                    "assert all(x['bite_status'] == 'BITE' for x in r['rows']); "
+                    "bs.render_survey_report(r); print('ok')") % tmp
+            out = subprocess.run([sys.executable, '-I', '-c', code], cwd=outside,
+                                 capture_output=True, text=True, timeout=120)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual(out.stdout.strip(), 'ok')
+            env_code = ("import sys; sys.path.insert(0, %r); "
+                        "from physicroll import band_products; "
+                        "band_products.main(['--list'])") % tmp
+            out = subprocess.run([sys.executable, '-I', '-c', env_code], cwd=outside,
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn('battery_collector_foil', out.stdout)
+            self.assertFalse((Path(tmp) / 'scenarios').exists())
+
+
 if __name__ == '__main__':
     unittest.main()

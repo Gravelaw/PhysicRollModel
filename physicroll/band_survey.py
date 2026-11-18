@@ -53,6 +53,7 @@ from pathlib import Path
 
 from . import band_diagnosis as bd
 from . import band_products as bp
+from . import band_survey_mills
 from . import band_width as bw
 from . import strip_shape as ss
 from .band_report import CSS, COLOURS, ML, MR, W, _Axis, _Chart, _e, _table, _tick_label
@@ -60,7 +61,6 @@ from .band_report import CSS, COLOURS, ML, MR, W, _Axis, _Chart, _e, _table, _ti
 SCHEMA = 'physicroll.band_survey.v1'
 STATUS = 'SYNTHETIC_SURVEY_LITERATURE_INPUTS_UNVALIDATED'
 SLUG = 'product-survey'
-SCENARIOS = Path(__file__).resolve().parents[1] / 'scenarios'
 FOIL_MILL_MAX_EXIT_M = 0.2e-3          # below: the battery-foil demo mill; at or above: sheet
 MILLS = {
     'foil': {'scenario': 'band_diagnosis_battery_foil.json',
@@ -399,9 +399,45 @@ def load_mill_file(path, kind):
     return case, _describe(case, kind, f'user mill from {path.name}', path.name, True)
 
 
+# placeholder product side of a default mill case (every value is replaced per product)
+_PLACEHOLDER_PASS = {
+    'foil': {'entry_thickness_m': 5e-05, 'exit_thickness_m': 3e-05,
+             'mean_flow_stress_pa': 175e6, 'entry_tension_pa': 35e6, 'exit_tension_pa': 40e6},
+    'sheet': {'entry_thickness_m': 3e-04, 'exit_thickness_m': 2.1e-04,
+              'mean_flow_stress_pa': 270e6, 'entry_tension_pa': 25e6, 'exit_tension_pa': 30e6}}
+
+
+def default_mill_case(kind):
+    """A validated v2 case of a default mill: the packaged machine sections
+    (``band_survey_mills.MACHINES``, generated from the demo scenarios) with a placeholder
+    product side. Needs no file from the repository checkout (review finding: the survey
+    used to read ``scenarios/`` next to the package, absent in a wheel installation)."""
+    m = copy.deepcopy(band_survey_mills.MACHINES[kind])
+    w = dict(copy.deepcopy(bw.WIDTH_DEFAULTS), **m['width_model'])
+    case = {
+        'case_schema': bd.CASE_SCHEMA_V2, 'name': f'default {kind} mill', 'synthetic': True,
+        'provenance': f'machine of the demo scenario {MILLS[kind]["scenario"]} (packaged)',
+        'pass': dict(m['pass'], exit_speed_m_s=MILLS[kind]['default_speed_m_s'],
+                     **_PLACEHOLDER_PASS[kind]),
+        'material': {'alloy': 'placeholder', 'temper': 'H18',
+                     'yield_stress_pa': _PLACEHOLDER_PASS[kind]['mean_flow_stress_pa'],
+                     'youngs_modulus_pa': ss.ALUMINIUM_E_PA, 'luders_strain': None,
+                     'magnesium_wt_pct': None, 'grain_size_m': None},
+        'stand': m['stand'], 'spans': m['spans'], 'kinematics': m['kinematics'],
+        'lubrication': m['lubrication'],
+        'coolant': (None if m['coolant'] is None
+                    else dict(m['coolant'], blocked_nozzle_indices=[])),
+        'model_options': dict(m['model_options'], bite_response_override=None),
+        'observation': {k: ([] if k in ('pitch_observations',
+                                        'band_positions_across_width_m') else None)
+                        for k in bd.OBS_KEYS + bw.OBS_V2_ALL},
+        'schedule': [], 'width_model': w, 'tribology': m['tribology'], 'hardening': None,
+        'gauge_control': m['gauge_control'], 'drive': m['drive'], 'incoming_variation': None}
+    return bd.validate_case(case)
+
+
 def _load_mill(kind):
-    case = _machine_case(bd.load_case(SCENARIOS / MILLS[kind]['scenario']),
-                         MILLS[kind]['scenario'])
+    case = _machine_case(default_mill_case(kind), MILLS[kind]['scenario'])
     return case, _describe(case, kind, MILLS[kind]['name'], MILLS[kind]['scenario'], False)
 
 
