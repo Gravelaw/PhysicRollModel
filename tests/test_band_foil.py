@@ -210,6 +210,10 @@ class NoBiteWidthTests(unittest.TestCase):
 
     def test_foil_regime_block_without_bite(self):
         fr = self.r['foil_regime']
+        # thinnest pass 30 um (above the bite floor): no collector-foil gauge clue, no '16-18'
+        prod = fr['product_question']['text']
+        self.assertIn('The thinnest pass in this case exits at 30 um, which fits', prod)
+        self.assertNotIn('16-18', json.dumps(fr))
         self.assertIn(CLOSED_GAP_FLAG, self.r['flags'])
         self.assertEqual(fr['exit_thickness_m'], 30e-6)
         self.assertEqual(fr['case_position'], 'BELOW_EVERY_REPORTED_ONSET')
@@ -539,6 +543,10 @@ class SuppliedBiteGaugeTrendTests(unittest.TestCase):
         self.assertEqual(rows[1]['strip_stiffness_per_width_pa'], steady_q)
         self.assertEqual(rows[1]['bite_source'], 'supplied')
         self.assertEqual(rows[1]['bite_model'], 'supplied')
+        # sheet gauge, every pass assessable: no span-threshold keys, no bite-free sentence
+        self.assertNotIn('bite_free_text', w['gauge_trend'])
+        self.assertTrue(all('roller_wrinkle_critical_lateral_stress_exit_span_pa' not in x
+                            for x in rows))
         self.assertEqual(rows[0]['bite_source'], 'derived_slab_hitchcock')
         self.assertNotEqual(rows[0]['strip_stiffness_per_width_pa'], steady_q)
 
@@ -647,6 +655,9 @@ class FinalPassDoubledTests(unittest.TestCase):
         self.assertIn('limit of the tool', floor)
         self.assertIn('[V S8, S16, S17]', floor)
         self.assertIn('final pass is rolled single-sheet', prod)
+        # worded from the case, no hard-coded plant gauge
+        self.assertIn('The thinnest pass in this case exits at 18 um', prod)
+        self.assertNotIn('16-18', prod + floor)
         self.assertEqual(len(fr['implications']), 6)
         self.assertIn('observation.faces', fr['implications'][-1])
         self.assertIn('[D]', fr['implications'][-1])
@@ -904,11 +915,33 @@ class FoilDemoTests(unittest.TestCase):
             self.assertLess(abs(row['trough_critical_lateral_stress_pa']),
                             abs(ok[-1]['trough_critical_lateral_stress_pa']))
         self.assertLess(rows[-1]['critical_ridge_height_m'], rows[-2]['critical_ridge_height_m'])
+        # review follow-up: every bite-free quantity is on the rows without a bite too and
+        # continues the falling trend below the last assessable pass (magnitudes, by gauge)
+        for key in ('shohet_townsend_half_width_i_units', 'critical_ridge_height_m',
+                    'trough_critical_lateral_stress_exit_span_pa',
+                    'trough_critical_lateral_stress_entry_span_pa',
+                    'roller_wrinkle_critical_lateral_stress_exit_span_pa',
+                    'roller_wrinkle_critical_lateral_stress_entry_span_pa'):
+            vals = [abs(x[key]) for x in rows]
+            self.assertTrue(all(b < a for a, b in zip(vals, vals[1:])), (key, vals))
+        self.assertEqual(rows[-1]['trough_critical_lateral_stress_exit_span_pa'],
+                         rows[-1]['trough_critical_lateral_stress_pa'])
+        bft = r['width']['gauge_trend']['bite_free_text']
+        self.assertIn('including passes without a roll bite (F2', bft)
+        self.assertEqual(bft.count('falls on every pass'), 6)
+        self.assertIn('0.271 -> 0.00301 I-units', bft)
         # the report's neutral heading and generated direction sentence say the same
         html = render_band_report(r)
         self.assertIn('<h2>How the result changes with gauge</h2>', html)
         self.assertIn('thinner is less sensitive for this mechanism in the model', html)
         self.assertIn('Not assessable (excluded from the direction): F2', html)
+        self.assertIn('Bite-free thresholds.', html)
+        i = html.index('<td>ALT', html.index('Bite-free thresholds.'))
+        row = html[i:html.index('</tr>', i)]
+        self.assertIn('no roll-bite result', row)
+        self.assertNotIn('<td></td>', row)                      # no empty cell
+        self.assertIn(f'{rows[-1]["shohet_townsend_half_width_i_units"]:.3g}', row)
+        self.assertIn(f'{rows[-1]["critical_ridge_height_m"] * 1e6:.3g} µm', row)
         self.assertNotIn('Why thin gauge is worse', html)
 
 

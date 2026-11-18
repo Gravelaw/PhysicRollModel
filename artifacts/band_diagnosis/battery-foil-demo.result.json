@@ -721,7 +721,7 @@
           "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)"
         }
       ],
-      "text": "No roll-bite result exists for F2 0.030->0.018 mm (plant pass 2, final) (18 um), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um): the exit gauge is below the 20 um floor of both roll-bite models (chatter.BitePass.validate). For such a pass the chatter, lever, process-friction fixed point (and pass heating) and gauge-control sections are not assessable, and its strip-shape chain runs only with supplied width_model.shape_inputs (case pass). The plant states that this pass is rolled single-sheet, so the missing roll-bite result is a limit of the tool (the 20 um floor of both bite models and no closed-gap load path), not of an unmodelled doubled pass; a single-sheet pass at this gauge is closed-gap rolling, where the gauge is set by tension, speed and lubrication rather than load [V S8, S16, S17]."
+      "text": "No roll-bite result exists for F2 0.030->0.018 mm (plant pass 2, final) (18 um), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um): the exit gauge is below the 20 um floor of both roll-bite models (chatter.BitePass.validate). For such a pass the chatter, lever, process-friction fixed point (and pass heating) and gauge-control sections are not assessable, and its strip-shape chain runs only with supplied width_model.shape_inputs (case pass). The case states (material.final_pass_doubled false) that this pass is rolled single-sheet, so the missing roll-bite result is a limit of the tool (the 20 um floor of both bite models and no closed-gap load path), not of an unmodelled doubled pass; a single-sheet pass at this gauge is closed-gap rolling, where the gauge is set by tension, speed and lubrication rather than load [V S8, S16, S17]."
     },
     "bite": {
       "bite_error": null,
@@ -796,7 +796,7 @@
       "The local transfer of a roll stripe to the strip is by roll / strip compliance, which the shape chain models, but without the load shunted outside the strip where the rolls touch; the transfer may be misestimated.",
       "Online (shapemeter) and offline flatness diverge at foil gauge: front tension masks the true shape [V S17, S8]; the in-mill and after-release states of the shape chain are the tool's proxy for that difference.",
       "Foil band defects with no physical model in the tool (tension lines, hot spots from roll wipers, creasing from ironing rolls) are screened by rules only.",
-      "Single-sheet final pass (plant statement): both strip faces run against a work roll (no matte sheet-to-sheet face), so observation.faces discriminates [D]: a surface band printed by one work roll (wear band, pick-up, wiper debris) or a stain from one side can show on one face only, while a flatness or thickness band (such as a nozzle thermal stripe) shows on both."
+      "Single-sheet final pass (stated in the case): both strip faces run against a work roll (no matte sheet-to-sheet face), so observation.faces discriminates [D]: a surface band printed by one work roll (wear band, pick-up, wiper debris) or a stain from one side can show on one face only, while a flatness or thickness band (such as a nozzle thermal stripe) shows on both."
     ],
     "limitations": [
       "No roll-kissing (closed-gap) model; the bite models see only the strip contact.",
@@ -804,7 +804,7 @@
     ],
     "product_question": {
       "case_temper": "H18",
-      "text": "Ask the plant which product this is: 25-60 um can be pouch-laminate barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of thinner collector foil; a final pass of 16-18 um (plant statement) points to cathode current-collector foil in H18 with 25-60 um as intermediate passes. The plant states that the final pass is rolled single-sheet. O against H18 changes buckling and winding behaviour; this case uses temper H18."
+      "text": "Ask the plant which product this is: 25-60 um can be pouch-laminate barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of thinner collector foil (collector foil is usually 9-20 um). The thinnest pass in this case exits at 12 um; a final gauge below about 20 um points to cathode current-collector foil in H18 with 25-60 um as intermediate passes. The case states that the final pass is rolled single-sheet (material.final_pass_doubled false). O against H18 changes buckling and winding behaviour; this case uses temper H18."
     },
     "schedule_bites": [
       {
@@ -12700,6 +12700,7 @@
       "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
     ],
     "gauge_trend": {
+      "bite_free_text": "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um), including passes without a roll bite (F2 0.030->0.018 mm (plant pass 2, final), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -25.6 kPa (x0.11, in magnitude falls on every pass); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.39 MPa (x0.094, in magnitude falls on every pass).",
       "evaluation_grid_m": 0.009966666666666667,
       "reference_stripe_basis": "largest steady stripe (peak 9.589e-07 m at 0.6225 m), isolated; onsets by scaling its own shape",
       "reference_stripe_description": "smooth Gaussian stripe, half-peak width 0.1 m (about one cooling zone), centred at 0.6204 m; its height is bisected for the *_onset_height_reference_m columns",
@@ -12738,6 +12739,8 @@
           "reporting_onset_height_reference_m": 4.0942355082565484e-08,
           "reporting_onset_stripe_height_m": 4.535319670381331e-08,
           "rigid_i_units": 710.2798927848187,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -89050738.5725952,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -46237883.48961673,
           "saturated": false,
           "separating_force_per_width_n_m": 709291.498603684,
           "shape_inputs_basis": "derived_bite",
@@ -12750,6 +12753,8 @@
           "tension_feedback_stiffness_per_width_pa": 682452633781.6652,
           "transfer_factor_compliance_only": 0.9570968050870436,
           "transfer_factor_with_feedback": 0.22813408033122606,
+          "trough_critical_lateral_stress_entry_span_pa": -241316.91470409674,
+          "trough_critical_lateral_stress_exit_span_pa": -135338.56877916848,
           "trough_critical_lateral_stress_pa": -135338.56877916848
         },
         {
@@ -12784,6 +12789,8 @@
           "reporting_onset_height_reference_m": 5.6589636057339646e-08,
           "reporting_onset_stripe_height_m": 6.267383020538807e-08,
           "rigid_i_units": 1128.0915944229473,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -46237883.48961673,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -29112741.45642535,
           "saturated": false,
           "separating_force_per_width_n_m": 612274.8061547138,
           "shape_inputs_basis": "derived_bite",
@@ -12796,6 +12803,8 @@
           "tension_feedback_stiffness_per_width_pa": 1394962973668.0613,
           "transfer_factor_compliance_only": 0.8539448715113501,
           "transfer_factor_with_feedback": 0.17755256880554016,
+          "trough_critical_lateral_stress_entry_span_pa": -129408.42348098618,
+          "trough_critical_lateral_stress_exit_span_pa": -87614.01374230038,
           "trough_critical_lateral_stress_pa": -87614.01374230038
         },
         {
@@ -12830,6 +12839,8 @@
           "reporting_onset_height_reference_m": 8.493705196897512e-08,
           "reporting_onset_stripe_height_m": 9.405339333048348e-08,
           "rigid_i_units": 1917.7557105190103,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -29112741.45642535,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -17125142.033191383,
           "saturated": false,
           "separating_force_per_width_n_m": 736444.7180660991,
           "shape_inputs_basis": "derived_bite",
@@ -12842,6 +12853,8 @@
           "tension_feedback_stiffness_per_width_pa": 3532885736793.105,
           "transfer_factor_compliance_only": 0.6829002746469377,
           "transfer_factor_with_feedback": 0.13091940978896974,
+          "trough_critical_lateral_stress_entry_span_pa": -83987.020190417,
+          "trough_critical_lateral_stress_exit_span_pa": -52912.2338089146,
           "trough_critical_lateral_stress_pa": -52912.2338089146
         },
         {
@@ -12882,6 +12895,8 @@
           "reporting_onset_height_reference_m": 2.1532229066909874e-07,
           "reporting_onset_stripe_height_m": 2.384401072144317e-07,
           "rigid_i_units": 3196.2595175316837,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -17125142.033191383,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -10275085.21991483,
           "saturated": false,
           "separating_force_per_width_n_m": 958604.665939781,
           "shape_inputs_basis": "derived_bite",
@@ -12894,6 +12909,8 @@
           "tension_feedback_stiffness_per_width_pa": 14720604602196.254,
           "transfer_factor_compliance_only": 0.37988725110609384,
           "transfer_factor_with_feedback": 0.069415867498768,
+          "trough_critical_lateral_stress_entry_span_pa": -50125.395844136474,
+          "trough_critical_lateral_stress_exit_span_pa": -32151.7813071739,
           "trough_critical_lateral_stress_pa": -32151.7813071739
         },
         {
@@ -12905,6 +12922,13 @@
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
           "mean_flow_stress_pa": 180000000.0,
           "rejected": "not derivable (exit gauge 18 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -10275085.21991483,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -6165051.131948898,
+          "shohet_townsend_half_width_i_units": 0.006392650955733692,
+          "shohet_townsend_lower_i_units": -0.008523534607644923,
+          "shohet_townsend_upper_i_units": 0.004261767303822462,
+          "trough_critical_lateral_stress_entry_span_pa": -31337.680022029715,
+          "trough_critical_lateral_stress_exit_span_pa": -19767.463205550666,
           "trough_critical_lateral_stress_pa": -19767.463205550666
         },
         {
@@ -12916,6 +12940,13 @@
           "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
           "mean_flow_stress_pa": 185000000.0,
           "rejected": "not derivable (exit gauge 12 um below the 20 um floor of the roll-bite models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)",
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -8391319.596263777,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -4110034.0879659317,
+          "shohet_townsend_half_width_i_units": 0.0030071234017636306,
+          "shohet_townsend_lower_i_units": -0.004009497869018174,
+          "shohet_townsend_upper_i_units": 0.002004748934509087,
+          "trough_critical_lateral_stress_entry_span_pa": -25592.438684657598,
+          "trough_critical_lateral_stress_exit_span_pa": -13178.308803700442,
           "trough_critical_lateral_stress_pa": -13178.308803700442
         }
       ],

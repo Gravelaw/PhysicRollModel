@@ -119,9 +119,14 @@ Two products fit "battery foil at 16-60 um", and they behave differently:
 | stock strength | UTS 150-200 MPa in H18 [V S4] | not in the research pass |
 
 A final gauge of usually 17-19 um, down to 12 um (plant statements), points to
-current-collector foil in H18 with 25-60 um as intermediate passes; the result's
-`foil_regime.product_question` says the same (its text still quotes the earlier plant figure
-of 16-18 um).
+current-collector foil in H18 with 25-60 um as intermediate passes. The result's
+`foil_regime.product_question` words this from the case, not from any plant statement: it
+names the thinnest exit gauge of the case pass and schedule ("The thinnest pass in this case
+exits at 12 um; a final gauge below about 20 um points to cathode current-collector foil in H18
+with 25-60 um as intermediate passes" in the demo) and, at 20 um or above, says only that the
+gauge fits any of the listed products or an intermediate pass. Texts that depend on
+`material.final_pass_doubled` say "the case states" (the key is the plant's answer as entered),
+not "the plant states".
 One question remains open for the plant:
 
 1. **Alloy and temper.** O against H18 changes buckling and winding behaviour. In the tool
@@ -350,24 +355,26 @@ thresholds.
 | F2 | | | | | | 0.0926 | -19.8 |
 | ALT | | | | | | 0.0617 | -13.2 |
 
-The bite-free thresholds per pass, including the two passes below the floor. The dead-band
-half-width and the trough and ridge values for S1-F1 are in `width.gauge_trend`; the
-dead-band half-width of F2 and ALT and the roller-wrinkle threshold of every pass are not in
-the result (the engine skips the dead band for a pass without a bite and reports the
-roller-wrinkle threshold only for the case pass's two spans). They were computed for this
-document with the functions the engine calls (`strip_shape.shohet_townsend_window`,
-`coil_ridge_buildup`, `tension_trough_screen` with the exit-span length 3 m, the pass's exit
-tension and the 0.125 m deflector radius); for S1-F1 these calls reproduce the result's
-dead-band, ridge and trough values exactly.
+The bite-free thresholds per pass, including the two passes below the floor, all from
+`width.gauge_trend.rows`: every row carries the flatness dead band
+(`shohet_townsend_half_width_i_units`), the critical coil ridge height, and, for a foil-regime
+case or a schedule with a pass without a roll bite, the trough onset and roller-wrinkle
+thresholds of both spans with that pass's gauges and tensions
+(`trough_critical_lateral_stress_{exit,entry}_span_pa`,
+`roller_wrinkle_critical_lateral_stress_{exit,entry}_span_pa`; the same
+`strip_shape.tension_trough_screen` call as the case-pass `troughs` section, deflector radius
+0.125 m; the exit-span trough value equals the row's `trough_critical_lateral_stress_pa`).
 
-| pass | exit gauge [um] | dead-band half-width [I] | critical ridge height [um] | trough onset lateral stress [kPa] | roller-wrinkle threshold [MPa] | trough wavelength, exit span [m] |
-|---|---|---|---|---|---|---|
-| S1 | 135 | 0.271 | 0.694 | -135 | -46.2 | 0.264 |
-| S2 | 85 | 0.115 | 0.437 | -87.6 | -29.1 | 0.206 |
-| S3 | 50 | 0.0428 | 0.257 | -52.9 | -17.1 | 0.156 |
-| F1 | 30 | 0.0165 | 0.154 | -32.2 | -10.3 | 0.120 |
-| F2 | 18 | 0.00639 | 0.0926 | -19.8 | -6.17 | 0.0920 |
-| ALT | 12 | 0.00301 | 0.0617 | -13.2 | -4.11 | 0.0752 |
+| pass | exit gauge [um] | dead-band half-width [I] | critical ridge height [um] | trough onset lateral stress, exit / entry span [kPa] | roller-wrinkle threshold, exit / entry span [MPa] |
+|---|---|---|---|---|---|
+| S1 | 135 | 0.271 | 0.694 | -135 / -241 | -46.2 / -89.1 |
+| S2 | 85 | 0.115 | 0.437 | -87.6 / -129 | -29.1 / -46.2 |
+| S3 | 50 | 0.0428 | 0.257 | -52.9 / -84 | -17.1 / -29.1 |
+| F1 | 30 | 0.0165 | 0.154 | -32.2 / -50.1 | -10.3 / -17.1 |
+| F2 | 18 | 0.00639 | 0.0926 | -19.8 / -31.3 | -6.17 / -10.3 |
+| ALT | 12 | 0.00301 | 0.0617 | -13.2 / -25.6 | -4.11 / -8.39 |
+
+The result states the trend in `width.gauge_trend.bite_free_text`: "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um), including passes without a roll bite (F2 0.030->0.018 mm (plant pass 2, final), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -25.6 kPa (x0.11, in magnitude falls on every pass); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.39 MPa (x0.094, in magnitude falls on every pass)."
 
 **The model does not reproduce "worse at thinner gauge" through cooling stripes buckling in
 the mill.** The finding of the earlier foil demo holds on the plant's route. The same roll
@@ -402,7 +409,7 @@ What the model does make easier at thinner gauge:
   sheet gauge the same onsets fell with gauge, section 7.3; across the foil passes they do
   not.)
 - **The flatness dead band** half-width falls from 0.271 to 0.115 to 0.0428 to 0.0165 I-units
-  (and to 0.00639 at 18 um and 0.00301 at 12 um, computed above): a relative crown change that
+  (and to 0.00639 at 18 um and 0.00301 at 12 um): a relative crown change that
   lateral flow absorbs in thicker strip shows as flatness in foil.
 - **The critical coil ridge height** falls in proportion to gauge, 0.694 -> 0.437 -> 0.257 ->
   0.154 um, and to 0.0926 um at the plant's 18 um final pass and 0.0617 um at 12 um (they need
@@ -566,9 +573,9 @@ a work-roll change".
 
 What the demo shows the tool cannot say: the plant's 18 um final pass F2 and the 12 um
 alternative ALT have no bite (their schedule, pass-heating and gauge-trend rows read "not
-derivable (exit gauge 18 um below the 20 um floor ...)" and "... 12 um ..."; the bite-free
-critical ridge height and trough onset stress are still in their gauge-trend rows, while the
-report's gauge table leaves those cells empty for a rejected row), the 30 um case pass lies
+derivable (exit gauge 18 um below the 20 um floor ...)" and "... 12 um ..."; their
+gauge-trend rows still carry every bite-free threshold, and the report shows them with the
+bite-dependent cells marked "no roll-bite result"), the 30 um case pass lies
 below every reported closed-gap onset (`BELOW_EVERY_REPORTED_ONSET`) with no roll-kissing
 model, and the lever and gauge-control sections carry the open-gap note. The CLI run of this
 demo took about 19 s on this container. It tests the screening logic at foil gauge, not the
@@ -1731,7 +1738,12 @@ after-release onset separately, says whether each changes on every pass or only 
 whether the after-release values are reporting-threshold upper bounds, gives the verdict
 (both falling toward the thin pass: "thinner is worse for this mechanism in the model"; both
 rising: "thinner is less sensitive for this mechanism in the model"; otherwise mixed) and
-names any pass that was not assessable. The gauge-trend text follows unchanged. In the sheet
+names any pass that was not assessable. The gauge-trend text follows unchanged, then, when
+the result has it, a paragraph "Bite-free thresholds." with `gauge_trend.bite_free_text`
+(section 3.5). In the gauge-trend table a pass without a roll bite keeps its bite-free cells
+(dead-band half-width, critical ridge height, and the trough-onset and roller-wrinkle columns
+of both spans, which appear when the rows carry them); its bite-dependent cells read "no
+roll-bite result", the first one with the rejection reason. In the sheet
 demo: "... the in-mill onset stripe height falls from 3.61 µm to 2.44 µm (x0.68, overall, not
 on every pass), and the after-release onset falls from 0.626 µm to ≤ 0.108 µm (x0.17, on every
 pass; reporting-threshold upper bounds); thinner is worse for this mechanism in the model." In
@@ -1786,7 +1798,7 @@ real mill.
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`) |
 | `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`) |
-| foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions and the film-ratio gate (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Below the 20 um floor** (`CollectorFoilBelowFloorTests`, 30 -> 17 um case pass): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders the floor warning (`test_report_renders`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (coarse numerics, the plant's passes F1, F2 and ALT only, no AGC or drive): the plant's route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT 24.5 -> 12 um above 50 %, assumed gauges labelled), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, F2 and ALT rows rejected at the floor and both listed in the foil block, single-sheet statement, foil box before the leading hypotheses (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** over the whole schedule (S1-F1 assessable, F2 and ALT below the floor): in-mill onset and rigid bound rise, linear-feedback I-units, critical ridge height and trough onset stress fall on every pass, the floor rows still fall below F1 in ridge height and trough stress, and the report's direction sentence says "thinner is less sensitive for this mechanism in the model" (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`). **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite, the friction at which the mattress model rejects, and the bite-free values of section 3.5 that are not in the result (dead band of F2 and ALT, roller-wrinkle thresholds per pass) |
+| foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions and the film-ratio gate (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Below the 20 um floor** (`CollectorFoilBelowFloorTests`, 30 -> 17 um case pass): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders the floor warning (`test_report_renders`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (coarse numerics, the plant's passes F1, F2 and ALT only, no AGC or drive): the plant's route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT 24.5 -> 12 um above 50 %, assumed gauges labelled), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, F2 and ALT rows rejected at the floor and both listed in the foil block, single-sheet statement, foil box before the leading hypotheses (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** over the whole schedule (S1-F1 assessable, F2 and ALT below the floor): in-mill onset and rigid bound rise, linear-feedback I-units, critical ridge height and trough onset stress fall on every pass, the floor rows still fall below F1 in ridge height and trough stress, and the report's direction sentence says "thinner is less sensitive for this mechanism in the model" (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`). **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. The direction test (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`) also pins the **bite-free values of the passes without a bite**: dead band, ridge height, trough onset and roller-wrinkle thresholds of both spans on every row, each falling in magnitude on every pass through F2 and ALT, the bite-free sentence ("falls on every pass" six times, "including passes without a roll bite (F2 ..."), and the report's ALT row (no empty cell, "no roll-bite result", its dead band and ridge height shown). The **product question** is worded from the case ("The thinnest pass in this case exits at 18 um" or "... 30 um, which fits ..."; no "16-18"; `FinalPassDoubledTests`, `test_foil_regime_block_without_bite`); a sheet schedule with every pass assessable gets no span-threshold keys and no bite-free sentence (`test_case_pass_row_keeps_the_supplied_bite`). **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite and the friction at which the mattress model rejects |
 
 `tests/test_band_diagnosis.py` also checks that twenty hypotheses are evaluated for every
 case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
@@ -1894,11 +1906,11 @@ At battery-foil gauge, in addition (each checked against the code and
   above 50 % are rejected, so the published 52-57 % passes (section 3.1) and the plant's
   thinnest route with equal reductions (50 -> 24.5 -> 12 um, about 51 % per pass, assumed)
   cannot be entered as they are.
-- **Bite-free values of passes without a bite are only partly in the result**: for a pass
-  below the floor `width.gauge_trend` keeps the critical ridge height and the trough onset
-  stress but not the flatness dead band, the roller-wrinkle threshold is reported only for
-  the case pass's spans, and the report's gauge table leaves every cell of a rejected row
-  empty; section 3.5 computes the missing values with the engine's functions.
+- **Per-pass span thresholds only where they matter**: the per-pass trough onset and
+  roller-wrinkle thresholds of both spans and the bite-free trend sentence are added to
+  `width.gauge_trend` only for a foil-regime case or a schedule with a pass without a roll
+  bite, so that sheet results without such passes keep their exact content; a sheet case
+  sees the roller-wrinkle threshold only for the case pass's spans (`width.troughs`).
 - **Tension lines have no physical model**; `foil_tension_lines` is a rule set with analyst
   weights [D] on reported facts [V S27, S28].
 - **Demo heat partition**: the foil demo keeps the sheet demo's strip heat fraction 0.84,

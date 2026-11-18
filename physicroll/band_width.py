@@ -1373,6 +1373,16 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
         except ValueError as exc:
             row['rejected'] = str(exc)
         h1 = src['exit_thickness_m']
+        if 'rejected' in row:
+            # bite-free: the flatness dead band needs only gauge and width (review follow-up)
+            try:
+                win = ss.shohet_townsend_window(h1, case['pass']['width_m'])
+                row.update(shohet_townsend_half_width_i_units=(win['upper_bound_i_units']
+                                                               - win['lower_bound_i_units']) / 2,
+                           shohet_townsend_upper_i_units=win['upper_bound_i_units'],
+                           shohet_townsend_lower_i_units=win['lower_bound_i_units'])
+            except ValueError as exc:
+                row['shohet_townsend_error'] = str(exc)
         row['critical_ridge_height_m'] = None
         if coil is not None:
             try:
@@ -1394,14 +1404,92 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
             row['trough_critical_lateral_stress_pa'] = None
             row['trough_error'] = str(exc)
         rows.append(row)
-    return {'reference_stripe_peak_m': peak_ref, 'reference_stripe_position_m': peak_x,
-            'reference_stripe_basis': basis,
-            'reference_stripe_description': (
-                f'smooth Gaussian stripe, half-peak width {REFERENCE_HALF_PEAK_WIDTH_M:g} m (about '
-                f'one cooling zone), centred at {peak_x:.4g} m; its height is bisected for the '
-                '*_onset_height_reference_m columns'),
-            'evaluation_grid_m': zc[1] - zc[0],
-            'rows': rows, 'text': _trend_text(rows, peak_ref)}
+    out = {'reference_stripe_peak_m': peak_ref, 'reference_stripe_position_m': peak_x,
+           'reference_stripe_basis': basis,
+           'reference_stripe_description': (
+               f'smooth Gaussian stripe, half-peak width {REFERENCE_HALF_PEAK_WIDTH_M:g} m (about '
+               f'one cooling zone), centred at {peak_x:.4g} m; its height is bisected for the '
+               '*_onset_height_reference_m columns'),
+           'evaluation_grid_m': zc[1] - zc[0],
+           'rows': rows, 'text': _trend_text(rows, peak_ref)}
+    # Bite-free span thresholds per pass and their trend sentence: only for a foil-regime case
+    # or a schedule with a pass without a bite (the passes they matter for), so that sheet
+    # results without such passes keep their exact content
+    if (case['pass']['exit_thickness_m'] < FOIL_GAUGE_M
+            or any('rejected' in r for r in rows)):
+        for src, row in zip(rows_src, rows):
+            _span_thresholds(case, w, src, row)
+        out['bite_free_text'] = _bite_free_text(rows)
+    return out
+
+
+def _span_thresholds(case, w, src, row):
+    """Trough onset and roller-wrinkle thresholds of both spans of one pass (bite-free; the
+    same ``tension_trough_screen`` call as the case-pass ``troughs`` section, with this pass's
+    gauges and tensions)."""
+    sp, m, p = case['spans'], case['material'], case['pass']
+    for name, h, length, tension in (
+            ('entry_span', src['entry_thickness_m'], sp['entry_span_length_m'],
+             src['entry_tension_pa']),
+            ('exit_span', src['exit_thickness_m'], sp['exit_span_length_m'],
+             src['exit_tension_pa'])):
+        try:
+            r = ss.tension_trough_screen(
+                h, length, tension, p['width_m'], roller_radius_m=w['deflector_roll_radius_m'],
+                lateral_compressive_stress_pa=None, observed_spacing_m=None,
+                youngs_modulus_pa=m['youngs_modulus_pa'], poisson_ratio=STRIP_POISSON_RATIO)
+            row[f'trough_critical_lateral_stress_{name}_pa'] = r[
+                'trough_critical_lateral_stress_pa']
+            row[f'roller_wrinkle_critical_lateral_stress_{name}_pa'] = r[
+                'roller_wrinkle_critical_lateral_stress_pa']
+        except ValueError as exc:
+            row[f'trough_critical_lateral_stress_{name}_pa'] = None
+            row[f'roller_wrinkle_critical_lateral_stress_{name}_pa'] = None
+            row[f'span_threshold_error_{name}'] = str(exc)
+
+
+BITE_FREE_SERIES = (
+    ('shohet_townsend_half_width_i_units', 'flatness dead band half-width', 1.0, 'I-units', 3),
+    ('critical_ridge_height_m', 'critical coil ridge height', 1e6, 'um', 3),
+    ('trough_critical_lateral_stress_exit_span_pa', 'trough onset lateral stress, exit span',
+     1e-3, 'kPa', 3),
+    ('trough_critical_lateral_stress_entry_span_pa', 'trough onset lateral stress, entry span',
+     1e-3, 'kPa', 3),
+    ('roller_wrinkle_critical_lateral_stress_exit_span_pa', 'roller-wrinkle threshold, exit span',
+     1e-6, 'MPa', 3),
+    ('roller_wrinkle_critical_lateral_stress_entry_span_pa',
+     'roller-wrinkle threshold, entry span', 1e-6, 'MPa', 3))
+
+
+def _bite_free_text(rows):
+    """How each bite-free quantity changes from the thickest to the thinnest pass (by exit
+    gauge), passes without a roll bite included."""
+    order = sorted(rows, key=lambda r: -r['exit_thickness_m'])
+    if len(order) < 2:
+        return 'Fewer than two passes: no bite-free trend statement.'
+    a, b = order[0], order[-1]
+    nobite = [r['label'] for r in order if 'rejected' in r]
+    parts = []
+    for key, label, scale, unit, d in BITE_FREE_SERIES:
+        vals = [r.get(key) for r in order]
+        vals = [v for v in vals if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        if len(vals) < 2 or vals[0] == 0:
+            continue
+        mags = [abs(v) for v in vals]
+        falls = all(y < x for x, y in zip(mags, mags[1:]))
+        rises = all(y > x for x, y in zip(mags, mags[1:]))
+        how = ('in magnitude ' if vals[0] < 0 else '') + (
+            'falls on every pass' if falls else 'rises on every pass' if rises
+            else 'not monotonic')
+        parts.append(f'{label} {vals[0] * scale:.{d}g} -> {vals[-1] * scale:.{d}g} {unit} '
+                     f'(x{mags[-1] / mags[0]:.2g}, {how})')
+    if not parts:
+        return 'No bite-free quantity available on two passes.'
+    return (f'Bite-free thresholds (no roll bite needed), thickest to thinnest pass, '
+            f'{a["label"]} ({a["exit_thickness_m"] * 1e6:.3g} um) to {b["label"]} '
+            f'({b["exit_thickness_m"] * 1e6:.3g} um)'
+            + (f', including passes without a roll bite ({", ".join(nobite)})' if nobite else '')
+            + ': ' + '; '.join(parts) + '.')
 
 
 def _trend_text(rows, peak):

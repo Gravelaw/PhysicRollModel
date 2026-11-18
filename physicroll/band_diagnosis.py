@@ -619,7 +619,7 @@ def _bite_pass(case, row=None):
 
 # chatter.BitePass.validate requires 2e-5 m <= exit thickness; both roll-bite models (slab /
 # Hitchcock and the experimental mattress model) take a BitePass, so neither can represent a
-# thinner pass (SPEC9 addendum: 16-18 um collector-foil final passes). Not changed here.
+# thinner pass (e.g. a collector-foil final pass below 20 um). Not changed here.
 BITE_FLOOR_M = 2e-5
 BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
 BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 20 um floor of the roll-bite '
@@ -2110,6 +2110,16 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                      'tension.')
     temper = m['temper']
     doubled = m.get('final_pass_doubled')
+    # worded from the case (thinnest exit gauge of the case pass and schedule), never from one
+    # plant's statement
+    thinnest = min([h1] + [r['exit_thickness_m'] for r in eff['schedule']])
+    if thinnest < BITE_FLOOR_M:
+        gauge_clue = (f'The thinnest pass in this case exits at {thinnest * 1e6:.3g} um; a final '
+                      'gauge below about 20 um points to cathode current-collector foil in H18 '
+                      'with 25-60 um as intermediate passes. ')
+    else:
+        gauge_clue = (f'The thinnest pass in this case exits at {thinnest * 1e6:.3g} um, which '
+                      'fits any of these products or an intermediate pass. ')
     implications = [
         'In closed gap the load is no longer a gauge actuator: more screw-down only bends '
         'the rolls and changes flatness; the gauge is set by tension, speed and '
@@ -2125,7 +2135,7 @@ def _foil_regime(eff, bite, bite_error, result, flags):
         'shape chain are the tool\'s proxy for that difference.',
         'Foil band defects with no physical model in the tool (tension lines, hot spots '
         'from roll wipers, creasing from ironing rolls) are screened by rules only.']
-    floor_tail = ('Collector foil of 16-18 um may in practice be rolled as a DOUBLED '
+    floor_tail = ('A foil pass below 20 um may in practice be rolled as a DOUBLED '
                   '(two-sheet) pass, which the tool does not model at all. Ask the plant: '
                   'single-sheet or doubled?')
     product_doubling = ('Ask also whether the last pass is single-sheet or doubled (doubling '
@@ -2133,15 +2143,17 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                         'foil [V S3]). ')
     flist = [CLOSED_GAP_FLAG] + ([BITE_FLOOR_FLAG] if below else [])
     if doubled is False:
-        floor_tail = ('The plant states that this pass is rolled single-sheet, so the missing '
+        floor_tail = ('The case states (material.final_pass_doubled false) that this pass is '
+                      'rolled single-sheet, so the missing '
                       'roll-bite result is a limit of the tool (the 20 um floor of both bite '
                       'models and no closed-gap load path), not of an unmodelled doubled pass; '
                       'a single-sheet pass at this gauge is closed-gap rolling, where the gauge '
                       'is set by tension, speed and lubrication rather than load '
                       '[V S8, S16, S17].')
-        product_doubling = 'The plant states that the final pass is rolled single-sheet. '
+        product_doubling = ('The case states that the final pass is rolled single-sheet '
+                            '(material.final_pass_doubled false). ')
         implications.append(
-            'Single-sheet final pass (plant statement): both strip faces run against a work '
+            'Single-sheet final pass (stated in the case): both strip faces run against a work '
             'roll (no matte sheet-to-sheet face), so observation.faces discriminates [D]: a '
             'surface band printed by one work roll (wear band, pick-up, wiper debris) or a '
             'stain from one side can show on one face only, while a flatness or thickness '
@@ -2149,11 +2161,13 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     elif doubled is True:
         flist.append(DOUBLED_FLAG)
         flags.append(DOUBLED_FLAG)
-        floor_tail = ('The plant states that the final pass is rolled DOUBLED (two sheets in '
+        floor_tail = ('The case states (material.final_pass_doubled true) that the final pass '
+                      'is rolled DOUBLED (two sheets in '
                       'one bite); the tool does not model that at all.')
-        product_doubling = 'The plant states that the final pass is rolled doubled. '
+        product_doubling = ('The case states that the final pass is rolled doubled '
+                            '(material.final_pass_doubled true). ')
         implications.append(
-            'Doubled final pass (plant statement), NOT modelled: the tool models one sheet in '
+            'Doubled final pass (stated in the case), NOT modelled: the tool models one sheet in '
             'the bite, so every bite-dependent result for that pass describes a single sheet '
             'of the entered gauge, not two sheets in one bite with a sheet-to-sheet '
             'interface; read observation.faces knowing that one face of each sheet is the '
@@ -2196,9 +2210,8 @@ def _foil_regime(eff, bite, bite_error, result, flags):
             'text': 'Ask the plant which product this is: 25-60 um can be pouch-laminate '
                     'barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector '
                     'foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of '
-                    'thinner collector foil; a final pass of 16-18 um (plant statement) points '
-                    'to cathode current-collector foil in H18 with 25-60 um as intermediate '
-                    'passes. ' + product_doubling + 'O against H18 changes buckling and '
+                    'thinner collector foil (collector foil is usually 9-20 um). '
+                    + gauge_clue + product_doubling + 'O against H18 changes buckling and '
                     f'winding behaviour; this case uses temper {temper}.'},
         'flags': flist,
         'limitations': [

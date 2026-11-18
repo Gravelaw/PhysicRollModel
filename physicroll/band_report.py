@@ -1713,7 +1713,10 @@ def _gauge_section(r):
     rows = g.get('rows') or []
     ref_desc = g.get('reference_stripe_description') or g.get('onset_50mm_reference_basis')
     out = [f'<p class="lead">{_e(_gauge_direction(g))}</p>',
-           f'<p>{_e(g.get("text") or "")}</p>',
+           f'<p>{_e(g.get("text") or "")}</p>']
+    if g.get('bite_free_text'):
+        out.append(f'<p><strong>Bite-free thresholds.</strong> {_e(g["bite_free_text"])}</p>')
+    out += [
            f'<p class="note">Model stripe: {_e(g.get("reference_stripe_basis") or "n/a")} '
            f'(peak {_um(g.get("reference_stripe_peak_m"))} at '
            f'{_f(g.get("reference_stripe_position_m"), 1, 4)} m). Reference stripe: '
@@ -1752,13 +1755,36 @@ def _gauge_section(r):
              ('band buckling stress', lambda x: _mpa(x.get('band_buckling_stress_pa'))),
              ('effective buckling width', lambda x: _mm2(x.get('effective_buckling_width_m'))),
              ('critical ridge height (coil)', lambda x: _um(x.get('critical_ridge_height_m')))]
+    # bite-free columns: shown for a pass without a roll bite too; the span thresholds exist
+    # only for foil-regime cases or schedules with such a pass
+    free = {'S–T half-width [I]', 'critical ridge height (coil)'}
+    for key, label, fn in (
+            ('trough_critical_lateral_stress_exit_span_pa', 'trough onset, exit / entry span',
+             lambda x: f'{_f(x.get("trough_critical_lateral_stress_exit_span_pa"), 1e-3, 3)}'
+                       f' / {_f(x.get("trough_critical_lateral_stress_entry_span_pa"), 1e-3, 3)}'
+                       ' kPa'),
+            ('roller_wrinkle_critical_lateral_stress_exit_span_pa',
+             'roller-wrinkle threshold, exit / entry span',
+             lambda x: _mpa(x.get('roller_wrinkle_critical_lateral_stress_exit_span_pa'))
+             + ' / ' + _mpa(x.get('roller_wrinkle_critical_lateral_stress_entry_span_pa')))):
+        if any(key in x for x in rows):
+            cols.append((label, fn))
+            free.add(label)
     body = []
     for x in rows:
         lead = [_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
                 _mpa(x.get('exit_tension_pa'))]
         if 'rejected' in x:
-            body.append(lead + [f'<em>rejected: {_e(x["rejected"])}</em>']
-                        + [''] * (len(cols) - 1))
+            cells, first = [], True
+            for name, fn in cols:
+                if name in free:
+                    cells.append(fn(x))
+                elif first:
+                    cells.append(f'<em>no roll-bite result: {_e(x["rejected"])}</em>')
+                    first = False
+                else:
+                    cells.append('<em>no roll-bite result</em>')
+            body.append(lead + cells)
             continue
         body.append(lead + [fn(x) for _, fn in cols])
     out.append(_table(['pass', 'exit gauge', 'exit tension'] + [c for c, _ in cols], body,
