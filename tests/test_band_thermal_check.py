@@ -101,7 +101,9 @@ class PropertyRiskTests(unittest.TestCase):
         rows = [{'label': lab, 'exit_temperature_k': t + 273.15}
                 for lab, t in (('F1', 70.0), ('F2', t_final))]
         return {'process': {'heating': {'operating': rows[0], 'schedule': rows}},
-                'product_check': {'final_pass_labels': ['F2']}}
+                # final passes by row index (0 = the case pass, i >= 1 = schedule row i-1):
+                # F2 is schedule row 1 (review of ac2e7df: never by label)
+                'product_check': {'final_pass_labels': ['F2'], 'final_pass_row_indices': [2]}}
 
     def test_limits_and_flag(self):
         tc = bt.thermal_check(self._result(78.0), self._case())

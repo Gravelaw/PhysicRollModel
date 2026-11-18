@@ -2591,6 +2591,10 @@ def _alloy_designation(alloy):
     return text
 
 
+ROW_INDEX_CONVENTION = ('row_index: 0 = the case pass, i >= 1 = schedule row i-1; labels are '
+                        'display only (a schedule row may be labelled \'case pass\' too)')
+
+
 def _product_check(eff, flags):
     """SPEC12 B2: the case pass and every schedule row against the published envelope of
     ``material.product`` (``band_products``). Evidence-neutral: it never changes hypothesis
@@ -2606,6 +2610,8 @@ def _product_check(eff, flags):
                 'product_ids': list(band_products.product_ids())}
     prod = band_products.product(pid)
     env = band_products._json(prod)
+    # identity by position (ROW_INDEX_CONVENTION), never by label: a schedule row may be
+    # labelled 'case pass' too
     rows_src = [('case pass', p)] + [(r['label'], r) for r in eff['schedule']]
     thinnest = min(src['exit_thickness_m'] for _, src in rows_src)
     alloy = _alloy_designation(m['alloy'])
@@ -2617,7 +2623,7 @@ def _product_check(eff, flags):
         h = src['exit_thickness_m']
         return not any(abs(e - h) <= 1e-9 * h for e in entries)
     rows = []
-    for label, src in rows_src:
+    for i, (label, src) in enumerate(rows_src):
         final = src['exit_thickness_m'] <= thinnest * (1 + 1e-9) or route_end(src)
         findings = band_products.check_pass(
             pid, src['entry_thickness_m'], src['exit_thickness_m'],
@@ -2625,7 +2631,8 @@ def _product_check(eff, flags):
             doubled=m.get('final_pass_doubled') if final else None, is_final_pass=final,
             alloy=alloy, temper=m['temper'])
         outside = [f['item'] for f in findings if f['verdict'] in OUTSIDE_VERDICTS]
-        rows.append({'label': label, 'entry_thickness_m': src['entry_thickness_m'],
+        rows.append({'label': label, 'row_index': i,
+                     'entry_thickness_m': src['entry_thickness_m'],
                      'exit_thickness_m': src['exit_thickness_m'],
                      'exit_speed_m_s': src['exit_speed_m_s'], 'is_final_pass': final,
                      'outside_published_range': outside, 'findings': findings})
@@ -2651,6 +2658,9 @@ def _product_check(eff, flags):
         'rows': rows,
         'final_pass_label': final_row['label'],
         'final_pass_labels': [r['label'] for r in rows if r['is_final_pass']],
+        'final_pass_row_index': final_row['row_index'],
+        'final_pass_row_indices': [r['row_index'] for r in rows if r['is_final_pass']],
+        'row_index_convention': ROW_INDEX_CONVENTION,
         'final_pass_rule': 'final passes: the thinnest pass of the case and the last pass of any '
                            'route listed in the schedule (no pass enters at its exit gauge); '
                            'material.final_pass_doubled applies to them; final_pass_label is '
@@ -2737,9 +2747,12 @@ def _material_selection(eff, flags):
         return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
                 'reason': f'no gauge-by-gauge alloy and temper table is published for {pid}',
                 'hint': MATERIAL_SELECTION_HINT}
-    rows_src = [('case pass', p)] + [(r['label'], r) for r in eff['schedule']
-                                     if not bw.is_case_pass(eff, r)]
-    final_label, final_src = min(rows_src, key=lambda x: x[1]['exit_thickness_m'])
+    # identity by position (ROW_INDEX_CONVENTION), never by label: a schedule row may be
+    # labelled 'case pass' too (review of ac2e7df)
+    rows_src = [(0, 'case pass', p)] + [(i + 1, r['label'], r)
+                                        for i, r in enumerate(eff['schedule'])
+                                        if not bw.is_case_pass(eff, r)]
+    final_idx, final_label, final_src = min(rows_src, key=lambda x: x[2]['exit_thickness_m'])
     h_final = final_src['exit_thickness_m']
     final_band = band_products.gauge_band(pid, h_final)
     case_band = band_products.gauge_band(pid, p['exit_thickness_m'])
@@ -2787,10 +2800,11 @@ def _material_selection(eff, flags):
 
     # pass strengths, each against its own exit-gauge band
     passes = []
-    for label, src in rows_src:
+    for idx, label, src in rows_src:
         h = src['exit_thickness_m']
         g = band_products.grade_options(pid, h)
-        row = {'label': label, 'exit_thickness_m': h, 'is_final_pass': label == final_label,
+        row = {'label': label, 'row_index': idx, 'exit_thickness_m': h,
+               'is_final_pass': idx == final_idx,
                'mean_flow_stress_pa': src['mean_flow_stress_pa'], 'band_id': g['band_id'],
                'band_label': g['band_label']}
         if g['status'] != 'IN_BAND':
@@ -2829,24 +2843,25 @@ def _material_selection(eff, flags):
                      'basis': 'no proof strength for this band'}
 
     # the last pass of every other route of the schedule (no pass enters at its exit gauge)
-    entries = [src['entry_thickness_m'] for _, src in rows_src]
+    entries = [src['entry_thickness_m'] for _, _, src in rows_src]
     others = []
-    for label, src in rows_src:
+    for idx, label, src in rows_src:
         h = src['exit_thickness_m']
-        if label == final_label or any(abs(e - h) <= 1e-9 * h for e in entries):
+        if idx == final_idx or any(abs(e - h) <= 1e-9 * h for e in entries):
             continue
         g = band_products.gauge_band(pid, h)
         if g['status'] != 'IN_BAND':
             continue
         pr = {gr: band_products.proposed_material(pid, h, grade=gr)
               for gr in band_products.GRADES}
-        others.append({'label': label, 'exit_thickness_m': h, 'band_id': g['band_id'],
+        others.append({'label': label, 'row_index': idx, 'exit_thickness_m': h,
+                       'band_id': g['band_id'],
                        'band_label': g['band_label'], 'proposals': pr,
                        'text': (f'{label} ({h * 1e6:.3g} um, {g["band_label"]} band): standard '
                                 f'{_proposal_words(pr["standard"])}; high-strength '
                                 f'{_proposal_words(pr["high_strength"])}')})
     # the plain sentence
-    final_row = next(r for r in passes if r['is_final_pass'])
+    final_row = next(r for r in passes if r['row_index'] == final_idx)
     ftxt = (f'the final pass ({final_label}, {h_final * 1e6:.3g} um) is in the '
             f'{final_band.get("band_label")} band' if final_band['status'] == 'IN_BAND'
             else f'the final pass ({final_label}, {h_final * 1e6:.3g} um) is outside every '
@@ -2881,7 +2896,8 @@ def _material_selection(eff, flags):
     flags.extend(dict.fromkeys(out_flags))
     return {
         'status': band_products.BG_STATUS, 'not_supplied': False, 'product_id': pid,
-        'final_pass_label': final_label, 'final_exit_thickness_m': h_final,
+        'final_pass_label': final_label, 'final_pass_row_index': final_idx,
+        'row_index_convention': ROW_INDEX_CONVENTION, 'final_exit_thickness_m': h_final,
         'final_pass_band': band_brief(final_band), 'case_pass_band': band_brief(case_band),
         'final_pass_rule': 'the final pass is the thinnest pass of the case (case pass and '
                            'schedule)',

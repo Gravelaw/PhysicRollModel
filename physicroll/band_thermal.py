@@ -498,7 +498,13 @@ def attach_per_pass(result):
         ts['per_pass_note'] = 'no pass-heating schedule or gauge trend to combine'
         return
     op = heating['operating']
-    by_label = {x['label']: x for x in heating.get('schedule') or []}
+    # identity by position, never by label (review of ac2e7df): the gauge trend has one row
+    # per schedule row in order (the case pass alone without a schedule), as pass heating has
+    sched = list(heating.get('schedule') or [])
+    if sched and len(sched) != len(gt['rows']):
+        ts['per_pass'] = None
+        ts['per_pass_note'] = 'gauge-trend and pass-heating rows do not match'
+        return
     base_row = next((r for r in ts['rows'] if r['strip_heat_share'] == ts['case_strip_heat_share']
                      and r['spray_htc_w_m2k'] == ts['case_spray_htc_w_m2k']), None)
     if base_row is None:
@@ -536,11 +542,8 @@ def attach_per_pass(result):
         shape_reason = ('the gauge-trend onsets are for the Gaussian reference stripe, not for '
                         'a thermal stripe shape')
     out = []
-    for g in gt['rows']:
-        h = by_label.get(g['label'])
-        if h is None and not op.get('rejected') and 'exit_thickness_m' in g and abs(
-                g['exit_thickness_m'] - op['exit_thickness_m']) < 1e-12:
-            h = op
+    for j, g in enumerate(gt['rows']):
+        h = sched[j] if sched else op
         reasons = []
         if g.get('rejected'):
             reasons.append(f'gauge trend: {g["rejected"]}')
@@ -745,28 +748,31 @@ def thermal_check(result, case):
             'read_status': bp.SPRAY_OVERLAP.effective_read_status(), 'note': ''})
     # ---- outputs: strip exit temperature per pass (reused from thermal_sensitivity.per_pass)
     pc = result.get('product_check') if isinstance(result.get('product_check'), dict) else {}
-    finals = set(pc.get('final_pass_labels') or [])
+    # final passes by row index (0 = the case pass, i >= 1 = schedule row i-1), never by
+    # label: a schedule row may be labelled 'case pass' too (review of ac2e7df)
+    finals = set(pc.get('final_pass_row_indices') or [])
     # the pass-heating rows themselves (computed with tribology.strip_heat_fraction, the
     # input pass heating uses; the same numbers thermal_sensitivity.per_pass rescales)
     rows = []
     heat = (result.get('process') or {}).get('heating') if isinstance(
         result.get('process'), dict) else None
     if isinstance(heat, dict) and 'operating' in heat:
-        src = list(heat.get('schedule') or [])
+        src = [(j + 1, x) for j, x in enumerate(heat.get('schedule') or [])]
         op = heat['operating']
         if not any(abs(x.get('exit_thickness_m', -1) - op.get('exit_thickness_m', -2)) < 1e-12
                    and abs(x.get('exit_speed_m_s', -1) - op.get('exit_speed_m_s', -2)) < 1e-12
-                   for x in src):
-            src = [op] + src             # the case pass when the schedule does not list it
-        for h in src:
+                   for _, x in src):
+            src = [(0, op)] + src        # the case pass when the schedule does not list it
+        for i, h in src:
             rows.append((h['label'], None if h.get('rejected') else _k_to_c(
-                h.get('exit_temperature_k')), h['label'] in finals, h.get('rejected')))
+                h.get('exit_temperature_k')), i in finals, h.get('rejected'), i))
     temps = []
-    for label, t, final, why in rows:
+    for label, t, final, why, idx in rows:
         if t is None:
             # a pass whose bite (hence pass heating) was rejected: not assessable, never a
             # property risk; the other passes keep their comparisons
             temps.append({'item': 'modelled_strip_exit_temperature', 'label': label,
+                          'row_index': idx,
                           'value': None, 'published_low': None, 'published_high': None,
                           'unit': 'degC', 'verdict': 'NOT_ASSESSABLE',
                           'basis': 'no pass-heating result for this pass',
@@ -783,6 +789,7 @@ def thermal_check(result, case):
                  'basis': 'no coil temperature limit published for this product', 'sources': [],
                  'read_status': None, 'note': ''}
         f['label'] = label
+        f['row_index'] = idx
         f['is_final_pass'] = final
         f['above_90c'] = t > bp.COIL_OUT_FINAL_LIMIT_LOOSE.high
         temps.append(f)

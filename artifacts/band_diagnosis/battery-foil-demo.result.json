@@ -4915,6 +4915,7 @@
         "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
         "mean_flow_stress_pa": 185000000.0,
         "option": "1235",
+        "row_index": 7,
         "sources": [
           "BG-G2",
           "BG-G21",
@@ -4938,6 +4939,7 @@
           "label": "case pass",
           "mean_flow_stress_pa": 175000000.0,
           "option": "1235",
+          "row_index": 0,
           "sources": [
             "BG-G35",
             "BG-G7",
@@ -4959,6 +4961,7 @@
           "label": "S1 0.260->0.135 mm (assumed stock route)",
           "mean_flow_stress_pa": 150000000.0,
           "option": null,
+          "row_index": 1,
           "verdict": "OUTSIDE_PUBLISHED_BANDS"
         },
         {
@@ -4970,6 +4973,7 @@
           "label": "S2 0.135->0.085 mm (assumed stock route)",
           "mean_flow_stress_pa": 160000000.0,
           "option": null,
+          "row_index": 2,
           "verdict": "OUTSIDE_PUBLISHED_BANDS"
         },
         {
@@ -4981,6 +4985,7 @@
           "label": "S3 0.085->0.050 mm (assumed stock route)",
           "mean_flow_stress_pa": 168000000.0,
           "option": null,
+          "row_index": 3,
           "verdict": "OUTSIDE_PUBLISHED_BANDS"
         },
         {
@@ -4992,6 +4997,7 @@
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
           "mean_flow_stress_pa": 180000000.0,
           "option": "1235",
+          "row_index": 5,
           "sources": [
             "BG-G2",
             "BG-G42",
@@ -5013,6 +5019,7 @@
           "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
           "mean_flow_stress_pa": 178000000.0,
           "option": "1235",
+          "row_index": 6,
           "sources": [
             "BG-G35",
             "BG-G7",
@@ -5034,6 +5041,7 @@
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
           "mean_flow_stress_pa": 185000000.0,
           "option": "1235",
+          "row_index": 7,
           "sources": [
             "BG-G2",
             "BG-G21",
@@ -5072,6 +5080,7 @@
       "status": "IN_BAND"
     },
     "final_pass_label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+    "final_pass_row_index": 7,
     "final_pass_rule": "the final pass is the thinnest pass of the case (case pass and schedule)",
     "flags": [
       "MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN"
@@ -5905,6 +5914,7 @@
             "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
           }
         },
+        "row_index": 5,
         "text": "F2 0.030->0.018 mm (plant pass 2, final) (18 um, >15\u201320 \u00b5m band): standard 1235-H18 (Rm 210 MPa; evidence vendor_level); high-strength 1100-H18 (Rm 220 MPa; evidence WEAK: no usual choice of this grade is published for this band, so the fallback rule (highest standard minimum) chose it)"
       }
     ],
@@ -6068,6 +6078,7 @@
         "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
       }
     },
+    "row_index_convention": "row_index: 0 = the case pass, i >= 1 = schedule row i-1; labels are display only (a schedule row may be labelled 'case pass' too)",
     "sentence": "Alloy and temper are not stated by the plant (the case uses AA1235-H18); the final pass (ALT2 0.025->0.012 mm (thinnest product, alternative final pass), 12 um) is in the >10\u201313 \u00b5m band; LITERATURE PROPOSAL TO CONFIRM OR CORRECT WITH THE PLANT: standard proposal 1235-H18 (Rm 180 MPa; evidence medium); high-strength proposal 1100-H18 (Rm 250 MPa; evidence medium). The final-pass flow stress of the case, 185 MPa, is closest to the standard proposal (1235, 180 MPa; indicator only). Other route ends of the schedule: F2 0.030->0.018 mm (plant pass 2, final) (18 um, >15\u201320 \u00b5m band): standard 1235-H18 (Rm 210 MPa; evidence vendor_level); high-strength 1100-H18 (Rm 220 MPa; evidence WEAK: no usual choice of this grade is published for this band, so the fallback rule (highest standard minimum) chose it).",
     "stated": {
       "alloy": "AA1235",
@@ -6849,6 +6860,11 @@
       "F2 0.030->0.018 mm (plant pass 2, final)",
       "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)"
     ],
+    "final_pass_row_index": 7,
+    "final_pass_row_indices": [
+      5,
+      7
+    ],
     "final_pass_rule": "final passes: the thinnest pass of the case and the last pass of any route listed in the schedule (no pass enters at its exit gauge); material.final_pass_doubled applies to them; final_pass_label is the thinnest",
     "flags": [],
     "limitations": [
@@ -7018,6 +7034,7 @@
     "note": "Evidence-neutral literature check: it never changes hypothesis scores. A value inside a published span is not evidence that a pass is good.",
     "product_id": "battery_collector_foil",
     "product_name": "Li-ion cathode current-collector foil",
+    "row_index_convention": "row_index: 0 = the case pass, i >= 1 = schedule row i-1; labels are display only (a schedule row may be labelled 'case pass' too)",
     "rows": [
       {
         "entry_thickness_m": 5e-05,
@@ -7118,7 +7135,8 @@
         ],
         "is_final_pass": false,
         "label": "case pass",
-        "outside_published_range": []
+        "outside_published_range": [],
+        "row_index": 0
       },
       {
         "entry_thickness_m": 0.00026,
@@ -7210,7 +7228,8 @@
         "label": "S1 0.260->0.135 mm (assumed stock route)",
         "outside_published_range": [
           "mean_flow_stress_indicator"
-        ]
+        ],
+        "row_index": 1
       },
       {
         "entry_thickness_m": 0.000135,
@@ -7302,7 +7321,8 @@
         "label": "S2 0.135->0.085 mm (assumed stock route)",
         "outside_published_range": [
           "mean_flow_stress_indicator"
-        ]
+        ],
+        "row_index": 2
       },
       {
         "entry_thickness_m": 8.5e-05,
@@ -7394,7 +7414,8 @@
         "label": "S3 0.085->0.050 mm (assumed stock route)",
         "outside_published_range": [
           "mean_flow_stress_indicator"
-        ]
+        ],
+        "row_index": 3
       },
       {
         "entry_thickness_m": 5e-05,
@@ -7495,7 +7516,8 @@
         ],
         "is_final_pass": false,
         "label": "F1 0.050->0.030 mm (plant pass 1; 30 um assumed)",
-        "outside_published_range": []
+        "outside_published_range": [],
+        "row_index": 4
       },
       {
         "entry_thickness_m": 3e-05,
@@ -7764,7 +7786,8 @@
             "step": 3
           }
         ],
-        "outside_published_range": []
+        "outside_published_range": [],
+        "row_index": 5
       },
       {
         "entry_thickness_m": 5e-05,
@@ -7865,7 +7888,8 @@
         ],
         "is_final_pass": false,
         "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
-        "outside_published_range": []
+        "outside_published_range": [],
+        "row_index": 6
       },
       {
         "entry_thickness_m": 2.5e-05,
@@ -8133,7 +8157,8 @@
             "step": 3
           }
         ],
-        "outside_published_range": []
+        "outside_published_range": [],
+        "row_index": 7
       }
     ],
     "status": "LITERATURE_SURVEY_UNVALIDATED",
@@ -9895,6 +9920,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 1,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -9913,6 +9939,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 2,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -9931,6 +9958,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 3,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -9949,6 +9977,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 4,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -9967,6 +9996,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 5,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -9985,6 +10015,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 6,
         "sources": [
           "PT-T1",
           "PT-T2"
@@ -10003,6 +10034,7 @@
         "published_high": 80.0,
         "published_low": null,
         "read_status": "excerpt",
+        "row_index": 7,
         "sources": [
           "PT-T1",
           "PT-T2"
