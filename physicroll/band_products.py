@@ -1183,9 +1183,10 @@ BATTERY_SCHEDULE_CAVEAT = _s(
     '(260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next '
     'pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are '
     'doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The '
-    'first-plant row prints "302→152", which the report reads as 30×2→15×2 µm.', 'BF-S17',
-    _pt(30, 'um', 'BF-S17', 'doubling-entry gauge, plant schedule 1'),
-    _pt(24, 'um', 'BF-S17', 'doubling-entry gauge, plant schedule 2'),
+    'trade page\'s first-plant row prints "302→152", which the report reads as '
+    '30×2→15×2 µm.', 'BF-S17',
+    _pt(30, 'um', 'BF-S17', 'doubling-entry gauge, trade-page plant 1 schedule'),
+    _pt(24, 'um', 'BF-S17', 'doubling-entry gauge, trade-page plant 2 schedule'),
     topic='doubling_entry_schedules')
 
 TENSION_LINES = _s(
@@ -1222,11 +1223,11 @@ _BF_SINGLE = (
                 '0.105 mm, no anneal; only the last passes are published'),
 )
 _BF_DOUBLED = (
-    _sched('BF-S17 plant 1, doubled last pass', _um(260, 135, 65, 30, 15), 'BF-S17',
+    _sched('BF-S17 trade-page plant 1 schedule, doubled last pass', _um(260, 135, 65, 30, 15), 'BF-S17',
            doubled_from_index=3,
            note='trade page; the last pass is printed "302→152", read by the report as '
                 '30×2→15×2 µm; one-side-bright'),
-    _sched('BF-S17 plant 2, doubled last pass', _um(280, 120, 55, 24, 12), 'BF-S17',
+    _sched('BF-S17 trade-page plant 2 schedule, doubled last pass', _um(280, 120, 55, 24, 12), 'BF-S17',
            doubled_from_index=3, note='trade page; last pass 24×2→12×2 µm; one-side-bright'),
     _sched('BF-S17 doubled pass 28×2→15×2 µm (schedule not stated)', _um(28, 15), 'BF-S17',
            doubled_from_index=0,
@@ -1467,7 +1468,7 @@ BATTERY_COLLECTOR = Product(
            'calling the product two-side-bright.', 'BF-S13'),
         _s('Temper: H18 is the consensus; some vendor pages list O.', 'BF-S1 BF-S48'),
         _s('BF-S17 doubled passes: the report lists them as 24×2→12×2 µm and 28×2→15×2 µm, yet '
-           'reads the first-plant row "302→152" as 30×2→15×2 µm; which schedule the '
+           'reads the trade page\'s first-plant row "302→152" as 30×2→15×2 µm; which schedule the '
            '28×2→15×2 µm pass belongs to is not stated. Both readings are carried.', 'BF-S17'),
     ),
     not_found=(

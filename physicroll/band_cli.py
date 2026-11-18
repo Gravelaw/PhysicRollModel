@@ -1,6 +1,7 @@
 """Band / chatter-mark root-cause screening from a case file (synthetic or user supplied).
 
     python -m physicroll.band_cli CASE.json --out DIR
+    python -m physicroll.band_cli --product-survey --out DIR   (physicroll.band_survey)
 
 Writes ``DIR/<slug>.result.json`` and ``DIR/<slug>.report.html`` atomically and prints the
 ranked standings. The result is an unvalidated screening tally, not a certified cause.
@@ -23,9 +24,20 @@ def slug(name):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Band / chatter-mark root-cause screening (unvalidated, SI units)')
-    parser.add_argument('case', type=Path, help='band case JSON (physicroll.band_case.v1 or v2)')
+    parser.add_argument('case', type=Path, nargs='?',
+                        help='band case JSON (physicroll.band_case.v1 or v2)')
     parser.add_argument('--out', type=Path, required=True, help='output directory')
+    parser.add_argument('--product-survey', action='store_true',
+                        help='run the product survey (physicroll.band_survey) instead of a case')
     args = parser.parse_args(argv)
+    if args.product_survey:
+        if args.case is not None:
+            parser.error('--product-survey takes no case file')
+        from . import band_survey
+        band_survey.main(['--out', str(args.out)])
+        return
+    if args.case is None:
+        parser.error('a case file is required (or --product-survey)')
     try:
         case = load_case(args.case)
         result = diagnose(case)

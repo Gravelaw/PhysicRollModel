@@ -165,7 +165,7 @@ class ReductionTests(unittest.TestCase):
         self.assertAlmostEqual(fp.entry_gauge_m.high, 32 * UM)
         self.assertEqual(round(fp.reduction.low * 100), 29)
         self.assertEqual(round(fp.reduction.high * 100), 57)
-        dbl = schedule(b, 'BF-S17 plant 1, doubled last pass')
+        dbl = schedule(b, 'BF-S17 trade-page plant 1 schedule, doubled last pass')
         self.assertTrue(dbl.is_doubled(3) and not dbl.is_doubled(2))
         self.assertAlmostEqual(dbl.reductions()[3][0], 0.5)
 

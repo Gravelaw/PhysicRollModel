@@ -52,7 +52,7 @@ Catalogue: 24 products, 793 sourced facts, 119 sources. Status: LITERATURE_SURVE
 
 ### Battery schedules: most important flag
 
-Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
+Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The trade page's first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
 
 "Tension lines": longitudinal stripes at 5–20 mm pitch appear below 15 µm and worsen as gauge falls; drivers are tension, roll roughness, roll parallelism, roll pressure and pass reduction. [BF-S21]
 
@@ -334,7 +334,7 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 | 2 | 57 µm | 23 µm | 1 | 59.6 % (computed) | — |
 | 3 | 23 µm | 15 µm | 1 | 34.8 % (computed) | — |
 
-**BF-S17 plant 1, doubled last pass** [BF-S17]. Trade page; the last pass is printed "302→152", read by the report as 30×2→15×2 µm; one-side-bright.
+**BF-S17 trade-page plant 1 schedule, doubled last pass** [BF-S17]. Trade page; the last pass is printed "302→152", read by the report as 30×2→15×2 µm; one-side-bright.
 
 | Step | Entry | Exit | Passes | Reduction | Speed |
 |---|---|---|---|---|---|
@@ -343,7 +343,7 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 | 3 | 65 µm | 30 µm | 1 | 53.8 % (computed) | — |
 | 4 | 2×30 µm | 2×15 µm | 1 | 50.0 % (computed) | — |
 
-**BF-S17 plant 2, doubled last pass** [BF-S17]. Trade page; last pass 24×2→12×2 µm; one-side-bright.
+**BF-S17 trade-page plant 2 schedule, doubled last pass** [BF-S17]. Trade page; last pass 24×2→12×2 µm; one-side-bright.
 
 | Step | Entry | Exit | Passes | Reduction | Speed |
 |---|---|---|---|---|---|
@@ -421,7 +421,7 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 
 ### Caveats
 
-- Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
+- Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The trade page's first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
 - The GB/T 33143 property table was partly garbled in the report's read; the minima are quoted as "about". [BF-S2]
 
 Key requirement: Thickness ±3–5 % by precision class, wave height ≤2–5 mm at 1.0 m span, wettability ≥30 mN/m, pinhole limits by gauge (GB/T 33143). [BF-S1, BF-S2]
@@ -1708,7 +1708,7 @@ Key requirement: ≥60–62 % IACS, burr-free edge, Rm 60–95 MPa. [HX-S39]
 - Minimum single-rolled gauge: about 9 µm, 12 µm on the Mino mill, UACJ sells 10 µm as bright/matte, yet 8 µm double-bright is reported in production. [BF-S18, BF-S25, BF-S4, BF-S21]
 - Rolling mode in BF-S13: the text says "doubled rolling" on the finishing mill while calling the product two-side-bright. [BF-S13]
 - Temper: H18 is the consensus; some vendor pages list O. [BF-S1, BF-S48]
-- BF-S17 doubled passes: the report lists them as 24×2→12×2 µm and 28×2→15×2 µm, yet reads the first-plant row "302→152" as 30×2→15×2 µm; which schedule the 28×2→15×2 µm pass belongs to is not stated. Both readings are carried. [BF-S17]
+- BF-S17 doubled passes: the report lists them as 24×2→12×2 µm and 28×2→15×2 µm, yet reads the trade page's first-plant row "302→152" as 30×2→15×2 µm; which schedule the 28×2→15×2 µm pass belongs to is not stated. Both readings are carried. [BF-S17]
 
 ### Battery pouch-laminate barrier foil
 

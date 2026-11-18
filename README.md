@@ -271,6 +271,10 @@ python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json -
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 ```
 
+`python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis` screens one
+synthetic final pass per catalogue product (literature inputs, one synthetic mill per gauge
+class, unvalidated) and ranks the products per mechanism; see section 3.10 of the doc.
+
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see
 [band diagnosis](docs/band-diagnosis.md) for what the tool can and cannot say at foil gauge,

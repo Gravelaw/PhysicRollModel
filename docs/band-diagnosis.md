@@ -332,9 +332,11 @@ and `schedule_sweep.rows` (friction 0.03 supplied on every pass, `bite_model: au
   at 12 um: 2.7). A not-credible row stays in every table, marked, and is excluded from the
   gauge-trend text, the report's direction sentence and its charts (section 3.5). When the
   case pass itself is not credible the result carries `case_bite_credibility`, the flag
-  `CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE`, a limitations sentence, and the
-  note "[NOT CREDIBLE BASIS: ...]" on every model-based evidence item; the scores are not
-  changed (section 14). Below 8 um, or above 65 %, the pass has no bite: its schedule-sweep,
+  `CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE`, a limitations sentence, and
+  every model-based evidence item that rests on the bite is gated: it becomes `NEUTRAL` with
+  basis `model not credible` and the note "[NOT CREDIBLE BASIS: ...]", and keeps its verdict
+  and weight without the gate in `verdict_without_credibility_gate` and
+  `weight_without_credibility_gate` (section 6.1). Below 8 um, or above 65 %, the pass has no bite: its schedule-sweep,
   pass-heating and gauge-trend rows are reported as not derivable with the reason, flag
   `EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR` for the floor; for a case pass also chatter, levers,
   gauge control and the derived shape chain. Bite-free parts still run (section 3.4).
@@ -677,6 +679,115 @@ closed-gap onset (`BELOW_EVERY_REPORTED_ONSET`) with no roll-kissing model, and 
 gauge-control sections carry the open-gap note. The CLI run of this demo took about 23 s on
 this container. It tests the screening logic at foil gauge, not the physics.
 
+### 3.10 Product survey
+
+`physicroll/band_survey.py` builds one synthetic **final pass per catalogue product** (24
+products, every one with a published final gauge) from catalogue data only and evaluates it
+with the engine's own models, on one stated synthetic mill per gauge class: the battery-foil
+demo mill (work roll radius 0.135 m, strip 1.2 m) for an exit
+gauge below 0.2 mm and the lengthwise demo mill (radius
+0.2 m, strip 1.5 m) above. Run it with
+
+```
+python -m physicroll.band_survey --out artifacts/band_diagnosis
+python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis
+```
+
+It writes `product-survey.result.json` (schema `physicroll.band_survey.v1`, status `SYNTHETIC_SURVEY_LITERATURE_INPUTS_UNVALIDATED`) and
+`product-survey.report.html` (about 27 s on this container).
+
+**How the survey pass is built** (every row lists, in `catalogue_values_used`, each value taken
+from the catalogue with its source ids and read status, and, in `assumed_values`, each
+assumption; `vendor_level_input` marks a row resting on vendor or trade-page data):
+
+- gauges: the last pass of a published schedule whose last step is one published pass
+  (preferring an exit inside the published final-gauge span, the product's own rolling mode,
+  then the exit nearest the middle of that span); otherwise the geometric middle of the
+  published final-gauge span as exit, with the entry from the middle of the published
+  final-pass reduction span, else the per-pass span, else (foil families) the general
+  packaging-foil per-pass span, else an assumed 30 %;
+- flow stress: the as-rolled strength of the pass, the median of the published
+  tensile-strength numbers of an H1x temper (standard grade where both are published). For O,
+  H2x and other annealed final tempers the final cold pass is rolled hard and annealed
+  afterwards: a published as-rolled H1x strength of the product is used if there is one,
+  otherwise an ASSUMED 180 MPa, labelled
+  (18 of the 24 rows); annealed strength is never used as rolling flow stress;
+- tensions 0.2 / 0.23 of the flow stress, friction 0.03 (the demos'
+  value), speed from the middle of the published final-pass (or pass) speed span, else the demo
+  mill's speed;
+- a doubled (pack-rolled) final pass is not modelled: its bite-dependent cells read "doubled
+  pass not modelled" and its bite-free thresholds are per sheet;
+- credibility: the engine's marks; the force range (0.9-2.3 kN/mm) is reported for
+  battery-foil passes only, so for another product an extended-domain bite is marked
+  `NO_REPORTED_LOAD_RANGE_IN_CATALOGUE` (unvalidated) instead.
+
+Per product it reports the bite model and flags, force per width, the closed-gap flag (exit
+below 100 um), the strip-to-mill modulus ratio, the bite-free thresholds (flatness dead band,
+critical coil ridge height at the outer coil radius, trough onset and roller-wrinkle
+thresholds of the exit span), the response to a 1 um Gaussian roll stripe at the strip
+centre (linear-feedback I-units, in-mill and after-release onset heights), the chatter critical
+speeds with and without bite damping against the survey speed with the span-wave reliability
+flag, the product-check verdicts of the survey pass and the catalogue's named defects.
+
+Survey table (from `artifacts/band_diagnosis/product-survey.result.json`; force in kN/mm,
+dead band in I-units, ridge height in um, trough onset in kPa, roller-wrinkle threshold in
+MPa, stripe: I-units of the 1 um stripe; in-mill / after-release onset height in um;
+chatter: critical speed with / without bite damping at the survey speed, m/s):
+
+| product | survey pass | bite | dead band | ridge | trough | roller wrinkle | 1 um stripe | chatter | marks |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 `battery_collector_foil` | 20 -> 13, foil, 182 MPa | mattress, 2.54 | 0.00349 | 0.0755 | -14.3 | -4.45 | 0.992 I; not reached / 2.02 | stable / 4.28 at 13.6, not reliable | NOT CREDIBLE (x1.1); extended domain; closed gap; vendor-level input |
+| 2 `battery_pouch_laminate_foil` | 64 -> 30, foil, 180 MPa | mattress, 1.41 | 0.0165 | 0.171 | -32.7 | -10.3 | 7.1 I; 8.46 / 0.285 | stable / 5.33 at 7.92, not reliable | extended domain; closed gap; flow stress assumed |
+| 3 `capacitor_anode_foil_high_voltage` | 180 -> 86.6, foil, 180 MPa | Hitchcock, 0.888 | 0.119 | 0.495 | -94.4 | -29.7 | 36.5 I; 1.71 / 0.0555 | 5.27 / 1.06 at 10 | extended domain; closed gap; flow stress assumed |
+| 4 `capacitor_anode_foil_low_voltage` | 169 -> 81.2, foil, 180 MPa | Hitchcock, 0.892 | 0.105 | 0.464 | -88.5 | -27.8 | 34.8 I; 1.8 / 0.0583 | 5.61 / 1.22 at 10 | extended domain; closed gap; flow stress assumed |
+| 5 `capacitor_cathode_foil` | 72.1 -> 34.6, foil, 180 MPa | mattress, 1.25 | 0.0216 | 0.198 | -37.7 | -11.9 | 8.8 I; 6.85 / 0.23 | 24.9 / 5.68 at 10, not reliable | extended domain; closed gap; flow stress assumed |
+| 6 `pharma_blister_lidding` | 55.8 -> 26.8 per sheet, foil, 150 MPa | doubled pass not modelled | 0.0134 | 0.123 | -26.7 | -9.18 | doubled pass not modelled | doubled pass not modelled | closed gap; vendor-level input |
+| 7 `pharma_cold_form_foil` | 108 -> 52, foil, 180 MPa | Hitchcock, 0.967 | 0.046 | 0.297 | -56.7 | -17.8 | 22.9 I; 2.7 / 0.0887 | 9.22 / 4.06 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 8 `pharma_strip_pack_foil` | 65.8 -> 31.6, foil, 180 MPa | mattress, 1.32 | 0.0182 | 0.181 | -34.5 | -10.8 | 7.78 I; 7.79 / 0.26 | stable / 5.51 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 9 `household_foil` | 23 -> 10.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00235 | 0.06 | -11.4 | -3.6 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 10 `household_foil_heavy_duty` | 44.2 -> 21.2 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00867 | 0.121 | -23.1 | -7.26 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed |
+| 11 `converter_foil` | 14 -> 6.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000961 | 0.0371 | -7.09 | -2.23 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 12 `cigarette_liner_foil` | 13.5 -> 6.48 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000956 | 0.037 | -7.07 | -2.22 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 13 `dairy_lidding_foil` | 77.9 -> 37.4, foil, 180 MPa | mattress, 1.19 | 0.0249 | 0.214 | -40.8 | -12.8 | 9.77 I; 6.18 / 0.207 | 19.6 / 5.8 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 14 `container_foil_wrinkle_wall` | 151 -> 72.7, foil, 180 MPa | Hitchcock, 0.899 | 0.0858 | 0.415 | -79.3 | -24.9 | 31.8 I; 1.95 / 0.0637 | 6.29 / 1.58 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 15 `container_foil_smooth_wall` | 279 -> 134, foil, 180 MPa | Hitchcock, 0.902 | 0.267 | 0.766 | -146 | -45.9 | 51.1 I; 1.26 / 0.0397 | 3.17 / 0.469 at 10 | extended domain; flow stress assumed; vendor-level input |
+| 16 `container_foil_retortable` | 191 -> 91.7, foil, 180 MPa | Hitchcock, 0.888 | 0.132 | 0.524 | -100 | -31.4 | 38.2 I; 1.63 / 0.0531 | 4.95 / 0.937 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 17 `brazed_fin_stock` | 128 -> 89.4, foil, 148 MPa | Hitchcock, 0.484 | 0.126 | 0.4 | -88.2 | -30.6 | 37.9 I; 1.36 / 0.0534 | 6.87 / 2.31 at 10 | closed gap; vendor-level input |
+| 18 `brazing_sheet_tube` | 404 -> 283, sheet, 180 MPa | Hitchcock, 1.05 | 0.709 | 1.94 | -231 | -80.8 | 30 I; 2.29 / 0.0676 | 7.8 / 2.24 at 12 | flow stress assumed; vendor-level input |
+| 19 `hvac_fin_stock` | 130 -> 82.46, foil, 175 MPa | Hitchcock, 0.676 | 0.108 | 0.456 | -88.7 | -28.2 | 33.6 I; 1.81 / 0.0604 | 7.34 / 2.45 at 10 | closed gap |
+| 20 `litho_sheet` | 494.5 -> 272, sheet, 135 MPa | Hitchcock, 0.955 | 0.659 | 1.34 | -193 | -77.6 | 39.7 I; 1.32 / 0.0511 | 3.76 / 0.878 at 12 | – |
+| 21 `can_body_stock` | 414 -> 290, sheet, 180 MPa | Hitchcock, 1.05 | 0.742 | 1.99 | -237 | -82.8 | 30.2 I; 2.28 / 0.0672 | 7.76 / 2.23 at 12 | flow stress assumed |
+| 22 `can_end_stock` | 391 -> 274, sheet, 180 MPa | Hitchcock, 1.04 | 0.668 | 1.88 | -224 | -78.2 | 29.8 I; 2.3 / 0.0681 | 7.87 / 2.27 at 12 | flow stress assumed |
+| 23 `closure_sheet` | 303 -> 212, sheet, 148 MPa | Hitchcock, 0.782 | 0.415 | 1.16 | -157 | -60.5 | 29.7 I; 1.85 / 0.0683 | 7.28 / 2.14 at 12 | vendor-level input |
+| 24 `transformer_strip` | 756 -> 529, sheet, 180 MPa | Hitchcock, 1.26 | 2.27 | 3.63 | -433 | -151 | 35.4 I; 2.17 / 0.114 | 6.73 / 1.91 at 12 | flow stress assumed; vendor-level input |
+
+**Rankings** (most sensitive first; a ranking uses only rows carrying the quantity, never mixes
+a not-credible bite with credible ones, and lists every excluded row with its reason):
+
+- **Coil ridges (critical ridge height at the outer coil radius)**: most sensitive cigarette_liner_foil (0.037 um), converter_foil (0.0371 um), household_foil (0.06 um); rank correlation with thinner gauge +0.99; none excluded.
+- **Troughs and creases in the exit span (trough onset lateral stress, magnitude)**: most sensitive cigarette_liner_foil (7.07 kPa), converter_foil (7.09 kPa), household_foil (11.4 kPa); rank correlation with thinner gauge +0.99; none excluded.
+- **Roller wrinkles on the deflector roll (threshold magnitude)**: most sensitive cigarette_liner_foil (2.22 MPa), converter_foil (2.23 MPa), household_foil (3.6 MPa); rank correlation with thinner gauge +1.00; none excluded.
+- **Cooling stripes visible in the mill (in-mill onset height of a roll stripe)**: most sensitive container_foil_smooth_wall (1.26 um), litho_sheet (1.32 um), brazed_fin_stock (1.36 um); rank correlation with thinner gauge -0.47; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
+- **Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited)**: most sensitive container_foil_smooth_wall (0.0397 um), litho_sheet (0.0511 um), container_foil_retortable (0.0531 um); rank correlation with thinner gauge -0.43; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
+- **Chatter margin (survey speed over the critical speed without bite damping)**: most sensitive container_foil_smooth_wall (21.3), litho_sheet (13.7), container_foil_retortable (10.7); rank correlation with thinner gauge -0.11; 10 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); chatter onset above the span-wave limit (not reliable); doubled pass not modelled).
+
+The generated summary (`summary`): "24 catalogue products, one synthetic final pass each: 19 with a roll bite, 5 doubled (bite not modelled), 1 with a bite marked not credible, 18 with an assumed flow stress. Coil ridges (critical ridge height at the outer coil radius): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Troughs and creases in the exit span (trough onset lateral stress, magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Roller wrinkles on the deflector roll (threshold magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Cooling stripes visible in the mill (in-mill onset height of a roll stripe): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), brazed_fin_stock (89.4 um); no clear gauge order (rank correlation -0.47); 6 excluded. Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.43); 6 excluded. Chatter margin (survey speed over the critical speed without bite damping): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.11); 10 excluded. These are model sensitivities on one synthetic mill per gauge class with literature inputs, not plant defect rates."
+
+**How to read it.** The bite-free thresholds fall with gauge, so the thinnest products
+(cigarette liner, converter and household foil, all doubled) are the most sensitive to coil
+ridges, troughs and roller wrinkles. The cooling-stripe and chatter rankings show no clear gauge
+order across the two mills; within the foil mill the in-mill ranking runs against gauge (rank
+correlation of "more sensitive" with "thinner" -0.99 over 12 foil products),
+the finding of section 3.5: a given roll stripe is hidden more, not less, in thinner foil. The
+battery collector foil's survey pass (published 20 -> 13 um) has a bite force of
+2.54 kN/mm, x1.1 the top of the range reported for battery-foil passes, so its
+bite is NOT CREDIBLE and it is excluded from every bite-dependent ranking.
+
+**What it is not.** One synthetic mill per gauge class, the same friction and tension fractions
+for every product, literature inputs (many from excerpts, patents, standards previews and
+vendor or trade pages), many assumed flow stresses, open-gap models in the closed-gap regime,
+nothing validated. It compares model sensitivities, not plant defect rates.
+
 ## 4. How to run
 
 ```
@@ -685,6 +796,7 @@ python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --o
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli my_case.json --out my_output_dir
+python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis   # section 3.10
 ```
 
 Each run validates the case, writes `<case-name-slug>.result.json` (deterministic: sorted
@@ -835,7 +947,13 @@ roll-surface band, were replaced by nine in phase 2; phase 3 added `foil_tension
 `model_prediction`, `evidence` items `{criterion, observed, expected, verdict, weight,
 basis}`, tallies, `score`, `standing`, `confirming_test` and `levers`. `basis` is
 `observation` (a plant observation), `model` (a model result), `input` (mill data) or
-`model not assessable` (a model part that could not be computed, always `NEUTRAL`).
+`model not assessable` (a model part that could not be computed, always `NEUTRAL`) or
+`model not credible` (a model item resting on a case-pass bite whose extended-domain force
+lies outside the range reported for battery-foil passes, section 3.3; always `NEUTRAL`). The
+credibility gate leaves alone the three model items that do not use the bite: the
+tension-trough status, the crown change against the Shohet-Townsend dead band and the
+yield-point bending window. Observation and input items are never gated, and the leading
+rule (a supporting plant observation) is unchanged.
 
 Verdicts: `SUPPORTS`, `CONTRADICTS`, `NEUTRAL`, `NOT_OBSERVED`; weights strong / moderate /
 weak. **Score = sum of supports (3/2/1) - sum of contradictions (6/2/1).** Standing:
@@ -1935,7 +2053,8 @@ real mill.
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`) |
 | `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`) |
 | foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions and the film-ratio gate (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Case-pass identity, zone-duration fallback, supplied-bite tables, sensitivity-mix flag** (`CasePassIdentityTests`, `ZoneDurationFallbackTests`, `SuppliedBiteGaugeTrendTests`, `SuppliedBiteScheduleTablesTests`, `SensitivityMixFlagTests`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (`FoilDemoTests`, coarse numerics, the plant's passes and the alternative route, no AGC or drive): the route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT1 50 -> 25 um and ALT2 25 -> 12 um at 52 %, assumed gauges labelled, every other pass at or below 50 %, speeds inside the published spans, `material.product`), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, no floor flag, mattress bites on F2, ALT1 and ALT2 with their extended-domain flags, `extended_bite_domain` listing 18 and 12 um with the credibility marks (ALT2 ratio above 2, "NOT CREDIBLE" in the text), no case-pass mark, the product check (alloy `1235`, final passes F2 and ALT2, nothing outside the published range on the case and final passes, nearest published passes present), the extended-domain limitation, single-sheet statement, foil box before the leading hypotheses, "Extended roll-bite domain" and "Product check" in the report (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`): seven rows, ALT2 marked not credible with ratio above 2, the credible rows ordered by exit gauge S1, S2, S3, F1, ALT1, F2, along which the in-mill onset and rigid bound rise and linear-feedback I-units fall, the exit-span bite-free thresholds fall on every row, the text names ALT2 after "Not credible (excluded from the trend):" and spans 0.135 -> 0.018 mm, and the report's direction sentence ends at F2, says "thinner is less sensitive for this mechanism in the model", names ALT2 as not credible and marks its table row. **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. The direction test also pins the **bite-free values**: dead band, ridge height, trough onset and roller-wrinkle thresholds of both spans on every row, and the bite-free sentence ("falls on every pass" four times; the two entry-span quantities are not monotonic across the two routes). The **product question** is worded from the case ("The thinnest pass in this case exits at 18 um" or "... 30 um, which fits ..."; no "16-18"; `FinalPassDoubledTests`, `test_foil_regime_block_without_bite`); a sheet schedule with every pass assessable gets no span-threshold keys and no bite-free sentence (`test_case_pass_row_keeps_the_supplied_bite`). **Rules** (`test_tension_lines_rules`) also pin the stage-B tension-line weights: regular 5-20 mm strong, 25 mm weak, 80 mm a weak contradiction, irregular weak; exit gauge 12 um moderate, 25 um weak, 45 and 80 um neutral, 210 um a contradiction. **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite and the friction at which the mattress model rejects |
-| extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, "NOT CREDIBLE BASIS" on every model-based evidence item, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
+| product survey (`band_survey.py`) / `tests/test_band_survey.py` | the survey computed once: every catalogue product appears, with its catalogue values (sources, read status) and assumptions, the as-rolled flow stress assumed for O temper (`test_every_catalogue_product_appears`); on the foil mill at equal flow stress a thinner product has a lower critical ridge height, trough onset and roller-wrinkle threshold, and the three bite-free rankings correlate with thinner gauge above 0.9 (`test_thinner_product_lower_ridge_and_trough_thresholds`); doubled products have no bite and keep their per-sheet thresholds (`test_doubled_products_have_no_bite`); credibility marks equal the engine's (`_bite_credibility`), the load range applied to battery collector foil only, no bite-dependent ranking contains a not-credible row, ranked plus excluded rows cover every product (`test_credibility_marks_consistent_with_the_engine`); one row recomputed is identical, and the committed result and report equal a fresh run (`test_determinism_and_committed_artifacts`); the report renders, escapes text and has no nan / inf (`test_report_renders_escapes_and_is_finite`) |
+| extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
 | `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI |
 
 `tests/test_band_diagnosis.py` also checks that twenty hypotheses are evaluated for every
@@ -2050,11 +2169,13 @@ At battery-foil gauge, in addition (each checked against the code and
 - **The credibility mark rests on one reported range.** It compares a bite below 20 um with the
   0.9-2.3 kN/mm reported for battery-foil passes [V S3, S4]; that range comes from trade
   sources, applies to battery-foil passes only, and a force inside it does not make the bite
-  right. A not-credible case pass flags itself and notes "[NOT CREDIBLE BASIS: ...]" on every
-  model-based evidence item, but **the scores are not changed**: a reader must discount the
-  model-based items by hand. (A gate that turns those items `NEUTRAL` with basis
-  `model not credible`, as is done for `model not assessable`, is the obvious next step; it is
-  not implemented.)
+  right. A not-credible case pass flags itself, and its bite-dependent model evidence is
+  scored `NEUTRAL` (basis `model not credible`), so the ranking then rests on the
+  observations, the inputs and the bite-free model items; a credible extended-domain bite
+  (inside the range) is not gated, although it is still unvalidated.
+- **The product survey is one synthetic mill per gauge class** (section 3.10): the same
+  friction, tension fractions and mill for every product, many assumed flow stresses (18 of 24
+  rows), doubled passes without a bite; it ranks model sensitivities, not plant defect rates.
 - **Product ranges are a literature survey.** The product catalogue and the product check
   (`docs/thin-gauge-products.md`) collect published values, most read as excerpts, patents
   or vendor and trade pages, not full texts; nothing in it was measured on a plant, the

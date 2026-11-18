@@ -1878,6 +1878,8 @@ def _hypotheses(ctx):
             evidence, pred = bw.LENGTHWISE_BUILDERS[hid](facts)
         else:
             evidence, pred = _BUILDERS[hid](ctx)
+        if getattr(ctx, 'credibility_gate_note', None):
+            _gate_not_credible(evidence, ctx.credibility_gate_note)
         tallies, score, standing = score_evidence(evidence)
         h = {'id': hid, 'family': family, 'title': title, 'mechanism': mech,
              'model_prediction': pred,
@@ -2393,6 +2395,33 @@ CREDIBILITY_BASIS = ('applied only to extended-domain mattress bites (exit gauge
                      '[V S3, S4; conversion D]')
 
 
+# Model-based evidence items that do not use the case-pass roll bite (tension-trough screen,
+# Shohet-Townsend dead band, yield-point bending window): left alone by the credibility gate.
+BITE_FREE_MODEL_CRITERIA = ('model trough status (either span)',
+                            'crown change vs Shohet-Townsend dead band',
+                            'deflector / coil in yield-point bending window')
+NOT_CREDIBLE_BASIS = 'model not credible'
+
+
+def _credibility_gate_note(fpw):
+    return (f' [NOT CREDIBLE BASIS: the case-pass bite force {fpw * 1e-6:.3g} kN/mm lies '
+            'outside the 0.9-2.3 kN/mm reported for battery-foil passes; model results '
+            'resting on this bite are not credible]')
+
+
+def _gate_not_credible(evidence, note):
+    """SPEC12 C follow-up 1: with a not-credible case-pass bite, every model-based item that
+    rests on the bite becomes NEUTRAL with basis 'model not credible' (as 'model not
+    assessable' does); its verdict without the gate is kept for the reader."""
+    for e in evidence:
+        if e.get('basis') != 'model' or e['criterion'] in BITE_FREE_MODEL_CRITERIA:
+            continue
+        e['observed'] += note
+        e['verdict_without_credibility_gate'] = e['verdict']
+        e['weight_without_credibility_gate'] = e['weight']
+        e['verdict'], e['weight'], e['basis'] = 'NEUTRAL', None, NOT_CREDIBLE_BASIS
+
+
 def _bite_credibility(bite_flags, force_per_width):
     """(mark, ratio) of an extended-domain bite below 20 um exit gauge, else (None, None).
 
@@ -2416,8 +2445,8 @@ def _credibility_note(label, fpw, ratio):
 def _apply_credibility(result, eff, bite, flags):
     """SPEC12 B, coordinator item 2: mark extended-domain bites whose force lies outside the
     reported battery-foil range, keep their rows and numbers, exclude them from the generated
-    gauge-trend statement, and flag and annotate a case pass resting on such a bite. Scores
-    are not changed."""
+    gauge-trend statement, and flag a case pass resting on such a bite (its bite-dependent
+    model evidence is gated to NEUTRAL in ``_hypotheses``, before scoring)."""
     for row in (result.get('schedule_sweep') or {}).get('rows') or []:
         mark, ratio = _bite_credibility(row.get('bite_flags'),
                                         row.get('separating_force_per_width_n_m'))
@@ -2469,18 +2498,12 @@ def _apply_credibility(result, eff, bite, flags):
                                            'basis': CREDIBILITY_BASIS}
     if mark == CREDIBILITY_OUTSIDE:
         flags.append(CASE_NOT_CREDIBLE_FLAG)
-        note = (f' [NOT CREDIBLE BASIS: the case-pass bite force {fpw * 1e-6:.3g} kN/mm lies '
-                'outside the 0.9-2.3 kN/mm reported for battery-foil passes; model results '
-                'resting on this bite are not credible]')
-        for h in result['hypotheses']:
-            for e in h['evidence']:
-                if e['basis'] == 'model':
-                    e['observed'] += note
         result['limitations'].append(
             'The case-pass roll bite is an extended-domain mattress bite whose force lies '
             'outside the range reported for battery-foil passes: every model result resting on '
             'it (chatter, levers, shape chain, onsets, model evidence) is not credible; the '
-            'scores are not changed by this, read the notes on the model evidence.')
+            'model evidence that rests on the bite is scored NEUTRAL (basis "model not '
+            'credible"), its verdict without the gate is kept in the item.')
     if result.get('case_bite_credibility') is None:
         del result['case_bite_credibility']
 
@@ -2744,6 +2767,10 @@ def diagnose(case):
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
 
+    if bite is not None:
+        fpw_case = bite.separating_force_n / eff['pass']['width_m']
+        if _bite_credibility(bite.flags, fpw_case)[0] == CREDIBILITY_OUTSIDE:
+            ctx.credibility_gate_note = _credibility_gate_note(fpw_case)
     hyps, leading = _hypotheses(ctx)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading

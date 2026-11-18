@@ -5761,7 +5761,7 @@
             0.5,
             0.5
           ],
-          "schedule": "BF-S17 plant 2, doubled last pass",
+          "schedule": "BF-S17 trade-page plant 2 schedule, doubled last pass",
           "source_read_status": "vendor_or_trade_page",
           "sources": [
             "BF-S17"
@@ -6825,7 +6825,7 @@
               0.5,
               0.5
             ],
-            "schedule": "BF-S17 plant 2, doubled last pass",
+            "schedule": "BF-S17 trade-page plant 2 schedule, doubled last pass",
             "source_read_status": "vendor_or_trade_page",
             "sources": [
               "BF-S17"

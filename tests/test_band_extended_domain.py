@@ -6,7 +6,9 @@ import copy
 import json
 import unittest
 
-from physicroll.band_diagnosis import BITE_FLOOR_FLAG, CLOSED_GAP_FLAG, diagnose, validate_case
+from physicroll.band_diagnosis import (BITE_FLOOR_FLAG, BITE_FREE_MODEL_CRITERIA, CLOSED_GAP_FLAG,
+                                       WEIGHT_POINTS_CONTRADICT, WEIGHT_POINTS_SUPPORT,
+                                       diagnose, validate_case)
 from physicroll.band_report import render_band_report
 from tests.test_band_foil import TRIBOLOGY, foil_case
 
@@ -189,9 +191,13 @@ class CaseBiteCredibilityTests(unittest.TestCase):
         self.assertGreater(cb['ratio_to_reported_range'], 2)
         self.assertIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE', r['flags'])
         self.assertTrue(any('not credible' in x for x in r['limitations']))
+        gated = [e for h in r['hypotheses'] for e in h['evidence']
+                 if e['basis'] == 'model not credible']
+        self.assertTrue(gated)
+        self.assertTrue(all('NOT CREDIBLE BASIS' in e['observed'] and e['verdict'] == 'NEUTRAL'
+                            for e in gated))
         model = [e for h in r['hypotheses'] for e in h['evidence'] if e['basis'] == 'model']
-        self.assertTrue(model)
-        self.assertTrue(all('NOT CREDIBLE BASIS' in e['observed'] for e in model))
+        self.assertTrue(all(e['criterion'] in BITE_FREE_MODEL_CRITERIA for e in model))
         # the over-long time trace of this stiff bite fails soft (it crashed diagnose before)
         self.assertEqual(r['time_simulation']['status'], 'FAILED')
         self.assertIn('Simulated exit thickness trace', render_band_report(r))
@@ -206,6 +212,63 @@ class CaseBiteCredibilityTests(unittest.TestCase):
                          'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED')
         self.assertNotIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE',
                          r['flags'])
+
+
+def _gate_case(h0, h1):
+    """Case pass on the foil demo mill with the demo's final-pass material (185 MPa, H18,
+    42 MPa exit tension, 10 m/s), coarse width model with a blocked nozzle and a ridge."""
+    c = foil_case(friction=0.03, h0=h0, h1=h1, schedule=False, width=True,
+                  orientation='longitudinal', band_positions_across_width_m=[0.623],
+                  lengthwise_continuity='continuous', visible_only_after_tension_release=True,
+                  appearance='loose_or_buckle')
+    c['material'].update(yield_stress_pa=185e6)
+    c['pass'].update(mean_flow_stress_pa=185e6, entry_tension_pa=38e6, exit_tension_pa=42e6,
+                     exit_speed_m_s=10.0)
+    c['model_options']['bite_model'] = 'auto'
+    return diagnose(c)
+
+
+class CredibilityGateTests(unittest.TestCase):
+    """SPEC12 C follow-up 1: a not-credible case-pass bite gates its model evidence to
+    NEUTRAL ('model not credible'); a credible extended-domain bite does not."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.bad = _gate_case(25e-6, 12e-6)
+        cls.good = _gate_case(30e-6, 18e-6)
+
+    @staticmethod
+    def _bite_model_items(r):
+        return [e for h in r['hypotheses'] for e in h['evidence']
+                if e['basis'] == 'model' and e['criterion'] not in BITE_FREE_MODEL_CRITERIA
+                and e['verdict'] in ('SUPPORTS', 'CONTRADICTS')]
+
+    def test_not_credible_bite_gives_no_model_support_or_contradiction(self):
+        r = self.bad
+        self.assertEqual(r['case_bite_credibility']['mark'], 'FORCE_OUTSIDE_REPORTED_RANGE')
+        self.assertIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE', r['flags'])
+        self.assertEqual(self._bite_model_items(r), [])
+        gated = [e for h in r['hypotheses'] for e in h['evidence']
+                 if e['basis'] == 'model not credible']
+        self.assertTrue(any(e['verdict_without_credibility_gate'] in ('SUPPORTS', 'CONTRADICTS')
+                            for e in gated))
+        for h in r['hypotheses']:     # scores are the tally of the gated evidence
+            pts = sum(WEIGHT_POINTS_SUPPORT[e['weight']] if e['verdict'] == 'SUPPORTS'
+                      else -WEIGHT_POINTS_CONTRADICT[e['weight']] for e in h['evidence']
+                      if e['verdict'] in ('SUPPORTS', 'CONTRADICTS'))
+            self.assertEqual(h['score'], pts, h['id'])
+        for hid in r['leading_hypotheses']:   # leading rule unchanged
+            h = next(x for x in r['hypotheses'] if x['id'] == hid)
+            self.assertGreater(h['tallies']['observation_supports'], 0)
+
+    def test_credible_bite_keeps_model_evidence(self):
+        r = self.good
+        self.assertEqual(r['case_bite_credibility']['mark'],
+                         'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED')
+        self.assertTrue(self._bite_model_items(r))
+        self.assertFalse(any(e['basis'] == 'model not credible'
+                             for h in r['hypotheses'] for e in h['evidence']))
+
 
 if __name__ == '__main__':
     unittest.main()
