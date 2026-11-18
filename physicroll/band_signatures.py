@@ -103,6 +103,16 @@ LAW_COIL = 'drifts_with_coil_diameter'
 FIXED_FREQUENCY_MIN_SLOPE = 0.7
 SPEED_INDEPENDENT_MAX_ABS_SLOPE = 0.3
 MIN_LN_SPEED_SPREAD = math.log(1.05)  # analyst choice: speeds within 5 % give no pitch law
+# numerical criterion: exit speeds whose ln-spread is below this are not distinct (no fit at all)
+DISTINCT_LN_SPEED_TOLERANCE = 1e-9
+
+
+def has_distinct_exit_speeds(speeds_m_s):
+    """True when positive finite exit speeds span more than ``DISTINCT_LN_SPEED_TOLERANCE`` in
+    ln(speed): the criterion ``pitch_speed_exponent`` uses to accept a fit. Use it before calling
+    that function so near-equal speeds take the 'needs two distinct speeds' path."""
+    xs = [math.log(u) for u in speeds_m_s]
+    return len(xs) >= 2 and max(xs) - min(xs) >= DISTINCT_LN_SPEED_TOLERANCE
 MARGINAL_FORWARD_SLIP = 0.005
 HERRINGBONE_ELEVATED_REDUCTION = 0.40
 HERRINGBONE_HIGH_REDUCTION = 0.45
@@ -228,7 +238,7 @@ def pitch_speed_exponent(observations):
         raise ValueError('at least two observations are required')
     xs = [math.log(u) for u, _ in pairs]
     ys = [math.log(p) for _, p in pairs]
-    if max(xs) - min(xs) < 1e-9:
+    if not has_distinct_exit_speeds([u for u, _ in pairs]):
         raise ValueError('observations need at least two distinct exit speeds')
     distinct = len({round(x, 12) for x in xs})
     mx, my = sum(xs) / len(xs), sum(ys) / len(ys)

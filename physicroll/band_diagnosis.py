@@ -929,11 +929,17 @@ def _section_signatures(case, mill_kw_modes, slip, u_op, h_ratio, obs, flags):
     sig = {'forward_slip_fraction_used': slip, 'catalogue': catalogue,
            'pitch_speed_exponent': None, 'law': None, 'observations': []}
     pitches = obs['pitch_observations']
-    speeds = {p['exit_speed_m_s'] for p in pitches}
-    if len(pitches) >= 2 and len(speeds) >= 2:
-        pse = bs.pitch_speed_exponent([(p['exit_speed_m_s'], p['pitch_m']) for p in pitches])
-        sig['pitch_speed_exponent'] = pse
-        sig['law'] = pse['classification']
+    # distinctness by the helper's own criterion (review finding: an exact-float set let speeds
+    # 1e-10 apart through and pitch_speed_exponent then raised)
+    if len(pitches) >= 2 and bs.has_distinct_exit_speeds([p['exit_speed_m_s'] for p in pitches]):
+        try:
+            pse = bs.pitch_speed_exponent([(p['exit_speed_m_s'], p['pitch_m']) for p in pitches])
+        except ValueError as exc:
+            sig['law_note'] = f'Pitch-speed law not assessable: {exc}.'
+            flags.append('PITCH_SPEED_LAW_FAILED')
+        else:
+            sig['pitch_speed_exponent'] = pse
+            sig['law'] = pse['classification']
     elif pitches:
         sig['law_note'] = 'Pitch-speed law needs pitch at two or more distinct exit speeds.'
     for p in pitches:
@@ -1059,6 +1065,43 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
         scr['coverage_profile'] = None
         scr['band_risk_stripes'] = None
     return scr
+
+
+SIGNATURES_FAILED_FLAG = 'SIGNATURES_SECTION_FAILED'
+SCREENS_FAILED_FLAG = 'SCREENS_SECTION_FAILED'
+
+
+def _failed_signatures(exc, slip, flags):
+    """Fail-soft signatures section: every key the hypotheses and the report read is present."""
+    flags.append(SIGNATURES_FAILED_FLAG)
+    return {'status': 'FAILED', 'error': f'signatures: {exc}', 'forward_slip_fraction_used': slip,
+            'catalogue': [], 'pitch_speed_exponent': None, 'law': None, 'observations': [],
+            'law_note': f'Signatures not assessable: {exc}.', 'resonance_speeds': {}}
+
+
+def _failed_screens(case, exc, slip, contact_length, flags, no_bite=False):
+    """Fail-soft screens section: every key the hypotheses, the lengthwise facts and the report
+    read is present; status-carrying screens say NOT_ASSESSABLE with the reason."""
+    flags.append(SCREENS_FAILED_FLAG)
+    p = case['pass']
+    reason = f'screens: {exc}'
+    na = {'status': 'NOT_ASSESSABLE', 'reason': reason}
+    basis = 'derived_bite'
+    if contact_length is None:
+        contact_length = math.sqrt(p['work_roll_radius_m']
+                                   * (p['entry_thickness_m'] - p['exit_thickness_m']))
+        basis = 'undeformed_roll_estimate_sqrt_R_draft'
+    return {'status': 'FAILED', 'error': reason,
+            'luders_susceptibility': dict(na), 'bending_windows': [],
+            'pass_reduction_vs_luders': dict(na),
+            'herringbone': {**na, 'risk_level': 'NOT_ASSESSABLE',
+                            'contact_length_m': contact_length,
+                            'contact_length_basis': basis},
+            'forward_slip': None if no_bite else {**na, 'forward_slip_fraction': slip,
+                                                  'flags': [], 'limitations': [],
+                                                  'sources': []},
+            'film': None, 'film_regime': None, 'spray_coverage': None, 'thermal': None,
+            'band_position_match': None, 'coverage_profile': None, 'band_risk_stripes': None}
 
 
 def _coverage_profile(cov, length):
@@ -2853,7 +2896,10 @@ def diagnose(case):
         ctx.ucrit = ctx.ucrit0 = ctx.onset_hz = ctx.dominant_hz = ctx.speed_ratio = None
         ctx.lever_directions = None
 
-    sig = _section_signatures(eff, modes, ctx.kin_slip, u_op, h0 / h1, obs, flags)
+    try:
+        sig = _section_signatures(eff, modes, ctx.kin_slip, u_op, h0 / h1, obs, flags)
+    except ValueError as exc:
+        sig = _failed_signatures(exc, ctx.kin_slip, flags)
     result['signatures'] = sig
     ctx.signatures = sig
     ctx.catalogue = sig['catalogue']
@@ -2867,7 +2913,10 @@ def diagnose(case):
 
     contact = bite.contact_length_m if bite is not None else None
     ratio = bite.contact_radius_ratio if bite is not None else 1.0
-    result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
+    try:
+        result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
+    except ValueError as exc:
+        result['screens'] = _failed_screens(eff, exc, ctx.slip, contact, flags, bite is None)
     ctx.screens = result['screens']
 
     result['schedule_sweep'] = (_schedule_rows(eff, cache, stand, spans, beta, bite)

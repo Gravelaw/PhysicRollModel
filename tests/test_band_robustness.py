@@ -59,6 +59,23 @@ SWEEP = {
     'same speed, different pitches': dict(pitch_observations=[_p(10, 0.05), _p(10, 0.07)]),
     'pitch larger than a coil circumference': dict(pitch_observations=[_p(10, 9.0)]),
 }
+# run on the v1 case only: the signatures section is the same code for v1 and v2 cases
+SWEEP_PITCH = {
+    # review finding: near-equal speeds passed an exact-float distinctness test and then made
+    # pitch_speed_exponent raise, aborting the diagnosis
+    'speeds 1e-10 relative apart (reviewer)': dict(
+        pitch_observations=[_p(10, 0.03), _p(10.000000001, 0.031)]),
+    'speeds 1e-9 relative apart': dict(pitch_observations=[_p(10, 0.03), _p(10 * (1 + 1e-9),
+                                                                            0.031)]),
+    'speeds 1e-6 relative apart': dict(pitch_observations=[_p(10, 0.03), _p(10 * (1 + 1e-6),
+                                                                            0.031)]),
+    'three pitches, two at one speed': dict(
+        pitch_observations=[_p(10, 0.03), _p(10, 0.031), _p(14, 0.042)]),
+    'speeds in descending order': dict(
+        pitch_observations=[_p(16, 0.048), _p(12, 0.036), _p(8, 0.024)]),
+    'tiny and huge pitch at distinct speeds': dict(
+        pitch_observations=[_p(5, 1e-4), _p(20, 9.0)]),
+}
 SWEEP_V2 = {
     'tiny band spacing': dict(band_positions_across_width_m=[0.5, 0.6], band_spacing_m=1e-6),
     'band spacing at the 10 m limit': dict(band_positions_across_width_m=[0.5, 0.6],
@@ -160,7 +177,7 @@ class DegenerateInputSweepTests(unittest.TestCase):
     """Every accepted degenerate observation input: diagnose returns, the report renders."""
 
     def test_v1_sweep(self):
-        for label, obs in SWEEP.items():
+        for label, obs in {**SWEEP, **SWEEP_PITCH}.items():
             with self.subTest(label):
                 _ok(self, v1case(**obs), label)
         _ok(self, v1case(), 'all null')
@@ -187,6 +204,41 @@ class DegenerateInputSweepTests(unittest.TestCase):
             c = v2case(width=True, band_positions_across_width_m=[0.6])
             c['width_model']['blocked_nozzle_indices'] = idx
             _ok(self, c, f'blocked {idx}')
+
+    def test_near_equal_speeds_take_the_two_speeds_path(self):
+        from physicroll import band_signatures as bs
+        r, html = _ok(self, v1case(pitch_observations=[_p(10, 0.03), _p(10.000000001, 0.031)]),
+                      'reviewer')
+        self.assertIsNone(r['signatures']['pitch_speed_exponent'])
+        self.assertIn('two or more distinct exit speeds', r['signatures']['law_note'])
+        self.assertFalse(bs.has_distinct_exit_speeds([10, 10.000000001]))
+        self.assertTrue(bs.has_distinct_exit_speeds([10, 10.5]))
+        with self.assertRaisesRegex(ValueError, 'distinct exit speeds'):
+            bs.pitch_speed_exponent([(10, 0.03), (10.000000001, 0.031)])
+        # 1e-6 apart is distinct numerically but below the 5 % guard: reported, not classified
+        r, _ = _ok(self, v1case(pitch_observations=[_p(10, 0.03), _p(10.00001, 0.031)]), '1e-6')
+        pse = r['signatures']['pitch_speed_exponent']
+        self.assertEqual(pse['classification'], 'INDETERMINATE')
+        self.assertIn('SPEEDS_TOO_CLOSE_FOR_PITCH_SPEED_LAW', pse['flags'])
+
+    def test_signatures_and_screens_fail_soft(self):
+        def boom(*a, **k):
+            raise ValueError('planted <b>& error')
+        for target, flag, key in (('pitch_speed_exponent', 'PITCH_SPEED_LAW_FAILED', None),
+                                  ('source_catalogue', bd.SIGNATURES_FAILED_FLAG, 'signatures'),
+                                  ('herringbone_screen', bd.SCREENS_FAILED_FLAG, 'screens'),
+                                  ('luders_susceptibility', bd.SCREENS_FAILED_FLAG, 'screens')):
+            cases = [v1case(pitch_observations=[_p(10, 0.03), _p(14, 0.042)])]
+            if key == 'screens':  # the lengthwise facts read the screens too
+                cases.append(v2case(pitch_observations=[_p(10, 0.03), _p(14, 0.042)]))
+            for case in cases:
+                with self.subTest(target), mock.patch.object(bd.bs, target, boom):
+                    r, html = _ok(self, case, target)
+                    self.assertIn(flag, r['flags'])
+                    if key:
+                        self.assertEqual(r[key]['status'], 'FAILED')
+                    self.assertIn('planted &lt;b&gt;&amp; error', html)
+                    self.assertNotIn('planted <b>&', html)
 
     def test_rejected_at_validation(self):
         # rejected on purpose: a zero duration is no observation (use null), a band spacing

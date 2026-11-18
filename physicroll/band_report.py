@@ -2606,6 +2606,8 @@ def _levers_blocks(r):
                      f'{_n(scr["film"]["film_thickness_m"] * 1e6)} um, Lambda '
                      f'{_n(scr["film_regime"]["film_ratio"], 3)} '
                      f'({_e(scr["film_regime"]["regime"])})'])
+    if scr.get('status') == 'FAILED':
+        rows.insert(0, ['screens section', 'FAILED: ' + _e(scr.get('error', ''))])
     s.append('<h3>Other screens</h3>' + _table(('screen', 'result'), rows))
     return s
 
