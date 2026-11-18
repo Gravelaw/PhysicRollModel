@@ -40,7 +40,8 @@
     "observation.changes_after_roll_wiper_cleaning: true if the bands change or go after the roll wipers are cleaned (wiper debris), false if they stay.",
     "observation.tracks_speed_changes: true if the bands appear, move or fade when the mill speed changes, false if they ignore speed changes.",
     "observation.appeared_after_narrower_coil: true if the bands started when a wider coil was rolled after a narrower one (without a backup-roll change).",
-    "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied."
+    "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied.",
+    "material.final_pass_doubled (optional, v2): whether the thinnest pass of the case (schedule rows and the case pass) is rolled doubled, two sheets in one bite. null = not stated (the foil-regime block then asks the plant); false = single-sheet stated (the block records it and notes that both faces are roll-side, so observation.faces is worth recording); true = doubled stated (flag DOUBLED_FINAL_PASS_NOT_MODELLED: the tool models one sheet in the bite). It has no effect when the case is not in the foil regime (exit gauge of 100 um or more, no foil_regime block)."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -60,7 +61,8 @@
     "youngs_modulus_pa": 70000000000.0,
     "luders_strain": null,
     "magnesium_wt_pct": 1.1,
-    "grain_size_m": null
+    "grain_size_m": null,
+    "final_pass_doubled": null
   },
   "stand": {
     "work_roll_mass_kg": 3000.0,

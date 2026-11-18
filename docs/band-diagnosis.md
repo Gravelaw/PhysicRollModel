@@ -60,7 +60,8 @@ sources place somewhere between 200 and 50 um exit gauge; solve the roll bite of
 exit gauge below 20 um (so a 16-18 um final pass has no bite-dependent result: no pass
 heating or gauge-trend row, and as a case pass no chatter, levers, gauge control or derived
 flatness) or a reduction above 50 %; model a doubled
-(two-sheet) pass; or model tension lines physically. Between 20 and about 60 um the roll bite
+(two-sheet) pass (this plant rolls its final pass single-sheet, section 3.1, so that gap does
+not apply to it); or model tension lines physically. Between 20 and about 60 um the roll bite
 comes from an experimental model whose numbers are order of magnitude only. And one model
 result runs against the plant observation "worse at thinner gauge": in the foil demo the
 cooling-stripe mechanism becomes **harder** to see in the mill as the gauge thins (section 3.5).
@@ -108,16 +109,37 @@ Two products fit "battery foil at 16-60 um", and they behave differently:
 
 A final gauge of 16-18 um (plant statement) points to current-collector foil in H18 with
 25-60 um as intermediate passes; the result's `foil_regime.product_question` says the same.
-Two questions remain open for the plant:
+One question remains open for the plant:
 
 1. **Alloy and temper.** O against H18 changes buckling and winding behaviour. In the tool
    the temper acts through the numbers you enter: `material.yield_stress_pa` (coil-ridge
    yield, critical ridge height) and the pass flow stress (bite). The demo uses
    1235-H18-like values.
-2. **Is the last pass single-sheet or doubled?** Published schedules start doubling at about
-   18-32 um entry gauge, or not at all for two-side-bright foil [V S3]. The tool has no model
-   of a doubled pass (two sheets in one bite and the sheet-to-sheet interface); a doubled
-   pass entered as one sheet is a different pass.
+
+**Answered: the final 16-18 um pass is rolled single-sheet** (plant statement). Published
+schedules start doubling at about 18-32 um entry gauge, or not at all for two-side-bright
+foil [V S3]; this plant does not double. What follows from it:
+
+- the tool's doubled-pass gap (it has no model of two sheets in one bite with a
+  sheet-to-sheet interface) does not apply to this plant;
+- the binding limits for the final pass are the 20 um floor of both roll-bite models (no
+  bite-dependent result for that pass, section 3.3) and the missing closed-gap model: a
+  single-sheet pass at this gauge is closed-gap rolling, where the gauge is set by tension,
+  speed and lubrication rather than load [V S8, S16, S17] (section 3.2);
+- both strip faces run against a work roll (no matte sheet-to-sheet face), so
+  `observation.faces` is worth recording [D]: a surface band printed by one work roll or a
+  stain from one side can show on one face only, a flatness or thickness band shows on both
+  (the rules: `faces` one S moderate for `roll_surface_band` and
+  `oil_carryover_drips_or_stain`, both S weak for `nozzle_thermal_stripe`, section 6.2).
+
+Record the answer in the case as `material.final_pass_doubled` (optional, v2): `null` or
+absent = not stated (the foil block asks the plant), `false` = single-sheet stated (the
+block records it, drops the question and adds the faces implication), `true` = doubled stated
+(flag `DOUBLED_FINAL_PASS_NOT_MODELLED` in `foil_regime.flags` and the top-level flags: the
+tool models one sheet in the bite, so every bite-dependent result for that pass describes a
+single sheet of the entered gauge, not the doubled pass, and one face of each sheet is the
+matte sheet-to-sheet face). "Final pass" is the thinnest pass of the case; the key has no
+effect without a `foil_regime` block. The foil demo sets it to `false`.
 
 Published single-sheet battery-foil practice, for comparison with your mill: schedules
 260 -> 135 -> 65 -> 30 um and 280 -> 120 -> 55 -> 24 um [V S3, S4], that is 48-54 % and
@@ -176,7 +198,11 @@ numbers, its reliability text and flags, the reason Hitchcock rejected the pass,
 force per width against the reported 0.9-2.3 kN/mm and whether it lies inside, forward slip,
 or the bite error); `schedule_bites` (bite model and force per width for each schedule pass);
 `below_bite_model_floor` (the passes below 20 um exit gauge, flag
-`EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR`, and a text asking whether the last pass is doubled);
+`EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR`, and a text that asks whether the last pass is doubled,
+or, with `material.final_pass_doubled` stated, records the answer: `false` says the missing
+bite is a limit of the tool, not of an unmodelled doubled pass; `true` adds the flag
+`DOUBLED_FINAL_PASS_NOT_MODELLED`); `final_pass_doubled` when stated; with `false` also a
+sixth implication on `observation.faces` (section 3.1);
 `wrinkle_rule` (section 3.6); `product_question` (section 3.1); flags, limitations and the
 foil sources. Above 100 um exit gauge there is no foil block, although one source puts the
 onset of closed-gap rolling at up to 200 um.
@@ -413,7 +439,8 @@ the zone valve of nozzles 18-19. Observations were generated from the model itse
 0.623 and 0.988 m (the model steady stripe and event stripe peaks), continuity both,
 intermittent duration 150 s, loose / buckle, visible only after tension release, positions
 repeat across coils and do not move after a work-roll change, change with zone switching, do
-not change after roll wiper cleaning, do not track speed changes; `worse_at_thinner_gauge`
+not change after roll wiper cleaning, do not track speed changes; the final pass is rolled
+single-sheet (`material.final_pass_doubled: false`, plant statement); `worse_at_thinner_gauge`
 and `worse_at_lower_tension` are left `null` (the model gauge trend does not reproduce the
 first, and the second does not separate tension lines from a latent stripe).
 
@@ -504,7 +531,9 @@ Copy `scenarios/band_diagnosis_template.json` (schema `physicroll.band_case.v2`,
 explain every field. Replace the mill, pass and material numbers with your own, in SI
 units (m, Pa, kg, N/m, m/s, Hz, rad, K); the values in the template are the synthetic demo
 mill. Keys are strict: unknown or missing keys are rejected, except the six optional foil
-observations (section 3.8) and `width_model.shape_inputs`, which may be absent. **Leave an observation `null`
+observations (section 3.8), `width_model.shape_inputs` and `material.final_pass_doubled`
+(whether the thinnest pass is rolled doubled: `null` not stated, `false` single-sheet, `true`
+doubled; read only in the foil regime, section 3.1), which may be absent. **Leave an observation `null`
 when nobody has looked**: `null` always gives `NOT_OBSERVED` evidence and never counts
 against a hypothesis.
 
@@ -1604,7 +1633,9 @@ flatness, rule-only foil defects); the bite model of the case pass with its reli
 text, force per width against the reported 0.9-2.3 kN/mm, forward slip and the reason
 Hitchcock rejected it; a table of bite model and force per width per schedule pass, with the
 rejection reason for a pass below the floor; a "Below the roll-bite model floor" paragraph
-when a pass is under 20 um, asking whether that pass is single-sheet or doubled; the wrinkle
+when a pass is under 20 um, asking whether that pass is single-sheet or doubled (or, with
+`material.final_pass_doubled` set, stating the plant's answer; the foil demo shows the
+single-sheet statement there, in the implications and in the product question); the wrinkle
 rule of thumb against the largest model band; and the product question. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
@@ -1774,7 +1805,8 @@ At battery-foil gauge, in addition (each checked against the code and
   `dh = (h/H)*dH` is used for the exit ridge height (a no-bite estimate, not a bound); its
   coil result supports only weakly.
 - **Domain limits**: below 20 um exit gauge no bite at all (a 16-18 um final pass has no
-  bite-dependent result); doubled passes are not modelled; reductions above 50 % are
+  bite-dependent result); doubled passes are not modelled (`material.final_pass_doubled`
+  true flags it; the demo plant rolls single-sheet); reductions above 50 % are
   rejected, so the published 52-57 % passes (section 3.1) cannot be entered as they are.
 - **Tension lines have no physical model**; `foil_tension_lines` is a rule set with analyst
   weights [D] on reported facts [V S27, S28].

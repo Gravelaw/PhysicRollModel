@@ -606,6 +606,94 @@ class SensitivityMixFlagTests(unittest.TestCase):
                 self.assertNotIn('note', sc)
 
 
+class FinalPassDoubledTests(unittest.TestCase):
+    """Plant answer: the 16-18 um final pass is rolled single-sheet
+    (material.final_pass_doubled false); null keeps the question, true flags a doubled pass."""
+    FLAG = 'DOUBLED_FINAL_PASS_NOT_MODELLED'
+    QUESTION = 'Ask the plant: single-sheet or doubled?'
+    PRODUCT_Q = 'Ask also whether the last pass is single-sheet or doubled'
+
+    @classmethod
+    def setUpClass(cls):
+        # 35 um case pass with an 18 um schedule row below the bite floor; no width model
+        # (the foil block does not need it), friction 0.05 so no bite is solved (fast)
+        cls.r = {}
+        for value in ('absent', None, False, True):
+            c = foil_case(h0=60e-6, h1=35e-6, width=False, orientation='longitudinal')
+            c['schedule'][1]['entry_thickness_m'] = 60e-6
+            c['schedule'][1]['exit_thickness_m'] = 35e-6
+            c['schedule'].append(dict(c['schedule'][1], label='P4 0.035->0.018 mm',
+                                      entry_thickness_m=35e-6, exit_thickness_m=18e-6))
+            if value != 'absent':
+                c['material']['final_pass_doubled'] = value
+            cls.r[value] = diagnose(c)
+
+    def test_absent_and_null_keep_the_question(self):
+        a, n = self.r['absent']['foil_regime'], self.r[None]['foil_regime']
+        self.assertEqual(a, n)
+        self.assertNotIn('final_pass_doubled', a)
+        self.assertIn(self.QUESTION, a['below_bite_model_floor']['text'])
+        self.assertIn(self.PRODUCT_Q, a['product_question']['text'])
+        self.assertEqual(len(a['implications']), 5)
+        self.assertNotIn('final_pass_doubled', self.r['absent']['inputs']['material'])
+
+    def test_single_sheet_stated(self):
+        fr = self.r[False]['foil_regime']
+        self.assertIs(fr['final_pass_doubled'], False)
+        floor, prod = fr['below_bite_model_floor']['text'], fr['product_question']['text']
+        self.assertNotIn(self.QUESTION, floor)
+        self.assertNotIn(self.PRODUCT_Q, prod)
+        self.assertIn('rolled single-sheet', floor)
+        self.assertIn('limit of the tool', floor)
+        self.assertIn('[V S8, S16, S17]', floor)
+        self.assertIn('final pass is rolled single-sheet', prod)
+        self.assertEqual(len(fr['implications']), 6)
+        self.assertIn('observation.faces', fr['implications'][-1])
+        self.assertIn('[D]', fr['implications'][-1])
+        self.assertNotIn(self.FLAG, fr['flags'])
+        self.assertNotIn(self.FLAG, self.r[False]['flags'])
+        html = render_band_report(self.r[False])
+        self.assertIn('rolled single-sheet', html)
+        self.assertNotIn(self.QUESTION, html)
+
+    def test_doubled_stated(self):
+        r = self.r[True]
+        fr = r['foil_regime']
+        self.assertIs(fr['final_pass_doubled'], True)
+        self.assertIn(self.FLAG, fr['flags'])
+        self.assertIn(self.FLAG, r['flags'])
+        self.assertIn('matte sheet-to-sheet face', fr['implications'][-1])
+        self.assertNotIn(self.QUESTION, fr['below_bite_model_floor']['text'])
+        self.assertIn(self.FLAG, render_band_report(r))
+        # no numeric change against the unstated case
+        self.assertEqual(r['hypotheses'], self.r[None]['hypotheses'])
+        self.assertEqual(r['schedule_sweep'], self.r[None]['schedule_sweep'])
+
+    def test_validation_and_sheet_gauge(self):
+        c = foil_case(width=False)
+        for bad in ('no', 0, 1.0):
+            c['material']['final_pass_doubled'] = bad
+            with self.assertRaises(ValueError) as cm:
+                validate_case(c)
+            self.assertIn('final_pass_doubled', str(cm.exception))
+        v1 = json.loads((SCEN / 'band_diagnosis_thin_gauge_chatter.json').read_text())
+        v1['material']['final_pass_doubled'] = None
+        self.assertNotIn('final_pass_doubled', validate_case(v1)['material'])
+        v1['material']['final_pass_doubled'] = False
+        with self.assertRaises(ValueError):
+            validate_case(v1)
+        sheet = v2(orientation='longitudinal')
+        sheet['material']['final_pass_doubled'] = True
+        r = diagnose(sheet)
+        self.assertIsNone(r['foil_regime'])
+        self.assertNotIn(self.FLAG, r['flags'])
+
+    def test_foil_demo_states_single_sheet(self):
+        demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
+        self.assertIs(demo['material']['final_pass_doubled'], False)
+        self.assertNotIn('Ask the plant whether this pass', ' '.join(demo['notes']))
+
+
 class CollectorFoilBelowFloorTests(unittest.TestCase):
     """SPEC9 addendum: a 0.030 -> 0.017 mm case pass (below the 20 um roll-bite floor)."""
 
@@ -751,6 +839,8 @@ class FoilDemoTests(unittest.TestCase):
         fl = fr['below_bite_model_floor']
         self.assertFalse(fl['case_pass_below_floor'])
         self.assertIn('doubled', fl['text'].lower())
+        self.assertIn('rolled single-sheet', fl['text'])     # material.final_pass_doubled false
+        self.assertIs(fr['final_pass_doubled'], False)
         html = render_band_report(r)
         self.assertLess(html.index('class="foil"'), html.index('Leading hypotheses'))
         self.assertIn('Below the roll-bite model floor', html)

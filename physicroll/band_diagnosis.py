@@ -315,6 +315,9 @@ PASS_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'width_m', 'work_roll_radi
              'exit_tension_pa', 'exit_speed_m_s')
 MATERIAL_KEYS = ('alloy', 'temper', 'yield_stress_pa', 'youngs_modulus_pa', 'luders_strain',
                  'magnesium_wt_pct', 'grain_size_m')
+# v2 optional (absent = null = not stated): whether the thinnest pass of the case is rolled
+# doubled (two sheets in one bite). Only read by the foil-regime block.
+MATERIAL_OPTIONAL = ('final_pass_doubled',)
 STAND_KEYS = ('work_roll_mass_kg', 'backup_roll_mass_kg', 'work_backup_contact_stiffness_n_m',
               'housing_stiffness_n_m', 'modal_damping_ratio', 'roll_youngs_modulus_pa',
               'roll_poisson_ratio')
@@ -391,7 +394,10 @@ def validate_case(case):
         raise ValueError('pass.exit_thickness_m must be below pass.entry_thickness_m')
 
     m = case['material']
-    _keys('material', m, MATERIAL_KEYS)
+    _keys('material', m, MATERIAL_KEYS, MATERIAL_OPTIONAL)
+    doubled = _opt_bool('material.final_pass_doubled', m.get('final_pass_doubled'))
+    if doubled is not None and not v2:
+        raise ValueError(f'material.final_pass_doubled needs case_schema {CASE_SCHEMA_V2!r}')
     out['material'] = {
         'alloy': _text('material.alloy', m['alloy']),
         'temper': _text('material.temper', m['temper']),
@@ -404,6 +410,9 @@ def validate_case(case):
                                      nonnegative=True, hi=15.0),
         'grain_size_m': _opt_num('material.grain_size_m', m['grain_size_m'], positive=True,
                                  hi=5e-3)}
+    if v2 and 'final_pass_doubled' in m:
+        # kept only when given, so results of cases without the key are unchanged
+        out['material']['final_pass_doubled'] = doubled
 
     s = case['stand']
     _keys('stand', s, STAND_KEYS)
@@ -1976,6 +1985,7 @@ def _process_inputs(eff, cache, flags, supplied=None):
 
 FOIL_GAUGE_M = bw.FOIL_GAUGE_M
 CLOSED_GAP_FLAG = 'CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED'
+DOUBLED_FLAG = 'DOUBLED_FINAL_PASS_NOT_MODELLED'
 CLOSED_GAP_ONSET_RANGE_M = (50e-6, 200e-6)
 CLOSED_GAP_SOURCES = (
     {'source': 'S8 Mysteel foil-rolling reference', 'tag': 'V',
@@ -2099,28 +2109,63 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                      f'the rule-of-thumb wrinkle onset of {wrinkle:.3g} I-units at this '
                      'tension.')
     temper = m['temper']
-    return {
+    doubled = m.get('final_pass_doubled')
+    implications = [
+        'In closed gap the load is no longer a gauge actuator: more screw-down only bends '
+        'the rolls and changes flatness; the gauge is set by tension, speed and '
+        'lubrication [V S8, S16, S17].',
+        'The lever table (critical chatter speed against friction, reduction, tensions, '
+        'span, damping) and the gauge-control section assume an OPEN roll gap; read them '
+        'as open-gap reasoning, not as foil-mill predictions.',
+        'The local transfer of a roll stripe to the strip is by roll / strip compliance, '
+        'which the shape chain models, but without the load shunted outside the strip '
+        'where the rolls touch; the transfer may be misestimated.',
+        'Online (shapemeter) and offline flatness diverge at foil gauge: front tension '
+        'masks the true shape [V S17, S8]; the in-mill and after-release states of the '
+        'shape chain are the tool\'s proxy for that difference.',
+        'Foil band defects with no physical model in the tool (tension lines, hot spots '
+        'from roll wipers, creasing from ironing rolls) are screened by rules only.']
+    floor_tail = ('Collector foil of 16-18 um may in practice be rolled as a DOUBLED '
+                  '(two-sheet) pass, which the tool does not model at all. Ask the plant: '
+                  'single-sheet or doubled?')
+    product_doubling = ('Ask also whether the last pass is single-sheet or doubled (doubling '
+                        'starts at about 18-32 um entry, or not at all for two-side-bright '
+                        'foil [V S3]). ')
+    flist = [CLOSED_GAP_FLAG] + ([BITE_FLOOR_FLAG] if below else [])
+    if doubled is False:
+        floor_tail = ('The plant states that this pass is rolled single-sheet, so the missing '
+                      'roll-bite result is a limit of the tool (the 20 um floor of both bite '
+                      'models and no closed-gap load path), not of an unmodelled doubled pass; '
+                      'a single-sheet pass at this gauge is closed-gap rolling, where the gauge '
+                      'is set by tension, speed and lubrication rather than load '
+                      '[V S8, S16, S17].')
+        product_doubling = 'The plant states that the final pass is rolled single-sheet. '
+        implications.append(
+            'Single-sheet final pass (plant statement): both strip faces run against a work '
+            'roll (no matte sheet-to-sheet face), so observation.faces discriminates [D]: a '
+            'surface band printed by one work roll (wear band, pick-up, wiper debris) or a '
+            'stain from one side can show on one face only, while a flatness or thickness '
+            'band (such as a nozzle thermal stripe) shows on both.')
+    elif doubled is True:
+        flist.append(DOUBLED_FLAG)
+        flags.append(DOUBLED_FLAG)
+        floor_tail = ('The plant states that the final pass is rolled DOUBLED (two sheets in '
+                      'one bite); the tool does not model that at all.')
+        product_doubling = 'The plant states that the final pass is rolled doubled. '
+        implications.append(
+            'Doubled final pass (plant statement), NOT modelled: the tool models one sheet in '
+            'the bite, so every bite-dependent result for that pass describes a single sheet '
+            'of the entered gauge, not two sheets in one bite with a sheet-to-sheet '
+            'interface; read observation.faces knowing that one face of each sheet is the '
+            'matte sheet-to-sheet face.')
+    out = {
         'status': STATUS, 'exit_thickness_m': h1,
         'closed_gap_onset_range_m': [lo, hi],
         'closed_gap_onset_sources': [dict(x) for x in CLOSED_GAP_SOURCES],
         'closed_gap_note': 'Reported onsets of closed-gap rolling disagree (50-200 um exit '
                            'gauge); the tool has no roll-kissing model.',
         'case_position': where, 'case_position_text': where_text,
-        'implications': [
-            'In closed gap the load is no longer a gauge actuator: more screw-down only bends '
-            'the rolls and changes flatness; the gauge is set by tension, speed and '
-            'lubrication [V S8, S16, S17].',
-            'The lever table (critical chatter speed against friction, reduction, tensions, '
-            'span, damping) and the gauge-control section assume an OPEN roll gap; read them '
-            'as open-gap reasoning, not as foil-mill predictions.',
-            'The local transfer of a roll stripe to the strip is by roll / strip compliance, '
-            'which the shape chain models, but without the load shunted outside the strip '
-            'where the rolls touch; the transfer may be misestimated.',
-            'Online (shapemeter) and offline flatness diverge at foil gauge: front tension '
-            'masks the true shape [V S17, S8]; the in-mill and after-release states of the '
-            'shape chain are the tool\'s proxy for that difference.',
-            'Foil band defects with no physical model in the tool (tension lines, hot spots '
-            'from roll wipers, creasing from ironing rolls) are screened by rules only.'],
+        'implications': implications,
         'bite': bite_block,
         'schedule_bites': passes,
         'below_bite_model_floor': {
@@ -2135,10 +2180,7 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                        '(chatter.BitePass.validate). For such a pass the chatter, lever, '
                        'process-friction fixed point (and pass heating) and gauge-control '
                        'sections are not assessable, and its strip-shape chain runs only with '
-                       'supplied width_model.shape_inputs (case pass). Collector foil of '
-                       '16-18 um may in practice be rolled as a DOUBLED (two-sheet) pass, which '
-                       'the tool does not model at all. Ask the plant: single-sheet or '
-                       'doubled?')},
+                       'supplied width_model.shape_inputs (case pass). ' + floor_tail)},
         'wrinkle_rule': {
             'wrinkle_onset_i_units': wrinkle,
             'formula': 'wrinkle_onset_i_units = 1e5 * exit_tension_pa / strip_youngs_modulus_pa '
@@ -2156,15 +2198,16 @@ def _foil_regime(eff, bite, bite_error, result, flags):
                     'foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of '
                     'thinner collector foil; a final pass of 16-18 um (plant statement) points '
                     'to cathode current-collector foil in H18 with 25-60 um as intermediate '
-                    'passes. Ask also whether the last pass is single-sheet or doubled (doubling '
-                    'starts at about 18-32 um entry, or not at all for two-side-bright foil '
-                    '[V S3]). O against H18 changes buckling and winding behaviour; this case '
-                    f'uses temper {temper}.'},
-        'flags': [CLOSED_GAP_FLAG] + ([BITE_FLOOR_FLAG] if below else []),
+                    'passes. ' + product_doubling + 'O against H18 changes buckling and '
+                    f'winding behaviour; this case uses temper {temper}.'},
+        'flags': flist,
         'limitations': [
             'No roll-kissing (closed-gap) model; the bite models see only the strip contact.',
             'Foil facts are cited from a research pass (tags V / D / M), not plant-validated.'],
         'sources': list(FOIL_SOURCES)}
+    if doubled is not None:
+        out['final_pass_doubled'] = doubled
+    return out
 
 
 def _family_summary(obs, hyps, leading):
