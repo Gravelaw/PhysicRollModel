@@ -8150,7 +8150,10 @@
     "Step the exit tension and note whether (and at which tension) the bands fade.",
     "Change the ironing-roll pressure (per side) and, separately, the exit air blow-off, one at a time.",
     "Record whether the bands started when a wider coil followed a narrower one.",
-    "Compare the online shapemeter flatness with the offline sag of a sample laid flat (front tension masks the true shape at foil gauge)."
+    "Compare the online shapemeter flatness with the offline sag of a sample laid flat (front tension masks the true shape at foil gauge).",
+    "Log the coil temperature before and after the final pass: published battery-foil limits are <= 75 C entering and <= 80 C leaving it (above 90 C elongation decays for weeks) [PT-T1, PT-T2].",
+    "Log the oil supply temperature against the 38-45 C window (battery foil 40-45 C [PT-T1, PT-T6]; a ladder defect below 38 C at one plant [PT-T3]).",
+    "Measure the dyne level at 0 h and 24 h after rolling: it can fall from above 32 to below 30 dyn within 12-24 h as base oil evaporates [PT-T29, PT-T30]."
   ],
   "schedule_sweep": {
     "bite_damping_transit_fraction": 0.5,
@@ -9703,6 +9706,314 @@
     "strip_length_m": 1.0
   },
   "synthetic": true,
+  "thermal_check": {
+    "battery_coil_limits_apply": true,
+    "coil_limits_c": {
+      "elongation_decay_above": 90.0,
+      "entering_final_pass": 75.0,
+      "leaving_final_pass": 80.0
+    },
+    "flags": [],
+    "growth": {
+      "axial_decay_time_constant_s": 22.8310400474,
+      "event_time_to_half_peak_s": [
+        9.246813364914747
+      ],
+      "radial_time_constant_s": [
+        240.0,
+        420.0
+      ],
+      "read_status": "computed",
+      "sources": [
+        "PT-T18",
+        "PT-T25"
+      ],
+      "steady_build_up": {
+        "time_to_50_percent_s": 116.08597451387257,
+        "time_to_63_percent_s": 187.92375247790747,
+        "time_to_90_percent_s": 550.9320803614576,
+        "time_to_95_percent_s": 760.6333074797783
+      },
+      "text": "Growth: the short event reaches half its peak in 9.25 s (axial decay time constant of a 52 mm stripe about 23 s, computed); the steady stripe builds up to 50 % in 116 s and to 90 % in 551 s (radial time constant 4-7 min computed for a 260 mm roll). A plant-identified flatness response of about 20 s is of the order of the short local (axial) time scale and of an event's rise, not of the minutes a steady stripe needs to build."
+    },
+    "heat_partition_inputs": null,
+    "inputs": [
+      {
+        "basis": "strip share of the heat against the only measured foil-mill partition (abstract only; a net balance, not necessarily the split inside the bite) [PT-T16]",
+        "conversion": "strip share 0.22 <-> roll heat fraction per work roll 0.39 = (1 - strip share) / 2 ((1 - tribology.strip_heat_fraction)/2)",
+        "item": "strip_heat_fraction",
+        "note": "measured foil-mill heat partition, strip share (abstract only; a net balance, not necessarily the split inside the bite)",
+        "published_high": 0.33,
+        "published_low": 0.11,
+        "read_status": "abstract_or_snippet",
+        "sources": [
+          "PT-T16"
+        ],
+        "unit": "fraction",
+        "value": 0.21999999999999997,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "kerosene spray on a work roll, SIMULATED 2.5\u20134.3 kW/m\u00b2K [PT-T18]; no measured value on a roll was found",
+        "item": "spray_heat_transfer_coefficient",
+        "note": "wider published values: 4.65\u20135.5 kW/m\u00b2K in a cold-mill model example (coolant not named) [PT-T20]; about 5\u201313 kW/m\u00b2K computed from a plate test [PT-T19]",
+        "published_high": 4300.0,
+        "published_low": 2500.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T18"
+        ],
+        "unit": "W/m^2K",
+        "value": 3400.0,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "oil supply, finishing, battery foil [PT-T1, PT-T6]",
+        "item": "coolant_temperature_as_oil_supply",
+        "note": "oil supply, finishing, battery foil; width_model.coolant_temperature_k read as the oil supply temperature of a finishing (foil) pass",
+        "published_high": 45.0,
+        "published_low": 40.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T6"
+        ],
+        "unit": "degC",
+        "value": 45.0,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "oil supply, finishing, battery foil [PT-T1, PT-T6]",
+        "item": "oil_inlet_temperature",
+        "note": "oil supply, finishing, battery foil",
+        "published_high": 45.0,
+        "published_low": 40.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T6"
+        ],
+        "unit": "degC",
+        "value": 45.0,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "the case gives a dynamic viscosity at 40 C; the literature gives kinematic viscosity at 40 C (1.5-2.0 cSt); the oil density needed to convert is not a case input, so no verdict",
+        "item": "oil_viscosity_40c",
+        "note": "",
+        "published_high": 2e-06,
+        "published_low": 1.5e-06,
+        "read_status": "vendor_or_trade_page",
+        "sources": [
+          "PT-T9",
+          "PT-T10",
+          "PT-T8"
+        ],
+        "unit": "Pa s (case, dynamic) / m^2/s (literature, kinematic)",
+        "value": 0.0016,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "footprint overlap (W_eff - pitch) / W_eff of the spray screen against the published 10-30 %, never above 50 % [PT-T22, PT-T21]; the spray screen itself has no overlap threshold (it only flags gaps between fans)",
+        "item": "spray_footprint_overlap",
+        "note": "",
+        "published_high": 0.3,
+        "published_low": 0.1,
+        "read_status": "vendor_or_trade_page",
+        "sources": [
+          "PT-T22",
+          "PT-T21"
+        ],
+        "unit": "fraction",
+        "value": 0.6880238768612186,
+        "verdict": "ABOVE_PUBLISHED_LIMIT"
+      }
+    ],
+    "not_supplied": false,
+    "note": "Evidence-neutral literature comparison: it never changes a number or a score.",
+    "outputs": [
+      {
+        "basis": "against the simulated zone-cooling authority, \u00b13.6 to \u00b14.2 \u00b5m on diameter 20 revolutions after a zone change [PT-T18]",
+        "item": "stripe_height_on_diameter",
+        "note": "largest steady stripe 2.96 um on radius (x2 on diameter) at 0.6225 m; \u00b1 on diameter 20 revolutions after a zone change (simulated, 1100 alloy); grows linearly with rolled length, halves from 100 to 300 m/min",
+        "published_high": 4.2e-06,
+        "published_low": 3.6e-06,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T18"
+        ],
+        "unit": "m",
+        "value": 5.9172056946727995e-06,
+        "verdict": "ABOVE_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "foil-mill thermal crown, 30 \u00b5m maximum from measured values [PT-T25]; diameter or radius not stated (a published limit)",
+        "item": "thermal_crown",
+        "note": "model thermal crown 9.63 um on radius, 19.3 um on diameter (compared); the published 30 um does not say whether it is on diameter or radius",
+        "published_high": 3e-05,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T25"
+        ],
+        "unit": "m",
+        "value": 1.926821462514712e-05,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      }
+    ],
+    "product_id": "battery_collector_foil",
+    "property_risk": null,
+    "quarter_barrel_note": {
+      "positions_in_quarter_zones_m": [],
+      "sources": [
+        "PT-T38"
+      ],
+      "text": "Positional note only (no score): a roll hotter at 1/5-1/4 of the barrel from each end gave quarter looseness after roughing, removed by larger nozzles there [PT-T38]. No observed band lies in those zones.",
+      "zones_m": [
+        [
+          0.30000000000000004,
+          0.375
+        ],
+        [
+          1.125,
+          1.2
+        ]
+      ]
+    },
+    "status": "LITERATURE_SURVEY_UNVALIDATED",
+    "strip_exit_temperatures": [
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "S1 0.260->0.135 mm (assumed stock route)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 54.77187219412377,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "S2 0.135->0.085 mm (assumed stock route)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 51.54825702788821,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "S3 0.085->0.050 mm (assumed stock route)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 57.11144560972264,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "F1 0.050->0.030 mm (plant pass 1; 30 um assumed)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 60.28115361872642,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": true,
+        "item": "modelled_strip_exit_temperature",
+        "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 66.06281022810697,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 72.43653891457927,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": false,
+        "basis": "battery collector foil: coil off the final pass \u226480 \u00b0C [PT-T1, PT-T2] (a published limit)",
+        "is_final_pass": true,
+        "item": "modelled_strip_exit_temperature",
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+        "note": "battery foil: coil off the final pass, also when slit within 30 min",
+        "published_high": 80.0,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T1",
+          "PT-T2"
+        ],
+        "unit": "degC",
+        "value": 72.89373118546308,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      }
+    ],
+    "texts": [
+      "A modelled strip exit temperature is not a coil temperature (the published limits are for the coil, PT-T1), and the experimental mattress bite inflates friction heat; read these as indicators.",
+      "The tool has no model of property change after rolling, no roll-wear model and no temperature-to-surface-finish model; the statements here are literature statements, not model outputs."
+    ]
+  },
   "time_simulation": {
     "bite_damping_transit_fraction": 0.5,
     "couple_tension": true,
@@ -21743,7 +22054,7 @@
           "label": "S1 0.260->0.135 mm (assumed stock route)",
           "ratio_stripe_to_after_release_onset": 31.848604035986625,
           "ratio_stripe_to_in_mill_onset": 1.2313399398228664,
-          "strip_exit_temperature_c": 96.40169383210906,
+          "strip_exit_temperature_c": 96.401693832109,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 1.4536093388792057e-06
         },
@@ -22060,7 +22371,7 @@
           "stripe_peak_m": 3.028650602313539e-07
         }
       ],
-      "per_pass_note": "Stripe at a pass = the case-pass stripe x (that pass's bite heat / the case pass's) x (roll share / case roll share), at the case spray coefficient (linear model, same stripe shape); onsets from the gauge trend (the case stripe's shape at each pass). Strip exit temperature = entry + pass-heating rise x (share / case share); a strip exit temperature is not a coil temperature (the 80 C battery limit is for the coil [PT-T1]), and the experimental mattress bite inflates friction heat.",
+      "per_pass_note": "Stripe at a pass = the case-pass stripe x (that pass's bite heat / the case pass's) x (roll share / case roll share), at the case spray coefficient (linear model, same stripe shape); onsets from the gauge trend (the case stripe's shape at each pass). Strip exit temperature = entry + pass-heating rise x (share / the strip fraction that pass-heating row used, tribology.strip_heat_fraction); a strip exit temperature is not a coil temperature (the 80 C battery limit is for the coil [PT-T1]), and the experimental mattress bite inflates friction heat.",
       "per_pass_text": "Two questions, two answers. The gauge trend holds the case-pass stripe (2.96 um) unchanged on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on S1, S2, S3 and stay latent on F1, F2, ALT1.",
       "rows": [
         {
@@ -22985,7 +23296,19 @@
         }
       ],
       "spray_rows_note": null,
-      "status": "EVALUATED"
+      "status": "EVALUATED",
+      "steady_build_up": {
+        "basis": "transient from the healthy steady state with the case nozzle levels, monitor at the stripe peak (case pass, case heat share and spray)",
+        "fraction_at_end": 0.9980663383508636,
+        "simulated_s": 1800.0,
+        "status": "EVALUATED",
+        "steady_stripe_m": 2.9586028473363998e-06,
+        "stripe_position_m": 0.6225,
+        "time_to_50_percent_s": 116.08597451387257,
+        "time_to_63_percent_s": 187.92375247790747,
+        "time_to_90_percent_s": 550.9320803614576,
+        "time_to_95_percent_s": 760.6333074797783
+      }
     },
     "thermal_steady": {
       "blocked_nozzle_indices": [],

@@ -348,12 +348,13 @@ and `schedule_sweep.rows` (friction 0.03 supplied on every pass, `bite_model: au
   thinner passes; it carries the flag `FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES`
   (the model has no elastic strip zones; section 10.2). The slip enters the interface slip
   dissipation, so the pass heating is inflated [D]: at the case pass friction power 47.1 kW/m
-  against 40.3 kW/m plastic power, strip exit temperature 390.6 K (+77.4 K), just below the
-  393.15 K limit supplied in the demo (`process.heating.operating`); F2, ALT1 and ALT2 exceed
-  that limit (412.7 K, 437.0 K and 438.7 K, `process.heating.schedule`). The heat-streak rule
-  "boundary regime or exit temperature above the limit" is met at the case pass by the
-  boundary regime alone, so the inflated temperature does not change the demo ranking, but it
-  could on a case in the mixed regime.
+  against 40.3 kW/m plastic power, strip exit temperature 333.4 K (+20.3 K) at the strip
+  heat share 0.22 (`process.heating.operating`; 390.6 K at the former 0.84); F2, ALT1 and ALT2
+  reach 339.2 K, 345.6 K and 346 K (`process.heating.schedule`), all below the 393.15 K limit
+  supplied in the demo and below the published 80 C battery coil limit (section 3.12). The
+  heat-streak rule "boundary regime or exit temperature above the limit" is met at the case
+  pass by the boundary regime alone, so the inflated temperature does not change the demo
+  ranking, but it could on a case in the mixed regime.
 - **The extended roll-bite domain.** `chatter.BitePass.validate` keeps a 20 um floor and a
   50 % reduction limit for the slab and Hitchcock path; the mattress model
   (`foil_bite.py`) accepts an exit gauge down to 8 um (`BITE_FLOOR_M`) and a reduction up to
@@ -443,34 +444,37 @@ derived case-pass values (mattress bite, `width.inputs_used`): `Q` = 7.39e10 Pa,
 ### 3.5 What the model says about "worse at thinner gauge" in foil
 
 Source: `artifacts/band_diagnosis/battery-foil-demo.result.json`, `width.gauge_trend`. As in
-section 7.3, the demo's steady stripe (0.959 um at 0.6225 m, isolated) is carried through every
-schedule pass with that pass's own bite and tension; a smooth Gaussian reference stripe
-(half-peak width 0.1 m) is evaluated alongside. S1-S3 are the assumed stock route, F1 is the
-plant's first pass (the case pass), F2 the plant's final pass (extended domain, force inside the
-reported range, unvalidated), ALT1 and ALT2 the thinnest product's alternative route
-50 -> 25 -> 12 um; ALT2's bite is NOT CREDIBLE (force 2.7 times the top of the range reported
-for battery-foil passes, section 3.3). The rows are listed in schedule order; the trend
-statements order them by exit gauge and leave ALT2 out.
+section 7.3, the demo's steady stripe (2.96 um at 0.6225 m, isolated; strip heat share
+0.22, section 3.12) is carried through every schedule pass with that pass's own bite and
+tension; a smooth Gaussian reference stripe (half-peak width 0.1 m) is evaluated alongside. This
+holds the case-pass stripe unchanged on every pass (the question "what does the same roll
+stripe do at each gauge"); the stripe each pass would itself produce is a different question,
+answered below and in section 3.12. S1-S3 are the assumed stock route, F1 is the plant's first
+pass (the case pass), F2 the plant's final pass (extended domain, force inside the reported
+range, unvalidated), ALT1 and ALT2 the thinnest product's alternative route 50 -> 25 -> 12 um;
+ALT2's bite is NOT CREDIBLE (force 2.7 times the top of the range reported for battery-foil
+passes, section 3.3). The rows are listed in schedule order; the trend statements order them by
+exit gauge and leave ALT2 out.
 
-| pass | exit gauge [um] | exit tension [MPa] | rigid bound [I] | compliance only [I] | linear feedback [I] | feedback stiffness per width [Pa] (x `Q`) | in-mill state (U) | after release |
-|---|---|---|---|---|---|---|---|---|
-| S1 | 135 | 35 | 710.3 | 560.7 | 42.31 | 6.82e11 (286) | latent (0) | manifest |
-| S2 | 85 | 37 | 1128 | 795.0 | 30.62 | 1.39e12 (171) | latent (0) | manifest |
-| S3 | 50 | 39 | 1918 | 1081 | 20.41 | 3.53e12 (164) | latent (0) | manifest |
-| F1 (case) | 30 | 40 | 3196 | 1003 | 8.051 | 1.47e13 (199) | latent (0) | manifest |
-| F2 (extended, unvalidated) | 18 | 42 | 5327 | 668.0 | 3.229 | 6.09e13 (243) | latent (0) | manifest |
-| ALT1 | 25 | 40 | 3836 | 855.8 | 4.977 | 2.97e13 (234) | latent (0) | manifest |
-| ALT2 (NOT CREDIBLE) | 12 | 42 | 7991 | 95.42 | 0.2505 | 1.40e15 (386) | below reporting threshold | below reporting threshold |
+| pass | exit gauge [um] | exit tension [MPa] | rigid bound [I] | compliance only [I] | linear feedback [I] | feedback stiffness per width [Pa] (x `Q`) | in-mill state | after release | stripe / in-mill onset |
+|---|---|---|---|---|---|---|---|---|---|
+| S1 | 135 | 35 | 2192 | 1746 | 131.8 | 6.82e11 (286) | MANIFEST (buckles) | manifest | 2.51 |
+| S2 | 85 | 37 | 3481 | 2478 | 95.51 | 1.39e12 (171) | MANIFEST (buckles) | manifest | 1.73 |
+| S3 | 50 | 39 | 5917 | 3375 | 63.74 | 3.53e12 (164) | MANIFEST (buckles) | manifest | 1.12 |
+| F1 (case) | 30 | 40 | 9862 | 3128 | 25.13 | 1.47e13 (199) | latent | manifest | 0.434 |
+| F2 (extended, unvalidated) | 18 | 42 | 1.644e+04 | 2082 | 10.06 | 6.09e13 (243) | latent | manifest | 0.169 |
+| ALT1 | 25 | 40 | 1.183e+04 | 2669 | 15.53 | 2.97e13 (234) | latent | manifest | 0.273 |
+| ALT2 (NOT CREDIBLE) | 12 | 42 | 2.466e+04 | 296.7 | 0.779 | 1.40e15 (386) | below reporting threshold | below reporting threshold | - |
 
 | pass | in-mill onset, model stripe [um] | in-mill onset, Gaussian [um] | after-release onset, model stripe [um] | after-release onset, Gaussian [um] | reporting onset (2 I), model stripe [um] |
 |---|---|---|---|---|---|
-| S1 | 1.19 | 1.11 | 0.0460 (upper bound) | 0.0415 (upper bound) | 0.0454 |
-| S2 | 1.71 | 1.58 | 0.0635 (upper bound) | 0.0573 (upper bound) | 0.0627 |
-| S3 | 2.66 | 2.45 | 0.0952 (upper bound) | 0.0860 (upper bound) | 0.0941 |
-| F1 | 6.83 | 6.30 | 0.241 (upper bound) | 0.218 (upper bound) | 0.238 |
-| F2 | 17.5 | 16.2 | 0.594 (upper bound) | 0.537 (upper bound) | 0.594 |
-| ALT1 | 11.0 | 10.1 | 0.389 (upper bound) | 0.352 (upper bound) | 0.386 |
-| ALT2 (NOT CREDIBLE) | not reached within the 50 um scan | not reached | 7.66 (upper bound) | 6.91 (upper bound) | 7.66 |
+| S1 | 1.18 | 1.11 | 0.0456 (upper bound) | 0.0415 (upper bound) | 0.045 |
+| S2 | 1.71 | 1.58 | 0.063 (upper bound) | 0.0573 (upper bound) | 0.0622 |
+| S3 | 2.64 | 2.45 | 0.0945 (upper bound) | 0.086 (upper bound) | 0.0934 |
+| F1 | 6.81 | 6.3 | 0.239 (upper bound) | 0.218 (upper bound) | 0.237 |
+| F2 | 17.5 | 16.2 | 0.59 (upper bound) | 0.537 (upper bound) | 0.59 |
+| ALT1 | 10.8 | 10.1 | 0.387 (upper bound) | 0.352 (upper bound) | 0.383 |
+| ALT2 (NOT CREDIBLE) | not reached within the 50 um scan | not reached within the 50 um scan | 7.6 (upper bound) | 6.91 (upper bound) | 7.6 |
 
 The bite-free thresholds per pass, all from `width.gauge_trend.rows`: every row carries the
 flatness dead band (`shohet_townsend_half_width_i_units`), the critical coil ridge height, and,
@@ -498,28 +502,38 @@ by exit gauge, the rows interleave two routes: ALT1 (entry 50 um) lies between F
 (entry 30 um).
 
 **The model does not reproduce "worse at thinner gauge" through cooling stripes buckling in
-the mill.** The finding of the earlier foil demo holds on the plant's route, now including the
-final pass. Ordered by exit gauge over the credible rows, the same roll stripe gives 42.3,
-30.6, 20.4, 8.05, 4.98 and 3.23 I-units with the exit-tension feedback at 135, 85, 50, 30, 25
-and 18 um; its in-mill onset height rises 1.19 -> 1.71 -> 2.66 -> 6.83 -> 11.0 -> 17.5 um
-(Gaussian reference 1.11 -> 16.2 um). The 0.959 um stripe is hidden under tension on all six
-credible passes and visible after release on all six. The result's text
-(`width.gauge_trend.text`) ends: "Not credible (excluded from the trend): ALT2 0.025->0.012 mm
-(thinnest product, alternative final pass) (extended-domain bite force 6.19 kN/mm, x2.7 the
-nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)." The report's direction
-sentence says: "the in-mill onset stripe height rises from 1.19 µm to 17.5 µm (x15, on every
-pass), and the after-release onset rises from ≤ 0.046 µm to ≤ 0.594 µm (x13, on every pass;
-reporting-threshold upper bounds); thinner is less sensitive for this mechanism in the model.
-Not credible (excluded from the direction): ALT2 ...". The 18 um point is an extended-domain
-bite (force inside the reported range, unvalidated); the 12 um point is not usable at all.
+the mill.** Ordered by exit gauge over the credible rows, the same 2.96 um roll stripe gives
+132, 95.5, 63.7, 25.1, 15.5, 10.1 I-units with the exit-tension feedback at 135, 85, 50, 30, 25 and 18 um; its in-mill onset
+height rises 1.18 -> 1.71 -> 2.64 -> 6.81 -> 10.8 -> 17.5 um (Gaussian reference 1.11 -> 16.2 um). At the measured heat partition
+(section 3.12) the stripe is large enough to **buckle in the mill on the three assumed stock
+passes S1, S2, S3** (stripe / onset 2.51, 1.73, 1.12) and stays **hidden under tension on the
+plant's passes F1, ALT1, F2** (0.434, 0.273, 0.169); it is visible after release on all six. (At the
+old strip share 0.84 and 2 kW/m2K the stripe was 0.959 um and hidden on all six.) The result's text
+(`width.gauge_trend.text`) ends: "Not credible (excluded from the trend): ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (extended-domain bite force 6.19 kN/mm, x2.7 the nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)." The report's direction sentence says: "the in-mill onset stripe height rises from 1.18 µm to 17.5 µm (x15, on every pass), and the after-release onset rises from ≤ 0.0456 µm to ≤ 0.59 µm (x13, on every pass; reporting-threshold upper bounds); thinner is less sensitive for this mechanism in the model." The 18 um point is an
+extended-domain bite (force inside the reported range, unvalidated); the 12 um point is not
+usable at all.
+
+**Two questions, two answers.** The table above holds the case-pass stripe on every pass. The
+stripe each pass would itself produce scales with that pass's bite heat (same spray, same
+partly blocked nozzle, steady state; `width.thermal_sensitivity.per_pass`): at the case share it
+would buckle in the mill on S1, S2, S3 (stripe / onset 6, 2.26, 1.4) and stay latent on
+F1, ALT1, F2 (0.434, 0.364, 0.1); at share 0.84 with the same
+spray coefficient it would already be 1.23 on S1. Both answers
+assume the steady state: from a healthy header the stripe needs 116 s to reach 50 % and
+551 s to reach 90 % of its steady height (`width.thermal_sensitivity.steady_build_up`), so a pass must
+last about ten minutes for the steady numbers to apply; shorter passes carry less. In one
+sentence: in this model a partly blocked nozzle gives a stripe that shows in the mill on the
+thick stock passes but stays hidden under tension on the plant's 30, 25 and 18 um passes, so a
+foil band of this kind is expected after tension release, and thinner foil hides it better in
+the mill.
 
 Why, in the model [D, from the transfer of section 7.2]: the exit-tension feedback stiffness
 per width `N_x'*E_strip*xi/h_exit` grows as the gauge falls, from 6.82e11 Pa at S1 to 1.47e13 Pa
 at F1 and 6.09e13 Pa at F2 (x89 from S1 to F2) while the gauge falls x7.5. A locally
 over-rolled fibre loses exit tension, which raises the local roll force and flattens the roll
 bump; at foil gauge this effect wins, so the elongation a given stripe leaves falls with
-gauge, although the rigid bound rises x7.50 from S1 to F2 and the compliance-only level is not
-monotonic (1081 at S3, 1003 at F1, 668 at F2). For a broad stripe the in-mill onset needs the
+gauge, although the rigid bound rises x7.5 from S1 to F2 and the compliance-only level is not
+monotonic (3375 at S3, 3128 at F1, 2082 at F2). For a broad stripe the in-mill onset needs the
 residual compression to exceed the mill tension (35-42 MPa here), so it is reached at ever
 larger stripes. At sheet gauge (section 7.3) the same feedback made the elongation nearly
 gauge-independent; at foil gauge it makes it fall.
@@ -528,7 +542,7 @@ What the model does make easier at thinner gauge:
 
 - **Bands that appear after tension release.** On every credible foil pass any stripe large
   enough to be reported (2 I-units) already buckles once tension is released: the
-  after-release onsets 0.0460, 0.0635, 0.0952, 0.241, 0.389 and 0.594 um coincide with the
+  after-release onsets 0.0456, 0.063, 0.0945, 0.239, 0.387 and 0.59 um coincide with the
   reporting onsets and are upper bounds set by the 2 I-unit threshold. They rise in
   micrometres only because a stripe gives fewer I-units per micrometre at thinner gauge; read
   them as "every reported band is visible on the coil, at the slitter or on the table", not as
@@ -554,7 +568,8 @@ What the model does make easier at thinner gauge:
 What this implies for where to look first on the mill (a screening order, not a diagnosis):
 if your bands get worse as the gauge thins, a cooling stripe that buckles **in the mill** is
 not the first candidate in this model, because a given stripe is hidden more, not less, at
-thinner gauge. The thin-gauge-sensitive candidates are bands seen only after tension
+thinner gauge (at the measured heat partition it shows in the mill on the thick stock passes
+and not on the foil passes). The thin-gauge-sensitive candidates are bands seen only after tension
 release (a thermal stripe can be one of them), tension troughs and creases in the spans and
 at the ironing roll, coil ridges, a crown change outside the shrinking dead band, and tension
 lines. The first observations to take are therefore: is the band visible in the mill or only
@@ -575,7 +590,7 @@ tension beside a compressed zone stabilises it (Rayleigh quotient) and the buckl
 depends on the band width. The result evaluates
 `wrinkle_onset_i_units = 1e5 * exit_tension / E_strip` [D] beside the largest model band
 (`foil_regime.wrinkle_rule`). Demo: 57.1 I-units at 40 MPa exit tension; the largest model
-band (steady stripe, linear feedback) is 8.02 I-units, below it, consistent with that band
+band (steady stripe, linear feedback) is 25.1 I-units, below it, consistent with that band
 being hidden under tension.
 
 ### 3.7 Foil band vocabulary and the hypotheses it maps to
@@ -642,15 +657,19 @@ the plant has not stated the alloy and temper, so `material.alloy` AA1235 and te
 the literature proposal to confirm (`material.alloy_temper_stated: false`). `material.product:
 "battery_collector_foil"` (section 3.1); `material.final_pass_doubled: false` (plant
 statement). Neat-oil spray header of 28 nozzles at 52 mm
-pitch, mean spray coefficient 2000 W/m2K (chosen lower than the sheet demo's 3000 [D]); oil
-1.6 mPa s, work-roll Rq 0.15 um, strip Rq 0.2 um. The strip heat fraction is 0.84, as in the
-sheet demo, although foil mills are reported to put only 0.11-0.33 of the bite heat into the
-foil (section 8.2); the roll heat share and hence the stripe heights depend on this choice.
+pitch, mean spray coefficient 3.4 kW/m2K (the middle of the SIMULATED 2.5-4.3 kW/m2K for
+kerosene on a work roll [PT-T18], read as an excerpt of a garbled mirror; 2 kW/m2K before
+SPEC14); oil 1.6 mPa s, work-roll Rq 0.15 um, strip Rq 0.2 um. Strip heat share
+0.22 (each work roll 0.39): the middle of the only measured foil-mill partition, strip
+0.11-0.33 [PT-T16], read as an ABSTRACT only and a net balance (0.84 before SPEC14, as in the
+sheet demo). `model_options.thermal_sensitivity: "full"` keeps the old values as rows of the
+sensitivity block (section 3.12).
 
 Planted causes: nozzle 11 (0.62 m) partly blocked at flow level 0.45, and a 20 s closure of
 the zone valve of nozzles 18-19. Observations were generated from the model itself at the
 case pass F1: positions 0.623 and 0.988 m (the model steady stripe and event stripe peaks),
-continuity both, intermittent duration 80 s, loose / buckle, visible only after tension
+continuity both, intermittent duration 310 s (the model's after-release visible time at the
+moved heat partition, rounded to 10 s; 80 s before), loose / buckle, visible only after tension
 release, positions repeat across coils and do not move after a work-roll change, change with
 zone switching, do not change after roll wiper cleaning, do not track speed changes; the final
 pass is rolled single-sheet (`material.final_pass_doubled: false`, plant statement);
@@ -659,24 +678,24 @@ does not reproduce the first, and the second does not separate tension lines fro
 stripe).
 
 Results (`artifacts/band_diagnosis/battery-foil-demo.result.json`): bite heat 87.4 kW/m at
-the case pass; healthy thermal crown 3.09 um (3.34 um with the actual header); one steady
-stripe, peak 0.959 um at 0.6225 m, half-peak width 0.180 m, next to nozzle 11; 8.02 I-units
-with the feedback (not saturated), 999 compliance only, 2638 rigid bound; hidden under mill
-tension (utilisation 0) and visible after release (utilisation 2072); in-mill onset 6.83 um,
-after-release onset 0.241 um (reporting-limited). The whole-sheet released indicator reads
-`GLOBAL_BUCKLE_AFTER_RELEASE` (utilisation 6269) for this 8.02 I-unit band. The valve event:
-local spray coefficient 2546 -> 1298 W/m2K, net surface flux change 4756 W/m2, initial growth
-0.0302 um/s analytic against 0.0268 um/s simulated; peak 0.495 um at the monitor (1.01 m)
-after 20 s (stripe peak 0.526 um at 0.9875 m), 4.69 I-units, hidden in the mill and visible
-after release; the in-mill threshold (6.10 um) is never reached; the after-release threshold
-(0.214 um, reporting-limited) is crossed 8.14 s after the valve closes and the band stays
-visible after release for 80.9 s (band life 90.3 s): a 20 s valve closure leaves a band for
-over a minute. Troughs: wavelength 0.161 m (entry span) and 0.120 m (exit span); thresholds
+the case pass; healthy thermal crown 8.96 um (9.63 um with the actual header); one steady
+stripe, peak 2.96 um at 0.6225 m, half-peak width 0.18 m, next to nozzle 11; 25.1 I-units
+with the feedback (not saturated), 3.12e+03 compliance only, 8304 rigid bound; hidden under mill
+tension (utilisation 0) and visible after release (utilisation 6269); in-mill onset 6.81 um,
+after-release onset 0.239 um (reporting-limited). The whole-sheet released indicator reads
+`GLOBAL_BUCKLE_AFTER_RELEASE` (utilisation 1.894e+04) for this 25.1 I-unit band. The valve event:
+local spray coefficient 4293 -> 2171 W/m2K, net surface flux change 2.289e+04 W/m2, initial growth
+0.145 um/s analytic against 0.12 um/s simulated; peak 2.12 um at the monitor (1.01 m)
+after 20 s (stripe peak 2.33 um at 0.9875 m), 21 I-units, hidden in the mill and visible
+after release; the in-mill threshold (5.89 um) is never reached; the after-release threshold
+(0.206 um, reporting-limited) is crossed 1.62 s after the valve closes and the band stays
+visible after release for 311 s (band life 315 s): a 20 s valve closure leaves a band for
+about five minutes. Troughs: wavelength 0.161 m (entry span) and 0.12 m (exit span); thresholds
 only, the lateral compressive stress is not supplied. Chatter is flagged
 `CHATTER_NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT`: with bite damping (beta 0.5) the case pass is
 stable over the whole scanned speed range; without it the critical speed is 6.36 m/s against
 13 m/s operating, and the onset frequency 2133 Hz lies above the 849 Hz span-wave limit of the
-3 m spans. Energy residuals: steady -2.0e-8, events 4.5e-13.
+3 m spans. Energy residuals: steady 1.1e-9, events 7.8e-14.
 
 | rank | hypothesis | standing | score (before SPEC12 stage B) |
 |---|---|---|---|
@@ -721,15 +740,15 @@ excerpt], 50 -> 25 um [BF-S15, full text] and 55 -> 25 um [BF-S12, excerpt]; for
 26 -> 13 um [BF-S12, excerpt]. The check is evidence-neutral: it changes no score.
 
 **Material selection** (`material_selection`, section 3.1): final pass ALT2 at 12 um in the
-{ms['final_pass_band']['band_label'].replace('µm','um')} band, case pass in the {ms['case_pass_band']['band_label'].replace('µm','um')} band; standard proposal
-{ms['proposals']['standard']['alloy']}-{ms['proposals']['standard']['temper']} ({ms['proposals']['standard']['tensile_strength_pa']['value_pa']*1e-6:.0f} MPa, the standard minimum; evidence {ms['proposals']['standard']['evidence']}),
-high-strength proposal {ms['proposals']['high_strength']['alloy']}-{ms['proposals']['high_strength']['temper']} ({ms['proposals']['high_strength']['tensile_strength_pa']['value_pa']*1e-6:.0f} MPa; evidence {ms['proposals']['high_strength']['evidence']}); the other route end F2
+>10–13 um band, case pass in the >20–30 um band; standard proposal
+1235-H18 (180 MPa, the standard minimum; evidence medium),
+high-strength proposal 1100-H18 (250 MPa; evidence medium); the other route end F2
 (18 um) has standard 1235-H18 (210 MPa, evidence vendor-level) and high-strength 1100-H18
 (220 MPa, evidence WEAK: fallback rule). The case's AA1235-H18 is the usual standard choice
-(alloy `{ms['comparison']['alloy']['verdict']}`, temper `{ms['comparison']['temper']['verdict']}`); flow stresses: F2
-`{v['F2']['verdict']}`, ALT2 `{v['ALT2']['verdict']}`, F1 and ALT1 `{v['F1']['verdict']}` (>20-30 um band),
-S1-S3 outside every published band; yield stress {ms['comparison']['yield_stress']['value_pa']*1e-6:.0f} MPa `{ms['comparison']['yield_stress']['verdict']}`
-of the assumed proof-strength range. Flag `{ms['flags'][0]}` (the plant has not stated the
+(alloy `USUAL_CHOICE`, temper `CONSISTENT`); flow stresses: F2
+`BETWEEN_STANDARD_MINIMUM_AND_TYPICAL_RANGE`, ALT2 `AT_OR_ABOVE_STANDARD_MINIMUM_NO_TYPICAL_PUBLISHED`, F1 (the case pass) and ALT1 `INSIDE_TYPICAL_RANGE` (>20-30 um band),
+S1-S3 outside every published band; yield stress 165 MPa `INSIDE_RANGE`
+of the assumed proof-strength range. Flag `MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN` (the plant has not stated the
 material). It changes no number and no score.
 
 What the demo shows the tool cannot say: the 18 um final pass F2 has a bite only in the
@@ -737,8 +756,8 @@ extended domain (force inside the reported range, unvalidated); the 12 um ALT2 b
 CREDIBLE (6.19 kN/mm, 2.7 times the top of the reported range) and is kept out of the trend
 statements, while its bite-free thresholds stand; the 30 um case pass lies below every reported
 closed-gap onset (`BELOW_EVERY_REPORTED_ONSET`) with no roll-kissing model, and the lever and
-gauge-control sections carry the open-gap note. The CLI run of this demo took about 23 s on
-this container. It tests the screening logic at foil gauge, not the physics.
+gauge-control sections carry the open-gap note. The CLI run of this demo took about 37 s on
+this container (the full thermal sensitivity block included). It tests the screening logic at foil gauge, not the physics.
 
 ### 3.10 Product survey
 
@@ -852,6 +871,150 @@ for every product, literature inputs (many from excerpts, patents, standards pre
 vendor or trade pages), many assumed flow stresses, open-gap models in the closed-gap regime,
 nothing validated. It compares model sensitivities, not plant defect rates.
 
+### 3.12 Process temperatures
+
+The plant asked for process temperatures because thermal interaction with the material and the
+coolant affects mechanical properties, roll wear and surface finish. A third research pass
+(sources `PT-`, `docs/thin-gauge-products.md`, "Process temperatures in foil rolling") gives
+the temperature map below; the tool compares the case with it in `thermal_check`
+(`physicroll/band_thermal.py`, evidence-neutral, never changes a score) and shows how the
+cooling-stripe result depends on the two least certain inputs in `width.thermal_sensitivity`.
+**The tool has no roll-wear model, no temperature-to-surface-finish (dyne, gloss) model and no
+model of property change after rolling**: what the research says about those is carried as
+literature statements, not model outputs.
+
+**Temperature map** (from `physicroll.band_products.TEMPERATURE_MAP`, by script):
+
+| temperature | typical | limit |
+|---|---|---|
+| Coil entering a pass | Not stated for foil; 60–100 °C entry gave exit above 150 °C at sheet gauge. [PT-T3] | ≤75 °C before the battery-foil final pass (≥10 h natural cooling). [PT-T1] |
+| Strip inside the bite | Calculated to reach about 200 °C at high speed. [PT-T4] | Above 200 °C needed before softening shows. [PT-T4] |
+| Coil off the final pass, battery foil (20→13 µm, 35 %, oil 42 °C) | 77.2 °C at 550 m/min; 97.9 and 99.7 °C at 600 m/min; prior art "above 90 °C". [PT-T1, PT-T2] | ≤80 °C (≤90 °C at the least), also when slit within 30 min. [PT-T1, PT-T2] |
+| Coil leaving a cold-mill pass (sheet gauge) | "About 121 °C"; cold rolling defined as below 129 °C; metal at 20–200 °C. [PT-T14, PT-T13, PT-T37] | No stated limit; trouble above 150–160 °C. [PT-T3] |
+| Oil supply, roughing and intermediate | 30–40 °C and 40–50 °C. [PT-T5, PT-T6] | - |
+| Oil supply, finishing | 50–60 °C general foil; 40–45 °C battery foil. [PT-T5, PT-T1, PT-T6] | Window 38–55 °C at one plant; legal cap 68 °C (cold mill), 71 °C (foil mills) in one US rule. [PT-T3, PT-T13] |
+| Hot edge spray | Oil up to 120 °C in 25 mm zones. [PT-T21, PT-T5] | - |
+| Work-roll surface and bulk | Not found measured; a cold-mill model uses 50 °C surface with 35 °C oil. [PT-T18] | Thermal load 40–50 kcal/m²s of roll surface (167–209 kW/m², computed by the report). [PT-T4] |
+
+**How cooling becomes a band in this tool** (one chain, section 7 for the physics): bite heat
+per width (plastic work plus interface slip, section 8.2) -> the share that goes into each work
+roll, `(1 - strip share) / 2` -> the spray header (nozzle footprints, flow level of each
+nozzle, spray coefficient) -> the roll temperature field (axial and radial conduction,
+`roll_thermal.py`) -> thermal expansion, compared with the same roll under a healthy header ->
+a local change of the roll gap, turned into a local thickness change by the roll compliance,
+the strip stiffness and the exit-tension feedback (`strip_shape.py`) -> extra length of that
+fibre (I-units) -> latent under the mill tension or buckled in the mill, and visible or not
+after tension release. A short event (a valve closure, an intermittent blockage) is the
+transient of the same chain. **Not modelled**: any effect of temperature on flow stress or on
+the oil film across the width, the per-revolution surface temperature cycle, the
+roll-strip heat coupling (bite heat is computed from the pass, not fed back), property change
+after rolling, roll wear and surface finish.
+
+**The heat-partition finding and what it did to the demo.** The only measured foil-mill heat
+balance puts 0.67-0.89 of the heat into the rolls and 0.11-0.33 into the strip [PT-T16, read as
+an ABSTRACT only; a net balance, not necessarily the split inside the bite]. The battery demo
+used a strip share of 0.84 (that of the sheet demo); it now uses the middle of the measured
+range, 0.22 (each work roll 0.39), and the middle of the simulated spray range,
+3.4 kW/m2K (no measured value on a roll exists; [PT-T18] simulated 2.5-4.3 kW/m2K on an aluminium
+cold mill, read as an excerpt of a garbled mirror; a plate test gives about 5-13 kW/m2K,
+computed [PT-T19]). With several times more heat in the roll the planted steady stripe grows
+from 0.959 to 2.96 um and the valve event from 0.495 to 2.12 um; both stay hidden under
+tension at the case pass and visible after release; the event is visible after release for
+311 s instead of 81 s (the demo observation was regenerated from the model to 310 s); every
+hypothesis score and the leader (`nozzle_thermal_stripe`) are unchanged. Sensitivity at the
+case pass (`width.thermal_sensitivity`, `model_options.thermal_sensitivity: "full"`; stripe and
+event scaled linearly with the roll heat at a fixed spray coefficient, checked by a direct
+solve; flatness states recomputed for every row):
+
+| strip share (per roll) | spray [kW/m2K] | stripe [um] | I-units | in mill / after release | stripe / in-mill onset | event peak [um] | event visible after release [s] |
+|---|---|---|---|---|---|---|---|
+| 0.22 (0.39) | 3.4 | 2.96 | 25.1 | latent under tension / manifest after tension release | 0.434 | 2.12 | 311 |
+| 0.33 (0.335) | 3.4 | 2.54 | 21.5 | latent under tension / manifest after tension release | 0.373 | 1.82 | 276 |
+| 0.11 (0.445) | 3.4 | 3.38 | 28.7 | latent under tension / manifest after tension release | 0.496 | 2.42 | 343 |
+| 0.84 (0.08) | 3.4 | 0.607 | 5.12 | latent under tension / manifest after tension release | 0.0891 | 0.435 | 51.6 |
+| 0.22 (0.39) | 2.5 | 3.87 | 32.7 | latent under tension / manifest after tension release | 0.567 | 2.3 | 371 |
+| 0.33 (0.335) | 2.5 | 3.32 | 28.1 | latent under tension / manifest after tension release | 0.487 | 1.98 | 332 |
+| 0.11 (0.445) | 2.5 | 4.42 | 37.4 | latent under tension / manifest after tension release | 0.647 | 2.63 | 406 |
+| 0.84 (0.08) | 2.5 | 0.794 | 6.67 | latent under tension / manifest after tension release | 0.116 | 0.473 | 67.2 |
+| 0.22 (0.39) | 4.3 | 2.4 | 20.4 | latent under tension / manifest after tension release | 0.356 | 1.96 | 272 |
+| 0.33 (0.335) | 4.3 | 2.06 | 17.5 | latent under tension / manifest after tension release | 0.306 | 1.69 | 240 |
+| 0.11 (0.445) | 4.3 | 2.73 | 23.3 | latent under tension / manifest after tension release | 0.406 | 2.24 | 301 |
+| 0.84 (0.08) | 4.3 | 0.492 | 4.16 | latent under tension / manifest after tension release | 0.073 | 0.403 | 41.8 |
+| 0.22 (0.39) | 13 | 0.851 | 7.28 | latent under tension / manifest after tension release | 0.127 | 1.12 | 136 |
+| 0.33 (0.335) | 13 | 0.731 | 6.25 | latent under tension / manifest after tension release | 0.109 | 0.959 | 116 |
+| 0.11 (0.445) | 13 | 0.971 | 8.31 | latent under tension / manifest after tension release | 0.145 | 1.27 | 155 |
+| 0.84 (0.08) | 13 | 0.175 | - | below reporting threshold / below reporting threshold | 0.026 | 0.229 | 9.14 |
+| 0.22 (0.39) | 2 | 4.67 | 39.4 | latent under tension / manifest after tension release | 0.684 | 2.41 | 421 |
+| 0.33 (0.335) | 2 | 4.02 | 33.8 | latent under tension / manifest after tension release | 0.587 | 2.07 | 379 |
+| 0.11 (0.445) | 2 | 5.33 | 45.1 | latent under tension / manifest after tension release | 0.78 | 2.76 | 459 |
+| 0.84 (0.08) | 2 | 0.959 | 8.02 | latent under tension / manifest after tension release | 0.14 | 0.495 | 80.9 |
+
+Only one combination changes a state: share 0.84 with 13 kW/m2K, where the stripe falls below the
+reporting threshold. At the measured partition the same stripe held on every pass buckles in the
+mill on the three assumed stock passes and stays latent on the plant's passes; the stripe each
+pass would itself produce gives the same split (section 3.5, "two questions"). Both assume the
+steady state, which takes 116 s to reach 50 % and 551 s to reach 90 % from a healthy header.
+
+**Strip exit temperatures** (pass heating, `process.heating`; reused by `thermal_check`): at the
+strip share 0.22, S1 54.8, S2 51.5, S3 57.1, F1 60.3, F2 66.1, ALT1 72.4, ALT2 72.9 C; at the former 0.84, S1 96.4, S2 84.1, S3 105, F1 117, F2 140, ALT1 164, ALT2 166 C. The measured partition brings
+every modelled exit temperature below the published 80 C battery coil limit [PT-T1, PT-T2],
+which the old partition exceeded on every pass. Two caveats stand: a strip exit temperature is
+not a coil temperature, and the experimental mattress bite inflates the friction heat.
+
+**`thermal_check` for the battery demo** (inputs, then outputs):
+
+| item | case value | published | verdict | read status |
+|---|---|---|---|---|
+| strip heat fraction | 0.22 | 0.11-0.33 | `WITHIN_PUBLISHED_RANGE` | abstract_or_snippet |
+| spray heat transfer coefficient | 3.4 kW/m2K | 2.5-4.3 kW/m2K | `WITHIN_PUBLISHED_RANGE` | excerpt |
+| coolant temperature as oil supply | 45 C | 40-45 | `WITHIN_PUBLISHED_RANGE` | excerpt |
+| oil inlet temperature | 45 C | 40-45 | `WITHIN_PUBLISHED_RANGE` | excerpt |
+| oil viscosity 40c | 1.6 mPa s (dynamic) | 1.5-2.0 cSt (kinematic) | `NO_PUBLISHED_RANGE` | vendor_or_trade_page |
+| spray footprint overlap | 0.688 | 0.1-0.3 | `ABOVE_PUBLISHED_LIMIT` | vendor_or_trade_page |
+
+| pass (modelled strip exit) | value | published | verdict | final pass |
+|---|---|---|---|---|
+| S1 | 54.8 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | no |
+| S2 | 51.5 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | no |
+| S3 | 57.1 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | no |
+| F1 | 60.3 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | no |
+| F2 | 66.1 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | yes |
+| ALT1 | 72.4 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | no |
+| ALT2 | 72.9 C | <= 80 | `WITHIN_PUBLISHED_RANGE` | yes |
+
+| output | value | published | verdict |
+|---|---|---|---|
+| stripe height on diameter | 5.92 um | 3.6-4.2 um | `ABOVE_PUBLISHED_RANGE` |
+| thermal crown | 19.3 um | <= 30 um | `WITHIN_PUBLISHED_RANGE` |
+
+The modelled stripe on diameter is above the simulated zone-cooling authority (about +-4 um on
+diameter 20 revolutions after a zone change [PT-T18]) because a partly blocked nozzle is a
+permanent, not a 20-revolution, disturbance; the thermal crown is inside the 30 um maximum
+measured on a foil mill [PT-T25] (whether that is on diameter or radius is not stated). The
+spray footprint overlap of the demo header, 69 %, is above the published 10-30 % (never above
+50 %) [PT-T22, PT-T21]; the tool's spray screen has no overlap threshold (it flags only gaps
+between fans) and is left as it is. The oil viscosity is not compared: the case gives a dynamic
+viscosity, the literature a kinematic one, and the density is not a case input. Growth: the short event reaches half its peak in 9.25 s (axial decay time constant of a 52 mm stripe about 23 s, computed); the steady stripe builds up to 50 % in 116 s and to 90 % in 551 s (radial time constant 4-7 min computed for a 260 mm roll). A plant-identified flatness response of about 20 s is of the order of the short local (axial) time scale and of an event's rise, not of the minutes a steady stripe needs to build.
+`thermal_check.quarter_barrel_note` is a positional note only (bands at 1/5-1/4 of the barrel from
+each end, the quarter looseness of [PT-T38]); it changes no score. If
+`width_model.roll_heat_fraction_per_roll` is given and disagrees with
+`tribology.strip_heat_fraction` the result flags `HEAT_PARTITION_INPUTS_INCONSISTENT` (the roll
+thermal model uses the first, pass heating the second); leave it null to derive it.
+
+**Roll wear and surface finish (literature, not modelled).** More aluminium fines with higher oil
+temperature, speed, reduction and roll roughness [PT-T15]; adsorbed films desorb as temperature
+rises and the roll coating is re-deposited [PT-T37, PT-T27]; a small circumferential temperature
+swing reduces thermal fatigue and wear (a general cold-mill statement) [PT-T23]; harder rolls
+(115-125 HSD) held shape on strong foil [PT-T29]. Surface: heat stripes, stripes between spray
+footprints, buckles after a spray is turned down and quarter looseness are documented in words
+only; dyne is set mainly by the oil carried out and can fall from above 32 to below 30 within
+12-24 h [PT-T29, PT-T30]; no source links oil, roll or strip temperature directly to dyne, gloss
+bands or white streaks.
+
+**Logs worth taking** (added to `recommended_next_measurements` for foil gauge or a battery
+product): coil temperature before and after the final pass (<= 75 / <= 80 C), oil supply
+temperature against 38-45 C, dyne at 0 h and 24 h.
+
 ## 4. How to run
 
 ```
@@ -919,7 +1082,10 @@ run unchanged.
 | `incoming_variation` | relative hardness variation of the incoming coil, once per decoiler revolution or not |
 
 `width_model.roll_heat_fraction_per_roll` may stay `null` only when `tribology` is given
-(it is then `(1 - strip_heat_fraction)/2`). `bite_heat_per_width_w_m` may stay `null`: it is
+(it is then `(1 - strip_heat_fraction)/2`); leave it `null` when `tribology` is given: if both are
+supplied and disagree the result flags `HEAT_PARTITION_INPUTS_INCONSISTENT` (the roll thermal
+model uses the width-model value, pass heating the tribology value; neither is changed).
+`bite_heat_per_width_w_m` may stay `null`: it is
 computed from the pass (section 8.2), except when no roll bite solves the case pass: then it
 must be supplied for the roll thermal model to run (section 3.4).
 
@@ -1421,10 +1587,16 @@ temperature reacts more than five times faster, and after re-cooling the resolve
 decays faster (half-decay about 79 s against about 113 s lumped in the reference case),
 still in minutes.
 
-**Open discrepancy.** Dohmae & Okamura (2012) identified on a plant a first-order flatness
-response to one cooling zone with a time constant of about 20 s. This model grows and fades
-stripes over tens of seconds to minutes (section 7.4: half-decay 57 s and 84 s after the two
-demo events). The discrepancy is open. Possible causes, none modelled: bite heat that depends
+**Open discrepancy, revisited.** Dohmae & Okamura (2012) identified on a plant a first-order
+flatness response to one cooling zone with a time constant of about 20 s. This model fades
+stripes over about a minute (section 7.4: half-decay 57 s and 84 s after the two lengthwise
+demo events) and builds a steady stripe over minutes (battery demo: 116 s to 50 %,
+551 s to 90 %, `width.thermal_sensitivity.steady_build_up`); a short event rises faster (half its
+peak in 9.25 s in the battery demo). The literature's computed time scales are about 23 s for the
+axial decay of a 52 mm stripe and 4-7 min radially for a 260 mm roll [PT-T18, PT-T25,
+computed]: the plant's 20 s is of the order of the axial (local) scale, the model's steady
+build-up of the radial one. Plant time constants themselves were not found (abstract only,
+[PT-T26]). Partly open. Possible causes, none modelled: bite heat that depends
 on the roll surface temperature, emulsion-level heat transfer, per-revolution effects.
 
 Not modelled: the per-revolution surface temperature cycle, the bite contact conductance
@@ -1719,7 +1891,9 @@ schedule 2.2 -> 0.21 mm in six passes. Header: 32 nozzles at 52 mm pitch, 0.2 m 
 0.8 rad fans, mean spray coefficient 3000 W/m2K; nozzle 12 at 0.668 m partly blocked (flow
 level 0.45); events: nozzles 20-21 off for 60 s, nozzle 6 off for 150 s. The roll heat share
 (0.08 per roll from `strip_heat_fraction` 0.84) and the spray coefficient were chosen so that
-the thermal crown lands in the 2-16 um reported for mills. Observations were generated from
+the thermal crown lands in the 2-16 um reported for mills; the share is kept at 0.84 because the
+process-temperature research found a measured partition for foil mills only (0.11-0.33 to the
+strip), none for sheet-gauge cold rolling (section 3.12). Observations were generated from
 the model itself (positions 0.357, 0.667, 1.093 m; duration 40 s; continuity both;
 loose/buckle, visible in the mill; positions repeat and do not move after a work-roll
 change; worse at thinner gauge).
@@ -2230,7 +2404,11 @@ proposal, to confirm with the plant)"** when the result has `material_selection`
 sentence, the bands of the final and the case pass, the options table at the final gauge
 (GB minimum, typical Rm, usual choice, evidence, sources), the two proposals (a fallback
 proposal marked "evidence WEAK"), the case against the band (alloy, temper, yield stress, a
-verdict per pass) with the indicator-only caveat, flags and limitations. Further down, the
+verdict per pass) with the indicator-only caveat, flags and limitations. For a v2 case with a
+width model or tribology, a **"Process temperatures"** section follows the process section:
+the case's thermal inputs and the modelled outputs against the literature (`thermal_check`,
+section 3.12), the battery coil limit line, the growth-time text, any property-risk statement,
+the quarter-barrel note and the heat-partition / spray sensitivity table. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
 assessable: <reason>" and lists what is still evaluated; with supplied shape inputs it says
@@ -2352,12 +2530,26 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   read from mirrors or producer pages reproducing them; finished tensile strength is used as an
   indicator of the rolling flow stress and the proof strength is assumed from a ratio where not
   published. The plant must confirm or correct the proposal.
-- **Supplied heat partition and spray coefficients.** The strip heat fraction (hence the roll
-  heat fraction) and the spray heat-transfer coefficients are inputs; no measured value for a
-  kerosene-based coolant spray was found. Stripe heights scale with these guesses.
-- **Thermal model slower than the plant-identified response**: stripes grow and fade over
-  tens of seconds to minutes (demo half-decay 57 s and 84 s) against a first-order flatness
-  response of about 20 s identified on a plant (Dohmae & Okamura 2012). Open.
+- **Supplied heat partition and spray coefficients.** Both are inputs. The only measured
+  foil-mill partition puts 0.11-0.33 of the heat into the strip [PT-T16], read as an abstract
+  only and a net balance (not necessarily the split inside the bite); no sheet-gauge value was
+  found. For kerosene on a rotating work roll only a SIMULATED 2.5-4.3 kW/m2K was found
+  [PT-T18, excerpt of a garbled mirror]; a plate test gives about 5-13 kW/m2K (computed,
+  [PT-T19]). Stripe heights scale with the roll heat share and fall with the spray
+  coefficient; `width.thermal_sensitivity` shows how far (section 3.12).
+- **No roll-wear model and no temperature-to-surface-finish model.** What the research says
+  about temperature, roll wear, roll coating, fines and dyne is carried as literature
+  statements in the catalogue and in `thermal_check`, not computed. No property change after
+  rolling (the battery-foil elongation decay above 90 C is a literature statement).
+- **Thermal model against the plant-identified response**: a first-order flatness response
+  of about 20 s was identified on a plant (Dohmae & Okamura 2012). In the model a short local
+  event rises fast (the battery demo's valve event reaches half its peak in 9.25 s; the computed
+  axial decay time of a 52 mm stripe is about 23 s), while a steady stripe needs minutes to
+  build (116 s to 50 %, 551 s to 90 % in the battery demo; radial time constant 4-7 min
+  computed for a 260 mm roll [PT-T25]) and the lengthwise demo's events fade over about a
+  minute (half-decay 57 s and 84 s). The 20 s is of the order of the local time scale, not of
+  the steady build-up; plant time constants were not found (only an abstract, [PT-T26]).
+  Partly open.
 - **The roll thermal model** is circumferentially averaged, with top-hat footprints (the
   nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
   expansion with a source-dependent factor (1 or 1 + nu), and no coupling of roll temperature
@@ -2402,17 +2594,18 @@ At battery-foil gauge, in addition (each checked against the code and
   The rule weights for `worse_at_thinner_gauge` are inherited from sheet gauge: "true" still
   supports `nozzle_thermal_stripe` and `cooling_zone_switching_transient` weakly.
 - **After-release onsets are set by the reporting threshold.** At the foil case pass they are
-  about 0.2 um of stripe (0.241 um steady, 0.214 um for the event), equal to the 2 I-unit
+  about 0.2 um of stripe (0.239 um steady, 0.206 um for the event), equal to the 2 I-unit
   reporting onset, so nearly any reportable stripe reads "visible after tension release", and
-  a 20 s valve closure shows a band after release for 80.9 s. The whole-sheet after-release
-  indicator reads `GLOBAL_BUCKLE_AFTER_RELEASE` for bands of 8.02 and 4.69 I-units.
+  a 20 s valve closure shows a band after release for 311 s. The whole-sheet after-release
+  indicator reads `GLOBAL_BUCKLE_AFTER_RELEASE` for bands of 25.1 and 21 I-units.
 - **"Worse at lower tension" is not specific to tension lines.** A latent thermal stripe's
   in-mill onset also falls with tension: 6.83 um at 40 MPa in the result; about 1.6 um at
   8 MPa according to the demo's scenario notes (a probe with the bite re-derived at 8 MPa; not
   in the result file). The demo therefore leaves the observation `null`.
 - **The experimental mattress bite at foil gauge**: forward slip 0.190 at the case pass,
   flagged implausible; it enters the slip dissipation and so inflates the friction power
-  (47.1 kW/m against 40.3 kW/m plastic) and the pass-heating exit temperature (390.6 K) [D];
+  (47.1 kW/m against 40.3 kW/m plastic) and the pass-heating exit temperature (333.4 K at
+  strip share 0.22) [D];
   force per width scales steeply with the supplied friction (section 3.3); no closed-gap load
   path in either bite model.
 - **No roll-kissing model.** The `foil_regime` block appears below 100 um exit gauge, while
@@ -2462,9 +2655,10 @@ At battery-foil gauge, in addition (each checked against the code and
 - **Tension lines have no physical model**; `foil_tension_lines` is a rule set with analyst
   weights [D] on a published description [BF-S21, excerpt of a trade report of a producer
   talk; V S27, S28].
-- **Demo heat partition**: the foil demo keeps the sheet demo's strip heat fraction 0.84,
-  outside the 0.11-0.33 reported for foil mills (section 8.2); the stripe heights scale with
-  this choice.
+- **Demo heat partition**: the foil demo uses the middle (0.22) of the only measured
+  foil-mill strip share, 0.11-0.33 [PT-T16, abstract only, net balance], with 0.84 and the
+  measured ends kept as sensitivity rows; the sheet-gauge lengthwise demo keeps 0.84 because no
+  published sheet-gauge partition was found.
 - **Foil facts** come from a research pass over trade, association, patent and journal
   sources (section 15), some not peer-reviewed; product ranges given there without a source
   are tagged [M]. None is plant-validated.

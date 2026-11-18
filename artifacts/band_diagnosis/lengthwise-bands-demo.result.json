@@ -6808,6 +6808,275 @@
     "strip_length_m": 1.0
   },
   "synthetic": true,
+  "thermal_check": {
+    "battery_coil_limits_apply": false,
+    "coil_limits_c": {
+      "elongation_decay_above": 90.0,
+      "entering_final_pass": 75.0,
+      "leaving_final_pass": 80.0
+    },
+    "flags": [],
+    "growth": {
+      "axial_decay_time_constant_s": 22.8310400474,
+      "event_time_to_half_peak_s": [
+        25.809070884414194,
+        50.0308890999369
+      ],
+      "radial_time_constant_s": [
+        240.0,
+        420.0
+      ],
+      "read_status": "computed",
+      "sources": [
+        "PT-T18",
+        "PT-T25"
+      ],
+      "text": "Growth: the short event reaches half its peak in 25.8 s (axial decay time constant of a 52 mm stripe about 23 s, computed). A plant-identified flatness response of about 20 s is of the order of the short local (axial) time scale and of an event's rise, not of the minutes a steady stripe needs to build."
+    },
+    "heat_partition_inputs": null,
+    "inputs": [
+      {
+        "basis": "strip share of the heat against the only measured foil-mill partition (abstract only; a net balance, not necessarily the split inside the bite) [PT-T16]; the case pass is sheet gauge and the literature has foil-mill data only (verdict against the foil range kept beside)",
+        "conversion": "strip share 0.84 <-> roll heat fraction per work roll 0.08 = (1 - strip share) / 2 ((1 - tribology.strip_heat_fraction)/2)",
+        "item": "strip_heat_fraction",
+        "note": "measured foil-mill heat partition, strip share (abstract only; a net balance, not necessarily the split inside the bite)",
+        "published_high": 0.33,
+        "published_low": 0.11,
+        "read_status": "abstract_or_snippet",
+        "sources": [
+          "PT-T16"
+        ],
+        "unit": "fraction",
+        "value": 0.84,
+        "verdict": "NO_PUBLISHED_RANGE",
+        "verdict_against_foil_literature": "ABOVE_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "kerosene spray on a work roll, SIMULATED 2.5\u20134.3 kW/m\u00b2K [PT-T18]; no measured value on a roll was found",
+        "item": "spray_heat_transfer_coefficient",
+        "note": "wider published values: 4.65\u20135.5 kW/m\u00b2K in a cold-mill model example (coolant not named) [PT-T20]; about 5\u201313 kW/m\u00b2K computed from a plate test [PT-T19]",
+        "published_high": 4300.0,
+        "published_low": 2500.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T18"
+        ],
+        "unit": "W/m^2K",
+        "value": 3000.0,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "oil supply, finishing; the case pass is sheet gauge and the literature has foil-mill data only (verdict against the foil range kept beside)",
+        "item": "coolant_temperature_as_oil_supply",
+        "note": "oil supply, finishing, general foil; width_model.coolant_temperature_k read as the oil supply temperature of a finishing (foil) pass",
+        "published_high": 60.0,
+        "published_low": 50.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T5"
+        ],
+        "unit": "degC",
+        "value": 45.0,
+        "verdict": "NO_PUBLISHED_RANGE",
+        "verdict_against_foil_literature": "BELOW_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "oil supply, finishing; the case pass is sheet gauge and the literature has foil-mill data only (verdict against the foil range kept beside)",
+        "item": "oil_inlet_temperature",
+        "note": "oil supply, finishing, general foil",
+        "published_high": 60.0,
+        "published_low": 50.0,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T5"
+        ],
+        "unit": "degC",
+        "value": 45.0,
+        "verdict": "NO_PUBLISHED_RANGE",
+        "verdict_against_foil_literature": "BELOW_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "the case gives a dynamic viscosity at 40 C; the literature gives kinematic viscosity at 40 C (1.5-2.0 cSt); the oil density needed to convert is not a case input, so no verdict",
+        "item": "oil_viscosity_40c",
+        "note": "",
+        "published_high": 2e-06,
+        "published_low": 1.5e-06,
+        "read_status": "vendor_or_trade_page",
+        "sources": [
+          "PT-T9",
+          "PT-T10",
+          "PT-T8"
+        ],
+        "unit": "Pa s (case, dynamic) / m^2/s (literature, kinematic)",
+        "value": 0.0018,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "footprint overlap (W_eff - pitch) / W_eff of the spray screen against the published 10-30 %, never above 50 % [PT-T22, PT-T21]; the spray screen itself has no overlap threshold (it only flags gaps between fans)",
+        "item": "spray_footprint_overlap",
+        "note": "",
+        "published_high": 0.3,
+        "published_low": 0.1,
+        "read_status": "vendor_or_trade_page",
+        "sources": [
+          "PT-T22",
+          "PT-T21"
+        ],
+        "unit": "fraction",
+        "value": 0.6880238768612186,
+        "verdict": "ABOVE_PUBLISHED_LIMIT"
+      }
+    ],
+    "not_supplied": false,
+    "note": "Evidence-neutral literature comparison: it never changes a number or a score.",
+    "outputs": [
+      {
+        "basis": "against the simulated zone-cooling authority, \u00b13.6 to \u00b14.2 \u00b5m on diameter 20 revolutions after a zone change [PT-T18]",
+        "item": "stripe_height_on_diameter",
+        "note": "largest steady stripe 2.72 um on radius (x2 on diameter) at 0.6675 m; \u00b1 on diameter 20 revolutions after a zone change (simulated, 1100 alloy); grows linearly with rolled length, halves from 100 to 300 m/min",
+        "published_high": 4.2e-06,
+        "published_low": 3.6e-06,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T18"
+        ],
+        "unit": "m",
+        "value": 5.430235565335637e-06,
+        "verdict": "ABOVE_PUBLISHED_RANGE"
+      },
+      {
+        "basis": "foil-mill thermal crown, 30 \u00b5m maximum from measured values [PT-T25]; diameter or radius not stated (a published limit)",
+        "item": "thermal_crown",
+        "note": "model thermal crown 9.24 um on radius, 18.5 um on diameter (compared); the published 30 um does not say whether it is on diameter or radius",
+        "published_high": 3e-05,
+        "published_low": null,
+        "read_status": "excerpt",
+        "sources": [
+          "PT-T25"
+        ],
+        "unit": "m",
+        "value": 1.8489371797696748e-05,
+        "verdict": "WITHIN_PUBLISHED_RANGE"
+      }
+    ],
+    "product_id": null,
+    "property_risk": null,
+    "quarter_barrel_note": {
+      "positions_in_quarter_zones_m": [
+        0.357
+      ],
+      "sources": [
+        "PT-T38"
+      ],
+      "text": "Positional note only (no score): a roll hotter at 1/5-1/4 of the barrel from each end gave quarter looseness after roughing, removed by larger nozzles there [PT-T38]. Observed bands in those zones: 0.357 m.",
+      "zones_m": [
+        [
+          0.34,
+          0.425
+        ],
+        [
+          1.275,
+          1.3599999999999999
+        ]
+      ]
+    },
+    "status": "LITERATURE_SURVEY_UNVALIDATED",
+    "strip_exit_temperatures": [
+      {
+        "above_90c": false,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P1 2.20->1.40 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 78.76695638847872,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": true,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P2 1.40->0.90 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 96.18344402500804,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": true,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P3 0.90->0.60 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 99.55580294300552,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": true,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P4 0.60->0.42 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 94.56141801223748,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": true,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P5 0.42->0.30 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 92.26269105464638,
+        "verdict": "NO_PUBLISHED_RANGE"
+      },
+      {
+        "above_90c": true,
+        "basis": "no coil temperature limit published for this product",
+        "is_final_pass": false,
+        "item": "modelled_strip_exit_temperature",
+        "label": "P6 0.30->0.21 mm",
+        "note": "",
+        "published_high": null,
+        "published_low": null,
+        "read_status": null,
+        "sources": [],
+        "unit": "degC",
+        "value": 95.73600288576773,
+        "verdict": "NO_PUBLISHED_RANGE"
+      }
+    ],
+    "texts": [
+      "The tool has no model of property change after rolling, no roll-wear model and no temperature-to-surface-finish model; the statements here are literature statements, not model outputs."
+    ]
+  },
   "time_simulation": {
     "bite_damping_transit_fraction": 0.5,
     "couple_tension": true,
@@ -23162,7 +23431,7 @@
           "stripe_peak_m": 1.5102842666089739e-05
         }
       ],
-      "per_pass_note": "Stripe at a pass = the case-pass stripe x (that pass's bite heat / the case pass's) x (roll share / case roll share), at the case spray coefficient (linear model, same stripe shape); onsets from the gauge trend (the case stripe's shape at each pass). Strip exit temperature = entry + pass-heating rise x (share / case share); a strip exit temperature is not a coil temperature (the 80 C battery limit is for the coil [PT-T1]), and the experimental mattress bite inflates friction heat.",
+      "per_pass_note": "Stripe at a pass = the case-pass stripe x (that pass's bite heat / the case pass's) x (roll share / case roll share), at the case spray coefficient (linear model, same stripe shape); onsets from the gauge trend (the case stripe's shape at each pass). Strip exit temperature = entry + pass-heating rise x (share / the strip fraction that pass-heating row used, tribology.strip_heat_fraction); a strip exit temperature is not a coil temperature (the 80 C battery limit is for the coil [PT-T1]), and the experimental mattress bite inflates friction heat.",
       "per_pass_text": "Two questions, two answers. The gauge trend holds the case-pass stripe (2.72 um) unchanged on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6 and stay latent on P1.",
       "rows": [
         {
@@ -23381,7 +23650,8 @@
         }
       ],
       "spray_rows_note": "spray-coefficient rows not computed: set model_options.thermal_sensitivity to \"full\" (a few seconds)",
-      "status": "EVALUATED"
+      "status": "EVALUATED",
+      "steady_build_up": null
     },
     "thermal_steady": {
       "blocked_nozzle_indices": [],

@@ -3367,6 +3367,14 @@ def diagnose(case):
         flags.append('MATERIAL_SELECTION_FAILED')
     if ms is not None:
         result['material_selection'] = ms
+    try:
+        tc = band_thermal.thermal_check(result, eff)
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        tc = {'status': 'FAILED', 'error': f'thermal_check: {exc}', 'not_supplied': False}
+        flags.append('THERMAL_CHECK_FAILED')
+    if tc is not None:
+        result['thermal_check'] = tc
+        flags.extend(tc.get('flags') or [])
     if result['foil_regime'] is not None:
         note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
                 'rolling (not modelled), where load is no longer a gauge actuator.')
@@ -3377,6 +3385,9 @@ def diagnose(case):
                 sec['foil_regime_note'] = note
     try:
         result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law, h1)
+        for line in band_thermal.thermal_measurements(eff):
+            if line not in result['recommended_next_measurements']:
+                result['recommended_next_measurements'].append(line)
     except ValueError as exc:
         result['recommended_next_measurements'] = [f'not available: {exc}']
         flags.append('NEXT_MEASUREMENTS_FAILED')

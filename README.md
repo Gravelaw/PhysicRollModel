@@ -260,12 +260,18 @@ published product ranges and schedules
 alloy and temper for the final gauge from a literature grade table (`material_selection`: the
 gauge band, its options with evidence ratings, a standard and a high-strength proposal, and
 the case compared with them; a proposal for the plant to confirm, never a change to the case or
-the scores). The foil demo follows the plant's route
+the scores). With a width model or tribology, `thermal_check` compares the case's process
+temperatures, heat partition and spray coefficient with a literature temperature map and
+shows, in `width.thermal_sensitivity`, how the cooling-stripe result moves across the measured
+heat partition and the published spray coefficients (no roll-wear or surface-finish model).
+The foil demo follows the plant's route
 (50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates assumed;
-alloy and temper the literature proposal 1235-H18): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
+alloy and temper the literature proposal 1235-H18; measured heat partition 0.22, simulated
+spray 3.4 kW/m2K): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
 alternative. The 18 um final pass gets an extended-domain bite with its force inside the
 reported range (still unvalidated); the 12 um bite is not credible. In the demo a cooling
-stripe becomes harder, not easier, to see in the mill as the gauge thins; see
+stripe becomes harder, not easier, to see in the mill as the gauge thins (at the measured heat
+partition it shows in the mill on the thick stock passes and stays hidden on the foil passes); see
 section 3 of the doc. Four synthetic demos:
 
 ```

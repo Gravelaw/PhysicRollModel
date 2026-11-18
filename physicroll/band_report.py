@@ -2235,7 +2235,8 @@ def _foil_block(r):
 # ------------------------------------------------------------------------------ product check
 PC_WORDS = {'WITHIN_PUBLISHED_RANGE': 'within', 'BELOW_PUBLISHED_RANGE': 'BELOW',
             'ABOVE_PUBLISHED_RANGE': 'ABOVE', 'NO_PUBLISHED_RANGE': 'no published range',
-            'INCONSISTENT_WITH_PUBLISHED_MODE': 'INCONSISTENT'}
+            'INCONSISTENT_WITH_PUBLISHED_MODE': 'INCONSISTENT',
+            'ABOVE_PUBLISHED_LIMIT': 'ABOVE LIMIT'}
 PC_ITEMS = ('final_gauge', 'per_pass_reduction', 'final_pass_reduction', 'final_pass_entry_gauge',
             'exit_speed', 'rolled_mode', 'single_sheet_final_gauge', 'alloy', 'temper',
             'mean_flow_stress_indicator')
@@ -2363,6 +2364,98 @@ def _material_block(r):
             + f'<p class="note">{_e(cmp_.get("flow_stress_caveat"))} {_e(ms.get("note"))} '
               f'Flags: {_e(", ".join(ms.get("flags") or []) or "none")}. '
               + _e(' '.join(ms.get('limitations') or [])) + '</p></section>')
+
+
+TC_UNITS = {'degC': ('°C', 1.0), 'fraction': ('', 1.0), 'W/m^2K': ('kW/m²K', 1e-3),
+            'm': ('µm', 1e6), 'm^2/s': ('cSt', 1e6)}
+
+
+def _tc_val(f, key):
+    v = f.get(key)
+    unit, k = TC_UNITS.get(f.get('unit'), ('', 1.0))
+    if not _ok(v):
+        return '–'
+    return _f(v * k, 1.0, 3) + (f' {unit}' if unit else '')
+
+
+def _tc_rows(fs, label_key='item'):
+    rows = []
+    for f in fs:
+        lo, hi = _tc_val(f, 'published_low'), _tc_val(f, 'published_high')
+        rng = f'{lo} – {hi}' if lo != '–' and hi != '–' else (f'≤ {hi}' if hi != '–' else lo)
+        word = PC_WORDS.get(f.get('verdict'), str(f.get('verdict')))
+        rows.append([_e(str(f.get(label_key) or f.get('item')).replace('_', ' ')),
+                     _tc_val(f, 'value'), rng,
+                     f'<strong>{_e(word)}</strong>' if word.isupper() else _e(word),
+                     _e(', '.join(f.get('sources') or [])), _e(f.get('read_status') or '–'),
+                     _e(' '.join(x for x in (f.get('conversion'), f.get('note')) if x))])
+    return rows
+
+
+def _thermal_block(r):
+    """SPEC14 Part 2: process temperatures against the literature (and the sensitivity)."""
+    tc = r.get('thermal_check')
+    head = '<section><h2>Process temperatures</h2>'
+    if not isinstance(tc, dict):
+        return ''
+    if tc.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(tc.get('error'))) + '</section>'
+    if tc.get('not_supplied'):
+        return head + _state_p('not supplied: ' + str(tc.get('reason'))) + '</section>'
+    cols = ['item', 'value', 'published', 'verdict', 'sources', 'read status', 'note']
+    out = [head, f'<p>{_e(tc.get("note"))} ' + _e(' '.join(tc.get('texts') or [])) + '</p>',
+           '<h3>Case inputs against the literature</h3>',
+           _table(cols, _tc_rows(tc.get('inputs') or []), 'wrapall')]
+    lim = tc.get('coil_limits_c') or {}
+    out.append('<h3>Modelled outputs against the literature</h3>')
+    if tc.get('battery_coil_limits_apply'):
+        out.append(f'<p>Battery-foil coil limits [PT-T1, PT-T2]: ≤{_f(lim.get("entering_final_pass"))} °C '
+                   f'entering the final pass, ≤{_f(lim.get("leaving_final_pass"))} °C leaving it; '
+                   f'above {_f(lim.get("elongation_decay_above"))} °C elongation decays for '
+                   'weeks.</p>')
+    temps = tc.get('strip_exit_temperatures') or []
+    if temps:
+        for f in temps:
+            f.setdefault('label', f.get('item'))
+        out.append(_table(['pass (strip exit, modelled)', 'value', 'published', 'verdict',
+                           'sources', 'read status', 'note'], _tc_rows(temps, 'label'),
+                          'wrapall'))
+    out.append(_table(cols, _tc_rows(tc.get('outputs') or []), 'wrapall'))
+    g = tc.get('growth') or {}
+    if g.get('text'):
+        out.append(f'<p>{_e(g["text"])}</p>')
+    pr = tc.get('property_risk')
+    if pr:
+        out.append(f'<p><strong>Property risk (literature, not a model):</strong> passes '
+                   f'{_e(", ".join(pr["passes"]))}. {_e(pr["literature_statement"])} '
+                   f'[{_e(", ".join(pr["sources"]))}] {_e(pr["note"])}</p>')
+    q = tc.get('quarter_barrel_note')
+    if q:
+        out.append(f'<p class="note">{_e(q["text"])}</p>')
+    ts = _get(r, 'width', 'thermal_sensitivity')
+    if isinstance(ts, dict) and ts.get('status') == 'EVALUATED':
+        rows = []
+        for x in ts.get('rows') or []:
+            ev = (x.get('events') or [{}])[0] if x.get('events') else {}
+            rows.append([_f(x.get('strip_heat_share'), 1, 2),
+                         _f(x.get('spray_htc_w_m2k'), 1e-3, 3),
+                         _um(x.get('stripe_peak_m')),
+                         _e(_short(x.get('state_in_mill'))) if x.get('state_in_mill') else '–',
+                         _f(x.get('ratio_stripe_to_in_mill_onset'), 1, 3),
+                         _um(ev.get('peak_deviation_m')) if ev else '–',
+                         _e(_short(ev.get('in_mill'))) if ev.get('in_mill') else '–',
+                         _f(ev.get('visible_time_s'), 1, 3) if ev else '–'])
+        out.append('<h3>Sensitivity of the stripe to the heat partition and the spray '
+                   'coefficient</h3>'
+                   f'<p class="note">{_e(ts.get("share_conversion"))}; {_e(ts.get("note"))} '
+                   f'{_e(ts.get("linearity_note"))}. {_e(ts.get("spray_rows_note") or "")}</p>'
+                   + _table(['strip share', 'spray [kW/m²K]', 'stripe (radius)', 'in mill',
+                             'stripe / in-mill onset', 'event peak', 'event in mill',
+                             'event visible [s]'], rows, 'wrapall'))
+        if ts.get('per_pass_text'):
+            out.append(f'<p>{_e(ts["per_pass_text"])}</p>')
+    out.append('</section>')
+    return ''.join(out)
 
 
 # ------------------------------------------------------------------------------ family + layout
@@ -2761,7 +2854,7 @@ def render_band_report(result):
                       _schedule_section(r), _freq_section(r), _forced_section(r)]
         transverse += _levers_blocks(r)
         new = [_width_section(r), _events_section(r), _gauge_section(r)]
-        tail = [_process_section(r), _dynamics_section(r)]
+        tail = [_process_section(r), _thermal_block(r), _dynamics_section(r)]
         if lengthwise:
             s += new
             s.append(_hyp_section(r, fam or ''))
