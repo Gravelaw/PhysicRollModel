@@ -637,6 +637,13 @@ def _bite_pass(case, row=None):
 # Hitchcock derivation keeps its own 20 um floor, the experimental mattress model reaches 8 um
 # (the lower gauge of GB/T 33143-2022) with the flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_
 # DOMAIN below 20 um. A pass below 8 um has no roll-bite result at all.
+SLIP_KINEMATICS_LIMIT = 0.5   # band_signatures accepts |forward slip| < 0.5
+SLIP_KINEMATICS_FLAG = 'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'
+SLIP_KINEMATICS_LIMITATION = (
+    'The bite\'s forward slip is 0.5 or more (experimental mattress model without elastic '
+    'strip zones): zero slip is used in the roll-borne pitch kinematics only (source '
+    'catalogue, roll-mark and order-locked pitches); the forward-slip screen is not '
+    'assessable and every other result uses the bite\'s actual slip.')
 BITE_FLOOR_M = chatter_BITE_MIN_EXIT_THICKNESS_M
 BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
 BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 8 um floor of the roll-bite '
@@ -972,7 +979,19 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
                                pitches[0]['pitch_m'] if len(pitches) == 1 else None)
     hb['contact_length_basis'] = contact_basis
     scr['herringbone'] = hb
-    scr['forward_slip'] = bs.forward_slip_screen(slip) if bite is not None else None
+    if bite is None:
+        scr['forward_slip'] = None
+    elif abs(slip) < SLIP_KINEMATICS_LIMIT:
+        scr['forward_slip'] = bs.forward_slip_screen(slip)
+    else:
+        # band_signatures accepts |slip| < 0.5; a larger (implausible, flagged) model slip is
+        # not skidding: the screen is not assessable, never 'SKIDDING'
+        scr['forward_slip'] = {
+            'status': 'NOT_ASSESSABLE', 'forward_slip_fraction': slip,
+            'reason': (f'forward slip {slip:.4g} is outside the screen domain (|f| < 0.5): '
+                       'strongly positive, not skidding; an experimental mattress bite reports '
+                       'such values because it has no elastic strip zones'),
+            'flags': [], 'limitations': [], 'sources': []}
     lub = case['lubrication']
     if lub is not None and bite is not None:
         vr = p['exit_speed_m_s'] / (1 + slip)
@@ -1480,7 +1499,7 @@ def _h_fifth(ctx):
                   None if g is None else ('weak' if g else 'moderate')))
     if ctx.law == 'SPEED_INDEPENDENT_PITCH':
         def near_int(p):
-            n = math.pi * ctx.db * (1 + ctx.slip) / p['pitch_m']
+            n = math.pi * ctx.db * (1 + ctx.kin_slip) / p['pitch_m']
             ok = n >= 0.95 and abs(n - round(n)) <= 0.05
             return (('SUPPORTS', 'moderate', f'pi*D_b*(1+f)/p = {n:.3f}') if ok
                     else ('NEUTRAL', None, f'pi*D_b*(1+f)/p = {n:.3f}'))
@@ -1523,8 +1542,9 @@ def _roll_mark(ctx, diameter, roll, label):
     ns = sorted(set(range(1, 9)) | set(marks))
 
     def rule(p):
-        best = min(ns, key=lambda n: abs(math.pi * diameter * (1 + ctx.slip) / n - p['pitch_m']))
-        pred = math.pi * diameter * (1 + ctx.slip) / best
+        best = min(ns, key=lambda n: abs(math.pi * diameter * (1 + ctx.kin_slip) / n
+                                         - p['pitch_m']))
+        pred = math.pi * diameter * (1 + ctx.kin_slip) / best
         mis = abs(pred - p['pitch_m']) / p['pitch_m']
         if mis <= 0.03:
             return ('SUPPORTS', 'strong', f'n = {best}, mismatch {mis:.2%}')
@@ -1558,9 +1578,9 @@ def _h_roll(ctx, which):
                   'NOT_OBSERVED' if ori is None else
                   ('CONTRADICTS' if ori == 'longitudinal' else 'NEUTRAL'),
                   'strong' if ori == 'longitudinal' else None))
-    pred = {'roll_diameter_m': d, 'pitch_one_mark_m': math.pi * d * (1 + ctx.slip),
-            'pitch_two_marks_m': math.pi * d * (1 + ctx.slip) / 2,
-            'forward_slip_fraction_used': ctx.slip}
+    pred = {'roll_diameter_m': d, 'pitch_one_mark_m': math.pi * d * (1 + ctx.kin_slip),
+            'pitch_two_marks_m': math.pi * d * (1 + ctx.kin_slip) / 2,
+            'forward_slip_fraction_used': ctx.kin_slip}
     return ev, pred
 
 
@@ -1829,6 +1849,10 @@ def _h_skid(ctx):
     if scr['forward_slip'] is None:
         ev = [_ev('forward slip', f'NOT_ASSESSABLE: {ctx.bite_error}', '<= 0 or < 0.005',
                   'NEUTRAL', basis='model')]
+    elif scr['forward_slip']['status'] == 'NOT_ASSESSABLE':
+        ev = [_ev('forward slip', f'{ctx.slip:.4f}; not assessable: '
+                  f'{scr["forward_slip"]["reason"]}', '<= 0 or < 0.005', 'NEUTRAL',
+                  basis='model')]
     else:
         f = ctx.slip
         if f <= 0:
@@ -2659,15 +2683,18 @@ def diagnose(case):
     ctx.anti_upper_hz = nf['antisymmetric_hz'][1]
     ctx.drive_modes = drive_modes
     ctx.chatter_unreliable = False
-    if bite is not None and abs(bite.forward_slip_fraction) < 0.5:
+    # two values (review finding): ctx.slip is the bite's actual forward slip, used by the
+    # evidence and the screens; ctx.kin_slip is the value of the roll-borne pitch kinematics,
+    # whose helpers (band_signatures) accept |slip| < 0.5 only. An experimental mattress bite
+    # can report an implausible slip of 0.5 or more (no elastic strip zones): then only the
+    # kinematics use zero.
+    if bite is not None:
         ctx.slip = bite.forward_slip_fraction
-    elif bite is not None:
-        # an experimental mattress bite can report an implausible slip of 0.5 or more (no
-        # elastic strip zones); the roll-speed kinematics accept |slip| < 0.5 only
-        ctx.slip = 0.0
-        flags.append('FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS')
+        ctx.kin_slip = ctx.slip if abs(ctx.slip) < SLIP_KINEMATICS_LIMIT else 0.0
+        if ctx.kin_slip != ctx.slip:
+            flags.append(SLIP_KINEMATICS_FLAG)
     else:
-        ctx.slip = 0.0
+        ctx.slip = ctx.kin_slip = 0.0
         flags.append('FORWARD_SLIP_UNKNOWN_ZERO_USED_IN_KINEMATICS')
 
     if bite is not None:
@@ -2733,7 +2760,7 @@ def diagnose(case):
         ctx.ucrit = ctx.ucrit0 = ctx.onset_hz = ctx.dominant_hz = ctx.speed_ratio = None
         ctx.lever_directions = None
 
-    sig = _section_signatures(eff, modes, ctx.slip, u_op, h0 / h1, obs, flags)
+    sig = _section_signatures(eff, modes, ctx.kin_slip, u_op, h0 / h1, obs, flags)
     result['signatures'] = sig
     ctx.signatures = sig
     ctx.catalogue = sig['catalogue']
@@ -2869,6 +2896,8 @@ def diagnose(case):
         result['limitations'].append(EXTENDED_GAUGE_LIMITATION)
     if REDUCTION_EXTENDED_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_REDUCTION_LIMITATION)
+    if SLIP_KINEMATICS_FLAG in flags:
+        result['limitations'].append(SLIP_KINEMATICS_LIMITATION)
     _apply_credibility(result, eff, bite, flags)
     result['flags'] = sorted(set(flags))
     result['sources'] = list(SOURCES)

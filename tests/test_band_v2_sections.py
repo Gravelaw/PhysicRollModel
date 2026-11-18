@@ -650,5 +650,41 @@ class CoverageIntervalMatchTests(unittest.TestCase):
         self.assertIn('no observed position near', e['observed'])
 
 
+class KinematicSlipOnlyTests(unittest.TestCase):
+    """Review finding: the zero-slip fallback for a slip of 0.5 or more applies to the
+    roll-borne pitch kinematics only, not to the forward-slip screen or the skid evidence."""
+
+    @staticmethod
+    def _run(slip):
+        c = v2(orientation='irregular')
+        c['model_options']['bite_response_override']['forward_slip_fraction'] = slip
+        r = diagnose(c)
+        h = _h(r)['skidding_loss_of_forward_slip']
+        return r, h, h['evidence'][0]
+
+    def test_supplied_slip_above_half_is_not_skidding(self):
+        r, h, e = self._run(0.6)
+        fs = r['screens']['forward_slip']
+        self.assertEqual(fs['status'], 'NOT_ASSESSABLE')
+        self.assertEqual(fs['forward_slip_fraction'], 0.6)
+        self.assertEqual((e['verdict'], e['basis']), ('NEUTRAL', 'model'))
+        self.assertTrue(e['observed'].startswith('0.6000; not assessable'))
+        self.assertEqual(h['model_prediction']['forward_slip_fraction'], 0.6)
+        self.assertNotEqual(h['standing'], 'CONSISTENT_LEADING')
+        self.assertEqual(r['signatures']['forward_slip_fraction_used'], 0.0)
+        self.assertIn('FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS',
+                      r['flags'])
+        self.assertIn('NOT_ASSESSABLE', render_band_report(r))
+
+    def test_non_positive_slip_still_skids(self):
+        r, h, e = self._run(-0.01)
+        self.assertEqual(r['screens']['forward_slip']['status'],
+                         'SKIDDING_NEUTRAL_POINT_AT_OR_BEYOND_EXIT')
+        self.assertEqual((e['verdict'], e['weight']), ('SUPPORTS', 'strong'))
+        self.assertEqual(r['signatures']['forward_slip_fraction_used'], -0.01)
+        self.assertNotIn('FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS',
+                         r['flags'])
+
+
 if __name__ == '__main__':
     unittest.main()

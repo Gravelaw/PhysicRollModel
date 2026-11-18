@@ -290,6 +290,16 @@ class LargeForwardSlipTests(unittest.TestCase):
                   'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'):
             self.assertIn(f, r['flags'])
         self.assertEqual(r['signatures']['forward_slip_fraction_used'], 0.0)
+        # review finding: the zero is kinematic only; the screen and the skid evidence keep
+        # the actual slip and never report skidding
+        fs = r['screens']['forward_slip']
+        self.assertEqual(fs['status'], 'NOT_ASSESSABLE')
+        self.assertAlmostEqual(fs['forward_slip_fraction'], r['bite']['forward_slip_fraction'])
+        sk = next(h for h in r['hypotheses'] if h['id'] == 'skidding_loss_of_forward_slip')
+        self.assertEqual(sk['model_prediction']['forward_slip_fraction'],
+                         r['bite']['forward_slip_fraction'])
+        self.assertNotEqual(sk['evidence'][0]['verdict'], 'SUPPORTS')
+        self.assertTrue(any('roll-borne pitch kinematics only' in x for x in r['limitations']))
         row = r['schedule_sweep']['rows'][0]
         self.assertNotIn('rejected', row)
         self.assertGreaterEqual(row['forward_slip_fraction'], 0.5)
