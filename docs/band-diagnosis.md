@@ -72,8 +72,9 @@ python -m physicroll.band_cli my_case.json --out my_output_dir
 Each run validates the case, writes `<case-name-slug>.result.json` (deterministic: sorted
 keys, no timestamps) and `<case-name-slug>.report.html` atomically, and prints the ranked
 standings. Running the three demo commands into a scratch directory reproduced the
-committed result files byte for byte. On this container (Python 3.13) they took about 66 s
-(lengthwise), 22 s (thin-gauge chatter) and 12 s (bearing order). From Python:
+committed result and report files byte for byte. On this container (Python 3.13) they took
+about 41 s (lengthwise), 14 s (thin-gauge chatter) and 7 s (bearing order); expect
+different times on other machines. From Python:
 `from physicroll.band_diagnosis import load_case, diagnose`.
 
 Which demo to look at:
@@ -105,7 +106,7 @@ observation fields. v1 case files still load and run unchanged.
 |---|---|
 | `width_model` | work-roll thermal model and strip-shape chain (lengthwise bands): roll properties, spray header, coolant temperature, nozzle levels or blocked nozzles, switching events, and optional crowns, incoming ridges, coil, previous strip widths, grinding, cooling-zone pitch, deflector radius, lateral compressive stress |
 | `tribology` | rolling-oil viscosity law, roughness, temperatures, strip heat fraction: film thickness, placeholder friction, pass heating; also supplies the roll heat fraction to `width_model` |
-| `hardening` | power or Voce law; with `use_computed_flow_stress` the computed flow stress replaces the supplied one on every pass |
+| `hardening` | power or Voce law; with `use_computed_flow_stress` the computed flow stress replaces the supplied one on every pass (schedule rows are matched to passes by their position in the schedule, not by label) |
 | `gauge_control` | gaugemeter AGC compensation gain, cylinder bandwidth, optional force filter |
 | `drive` | drive-train inertias and shaft stiffnesses (torsional modes) |
 | `incoming_variation` | relative hardness variation of the incoming coil, once per decoiler revolution or not |
@@ -183,8 +184,10 @@ Lengthwise observation fields in plain words:
 5. Onset speed, where the marks first appear (`first_seen`: bite exit, incoming coil, after
    bending or levelling), a chock-accelerometer frequency if one exists.
 6. Geometry for the catalogue: work-roll and backup-roll bearings, gear meshes,
-   grinder-mark counts, deflector roll and coil diameters. Without bearings and gears the
-   drive/bearing hypothesis is `NOT_OBSERVED`.
+   grinder-mark counts, deflector roll and coil diameters. Without bearings and gears only
+   the spindle / coupling candidate (twice work-roll rotation, from the work-roll diameter)
+   is checked: a match still supports the drive/bearing hypothesis, a mismatch is
+   `NOT_OBSERVED` rather than a contradiction.
 
 ## 5. Hypotheses and evidence rules
 
@@ -251,9 +254,9 @@ Notation: `f_obs = u/p` per pitch observation (plus `measured_vibration_hz` when
 | 2 | `fifth_octave_roll_stack_resonance` | orientation as 1. `f_obs` within +-15 % of the antisymmetric upper mode S str, else 500-1200 Hz S mod, below 300 Hz C str. pitch 10-40 mm S mod. gauge variation not detected S mod, detected C weak. law FIXED_FREQUENCY S mod; SPEED_INDEPENDENT S mod if `pi*D_b*(1+f)/p` within 0.05 of an integer, else NEUTRAL. order-locked source within +-10 % of the antisymmetric upper mode at `u_op` S mod. disappears after backup-roll change S mod. faces both S weak. |
 | 3 | `work_roll_borne_marks` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. pitch = `pi*D_w*(1+f)/n` within 3 % for n = 1..8 or a supplied grinder-mark count S str, no match C mod. work-roll change: disappears S str, persists C str. faces one S mod, both C weak. longitudinal C str. |
 | 4 | `backup_roll_borne_marks` | as 3 with `D_b`; backup-roll change disappears S str, persists C str; disappears after work-roll change C str. |
-| 5 | `order_locked_drive_or_bearing_excitation` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. best gear / bearing / spindle source within 5 % S str (named); no gear and no bearing supplied NOT_OBSERVED; supplied but no match C weak. persists after both roll changes S weak. faces both S weak. longitudinal C str. |
+| 5 | `order_locked_drive_or_bearing_excitation` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. best gear / bearing / spindle source within 5 % S str (named). The spindle / coupling candidate `work_roll_2x` is scored whether or not gear or bearing geometry is supplied: with no gear and no bearing supplied, a spindle match S str (the text says only the spindle was checked) and no match NOT_OBSERVED; with geometry supplied but no match C weak. No pitch and no vibration frequency observed: NOT_OBSERVED. persists after both roll changes S weak. faces both S weak. longitudinal C str. |
 | 6 | `torsional_or_low_frequency_drive_vibration` | `f_obs` 5-30 Hz S str, above 60 Hz C str. **Phase 2:** with a `drive` section, within +-15 % of a computed torsional mode S str, above max(60 Hz, 1.5 x highest mode) C str. pitch 0.1-3 m S weak. law FIXED_FREQUENCY S mod. longitudinal C str. |
-| 7 | `coil_or_mandrel_locked_marks` | pitch within 10 % of `pi*D_exit_coil` or `pi*D_entry_coil*h0/h1` S str; coil diameters not supplied NOT_OBSERVED; supplied but no match C weak (gap filled, 5.4). first seen incoming S weak. law FIXED_FREQUENCY C mod. |
+| 7 | `coil_or_mandrel_locked_marks` | pitch within 10 % of `pi*D_exit_coil` or `pi*D_entry_coil*h0/h1` S str; coil diameters not supplied NOT_OBSERVED; supplied but no match C weak (gap filled, 5.4). The coil with the smallest worst-case mismatch over the observed pitches is kept as `matched_coil` (with `matched_coil_worst_relative_mismatch`) and drawn in the strip map. first seen incoming S weak. law FIXED_FREQUENCY C mod. |
 | 8 | `yield_point_bending_marks` | not susceptible C str, susceptible S mod, unknown NOT_OBSERVED. diagonal/irregular S mod, chevron/longitudinal C mod. a regular law C mod. first seen incoming or after bending/levelling S str; at bite exit with `red > 0.02` C str. a deflector/coil in the yield-point window S mod, none C weak. worse at thinner gauge C mod (`t/D` falls with gauge). |
 | 9 | `herringbone_lubricant_film_breakdown` | chevron S str, diagonal S weak, longitudinal C str. `red >= 0.40` S mod, `red < 0.25` C mod. pitch 0.5-2 x contact length S str, > 5 x C mod. gauge variation not detected S weak. film ratio < 1 S weak. |
 | 10 | `skidding_loss_of_forward_slip` | forward slip <= 0 S str, < 0.005 S mod, >= 0.02 C mod. film ratio > 3 S weak. irregular S weak, longitudinal C str. a regular law C weak. |
@@ -303,7 +306,7 @@ barrel length `B`; `z` along the barrel, `r` radial [V: Yamaguchi et al. 2016; L
 ```
 rho*c*dT/dt = k_r*(1/r)*d/dr(r*dT/dr) + k_z*d2T/dz2                      [V]
 r = R:   -k_r*dT/dr = h(z,t)*(T - T_coolant) - q(z,t)                    [V]
-r = 0:   symmetry;   z = 0, B: adiabatic (neck and chock losses ignored, flagged)
+r = 0:   symmetry;   z = 0, B: adiabatic (neck and chock losses ignored, flagged)   [V]
 q = roll_heat_fraction_per_roll * bite_heat_per_width / (2*pi*R)         [D] (under the strip only)
 h = background_htc + spray_mean_htc * weight(z,t)                        [D]
 ```
@@ -320,7 +323,7 @@ Thermal radius growth per axial station:
 
 ```
 dR(z,t) = factor*(2*alpha/R) * integral_0^R (T - T_ref) r dr                       [V/D]
-factor = 1 ('axially_free', default) or (1 + nu) ('plane_strain')
+factor = 1 ('axially_free', default) or (1 + nu) ('plane_strain')                 [V/D]
 ```
 
 The sources disagree on the expansion factor: Yamaguchi et al. (2016) use 1 [V], Li et al.
@@ -411,7 +414,7 @@ below `4a` are taken at `C(4a)`, above `R` (including the mean) at `C(R)`.
 rigid bound:              I = 1e5*n*dR/h                                       [D]
 compliance only:          T = 1/(1 + 2*C*Q),        dh = -n*T*dR               [D]
 with exit-tension feedback:
-  dp' = -Q*dh - N_x'*dsigma_x,  dsigma_x = -E_strip*eps,  eps = -xi*dh/h_exit
+  dp' = -Q*dh - N_x'*dsigma_x,  dsigma_x = -E_strip*eps,  eps = -xi*dh/h_exit  [D]
   Q_eff = Q + N_x'*E_strip*xi/h_exit,  T = 1/(1 + 2*C*Q_eff)                   [D]
 ```
 
@@ -427,7 +430,7 @@ stripe on both rolls, 0.21 mm exit gauge, 30 MPa tension, `Q` = 1.1e10 Pa,
 `MANIFEST_BUCKLE`; with the feedback 28.6 I-units, latent under tension (values from running
 the test's inputs through `thermal_stripe_flatness`; the test asserts 410.58 I-units without
 the feedback, the latent state with it and a ratio below 0.1). In the lengthwise demo the
-feedback stiffness per width is 85 to 140 times `Q` on every pass (gauge-trend table, 6.3).
+feedback stiffness per width is 76 to 140 times `Q` on every pass (gauge-trend table, 6.3).
 The engine always applies it and reports all three levels.
 
 When the feedback term dominates, `eps -> n*dR/(2*C*N_x'*E_strip)`, independent of gauge
@@ -587,19 +590,43 @@ What these numbers say, plainly:
 ### 6.4 Short-lived bands
 
 A switching event (`width_model.events`) sets the listed nozzles to a level for a duration;
-the engine starts from the steady state, simulates the event and a recovery of at least
-600 s, and differences the radius against the steady state it started from. At the monitor
-position it reports the analytic initial growth rate (6.1) beside the simulated rate over
-the first 5 s, the time to each threshold (in-mill manifest onset, after-release onset,
-reporting threshold, all as stripe heights from the peak profile scaled), the time above
-the in-mill threshold (`visible_time_s`), the fade time after the event, and the band life
-(event duration plus the time after the event to fall below the manifest threshold).
+the engine starts from the steady state, simulates all events as one transient followed by
+a recovery of at least 600 s, and differences the radius against the steady state it started
+from. At the monitor position it reports the analytic initial growth rate (6.1) beside the
+simulated rate over the first 5 s, the time to each threshold (in-mill manifest onset,
+after-release onset, reporting threshold, all as stripe heights from the peak profile
+scaled), the time above the in-mill threshold (`visible_time_s`), the fade time after the
+event, and the band life (event duration plus the time after the event to fall below the
+manifest threshold). These are integration choices of `band_width.py` [D]:
 
-Demo events (`width.thermal_events`):
+- **Stripes.** Each connected group of adjacent switched nozzles is one stripe with its own
+  monitor; an event that switches separated nozzles therefore gives several stripes. The
+  stripe with the largest peak radius deviation governs the event's metrics
+  (`governing_stripe_index`); all stripes are listed under `stripes` with their nozzles,
+  monitor position, peak, time of peak and time to half peak.
+- **Attribution window.** An event's metrics use the monitor history only from its start to
+  `attribution_window_end_s` (measured from the event start): the start of the next event
+  that switches nozzles within the isolation margin (0.1 m) of this one, else the end of the
+  run. Beyond the window a fade gives only a lower bound (`band_life_lower_bound_s`,
+  `visible_time_lower_bound_s`, flag `FADE_BEYOND_ATTRIBUTION_WINDOW`; at the end of the run
+  `FADE_BEYOND_SIMULATED_RECOVERY`). Flags `LATER_EVENT_IN_SAME_REGION`,
+  `PEAK_TRUNCATED_BY_LATER_EVENT` (the later event starts during this one),
+  `EARLIER_EVENT_IN_SAME_REGION` (an earlier event leaves its residual in this history) and
+  `CONCURRENT_EVENT_IN_SAME_REGION` say what could not be separated.
+- **Peak profile.** Event boundaries are always recorded as snapshots, and the peak profile
+  (shape and thresholds) is the snapshot at the governing stripe's measured peak time; if
+  that time falls between records the transient is run a second time to record it
+  (`peak_snapshots_recorded_by_second_run`). A short event is therefore never evaluated on
+  the unchanged initial state.
+
+Demo events (`width.thermal_events`; the nearest switched nozzles of the two events are
+0.728 m apart, so each event's window runs to the end of the run at 1050 s, no event carries a flag, each has one stripe, nozzles 20 and 21
+being adjacent, and no second run was needed):
 
 | quantity | event 1: nozzles 20-21 off | event 2: nozzle 6 off |
 |---|---|---|
 | start, duration | 0 s, 60 s | 300 s, 150 s |
+| attribution window end, from the event start [s] | 1050 (end of run) | 750 (end of run) |
 | local heat-transfer coefficient before / during [W/m2K] | 3794 / 1922 | 2858 / 1922 |
 | net surface flux change [W/m2] | 14805 | 8185 |
 | initial growth rate, analytic / simulated (first 5 s) [um/s] | 0.0939 / 0.0793 | 0.0519 / 0.0403 |
@@ -768,8 +795,8 @@ dF_meas = K_h*(x_b - x_s),   x_s' = omega_c*(x_s_ref - x_s),   x_s_ref = -alpha*
 Static limits, **tension held constant** (reel regulators; "tension coupling off") [D]:
 
 ```
-run-out e:        dh = -2e*M/(M + (1-alpha)*Q)
-bite input dF0:   dh = (1-alpha)*dF0/(M + (1-alpha)*Q)
+run-out e:        dh = -2e*M/(M + (1-alpha)*Q)                       [D]
+bite input dF0:   dh = (1-alpha)*dF0/(M + (1-alpha)*Q)               [D]
                   (entry thickness dF0 = F_hin*dh_in; flow stress dF/dY*dY; friction dF/dmu*dmu)
 ```
 
@@ -801,8 +828,10 @@ Which of the two applies to a real mill depends on its actual loop dynamics, whi
 does not have.
 
 **Incoming hardness variation** [V: about 2 % cyclic, once per decoiler revolution, ABB
-"Improvement of thickness tolerances"]. `dF/dY` by central differences of the bite derivation
-[D]; static gauge change by the bite-input formula above (tension held constant); decoiler
+"Improvement of thickness tolerances"]. `dF/dY` by central differences (+-0.5 % of the flow
+stress) [D], taken through the engine's own bite cache with the same bite model as the
+operating pass (`sensitivity_bite_model`), so it also works for a pass solved by the mattress
+model (9.2); static gauge change by the bite-input formula above (tension held constant); decoiler
 frequency `n*u_e/(pi*D_coil)`, exit pitch `pi*D_coil*h0/(h1*n)` [D]. Demo
 (`incoming_variation`): 2 % = 5.65 MPa flow-stress amplitude; static exit-gauge change 3.68 um
 without AGC, 1.22 um with it; decoiler 2.23 Hz, exit pitch 5.39 m (first harmonic).
@@ -817,7 +846,9 @@ in the torsional rule (5.3).
 
 **Speed-change gauge shift** [V context: Zhang et al. 2017 IJCA 10(6); formula D, tension held
 constant]: `dh = (1-alpha)*dF0/(M + (1-alpha)*Q)` with `dF0 = dF/dmu*dmu` from the friction-speed
-slope. Demo (`gauge_control.speed_change_gauge_shift`, 6 -> 12 m/s): placeholder friction
+slope; `dF/dmu` is a central difference (+-2 % of the friction) through the bite cache with the
+operating bite model, as for `dF/dY`. In the demo both sensitivities report
+`sensitivity_bite_model` `derived_slab_hitchcock`. Demo (`gauge_control.speed_change_gauge_shift`, 6 -> 12 m/s): placeholder friction
 0.0829 -> 0.0765, force -242 kN, exit gauge -4.68 um with AGC, -14.2 um without; the
 absolute friction values are placeholders (7.1).
 
@@ -858,7 +889,7 @@ rigid-perfectly-plastic (no elastic strip zones) and the roll a local Winkler fo
 ```
 h(x) = g0 + x^2/R + 2*p(x)/K_p                                          [D]
 p'*(h - 2K/K_p) = K*(2x/R) + s*2*mu*p,   yield p + sigma = K,  K = 2Y/sqrt(3)   [D]
-h' = [ (2x/R)*h + s*4*mu*p/K_p ] / (h - 2K/K_p)   (s = +1 entry side, -1 exit side)
+h' = [ (2x/R)*h + s*4*mu*p/K_p ] / (h - 2K/K_p)   (s = +1 entry side, -1 exit side)   [D]
 K_p = (3*pi/8)*E*/a = 1.178*E*/a,   E* = E/(1 - nu^2),  a = half the contact length   [D]
 ```
 
@@ -908,8 +939,15 @@ of magnitude only.
 **`model_options.bite_model`**: `hitchcock` (default; slab + circular flattening), `mattress`
 (always the experimental model, at least 200 cells) or `auto` (Hitchcock, and the mattress
 model only when Hitchcock rejects the pass; the reason is kept in `bite_fallback_reason`).
-Mattress bites carry the flag `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL`. The lengthwise demo
-uses `auto`; every pass derived with Hitchcock. A bite from a plant or foil-mill model can
+Mattress bites carry the flag `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL`, and the report's key
+numbers name their source `experimental_mattress`. The perturbed bites of the flow-stress and
+friction sensitivities (section 8) use the model of the operating bite: the mattress model
+when the operating bite is a mattress bite or `bite_model` is `mattress`, else Hitchcock
+(also for `auto` with a Hitchcock operating bite, and for a supplied bite). Known and not
+fixed: with `auto`, a perturbed bite of the lever table or of the speed-consistent critical
+speed goes through the `auto` rule itself and could fall back to the mattress model while
+the operating bite is Hitchcock, mixing the two models in one comparison (not reproduced on
+the demos; section 13). The lengthwise demo uses `auto`; every pass derived with Hitchcock. A bite from a plant or foil-mill model can
 still be supplied in `model_options.bite_response_override`.
 
 ## 10. Transverse physics (chatter)
@@ -926,11 +964,11 @@ Wilson & Ehmann (1998) and Niroomand et al. (2012) [D]:
 ```
 M_w*x_w'' = -K_wb*(x_w - x_b) - C_wb*(x_w' - x_b') + dF                        [D]
 M_b*x_b'' = +K_wb*(x_w - x_b) + C_wb*(x_w' - x_b') - K_h*x_b - C_h*x_b'        [D]
-K_mill = 1/(2*(1/K_wb + 1/K_h))
-dF = F_h*dh + F_hdot*dh' + F_se*sigma_e + F_sx*sigma_x + F_hin*dh_in,   Q_s = -F_h > 0
-df = f_h*dh + f_se*sigma_e + f_sx*sigma_x + f_hin*dh_in
+K_mill = 1/(2*(1/K_wb + 1/K_h))                                                [D]
+dF = F_h*dh + F_hdot*dh' + F_se*sigma_e + F_sx*sigma_x + F_hin*dh_in,   Q_s = -F_h > 0   [D]
+df = f_h*dh + f_se*sigma_e + f_sx*sigma_x + f_hin*dh_in                         [D]
 F_hdot = F_h*beta*l_d/u_x          [D] bite-damping closure, declared heuristic
-du_x = V_r*df
+du_x = V_r*df                                                                  [D]
 du_e = V_r*[(h1/h0)*df + ((1+f)/h0)*dh - ((1+f)*h1/h0**2)*dh_in]              [D]
 sigma_e' = +(E/L_e)*du_e,          sigma_x' = -(E/L_x)*du_x                    [D]
 ```
@@ -951,7 +989,7 @@ is not reliable and the result is flagged (5.3).
 ```
 fixed frequency F:            p = u_x/F                         [V: Kim et al. 2012, f = v/p]
 n marks on a roll of dia. D:  p = pi*D*(1+f)/n                  [V: Krueger, Richard & Peretic 2019]
-order k of work-roll speed:   p = pi*D_w*(1+f)/k
+order k of work-roll speed:   p = pi*D_w*(1+f)/k                [V: Krueger, Richard & Peretic 2019]
 exit coil:                    p = pi*D_coil;  entry coil: p = pi*D_coil*h0/h1     [D]
 later pass:                   p_out = p_in*h_in/h_out                            [D]
 bearing orders, r = (d/D)*cos(phi):  BPFO = n/2*(1-r), BPFI = n/2*(1+r),
@@ -1053,35 +1091,52 @@ with a `tribology` section the friction-speed slope enters the speed-consistent 
 
 ## 11. The report
 
-`<slug>.report.html` is a self-contained page (inline SVG, no scripts). A v1 result renders
-the phase-1 page. A v2 result adds the family statement and the lengthwise, process and
-dynamics sections; when the observed or leading family is lengthwise the page leads with the
-lengthwise sections and moves the transverse (chatter) sections into a block headed
-"Transverse-band (chatter) screening: supporting detail for this case". Sections of the
-lengthwise demo report, in order:
+`<slug>.report.html` is a self-contained page (inline SVG, no scripts), produced by
+`physicroll/band_report.py`. It opens with the case name, a warning box with the status
+`SCREENING_RESULT_NOT_PLANT_VALIDATED` and the score note, and the provenance. A v1 result
+renders the phase-1 page. A v2 result adds the case notes, the family statement and the
+lengthwise, process and dynamics sections; when the observed or leading family is
+lengthwise the page leads with the lengthwise sections and moves the transverse (chatter)
+sections into a block headed "Transverse-band (chatter) screening: supporting detail for this
+case". Sections of the lengthwise demo report
+(`artifacts/band_diagnosis/lengthwise-bands-demo.report.html`), in order:
 
 | section | what it shows |
 |---|---|
-| Which family of causes | the `family_summary` text and the number of non-contradicted hypotheses per family |
-| Leading hypotheses; Next measurements | the leading hypothesis with its confirming test, runners-up of the same family, and `recommended_next_measurements` |
-| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain; dashed lines at the observed positions. Tables: steady stripes (peak, width, I-units per level, in-mill state, state after release, in-mill onset height), the nozzle-pattern ripple, which predicted source each observed band matches, which pitch the gaps are multiples of, tension troughs |
-| Short-lived bands | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 6.4 |
-| Why thin gauge is worse | the gauge-trend text and table of 6.3 |
-| Hypotheses | every hypothesis with family, standing, score and its evidence items |
-| Transverse-band (chatter) screening | key numbers, strip map, chatter stability, schedule sweep, frequency-speed map, forced response and time trace, levers, spray coverage and other screens |
-| Process; Gauge control, drive and incoming variation | sections 7 and 8 |
-| Limitations and sources | result limitations, literature disagreements, sources |
+| Which family of causes | the `family_summary` text, the observed family and the family of the leading hypothesis, the number of non-contradicted hypotheses per family, and a one-line summary of the key observations as entered |
+| Leading hypotheses | each `CONSISTENT_LEADING` hypothesis with the criteria that support and contradict it; up to three other `CONSISTENT` hypotheses of the observed family with theirs |
+| Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
+| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines |
+| Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 6.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
+| Why thin gauge is worse | the gauge-trend text, two charts and the table of 6.3 |
+| Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
+| Transverse-band (chatter) screening: supporting detail | Key model numbers, What the model predicts on the strip, Chatter stability, Pass-schedule sweep, Frequency-speed map, Forced response and time trace, Levers (with coolant spray coverage and other screens) |
+| Process: friction, flow stress, pass heating | section 7: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed |
+| Gauge control, drive and incoming variation | section 8 |
+| Limitations and sources | result limitations, known disagreements in the literature, sources |
 
-**Reading in-mill against after-release.** Every band state comes in pairs. *In mill*:
-`LATENT_UNDER_TENSION` (flat, a stress stripe a shapemeter can see) or `MANIFEST_BUCKLE`
-(buckled under the mill tension). *After tension release*: `MANIFEST_AFTER_TENSION_RELEASE` or
-`FLAT_AFTER_TENSION_RELEASE`, from the local mode. A band latent in the mill and manifest
-after release is a band that appears on the coil, at the slitter or on the table; compare it
-with the observation `visible_only_after_tension_release`. The reported flatness level is the
-one with the exit-tension feedback; the rigid and compliance-only levels are bounds for
-comparison, not predictions. Onset heights flagged as limited by the reporting threshold are
-upper bounds. The global (whole-sheet) released mode is not a band prediction (6.2). The
-report section titles are produced by `physicroll/band_report.py`.
+**Key model numbers show the values actually used.** The rows "mean flow stress used" and
+"friction coefficient used" give the value every section used; when it differs from the
+supplied one (computed flow stress, or computed friction with
+`tribology.use_computed_friction`) the supplied value follows in brackets, as in the demo:
+"2.826e+08 Pa (computed; supplied 2.7e+08 Pa)". The "bite source" row reads
+`experimental_mattress` for a mattress bite, otherwise the bite's own source
+(`derived_slab_hitchcock` in the demo).
+
+**Reading in-mill against after-release.** Every band state comes in pairs, written in plain
+words in the tables. *In the mill*: "hidden under mill tension" (`LATENT_UNDER_TENSION`: flat,
+a stress stripe a shapemeter can see) or "buckled in the mill" (`MANIFEST_BUCKLE`; "(feedback
+saturated)" is added when the saturation step of 6.2 applied). *After tension release*:
+"visible after tension release" (`MANIFEST_AFTER_TENSION_RELEASE`) or "flat after tension
+release" (`FLAT_AFTER_TENSION_RELEASE`), from the local mode. A band hidden in the mill and
+visible after release is a band that appears on the coil, at the slitter or on the table;
+compare it with the observation `visible_only_after_tension_release`. Buckling utilisation is
+printed only below 1 ("≥ 1" otherwise), because once a band buckles the saturation inflates
+the number. The reported flatness level is the one with the exit-tension feedback; the rigid
+and compliance-only levels are bounds for comparison, not predictions. Onset heights limited
+by the reporting threshold are printed as "≤ ... (limited)" and are upper bounds. The global
+(whole-sheet) released mode is printed as an indicator only, not charted, and is not a band
+prediction (6.2).
 
 ## 12. Verification evidence
 
@@ -1098,9 +1153,9 @@ real mill.
 | `bite_tribology.py` / `tests/test_bite_tribology.py` | viscosity `beta` from the kerosene data points; film check case (62.8 nm, film ratio 0.209, within 5 % of the quoted 65 nm); film linear in speed and viscosity; closure limits and slope; friction falling monotonically with speed; pass heating check (49.35 K) and energy closure; Voce mean against quadrature; literature fits carry the warning |
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
 | `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of the high-friction foil case, the limiting gauge and a sticking exit; force trends; sensitivity signs match Hitchcock |
-| `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 5.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead |
-| `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings |
-| `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping |
+| `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 5.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
+| `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`) |
+| `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`) |
 
 Run, for example, `python -m unittest tests.test_band_lengthwise -v`.
 
@@ -1140,6 +1195,15 @@ Run, for example, `python -m unittest tests.test_band_lengthwise -v`.
   temperature for each pass.
 - **Mattress bite model is experimental**: no benchmark with known inputs, no elastic strip
   zones, Hertz-calibrated foundation modulus; foil-regime numbers are order of magnitude only.
+- **`bite_model: auto` can mix bite models (known, not fixed).** A perturbed bite of the lever
+  table or of the speed-consistent critical speed could fall back to the mattress model while
+  the operating bite is Hitchcock; not reproduced on the demos. The flow-stress and friction
+  sensitivities are not affected (9.2).
+- **Coil hypothesis scoring picks the nearest coil per pitch independently (known, not
+  fixed)**: with several pitch observations, different observations can be matched to
+  different coils; only `matched_coil` (the strip map) uses one coil for all of them.
+- **Short-lived bands close together in width**: an event's metrics stop at the start of the
+  next event in the same neighbourhood (6.4); what lies beyond is only a lower bound.
 - **Coil ridge compaction factor** is an analyst choice (default 0.5).
 - **Mill dynamics**: first-order cylinder loop (the AGC-chatter result depends on the loop
   roll-off, 9.70 against 13.62 m/s in the demo); static formulas hold tension constant.

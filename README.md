@@ -233,16 +233,28 @@ advances no material state and implements no dynamic physics or control.
 
 ## Band / chatter-mark root-cause screening
 
-Opt-in, **unvalidated** screening for transverse or lengthwise strip bands: a linear
-third-octave chatter model, pitch-law / roll / bearing / coil signatures and material,
-lubrication and spray screens are tallied against plant observations (an ordinal evidence
-score, not a probability), with a lever table and a pass-schedule sweep. Two synthetic demos:
+Opt-in, standard-library-only screening for strip bands of both families. For **lengthwise
+bands** (stripes along the rolling direction at fixed width positions, continuous or
+short-lived) it solves a work-roll temperature and thermal-radius field for the spray header,
+carries the resulting roll stripes through a strip-shape chain to flatness and to the band
+state in the mill and after tension release, simulates cooling-zone switching events, and
+follows one stripe through the pass schedule to show how thin gauge changes it. For
+**transverse marks** (repeating across the strip) it uses a linear third-octave chatter model
+and pitch-law, roll, bearing, gear and coil signatures, with levers and a pass-schedule sweep.
+Optional process and dynamics sections add lubricant film and placeholder friction, pass
+heating, work hardening, gaugemeter AGC, drive torsional modes and incoming hardness
+variation. Nineteen hypotheses are ranked by an ordinal evidence tally against the plant
+observations, not by probability. Three synthetic demos:
 
 ```
+python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 ```
 
-Start a real case from `scenarios/band_diagnosis_template.json`; see
-[band diagnosis](docs/band-diagnosis.md) for the equations, evidence rules, what the model
-says about thin gauges, and where the derived roll-bite path stops.
+Start a real case from `scenarios/band_diagnosis_template.json` (schema
+`physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see
+[band diagnosis](docs/band-diagnosis.md) for which observations matter most, the evidence
+rules, the equations with their source tags, how to read the report and the limitations.
+Status: a screening tool on synthetic, uncalibrated models; nothing in it has been validated
+against plant data, and the demo observations were generated from the model itself.
