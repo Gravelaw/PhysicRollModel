@@ -6,9 +6,10 @@ in the wrapped modules, which this file calls and never re-implements:
 - ``bite_tribology``: inlet film (Wilson & Walowit form), PLACEHOLDER friction closure
   ``mu(Lambda)`` (not fitted), friction vs speed, pass heating, Voce / power hardening and
   ``schedule_flow_stress``;
-- ``mill_dynamics``: gaugemeter AGC frequency response and stability, flow-stress and
-  friction force sensitivities, static gauge shifts, coil-synchronous frequencies, torsional
-  modes and roll-speed ripple;
+- ``mill_dynamics``: gaugemeter AGC frequency response and stability, static gauge shifts,
+  coil-synchronous frequencies, torsional modes and roll-speed ripple (the flow-stress and
+  friction force sensitivities are the same central differences, +-0.5 % and +-2 %, taken
+  here through the engine's bite cache so the perturbed bites use the operating bite model);
 - ``slab._solve_grid`` (Hitchcock bites) and ``foil_bite.solve_mattress_bite`` (experimental
   mattress bites): interface slip dissipation, the friction power of the pass heating.
 
@@ -298,6 +299,53 @@ def _mu_inputs(trib, src, radius, ratio, slip, exit_speed):
                 thermal_correction=trib['thermal_correction'])
 
 
+# same relative steps as mill_dynamics.flow_stress_sensitivity / friction_force_sensitivity
+FLOW_STRESS_RELATIVE_STEP = 0.005
+FRICTION_RELATIVE_STEP = 0.02
+
+
+def bite_sensitivity(get_bite, bite_pass_, field, relative_step):
+    """Central difference of the separating force and forward slip in ``field`` of the pass.
+
+    ``get_bite(BitePass) -> BiteResponse`` derives the perturbed bites through the engine's
+    bite cache with the SAME bite model as the operating bite (mill_dynamics' sensitivities
+    always use the Hitchcock derivation, which rejects passes the mattress model solves and,
+    where both work, would mix a Hitchcock force sensitivity with a mattress strip modulus).
+    """
+    nominal = getattr(bite_pass_, field)
+    step = relative_step * nominal
+    plus = get_bite(replace(bite_pass_, **{field: nominal + step}))
+    minus = get_bite(replace(bite_pass_, **{field: nominal - step}))
+    flags = []
+    for f in tuple(plus.flags) + tuple(minus.flags):
+        if f not in flags:
+            flags.append(f)
+    return {'dforce': (plus.separating_force_n - minus.separating_force_n) / (2 * step),
+            'dslip': (plus.forward_slip_fraction - minus.forward_slip_fraction) / (2 * step),
+            'step': step, 'relative_step': relative_step,
+            'mean_force': 0.5 * (plus.separating_force_n + minus.separating_force_n),
+            'bite_model': 'experimental_mattress' if is_mattress(plus) else plus.source,
+            'flags': flags}
+
+
+def flow_stress_sensitivity(get_bite, bite_pass_):
+    d = bite_sensitivity(get_bite, bite_pass_, 'mean_flow_stress_pa', FLOW_STRESS_RELATIVE_STEP)
+    return {'dforce_dflow_stress_m2': d['dforce'], 'dslip_dflow_stress_per_pa': d['dslip'],
+            'flow_stress_step_pa': d['step'], 'relative_step': d['relative_step'],
+            'mean_separating_force_n': d['mean_force'], 'bite_model': d['bite_model'],
+            'flags': d['flags'],
+            'basis': 'central difference of the bite of the operating bite model (+-0.5 %)'}
+
+
+def friction_force_sensitivity(get_bite, bite_pass_):
+    d = bite_sensitivity(get_bite, bite_pass_, 'friction_coefficient', FRICTION_RELATIVE_STEP)
+    return {'dforce_dfriction_n': d['dforce'], 'dslip_dfriction': d['dslip'],
+            'friction_step': d['step'], 'relative_step': d['relative_step'],
+            'mean_separating_force_n': d['mean_force'], 'bite_model': d['bite_model'],
+            'flags': d['flags'],
+            'basis': 'central difference of the bite of the operating bite model (+-2 %)'}
+
+
 def friction_at(trib, src, radius, ratio, slip, exit_speed):
     lub, fin, clo = tribology_objects(trib)
     return bt.friction_at_speed(lub, fin, clo, **_mu_inputs(trib, src, radius, ratio, slip,
@@ -345,10 +393,14 @@ def flow_stress_section(case, hardening):
 
 
 def apply_flow_stress(case, section):
-    """Replace the supplied flow stress by the computed one in the case pass and schedule."""
-    by_label = {r['label']: r for r in section['passes']}
-    for label, src in pass_rows(case):
-        row = by_label[label]
+    """Replace the supplied flow stress by the computed one in the case pass and schedule.
+
+    Rows are matched by position (``flow_stress_section`` builds them from ``pass_rows`` in
+    order), not by label: a schedule row may legally be labelled 'case pass' too."""
+    rows = section['passes']
+    if len(rows) != len(pass_rows(case)):
+        raise ValueError('flow stress rows do not match the case pass and schedule')
+    for (_, src), row in zip(pass_rows(case), rows):
         if 'computed_mean_flow_stress_pa' in row:
             src['mean_flow_stress_pa'] = row['computed_mean_flow_stress_pa']
         row['used_mean_flow_stress_pa'] = src['mean_flow_stress_pa']
@@ -711,7 +763,7 @@ def _agc_crit_summary(st):
             'flags': st['flags']}
 
 
-def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, derive_opts,
+def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, get_bite,
                           scan_range):
     p = case['pass']
     u = p['exit_speed_m_s']
@@ -754,7 +806,7 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
     out['speed_change_gauge_shift'] = None
     if trib is not None:
         try:
-            sens = md.friction_force_sensitivity(bite_pass(case, p), **derive_opts)
+            sens = friction_force_sensitivity(get_bite, bite_pass(case, p))
             radius = p['work_roll_radius_m']
             lo_u = 0.5 * u
             mu_hi = friction_at(trib, p, radius, bite.contact_radius_ratio,
@@ -769,6 +821,7 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
                 'friction_at_low_speed': mu_lo, 'friction_at_operating_speed': mu_hi,
                 'delta_friction': mu_hi - mu_lo,
                 'dforce_dfriction_n': sens['dforce_dfriction_n'],
+                'sensitivity_bite_model': sens['bite_model'],
                 'exit_thickness_change_m': shift['exit_thickness_change_m'],
                 'exit_thickness_change_without_agc_m':
                     shift['exit_thickness_change_without_agc_m'],
@@ -819,19 +872,20 @@ def drive_section(case, drive, stand, bite, spans, beta, gc):
 
 
 # ============================================================================= incoming
-def incoming_section(case, iv, stand, bite, spans, beta, gc, derive_opts):
+def incoming_section(case, iv, stand, bite, spans, beta, gc, get_bite):
     p = case['pass']
     u = p['exit_speed_m_s']
     h0, h1 = p['entry_thickness_m'], p['exit_thickness_m']
     dy = iv['flow_stress_variation_fraction'] * p['mean_flow_stress_pa']
     alpha = gc['compensation_gain'] if gc else 0.0
-    sens = md.flow_stress_sensitivity(bite_pass(case, p), **derive_opts)
+    sens = flow_stress_sensitivity(get_bite, bite_pass(case, p))
     shift = md.hardness_gauge_shift(sens['dforce_dflow_stress_m2'], dy, stand.mill_modulus_n_m,
                                     bite.strip_modulus_n_m, alpha)
     out = {'status': md.STATUS, 'not_supplied': False, 'inputs': dict(iv),
            'flow_stress_amplitude_pa': dy,
            'dforce_dflow_stress_m2': sens['dforce_dflow_stress_m2'],
            'dslip_dflow_stress_per_pa': sens['dslip_dflow_stress_per_pa'],
+           'sensitivity_bite_model': sens['bite_model'],
            'static': {'compensation_gain': alpha,
                       'exit_thickness_change_m': shift['exit_thickness_change_m'],
                       'exit_thickness_change_without_agc_m':

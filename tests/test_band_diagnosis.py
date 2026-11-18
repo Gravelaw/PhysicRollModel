@@ -20,6 +20,7 @@ from physicroll.band_diagnosis import (CASE_SCHEMA, HYPOTHESIS_IDS, diagnose, lo
 from physicroll.band_report import render_band_report
 from physicroll.chatter import (BitePass, StandModel, StripSpans, derive_bite_response,
                                 stability)
+from tests.test_band_lengthwise import _override   # supplied bite of the baseline pass
 
 ROOT = Path(__file__).resolve().parents[1]
 SCEN = ROOT / 'scenarios'
@@ -460,6 +461,54 @@ class BandDiagnosisTests(unittest.TestCase):
                 self.assertLess(rows[0]['speed_ratio'], 1.0)
                 self.assertGreater(rows[-1]['speed_ratio'], 1.0)
         # the v2 lengthwise demo is run in tests.test_band_lengthwise (time budget)
+
+
+class ReviewFindingTests(unittest.TestCase):
+    """Reproducers of code-review findings 7 and 8 (supplied bite: fast)."""
+
+    @staticmethod
+    def _case(pitch, **kinematics):
+        c = baseline(orientation='transverse', pitch_observations=[
+            {'exit_speed_m_s': 6.0, 'pitch_m': pitch}, {'exit_speed_m_s': 12.0, 'pitch_m': pitch}])
+        c['kinematics'].update(kinematics)
+        c['model_options']['bite_response_override'] = _override()
+        return c
+
+    def test_coil_strip_map_uses_the_matching_coil(self):
+        # finding 7: 1 m entry coil, 0.53 m exit coil, constant pitch pi*0.53 m: the coil
+        # hypothesis leads but the strip map drew the entry-coil pitch 4.488 m
+        r = diagnose(self._case(math.pi * 0.53, entry_coil_diameter_m=1.0,
+                                exit_coil_diameter_m=0.53))
+        coil = _by_id(r)['coil_or_mandrel_locked_marks']
+        self.assertIn('coil_or_mandrel_locked_marks', r['leading_hypotheses'])
+        self.assertEqual(coil['model_prediction']['matched_coil'], 'exit coil')
+        sm = r['strip_map']
+        self.assertEqual(sm['hypothesis_id'], 'coil_or_mandrel_locked_marks')
+        self.assertEqual(sm['predicted_pitch_basis'], 'exit coil')
+        self.assertAlmostEqual(sm['predicted_pitch_m'], math.pi * 0.53)
+
+    def test_spindle_candidate_matched_without_drive_geometry(self):
+        # finding 8: without gear / bearing geometry the work_roll_2x (spindle / coupling)
+        # candidate was skipped (NOT_OBSERVED); adding an unrelated gear enabled the match
+        slip = _override()['forward_slip_fraction']
+        pitch = math.pi * 0.4 * (1 + slip) / 2
+        crit = 'best gear / bearing / spindle source match'
+        plain = _by_id(diagnose(self._case(pitch)))['order_locked_drive_or_bearing_excitation']
+        e = next(x for x in plain['evidence'] if x['criterion'] == crit)
+        self.assertEqual((e['verdict'], e['weight']), ('SUPPORTS', 'strong'))
+        self.assertTrue(e['observed'].startswith('work_roll_2x'))
+        self.assertIn('no drive/bearing geometry supplied', e['observed'])
+        self.assertEqual(plain['model_prediction']['best_match']['id'], 'work_roll_2x')
+        gear = _by_id(diagnose(self._case(pitch, gear_meshes=[
+            {'name': 'unrelated', 'teeth': 97, 'shaft_speed_ratio_to_work_roll': 0.37}])))[
+            'order_locked_drive_or_bearing_excitation']
+        self.assertEqual(plain['score'], gear['score'])
+        # a spindle mismatch without drive geometry does not contradict a gear / bearing cause
+        far = _by_id(diagnose(self._case(1.37 * pitch)))[
+            'order_locked_drive_or_bearing_excitation']
+        e = next(x for x in far['evidence'] if x['criterion'] == crit)
+        self.assertEqual(e['verdict'], 'NOT_OBSERVED')
+        self.assertIn('no drive/bearing geometry supplied', e['observed'])
 
 if __name__ == '__main__':
     unittest.main()

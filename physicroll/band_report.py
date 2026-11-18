@@ -1371,6 +1371,22 @@ def _event_chart(e, k):
     return _wide(c.render(f'ev{k}')) + note
 
 
+def _beyond(e):
+    if 'FADE_BEYOND_ATTRIBUTION_WINDOW' in (e.get('flags') or []):
+        return (f'not attributable after {_f(e.get("attribution_window_end_s"), digits=4)} s: '
+                'a later event switches nozzles in the same neighbourhood')
+    return 'fades beyond the run'
+
+
+def _stripes_text(e):
+    st = e.get('stripes') or []
+    return '; '.join(f'{"governing: " if s.get("governing") else ""}'
+                     f'{", ".join("#" + str(i) for i in s.get("nozzle_indices") or [])} at '
+                     f'{_f(s.get("monitor_position_m"), 1, 4)} m, peak '
+                     f'{_um(s.get("peak_deviation_m"))} at {_f(s.get("time_of_peak_s"), unit="s")}'
+                     for s in st) or 'n/a'
+
+
 def _event_table(events):
     def nozz(e):
         ids = ', '.join(f'#{i}' for i in e.get('nozzle_indices') or [])
@@ -1385,7 +1401,7 @@ def _event_table(events):
             return (f'<strong>{_f(e["band_life_s"], digits=3)} s</strong> '
                     f'({_e(e.get("band_life_basis") or "")} threshold)')
         if _ok(e.get('band_life_lower_bound_s')):
-            return f'> {_f(e["band_life_lower_bound_s"], digits=3)} s (fades beyond the run)'
+            return f'> {_f(e["band_life_lower_bound_s"], digits=3)} s ({_beyond(e)})'
         return 'no band (threshold not reached)'
     def visible(e):
         v = e.get('visible_time_s')
@@ -1393,7 +1409,7 @@ def _event_table(events):
             return (f'<strong>{_f(v, digits=3)} s</strong> '
                     f'({_e(VISIBLE_BASIS.get(e.get("visible_time_basis"), "basis not given"))})')
         if _ok(e.get('visible_time_lower_bound_s')):
-            return f'> {_f(e["visible_time_lower_bound_s"], digits=3)} s (beyond the run)'
+            return f'> {_f(e["visible_time_lower_bound_s"], digits=3)} s ({_beyond(e)})'
         return 'not visible' if 'visible_time_s' in e else 'n/a'
 
     def opt(k, unit='s'):
@@ -1408,12 +1424,17 @@ def _event_table(events):
              lambda e: rate(e, 'simulated_initial_growth_rate_m_s')
              + f' (first {_f(e.get("initial_rate_window_s"))} s)'),
             ('peak radius deviation', lambda e: _um(e.get('peak_deviation_m'))
-             + f' at {_f(e.get("time_of_peak_s"), unit="s")}'),
-            ('time to half peak', lambda e: _f(e.get('time_to_half_peak_s'), unit='s')),
-            ('in-mill manifest threshold', lambda e: _um(e.get('manifest_threshold_m'))),
-            ('time to the in-mill threshold', lambda e: _f(e.get('time_to_manifest_threshold_s'),
-                                                           unit='s')
-             if _ok(e.get('time_to_manifest_threshold_s')) else 'not reached')]
+             + f' at {_f(e.get("time_of_peak_s"), unit="s")}')]
+    if any(len(e.get('stripes') or []) > 1 for e in events):
+        rows.append(('stripes (one monitor per group of adjacent nozzles)', _stripes_text))
+    if any(e.get('flags') for e in events):
+        rows.append(('attribution flags',
+                     lambda e: _e(', '.join(e.get('flags') or []) or 'none')))
+    rows += [('time to half peak', lambda e: _f(e.get('time_to_half_peak_s'), unit='s')),
+             ('in-mill manifest threshold', lambda e: _um(e.get('manifest_threshold_m'))),
+             ('time to the in-mill threshold',
+              lambda e: _f(e.get('time_to_manifest_threshold_s'), unit='s')
+              if _ok(e.get('time_to_manifest_threshold_s')) else 'not reached')]
     if any('released_threshold_m' in e for e in events):
         rows += [('after-release threshold',
                   lambda e: _um(e.get('released_threshold_m'))
@@ -2037,12 +2058,25 @@ def _next_blocks(r):
 
 def _key_numbers(r):
     p = r['inputs']['pass']
+    # flow stress and friction may be replaced by computed values (effective_inputs); show the
+    # value every section used, and the supplied one beside it when they differ
+    used = r.get('effective_inputs', {}).get('pass', p)
+
+    def used_value(key, unit=''):
+        text = _n(used[key], unit=unit)
+        if used[key] != p[key]:
+            text += f' (computed; supplied {_n(p[key], unit=unit)})'
+        return text
     rows = [['operating exit speed', _n(p['exit_speed_m_s'], unit='m/s')],
             ['pass gauge', f'{_mm(p["entry_thickness_m"])} -> {_mm(p["exit_thickness_m"])}'],
-            ['friction coefficient', _n(p['friction_coefficient'])]]
+            ['mean flow stress used', used_value('mean_flow_stress_pa', 'Pa')],
+            ['friction coefficient used', used_value('friction_coefficient')]]
     if r['bite']:
         b = r['bite']
-        rows += [['bite source', _e(b['source'])],
+        # foil_bite marks its bites source 'supplied'; name the model actually used
+        src = ('experimental_mattress' if 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL' in
+               (b.get('flags') or []) else b['source'])
+        rows += [['bite source', _e(src)],
                  ['separating force', _n(b['separating_force_n'], unit='N')],
                  ['contact radius ratio R\'/R', _n(b['contact_radius_ratio'])],
                  ['forward slip', _n(b['forward_slip_fraction'])],

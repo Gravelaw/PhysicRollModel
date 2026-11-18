@@ -21,7 +21,7 @@
     "source": "derived_slab_hitchcock",
     "strip_modulus_n_m": 17791214833.5749
   },
-  "bite_derivations": 32,
+  "bite_derivations": 36,
   "bite_error": null,
   "case_name": "lengthwise_bands_demo",
   "case_schema": "physicroll.band_case.v2",
@@ -2231,6 +2231,7 @@
       "friction_at_operating_speed": 0.07648428324495296,
       "from_exit_speed_m_s": 6.0,
       "label": "static formulas with tension coupling OFF (tensions held by the reel regulators); with coupling on the constant-speed spans drive the DC gauge response to the mass-flow limit (mill_dynamics docstring)",
+      "sensitivity_bite_model": "derived_slab_hitchcock",
       "separating_force_change_n": -242422.6631643675,
       "to_exit_speed_m_s": 12.0
     },
@@ -4047,6 +4048,7 @@
       "flow_stress_variation_fraction": 0.02
     },
     "not_supplied": false,
+    "sensitivity_bite_model": "derived_slab_hitchcock",
     "static": {
       "compensation_gain": 0.9,
       "exit_thickness_change_m": 1.2157255636525033e-06,
@@ -16358,10 +16360,12 @@
     },
     "status": "SCREENING_RESULT_NOT_PLANT_VALIDATED",
     "thermal_events": {
+      "attribution_definition": "event metrics use the monitor history from the event start to attribution_window_end_s: the start of the next event switching nozzles within the isolation margin (0.1 m) of this one, else the end of the run; a fade beyond it gives only a lower bound (flag FADE_BEYOND_ATTRIBUTION_WINDOW), a later event starting during this one truncates its peak (flag PEAK_TRUNCATED_BY_LATER_EVENT); an earlier event in the same neighbourhood leaves its residual in the history (flag EARLIER_EVENT_IN_SAME_REGION)",
       "band_life_definition": "band_life_s = event duration + time after the event ends for the stripe to fall below the manifest threshold (or the reporting threshold when it never becomes manifest)",
       "events": [
         {
           "analytic_initial_growth_rate_m_s": 9.389779634188547e-08,
+          "attribution_window_end_s": 1050.0,
           "band_life_basis": "manifest",
           "band_life_lower_bound_s": null,
           "band_life_s": 92.60237474076341,
@@ -16369,6 +16373,7 @@
           "fade_time_below_manifest_threshold_s": 32.60237474076341,
           "fade_time_below_released_threshold_s": null,
           "fade_time_below_reporting_threshold_s": null,
+          "governing_stripe_index": 0,
           "history": {
             "radius_deviation_m": [
               0.0,
@@ -19434,6 +19439,24 @@
           "start_s": 0.0,
           "stripe_peak_deviation_m": 3.6722800546207746e-06,
           "stripe_peak_position_m": 1.0925,
+          "stripes": [
+            {
+              "governing": true,
+              "index": 0,
+              "monitor_position_m": 1.1099999999999999,
+              "nozzle_indices": [
+                20,
+                21
+              ],
+              "nozzle_positions_m": [
+                1.084,
+                1.136
+              ],
+              "peak_deviation_m": 3.5609161674353563e-06,
+              "time_of_peak_s": 60.0,
+              "time_to_half_peak_s": 25.809070884414194
+            }
+          ],
           "surface_excess_temperature_k": 7.909234463336702,
           "time_above_manifest_threshold_s": 59.01411527252132,
           "time_above_released_threshold_s": null,
@@ -19449,6 +19472,7 @@
         },
         {
           "analytic_initial_growth_rate_m_s": 5.1910242745393365e-08,
+          "attribution_window_end_s": 750.0,
           "band_life_basis": "manifest",
           "band_life_lower_bound_s": null,
           "band_life_s": 155.30823543103253,
@@ -19456,6 +19480,7 @@
           "fade_time_below_manifest_threshold_s": 5.308235431032529,
           "fade_time_below_released_threshold_s": null,
           "fade_time_below_reporting_threshold_s": null,
+          "governing_stripe_index": 0,
           "history": {
             "radius_deviation_m": [
               6.860441295592325e-12,
@@ -22492,6 +22517,22 @@
           "start_s": 300.0,
           "stripe_peak_deviation_m": 2.5274660533098713e-06,
           "stripe_peak_position_m": 0.3575,
+          "stripes": [
+            {
+              "governing": true,
+              "index": 0,
+              "monitor_position_m": 0.35600000000000004,
+              "nozzle_indices": [
+                6
+              ],
+              "nozzle_positions_m": [
+                0.35600000000000004
+              ],
+              "peak_deviation_m": 2.5266607860195865e-06,
+              "time_of_peak_s": 150.0,
+              "time_to_half_peak_s": 50.0308890999369
+            }
+          ],
           "surface_excess_temperature_k": 8.745046144153093,
           "time_above_manifest_threshold_s": 26.835530457720267,
           "time_above_released_threshold_s": null,
@@ -22515,6 +22556,7 @@
       ],
       "growth_rate_note": "Radius growth follows the radial heat integral, so right after a spray change the stripe grows at 2*alpha*factor*dq/(rho*c) whatever the radial distribution; short-lived bands arise because the stripe crosses the manifest threshold within seconds to tens of seconds and fades over about a minute after the zone returns, not because the roll skin responds fast.",
       "open_discrepancy": "The 20 s first-order flatness response identified on a plant (Dohmae & Okamura 2012) is faster than this model's decay; possible causes (none modelled): bite heat depending on the roll surface temperature, emulsion-level heat transfer, per-revolution effects.",
+      "peak_snapshots_recorded_by_second_run": false,
       "recovery_s": 600.0,
       "relative_energy_residual": 5.713556401540416e-13,
       "solver": {
@@ -22523,6 +22565,7 @@
         "time_step_s": 1.0
       },
       "status": "UNVALIDATED_ROLL_THERMAL_TRANSIENT",
+      "stripe_definition": "one monitor per connected group of adjacent switched nozzles (a stripe); the stripe with the largest peak radius deviation governs the event metrics (governing_stripe_index), the others are listed under stripes",
       "time_origin_s": 0.0,
       "timeline_end_s": 1050.0,
       "visible_time_definition": "visible_time_s = time above the in-mill manifest threshold if reached, else above the after-release threshold, else above the reporting threshold (visible_time_basis says which); thresholds are stripe heights at the monitor position, from the peak profile scaled (onsets on a >= 10 mm grid)"

@@ -2005,7 +2005,9 @@
         "coil_pitches_m": {
           "entry coil": 5.38558740615393,
           "exit coil": 3.141592653589793
-        }
+        },
+        "matched_coil": "exit coil",
+        "matched_coil_worst_relative_mismatch": 40.082681490647225
       },
       "rank": 3,
       "score": -3,

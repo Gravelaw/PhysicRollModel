@@ -13,9 +13,12 @@ import sys
 import tempfile
 import unittest
 
-from physicroll.band_diagnosis import (CASE_SCHEMA_V2, HYPOTHESIS_IDS, diagnose, load_case,
-                                       result_json, validate_case)
+from physicroll import mill_dynamics as md
+from physicroll.band_diagnosis import (CASE_SCHEMA_V2, HYPOTHESIS_IDS, MATTRESS_MIN_CELLS,
+                                       diagnose, load_case, result_json, validate_case)
 from physicroll.band_report import render_band_report
+from physicroll.chatter import BitePass
+from physicroll.foil_bite import derive_bite_response_mattress
 from tests.test_band_lengthwise import (COARSE, HARDENING, LONG, NOZZLES, ROOT, SCEN, TRIBOLOGY,
                                         _h, v2, width_model)
 
@@ -110,6 +113,38 @@ class LengthwiseIntegrationTests(unittest.TestCase):
         self.assertLess(abs(iv['static']['exit_thickness_change_m']),
                         abs(iv['static']['exit_thickness_change_without_agc_m']))
         self.assertEqual(len(iv['coil_synchronous']['harmonics']), 3)
+
+    def test_key_numbers_show_the_values_actually_used(self):
+        # review finding 2: with use_computed_friction / _flow_stress the report showed the
+        # supplied 0.05 although every section used the computed friction (~0.082)
+        eff = self.full['effective_inputs']['pass']
+        self.assertNotAlmostEqual(eff['friction_coefficient'], 0.05, places=3)
+        html = render_band_report(self.full)
+        key = html[html.index('Key model numbers'):]
+        key = key[:key.index('</table>')]
+        self.assertIn(f'<td>friction coefficient used</td><td>{eff["friction_coefficient"]:.4g} '
+                      '(computed; supplied 0.05)</td>', key)
+        self.assertIn(f'<td>mean flow stress used</td><td>{eff["mean_flow_stress_pa"]:.4g} Pa '
+                      '(computed; supplied 2.5e+08 Pa)</td>', key)
+        html = render_band_report(self.plain)
+        self.assertIn('<td>friction coefficient used</td><td>0.05</td>', html)
+
+    def test_hitchcock_sensitivities_unchanged_by_engine_central_difference(self):
+        # review finding 5: the engine's own central difference equals mill_dynamics' for a
+        # Hitchcock bite (same steps, same derivation)
+        eff = self.full['effective_inputs']['pass']
+        bp = BitePass(eff['entry_thickness_m'], eff['exit_thickness_m'], eff['width_m'],
+                      eff['work_roll_radius_m'], eff['mean_flow_stress_pa'],
+                      eff['friction_coefficient'], eff['entry_tension_pa'],
+                      eff['exit_tension_pa'])
+        ref = md.flow_stress_sensitivity(bp, cells=64, max_radius_ratio=1.5)
+        iv = self.full['incoming_variation']
+        self.assertEqual(iv['dforce_dflow_stress_m2'], ref['dforce_dflow_stress_m2'])
+        self.assertEqual(iv['dslip_dflow_stress_per_pa'], ref['dslip_dflow_stress_per_pa'])
+        self.assertEqual(iv['sensitivity_bite_model'], 'derived_slab_hitchcock')
+        ref = md.friction_force_sensitivity(bp, cells=64, max_radius_ratio=1.5)
+        self.assertEqual(self.full['gauge_control']['speed_change_gauge_shift'][
+            'dforce_dfriction_n'], ref['dforce_dfriction_n'])
 
     def test_bite_model_auto_falls_back_to_mattress(self):
         c = v2(override=False, **LONG)
@@ -211,6 +246,68 @@ def _section(html, heading):
     """HTML of the <section> whose h2 starts with ``heading``."""
     i = html.index('<h2>' + heading)
     return html[html.rindex('<section', 0, i):html.index('</section>', i)]
+
+
+class ReviewFindingTests(unittest.TestCase):
+    """Reproducers of code-review findings 1 and 5 (process sections)."""
+
+    def test_schedule_row_labelled_case_pass_keeps_operating_flow_stress(self):
+        # finding 1: a schedule row labelled 'case pass' overwrote the operating pass in a
+        # label-keyed map: both got the schedule row's 149.0 MPa instead of 267.6 / 149.0
+        c = v2(**LONG)
+        c['hardening'] = dict(HARDENING, use_computed_flow_stress=True)
+        c['schedule'] = [{'label': 'case pass', 'entry_thickness_m': 2.2e-3,
+                          'exit_thickness_m': 1.5e-3, 'mean_flow_stress_pa': 150e6,
+                          'friction_coefficient': 0.05, 'entry_tension_pa': 20e6,
+                          'exit_tension_pa': 25e6, 'exit_speed_m_s': 3.0}]
+        r = diagnose(c)
+        op, row = r['process']['flow_stress']['passes']
+        self.assertAlmostEqual(op['computed_mean_flow_stress_pa'] / 1e6, 267.564, places=2)
+        self.assertAlmostEqual(row['computed_mean_flow_stress_pa'] / 1e6, 149.009, places=2)
+        eff = r['effective_inputs']
+        self.assertEqual(eff['pass']['mean_flow_stress_pa'], op['computed_mean_flow_stress_pa'])
+        self.assertEqual(op['used_mean_flow_stress_pa'], op['computed_mean_flow_stress_pa'])
+        self.assertEqual(eff['schedule'][0]['mean_flow_stress_pa'],
+                         row['computed_mean_flow_stress_pa'])
+        self.assertEqual(row['used_mean_flow_stress_pa'], row['computed_mean_flow_stress_pa'])
+
+    def test_mattress_bite_sensitivities_use_the_mattress_model(self):
+        # finding 5: with bite_model 'mattress' the flow-stress / friction sensitivities went
+        # through the Hitchcock derivation, which rejects this foil pass (R'/R ~2.6 > 1.5):
+        # incoming_variation FAILED and the speed-change gauge shift was rejected
+        c = v2(override=False, **LONG)
+        c['pass'].update(entry_thickness_m=0.12e-3, exit_thickness_m=0.084e-3,
+                         mean_flow_stress_pa=285e6, friction_coefficient=0.03)
+        c['model_options']['bite_model'] = 'mattress'
+        c['tribology'] = dict(TRIBOLOGY)
+        c['gauge_control'] = {'compensation_gain': 0.9, 'bandwidth_hz': 25.0,
+                              'force_filter_hz': None}
+        c['incoming_variation'] = {'flow_stress_variation_fraction': 0.02,
+                                   'coil_synchronous': False}
+        r = diagnose(c)
+        self.assertIn('BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL', r['bite']['flags'])
+        iv = r['incoming_variation']
+        self.assertEqual(iv['status'], md.STATUS, iv.get('error'))
+        self.assertEqual(iv['sensitivity_bite_model'], 'experimental_mattress')
+        p = c['pass']
+        kw = dict(roll_youngs_modulus_pa=210e9, roll_poisson_ratio=0.3,
+                  cells=max(64, MATTRESS_MIN_CELLS))
+
+        def force(y):
+            return derive_bite_response_mattress(BitePass(
+                p['entry_thickness_m'], p['exit_thickness_m'], p['width_m'],
+                p['work_roll_radius_m'], y, p['friction_coefficient'], p['entry_tension_pa'],
+                p['exit_tension_pa']), **kw).separating_force_n
+        y, dy = p['mean_flow_stress_pa'], 0.005 * p['mean_flow_stress_pa']
+        self.assertAlmostEqual(iv['dforce_dflow_stress_m2'],
+                               (force(y + dy) - force(y - dy)) / (2 * dy), places=12)
+        # the report names the bite model (foil_bite marks its bites source 'supplied')
+        self.assertIn('<td>bite source</td><td>experimental_mattress</td>',
+                      render_band_report(r))
+        shift = r['gauge_control']['speed_change_gauge_shift']
+        self.assertNotIn('rejected', shift)
+        self.assertEqual(shift['sensitivity_bite_model'], 'experimental_mattress')
+        self.assertGreater(shift['dforce_dfriction_n'], 0)
 
 
 class LengthwiseReportTests(unittest.TestCase):

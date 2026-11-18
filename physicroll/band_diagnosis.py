@@ -619,9 +619,11 @@ class _BiteCache:
             roll_poisson_ratio=s['roll_poisson_ratio'], cells=max(o['cells'], MATTRESS_MIN_CELLS))
         return bp.replace_bite_flags(bite, (bp.MATTRESS_FLAG,))
 
-    def get(self, bite_pass):
+    def get(self, bite_pass, model=None):
+        """Bite of ``bite_pass`` with the case's bite model, or with ``model`` ('hitchcock' /
+        'mattress') to keep perturbed bites on the model of a reference bite."""
         s, o = self.case['stand'], self.case['model_options']
-        model = o['bite_model']
+        model = o['bite_model'] if model is None else model
         key = (bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'], o['cells'],
                o['max_radius_ratio'], model)
         if key not in self.store:
@@ -651,12 +653,6 @@ class _BiteCache:
         if isinstance(value, Exception):
             raise ValueError(str(value))
         return value
-
-    def derive_options(self):
-        s, o = self.case['stand'], self.case['model_options']
-        return {'roll_youngs_modulus_pa': s['roll_youngs_modulus_pa'],
-                'roll_poisson_ratio': s['roll_poisson_ratio'], 'cells': o['cells'],
-                'max_radius_ratio': o['max_radius_ratio']}
 
 
 def _opts(beta):
@@ -1428,12 +1424,16 @@ def _h_order(ctx):
              or e['id'] == 'work_roll_2x']
     best = None
     crit = 'best gear / bearing / spindle source match'
-    if not k['gear_meshes'] and not k['bearings']:
-        ev.append(_ev(crit, 'no drive/bearing geometry supplied', 'match within 5 %',
-                      'NOT_OBSERVED', basis='input'))
-    elif not ctx.pitches and ctx.obs['measured_vibration_hz'] is None:
+    # the spindle / coupling candidate (work_roll_2x) follows from the work-roll diameter and
+    # speed, so it is matched even without gear or bearing geometry; the missing geometry
+    # only qualifies the absence of a gear / bearing match
+    no_geometry = not k['gear_meshes'] and not k['bearings']
+    if not ctx.pitches and ctx.obs['measured_vibration_hz'] is None:
         ev.append(_ev(crit, 'no pitch or vibration frequency observed', 'match within 5 %',
                       'NOT_OBSERVED'))
+    elif not cands:
+        ev.append(_ev(crit, 'no drive/bearing geometry supplied', 'match within 5 %',
+                      'NOT_OBSERVED', basis='input'))
     else:
         scored = []
         for e in cands:
@@ -1451,8 +1451,17 @@ def _h_order(ctx):
         txt = (f'{e["id"]} (order {e["order_of_work_roll_rotation"]:.4g}, pitch '
                f'{e["strip_pitch_m"] * 1e3:.4g} mm, {e["frequency_hz"]:.4g} Hz at u_op), '
                f'mismatch {mis:.2%}')
-        ev.append(_ev(crit, txt, 'match within 5 %', 'SUPPORTS' if mis <= 0.05 else
-                      'CONTRADICTS', 'strong' if mis <= 0.05 else 'weak'))
+        if mis <= 0.05:
+            if no_geometry:
+                txt += ('; no drive/bearing geometry supplied, so only the spindle / coupling '
+                        'candidate was checked')
+            ev.append(_ev(crit, txt, 'match within 5 %', 'SUPPORTS', 'strong'))
+        elif no_geometry:
+            ev.append(_ev(crit, 'no drive/bearing geometry supplied (no gear / bearing match '
+                          'assessable); spindle / coupling candidate ' + txt,
+                          'match within 5 %', 'NOT_OBSERVED', basis='input'))
+        else:
+            ev.append(_ev(crit, txt, 'match within 5 %', 'CONTRADICTS', 'weak'))
     wr, br = o['disappears_after_work_roll_change'], o['disappears_after_backup_roll_change']
     if wr is None and br is None:
         ev.append(_ev('roll-change test', 'not observed', 'persists after both',
@@ -1539,6 +1548,12 @@ def _h_coil(ctx):
                     ('CONTRADICTS', 'weak', note))
         ev = [_per_pitch(ctx, crit, 'within 10 % (no match: CONTRADICTS weak, filled rule)',
                          rule)]
+        if ctx.pitches:
+            # the coil that matches the observations best (smallest worst mismatch) is the one
+            # the strip map draws
+            worst = sorted((max(abs(t - pp['pitch_m']) / pp['pitch_m'] for pp in ctx.pitches),
+                            name) for name, t in targets)
+            matched, matched_mis = worst[0][1], worst[0][0]
     fs = o['first_seen']
     ev.append(_ev('first seen', 'not observed' if fs is None else fs, 'incoming_strip',
                   'NOT_OBSERVED' if fs is None else
@@ -1546,6 +1561,8 @@ def _h_coil(ctx):
                   'weak' if fs == 'incoming_strip' else None))
     ev.append(_law_ev(ctx, {}, {'FIXED_FREQUENCY': 'moderate'}, 'drifting / speed independent'))
     pred = {'coil_pitches_m': {n: t for n, t in targets}}
+    if targets and ctx.pitches:
+        pred.update(matched_coil=matched, matched_coil_worst_relative_mismatch=matched_mis)
     return ev, pred
 
 
@@ -1848,7 +1865,7 @@ def _strip_map(hyps, ctx):
         elif lead['id'] == 'order_locked_drive_or_bearing_excitation' and pr['best_match']:
             pitch, basis = pr['best_match']['strip_pitch_m'], pr['best_match']['id']
         elif lead['id'] == 'coil_or_mandrel_locked_marks' and pr['coil_pitches_m']:
-            name = sorted(pr['coil_pitches_m'])[0]
+            name = pr.get('matched_coil') or sorted(pr['coil_pitches_m'])[0]
             pitch, basis = pr['coil_pitches_m'][name], name
     observed = None
     if ctx.pitches:
@@ -2097,7 +2114,13 @@ def diagnose(case):
         result['process'] = process
     ctx.process = result['process']
 
-    derive_opts = cache.derive_options()
+    # perturbed bites of the sensitivities: same bite model as the operating bite (a supplied
+    # bite keeps the selected model, Hitchcock for 'auto')
+    sens_model = ('mattress' if (bite is not None and bp.is_mattress(bite))
+                  or eff['model_options']['bite_model'] == 'mattress' else 'hitchcock')
+
+    def sens_bite(bite_pass_):
+        return cache.get(bite_pass_, model=sens_model)
     gc = eff['gauge_control']
     if gc is None:
         result['gauge_control'] = bp.not_supplied('gauge_control is null or absent')
@@ -2108,7 +2131,7 @@ def diagnose(case):
         try:
             result['gauge_control'] = bp.gauge_control_section(
                 eff, gc, stand, bite, spans, beta, _roll_freqs(eff, u_op, ctx.slip), trib,
-                derive_opts, SPEED_SCAN_M_S)
+                sens_bite, SPEED_SCAN_M_S)
             flags.append('AGC_CHATTER_INTERACTION_DEPENDS_ON_LOOP_ROLL_OFF')
         except ValueError as exc:
             result['gauge_control'] = bp.failed('gauge_control', exc)
@@ -2128,7 +2151,7 @@ def diagnose(case):
     else:
         try:
             result['incoming_variation'] = bp.incoming_section(eff, iv, stand, bite, spans,
-                                                               beta, gc, derive_opts)
+                                                               beta, gc, sens_bite)
         except ValueError as exc:
             result['incoming_variation'] = bp.failed('incoming_variation', exc)
 

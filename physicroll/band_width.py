@@ -33,6 +33,13 @@ Integration choices (SPEC6 6.2 / 6.7; each is reported in the result):
   give spike artefacts.
 - Event visible time: time above the in-mill manifest threshold when reached, else above the
   after-release threshold, else above the reporting threshold (``visible_time_basis``).
+- Events run as one transient. Each connected group of adjacent switched nozzles is a stripe
+  with its own monitor; the stripe with the largest peak governs the event metrics. An event's
+  metrics use the history only up to the start of the next event switching nozzles in the same
+  neighbourhood (``attribution_window_end_s``); beyond it a fade is a lower bound, never this
+  event's value. The peak profile (shape, thresholds) is the snapshot AT the governing
+  stripe's measured peak time: event boundaries are always recorded, a peak between records
+  triggers a second run that records it.
 - The healthy-header nozzle-pattern ripple (healthy growth minus its moving average over one
   nozzle pitch, interior of the strip) is reported and fed through the shape chain.
 - The smooth thermal crown (centre minus strip-edge mean) goes to the crown / heredity model:
@@ -71,6 +78,7 @@ RECOVERY_MIN_S = 600.0
 RECORD_INTERVAL_S = 2.0
 HISTORY_MAX_POINTS = 300
 INITIAL_RATE_WINDOW_S = 5.0
+SNAPSHOT_TIME_TOL_S = 1e-6          # a snapshot within this of the measured peak time is 'at' it
 DEFAULT_NUMERICS = {'axial_cell_m': 0.005, 'radial_cells': 16, 'time_step_s': 1.0}
 DEFAULT_XI = 1.0
 LITERATURE_BAND_LIFE_S = (20.0, 120.0)
@@ -659,8 +667,62 @@ def _event_levels(th, active):
     return lv
 
 
+def _nozzle_groups(e):
+    """Connected groups of adjacent nozzle indices of an event (each group is one stripe)."""
+    groups = []
+    for i in sorted(e['nozzle_indices']):
+        if groups and i == groups[-1][-1] + 1:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    return groups
+
+
+def _event_region(th, groups):
+    """[(lo, hi)] neighbourhood of each stripe (nozzle span +- ISOLATION_MARGIN_M)."""
+    return [(min(th.positions[i] for i in g) - ISOLATION_MARGIN_M,
+             max(th.positions[i] for i in g) + ISOLATION_MARGIN_M) for g in groups]
+
+
+def _regions_overlap(ra, rb):
+    return any(a0 <= b1 and b0 <= a1 for a0, a1 in ra for b0, b1 in rb)
+
+
+def _attribution(k, starts, regions, end):
+    """(window end [s, timeline], flags) of event k: its metrics are attributable until another
+    event that switches nozzles in the same neighbourhood starts (that event's growth would be
+    read as this one's); an earlier such event leaves its residual in this event's history."""
+    ts, flags, window_end = starts[k], [], end
+    for j, (tj, rj) in enumerate(zip(starts, regions)):
+        if j == k or not _regions_overlap(regions[k], rj):
+            continue
+        if tj > ts + 1e-9:
+            window_end = min(window_end, tj)
+        elif tj < ts - 1e-9:
+            if 'EARLIER_EVENT_IN_SAME_REGION' not in flags:
+                flags.append('EARLIER_EVENT_IN_SAME_REGION')
+        elif 'CONCURRENT_EVENT_IN_SAME_REGION' not in flags:
+            flags.append('CONCURRENT_EVENT_IN_SAME_REGION')
+    return window_end, flags
+
+
+def _window(times, ts, tw):
+    return [i for i, t in enumerate(times) if ts - 1e-9 <= t <= tw + 1e-9]
+
+
+def _stripe_metrics(times, dev, sel, ts):
+    return rt.history_metrics([times[i] - ts for i in sel], [dev[i] for i in sel])
+
+
 def _events_section(th, sp, actual, events):
-    """One transient from the steady state through all events (overlaps combined)."""
+    """One transient from the steady state through all events (overlaps combined).
+
+    Per event: one monitor per connected group of adjacent switched nozzles (a stripe); the
+    stripe with the largest peak governs the event metrics. Metrics use the history up to the
+    start of the next event in the same neighbourhood (attribution window); what lies beyond
+    it is reported as a lower bound, not as this event's value. The peak profile is the
+    snapshot AT the governing stripe's measured peak time (event boundaries are always
+    recorded; a missing peak time is recorded by a second run)."""
     t0 = min(e['start_s'] for e in events)
     marks = sorted({0.0} | {e['start_s'] - t0 for e in events}
                    | {e['start_s'] - t0 + e['duration_s'] for e in events})
@@ -674,23 +736,65 @@ def _events_section(th, sp, actual, events):
         active = [e for e in events if e['start_s'] - t0 <= a + 1e-9
                   and e['start_s'] - t0 + e['duration_s'] >= b - 1e-9]
         segs.append(th.segment(_event_levels(th, active), b - a))
-    monitors = [sum(th.positions[i] for i in e['nozzle_indices']) / len(e['nozzle_indices'])
-                for e in events]
+    groups = [_nozzle_groups(e) for e in events]
+    regions = [_event_region(th, g) for g in groups]
+    stripe_x = [[sum(th.positions[i] for i in g) / len(g) for g in gs] for gs in groups]
+    monitors = [x for xs in stripe_x for x in xs]
+    first_monitor = [sum(len(xs) for xs in stripe_x[:k]) for k in range(len(events))]
+    starts = [e['start_s'] - t0 for e in events]
+    attrib = [_attribution(k, starts, regions, end) for k in range(len(events))]
     step = th.numerics['time_step_s']
     interval = max(RECORD_INTERVAL_S, step)
     n_rec = int(end / interval)
-    records = [k * interval for k in range(n_rec + 1)]
-    sim = rt.simulate(th.roll, th.header, segs, initial=actual, time_step_s=step,
-                      record_times_s=records, monitor_positions_m=monitors, **th.kw)
+    records = sorted({k * interval for k in range(n_rec + 1)} | set(marks))
     z = actual['z_m']
     base = actual['radius_growth_m']
+
+    def run(record_times):
+        return rt.simulate(th.roll, th.header, segs, initial=actual, time_step_s=step,
+                           record_times_s=record_times, monitor_positions_m=monitors, **th.kw)
+
+    def governing(sim, k):
+        """Per-stripe histories and metrics in the attribution window; governing index."""
+        ts, tw = starts[k], attrib[k][0]
+        out = []
+        for g, (nz, x) in enumerate(zip(groups[k], stripe_x[k])):
+            mon = sim['monitors'][first_monitor[k] + g]
+            times = mon['time_s']
+            g0 = _interp(z, base, x)
+            dev = [v - g0 for v in mon['radius_growth_m']]
+            sel = _window(times, ts, tw)
+            out.append({'nozzle_indices': nz, 'x': x, 'times': times, 'dev': dev, 'sel': sel,
+                        'met': _stripe_metrics(times, dev, sel, ts)})
+        gov = max(range(len(out)), key=lambda i: (abs(out[i]['met']['peak_change']), -i))
+        return out, gov
+
+    def peak_times(sim):
+        out = []
+        for k in range(len(events)):
+            st, gov = governing(sim, k)
+            out.append(starts[k] + st[gov]['met']['time_of_peak_s'])
+        return out
+
+    sim = run(records)
+    missing = [t for t in peak_times(sim)
+               if not any(abs(s['time_s'] - t) <= SNAPSHOT_TIME_TOL_S for s in sim['snapshots'])]
+    rerun = bool(missing)
+    if rerun:
+        sim = run(sorted(set(records) | set(missing)))
     rows = []
-    for k, (e, x, mon) in enumerate(zip(events, monitors, sim['monitors'])):
-        ts = e['start_s'] - t0
+    for k, e in enumerate(events):
+        ts = starts[k]
         te = ts + e['duration_s']
-        times = mon['time_s']
-        g0 = _interp(z, base, x)
-        dev = [g - g0 for g in mon['radius_growth_m']]
+        tw, att_flags = attrib[k]
+        flags = list(att_flags)
+        if tw < end - 1e-9:
+            flags.append('LATER_EVENT_IN_SAME_REGION')
+            if tw < te - 1e-9:
+                flags.append('PEAK_TRUNCATED_BY_LATER_EVENT')
+        stripes, gov = governing(sim, k)
+        gs = stripes[gov]
+        x, times, dev, sel, met = gs['x'], gs['times'], gs['dev'], gs['sel'], gs['met']
         # analytic initial growth rate from the change of the local cooling
         lv_after = _event_levels(th, [e])
         w_after = th.header.weight_profile(z, lv_after)
@@ -706,15 +810,14 @@ def _events_section(th, sp, actual, events):
                      2 * min(step, sim['solver']['internal_time_step_cap_s']))
         window = min(window, e['duration_s'])
         sim_rate = (_interp(times, dev, ts + window) - _interp(times, dev, ts)) / window
-        sel = [i for i, t in enumerate(times) if t >= ts - 1e-9]
-        met = rt.history_metrics([times[i] - ts for i in sel], [dev[i] for i in sel])
         t_peak = ts + met['time_of_peak_s']
         snap = min(sim['snapshots'], key=lambda s: (abs(s['time_s'] - t_peak), s['time_s']))
+        if abs(snap['time_s'] - t_peak) > SNAPSHOT_TIME_TOL_S:
+            flags.append('PEAK_SNAPSHOT_OFFSET_FROM_MEASURED_PEAK')
         prof = [g - b for g, b in zip(snap['radius_growth_m'], base)]
-        # isolate this event's stripe: zero outside its nozzles' neighbourhood
-        lo = min(th.positions[i] for i in e['nozzle_indices']) - ISOLATION_MARGIN_M
-        hi = max(th.positions[i] for i in e['nozzle_indices']) + ISOLATION_MARGIN_M
-        prof = [v if lo <= zz <= hi else 0.0 for zz, v in zip(z, prof)]
+        # isolate this event's stripes: zero outside its nozzle groups' neighbourhoods
+        prof = [v if any(lo <= zz <= hi for lo, hi in regions[k]) else 0.0
+                for zz, v in zip(z, prof)]
         at_mon = _interp(z, prof, x)
         k_pk = max(range(len(z)), key=lambda i: abs(prof[i]))
         row = {'index': k, 'label': e.get('label') or f'event {k}',
@@ -722,6 +825,15 @@ def _events_section(th, sp, actual, events):
                'nozzle_indices': e['nozzle_indices'], 'level': e['level'],
                'nozzle_positions_m': [th.positions[i] for i in e['nozzle_indices']],
                'monitor_position_m': x,
+               'governing_stripe_index': gov,
+               'stripes': [{'index': i, 'nozzle_indices': s['nozzle_indices'],
+                            'nozzle_positions_m': [th.positions[j] for j in s['nozzle_indices']],
+                            'monitor_position_m': s['x'],
+                            'peak_deviation_m': s['met']['peak_change'],
+                            'time_of_peak_s': s['met']['time_of_peak_s'],
+                            'time_to_half_peak_s': s['met']['time_to_half_peak_s'],
+                            'governing': i == gov} for i, s in enumerate(stripes)],
+               'attribution_window_end_s': tw - ts,
                'local_htc_before_w_m2k': h_before, 'local_htc_during_w_m2k': h_after,
                'surface_excess_temperature_k': t_s - th.w['coolant_temperature_k'],
                'net_surface_flux_change_w_m2': dq,
@@ -754,14 +866,15 @@ def _events_section(th, sp, actual, events):
             row['released_threshold_m'] = None
             row['peak_state_with_feedback'] = row['peak_state_after_tension_release'] = None
         sign = 1.0 if met['peak_change'] >= 0 else -1.0
-        sdev = [sign * v for v in dev]
+        tw_times = [times[i] for i in sel]
+        tw_sdev = [sign * dev[i] for i in sel]
         for name in ('manifest', 'released', 'reporting'):
             thr = row[f'{name}_threshold_m']
             t_on = fade = None
             if thr is not None and thr * sign > 0:
-                t_on = _first_cross(times, sdev, ts, abs(thr), up=True)
-                if t_on is not None:
-                    t_off = _first_cross(times, sdev, max(te, t_on), abs(thr), up=False)
+                t_on = _first_cross(tw_times, tw_sdev, ts, abs(thr), up=True)
+                if t_on is not None and max(te, t_on) <= tw + 1e-9:
+                    t_off = _first_cross(tw_times, tw_sdev, max(te, t_on), abs(thr), up=False)
                     fade = None if t_off is None else t_off - te
             row[f'time_to_{name}_threshold_s'] = None if t_on is None else t_on - ts
             row[f'fade_time_below_{name}_threshold_s'] = fade
@@ -774,8 +887,9 @@ def _events_section(th, sp, actual, events):
         row['band_life_s'] = None if (basis is None or fade is None) else e['duration_s'] + fade
         row['band_life_lower_bound_s'] = None
         if basis and fade is None:
-            row['flags'] = ['FADE_BEYOND_SIMULATED_RECOVERY']
-            row['band_life_lower_bound_s'] = end - ts
+            flags.append('FADE_BEYOND_ATTRIBUTION_WINDOW' if tw < end - 1e-9
+                         else 'FADE_BEYOND_SIMULATED_RECOVERY')
+            row['band_life_lower_bound_s'] = tw - ts
         # visible time: in the mill if it buckles there, else after tension release, else
         # the time it stays above the reporting threshold (a shapemeter stripe only)
         vis = next((n for n in ('manifest', 'released', 'reporting')
@@ -786,17 +900,21 @@ def _events_section(th, sp, actual, events):
                                      None: None}[vis]
         row['visible_time_s'] = None if vis is None else row[f'time_above_{vis}_threshold_s']
         row['visible_time_lower_bound_s'] = (
-            end - (ts + row[f'time_to_{vis}_threshold_s'])
+            tw - (ts + row[f'time_to_{vis}_threshold_s'])
             if vis is not None and row['visible_time_s'] is None else None)
-        stride = max(1, int(math.ceil(len(sel) / HISTORY_MAX_POINTS)))
-        keep = sel[::stride]
-        if keep[-1] != sel[-1]:
-            keep.append(sel[-1])
+        if flags:
+            row['flags'] = flags
+        hist = [i for i, t in enumerate(times) if t >= ts - 1e-9]
+        stride = max(1, int(math.ceil(len(hist) / HISTORY_MAX_POINTS)))
+        keep = hist[::stride]
+        if keep[-1] != hist[-1]:
+            keep.append(hist[-1])
         row['history'] = {'time_s': [times[i] - ts for i in keep],
                           'radius_deviation_m': [dev[i] for i in keep]}
         rows.append(row)
     return {'status': sim['status'], 'events': rows, 'timeline_end_s': end,
             'recovery_s': recovery, 'time_origin_s': t0,
+            'peak_snapshots_recorded_by_second_run': rerun,
             'solver': {k: sim['solver'][k] for k in ('time_step_s', 'internal_time_step_cap_s',
                                                      'steps')},
             'relative_energy_residual': sim['relative_energy_residual'],
@@ -816,6 +934,20 @@ def _events_section(th, sp, actual, events):
             'band_life_definition': 'band_life_s = event duration + time after the event ends '
                                     'for the stripe to fall below the manifest threshold (or the '
                                     'reporting threshold when it never becomes manifest)',
+            'stripe_definition': 'one monitor per connected group of adjacent switched nozzles '
+                                 '(a stripe); the stripe with the largest peak radius deviation '
+                                 'governs the event metrics (governing_stripe_index), the others '
+                                 'are listed under stripes',
+            'attribution_definition': 'event metrics use the monitor history from the event '
+                                      'start to attribution_window_end_s: the start of the next '
+                                      'event switching nozzles within the isolation margin '
+                                      f'({ISOLATION_MARGIN_M:g} m) of this one, else the end of '
+                                      'the run; a fade beyond it gives only a lower bound '
+                                      '(flag FADE_BEYOND_ATTRIBUTION_WINDOW), a later event '
+                                      'starting during this one truncates its peak (flag '
+                                      'PEAK_TRUNCATED_BY_LATER_EVENT); an earlier event in the '
+                                      'same neighbourhood leaves its residual in the history '
+                                      '(flag EARLIER_EVENT_IN_SAME_REGION)',
             'visible_time_definition': 'visible_time_s = time above the in-mill manifest '
                                        'threshold if reached, else above the after-release '
                                        'threshold, else above the reporting threshold '

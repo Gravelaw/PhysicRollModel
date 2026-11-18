@@ -12,6 +12,7 @@ import unittest
 from physicroll import band_width as bw
 from physicroll import strip_shape as ss
 from physicroll.band_diagnosis import CASE_SCHEMA_V2, HYPOTHESIS_FAMILIES, diagnose, load_case
+from physicroll.band_report import render_band_report
 from physicroll.chatter import BitePass, derive_bite_response
 from physicroll.roll_thermal import SprayHeader
 
@@ -380,6 +381,76 @@ class LengthwisePlantedTruthTests(unittest.TestCase):
         for hid, fam in HYPOTHESIS_FAMILIES.items():
             if fam == 'lengthwise':
                 self.assertEqual(_h(r)[hid]['standing'], 'CONTRADICTED', hid)
+
+
+class EventAttributionTests(unittest.TestCase):
+    """Reproducers of code-review findings 3, 4 and 6 (zone-switching event metrics); supplied
+    bite heat 1e6 W/m, coarse numerics (5 s time step)."""
+
+    @classmethod
+    def setUpClass(cls):
+        def run(events):
+            c = v2(**LONG)
+            c['width_model'] = width_model(bite_heat_per_width_w_m=1e6, events=events)
+            return diagnose(c)
+        cls.same = run([{'start_s': 0.0, 'duration_s': 5.0, 'nozzle_indices': [12], 'level': 0.0},
+                        {'start_s': 100.0, 'duration_s': 90.0, 'nozzle_indices': [12],
+                         'level': 0.0}])
+        cls.short = run([{'start_s': 0.0, 'duration_s': 2.0, 'nozzle_indices': [16],
+                          'level': 0.0}])
+        cls.split = run([{'start_s': 0.0, 'duration_s': 30.0, 'nozzle_indices': [6, 26],
+                          'level': 0.0}])
+
+    def test_later_event_on_same_nozzle_not_attributed_to_earlier(self):
+        # finding 3: the 5 s event reported the 90 s event's peak (at t = 190 s) and a band
+        # life of 222 s that included the later event
+        first, second = self.same['width']['thermal_events']['events']
+        self.assertEqual(first['attribution_window_end_s'], 100.0)
+        self.assertLessEqual(first['time_of_peak_s'], 100.0)
+        self.assertLess(first['peak_deviation_m'], 0.25 * second['peak_deviation_m'])
+        self.assertIn('LATER_EVENT_IN_SAME_REGION', first['flags'])
+        # the stripe of the 5 s event is still above the reporting threshold when the second
+        # event starts: its life is only bounded, never the combined value
+        self.assertIsNone(first['band_life_s'])
+        self.assertEqual(first['band_life_lower_bound_s'], 100.0)
+        self.assertIn('FADE_BEYOND_ATTRIBUTION_WINDOW', first['flags'])
+        self.assertIn('EARLIER_EVENT_IN_SAME_REGION', second['flags'])
+        self.assertAlmostEqual(second['time_of_peak_s'], 90.0)
+        self.assertGreater(second['band_life_s'], 90.0)
+        html = render_band_report(self.same)
+        self.assertIn('not attributable after 100 s', html)
+
+    def test_short_event_peak_profile_is_the_measured_peak(self):
+        # finding 4: a 2 s outage (shorter than the 5 s snapshot interval) took the snapshot at
+        # t = 0 (unchanged state): zero deviation and BELOW_REPORTING_THRESHOLD
+        ev = self.short['width']['thermal_events']['events'][0]
+        self.assertEqual(ev['time_of_peak_s'], 2.0)
+        self.assertEqual(ev['peak_snapshot_time_s'], ev['time_of_peak_s'])
+        self.assertGreater(ev['stripe_peak_deviation_m'], 1.5e-7)
+        self.assertLess(abs(ev['stripe_peak_position_m'] - NOZZLES[16]), 0.021)
+        shape = ev['peak_shape']
+        self.assertGreater(shape['feedback_peak_i_units'], shape['reporting_threshold_i_units'])
+        self.assertNotEqual(ev['peak_state_with_feedback'], 'BELOW_REPORTING_THRESHOLD')
+        self.assertIsNotNone(ev['reporting_threshold_m'])
+
+    def test_separated_nozzles_monitored_per_stripe(self):
+        # finding 6: nozzles 6 and 26 were monitored at their mean position (an unaffected
+        # region, ~ -3 nm) although both nozzle positions grow ~2.08 um
+        ev = self.split['width']['thermal_events']['events'][0]
+        stripes = ev['stripes']
+        self.assertEqual([s['nozzle_indices'] for s in stripes], [[6], [26]])
+        self.assertEqual([s['monitor_position_m'] for s in stripes], [NOZZLES[6], NOZZLES[26]])
+        for s in stripes:
+            self.assertGreater(s['peak_deviation_m'], 1.9e-6)
+        gov = stripes[ev['governing_stripe_index']]
+        self.assertTrue(gov['governing'])
+        self.assertEqual(ev['monitor_position_m'], gov['monitor_position_m'])
+        self.assertEqual(ev['peak_deviation_m'], max(s['peak_deviation_m'] for s in stripes))
+        self.assertNotEqual(ev['peak_state_with_feedback'], 'BELOW_REPORTING_THRESHOLD')
+        self.assertGreater(ev['reporting_threshold_m'], 0)
+        self.assertGreater(ev['band_life_s'], ev['duration_s'])
+        html = render_band_report(self.split)
+        self.assertIn('stripes (one monitor per group of adjacent nozzles)', html)
 
 
 class LengthwiseScenarioTests(unittest.TestCase):
