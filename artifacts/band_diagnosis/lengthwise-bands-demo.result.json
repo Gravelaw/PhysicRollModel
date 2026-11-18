@@ -21,7 +21,7 @@
     "source": "derived_slab_hitchcock",
     "strip_modulus_n_m": 17791214833.5749
   },
-  "bite_derivations": 36,
+  "bite_derivations": 29,
   "bite_error": null,
   "case_name": "lengthwise_bands_demo",
   "case_schema": "physicroll.band_case.v2",
@@ -387,97 +387,37 @@
       "forward_slip_fraction_held": 0.051523016370145,
       "friction_law": "mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at the closure mu_v: the placeholder closure supplies the slope, the friction used at the operating point the level",
       "friction_used_at_operating_speed": 0.03,
+      "lowest_assessable_exit_speed_m_s": {
+        "with_bite_damping": 19.905358527674867,
+        "without_bite_damping": 19.905358527674867
+      },
       "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the contact radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
       "placeholder_closure_friction_at_operating_speed": 0.07648428324495296,
       "relative_tolerance": 0.01,
       "scan": [
         {
-          "critical_exit_speed_m_s": 25.244987670313932,
-          "critical_exit_speed_without_bite_damping_m_s": 13.662988940106235,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 0.5,
           "friction_coefficient": 0.04290262737206485,
-          "placeholder_closure_friction_coefficient": 0.08938691061701781
+          "placeholder_closure_friction_coefficient": 0.08938691061701781,
+          "rejected": "Hitchcock contact radius ratio 1.614 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
         },
         {
-          "critical_exit_speed_m_s": 24.677218672608532,
-          "critical_exit_speed_without_bite_damping_m_s": 13.124513524585597,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 1.25594321575479,
           "friction_coefficient": 0.04198439881909635,
-          "placeholder_closure_friction_coefficient": 0.08846868206404931
+          "placeholder_closure_friction_coefficient": 0.08846868206404931,
+          "rejected": "Hitchcock contact radius ratio 1.603 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
         },
         {
-          "critical_exit_speed_m_s": 23.304903858564316,
-          "critical_exit_speed_without_bite_damping_m_s": 11.862992806185751,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 3.1547867224009667,
           "friction_coefficient": 0.03972334736647587,
-          "placeholder_closure_friction_coefficient": 0.08620763061142883
+          "placeholder_closure_friction_coefficient": 0.08620763061142883,
+          "rejected": "Hitchcock contact radius ratio 1.577 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
         },
         {
-          "critical_exit_speed_m_s": 20.161483155835615,
-          "critical_exit_speed_without_bite_damping_m_s": 9.200367868814842,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 7.924465962305566,
           "friction_coefficient": 0.034320112525435265,
-          "placeholder_closure_friction_coefficient": 0.08080439577038823
-        },
-        {
-          "critical_exit_speed_m_s": 19.828837807175674,
-          "critical_exit_speed_without_bite_damping_m_s": 8.938049708154754,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 8.465614176348618,
-          "friction_coefficient": 0.03373116062059689,
-          "placeholder_closure_friction_coefficient": 0.08021544386554985
-        },
-        {
-          "critical_exit_speed_m_s": 19.70472465986682,
-          "critical_exit_speed_without_bite_damping_m_s": 8.84116540266345,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 8.669332699358726,
-          "friction_coefficient": 0.03351068257045772,
-          "placeholder_closure_friction_coefficient": 0.07999496581541068
-        },
-        {
-          "critical_exit_speed_m_s": 19.633977194457387,
-          "critical_exit_speed_without_bite_damping_m_s": 8.786175489479092,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 8.785912827073151,
-          "friction_coefficient": 0.03338481457734199,
-          "placeholder_closure_friction_coefficient": 0.07986909782229495
-        },
-        {
-          "critical_exit_speed_m_s": 19.614842546127385,
-          "critical_exit_speed_without_bite_damping_m_s": 8.77134033582001,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 8.817487837398447,
-          "friction_coefficient": 0.03335076189317285,
-          "placeholder_closure_friction_coefficient": 0.07983504513812581
-        },
-        {
-          "critical_exit_speed_m_s": 13.31763245092798,
-          "critical_exit_speed_without_bite_damping_m_s": 4.838474740316489,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 13.247570995088322,
-          "friction_coefficient": 0.02872952858316999,
-          "placeholder_closure_friction_coefficient": 0.07521381182812295
-        },
-        {
-          "critical_exit_speed_m_s": 13.29705795527016,
-          "critical_exit_speed_without_bite_damping_m_s": 4.826212300023844,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 13.296825485112176,
-          "friction_coefficient": 0.028679856497954348,
-          "placeholder_closure_friction_coefficient": 0.07516413974290731
-        },
-        {
-          "critical_exit_speed_m_s": 13.25930859160557,
-          "critical_exit_speed_without_bite_damping_m_s": 4.803753707557694,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 13.387228275063658,
-          "friction_coefficient": 0.028588782743868363,
-          "placeholder_closure_friction_coefficient": 0.07507306598882132
+          "placeholder_closure_friction_coefficient": 0.08080439577038823,
+          "rejected": "Hitchcock contact radius ratio 1.524 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
         },
         {
           "critical_exit_speed_m_s": 10.647590052494515,
@@ -491,13 +431,14 @@
           "exit_speed_m_s": 50.0,
           "friction_coefficient": 0.008,
           "placeholder_closure_friction_coefficient": 0.04671550654081991,
-          "rejected": "no unique interior neutral point; slab case out of domain; experimental mattress fallback also rejected: the entry slip branch already reaches the no-slip state at h_n = 2.092e-04 m <= exit thickness 2.100e-04 m: the reduction would need a sticking exit (zero forward slip), a structure this experimental model does not represent (foil regime beyond its limit)"
+          "rejected": "no unique interior neutral point; slab case out of domain"
         }
       ],
-      "speed_consistent_critical_exit_speed_m_s": 13.297151771664414,
-      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": 8.786091210089177,
-      "status": "CROSSING_FOUND",
-      "status_without_bite_damping": "CROSSING_FOUND"
+      "scan_note": "speeds below the lowest assessable one have no roll bite with the operating bite's model (see scan[].rejected)",
+      "speed_consistent_critical_exit_speed_m_s": null,
+      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": null,
+      "status": "UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED",
+      "status_without_bite_damping": "UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED"
     },
     "stability": {
       "bite_damping_transit_fraction": 0.5,
@@ -2566,9 +2507,9 @@
           "basis": "observation",
           "criterion": "spacing vs trough wavelength",
           "expected": "0.5-2 x wavelength (either span)",
-          "observed": "spacing 368 mm; entry_span: 0.745 x wavelength, exit_span: 0.932 x wavelength",
+          "observed": "spacing 368 mm; entry_span: 0.745 x wavelength, exit_span: 0.932 x wavelength (irregular gaps cannot establish a spacing)",
           "verdict": "SUPPORTS",
-          "weight": "strong"
+          "weight": "weak"
         },
         {
           "basis": "observation",
@@ -2662,7 +2603,7 @@
         }
       },
       "rank": 3,
-      "score": 8,
+      "score": 6,
       "standing": "CONSISTENT",
       "tallies": {
         "contradiction_points": 0,
@@ -2671,7 +2612,7 @@
         "not_observed": 4,
         "observation_supports": 4,
         "strong_contradictions": 0,
-        "support_points": 8,
+        "support_points": 6,
         "supports": 4
       },
       "title": "Tension troughs or creases"
@@ -3361,9 +3302,9 @@
     },
     {
       "computed_lever_directions": [
-        "lower friction lowers the chatter-free (critical) exit speed; higher friction raises it (x0.7 -> ratio 0.727; x1.3 -> ratio 1.652)",
-        "lower pass reduction raises the chatter-free (critical) exit speed; higher pass reduction lowers it (x0.8 -> ratio 1.459; x1.2 -> ratio 0.914)",
-        "lower entry tension raises the chatter-free (critical) exit speed; higher entry tension lowers it (x0.5 -> ratio 1.372; x1.5 -> ratio 0.925)",
+        "lower friction lowers the chatter-free (critical) exit speed; higher friction raises it (x0.7 -> ratio 0.727)",
+        "lower pass reduction raises the chatter-free (critical) exit speed; higher pass reduction lowers it (x1.2 -> ratio 0.914)",
+        "lower entry tension raises the chatter-free (critical) exit speed; higher entry tension lowers it (x1.5 -> ratio 0.925)",
         "lower exit tension lowers the chatter-free (critical) exit speed; higher exit tension raises it (x0.5 -> ratio 0.985; x1.5 -> ratio 1.016)",
         "lower entry span length lowers the chatter-free (critical) exit speed; higher entry span length raises it (x0.5 -> ratio 0.680; x2 -> ratio 1.479)",
         "lower structural damping lowers the chatter-free (critical) exit speed; higher structural damping raises it (x0.5 -> ratio 0.887; x2 -> ratio 1.275)"
@@ -4628,17 +4569,17 @@
     "bite_damping_transit_fraction": 0.5,
     "directions": [
       {
-        "direction": "lower friction lowers the chatter-free (critical) exit speed; higher friction raises it (x0.7 -> ratio 0.727; x1.3 -> ratio 1.652)",
+        "direction": "lower friction lowers the chatter-free (critical) exit speed; higher friction raises it (x0.7 -> ratio 0.727)",
         "lever": "friction",
         "raising_parameter_effect_on_critical_speed": "RAISES"
       },
       {
-        "direction": "lower pass reduction raises the chatter-free (critical) exit speed; higher pass reduction lowers it (x0.8 -> ratio 1.459; x1.2 -> ratio 0.914)",
+        "direction": "lower pass reduction raises the chatter-free (critical) exit speed; higher pass reduction lowers it (x1.2 -> ratio 0.914)",
         "lever": "reduction",
         "raising_parameter_effect_on_critical_speed": "LOWERS"
       },
       {
-        "direction": "lower entry tension raises the chatter-free (critical) exit speed; higher entry tension lowers it (x0.5 -> ratio 1.372; x1.5 -> ratio 0.925)",
+        "direction": "lower entry tension raises the chatter-free (critical) exit speed; higher entry tension lowers it (x1.5 -> ratio 0.925)",
         "lever": "entry_tension",
         "raising_parameter_effect_on_critical_speed": "LOWERS"
       },
@@ -4661,16 +4602,6 @@
     "note": "Work-roll radius is not a lever. Ratios are critical exit speed of the variant over the baseline with the supplied bite-damping fraction.",
     "rows": [
       {
-        "change": "friction_coefficient x1.3",
-        "contact_radius_ratio": 1.834541718804987,
-        "critical_exit_speed_m_s": 22.87340810239369,
-        "critical_exit_speed_without_bite_damping_m_s": 11.47838853354958,
-        "factor": 1.3,
-        "lever": "friction",
-        "parameter": "friction_coefficient",
-        "ratio_to_baseline": 1.6519927630585696
-      },
-      {
         "change": "entry_span_length_m x2",
         "contact_radius_ratio": 1.4860253458546073,
         "critical_exit_speed_m_s": 20.471739046360923,
@@ -4691,16 +4622,6 @@
         "ratio_to_baseline": 0.6802770806182981
       },
       {
-        "change": "reduction_fraction (exit thickness varied, entry fixed) x0.8",
-        "contact_radius_ratio": 1.8358290179418164,
-        "critical_exit_speed_m_s": 20.20422726658702,
-        "critical_exit_speed_without_bite_damping_m_s": 9.576826116924728,
-        "factor": 0.8,
-        "lever": "reduction",
-        "parameter": "reduction_fraction (exit thickness varied, entry fixed)",
-        "ratio_to_baseline": 1.4592157442466769
-      },
-      {
         "change": "friction_coefficient x0.7",
         "contact_radius_ratio": 1.4180690257638988,
         "critical_exit_speed_m_s": 10.06670726279377,
@@ -4709,16 +4630,6 @@
         "lever": "friction",
         "parameter": "friction_coefficient",
         "ratio_to_baseline": 0.7270507075954333
-      },
-      {
-        "change": "entry_tension_pa x0.5",
-        "contact_radius_ratio": 1.7863623899024277,
-        "critical_exit_speed_m_s": 18.99160697965189,
-        "critical_exit_speed_without_bite_damping_m_s": 8.282443585356017,
-        "factor": 0.5,
-        "lever": "entry_tension",
-        "parameter": "entry_tension_pa",
-        "ratio_to_baseline": 1.371636318855093
       },
       {
         "change": "modal_damping_ratio x2",
@@ -4779,6 +4690,30 @@
         "lever": "exit_tension",
         "parameter": "exit_tension_pa",
         "ratio_to_baseline": 0.9854726880945398
+      },
+      {
+        "change": "entry_tension_pa x0.5",
+        "factor": 0.5,
+        "lever": "entry_tension",
+        "parameter": "entry_tension_pa",
+        "ratio_to_baseline": null,
+        "rejected": "Hitchcock contact radius ratio 1.506 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
+      },
+      {
+        "change": "friction_coefficient x1.3",
+        "factor": 1.3,
+        "lever": "friction",
+        "parameter": "friction_coefficient",
+        "ratio_to_baseline": null,
+        "rejected": "Hitchcock contact radius ratio 1.570 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
+      },
+      {
+        "change": "reduction_fraction (exit thickness varied, entry fixed) x0.8",
+        "factor": 0.8,
+        "lever": "reduction",
+        "parameter": "reduction_fraction (exit thickness varied, entry fixed)",
+        "ratio_to_baseline": null,
+        "rejected": "Hitchcock contact radius ratio 1.541 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed"
       }
     ]
   },

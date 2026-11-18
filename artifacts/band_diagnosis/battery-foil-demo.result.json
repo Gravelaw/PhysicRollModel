@@ -406,6 +406,9 @@
       "forward_slip_fraction_held": 0.1896489804627004,
       "friction_law": "mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at the closure mu_v: the placeholder closure supplies the slope, the friction used at the operating point the level",
       "friction_used_at_operating_speed": 0.03,
+      "lowest_assessable_exit_speed_m_s": {
+        "without_bite_damping": 7.924465962305566
+      },
       "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the contact radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
       "placeholder_closure_friction_at_operating_speed": 0.055239319435180456,
       "relative_tolerance": 0.01,
@@ -414,19 +417,19 @@
           "exit_speed_m_s": 0.5,
           "friction_coefficient": 0.06303967442856281,
           "placeholder_closure_friction_coefficient": 0.08827899386374327,
-          "rejected": "Coulomb shear exceeds material shear yield; sticking model required; experimental mattress fallback also rejected: Coulomb shear mu*p reaches 1.52 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
+          "rejected": "Coulomb shear mu*p reaches 1.52 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
         },
         {
           "exit_speed_m_s": 1.25594321575479,
           "friction_coefficient": 0.06050604909079055,
           "placeholder_closure_friction_coefficient": 0.085745368525971,
-          "rejected": "Coulomb shear exceeds material shear yield; sticking model required; experimental mattress fallback also rejected: Coulomb shear mu*p reaches 1.41 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
+          "rejected": "Coulomb shear mu*p reaches 1.41 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
         },
         {
           "exit_speed_m_s": 3.1547867224009667,
           "friction_coefficient": 0.054488973263485646,
           "placeholder_closure_friction_coefficient": 0.0797282926986661,
-          "rejected": "Coulomb shear exceeds material shear yield; sticking model required; experimental mattress fallback also rejected: Coulomb shear mu*p reaches 1.13 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
+          "rejected": "Coulomb shear mu*p reaches 1.13 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
         },
         {
           "critical_exit_speed_m_s": null,
@@ -477,18 +480,17 @@
           "placeholder_closure_friction_coefficient": 0.04324359907309032
         },
         {
-          "critical_exit_speed_m_s": 1.1185835916431799,
-          "critical_exit_speed_without_bite_damping_m_s": 0.17315884827012637,
-          "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 50.0,
           "friction_coefficient": 0.008,
-          "placeholder_closure_friction_coefficient": 0.01783152069880997
+          "placeholder_closure_friction_coefficient": 0.01783152069880997,
+          "rejected": "the entry slip branch already reaches the no-slip state at h_n = 2.994e-05 m <= exit thickness 3.000e-05 m: the reduction would need a sticking exit (zero forward slip), a structure this experimental model does not represent (foil regime beyond its limit)"
         }
       ],
+      "scan_note": "speeds below the lowest assessable one have no roll bite with the operating bite's model (see scan[].rejected)",
       "speed_consistent_critical_exit_speed_m_s": 16.286309779030212,
-      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": 7.924465962305566,
+      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": null,
       "status": "CROSSING_FOUND",
-      "status_without_bite_damping": "UNSTABLE_AT_LOWEST_SCANNED_SPEED"
+      "status_without_bite_damping": "UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED"
     },
     "stability": {
       "bite_damping_transit_fraction": 0.5,
@@ -2901,7 +2903,7 @@
           "basis": "observation",
           "criterion": "spacing vs trough wavelength",
           "expected": "0.5-2 x wavelength",
-          "observed": "spacing 365 mm; entry_span: 2.27 x wavelength, exit_span: 3.03 x wavelength",
+          "observed": "spacing 365 mm; entry_span: 2.27 x wavelength, exit_span: 3.03 x wavelength (one gap between two bands cannot establish a spacing)",
           "verdict": "NEUTRAL",
           "weight": null
         },

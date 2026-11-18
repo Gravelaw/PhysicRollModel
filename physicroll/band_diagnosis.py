@@ -715,6 +715,26 @@ class _BiteCache:
         return value
 
 
+def perturbed_bite_model(case, bite):
+    """Bite model for the perturbed bites of the levers, the speed-consistent critical speed
+    and the sensitivities: the model of the operating bite (mattress when it is a mattress
+    bite or ``bite_model`` is 'mattress', else Hitchcock; a supplied bite keeps the selected
+    model, Hitchcock for 'auto'). No silent switch: a perturbed pass that model cannot solve is
+    reported as not assessable with the reason."""
+    return ('mattress' if (bite is not None and bp.is_mattress(bite))
+            or case['model_options']['bite_model'] == 'mattress' else 'hitchcock')
+
+
+class _ModelCache:
+    """A view of a ``_BiteCache`` that derives every bite with one fixed model."""
+
+    def __init__(self, cache, model):
+        self.cache, self.model = cache, model
+
+    def get(self, bite_pass, model=None):
+        return self.cache.get(bite_pass, model=model or self.model)
+
+
 def _opts(beta):
     return {'bite_damping_transit_fraction': beta}
 
@@ -1090,7 +1110,9 @@ def _lever_rows(case, cache, stand, spans, bite, beta, override):
             if override is not None:
                 raise ValueError('bite sensitivities were supplied: this lever needs a '
                                  're-derived or re-supplied bite response')
-            b = cache.get(variant)
+            # review fix: same bite model as the operating bite; a variant that model cannot
+            # solve is a rejected (not assessable) row, never a silent model switch
+            b = cache.get(variant, model=perturbed_bite_model(case, bite))
             c, c0 = _crit_pair(stand, b, spans, beta)
             row.update(critical_exit_speed_m_s=c['critical_exit_speed_m_s'],
                        critical_exit_speed_without_bite_damping_m_s=c0['critical_exit_speed_m_s'],
@@ -1709,20 +1731,32 @@ def _h_coil(ctx):
         ev = [_ev(crit, 'coil diameters not supplied', 'within 10 %', 'NOT_OBSERVED',
                   basis='input')]
     else:
+        # review finding: one coil must explain every pitch. The coil that fits all the
+        # observations best (smallest worst mismatch) is chosen first and every pitch is judged
+        # against it; before, each pitch took its own nearest coil, so mixed sources could all
+        # 'match'. The entry-coil pitch uses the case pass's h0/h1: the pitch observations are
+        # assumed to be taken on the case pass's exit strip.
+        if ctx.pitches:
+            worst = sorted((max(abs(t - pp['pitch_m']) / pp['pitch_m'] for pp in ctx.pitches),
+                            name) for name, t in targets)
+            matched, matched_mis = worst[0][1], worst[0][0]
+            chosen = [(n, t) for n, t in targets if n == matched]
+        else:
+            chosen = targets
+        mixed = len({min(targets, key=lambda t: abs(t[1] - pp['pitch_m']))[0]
+                     for pp in ctx.pitches}) > 1
+
         def rule(pp):
-            name, t = min(targets, key=lambda t: abs(t[1] - pp['pitch_m']))
+            name, t = min(chosen, key=lambda t: abs(t[1] - pp['pitch_m']))
             mis = abs(t - pp['pitch_m']) / pp['pitch_m']
             note = f'{name} pitch {t:.4g} m, mismatch {mis:.1%}'
+            if mixed:
+                note += (f'; the same coil ({name}, the best single fit) is applied to every '
+                         'pitch')
             return (('SUPPORTS', 'strong', note) if mis <= 0.10 else
                     ('CONTRADICTS', 'weak', note))
         ev = [_per_pitch(ctx, crit, 'within 10 % (no match: CONTRADICTS weak, filled rule)',
                          rule)]
-        if ctx.pitches:
-            # the coil that matches the observations best (smallest worst mismatch) is the one
-            # the strip map draws
-            worst = sorted((max(abs(t - pp['pitch_m']) / pp['pitch_m'] for pp in ctx.pitches),
-                            name) for name, t in targets)
-            matched, matched_mis = worst[0][1], worst[0][0]
     fs = o['first_seen']
     ev.append(_ev('first seen', 'not observed' if fs is None else fs, 'incoming_strip',
                   'NOT_OBSERVED' if fs is None else
@@ -2726,8 +2760,10 @@ def diagnose(case):
             flags.append('OPERATING_SPEED_OUTSIDE_SCANNED_RANGE')
         if trib is not None and override is None:
             try:
-                sc = bp.speed_consistent_critical_speed(eff, trib, cache, stand, spans, beta,
-                                                        bite, SPEED_SCAN_M_S)
+                # review fix: the perturbed bites use the operating bite's model
+                sc = bp.speed_consistent_critical_speed(
+                    eff, trib, _ModelCache(cache, perturbed_bite_model(eff, bite)), stand,
+                    spans, beta, bite, SPEED_SCAN_M_S)
                 sc['fixed_friction_critical_exit_speed_m_s'] = \
                     chat['with_bite_damping']['critical_exit_speed_m_s']
                 sc['fixed_friction_critical_exit_speed_without_bite_damping_m_s'] = \
@@ -2809,8 +2845,7 @@ def diagnose(case):
 
     # perturbed bites of the sensitivities: same bite model as the operating bite (a supplied
     # bite keeps the selected model, Hitchcock for 'auto')
-    sens_model = ('mattress' if (bite is not None and bp.is_mattress(bite))
-                  or eff['model_options']['bite_model'] == 'mattress' else 'hitchcock')
+    sens_model = perturbed_bite_model(eff, bite)
 
     def sens_bite(bite_pass_):
         return cache.get(bite_pass_, model=sens_model)

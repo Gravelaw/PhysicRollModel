@@ -2025,6 +2025,13 @@ def _speed_consistent_block(r):
         beta = sc.get('bite_damping_transit_fraction')
         out.append(_table(('friction', f'critical exit speed, beta = {_f(beta)}',
                            'critical, beta = 0', 'status (beta / 0)'), rows, 'num'))
+        low = sc.get('lowest_assessable_exit_speed_m_s')
+        if isinstance(low, dict) and low:
+            out.append('<p class="warn">Already unstable at the lowest assessable speed ('
+                       + _e(', '.join(f'{k.replace("_", " ")}: {_f(v, digits=4, unit="m/s")}'
+                                      for k, v in sorted(low.items())))
+                       + '): the crossing lies at or below it, and the lower scan speeds have '
+                       'no roll bite with the operating bite\'s model.</p>')
         out.append(f'<p class="note">{_e(sc.get("friction_law") or "")} '
                    f'{_e(sc.get("note") or "")}</p>')
     if ch.get('reliability') or _ok(ch.get('span_wave_limit_hz')):

@@ -665,12 +665,17 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
         return -math.inf if uc is None else u - uc
 
     speeds = _logspace(*SPEED_CONSISTENT_SCAN_M_S, SPEED_CONSISTENT_POINTS)
-    roots = {}
+    roots, lowest = {}, {}
     for key in ('critical_exit_speed_m_s', 'critical_exit_speed_without_bite_damping_m_s'):
         vals = [(u, g(u, key)) for u in speeds]
         vals = [(u, v) for u, v in vals if v is not None]
         root, status = None, 'NO_CROSSING_IN_SCAN'
-        if vals and vals[0][1] >= 0:
+        if vals and vals[0][1] >= 0 and vals[0][0] != speeds[0]:
+            # the lower scan speeds have no bite (rejected by the operating bite's model): the
+            # crossing lies at or below the lowest assessable speed, not at it
+            status = 'UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED'
+            lowest[key] = vals[0][0]
+        elif vals and vals[0][1] >= 0:
             status, root = 'UNSTABLE_AT_LOWEST_SCANNED_SPEED', vals[0][0]
         else:
             for (ua, va), (ub, vb) in zip(vals, vals[1:]):
@@ -680,7 +685,13 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
                     break
         roots[key] = (root, status)
     scan = [memo[u] for u in sorted(memo)]
-    return {'status': roots['critical_exit_speed_m_s'][1],
+    names = {'critical_exit_speed_m_s': 'with_bite_damping',
+             'critical_exit_speed_without_bite_damping_m_s': 'without_bite_damping'}
+    extra = ({'lowest_assessable_exit_speed_m_s': {names[k]: v for k, v in lowest.items()},
+              'scan_note': 'speeds below the lowest assessable one have no roll bite with the '
+                           "operating bite's model (see scan[].rejected)"}
+             if lowest else {})          # keys only then
+    return {**extra, 'status': roots['critical_exit_speed_m_s'][1],
             'speed_consistent_critical_exit_speed_m_s': roots['critical_exit_speed_m_s'][0],
             'speed_consistent_critical_exit_speed_without_bite_damping_m_s':
                 roots['critical_exit_speed_without_bite_damping_m_s'][0],

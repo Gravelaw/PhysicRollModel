@@ -2543,9 +2543,19 @@ def _h_troughs(f):
         ratios = [(n, s / lam) for n, lam in lams]
         txt = f'spacing {s * 1e3:.4g} mm; ' + ', '.join(f'{n}: {r:.3g} x wavelength'
                                                         for n, r in ratios)
+        # review fix: a trough spacing needs a stated spacing or at least two regular gaps
+        # (three or more bands, CV <= 0.1); one gap, or irregular gaps, between bands that may
+        # have different causes cannot establish one
+        established = (o['band_spacing_m'] is not None
+                       or (len(f.gaps) >= 2 and bool(f.spacing and f.spacing.get('regular'))))
+        if not established:
+            why = ('one gap between two bands cannot establish a spacing' if len(f.gaps) < 2
+                   else 'irregular gaps cannot establish a spacing')
+            txt += f' ({why})'
         if any(0.5 <= r <= 2 for _, r in ratios):
-            e.append(ev(crit, txt, '0.5-2 x wavelength (either span)', 'SUPPORTS', 'strong'))
-        elif all(r < 0.25 or r > 4 for _, r in ratios):
+            e.append(ev(crit, txt, '0.5-2 x wavelength (either span)', 'SUPPORTS',
+                        'strong' if established else 'weak'))
+        elif all(r < 0.25 or r > 4 for _, r in ratios) and established:
             e.append(ev(crit, txt, '0.5-2 x wavelength (outside a factor 4 contradicts)',
                         'CONTRADICTS', 'moderate'))
         else:
