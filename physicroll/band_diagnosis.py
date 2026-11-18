@@ -725,6 +725,21 @@ def _crit_value(c):
     return c['critical_exit_speed_m_s']
 
 
+def _outside_scan(u):
+    """'above' / 'below' when an exit speed lies outside SPEED_SCAN_M_S, else None. The
+    critical-speed search sees only the scanned range: 'no crossing' there says nothing about
+    a speed outside it (review finding); the operating-point stability decides there."""
+    lo, hi = SPEED_SCAN_M_S
+    return 'above' if u > hi else 'below' if u < lo else None
+
+
+def _outside_scan_note(u, side):
+    lo, hi = SPEED_SCAN_M_S
+    return (f'operating exit speed {u:.4g} m/s is {side} the scanned range {lo:g}-{hi:g} m/s: '
+            'the critical speeds and their status describe the scanned range only; the '
+            'operating-point stability (eigenvalues at the operating speed) decides there')
+
+
 def _roll_freqs(case, exit_speed, slip):
     vr = exit_speed / (1 + slip)
     dw = 2 * case['pass']['work_roll_radius_m']
@@ -808,7 +823,7 @@ def _section_chatter(stand, bite, spans, u_op, beta):
                                               'stable': stab['stable'],
                                               'dominant_frequency_hz':
                                               stab['dominant_frequency_hz']})
-    return {
+    out = {
         'status': stab['status'], 'operating_exit_speed_m_s': u_op,
         'bite_damping_transit_fraction': beta,
         'stability': stab, 'critical_speed': crit,
@@ -828,6 +843,14 @@ def _section_chatter(stand, bite, spans, u_op, beta):
             'max_growth_rate_per_s': stab0['max_growth_rate_per_s']},
         'growth_curve': curve,
         'flags': list(crit['flags']), 'limitations': list(crit['limitations'])}
+    side = _outside_scan(u_op)
+    if side:
+        # key only when it applies, so results inside the scan keep their exact content
+        out['operating_speed_outside_scanned_range'] = {
+            'side': side, 'scanned_range_m_s': list(SPEED_SCAN_M_S),
+            'note': _outside_scan_note(u_op, side)}
+        out['flags'].append('OPERATING_SPEED_OUTSIDE_SCANNED_RANGE')
+    return out
 
 
 def _section_time(stand, bite, spans, u_op, beta, dominant_hz):
@@ -1200,6 +1223,11 @@ def _schedule_rows(case, cache, stand, spans, beta, op_bite=None):
                 relative_ripple_per_um_runout_at_work_roll_2x=ripple / h1)
             if not st['stable']:
                 out['note'] = ('operating point linearly unstable: forced ripple is formal only')
+            side = _outside_scan(u)
+            if side:
+                out['operating_speed_outside_scanned_range'] = side
+                out['note'] = ((out['note'] + '; ') if 'note' in out else '') + \
+                    _outside_scan_note(u, side)
             ext = [f for f in EXTENDED_BITE_FLAGS if f in b.flags]
             if ext:
                 # SPEC12 A3: extended-domain rows say how far their chatter numbers carry (keys
@@ -1304,6 +1332,37 @@ def _faces(ctx, both=None, one=None):
     return _ev('faces', f, rule[2], rule[0], rule[1])
 
 
+def _speed_margin_outside_scan(ctx, u):
+    """Speed-margin item for an operating speed outside the critical-speed scan: decided by
+    the operating-point stability with and without bite damping, never by 'no crossing
+    inside the scan'."""
+    side = _outside_scan(u)
+    lo, hi = SPEED_SCAN_M_S
+    wb, nb = ctx.chatter['with_bite_damping'], ctx.chatter['without_bite_damping']
+    st, st0 = wb.get('stable_at_operating_speed'), nb.get('stable_at_operating_speed')
+    where = f'operating {u:.4g} m/s, {side} the scanned range {lo:g}-{hi:g} m/s'
+    if st is None or st0 is None:
+        return _ev('speed margin', where, 'margin not assessable beyond the scanned range',
+                   'NEUTRAL', basis='model')
+
+    def word(stable, g):
+        return f'{"stable" if stable else "UNSTABLE"} (growth rate {_fmt(g, "1/s")})'
+    obs = (f'{where}; basis: operating-point stability (not the critical-speed scan): '
+           f'beta={ctx.beta:g} {word(st, wb.get("max_growth_rate_per_s"))}, '
+           f'beta=0 {word(st0, nb.get("max_growth_rate_per_s"))}')
+    exp = ('unstable at the operating speed with beta (operating-point stability; the speed '
+           'is beyond the scanned range)')
+    if not st:
+        return _ev('speed margin', obs, exp, 'SUPPORTS', 'strong', 'model')
+    if not st0:
+        return _ev('speed margin', obs + ' (inside the band set by the unvalidated '
+                   'bite-damping closure)', exp, 'SUPPORTS', 'weak', 'model')
+    return _ev('speed margin', obs + '; the contradiction rests on the operating point, the '
+               'speed being beyond the scanned range', 'unstable at the operating speed with '
+               'beta = 0 (operating-point stability; the speed is beyond the scanned range)',
+               'CONTRADICTS', 'moderate', 'model')
+
+
 def _h_chatter(ctx):
     o = ctx.obs
     ev = [_orientation_chatter(o['orientation']),
@@ -1339,6 +1398,8 @@ def _h_chatter(ctx):
         ev.append(_ev('speed margin', f'operating {u:.4g} m/s; onset frequency above the span '
                       'wave limit c/(2L)', 'NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT: no model-based '
                       'evidence', 'NEUTRAL', basis='model'))
+    elif _outside_scan(u):
+        ev.append(_speed_margin_outside_scan(ctx, u))
     else:
         uc, uc0 = ctx.ucrit, ctx.ucrit0
         obs_txt = (f'operating {u:.4g} m/s; u_crit(beta={ctx.beta:g}) = {_fmt(uc, "m/s")}, '
@@ -2629,6 +2690,8 @@ def diagnose(case):
         unstable = not chat['stability']['stable']
         if unstable:
             flags.append('OPERATING_POINT_LINEARLY_UNSTABLE')
+        if 'operating_speed_outside_scanned_range' in chat:
+            flags.append('OPERATING_SPEED_OUTSIDE_SCANNED_RANGE')
         if trib is not None and override is None:
             try:
                 sc = bp.speed_consistent_critical_speed(eff, trib, cache, stand, spans, beta,

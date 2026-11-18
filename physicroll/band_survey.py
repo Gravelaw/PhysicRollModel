@@ -526,6 +526,9 @@ def rankings(rows):
                        else 'no roll bite')
             elif needs_bite and not _credible(r):
                 why = 'bite NOT CREDIBLE (force outside the range reported for battery foil)'
+            elif key == 'chatter_margin' and bd._outside_scan(r['exit_speed_m_s']):
+                why = ('survey speed outside the critical-speed scan (the margin is not '
+                       'assessable there)')
             elif key == 'chatter_margin' and r.get('chatter_reliability') != \
                     'WITHIN_SPAN_WAVE_LIMIT':
                 why = 'chatter onset above the span-wave limit (not reliable)'
@@ -696,6 +699,8 @@ def _chatter_cell(r):
     if r['bite_status'] != 'BITE':
         return _cell_bite(r, '')
     uc, uc0 = r['critical_exit_speed_m_s'], r['critical_exit_speed_without_bite_damping_m_s']
+    if bd._outside_scan(r['exit_speed_m_s']):
+        return _e(f'survey speed {r["exit_speed_m_s"]:.3g} m/s outside the scanned range')
     a = 'stable over scan' if uc is None else f'{uc:.3g} m/s'
     b = 'stable over scan' if uc0 is None else f'{uc0:.3g} m/s'
     rel = '' if r['chatter_reliability'] == 'WITHIN_SPAN_WAVE_LIMIT' else ' <em>(not reliable: ' \

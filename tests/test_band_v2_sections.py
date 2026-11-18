@@ -519,5 +519,82 @@ class LengthwiseReportTests(unittest.TestCase):
         self.assertIn('not supplied: no width_model.events', html)
 
 
+def _margin_case(damping, speed):
+    c = v2(orientation='transverse')
+    c['stand']['modal_damping_ratio'] = damping
+    c['pass']['exit_speed_m_s'] = speed
+    r = diagnose(c)
+    h = _h(r)['third_octave_self_excited_chatter']
+    return r, h, next(e for e in h['evidence'] if e['criterion'] == 'speed margin')
+
+
+class SpeedMarginScanRangeTests(unittest.TestCase):
+    """Review finding: 'no crossing inside the critical-speed scan (0.05-60 m/s)' is no
+    evidence about an operating speed outside it; the operating-point stability decides."""
+
+    def test_above_the_scan_unstable_at_the_operating_point_supports(self):
+        # reviewer's reproducer: supplied baseline bite, damping 0.21, 100 m/s
+        r, h, e = _margin_case(0.21, 100.0)
+        ch = r['chatter']
+        self.assertEqual(ch['critical_speed']['status'], 'STABLE_OVER_SCANNED_RANGE')
+        self.assertFalse(ch['with_bite_damping']['stable_at_operating_speed'])
+        self.assertEqual((e['verdict'], e['weight']), ('SUPPORTS', 'strong'))
+        self.assertIn('above the scanned range 0.05-60 m/s', e['observed'])
+        self.assertIn('basis: operating-point stability', e['observed'])
+        self.assertIn('operating-point stability', e['expected'])
+        self.assertEqual(ch['operating_speed_outside_scanned_range']['side'], 'above')
+        self.assertIn('OPERATING_SPEED_OUTSIDE_SCANNED_RANGE', r['flags'])
+        self.assertEqual(h['score'], 5)          # was 0 with the contradiction (-2 -> +3)
+        html = render_band_report(r)
+        self.assertIn('does not mean stable at the operating speed', html)
+
+    def test_inside_the_scan_without_crossing_still_contradicts(self):
+        r, h, e = _margin_case(0.21, 10.0)
+        self.assertEqual(r['chatter']['critical_speed']['status'], 'STABLE_OVER_SCANNED_RANGE')
+        self.assertEqual((e['verdict'], e['weight']), ('CONTRADICTS', 'moderate'))
+        self.assertEqual(e['expected'], 'u_op >= u_crit(0)')
+        self.assertNotIn('operating_speed_outside_scanned_range', r['chatter'])
+        self.assertNotIn('OPERATING_SPEED_OUTSIDE_SCANNED_RANGE', r['flags'])
+
+    def test_above_the_scan_stable_at_the_operating_point_contradicts(self):
+        r, h, e = _margin_case(0.6, 100.0)
+        self.assertTrue(r['chatter']['with_bite_damping']['stable_at_operating_speed'])
+        self.assertTrue(r['chatter']['without_bite_damping']['stable_at_operating_speed'])
+        self.assertEqual((e['verdict'], e['weight']), ('CONTRADICTS', 'moderate'))
+        self.assertIn('rests on the operating point', e['observed'])
+        self.assertIn('beyond the scanned range', e['expected'])
+
+
+class ZeroFeedbackSensitivityTests(unittest.TestCase):
+    """Review finding: shape_inputs with exit_tension_force_sensitivity_per_width_m = 0 (no
+    exit-tension feedback, the compliance-only limit) validated but failed in strip_shape."""
+
+    def test_zero_supplied_sensitivity_is_assessed(self):
+        c = v2(**LONG)
+        c['width_model'] = width_model(blocked_nozzle_indices=[12], bite_heat_per_width_w_m=4e5)
+        si = {'strip_stiffness_per_width_pa': 4e10,
+              'exit_tension_force_sensitivity_per_width_m': 0.0,
+              'bite_half_length_m': 5e-3, 'provenance': 'unit test: no feedback'}
+        c['width_model']['shape_inputs'] = si
+        r = diagnose(c)
+        st = r['width']['shape']['steady']
+        self.assertNotIn(st.get('status'), ('FAILED', 'NOT_ASSESSABLE', None))
+        self.assertEqual(st['tension_feedback_stiffness_per_width_pa'], 0.0)
+        self.assertEqual(st['i_units_with_feedback'], st['i_units_compliance_only'])
+        self.assertEqual(st['feedback_peak_i_units'], st['compliance_only_peak_i_units'])
+        row = next(x for x in r['width']['gauge_trend']['rows']
+                   if x['shape_inputs_basis'] == 'shape_inputs_supplied')
+        self.assertNotIn('rejected', row)
+        self.assertEqual(row['linear_feedback_i_units'], row['compliance_only_i_units'])
+        self.assertEqual(row['tension_feedback_stiffness_per_width_pa'], 0.0)
+        json.dumps(r, allow_nan=False)
+        html = render_band_report(r)
+        self.assertNotRegex(html, r'\b(nan|inf|NaN|Infinity)\b')
+        bad = copy.deepcopy(c)
+        bad['width_model']['shape_inputs']['exit_tension_force_sensitivity_per_width_m'] = -1e-3
+        with self.assertRaises(ValueError):
+            validate_case(bad)
+
+
 if __name__ == '__main__':
     unittest.main()

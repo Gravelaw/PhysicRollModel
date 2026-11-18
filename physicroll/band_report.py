@@ -2393,7 +2393,12 @@ def _chatter_section(r):
             '<p>Largest real part of the eigenvalues of the linear third-octave model versus '
             'exit speed. Positive = growing vibration. The bite-damping closure (fraction '
             'beta of the transit time) is a declared heuristic, so the beta = 0 curve is '
-            'shown as the cautious bound.</p>' + _growth_chart(r)
+            'shown as the cautious bound.</p>'
+            + (f'<p class="warn">{_e(ch["operating_speed_outside_scanned_range"]["note"])}. '
+               'Here "STABLE_OVER_SCANNED_RANGE" does not mean stable at the operating speed: '
+               'read the last column.</p>'
+               if ch.get('operating_speed_outside_scanned_range') else '')
+            + _growth_chart(r)
             + _table(('closure', 'critical exit speed', 'status', 'operating / critical',
                       'onset frequency', 'onset pitch', 'growth at operating speed',
                       'stable at operating speed'), rows, 'num') + '</section>')

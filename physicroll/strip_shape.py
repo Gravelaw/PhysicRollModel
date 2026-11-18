@@ -310,11 +310,14 @@ def _transfer_limitations(feedback=False):
 
 
 def _feedback(sensitivity_m, exit_thickness_m, strip_youngs_modulus_pa, xi):
-    """Return ``(N_x', N_x'*E_strip*xi/h_exit)`` or ``(None, 0.0)`` when feedback is off."""
+    """Return ``(N_x', N_x'*E_strip*xi/h_exit)`` or ``(None, 0.0)`` when feedback is off.
+
+    ``N_x' = 0`` is accepted (no exit-tension feedback: the compliance-only limit); it gives a
+    zero feedback stiffness, so the with-feedback level equals the compliance-only one. A
+    negative sensitivity is rejected."""
     if sensitivity_m is None:
         return None, 0.0
-    nx = _num('exit_tension_force_sensitivity_per_width_m', sensitivity_m, positive=True,
-              hi=10.0)
+    nx = _num('exit_tension_force_sensitivity_per_width_m', sensitivity_m, lo=0.0, hi=10.0)
     if exit_thickness_m is None:
         raise ValueError('exit_thickness_m is required with '
                          'exit_tension_force_sensitivity_per_width_m')
@@ -362,14 +365,17 @@ def local_bump_transfer(wavelength_m, bite_half_length_m, strip_stiffness_per_wi
     t = 1.0 / (1.0 + 2.0 * c * q_eff)
     t_c = 1.0 / (1.0 + 2.0 * c * q)
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA']
-    if nx is not None:
+    if nx:
         flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
     if radius is not None and lam > radius:
         flags.append('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL')
     reasons = [f'Compliance {c:.3e} m2/N x stiffness {q_eff:.3e} Pa: 2CQ = '
                f'{2 * c * q_eff:.3f}, so {t:.3f} of the radius deviation on each of {n} '
                'roll(s) reaches the strip.']
-    if nx is not None:
+    if nx == 0:
+        reasons.append('Supplied exit-tension force sensitivity is zero: no feedback '
+                       f'(transfer equals the compliance-only {t_c:.3f}).')
+    elif nx is not None:
         reasons.append(f'Exit-tension feedback adds {q_fb:.3e} Pa to Q = {q:.3e} Pa '
                        f'(compliance-only transfer {t_c:.3f}).')
     return _checked({
@@ -466,7 +472,7 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     t_weighted = (math.fsum(t * p for t, p in zip(t_used, energy)) / total
                   if total > 0 else _transfer(radius, a, e, nu, q_eff))
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
-    if nx is not None:
+    if nx:
         flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
     if f_short > SPECTRUM_FLAG_FRACTION:
         flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
@@ -482,7 +488,10 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
                f'lam = R ({radius:.4f} m, incl. mean): {f_long:.3f}. An isolated stripe of '
                'width w carries roughly 2w/R of its energy at wavelengths > R; those '
                'components are clamped to T(R).']
-    if nx is not None:
+    if nx == 0:
+        reasons.append('Supplied exit-tension force sensitivity is zero: no feedback '
+                       '(Q_eff = Q).')
+    elif nx is not None:
         reasons.append(f'Exit-tension feedback: Q_eff = {q_eff:.3e} Pa (Q = {q:.3e} Pa).')
     return _checked({
         'status': 'UNVALIDATED_LOCAL_TRANSFER_ESTIMATE',
@@ -1098,7 +1107,8 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
         radius = tr['long_wavelength_limit_m']
         dh = list(dh_lin)
         saturated = []
-        for b in fl_lin['bands']:
+        # with N_x' = 0 there is no feedback to saturate: the level is the compliance-only one
+        for b in (fl_lin['bands'] if nx > 0 else []):
             if b['sense'] != 'LOOSE_LONG' or b['state'] != 'MANIFEST_BUCKLE':
                 continue
             members = [i for i, v in enumerate(zs) if b['start_m'] < v < b['end_m']]
@@ -1141,7 +1151,10 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                f'{comp_i:.1f} and rigid-transfer bound {rigid_i:.1f} I-units.',
                'The same roll stripe is a larger relative thickness error on thinner strip, '
                'and the band buckling stress falls as thickness squared.']
-    if feedback:
+    if feedback and not tr['exit_tension_force_sensitivity_per_width_m']:
+        reasons.append('Supplied exit-tension force sensitivity is zero: no feedback; the '
+                       'with-feedback level equals the compliance-only level.')
+    elif feedback:
         reasons.append('With exit-tension feedback dominant, eps tends to '
                        'n*dR/(2*C*N_x\'*E_strip), independent of gauge; the thin-gauge trend '
                        'then comes from the t^2 buckling stress and the shrinking dead band.')

@@ -214,6 +214,36 @@ class TestTensionFeedback(unittest.TestCase):
                 bite_half_length_m=4.87e-3, roll_radius_m=0.2, strip_width_m=1.5,
                 mean_tension_pa=30e6)
 
+    def test_zero_sensitivity_is_the_compliance_only_limit(self):
+        # review finding: N_x' = 0 is a valid input (no exit-tension feedback)
+        off = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN)
+        zero = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
+                                       exit_tension_force_sensitivity_per_width_m=0.0)
+        self.assertTrue(zero['tension_feedback_applied'])
+        self.assertEqual(zero['tension_feedback_stiffness_per_width_pa'], 0.0)
+        self.assertEqual(zero['effective_strip_stiffness_per_width_pa'], 1.1e10)
+        self.assertEqual(zero['saturated_bands'], [])
+        self.assertEqual(zero['status'], off['status'])           # buckled bands, no saturation
+        self.assertEqual(zero['local_thickness_change_m'], off['local_thickness_change_m'])
+        self.assertEqual(zero['flatness']['i_units'], off['flatness']['i_units'])
+        self.assertEqual(zero['feedback_peak_i_units'], zero['compliance_only_peak_i_units'])
+        self.assertEqual(zero['linear_feedback_peak_i_units'], off['compliance_only_peak_i_units'])
+        self.assertTrue(any('sensitivity is zero' in x for x in zero['reasons']))
+        t0 = local_bump_transfer(0.1, 4.87e-3, 1.1e10, exit_tension_force_sensitivity_per_width_m=0.0,
+                                 exit_thickness_m=0.21e-3)
+        self.assertEqual(t0['transfer_factor'], t0['compliance_only_transfer_factor'])
+        # continuity: a tiny positive sensitivity stays next to the zero result
+        tiny = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
+                                       exit_tension_force_sensitivity_per_width_m=1e-12)
+        peak = max(abs(v) for v in zero['local_thickness_change_m'])
+        for a, b in zip(tiny['local_thickness_change_m'], zero['local_thickness_change_m']):
+            self.assertAlmostEqual(a, b, delta=1e-6 * peak)
+        self.assertAlmostEqual(tiny['linear_feedback_peak_i_units'],
+                               zero['linear_feedback_peak_i_units'], delta=1e-6 * 410)
+        with self.assertRaises(ValueError):
+            thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
+                                    exit_tension_force_sensitivity_per_width_m=-1e-3)
+
     def test_feedback_off_reproduces_previous_numbers(self):
         r = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN)
         same = thermal_stripe_flatness(Z, stripe(0.5e-6), **self.THIN,
