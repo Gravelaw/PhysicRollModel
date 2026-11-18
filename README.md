@@ -243,10 +243,19 @@ follows one stripe through the pass schedule to show how thin gauge changes it. 
 and pitch-law, roll, bearing, gear and coil signatures, with levers and a pass-schedule sweep.
 Optional process and dynamics sections add lubricant film and placeholder friction, pass
 heating, work hardening, gaugemeter AGC, drive torsional modes and incoming hardness
-variation. Nineteen hypotheses are ranked by an ordinal evidence tally against the plant
-observations, not by probability. Three synthetic demos:
+variation. Twenty hypotheses are ranked by an ordinal evidence tally against the plant
+observations, not by probability.
+
+**Battery foil** (exit gauge below 100 um): the tool runs at foil gauge and says what it
+cannot assess there. It warns that the mill is in or near closed-gap rolling, which it does
+not model; it has no roll bite below 20 um exit gauge or above 50 % reduction, and none for a
+doubled pass; between 20 and about 60 um the bite comes from an experimental model (order of
+magnitude only). It adds six foil observations and a rule-based tension-line hypothesis. In
+its foil demo a cooling stripe becomes harder, not easier, to see in the mill as the gauge
+thins; see section 3 of the doc. Four synthetic demos:
 
 ```
+python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
@@ -254,7 +263,8 @@ python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out 
 
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see
-[band diagnosis](docs/band-diagnosis.md) for which observations matter most, the evidence
-rules, the equations with their source tags, how to read the report and the limitations.
+[band diagnosis](docs/band-diagnosis.md) for what the tool can and cannot say at foil gauge,
+which observations matter most, the evidence rules, the equations with their source tags,
+how to read the report and the limitations.
 Status: a screening tool on synthetic, uncalibrated models; nothing in it has been validated
 against plant data, and the demo observations were generated from the model itself.
