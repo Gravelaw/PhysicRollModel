@@ -254,17 +254,23 @@ class FoilRulesTests(unittest.TestCase):
         return (x['verdict'], x['weight'])
 
     def test_tension_lines_rules(self):
-        T, crit = bw._h_tension_lines, 'band spacing 3-30 mm'
+        # SPEC12 B3: published pitch 5-20 mm and onset below 15 um [BF-S21, excerpt]
+        T, crit = bw._h_tension_lines, 'band spacing 5-20 mm, regular [BF-S21, excerpt]'
         self.assertEqual(self.vw(self.ev(T, crit, band_spacing_m=0.01)), ('SUPPORTS', 'strong'))
+        self.assertEqual(self.vw(self.ev(T, crit, band_spacing_m=0.025)), ('SUPPORTS', 'weak'))
         self.assertEqual(self.vw(self.ev(T, crit, band_spacing_m=0.08)),
-                         ('CONTRADICTS', 'moderate'))
+                         ('CONTRADICTS', 'weak'))
         self.assertEqual(self.vw(self.ev(T, crit, band_spacing_m=0.04)), ('NEUTRAL', None))
         self.assertEqual(self.vw(self.ev(T, crit, band_positions_across_width_m=[0.5, 0.51,
                                                                                  0.52])),
                          ('SUPPORTS', 'strong'))
-        g = 'exit gauge (tension lines on thin foil)'
-        for h1, want in ((25e-6, ('SUPPORTS', 'moderate')), (45e-6, ('SUPPORTS', 'weak')),
-                         (80e-6, ('NEUTRAL', None)), (0.21e-3, ('CONTRADICTS', 'moderate'))):
+        irregular = self.ev(T, crit, band_positions_across_width_m=[0.5, 0.505, 0.52, 0.525])
+        self.assertEqual(self.vw(irregular), ('SUPPORTS', 'weak'))
+        self.assertIn('irregular', irregular['observed'])
+        g = 'exit gauge (tension lines appear below 15 um [BF-S21, excerpt])'
+        for h1, want in ((12e-6, ('SUPPORTS', 'moderate')), (25e-6, ('SUPPORTS', 'weak')),
+                         (45e-6, ('NEUTRAL', None)), (80e-6, ('NEUTRAL', None)),
+                         (0.21e-3, ('CONTRADICTS', 'moderate'))):
             x = self.ev(T, g, h1=h1, band_spacing_m=0.01)
             self.assertEqual(self.vw(x), want, h1)
             self.assertEqual(x['basis'], 'input')
@@ -756,27 +762,35 @@ class FoilDemoTests(unittest.TestCase):
         self.assertTrue(demo['synthetic'])
         self.assertIn('GENERATED FROM THE MODEL', demo['provenance'])
         # plant route (plant statements): 50 um input, two single-sheet passes, final
-        # 17-19 um (F2 at 18 um), thinnest 12 um (ALT, alternative final pass, ~51 %)
+        # 17-19 um (F2 at 18 um), thinnest 12 um by the published-like route 50 -> 25 -> 12 um
+        # (ALT1, ALT2; SPEC12 B4)
         sched = {x['label'].split()[0]: x for x in demo['schedule']}
-        self.assertEqual(list(sched), ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT'])
+        self.assertEqual(list(sched), ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT1', 'ALT2'])
         self.assertAlmostEqual(sched['F1']['entry_thickness_m'], 50e-6)
         self.assertAlmostEqual(sched['F1']['exit_thickness_m'], 30e-6)
         self.assertAlmostEqual(sched['F2']['exit_thickness_m'], 18e-6)
-        self.assertAlmostEqual(sched['ALT']['exit_thickness_m'], 12e-6)
+        self.assertAlmostEqual(sched['ALT1']['exit_thickness_m'], 25e-6)
+        self.assertAlmostEqual(sched['ALT2']['entry_thickness_m'], 25e-6)
+        self.assertAlmostEqual(sched['ALT2']['exit_thickness_m'], 12e-6)
         self.assertEqual(demo['pass']['entry_thickness_m'], 50e-6)   # case pass = F1
         self.assertEqual(demo['pass']['exit_thickness_m'], 30e-6)
         red = {k: (x['entry_thickness_m'] - x['exit_thickness_m']) / x['entry_thickness_m']
                for k, x in sched.items()}
-        self.assertTrue(all(v <= 0.5 for k, v in red.items() if k != 'ALT'))
-        self.assertGreater(red['ALT'], 0.5)          # above 50 %: extended bite domain
-        for k in ('S1', 'S2', 'S3'):
+        self.assertTrue(all(v <= 0.5 + 1e-12 for k, v in red.items() if k != 'ALT2'))
+        self.assertAlmostEqual(red['ALT2'], 0.52)    # above 50 %: extended bite domain
+        # published practice: single-sheet final pass 450-650 m/min, earlier 550-1000 m/min
+        for k, x in sched.items():
+            lo, hi = (450, 650) if k in ('F2', 'ALT2') else (550, 1000)
+            self.assertTrue(lo <= x['exit_speed_m_s'] * 60 <= hi, k)
+        for k in ('S1', 'S2', 'S3', 'ALT1'):
             self.assertIn('assumed', sched[k]['label'])
-        self.assertIn('assumed', sched['ALT']['label'])
         self.assertIn('plant statements', demo['provenance'])
+        self.assertEqual(demo['material']['product'], 'battery_collector_foil')
         # coarse thermal numerics, final pass only, no AGC / drive (they do not enter the
         # lengthwise evidence) to keep the module fast
         demo['width_model']['numerics'] = dict(COARSE)
-        demo['schedule'] = demo['schedule'][-3:]   # case pass F1, final F2 and ALT
+        demo['schedule'] = [x for x in demo['schedule']            # F1, F2 and ALT2
+                            if x['label'].split()[0] in ('F1', 'F2', 'ALT2')]
         demo['gauge_control'] = demo['drive'] = None
         r = diagnose(demo)
         self.assertEqual(r['leading_hypotheses'], ['nozzle_thermal_stripe'])
@@ -818,6 +832,26 @@ class FoilDemoTests(unittest.TestCase):
         # F2 inside the published 0.9-2.3 kN/mm, ALT (12 um) far above it: reported, not hidden
         self.assertEqual([x['force_per_width_within_reported_range'] for x in ext],
                          [True, False])
+        # coordinator item 2: the 12 um bite is marked not credible, the 18 um one is not
+        self.assertEqual([x['bite_credibility'] for x in ext],
+                         ['FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED',
+                          'FORCE_OUTSIDE_REPORTED_RANGE'])
+        self.assertGreater(ext[1]['bite_force_ratio_to_reported_range'], 2)
+        self.assertIn('NOT CREDIBLE', fr['extended_bite_domain']['text'])
+        self.assertEqual(sw[2]['bite_credibility'], 'FORCE_OUTSIDE_REPORTED_RANGE')
+        self.assertNotIn('case_bite_credibility', r)          # case pass F1 is above 20 um
+        self.assertNotIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE',
+                         r['flags'])
+        # B2: product check, evidence-neutral; F2 and ALT2 are route ends (final passes)
+        pc = r['product_check']
+        self.assertEqual(pc['product_id'], 'battery_collector_foil')
+        self.assertEqual(pc['alloy_designation_used'], '1235')
+        self.assertEqual([x['label'].split()[0] for x in pc['rows'] if x['is_final_pass']],
+                         ['F2', 'ALT2'])
+        for x in pc['rows']:
+            if x['label'].split()[0] in ('F2', 'ALT2', 'F1'):
+                self.assertEqual(x['outside_published_range'], [], x['label'])
+        self.assertTrue(pc['nearest_published_schedules']['final_pass'])
         self.assertTrue(any('Exit gauge below 20 um' in x for x in r['limitations']))
         self.assertIs(fr['final_pass_doubled'], False)
         self.assertIn('rolled single-sheet', fr['product_question']['text'])
@@ -825,6 +859,7 @@ class FoilDemoTests(unittest.TestCase):
         self.assertLess(html.index('class="foil"'), html.index('Leading hypotheses'))
         self.assertIn('Extended roll-bite domain', html)
         self.assertNotIn('Below the roll-bite model floor', html)
+        self.assertIn('Product check (published envelope, literature survey)', html)
         json.dumps(r, allow_nan=False)
 
     def test_foil_gauge_trend_direction_runs_against_thinner_is_worse(self):
@@ -843,44 +878,43 @@ class FoilDemoTests(unittest.TestCase):
         demo['gauge_control'] = demo['drive'] = None
         r = diagnose(demo)
         rows = r['width']['gauge_trend']['rows']
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 7)
         self.assertTrue(all('rejected' not in x for x in rows))
         self.assertEqual([x['label'].split()[0] for x in rows],
-                         ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT'])
-        self.assertTrue(all(a['exit_thickness_m'] > b['exit_thickness_m']
-                            for a, b in zip(rows, rows[1:])))
-        # thick -> thin: +1 increases on every step, -1 decreases on every step
-        for key, sign in (('linear_feedback_i_units', -1),
-                          ('rigid_i_units', +1),
-                          ('critical_ridge_height_m', -1),
-                          ('trough_critical_lateral_stress_pa', -1),   # magnitude
-                          ('shohet_townsend_half_width_i_units', -1),
-                          ('trough_critical_lateral_stress_entry_span_pa', -1),
-                          ('roller_wrinkle_critical_lateral_stress_exit_span_pa', -1),
-                          ('roller_wrinkle_critical_lateral_stress_entry_span_pa', -1)):
-            vals = [abs(x[key]) for x in rows]
+                         ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT1', 'ALT2'])
+        alt2 = rows[-1]
+        self.assertEqual(alt2['bite_credibility'], 'FORCE_OUTSIDE_REPORTED_RANGE')
+        self.assertGreater(alt2['bite_force_ratio_to_reported_range'], 2)
+        self.assertEqual(rows[4]['bite_credibility'], 'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED')
+        # the trend is stated over the credible rows, thick -> thin by exit gauge
+        cred = sorted((x for x in rows if x is not alt2), key=lambda x: -x['exit_thickness_m'])
+        self.assertEqual([x['label'].split()[0] for x in cred],
+                         ['S1', 'S2', 'S3', 'F1', 'ALT1', 'F2'])
+        for key, sign in (('linear_feedback_i_units', -1), ('rigid_i_units', +1),
+                          ('manifest_onset_stripe_height_m', +1),
+                          ('released_onset_stripe_height_m', +1)):
+            vals = [x[key] for x in cred]
             self.assertTrue(all(sign * (b - a) > 0 for a, b in zip(vals, vals[1:])),
                             (key, vals))
-        # the in-mill onset rises on every pass down to 18 um; at 12 um it is not reached
-        # within the 50 um search (the stripe stays below the reporting threshold)
-        mill = [x['manifest_onset_stripe_height_m'] for x in rows]
-        self.assertTrue(all(b > a for a, b in zip(mill[:5], mill[1:5])), mill)
-        self.assertIsNone(mill[5])
-        self.assertEqual(rows[-1]['state'], 'BELOW_REPORTING_THRESHOLD')
-        released = [x['released_onset_stripe_height_m'] for x in rows]
-        self.assertTrue(all(b > a for a, b in zip(released, released[1:])), released)
-        bft = r['width']['gauge_trend']['bite_free_text']
-        self.assertNotIn('including passes without a roll bite', bft)
-        self.assertEqual(bft.count('falls on every pass'), 6)
-        self.assertIn('0.271 -> 0.00301 I-units', bft)
-        self.assertIn('rises beyond the 50 um search ceiling', r['width']['gauge_trend']['text'])
+        # bite-free thresholds (exit span / exit gauge) fall over every row, ALT2 included
+        allr = sorted(rows, key=lambda x: -x['exit_thickness_m'])
+        for key in ('shohet_townsend_half_width_i_units', 'critical_ridge_height_m',
+                    'trough_critical_lateral_stress_exit_span_pa',
+                    'roller_wrinkle_critical_lateral_stress_exit_span_pa'):
+            vals = [abs(x[key]) for x in allr]
+            self.assertTrue(all(b < a for a, b in zip(vals, vals[1:])), (key, vals))
+        g = r['width']['gauge_trend']
+        self.assertIn('Not credible (excluded from the trend): ALT2', g['text'])
+        self.assertIn('0.135 mm -> 0.018 mm', g['text'])
+        self.assertEqual(g['bite_free_text'].count('falls on every pass'), 4)
+        self.assertIn('0.271 -> 0.00301 I-units', g['bite_free_text'])
         # the report's neutral heading and generated direction sentence say the same
         html = render_band_report(r)
         self.assertIn('<h2>How the result changes with gauge</h2>', html)
         self.assertIn('thinner is less sensitive for this mechanism in the model', html)
-        self.assertIn('to above 50 µm', html)
-        self.assertIn('not reached within the 50 µm search on ALT', html)
-        self.assertNotIn('excluded from the direction', html)
+        self.assertIn('to F2 0.030-&gt;0.018 mm', html)
+        self.assertIn('Not credible (excluded from the direction): ALT2', html)
+        self.assertIn('bite NOT CREDIBLE', html)
         self.assertIn('Bite-free thresholds.', html)
         self.assertNotIn('Why thin gauge is worse', html)
 

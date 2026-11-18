@@ -41,7 +41,8 @@
     "observation.tracks_speed_changes: true if the bands appear, move or fade when the mill speed changes, false if they ignore speed changes.",
     "observation.appeared_after_narrower_coil: true if the bands started when a wider coil was rolled after a narrower one (without a backup-roll change).",
     "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied.",
-    "material.final_pass_doubled (optional, v2): whether the thinnest pass of the case (schedule rows and the case pass) is rolled doubled, two sheets in one bite. null = not stated (the foil-regime block then asks the plant); false = single-sheet stated (the block records it and notes that both faces are roll-side, so observation.faces is worth recording); true = doubled stated (flag DOUBLED_FINAL_PASS_NOT_MODELLED: the tool models one sheet in the bite). It has no effect when the case is not in the foil regime (exit gauge of 100 um or more, no foil_regime block)."
+    "material.final_pass_doubled (optional, v2): whether the thinnest pass of the case (schedule rows and the case pass) is rolled doubled, two sheets in one bite. null = not stated (the foil-regime block then asks the plant); false = single-sheet stated (the block records it and notes that both faces are roll-side, so observation.faces is worth recording); true = doubled stated (flag DOUBLED_FINAL_PASS_NOT_MODELLED: the tool models one sheet in the bite). It has no effect when the case is not in the foil regime (exit gauge of 100 um or more, no foil_regime block).",
+    "material.product (optional, v2): a product id from the thin-gauge catalogue (physicroll/band_products.py, docs/thin-gauge-products.md): battery_collector_foil, battery_pouch_laminate_foil, capacitor_anode_foil_high_voltage, capacitor_anode_foil_low_voltage, capacitor_cathode_foil, pharma_blister_lidding, pharma_cold_form_foil, pharma_strip_pack_foil, household_foil, household_foil_heavy_duty, converter_foil, cigarette_liner_foil, dairy_lidding_foil, container_foil_wrinkle_wall, container_foil_smooth_wall, container_foil_retortable, brazed_fin_stock, brazing_sheet_tube, hvac_fin_stock, litho_sheet, can_body_stock, can_end_stock, closure_sheet, transformer_strip. With it the result carries a product_check: every pass against the published envelope of that product (final gauge, per-pass and final-pass reduction, final-pass entry gauge, speed, rolled mode, alloy, temper, flow stress as an indicator) and the nearest published passes. It is a literature check and never changes the hypothesis scores; an unknown id is rejected with the list of valid ids. material.alloy may carry a prefix (AA1235, EN AW-1235): the check uses the bare designation."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -62,7 +63,8 @@
     "luders_strain": null,
     "magnesium_wt_pct": 1.1,
     "grain_size_m": null,
-    "final_pass_doubled": null
+    "final_pass_doubled": null,
+    "product": null
   },
   "stand": {
     "work_roll_mass_kg": 3000.0,

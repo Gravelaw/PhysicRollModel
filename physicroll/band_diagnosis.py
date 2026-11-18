@@ -71,6 +71,7 @@ import json
 import math
 
 from . import band_process as bp
+from . import band_products
 from . import band_signatures as bs
 from . import band_width as bw
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
@@ -320,7 +321,7 @@ MATERIAL_KEYS = ('alloy', 'temper', 'yield_stress_pa', 'youngs_modulus_pa', 'lud
                  'magnesium_wt_pct', 'grain_size_m')
 # v2 optional (absent = null = not stated): whether the thinnest pass of the case is rolled
 # doubled (two sheets in one bite). Only read by the foil-regime block.
-MATERIAL_OPTIONAL = ('final_pass_doubled',)
+MATERIAL_OPTIONAL = ('final_pass_doubled', 'product')
 STAND_KEYS = ('work_roll_mass_kg', 'backup_roll_mass_kg', 'work_backup_contact_stiffness_n_m',
               'housing_stiffness_n_m', 'modal_damping_ratio', 'roll_youngs_modulus_pa',
               'roll_poisson_ratio')
@@ -416,6 +417,18 @@ def validate_case(case):
     if v2 and 'final_pass_doubled' in m:
         # kept only when given, so results of cases without the key are unchanged
         out['material']['final_pass_doubled'] = doubled
+    prod = m.get('product')
+    if prod is not None:
+        if not v2:
+            raise ValueError(f'material.product needs case_schema {CASE_SCHEMA_V2!r}')
+        if not isinstance(prod, str):
+            raise ValueError('material.product must be a catalogue id string or null')
+        try:
+            band_products.product(prod)
+        except ValueError as exc:
+            raise ValueError(f'material.product: {exc}') from exc
+    if v2 and 'product' in m:
+        out['material']['product'] = prod
 
     s = case['stand']
     _keys('stand', s, STAND_KEYS)
@@ -2280,6 +2293,198 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     return out
 
 
+PRODUCT_CHECK_FLAGS = ('CASE_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE',
+                       'FINAL_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE')
+OUTSIDE_VERDICTS = ('BELOW_PUBLISHED_RANGE', 'ABOVE_PUBLISHED_RANGE',
+                    'INCONSISTENT_WITH_PUBLISHED_MODE')
+ENVELOPE_KEYS = ('final_gauge_m', 'single_sheet_gauge_m', 'rolled_mode', 'per_pass_reduction',
+                 'final_pass', 'pass_speed_m_s')
+
+
+def _alloy_designation(alloy):
+    """Catalogue designation of a case alloy: 'AA1235' / 'EN AW-1235' -> '1235' [D]."""
+    text = alloy.strip()
+    for prefix in ('EN AW-', 'EN AW ', 'ENAW-', 'AA'):
+        if text.upper().startswith(prefix):
+            return text[len(prefix):].strip()
+    return text
+
+
+def _product_check(eff, flags):
+    """SPEC12 B2: the case pass and every schedule row against the published envelope of
+    ``material.product`` (``band_products``). Evidence-neutral: it never changes hypothesis
+    scores. Returns None for a case with neither a product nor a foil-regime exit gauge, so
+    results of sheet cases without a product keep their content."""
+    m, p = eff['material'], eff['pass']
+    pid = m.get('product')
+    if pid is None:
+        if p['exit_thickness_m'] >= FOIL_GAUGE_M:
+            return None
+        return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                'reason': 'material.product is null or absent',
+                'product_ids': list(band_products.product_ids())}
+    prod = band_products.product(pid)
+    env = band_products._json(prod)
+    rows_src = [('case pass', p)] + [(r['label'], r) for r in eff['schedule']]
+    thinnest = min(src['exit_thickness_m'] for _, src in rows_src)
+    alloy = _alloy_designation(m['alloy'])
+    entries = [src['entry_thickness_m'] for _, src in rows_src]
+
+    def route_end(src):
+        # no pass of the case enters at this exit gauge: the end of a route (the thinnest pass,
+        # and the last pass of any alternative route listed in the schedule)
+        h = src['exit_thickness_m']
+        return not any(abs(e - h) <= 1e-9 * h for e in entries)
+    rows = []
+    for label, src in rows_src:
+        final = src['exit_thickness_m'] <= thinnest * (1 + 1e-9) or route_end(src)
+        findings = band_products.check_pass(
+            pid, src['entry_thickness_m'], src['exit_thickness_m'],
+            exit_speed_m_s=src['exit_speed_m_s'], mean_flow_stress_pa=src['mean_flow_stress_pa'],
+            doubled=m.get('final_pass_doubled') if final else None, is_final_pass=final,
+            alloy=alloy, temper=m['temper'])
+        outside = [f['item'] for f in findings if f['verdict'] in OUTSIDE_VERDICTS]
+        rows.append({'label': label, 'entry_thickness_m': src['entry_thickness_m'],
+                     'exit_thickness_m': src['exit_thickness_m'],
+                     'exit_speed_m_s': src['exit_speed_m_s'], 'is_final_pass': final,
+                     'outside_published_range': outside, 'findings': findings})
+    out_flags = []
+    if rows[0]['outside_published_range']:
+        out_flags.append(PRODUCT_CHECK_FLAGS[0])
+    if any(r['is_final_pass'] and r['outside_published_range'] for r in rows):
+        out_flags.append(PRODUCT_CHECK_FLAGS[1])
+    flags.extend(out_flags)
+    final_row = min((r for r in rows if r['is_final_pass']),
+                    key=lambda r: r['exit_thickness_m'])
+    for r in rows:
+        if r['is_final_pass']:
+            r['nearest_published_passes'] = band_products.nearest_published_schedules(
+                pid, r['entry_thickness_m'], r['exit_thickness_m'])
+    return {
+        'status': band_products.STATUS, 'not_supplied': False, 'product_id': pid,
+        'product_name': prod.name, 'family': prod.family,
+        'alloy_designation_used': alloy, 'temper_used': m['temper'],
+        'envelope': {k: env.get(k) for k in ENVELOPE_KEYS}
+        | {'alloys': [a['name'] for a in env.get('alloys') or []],
+           'tempers': [t['name'] for t in env.get('tempers') or []]},
+        'rows': rows,
+        'final_pass_label': final_row['label'],
+        'final_pass_labels': [r['label'] for r in rows if r['is_final_pass']],
+        'final_pass_rule': 'final passes: the thinnest pass of the case and the last pass of any '
+                           'route listed in the schedule (no pass enters at its exit gauge); '
+                           'material.final_pass_doubled applies to them; final_pass_label is '
+                           'the thinnest',
+        'nearest_published_schedules': {
+            'case_pass': band_products.nearest_published_schedules(
+                pid, p['entry_thickness_m'], p['exit_thickness_m']),
+            'final_pass': band_products.nearest_published_schedules(
+                pid, final_row['entry_thickness_m'], final_row['exit_thickness_m'])},
+        'flags': out_flags,
+        'note': 'Evidence-neutral literature check: it never changes hypothesis scores. A value '
+                'inside a published span is not evidence that a pass is good.',
+        'limitations': list(band_products.LIMITATIONS)}
+
+
+CREDIBILITY_OUTSIDE = 'FORCE_OUTSIDE_REPORTED_RANGE'
+CREDIBILITY_INSIDE = 'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED'
+CASE_NOT_CREDIBLE_FLAG = 'CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE'
+CREDIBILITY_BASIS = ('applied only to extended-domain mattress bites (exit gauge below 20 um); '
+                     'the 0.9-2.3 kN/mm range is the one reported for battery-foil passes '
+                     '[V S3, S4; conversion D]')
+
+
+def _bite_credibility(bite_flags, force_per_width):
+    """(mark, ratio) of an extended-domain bite below 20 um exit gauge, else (None, None).
+
+    ratio = force / the nearer end of the reported battery-foil range (> 1 above it, < 1
+    below it); a bite outside the range is not credible and must not carry a trend."""
+    if EXTENDED_GAUGE_FLAG not in (bite_flags or []) or force_per_width is None:
+        return None, None
+    lo, hi = FOIL_LOAD_RANGE_N_M
+    if force_per_width > hi:
+        return CREDIBILITY_OUTSIDE, force_per_width / hi
+    if force_per_width < lo:
+        return CREDIBILITY_OUTSIDE, force_per_width / lo
+    return CREDIBILITY_INSIDE, None
+
+
+def _credibility_note(label, fpw, ratio):
+    return (f'{label} (extended-domain bite force {fpw * 1e-6:.3g} kN/mm, x{ratio:.2g} the '
+            'nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)')
+
+
+def _apply_credibility(result, eff, bite, flags):
+    """SPEC12 B, coordinator item 2: mark extended-domain bites whose force lies outside the
+    reported battery-foil range, keep their rows and numbers, exclude them from the generated
+    gauge-trend statement, and flag and annotate a case pass resting on such a bite. Scores
+    are not changed."""
+    for row in (result.get('schedule_sweep') or {}).get('rows') or []:
+        mark, ratio = _bite_credibility(row.get('bite_flags'),
+                                        row.get('separating_force_per_width_n_m'))
+        if mark:
+            row['bite_credibility'] = mark
+            row['bite_force_ratio_to_reported_range'] = ratio
+    w = result.get('width')
+    g = w.get('gauge_trend') if isinstance(w, dict) else None
+    if isinstance(g, dict) and isinstance(g.get('rows'), list):
+        excluded = []
+        for row in g['rows']:
+            mark, ratio = _bite_credibility(row.get('bite_flags'),
+                                            row.get('separating_force_per_width_n_m'))
+            if mark:
+                row['bite_credibility'] = mark
+                row['bite_force_ratio_to_reported_range'] = ratio
+                row['bite_credibility_basis'] = CREDIBILITY_BASIS
+            if mark == CREDIBILITY_OUTSIDE:
+                excluded.append(_credibility_note(row['label'],
+                                                  row['separating_force_per_width_n_m'], ratio))
+        if excluded:
+            credible = [r for r in g['rows'] if r.get('bite_credibility') != CREDIBILITY_OUTSIDE]
+            g['text'] = (bw._trend_text(credible, g['reference_stripe_peak_m'])
+                         + ' Not credible (excluded from the trend): ' + '; '.join(excluded)
+                         + '.')
+            g['excluded_not_credible'] = excluded
+    fr = result.get('foil_regime')
+    if isinstance(fr, dict) and fr.get('extended_bite_domain'):
+        notes = []
+        for x in fr['extended_bite_domain']['passes']:
+            fl = x['extended_domain_flags']
+            mark, ratio = _bite_credibility(fl, x['separating_force_per_width_n_m'])
+            if mark:
+                x['bite_credibility'] = mark
+                x['bite_force_ratio_to_reported_range'] = ratio
+            if mark == CREDIBILITY_OUTSIDE:
+                notes.append(_credibility_note(x['label'], x['separating_force_per_width_n_m'],
+                                               ratio))
+        if notes:
+            fr['extended_bite_domain']['text'] += (
+                ' NOT CREDIBLE (force outside the range reported for battery-foil passes; kept '
+                'in the tables, excluded from every trend statement): ' + '; '.join(notes) + '.')
+    fpw = bite.separating_force_n / eff['pass']['width_m'] if bite is not None else None
+    mark, ratio = _bite_credibility(bite.flags if bite is not None else None, fpw)
+    result['case_bite_credibility'] = None
+    if mark:
+        result['case_bite_credibility'] = {'mark': mark, 'force_per_width_n_m': fpw,
+                                           'ratio_to_reported_range': ratio,
+                                           'basis': CREDIBILITY_BASIS}
+    if mark == CREDIBILITY_OUTSIDE:
+        flags.append(CASE_NOT_CREDIBLE_FLAG)
+        note = (f' [NOT CREDIBLE BASIS: the case-pass bite force {fpw * 1e-6:.3g} kN/mm lies '
+                'outside the 0.9-2.3 kN/mm reported for battery-foil passes; model results '
+                'resting on this bite are not credible]')
+        for h in result['hypotheses']:
+            for e in h['evidence']:
+                if e['basis'] == 'model':
+                    e['observed'] += note
+        result['limitations'].append(
+            'The case-pass roll bite is an extended-domain mattress bite whose force lies '
+            'outside the range reported for battery-foil passes: every model result resting on '
+            'it (chatter, levers, shape chain, onsets, model evidence) is not credible; the '
+            'scores are not changed by this, read the notes on the model evidence.')
+    if result.get('case_bite_credibility') is None:
+        del result['case_bite_credibility']
+
+
 def _family_summary(obs, hyps, leading):
     ori = obs['orientation']
     fam = (bw.FAMILY if ori == 'longitudinal' else None if ori is None else 'transverse')
@@ -2416,8 +2621,14 @@ def diagnose(case):
         else:
             chat['speed_consistent'] = bp.not_supplied(
                 'needs tribology and a derived (not supplied) bite')
-        result['time_simulation'] = (_section_time(stand, bite, spans, u_op, beta,
-                                                   ctx.dominant_hz) if ctx.dominant_hz else None)
+        try:
+            result['time_simulation'] = (_section_time(stand, bite, spans, u_op, beta,
+                                                       ctx.dominant_hz)
+                                         if ctx.dominant_hz else None)
+        except ValueError as exc:
+            # e.g. an extended-domain foil bite whose stiff stack gives a trace longer than
+            # chatter.simulate accepts: the section fails, the diagnosis does not
+            result['time_simulation'] = bp.failed('time_simulation', exc)
         result['forced_response'] = _section_forced(eff, stand, bite, spans, u_op, beta,
                                                     unstable)
         levers = _lever_rows(eff, cache, stand, spans, bite, beta, override)
@@ -2538,6 +2749,9 @@ def diagnose(case):
     result['leading_hypotheses'] = leading
     result['family_summary'] = _family_summary(obs, hyps, leading)
     result['foil_regime'] = _foil_regime(eff, bite, bite_error, result, flags)
+    pc = _product_check(eff, flags)
+    if pc is not None:
+        result['product_check'] = pc
     if result['foil_regime'] is not None:
         note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
                 'rolling (not modelled), where load is no longer a gauge actuator.')
@@ -2560,6 +2774,8 @@ def diagnose(case):
         result['limitations'].append(EXTENDED_GAUGE_LIMITATION)
     if REDUCTION_EXTENDED_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_REDUCTION_LIMITATION)
+    _apply_credibility(result, eff, bite, flags)
+    result['flags'] = sorted(set(flags))
     result['sources'] = list(SOURCES)
     result['source_disagreements'] = list(DISAGREEMENTS)
     json.dumps(result, allow_nan=False)

@@ -70,6 +70,7 @@ closed-gap (roll-kissing) rolling; any physical model of foil tension lines.
 """
 import math
 
+from . import band_products
 from . import roll_thermal as rt
 from . import strip_shape as ss
 from .band_process import (failed, int_list, keys, not_supplied, num, num_list,
@@ -1494,7 +1495,8 @@ def _bite_free_text(rows):
 
 def _trend_text(rows, peak):
     """Plain-words gauge trend, generated from the gauge_trend numbers."""
-    ok = [r for r in rows if 'rejected' not in r]
+    # thick -> thin by exit gauge (a schedule may list an alternative route after the main one)
+    ok = sorted((r for r in rows if 'rejected' not in r), key=lambda r: -r['exit_thickness_m'])
     if len(ok) < 2:
         return ('Fewer than two assessable passes: no gauge trend statement.' if ok or not rows
                 else 'No pass assessable.') + _rejected_text(rows)
@@ -2567,38 +2569,56 @@ def _gate_gauge_support(e, item):
               'NEUTRAL', basis=item['basis'])
 
 
+def _tl_published():
+    """(pitch low, pitch high, onset gauge, source id, read status) from the catalogue."""
+    vals = band_products.TENSION_LINES.values
+    pitch = next(v for v in vals if v.unit == 'm' and v.low is not None)
+    onset = next(v for v in vals if v.low is None)
+    sid = band_products.TENSION_LINES.sources[0]
+    return pitch.low, pitch.high, onset.high, sid, band_products.sources()[sid].read_status
+
+
 def _h_tension_lines(f):
-    """Foil tension lines (SPEC9 9.4) [V S27, S28; rule weights D]: rule-based only, the tool
-    has no physical model of them."""
+    """Foil tension lines: a PUBLISHED DESCRIPTION, not a model (SPEC9 9.4, revised in SPEC12
+    B3 from the catalogue's ``TENSION_LINES`` [BF-S21, excerpt]: longitudinal stripes at
+    5-20 mm pitch that appear below 15 um and worsen as gauge falls; also [V S27, S28]; rule
+    weights D)."""
     o = f.obs
     e = [_orientation(o)]
-    crit = 'band spacing 3-30 mm'
+    p_lo, p_hi, onset, sid, rs = _tl_published()
+    cite = f'[{sid}, {rs}]'
+    crit = f'band spacing {p_lo * 1e3:.3g}-{p_hi * 1e3:.3g} mm, regular {cite}'
+    exp = (f'regular {p_lo * 1e3:.3g}-{p_hi * 1e3:.3g} mm (published pitch); 3-30 mm or '
+           'irregular weak; > 60 mm contradicts weakly')
     if f.gaps is None:
-        e.append(ev(crit, 'spacing not observed', '3-30 mm (> 60 mm contradicts)',
-                    'NOT_OBSERVED'))
+        e.append(ev(crit, 'spacing not observed', exp, 'NOT_OBSERVED'))
     else:
-        sp_ = (o['band_spacing_m'] if o['band_spacing_m'] is not None
-               else sum(f.gaps) / len(f.gaps))
-        txt = f'{sp_ * 1e3:.4g} mm ({f.gap_basis})'
-        if 0.003 <= sp_ <= 0.030:
-            e.append(ev(crit, txt, '3-30 mm', 'SUPPORTS', 'strong'))
+        stated = o['band_spacing_m'] is not None
+        sp_ = o['band_spacing_m'] if stated else sum(f.gaps) / len(f.gaps)
+        regular = stated or bool(f.spacing and f.spacing.get('regular'))
+        txt = (f'{sp_ * 1e3:.4g} mm ({f.gap_basis}'
+               + ('' if stated else f', {"regular" if regular else "irregular"} gaps') + ')')
+        if p_lo <= sp_ <= p_hi and regular:
+            e.append(ev(crit, txt, exp, 'SUPPORTS', 'strong'))
+        elif 0.003 <= sp_ <= 0.030:
+            e.append(ev(crit, txt, exp, 'SUPPORTS', 'weak'))
         elif sp_ > 0.060:
-            e.append(ev(crit, txt, '3-30 mm (> 60 mm contradicts)', 'CONTRADICTS', 'moderate'))
+            e.append(ev(crit, txt, exp, 'CONTRADICTS', 'weak'))
         else:
-            e.append(ev(crit, txt, '3-30 mm', 'NEUTRAL'))
+            e.append(ev(crit, txt, exp, 'NEUTRAL'))
     h = f.exit_thickness
-    crit = 'exit gauge (tension lines on thin foil)'
+    crit = f'exit gauge (tension lines appear below {onset * 1e6:.3g} um {cite})'
     txt = f'{h * 1e6:.4g} um'
-    if h <= 30e-6:
-        gauge = ev(crit, txt, '<= 30 um (30-60 um weak, > 100 um contradicts)', 'SUPPORTS',
-                   'moderate', 'input')
-    elif h <= 60e-6:
-        gauge = ev(crit, txt, '<= 30 um (30-60 um weak)', 'SUPPORTS', 'weak', 'input')
+    exp = (f'< {onset * 1e6:.3g} um moderate [{sid}, S27]; {onset * 1e6:.3g}-30 um weak '
+           '[S28]; > 100 um contradicts')
+    if h < onset:
+        gauge = ev(crit, txt, exp, 'SUPPORTS', 'moderate', 'input')
+    elif h <= 30e-6:
+        gauge = ev(crit, txt, exp, 'SUPPORTS', 'weak', 'input')
     elif h > 100e-6:
-        gauge = ev(crit, txt, '<= 60 um (> 100 um contradicts)', 'CONTRADICTS', 'moderate',
-                   'input')
+        gauge = ev(crit, txt, exp, 'CONTRADICTS', 'moderate', 'input')
     else:
-        gauge = ev(crit, txt, '<= 60 um', 'NEUTRAL', basis='input')
+        gauge = ev(crit, txt, exp, 'NEUTRAL', basis='input')
     k_gauge = len(e)
     e.append(gauge)
     e.append(_rule(o, 'worse_at_lower_tension', 'worse at lower tension', 'true',
@@ -2715,14 +2735,18 @@ LENGTHWISE_HYPOTHESES = (
      'Anneal a sample and look for stain; inspect wipers and drip shields.',
      ('repair wipers / air knives', 'check drip shields', 'adjust oil filtration')),
     ('foil_tension_lines', 'Foil tension lines (fine lengthwise stripes, worse at low tension)',
-     'Fine parallel lengthwise stripes at 5-20 mm pitch on thin foil, wider and more visible '
-     'at low strip tension and vanishing above a threshold tension, worse at thinner gauge '
+     'PUBLISHED DESCRIPTION, NOT A MODEL: longitudinal stripes at 5-20 mm pitch that appear '
+     'below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, '
+     'roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk]; '
+     'wider and more visible at low strip tension and vanishing above a threshold tension '
      '[V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. '
-     'Rule-based: the tool has no physical model of them.',
+     'The tool has no physical model of them.',
      'Raise the exit tension in steps and note the tension at which the lines vanish; vary the '
-     'ironing-roll pressure per side and the exit air blow-off one at a time.',
+     'ironing-roll pressure per side and the exit air blow-off one at a time; check roll '
+     'parallelism.',
      ('raise front (exit) tension (risks ridging)', 'adjust ironing-roll pressure per side',
-      'reduce or redirect the exit air blow-off', 'raise work-roll roughness')),
+      'reduce or redirect the exit air blow-off', 'check roll parallelism',
+      'raise work-roll roughness')),
 )
 
 LENGTHWISE_BUILDERS = {

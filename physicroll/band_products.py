@@ -1178,7 +1178,8 @@ EN683_STRENGTH = (
 
 # --------------------------------------------------------------------------- battery collector
 BATTERY_SCHEDULE_CAVEAT = _s(
-    'Most important flag of the battery report: the two schedules the plant holds '
+    'Most important flag of the battery report: the two schedules quoted in earlier versions '
+    'of this project\'s documentation as single-sheet battery-foil practice '
     '(260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next '
     'pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are '
     'doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The '

@@ -3120,7 +3120,7 @@
       "title": "Coil- or mandrel-locked marks"
     },
     {
-      "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time.",
+      "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time; check roll parallelism.",
       "evidence": [
         {
           "basis": "observation",
@@ -3132,16 +3132,16 @@
         },
         {
           "basis": "observation",
-          "criterion": "band spacing 3-30 mm",
-          "expected": "3-30 mm (> 60 mm contradicts)",
-          "observed": "368 mm (gaps between observed band positions)",
+          "criterion": "band spacing 5-20 mm, regular [BF-S21, excerpt]",
+          "expected": "regular 5-20 mm (published pitch); 3-30 mm or irregular weak; > 60 mm contradicts weakly",
+          "observed": "368 mm (gaps between observed band positions, irregular gaps)",
           "verdict": "CONTRADICTS",
-          "weight": "moderate"
+          "weight": "weak"
         },
         {
           "basis": "input",
-          "criterion": "exit gauge (tension lines on thin foil)",
-          "expected": "<= 60 um (> 100 um contradicts)",
+          "criterion": "exit gauge (tension lines appear below 15 um [BF-S21, excerpt])",
+          "expected": "< 15 um moderate [BF-S21, S27]; 15-30 um weak [S28]; > 100 um contradicts",
           "observed": "210 um",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
@@ -3209,9 +3209,10 @@
         "raise front (exit) tension (risks ridging)",
         "adjust ironing-roll pressure per side",
         "reduce or redirect the exit air blow-off",
+        "check roll parallelism",
         "raise work-roll roughness"
       ],
-      "mechanism": "Fine parallel lengthwise stripes at 5-20 mm pitch on thin foil, wider and more visible at low strip tension and vanishing above a threshold tension, worse at thinner gauge [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. Rule-based: the tool has no physical model of them.",
+      "mechanism": "PUBLISHED DESCRIPTION, NOT A MODEL: longitudinal stripes at 5-20 mm pitch that appear below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk]; wider and more visible at low strip tension and vanishing above a threshold tension [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. The tool has no physical model of them.",
       "model_prediction": {
         "case_exit_thickness_m": 0.00021,
         "model": "NONE: rule-based hypothesis, the tool has no physical model of tension lines (5-20 mm pitch reported, vanishing above a threshold tension)",
@@ -3225,10 +3226,10 @@
         ]
       },
       "rank": 9,
-      "score": -2,
+      "score": -1,
       "standing": "WEAKENED",
       "tallies": {
-        "contradiction_points": 5,
+        "contradiction_points": 4,
         "contradicts": 3,
         "neutral": 1,
         "not_observed": 4,

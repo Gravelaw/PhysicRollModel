@@ -128,5 +128,84 @@ class BelowBiteFloorTests(unittest.TestCase):
         self.assertIn('Strip-shape chain not assessable', html)
 
 
+
+class ProductCheckTests(unittest.TestCase):
+    """SPEC12 B1/B2: material.product and the evidence-neutral product check."""
+
+    def test_validation(self):
+        c = foil_case(width=False)
+        c['material']['product'] = 'no_such_product'
+        with self.assertRaises(ValueError) as cm:
+            validate_case(c)
+        self.assertIn('battery_collector_foil', str(cm.exception))
+        c['material']['product'] = 3
+        with self.assertRaises(ValueError):
+            validate_case(c)
+        c['material']['product'] = 'battery_collector_foil'
+        self.assertEqual(validate_case(c)['material']['product'], 'battery_collector_foil')
+
+    def test_not_supplied_at_foil_gauge_absent_at_sheet_gauge(self):
+        r = diagnose(foil_case(width=False, schedule=False))
+        pc = r['product_check']
+        self.assertEqual(pc['status'], 'NOT_SUPPLIED')
+        self.assertIn('battery_collector_foil', pc['product_ids'])
+        from tests.test_band_lengthwise import v2
+        self.assertNotIn('product_check', diagnose(v2(orientation='longitudinal')))
+
+    def test_findings_flags_and_no_score_change(self):
+        base = foil_case(friction=0.03, h0=36e-6, h1=30e-6, schedule=False, width=False,
+                         orientation='longitudinal', band_spacing_m=0.01)
+        base['model_options']['bite_model'] = 'auto'
+        with_p = copy.deepcopy(base)
+        with_p['material']['product'] = 'battery_collector_foil'
+        a, b = diagnose(base), diagnose(with_p)
+        pc = b['product_check']
+        row = pc['rows'][0]
+        self.assertTrue(row['is_final_pass'])        # the only (thinnest) pass
+        red = next(f for f in row['findings'] if f['item'] == 'per_pass_reduction')
+        self.assertEqual(red['verdict'], 'BELOW_PUBLISHED_RANGE')    # 17 % < 29 %
+        self.assertIn('CASE_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE', b['flags'])
+        self.assertIn('FINAL_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE', b['flags'])
+        self.assertEqual([(h['id'], h['score']) for h in a['hypotheses']],
+                         [(h['id'], h['score']) for h in b['hypotheses']])
+        self.assertIn('Product check', render_band_report(b))
+
+
+class CaseBiteCredibilityTests(unittest.TestCase):
+    """Coordinator item 2: a case pass whose extended-domain bite force lies outside the range
+    reported for battery-foil passes is flagged; model evidence carries a note; scores are not
+    changed."""
+
+    def test_not_credible_case_pass(self):
+        c = foil_case(friction=0.03, h0=25e-6, h1=12e-6, schedule=False, width=False,
+                      orientation='longitudinal', band_spacing_m=0.01)
+        c['material'].update(yield_stress_pa=185e6)
+        c['pass'].update(mean_flow_stress_pa=185e6, entry_tension_pa=38e6, exit_tension_pa=42e6)
+        c['model_options']['bite_model'] = 'auto'
+        r = diagnose(c)
+        self.assertIn('EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN', r['bite']['flags'])
+        cb = r['case_bite_credibility']
+        self.assertEqual(cb['mark'], 'FORCE_OUTSIDE_REPORTED_RANGE')
+        self.assertGreater(cb['ratio_to_reported_range'], 2)
+        self.assertIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE', r['flags'])
+        self.assertTrue(any('not credible' in x for x in r['limitations']))
+        model = [e for h in r['hypotheses'] for e in h['evidence'] if e['basis'] == 'model']
+        self.assertTrue(model)
+        self.assertTrue(all('NOT CREDIBLE BASIS' in e['observed'] for e in model))
+        # the over-long time trace of this stiff bite fails soft (it crashed diagnose before)
+        self.assertEqual(r['time_simulation']['status'], 'FAILED')
+        self.assertIn('Simulated exit thickness trace', render_band_report(r))
+        json.dumps(r, allow_nan=False)
+
+    def test_credible_case_pass_has_no_mark(self):
+        c = foil_case(friction=0.03, h0=30e-6, h1=18e-6, schedule=False, width=False,
+                      orientation='longitudinal')
+        c['model_options']['bite_model'] = 'auto'
+        r = diagnose(c)
+        self.assertEqual(r['case_bite_credibility']['mark'],
+                         'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED')
+        self.assertNotIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE',
+                         r['flags'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -248,13 +248,20 @@ observations, not by probability.
 
 **Battery foil** (exit gauge below 100 um): the tool runs at foil gauge and says what it
 cannot assess there. It warns that the mill is in or near closed-gap rolling, which it does
-not model; it has no roll bite below 20 um exit gauge or above 50 % reduction, and none for a
-doubled pass; between 20 and about 60 um the bite comes from an experimental model (order of
-magnitude only). It adds six foil observations and a rule-based tension-line hypothesis. The
-foil demo follows the plant's route (50 um input, two single-sheet passes, final 17-19 um,
-down to 12 um; intermediates assumed): the first pass to about 30 um gets an experimental
-bite, the final pass is below the 20 um floor and gets only the bite-free screens. In the demo
-a cooling stripe becomes harder, not easier, to see in the mill as the gauge thins; see
+not model, and it has no model of a doubled pass. Below about 60 um the roll bite comes from an
+experimental model (order of magnitude only); below 20 um exit gauge (down to 8 um) and above
+50 % reduction (up to 65 %) that model runs in a flagged, unvalidated extended domain, and a
+bite there whose force lies outside the 0.9-2.3 kN/mm reported for battery-foil passes is
+marked not credible and kept out of every trend statement. It adds six foil observations, a
+tension-line hypothesis built on the published description (no physical model), and, with
+`material.product`, an evidence-neutral check of every pass against a literature survey of
+published product ranges and schedules
+([thin-gauge products](docs/thin-gauge-products.md)). The foil demo follows the plant's route
+(50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates, alloy and
+temper assumed): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
+alternative. The 18 um final pass gets an extended-domain bite with its force inside the
+reported range (still unvalidated); the 12 um bite is not credible. In the demo a cooling
+stripe becomes harder, not easier, to see in the mill as the gauge thins; see
 section 3 of the doc. Four synthetic demos:
 
 ```

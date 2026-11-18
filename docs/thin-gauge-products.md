@@ -52,7 +52,7 @@ Catalogue: 24 products, 793 sourced facts, 119 sources. Status: LITERATURE_SURVE
 
 ### Battery schedules: most important flag
 
-Most important flag of the battery report: the two schedules the plant holds (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
+Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
 
 "Tension lines": longitudinal stripes at 5–20 mm pitch appear below 15 µm and worsen as gauge falls; drivers are tension, roll roughness, roll parallelism, roll pressure and pass reduction. [BF-S21]
 
@@ -421,7 +421,7 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 
 ### Caveats
 
-- Most important flag of the battery report: the two schedules the plant holds (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
+- Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
 - The GB/T 33143 property table was partly garbled in the report's read; the minima are quoted as "about". [BF-S2]
 
 Key requirement: Thickness ±3–5 % by precision class, wave height ≤2–5 mm at 1.0 m span, wettability ≥30 mN/m, pinhole limits by gauge (GB/T 33143). [BF-S1, BF-S2]

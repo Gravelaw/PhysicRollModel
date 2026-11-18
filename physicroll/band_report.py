@@ -1564,7 +1564,10 @@ ONSET_SERIES = (
 
 
 def _gauge_charts(rows, ref_peak=None):
-    ok = [x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))]
+    # thick -> thin by exit gauge; a not-credible extended-domain bite carries no trend line
+    ok = sorted((x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))
+                 and x.get('bite_credibility') != NOT_CREDIBLE),
+                key=lambda x: -x['exit_thickness_m'])
     if len(ok) < 2:
         return ''
     hs = [x['exit_thickness_m'] * 1e3 for x in ok]
@@ -1646,6 +1649,7 @@ def _pass_labels(c, rows):
 
 GAUGE_HEADING = 'How the result changes with gauge'
 ONSET_SEARCH_CEILING_M = 50e-6   # band_width.ONSET_SEARCH_MAX_M: onsets are searched up to it
+NOT_CREDIBLE = 'FORCE_OUTSIDE_REPORTED_RANGE'
 GAUGE_TREND_TOL = 1.1   # thin/thick onset ratio within 1/1.1 .. 1.1: "roughly unchanged"
 
 
@@ -1693,9 +1697,21 @@ def _onset_direction(ok, key, limited_key):
 def _gauge_direction(g):
     """One sentence on the direction of the gauge trend for this case, from the rows."""
     rows = [x for x in g.get('rows') or [] if isinstance(x, dict)]
-    ok = [x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))]
-    bad = [str(x.get('label', '')) for x in rows if x not in ok]
+    ok = sorted((x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))
+                 and x.get('bite_credibility') != NOT_CREDIBLE),
+                key=lambda x: -x['exit_thickness_m'])     # thick -> thin by exit gauge
+    bad = [str(x.get('label', '')) for x in rows if 'rejected' in x]
     tail = (' Not assessable (excluded from the direction): ' + ', '.join(bad) + '.') if bad else ''
+    nc = [x for x in rows if x.get('bite_credibility') == NOT_CREDIBLE]
+    if nc:
+        # SPEC12 B: an extended-domain bite with a force outside the reported battery-foil
+        # range carries no trend; the row stays in the table
+        tail += (' Not credible (excluded from the direction): '
+                 + '; '.join(f'{x.get("label", "")} (extended-domain bite force '
+                             f'{_f(x.get("separating_force_per_width_n_m"), 1e-6, 3)} kN/mm, '
+                             f'x{_f(x.get("bite_force_ratio_to_reported_range"), digits=2)} '
+                             'the nearer end of the 0.9-2.3 kN/mm reported for battery-foil '
+                             'passes)' for x in nc) + '.')
     if len(ok) < 2:
         return 'Fewer than two assessable passes: no gauge direction stated.' + tail
     mill, sm = _onset_direction(ok, 'manifest_onset_stripe_height_m', None)
@@ -1788,7 +1804,15 @@ def _gauge_section(r):
             free.add(label)
     body = []
     for x in rows:
-        lead = [_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+        mark = ''
+        if x.get('bite_credibility') == NOT_CREDIBLE:
+            mark = (' <em>(bite NOT CREDIBLE: force '
+                    f'×{_f(x.get("bite_force_ratio_to_reported_range"), digits=2)} outside the '
+                    'reported battery-foil range; excluded from the direction)</em>')
+        elif x.get('bite_credibility'):
+            mark = (' <em>(extended-domain bite: force inside the reported battery-foil range, '
+                    'unvalidated)</em>')
+        lead = [_e(x.get('label', '')) + mark, _mm2(x.get('exit_thickness_m')),
                 _mpa(x.get('exit_tension_pa'))]
         if 'rejected' in x:
             cells, first = [], True
@@ -2181,6 +2205,59 @@ def _foil_block(r):
             + _e(' '.join(fr.get('limitations') or [])) + '</p></div>')
 
 
+# ------------------------------------------------------------------------------ product check
+PC_WORDS = {'WITHIN_PUBLISHED_RANGE': 'within', 'BELOW_PUBLISHED_RANGE': 'BELOW',
+            'ABOVE_PUBLISHED_RANGE': 'ABOVE', 'NO_PUBLISHED_RANGE': 'no published range',
+            'INCONSISTENT_WITH_PUBLISHED_MODE': 'INCONSISTENT'}
+PC_ITEMS = ('final_gauge', 'per_pass_reduction', 'final_pass_reduction', 'final_pass_entry_gauge',
+            'exit_speed', 'rolled_mode', 'single_sheet_final_gauge', 'alloy', 'temper',
+            'mean_flow_stress_indicator')
+
+
+def _product_block(r):
+    """SPEC12 B2: compact product check (verdict words per pass and item, nearest passes)."""
+    pc = r.get('product_check')
+    head = '<section><h2>Product check (published envelope, literature survey)</h2>'
+    if not isinstance(pc, dict):
+        return ''
+    if pc.get('not_supplied'):
+        return (head + _state_p('not supplied: ' + str(pc.get('reason')) + '. Catalogue ids: '
+                                + ', '.join(pc.get('product_ids') or [])) + '</section>')
+    rows = pc.get('rows') or []
+    items = [i for i in PC_ITEMS if any(f.get('item') == i for x in rows
+                                         for f in x.get('findings') or [])]
+    body = []
+    for x in rows:
+        by = {f.get('item'): f for f in x.get('findings') or []}
+        cells = []
+        for i in items:
+            f = by.get(i)
+            if not f:
+                cells.append('–')
+                continue
+            word = PC_WORDS.get(f.get('verdict'), str(f.get('verdict')))
+            cells.append(f'<strong>{_e(word)}</strong>' if word.isupper() else _e(word))
+        body.append([_e(x.get('label', '')) + (' <em>(final pass)</em>' if x.get('is_final_pass')
+                                               else ''),
+                     f'{_um(x.get("entry_thickness_m"))} → {_um(x.get("exit_thickness_m"))}']
+                    + cells)
+    near = []
+    for key, label in (('case_pass', 'case pass'), ('final_pass', 'final pass')):
+        lst = _get(pc, 'nearest_published_schedules', key) or []
+        txt = '; '.join(f'{_e(n.get("schedule"))} step {_f(n.get("step"))}: '
+                        f'{_um(_get(n, "entry_m", 0))} → {_um(_get(n, "exit_m", 0))}'
+                        + (' (doubled)' if n.get('doubled') else '')
+                        + f' [{_e(n.get("source_read_status") or "")}]' for n in lst)
+        near.append(f'<li>{_e(label)}: {txt or "none"}</li>')
+    return (head + f'<p>Product <code>{_e(pc.get("product_id"))}</code> '
+            f'({_e(pc.get("product_name") or "")}); alloy used {_e(pc.get("alloy_designation_used"))}'
+            f', temper {_e(pc.get("temper_used"))}. {_e(pc.get("note") or "")}</p>'
+            + _table(['pass', 'gauges'] + [i.replace('_', ' ') for i in items], body, 'wrapall')
+            + '<p>Nearest published passes:</p><ul>' + ''.join(near) + '</ul>'
+            + '<p class="note">Flags: ' + _e(', '.join(pc.get('flags') or []) or 'none') + '. '
+            + _e(' '.join(pc.get('limitations') or [])) + '</p></section>')
+
+
 # ------------------------------------------------------------------------------ family + layout
 def _family_block(r):
     fs = r.get('family_summary') or {}
@@ -2422,7 +2499,9 @@ def _forced_section(r):
                 'response is formal only (no steady state exists).</p>')
     sim = r['time_simulation']
     trace = ''
-    if sim:
+    if isinstance(sim, dict) and _bad(sim):
+        trace = '<h3>Simulated exit thickness trace</h3>' + _state_p(_bad(sim))
+    elif sim:
         trace = ('<h3>Simulated exit thickness trace</h3>'
                  '<p>Initial gap perturbation '
                  f'{_n(sim["initial_gap_perturbation_m"] * 1e6)} um; '
@@ -2540,7 +2619,7 @@ def render_band_report(result):
     v1 = r.get('case_schema', V1_SCHEMA) == V1_SCHEMA
     css = CSS
     s = _head_blocks(r)
-    foil = _foil_block(r)
+    foil = _foil_block(r) + _product_block(r)
     if foil:
         css += CSS3
         s.insert(len(s) - 1, foil)       # before the (long) provenance paragraph

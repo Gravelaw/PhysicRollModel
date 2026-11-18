@@ -27,7 +27,7 @@
     "source": "supplied",
     "strip_modulus_n_m": 88665051318.04382
   },
-  "bite_derivations": 26,
+  "bite_derivations": 27,
   "bite_error": null,
   "bite_fallback_reason": "Hitchcock contact radius ratio 2.481 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed",
   "case_name": "battery_foil_demo",
@@ -778,6 +778,8 @@
     "extended_bite_domain": {
       "passes": [
         {
+          "bite_credibility": "FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED",
+          "bite_force_ratio_to_reported_range": null,
           "exit_thickness_m": 1.8e-05,
           "extended_domain_flags": [
             "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
@@ -787,17 +789,19 @@
           "separating_force_per_width_n_m": 1536047.3999197013
         },
         {
+          "bite_credibility": "FORCE_OUTSIDE_REPORTED_RANGE",
+          "bite_force_ratio_to_reported_range": 2.690327579643028,
           "exit_thickness_m": 1.2e-05,
           "extended_domain_flags": [
             "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
             "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
           ],
           "force_per_width_within_reported_range": false,
-          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-          "separating_force_per_width_n_m": 6037575.414857484
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "separating_force_per_width_n_m": 6187753.433178965
         }
       ],
-      "text": "Roll-bite results in the EXTENDED domain for F2 0.030->0.018 mm (plant pass 2, final) (EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN, EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN). Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only. Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated. Chatter, levers and gauge control for these passes are open-gap screening only; a critical speed there is not a prediction."
+      "text": "Roll-bite results in the EXTENDED domain for F2 0.030->0.018 mm (plant pass 2, final) (EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN), ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN, EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN). Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only. Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated. Chatter, levers and gauge control for these passes are open-gap screening only; a critical speed there is not a prediction. NOT CREDIBLE (force outside the range reported for battery-foil passes; kept in the tables, excluded from every trend statement): ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (extended-domain bite force 6.19 kN/mm, x2.7 the nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)."
     },
     "final_pass_doubled": false,
     "flags": [
@@ -863,15 +867,22 @@
       },
       {
         "bite_model": "experimental_mattress",
+        "exit_thickness_m": 2.5e-05,
+        "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+        "rejected": null,
+        "separating_force_per_width_n_m": 1487662.028893882
+      },
+      {
+        "bite_model": "experimental_mattress",
         "exit_thickness_m": 1.2e-05,
         "extended_domain_flags": [
           "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
           "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
         ],
         "force_per_width_within_reported_range": false,
-        "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
         "rejected": null,
-        "separating_force_per_width_n_m": 6037575.414857484
+        "separating_force_per_width_n_m": 6187753.433178965
       }
     ],
     "sources": [
@@ -3237,7 +3248,7 @@
       "title": "Coil- or mandrel-locked marks"
     },
     {
-      "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time.",
+      "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time; check roll parallelism.",
       "evidence": [
         {
           "basis": "observation",
@@ -3249,16 +3260,16 @@
         },
         {
           "basis": "observation",
-          "criterion": "band spacing 3-30 mm",
-          "expected": "3-30 mm (> 60 mm contradicts)",
-          "observed": "365 mm (gaps between observed band positions)",
+          "criterion": "band spacing 5-20 mm, regular [BF-S21, excerpt]",
+          "expected": "regular 5-20 mm (published pitch); 3-30 mm or irregular weak; > 60 mm contradicts weakly",
+          "observed": "365 mm (gaps between observed band positions, regular gaps)",
           "verdict": "CONTRADICTS",
-          "weight": "moderate"
+          "weight": "weak"
         },
         {
           "basis": "input",
-          "criterion": "exit gauge (tension lines on thin foil)",
-          "expected": "<= 30 um (30-60 um weak, > 100 um contradicts)",
+          "criterion": "exit gauge (tension lines appear below 15 um [BF-S21, excerpt])",
+          "expected": "< 15 um moderate [BF-S21, S27]; 15-30 um weak [S28]; > 100 um contradicts",
           "observed": "30 um; counted only with a band-specific supporting observation (rule change, SPEC9 review: this case-wide quantity is shared by every band of the pass, so on its own it made this hypothesis lead from the orientation alone)",
           "verdict": "NEUTRAL",
           "weight": null
@@ -3326,9 +3337,10 @@
         "raise front (exit) tension (risks ridging)",
         "adjust ironing-roll pressure per side",
         "reduce or redirect the exit air blow-off",
+        "check roll parallelism",
         "raise work-roll roughness"
       ],
-      "mechanism": "Fine parallel lengthwise stripes at 5-20 mm pitch on thin foil, wider and more visible at low strip tension and vanishing above a threshold tension, worse at thinner gauge [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. Rule-based: the tool has no physical model of them.",
+      "mechanism": "PUBLISHED DESCRIPTION, NOT A MODEL: longitudinal stripes at 5-20 mm pitch that appear below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk]; wider and more visible at low strip tension and vanishing above a threshold tension [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. The tool has no physical model of them.",
       "model_prediction": {
         "case_exit_thickness_m": 3e-05,
         "model": "NONE: rule-based hypothesis, the tool has no physical model of tension lines (5-20 mm pitch reported, vanishing above a threshold tension)",
@@ -3342,10 +3354,10 @@
         ]
       },
       "rank": 9,
-      "score": -1,
+      "score": 0,
       "standing": "WEAKENED",
       "tallies": {
-        "contradiction_points": 3,
+        "contradiction_points": 2,
         "contradicts": 2,
         "neutral": 2,
         "not_observed": 5,
@@ -4416,6 +4428,7 @@
       "grain_size_m": null,
       "luders_strain": null,
       "magnesium_wt_pct": 0.0,
+      "product": "battery_collector_foil",
       "temper": "H18",
       "yield_stress_pa": 165000000.0,
       "youngs_modulus_pa": 70000000000.0
@@ -4430,11 +4443,11 @@
     "name": "battery_foil_demo",
     "notes": [
       "Closed-loop demo: planted causes are a partly blocked nozzle (continuous band hidden under mill tension, visible after tension release, nozzle_thermal_stripe) and a cooling-zone valve closure (cooling_zone_switching_transient).",
-      "Route: plant statements (50 um input, two single-sheet passes, final usually 17-19 um, down to 12 um); the intermediates 30 um and 24.5 um and the S1-S3 stock route are ASSUMED; all mill and material numbers are synthetic.",
+      "Route: plant statements (50 um input, two single-sheet passes, final usually 17-19 um, down to 12 um); the intermediates 30 um and 25 um, the S1-S3 stock route, the alloy (1235-like) and the temper (H18) are ASSUMED: the plant has not stated the alloy and temper. The demo assumes a standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report); all mill and material numbers are synthetic.",
       "At 30 um the mill is in or near closed-gap rolling, which the tool does not model: see the foil-regime block. The lever table and the gauge-control section assume an open gap.",
       "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
       "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
-      "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the alternative final pass ALT 0.0245 -> 0.012 mm (thinnest product, assumed intermediate; about 51 % reduction, above the tool's 50 % limit): both below the 20 um roll-bite floor; flag EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR; their rows are reported as not assessable. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false)."
+      "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check."
     ],
     "observation": {
       "appearance": "loose_or_buckle",
@@ -4483,12 +4496,12 @@
       "width_m": 1.2,
       "work_roll_radius_m": 0.135
     },
-    "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge was NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass) is ASSUMED for the usual product and 24.5 um (50 -> 24.5 -> 12 um, about 51 % per pass) for the thinnest. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass, the thinnest pass the bite models can assess) and F2 0.030 -> 0.018 mm (final), then ALT 0.0245 -> 0.012 mm, the thinnest product's final pass, listed as an ALTERNATIVE final pass (not contiguous with F2; about 51 %, above the tool's 50 % reduction limit). F2 and ALT are below the 20 um floor of both roll-bite models, so their schedule and gauge-trend rows are not assessable; the plant rolls them single-sheet (material.final_pass_doubled false). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 / 185 MPa (stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 8 / 10 / 11.5 / 13 / 15 / 15 m/s (600-1000 m/min reported [V S3, S4]), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
+    "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, consistent with standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report; stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
     "schedule": [
       {
         "entry_tension_pa": 30000000.0,
         "entry_thickness_m": 0.00026,
-        "exit_speed_m_s": 8.0,
+        "exit_speed_m_s": 9.5,
         "exit_tension_pa": 35000000.0,
         "exit_thickness_m": 0.000135,
         "friction_coefficient": 0.03,
@@ -4498,7 +4511,7 @@
       {
         "entry_tension_pa": 32000000.0,
         "entry_thickness_m": 0.000135,
-        "exit_speed_m_s": 10.0,
+        "exit_speed_m_s": 10.5,
         "exit_tension_pa": 37000000.0,
         "exit_thickness_m": 8.5e-05,
         "friction_coefficient": 0.03,
@@ -4528,7 +4541,7 @@
       {
         "entry_tension_pa": 38000000.0,
         "entry_thickness_m": 3e-05,
-        "exit_speed_m_s": 15.0,
+        "exit_speed_m_s": 10.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.8e-05,
         "friction_coefficient": 0.03,
@@ -4536,13 +4549,23 @@
         "mean_flow_stress_pa": 180000000.0
       },
       {
+        "entry_tension_pa": 35000000.0,
+        "entry_thickness_m": 5e-05,
+        "exit_speed_m_s": 13.0,
+        "exit_tension_pa": 40000000.0,
+        "exit_thickness_m": 2.5e-05,
+        "friction_coefficient": 0.03,
+        "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+        "mean_flow_stress_pa": 178000000.0
+      },
+      {
         "entry_tension_pa": 38000000.0,
-        "entry_thickness_m": 2.45e-05,
-        "exit_speed_m_s": 15.0,
+        "entry_thickness_m": 2.5e-05,
+        "exit_speed_m_s": 10.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.2e-05,
         "friction_coefficient": 0.03,
-        "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
         "mean_flow_stress_pa": 185000000.0
       }
     ],
@@ -4886,14 +4909,14 @@
       "schedule": [
         {
           "bite_source": "derived_slab_hitchcock",
-          "computed_friction_coefficient": 0.08166358973706939,
+          "computed_friction_coefficient": 0.08019758925593776,
           "contact_radius_ratio": 1.1252295871572449,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0009871897395374862,
-          "dmu_droll_speed_per_m_s": -0.001031865430470988,
-          "exit_speed_m_s": 8.0,
-          "film_ratio": 0.10721060356200462,
-          "film_thickness_m": 2.6802650890501156e-08,
+          "dmu_dexit_speed_per_m_s": -0.0009675433900121897,
+          "dmu_droll_speed_per_m_s": -0.0010113299770538955,
+          "exit_speed_m_s": 9.5,
+          "film_ratio": 0.1273125917298805,
+          "film_thickness_m": 3.182814793247012e-08,
           "forward_slip_fraction": 0.04525542471139632,
           "iterations": [],
           "label": "S1 0.260->0.135 mm (assumed stock route)",
@@ -4904,14 +4927,14 @@
         },
         {
           "bite_source": "derived_slab_hitchcock",
-          "computed_friction_coefficient": 0.07292024166916075,
+          "computed_friction_coefficient": 0.07216651337561167,
           "contact_radius_ratio": 1.2702517983254416,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0015162757496661738,
-          "dmu_droll_speed_per_m_s": -0.0016169131094787817,
-          "exit_speed_m_s": 10.0,
-          "film_ratio": 0.23355978205608,
-          "film_thickness_m": 5.838994551401999e-08,
+          "dmu_dexit_speed_per_m_s": -0.0014986716880853524,
+          "dmu_droll_speed_per_m_s": -0.0015981406415049525,
+          "exit_speed_m_s": 10.5,
+          "film_ratio": 0.245237771158884,
+          "film_thickness_m": 6.1309442789721e-08,
           "forward_slip_fraction": 0.06637141023640614,
           "iterations": [],
           "label": "S2 0.135->0.085 mm (assumed stock route)",
@@ -4958,14 +4981,14 @@
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.039046251951323455,
+          "computed_friction_coefficient": 0.05091515998364124,
           "contact_radius_ratio": 3.3132552239190787,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.002010226512701163,
-          "dmu_droll_speed_per_m_s": -0.0026291080740145985,
-          "exit_speed_m_s": 15.0,
-          "film_ratio": 0.97124115627312,
-          "film_thickness_m": 2.4281028906828e-07,
+          "dmu_dexit_speed_per_m_s": -0.002778731308886867,
+          "dmu_droll_speed_per_m_s": -0.0036342098134478497,
+          "exit_speed_m_s": 10.0,
+          "film_ratio": 0.64749410418208,
+          "film_thickness_m": 1.6187352604551999e-07,
           "forward_slip_fraction": 0.3078665799118516,
           "iterations": [],
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
@@ -4976,19 +4999,37 @@
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.02590954857811665,
-          "contact_radius_ratio": 11.248373508070705,
+          "computed_friction_coefficient": 0.06060112809047145,
+          "contact_radius_ratio": 2.256070020119829,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0018164881936492494,
-          "dmu_droll_speed_per_m_s": -0.0025725168232010945,
-          "exit_speed_m_s": 15.0,
-          "film_ratio": 1.521385236527897,
-          "film_thickness_m": 3.8034630913197424e-07,
-          "forward_slip_fraction": 0.4162034370468519,
+          "dmu_dexit_speed_per_m_s": -0.0017964567144899005,
+          "dmu_droll_speed_per_m_s": -0.0023620540219893363,
+          "exit_speed_m_s": 13.0,
+          "film_ratio": 0.44398168116365394,
+          "film_thickness_m": 1.1099542029091348e-07,
+          "forward_slip_fraction": 0.31484048735348225,
           "iterations": [],
-          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+          "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "MIXED",
+          "regime": "BOUNDARY",
+          "supplied_friction_coefficient": 0.03,
+          "used_friction_coefficient": 0.03
+        },
+        {
+          "bite_source": "experimental_mattress",
+          "computed_friction_coefficient": 0.03879203944752744,
+          "contact_radius_ratio": 11.143080602579031,
+          "converged": null,
+          "dmu_dexit_speed_per_m_s": -0.003015966492696947,
+          "dmu_droll_speed_per_m_s": -0.004288268304372669,
+          "exit_speed_m_s": 10.0,
+          "film_ratio": 0.9794630501869983,
+          "film_thickness_m": 2.448657625467496e-07,
+          "forward_slip_fraction": 0.42185542006403387,
+          "iterations": [],
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "method": "single evaluation at the contact radius of the supplied-friction bite",
+          "regime": "BOUNDARY",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         }
@@ -5194,38 +5235,38 @@
       },
       "schedule": [
         {
-          "bite_heat_per_width_w_m": 176215.00630117493,
+          "bite_heat_per_width_w_m": 209255.31998264522,
           "entry_temperature_k": 313.15,
-          "exit_speed_m_s": 8.0,
+          "exit_speed_m_s": 9.5,
           "exit_temperature_k": 369.551693832109,
           "exit_thickness_m": 0.000135,
           "flags": [
             "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED"
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
-          "friction_power_per_width_w_m": 53613.62572560228,
-          "heat_to_each_work_roll_per_width_w_m": 14097.200504093997,
+          "friction_power_per_width_w_m": 63666.180549152705,
+          "heat_to_each_work_roll_per_width_w_m": 16740.425598611622,
           "label": "S1 0.260->0.135 mm (assumed stock route)",
-          "plastic_power_per_width_w_m": 122601.38057557265,
+          "plastic_power_per_width_w_m": 145589.13943349253,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
-          "strip_temperature_rise_k": 56.401693832109025,
+          "strip_temperature_rise_k": 56.40169383210903,
           "temperature_limit_k": 393.15
         },
         {
-          "bite_heat_per_width_w_m": 108422.38586865041,
+          "bite_heat_per_width_w_m": 113843.50516208293,
           "entry_temperature_k": 313.15,
-          "exit_speed_m_s": 10.0,
+          "exit_speed_m_s": 10.5,
           "exit_temperature_k": 357.24334501557314,
           "exit_thickness_m": 8.5e-05,
           "flags": [
             "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED"
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
-          "friction_power_per_width_w_m": 35772.32420763714,
-          "heat_to_each_work_roll_per_width_w_m": 8673.790869492035,
+          "friction_power_per_width_w_m": 37560.940418018996,
+          "heat_to_each_work_roll_per_width_w_m": 9107.480412966637,
           "label": "S2 0.135->0.085 mm (assumed stock route)",
-          "plastic_power_per_width_w_m": 72650.06166101327,
+          "plastic_power_per_width_w_m": 76282.56474406393,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 44.09334501557315,
@@ -5272,9 +5313,9 @@
           "temperature_limit_k": 393.15
         },
         {
-          "bite_heat_per_width_w_m": 77726.40813936808,
+          "bite_heat_per_width_w_m": 51817.6054262454,
           "entry_temperature_k": 313.15,
-          "exit_speed_m_s": 15.0,
+          "exit_speed_m_s": 10.0,
           "exit_temperature_k": 412.6625481436811,
           "exit_thickness_m": 1.8e-05,
           "flags": [
@@ -5283,20 +5324,41 @@
             "EXIT_TEMPERATURE_ABOVE_TYPICAL_100C"
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
-          "friction_power_per_width_w_m": 49059.66787223547,
-          "heat_to_each_work_roll_per_width_w_m": 6218.112651149448,
+          "friction_power_per_width_w_m": 32706.445248156986,
+          "heat_to_each_work_roll_per_width_w_m": 4145.408434099632,
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
-          "plastic_power_per_width_w_m": 28666.74026713262,
+          "plastic_power_per_width_w_m": 19111.160178088412,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 99.51254814368113,
           "temperature_limit_k": 393.15
         },
         {
-          "bite_heat_per_width_w_m": 63832.15757990832,
+          "bite_heat_per_width_w_m": 116439.80276267717,
           "entry_temperature_k": 313.15,
-          "exit_speed_m_s": 15.0,
-          "exit_temperature_k": 435.7357621562025,
+          "exit_speed_m_s": 13.0,
+          "exit_temperature_k": 436.9986031283935,
+          "exit_thickness_m": 2.5e-05,
+          "flags": [
+            "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED",
+            "EXIT_TEMPERATURE_ABOVE_SUPPLIED_LIMIT",
+            "EXIT_TEMPERATURE_ABOVE_TYPICAL_100C"
+          ],
+          "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
+          "friction_power_per_width_w_m": 70137.96886708197,
+          "heat_to_each_work_roll_per_width_w_m": 9315.184221014175,
+          "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+          "plastic_power_per_width_w_m": 46301.8338955952,
+          "roll_heat_fraction_per_roll": 0.08000000000000002,
+          "strip_heat_fraction": 0.84,
+          "strip_temperature_rise_k": 123.84860312839353,
+          "temperature_limit_k": 393.15
+        },
+        {
+          "bite_heat_per_width_w_m": 43599.145516731995,
+          "entry_temperature_k": 313.15,
+          "exit_speed_m_s": 10.0,
+          "exit_temperature_k": 438.7442463444954,
           "exit_thickness_m": 1.2e-05,
           "flags": [
             "STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED",
@@ -5304,13 +5366,13 @@
             "EXIT_TEMPERATURE_ABOVE_TYPICAL_100C"
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
-          "friction_power_per_width_w_m": 36386.746310640934,
-          "heat_to_each_work_roll_per_width_w_m": 5106.572606392667,
-          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-          "plastic_power_per_width_w_m": 27445.41126926739,
+          "friction_power_per_width_w_m": 24784.321360792797,
+          "heat_to_each_work_roll_per_width_w_m": 3487.9316413385604,
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "plastic_power_per_width_w_m": 18814.824155939197,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
-          "strip_temperature_rise_k": 122.58576215620252,
+          "strip_temperature_rise_k": 125.59424634449545,
           "temperature_limit_k": 393.15
         }
       ],
@@ -5319,7 +5381,1490 @@
     "not_supplied": false,
     "status": "SCREENING_RESULT_NOT_PLANT_VALIDATED"
   },
-  "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge was NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass) is ASSUMED for the usual product and 24.5 um (50 -> 24.5 -> 12 um, about 51 % per pass) for the thinnest. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass, the thinnest pass the bite models can assess) and F2 0.030 -> 0.018 mm (final), then ALT 0.0245 -> 0.012 mm, the thinnest product's final pass, listed as an ALTERNATIVE final pass (not contiguous with F2; about 51 %, above the tool's 50 % reduction limit). F2 and ALT are below the 20 um floor of both roll-bite models, so their schedule and gauge-trend rows are not assessable; the plant rolls them single-sheet (material.final_pass_doubled false). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 / 185 MPa (stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 8 / 10 / 11.5 / 13 / 15 / 15 m/s (600-1000 m/min reported [V S3, S4]), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
+  "product_check": {
+    "alloy_designation_used": "1235",
+    "envelope": {
+      "alloys": [
+        "1070",
+        "1060",
+        "1050",
+        "1235",
+        "1100",
+        "8011",
+        "1C30",
+        "8A21",
+        "1085",
+        "1N30",
+        "3003",
+        "8021",
+        "A1100",
+        "A1050",
+        "A1235",
+        "Speira 99.35\u201399.5 % Al",
+        "1C32",
+        "A730H",
+        "1100 (Cu 0.10\u20130.15 %)",
+        "Al-Fe 1.0\u20131.7 %"
+      ],
+      "final_gauge_m": {
+        "bound": "span",
+        "display_unit": "um",
+        "high": 2e-05,
+        "low": 8e-06,
+        "note": "GB/T 33143-2022 scope; width \u22641600 mm; bare and coated",
+        "read_status": "full_text",
+        "sources": [
+          "BF-S1"
+        ],
+        "unit": "m"
+      },
+      "final_pass": {
+        "doubled_speed_m_s": {
+          "bound": "span",
+          "display_unit": "m/min",
+          "high": 10.8333333333,
+          "low": 5.83333333333,
+          "note": "doubled final pass (trade page)",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BF-S17"
+          ],
+          "unit": "m/s"
+        },
+        "entry_gauge_m": {
+          "bound": "span",
+          "display_unit": "um",
+          "high": 3.2e-05,
+          "low": 1.5e-05,
+          "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+          "read_status": "computed",
+          "sources": [
+            "BF-S12",
+            "BF-S11",
+            "BF-S13",
+            "BF-S14",
+            "BF-S15",
+            "BF-S16",
+            "BF-S8"
+          ],
+          "unit": "m"
+        },
+        "notes": [
+          {
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S11"
+            ],
+            "text": "Final pass at 450 \u00b1 20 m/min with coil temperature \u226480 \u00b0C, against 97.9 \u00b0C at 600 m/min in the comparative example (thermal-softening argument).",
+            "topic": "",
+            "values": [
+              {
+                "bound": "span",
+                "display_unit": "m/min",
+                "high": 7.83333333333,
+                "low": 7.16666666667,
+                "note": "",
+                "read_status": "excerpt",
+                "sources": [
+                  "BF-S11"
+                ],
+                "unit": "m/s"
+              }
+            ]
+          },
+          {
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S16"
+            ],
+            "text": "Final pass 600\u2013650 m/min.",
+            "topic": "",
+            "values": [
+              {
+                "bound": "span",
+                "display_unit": "m/min",
+                "high": 10.8333333333,
+                "low": 10.0,
+                "note": "",
+                "read_status": "excerpt",
+                "sources": [
+                  "BF-S16"
+                ],
+                "unit": "m/s"
+              }
+            ]
+          },
+          {
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S12"
+            ],
+            "text": "Final pass 1000\u20131200 m/min claimed.",
+            "topic": "",
+            "values": [
+              {
+                "bound": "span",
+                "display_unit": "m/min",
+                "high": 20.0,
+                "low": 16.6666666667,
+                "note": "",
+                "read_status": "excerpt",
+                "sources": [
+                  "BF-S12"
+                ],
+                "unit": "m/s"
+              }
+            ]
+          },
+          {
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S17"
+            ],
+            "text": "Doubled final pass 350\u2013650 m/min.",
+            "topic": "",
+            "values": [
+              {
+                "bound": "span",
+                "display_unit": "m/min",
+                "high": 10.8333333333,
+                "low": 5.83333333333,
+                "note": "",
+                "read_status": "vendor_or_trade_page",
+                "sources": [
+                  "BF-S17"
+                ],
+                "unit": "m/s"
+              }
+            ]
+          }
+        ],
+        "reduction": {
+          "bound": "span",
+          "display_unit": "%",
+          "high": 0.566666666667,
+          "low": 0.294117647059,
+          "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+          "read_status": "computed",
+          "sources": [
+            "BF-S12",
+            "BF-S11",
+            "BF-S13",
+            "BF-S14",
+            "BF-S15",
+            "BF-S16",
+            "BF-S8"
+          ],
+          "unit": "fraction"
+        },
+        "speed_m_s": {
+          "bound": "span",
+          "display_unit": "m/min",
+          "high": 20.0,
+          "low": 7.16666666667,
+          "note": "450 \u00b1 20 m/min [BF-S11]; 600\u2013650 m/min [BF-S16]; 1000\u20131200 m/min claimed [BF-S12]; the sources disagree",
+          "read_status": "excerpt",
+          "sources": [
+            "BF-S11",
+            "BF-S12",
+            "BF-S16"
+          ],
+          "unit": "m/s"
+        }
+      },
+      "pass_speed_m_s": {
+        "bound": "span",
+        "display_unit": "m/min",
+        "high": 21.6666666667,
+        "low": 9.16666666667,
+        "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+        "read_status": "vendor_or_trade_page",
+        "sources": [
+          "BF-S11",
+          "BF-S12",
+          "BF-S16",
+          "BF-S17"
+        ],
+        "unit": "m/s"
+      },
+      "per_pass_reduction": {
+        "bound": "span",
+        "display_unit": "%",
+        "high": 0.636363636364,
+        "low": 0.294117647059,
+        "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+        "read_status": "computed",
+        "sources": [
+          "BF-S12",
+          "BF-S11",
+          "BF-S13",
+          "BF-S14",
+          "BF-S15",
+          "BF-S16",
+          "BF-S8",
+          "BF-S17"
+        ],
+        "unit": "fraction"
+      },
+      "rolled_mode": "either",
+      "single_sheet_gauge_m": {
+        "bound": "span",
+        "display_unit": "um",
+        "high": 2e-05,
+        "low": 9e-06,
+        "note": "single rolling to final gauge feasible for 9\u201320 \u00b5m; below 9 \u00b5m high-strength foil is \"difficult\" single",
+        "read_status": "excerpt",
+        "sources": [
+          "BF-S18"
+        ],
+        "unit": "m"
+      },
+      "tempers": [
+        "H18",
+        "O"
+      ]
+    },
+    "family": "battery_electronics",
+    "final_pass_label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+    "final_pass_labels": [
+      "F2 0.030->0.018 mm (plant pass 2, final)",
+      "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)"
+    ],
+    "final_pass_rule": "final passes: the thinnest pass of the case and the last pass of any route listed in the schedule (no pass enters at its exit gauge); material.final_pass_doubled applies to them; final_pass_label is the thinnest",
+    "flags": [],
+    "limitations": [
+      "Literature survey only: every value is quoted from three research reports, not measured.",
+      "No plant validation: a value inside a published span is not evidence that a pass is good.",
+      "Vendor and trade pages are low-confidence; several standards were read from previews only.",
+      "Finished-product tensile strength is not the rolling flow stress; that comparison is an indicator only.",
+      "Spans mix minima, typical values and ranges from different sources; read the basis."
+    ],
+    "nearest_published_schedules": {
+      "case_pass": [
+        {
+          "alloy": "",
+          "doubled": false,
+          "entry_m": [
+            5.9e-05,
+            5.9e-05
+          ],
+          "exit_m": [
+            3e-05,
+            3e-05
+          ],
+          "log_gauge_distance": 0.1655144384775733,
+          "note": "single-sheet, two-side-bright; final gauge published as 9\u201310 \u00b5m",
+          "read_status": "computed",
+          "reduction": [
+            0.49152542372881347,
+            0.49152542372881347
+          ],
+          "schedule": "BF-S14 5 passes from 250 \u00b5m",
+          "source_read_status": "excerpt",
+          "sources": [
+            "BF-S14"
+          ],
+          "step": 2
+        },
+        {
+          "alloy": "1070",
+          "doubled": false,
+          "entry_m": [
+            5e-05,
+            5e-05
+          ],
+          "exit_m": [
+            2.5e-05,
+            2.5e-05
+          ],
+          "log_gauge_distance": 0.1823215567939546,
+          "note": "single-sheet, two-side-bright",
+          "read_status": "computed",
+          "reduction": [
+            0.5,
+            0.5
+          ],
+          "schedule": "BF-S15 1070, 5 passes from 360 \u00b5m",
+          "source_read_status": "full_text",
+          "sources": [
+            "BF-S15"
+          ],
+          "step": 3
+        },
+        {
+          "alloy": "1100",
+          "doubled": false,
+          "entry_m": [
+            5.5e-05,
+            5.5e-05
+          ],
+          "exit_m": [
+            2.5e-05,
+            2.5e-05
+          ],
+          "log_gauge_distance": 0.20573084466385674,
+          "note": "single-sheet, two-side-bright",
+          "read_status": "computed",
+          "reduction": [
+            0.5454545454545454,
+            0.5454545454545454
+          ],
+          "schedule": "BF-S12 1100, 4 passes from 260 \u00b5m",
+          "source_read_status": "excerpt",
+          "sources": [
+            "BF-S12"
+          ],
+          "step": 2
+        }
+      ],
+      "final_pass": [
+        {
+          "alloy": "1100",
+          "doubled": false,
+          "entry_m": [
+            2.5e-05,
+            2.5e-05
+          ],
+          "exit_m": [
+            1.2e-05,
+            1.2e-05
+          ],
+          "log_gauge_distance": 0.0,
+          "note": "single-sheet, two-side-bright",
+          "read_status": "computed",
+          "reduction": [
+            0.52,
+            0.52
+          ],
+          "schedule": "BF-S12 1100, 4 passes from 260 \u00b5m",
+          "source_read_status": "excerpt",
+          "sources": [
+            "BF-S12"
+          ],
+          "step": 3
+        },
+        {
+          "alloy": "",
+          "doubled": true,
+          "entry_m": [
+            2.4e-05,
+            2.4e-05
+          ],
+          "exit_m": [
+            1.2e-05,
+            1.2e-05
+          ],
+          "log_gauge_distance": 0.0408219945202552,
+          "note": "trade page; last pass 24\u00d72\u219212\u00d72 \u00b5m; one-side-bright",
+          "read_status": "computed",
+          "reduction": [
+            0.5,
+            0.5
+          ],
+          "schedule": "BF-S17 plant 2, doubled last pass",
+          "source_read_status": "vendor_or_trade_page",
+          "sources": [
+            "BF-S17"
+          ],
+          "step": 3
+        },
+        {
+          "alloy": "1100",
+          "doubled": false,
+          "entry_m": [
+            2.6e-05,
+            2.6e-05
+          ],
+          "exit_m": [
+            1.3e-05,
+            1.3e-05
+          ],
+          "log_gauge_distance": 0.08913528701902047,
+          "note": "single-sheet, two-side-bright",
+          "read_status": "computed",
+          "reduction": [
+            0.5,
+            0.5
+          ],
+          "schedule": "BF-S12 1100, 4 passes from 270 \u00b5m",
+          "source_read_status": "excerpt",
+          "sources": [
+            "BF-S12"
+          ],
+          "step": 3
+        }
+      ]
+    },
+    "not_supplied": false,
+    "note": "Evidence-neutral literature check: it never changes hypothesis scores. A value inside a published span is not evidence that a pass is good.",
+    "product_id": "battery_collector_foil",
+    "product_name": "Li-ion cathode current-collector foil",
+    "rows": [
+      {
+        "entry_thickness_m": 5e-05,
+        "exit_speed_m_s": 13.0,
+        "exit_thickness_m": 3e-05,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.4,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 13.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 175000000.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "case pass",
+        "outside_published_range": []
+      },
+      {
+        "entry_thickness_m": 0.00026,
+        "exit_speed_m_s": 9.5,
+        "exit_thickness_m": 0.000135,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.4807692307692307,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 9.5,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 150000000.0,
+            "verdict": "BELOW_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "S1 0.260->0.135 mm (assumed stock route)",
+        "outside_published_range": [
+          "mean_flow_stress_indicator"
+        ]
+      },
+      {
+        "entry_thickness_m": 0.000135,
+        "exit_speed_m_s": 10.5,
+        "exit_thickness_m": 8.5e-05,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.37037037037037035,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 10.5,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 160000000.0,
+            "verdict": "BELOW_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "S2 0.135->0.085 mm (assumed stock route)",
+        "outside_published_range": [
+          "mean_flow_stress_indicator"
+        ]
+      },
+      {
+        "entry_thickness_m": 8.5e-05,
+        "exit_speed_m_s": 11.5,
+        "exit_thickness_m": 5e-05,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.4117647058823529,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 11.5,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 168000000.0,
+            "verdict": "BELOW_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "S3 0.085->0.050 mm (assumed stock route)",
+        "outside_published_range": [
+          "mean_flow_stress_indicator"
+        ]
+      },
+      {
+        "entry_thickness_m": 5e-05,
+        "exit_speed_m_s": 13.0,
+        "exit_thickness_m": 3e-05,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.4,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 13.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 175000000.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "F1 0.050->0.030 mm (plant pass 1; 30 um assumed)",
+        "outside_published_range": []
+      },
+      {
+        "entry_thickness_m": 3e-05,
+        "exit_speed_m_s": 10.0,
+        "exit_thickness_m": 1.8e-05,
+        "findings": [
+          {
+            "basis": "exit gauge against the published final gauge of Li-ion cathode current-collector foil",
+            "item": "final_gauge",
+            "note": "GB/T 33143-2022 scope; width \u22641600 mm; bare and coated",
+            "published_high": 2e-05,
+            "published_low": 8e-06,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "m",
+            "value": 1.8e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.4,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "final-pass reduction against the published final-pass span",
+            "item": "final_pass_reduction",
+            "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+            "published_high": 0.566666666667,
+            "published_low": 0.294117647059,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8"
+            ],
+            "unit": "fraction",
+            "value": 0.4,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "final-pass entry gauge against the published final passes",
+            "item": "final_pass_entry_gauge",
+            "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+            "published_high": 3.2e-05,
+            "published_low": 1.5e-05,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8"
+            ],
+            "unit": "m",
+            "value": 3e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet final-pass speed",
+            "item": "exit_speed",
+            "note": "450 \u00b1 20 m/min [BF-S11]; 600\u2013650 m/min [BF-S16]; 1000\u20131200 m/min claimed [BF-S12]; the sources disagree",
+            "published_high": 20.0,
+            "published_low": 7.16666666667,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16"
+            ],
+            "unit": "m/s",
+            "value": 10.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet rolling is consistent with the published mode",
+            "item": "rolled_mode",
+            "note": "Two-side-bright (bright/bright) foil is rolled single-sheet to final gauge; the report's single-sheet schedules are two-side-bright. Doubled (pack) rolling gives one-side-bright foil: UACJ sells 10 \u00b5m 8021 as bright/matte and the BF-S17 schedules finish with a doubled pass. Single rolling to final gauge is feasible for 9\u201320 \u00b5m; below 9 \u00b5m high-strength foil is \"difficult\" single, and pack rolling covers 5\u201320 \u00b5m. The Mino battery finishing mill minimum is 1\u00d712 \u00b5m or 2\u00d76 \u00b5m.",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S4",
+              "BF-S11",
+              "BF-S12",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S17",
+              "BF-S18",
+              "BF-S25"
+            ],
+            "unit": "",
+            "value": "single_sheet",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet final gauge against the published single-rolling span",
+            "item": "single_sheet_final_gauge",
+            "note": "single rolling to final gauge feasible for 9\u201320 \u00b5m; below 9 \u00b5m high-strength foil is \"difficult\" single",
+            "published_high": 2e-05,
+            "published_low": 9e-06,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S18"
+            ],
+            "unit": "m",
+            "value": 1.8e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 180000000.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": true,
+        "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+        "nearest_published_passes": [
+          {
+            "alloy": "",
+            "doubled": false,
+            "entry_m": [
+              3.2e-05,
+              3.2e-05
+            ],
+            "exit_m": [
+              1.7e-05,
+              1.7e-05
+            ],
+            "log_gauge_distance": 0.08621081708998898,
+            "note": "single-sheet, two-side-bright; the BF-S13 text also says \"doubled rolling\" on the finishing mill (see disagreements)",
+            "read_status": "computed",
+            "reduction": [
+              0.46875,
+              0.46875
+            ],
+            "schedule": "BF-S13 5 passes from 260 \u00b5m",
+            "source_read_status": "excerpt",
+            "sources": [
+              "BF-S13"
+            ],
+            "step": 3
+          },
+          {
+            "alloy": "1070",
+            "doubled": false,
+            "entry_m": [
+              3.2e-05,
+              3.2e-05
+            ],
+            "exit_m": [
+              2e-05,
+              2e-05
+            ],
+            "log_gauge_distance": 0.12355589411399114,
+            "note": "single-sheet, two-side-bright",
+            "read_status": "computed",
+            "reduction": [
+              0.3749999999999999,
+              0.3749999999999999
+            ],
+            "schedule": "BF-S15 1070, 4 passes from 360 \u00b5m",
+            "source_read_status": "full_text",
+            "sources": [
+              "BF-S15"
+            ],
+            "step": 3
+          },
+          {
+            "alloy": "",
+            "doubled": false,
+            "entry_m": [
+              3.4e-05,
+              3.4e-05
+            ],
+            "exit_m": [
+              2e-05,
+              2e-05
+            ],
+            "log_gauge_distance": 0.16360516683102658,
+            "note": "single-sheet, two-side-bright",
+            "read_status": "computed",
+            "reduction": [
+              0.4117647058823529,
+              0.4117647058823529
+            ],
+            "schedule": "BF-S11 5 passes from 240 \u00b5m",
+            "source_read_status": "excerpt",
+            "sources": [
+              "BF-S11"
+            ],
+            "step": 3
+          }
+        ],
+        "outside_published_range": []
+      },
+      {
+        "entry_thickness_m": 5e-05,
+        "exit_speed_m_s": 13.0,
+        "exit_thickness_m": 2.5e-05,
+        "findings": [
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.5,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "speed of the earlier (non-final) passes",
+            "item": "exit_speed",
+            "note": "earlier passes: 550\u20131000 m/min [BF-S11, BF-S16, BF-S17]; 800\u20131300 m/min claimed [BF-S12]",
+            "published_high": 21.6666666667,
+            "published_low": 9.16666666667,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16",
+              "BF-S17"
+            ],
+            "unit": "m/s",
+            "value": 13.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 178000000.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": false,
+        "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+        "outside_published_range": []
+      },
+      {
+        "entry_thickness_m": 2.5e-05,
+        "exit_speed_m_s": 10.0,
+        "exit_thickness_m": 1.2e-05,
+        "findings": [
+          {
+            "basis": "exit gauge against the published final gauge of Li-ion cathode current-collector foil",
+            "item": "final_gauge",
+            "note": "GB/T 33143-2022 scope; width \u22641600 mm; bare and coated",
+            "published_high": 2e-05,
+            "published_low": 8e-06,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "m",
+            "value": 1.2e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "pass reduction 1 - h_exit/h_entry against the product's published per-pass span",
+            "item": "per_pass_reduction",
+            "note": "computed from every published per-pass gauge pair of this product; the report prints 29\u201364 %",
+            "published_high": 0.636363636364,
+            "published_low": 0.294117647059,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8",
+              "BF-S17"
+            ],
+            "unit": "fraction",
+            "value": 0.52,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "final-pass reduction against the published final-pass span",
+            "item": "final_pass_reduction",
+            "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+            "published_high": 0.566666666667,
+            "published_low": 0.294117647059,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8"
+            ],
+            "unit": "fraction",
+            "value": 0.52,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "final-pass entry gauge against the published final passes",
+            "item": "final_pass_entry_gauge",
+            "note": "computed from the last pass of the single-sheet schedules ending at \u226420 \u00b5m; the report prints entry 15\u201332 \u00b5m, reduction 29\u201357 %",
+            "published_high": 3.2e-05,
+            "published_low": 1.5e-05,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S12",
+              "BF-S11",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S8"
+            ],
+            "unit": "m",
+            "value": 2.5e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet final-pass speed",
+            "item": "exit_speed",
+            "note": "450 \u00b1 20 m/min [BF-S11]; 600\u2013650 m/min [BF-S16]; 1000\u20131200 m/min claimed [BF-S12]; the sources disagree",
+            "published_high": 20.0,
+            "published_low": 7.16666666667,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S11",
+              "BF-S12",
+              "BF-S16"
+            ],
+            "unit": "m/s",
+            "value": 10.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet rolling is consistent with the published mode",
+            "item": "rolled_mode",
+            "note": "Two-side-bright (bright/bright) foil is rolled single-sheet to final gauge; the report's single-sheet schedules are two-side-bright. Doubled (pack) rolling gives one-side-bright foil: UACJ sells 10 \u00b5m 8021 as bright/matte and the BF-S17 schedules finish with a doubled pass. Single rolling to final gauge is feasible for 9\u201320 \u00b5m; below 9 \u00b5m high-strength foil is \"difficult\" single, and pack rolling covers 5\u201320 \u00b5m. The Mino battery finishing mill minimum is 1\u00d712 \u00b5m or 2\u00d76 \u00b5m.",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S4",
+              "BF-S11",
+              "BF-S12",
+              "BF-S13",
+              "BF-S14",
+              "BF-S15",
+              "BF-S16",
+              "BF-S17",
+              "BF-S18",
+              "BF-S25"
+            ],
+            "unit": "",
+            "value": "single_sheet",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "single-sheet final gauge against the published single-rolling span",
+            "item": "single_sheet_final_gauge",
+            "note": "single rolling to final gauge feasible for 9\u201320 \u00b5m; below 9 \u00b5m high-strength foil is \"difficult\" single",
+            "published_high": 2e-05,
+            "published_low": 9e-06,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S18"
+            ],
+            "unit": "m",
+            "value": 1.2e-05,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "alloy listed for this product",
+            "item": "alloy",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "1235",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "temper listed for this product",
+            "item": "temper",
+            "note": "",
+            "published_high": null,
+            "published_low": null,
+            "read_status": "full_text",
+            "sources": [
+              "BF-S1"
+            ],
+            "unit": "",
+            "value": "H18",
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          },
+          {
+            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "item": "mean_flow_stress_indicator",
+            "note": "span of published Rm numbers",
+            "published_high": 190000000.0,
+            "published_low": 175000000.0,
+            "read_status": "excerpt",
+            "sources": [
+              "BF-S2"
+            ],
+            "unit": "Pa",
+            "value": 185000000.0,
+            "verdict": "WITHIN_PUBLISHED_RANGE"
+          }
+        ],
+        "is_final_pass": true,
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+        "nearest_published_passes": [
+          {
+            "alloy": "1100",
+            "doubled": false,
+            "entry_m": [
+              2.5e-05,
+              2.5e-05
+            ],
+            "exit_m": [
+              1.2e-05,
+              1.2e-05
+            ],
+            "log_gauge_distance": 0.0,
+            "note": "single-sheet, two-side-bright",
+            "read_status": "computed",
+            "reduction": [
+              0.52,
+              0.52
+            ],
+            "schedule": "BF-S12 1100, 4 passes from 260 \u00b5m",
+            "source_read_status": "excerpt",
+            "sources": [
+              "BF-S12"
+            ],
+            "step": 3
+          },
+          {
+            "alloy": "",
+            "doubled": true,
+            "entry_m": [
+              2.4e-05,
+              2.4e-05
+            ],
+            "exit_m": [
+              1.2e-05,
+              1.2e-05
+            ],
+            "log_gauge_distance": 0.0408219945202552,
+            "note": "trade page; last pass 24\u00d72\u219212\u00d72 \u00b5m; one-side-bright",
+            "read_status": "computed",
+            "reduction": [
+              0.5,
+              0.5
+            ],
+            "schedule": "BF-S17 plant 2, doubled last pass",
+            "source_read_status": "vendor_or_trade_page",
+            "sources": [
+              "BF-S17"
+            ],
+            "step": 3
+          },
+          {
+            "alloy": "1100",
+            "doubled": false,
+            "entry_m": [
+              2.6e-05,
+              2.6e-05
+            ],
+            "exit_m": [
+              1.3e-05,
+              1.3e-05
+            ],
+            "log_gauge_distance": 0.08913528701902047,
+            "note": "single-sheet, two-side-bright",
+            "read_status": "computed",
+            "reduction": [
+              0.5,
+              0.5
+            ],
+            "schedule": "BF-S12 1100, 4 passes from 270 \u00b5m",
+            "source_read_status": "excerpt",
+            "sources": [
+              "BF-S12"
+            ],
+            "step": 3
+          }
+        ],
+        "outside_published_range": []
+      }
+    ],
+    "status": "LITERATURE_SURVEY_UNVALIDATED",
+    "temper_used": "H18"
+  },
+  "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, consistent with standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report; stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
   "recommended_next_measurements": [
     "Spray footprint check (pattern paper or water test) and header inspection; compare the band positions on three consecutive coils with the nozzle positions on the barrel coordinate; shapemeter zone map.",
     "Log the coolant valve states against the shapemeter zones and the band appearance times; compare the band duration with the valve-off intervals.",
@@ -5355,8 +6900,8 @@
         "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "entry_tension_pa": 30000000.0,
         "entry_thickness_m": 0.00026,
-        "exit_ripple_per_um_runout_at_work_roll_2x_m": 1.2276782544360791e-07,
-        "exit_speed_m_s": 8.0,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 1.2202902636692443e-07,
+        "exit_speed_m_s": 9.5,
         "exit_tension_pa": 35000000.0,
         "exit_thickness_m": 0.000135,
         "forward_slip_fraction": 0.04525542471139632,
@@ -5366,18 +6911,18 @@
         "note": "operating point linearly unstable: forced ripple is formal only",
         "onset_frequency_hz": 166.25637190774248,
         "onset_strip_pitch_m": 0.0207375115712852,
-        "pitch_at_operating_speed_m": 0.04811845650306437,
+        "pitch_at_operating_speed_m": 0.05714066709738894,
         "reduction_fraction": 0.4807692307692307,
-        "relative_ripple_per_um_runout_at_work_roll_2x": 0.0009093912995822808,
+        "relative_ripple_per_um_runout_at_work_roll_2x": 0.0009039187138290698,
         "separating_force_n": 851149.7983244208,
         "separating_force_per_width_n_m": 709291.498603684,
-        "speed_ratio": 2.3203582714183026,
-        "speed_ratio_without_bite_damping": 14.24410250405068,
+        "speed_ratio": 2.7554254473092343,
+        "speed_ratio_without_bite_damping": 16.914871723560182,
         "stable_at_operating_speed": false,
         "strip_modulus_n_m": 2865885155.1797447,
         "strip_to_mill_modulus_ratio": 1.241883567244556,
         "thermal_gap_closure_fraction_upper_bound": 0.234,
-        "work_roll_2x_frequency_hz": 18.04612310465524
+        "work_roll_2x_frequency_hz": 21.429771186778098
       },
       {
         "at_case_friction": {
@@ -5398,8 +6943,8 @@
         "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
         "entry_tension_pa": 32000000.0,
         "entry_thickness_m": 0.000135,
-        "exit_ripple_per_um_runout_at_work_roll_2x_m": 8.366943079546503e-08,
-        "exit_speed_m_s": 10.0,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 8.347615381291165e-08,
+        "exit_speed_m_s": 10.5,
         "exit_tension_pa": 37000000.0,
         "exit_thickness_m": 8.5e-05,
         "forward_slip_fraction": 0.06637141023640614,
@@ -5409,18 +6954,18 @@
         "note": "operating point linearly unstable: forced ripple is formal only",
         "onset_frequency_hz": 208.80068429245716,
         "onset_strip_pitch_m": 0.031705108316132526,
-        "pitch_at_operating_speed_m": 0.047892563350000694,
+        "pitch_at_operating_speed_m": 0.05028719151750073,
         "reduction_fraction": 0.37037037037037035,
-        "relative_ripple_per_um_runout_at_work_roll_2x": 0.0009843462446525297,
+        "relative_ripple_per_um_runout_at_work_roll_2x": 0.0009820723977989605,
         "separating_force_n": 734729.7673856566,
         "separating_force_per_width_n_m": 612274.8061547138,
-        "speed_ratio": 1.5105629942172913,
-        "speed_ratio_without_bite_damping": 5.010184781351562,
+        "speed_ratio": 1.586091143928156,
+        "speed_ratio_without_bite_damping": 5.26069402041914,
         "stable_at_operating_speed": false,
         "strip_modulus_n_m": 9791198367.441948,
         "strip_to_mill_modulus_ratio": 4.242852625891511,
         "thermal_gap_closure_fraction_upper_bound": 0.3716470588235294,
-        "work_roll_2x_frequency_hz": 22.11097358889341
+        "work_roll_2x_frequency_hz": 23.216522268338082
       },
       {
         "at_case_friction": {
@@ -5521,6 +7066,7 @@
           "strip_modulus_n_m": 300971741843.6271
         },
         "bending_strain_smallest_deflector": 7.2e-05,
+        "bite_credibility": "FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED",
         "bite_flags": [
           "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
           "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
@@ -5532,6 +7078,7 @@
           "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
+        "bite_force_ratio_to_reported_range": null,
         "bite_model": "experimental_mattress",
         "chatter_reliability": "NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT",
         "contact_radius_ratio": 3.3132552239190787,
@@ -5540,8 +7087,8 @@
         "critical_status": "STABLE_OVER_SCANNED_RANGE",
         "entry_tension_pa": 38000000.0,
         "entry_thickness_m": 3e-05,
-        "exit_ripple_per_um_runout_at_work_roll_2x_m": 3.02137906325478e-09,
-        "exit_speed_m_s": 15.0,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 3.0798956426186657e-09,
+        "exit_speed_m_s": 10.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.8e-05,
         "extended_domain_note": "roll bite from the extended domain (EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN): the critical speeds of this row are open-gap screening numbers, not predictions",
@@ -5553,25 +7100,74 @@
         "onset_strip_pitch_m": null,
         "pitch_at_operating_speed_m": null,
         "reduction_fraction": 0.4,
-        "relative_ripple_per_um_runout_at_work_roll_2x": 0.00016785439240304332,
+        "relative_ripple_per_um_runout_at_work_roll_2x": 0.00017110531347881475,
         "separating_force_n": 1843256.8799036415,
         "separating_force_per_width_n_m": 1536047.3999197013,
         "speed_ratio": null,
-        "speed_ratio_without_bite_damping": 3.210841504844221,
+        "speed_ratio_without_bite_damping": 2.1405610032294806,
         "stable_at_operating_speed": true,
         "strip_modulus_n_m": 300971741843.6271,
         "strip_to_mill_modulus_ratio": 130.42108813223842,
         "thermal_gap_closure_fraction_upper_bound": 1.755,
-        "work_roll_2x_frequency_hz": 27.04233419124146
+        "work_roll_2x_frequency_hz": 18.02822279416097
+      },
+      {
+        "at_case_friction": {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.094937440301095,
+          "friction_coefficient": 0.03,
+          "strip_modulus_n_m": 152175293538.5406
+        },
+        "bending_strain_smallest_deflector": 0.0001,
+        "bite_flags": [
+          "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+          "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+          "MATTRESS_REGIME_FOIL",
+          "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+          "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+          "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+        ],
+        "bite_model": "experimental_mattress",
+        "contact_radius_ratio": 2.256070020119829,
+        "critical_exit_speed_m_s": null,
+        "critical_exit_speed_without_bite_damping_m_s": 5.094937440301095,
+        "critical_status": "STABLE_OVER_SCANNED_RANGE",
+        "entry_tension_pa": 35000000.0,
+        "entry_thickness_m": 5e-05,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 5.6723848936642495e-09,
+        "exit_speed_m_s": 13.0,
+        "exit_tension_pa": 40000000.0,
+        "exit_thickness_m": 2.5e-05,
+        "forward_slip_fraction": 0.31484048735348225,
+        "friction_coefficient": 0.03,
+        "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+        "mean_flow_stress_pa": 178000000.0,
+        "onset_frequency_hz": null,
+        "onset_strip_pitch_m": null,
+        "pitch_at_operating_speed_m": null,
+        "reduction_fraction": 0.5,
+        "relative_ripple_per_um_runout_at_work_roll_2x": 0.00022689539574656997,
+        "separating_force_n": 1785194.4346726583,
+        "separating_force_per_width_n_m": 1487662.028893882,
+        "speed_ratio": null,
+        "speed_ratio_without_bite_damping": 2.5515524287245697,
+        "stable_at_operating_speed": true,
+        "strip_modulus_n_m": 152175293538.5406,
+        "strip_to_mill_modulus_ratio": 65.94262720003427,
+        "thermal_gap_closure_fraction_upper_bound": 1.2636,
+        "work_roll_2x_frequency_hz": 23.312381546518456
       },
       {
         "at_case_friction": {
           "critical_exit_speed_m_s": null,
           "critical_exit_speed_without_bite_damping_m_s": null,
           "friction_coefficient": 0.03,
-          "strip_modulus_n_m": 4287374342946.522
+          "strip_modulus_n_m": 4369282438741.0654
         },
         "bending_strain_smallest_deflector": 4.8e-05,
+        "bite_credibility": "FORCE_OUTSIDE_REPORTED_RANGE",
         "bite_flags": [
           "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
           "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
@@ -5584,37 +7180,38 @@
           "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
+        "bite_force_ratio_to_reported_range": 2.690327579643028,
         "bite_model": "experimental_mattress",
         "chatter_reliability": "WITHIN_SPAN_WAVE_LIMIT",
-        "contact_radius_ratio": 11.248373508070705,
+        "contact_radius_ratio": 11.143080602579031,
         "critical_exit_speed_m_s": null,
         "critical_exit_speed_without_bite_damping_m_s": null,
         "critical_status": "STABLE_OVER_SCANNED_RANGE",
         "entry_tension_pa": 38000000.0,
-        "entry_thickness_m": 2.45e-05,
-        "exit_ripple_per_um_runout_at_work_roll_2x_m": 4.5334216954572627e-10,
-        "exit_speed_m_s": 15.0,
+        "entry_thickness_m": 2.5e-05,
+        "exit_ripple_per_um_runout_at_work_roll_2x_m": 4.6131266483888684e-10,
+        "exit_speed_m_s": 10.0,
         "exit_tension_pa": 42000000.0,
         "exit_thickness_m": 1.2e-05,
         "extended_domain_note": "roll bite from the extended domain (REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN, EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN): the critical speeds of this row are open-gap screening numbers, not predictions",
-        "forward_slip_fraction": 0.4162034370468519,
+        "forward_slip_fraction": 0.42185542006403387,
         "friction_coefficient": 0.03,
-        "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
         "mean_flow_stress_pa": 185000000.0,
         "onset_frequency_hz": null,
         "onset_strip_pitch_m": null,
         "pitch_at_operating_speed_m": null,
-        "reduction_fraction": 0.5102040816326531,
-        "relative_ripple_per_um_runout_at_work_roll_2x": 3.777851412881052e-05,
-        "separating_force_n": 7245090.497828981,
-        "separating_force_per_width_n_m": 6037575.414857484,
+        "reduction_fraction": 0.52,
+        "relative_ripple_per_um_runout_at_work_roll_2x": 3.844272206990724e-05,
+        "separating_force_n": 7425304.119814758,
+        "separating_force_per_width_n_m": 6187753.433178965,
         "speed_ratio": null,
         "speed_ratio_without_bite_damping": null,
         "stable_at_operating_speed": true,
-        "strip_modulus_n_m": 4287374342946.522,
-        "strip_to_mill_modulus_ratio": 1857.8622152768264,
+        "strip_modulus_n_m": 4369282438741.0654,
+        "strip_to_mill_modulus_ratio": 1893.355723454462,
         "thermal_gap_closure_fraction_upper_bound": 2.6325,
-        "work_roll_2x_frequency_hz": 24.973647292710414
+        "work_roll_2x_frequency_hz": 16.582916768447756
       }
     ],
     "smallest_deflector_roll_diameter_m": 0.25,
@@ -12823,8 +14420,11 @@
       "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
     ],
     "gauge_trend": {
-      "bite_free_text": "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) (12 um): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -25.6 kPa (x0.11, in magnitude falls on every pass); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.39 MPa (x0.094, in magnitude falls on every pass).",
+      "bite_free_text": "Bite-free thresholds (no roll bite needed), thickest to thinnest pass, S1 0.260->0.135 mm (assumed stock route) (135 um) to ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (12 um): flatness dead band half-width 0.271 -> 0.00301 I-units (x0.011, falls on every pass); critical coil ridge height 0.694 -> 0.0617 um (x0.089, falls on every pass); trough onset lateral stress, exit span -135 -> -13.2 kPa (x0.097, in magnitude falls on every pass); trough onset lateral stress, entry span -241 -> -26.1 kPa (x0.11, in magnitude not monotonic); roller-wrinkle threshold, exit span -46.2 -> -4.11 MPa (x0.089, in magnitude falls on every pass); roller-wrinkle threshold, entry span -89.1 -> -8.56 MPa (x0.096, in magnitude not monotonic).",
       "evaluation_grid_m": 0.009966666666666667,
+      "excluded_not_credible": [
+        "ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (extended-domain bite force 6.19 kN/mm, x2.7 the nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)"
+      ],
       "reference_stripe_basis": "largest steady stripe (peak 9.589e-07 m at 0.6225 m), isolated; onsets by scaling its own shape",
       "reference_stripe_description": "smooth Gaussian stripe, half-peak width 0.1 m (about one cooling zone), centred at 0.6204 m; its height is bisected for the *_onset_height_reference_m columns",
       "reference_stripe_peak_m": 9.588778552595053e-07,
@@ -13039,6 +14639,8 @@
         {
           "band_buckling_stress_pa": 3746.3876394747854,
           "band_width_m": 0.14949999999999997,
+          "bite_credibility": "FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED",
+          "bite_credibility_basis": "applied only to extended-domain mattress bites (exit gauge below 20 um); the 0.9-2.3 kN/mm range is the one reported for battery-foil passes [V S3, S4; conversion D]",
           "bite_flags": [
             "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
             "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
@@ -13050,6 +14652,7 @@
             "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
+          "bite_force_ratio_to_reported_range": null,
           "bite_half_length_m": 0.0011583904202328449,
           "bite_model": "experimental_mattress",
           "bite_source": "supplied",
@@ -13094,8 +14697,66 @@
           "trough_critical_lateral_stress_pa": -19767.463205550666
         },
         {
+          "band_buckling_stress_pa": 4504.255683809897,
+          "band_width_m": 0.1893666666666668,
+          "bite_flags": [
+            "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+            "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+            "MATTRESS_REGIME_FOIL",
+            "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+            "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+            "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+          ],
+          "bite_half_length_m": 0.0013796952850090147,
+          "bite_model": "experimental_mattress",
+          "bite_source": "supplied",
+          "buckling_utilisation": 0.0,
+          "compliance_only_i_units": 855.8248348863598,
+          "critical_ridge_height_m": 1.2857142857142858e-07,
+          "effective_buckling_width_m": null,
+          "entry_thickness_m": 5e-05,
+          "exit_tension_pa": 40000000.0,
+          "exit_thickness_m": 2.5e-05,
+          "feedback_i_units": 4.976756982340789,
+          "friction_coefficient": 0.03,
+          "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+          "linear_feedback_i_units": 4.976756982340789,
+          "manifest_onset_height_reference_m": 1.0116570035199296e-05,
+          "manifest_onset_stripe_height_m": 1.0962039327734694e-05,
+          "mean_flow_stress_pa": 178000000.0,
+          "released_buckling_utilisation": 1858.3840626005988,
+          "released_onset_height_reference_m": 3.516396755262496e-07,
+          "released_onset_limited_by_reporting_threshold": true,
+          "released_onset_reference_limited_by_reporting_threshold": true,
+          "released_onset_stripe_height_m": 3.893613516577473e-07,
+          "reporting_onset_height_reference_m": 3.4824528727074457e-07,
+          "reporting_onset_stripe_height_m": 3.8567973742271846e-07,
+          "rigid_i_units": 3835.5114210380207,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -17125142.033191383,
+          "roller_wrinkle_critical_lateral_stress_exit_span_pa": -8562571.016595691,
+          "saturated": false,
+          "separating_force_per_width_n_m": 1487662.028893882,
+          "shape_inputs_basis": "derived_bite",
+          "shohet_townsend_half_width_i_units": 0.011777213520354119,
+          "shohet_townsend_lower_i_units": -0.01570295136047216,
+          "shohet_townsend_upper_i_units": 0.00785147568023608,
+          "state": "LATENT_UNDER_TENSION",
+          "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+          "strip_stiffness_per_width_pa": 126812744615.4505,
+          "tension_feedback_stiffness_per_width_pa": 29717231138162.527,
+          "transfer_factor_compliance_only": 0.27032453183844346,
+          "transfer_factor_with_feedback": 0.048895213222960095,
+          "trough_critical_lateral_stress_entry_span_pa": -50125.395844136474,
+          "trough_critical_lateral_stress_exit_span_pa": -26793.15108931158,
+          "trough_critical_lateral_stress_pa": -26793.15108931158
+        },
+        {
           "band_buckling_stress_pa": null,
           "band_width_m": null,
+          "bite_credibility": "FORCE_OUTSIDE_REPORTED_RANGE",
+          "bite_credibility_basis": "applied only to extended-domain mattress bites (exit gauge below 20 um); the 0.9-2.3 kN/mm range is the one reported for battery-foil passes [V S3, S4; conversion D]",
           "bite_flags": [
             "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
             "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
@@ -13108,51 +14769,52 @@
             "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
-          "bite_half_length_m": 0.00217839564214523,
+          "bite_force_ratio_to_reported_range": 2.690327579643028,
+          "bite_half_length_m": 0.002211114337699783,
           "bite_model": "experimental_mattress",
           "bite_source": "supplied",
           "buckling_utilisation": null,
-          "compliance_only_i_units": 96.79692596311567,
+          "compliance_only_i_units": 95.42081086753203,
           "critical_ridge_height_m": 6.171428571428573e-08,
           "effective_buckling_width_m": null,
-          "entry_thickness_m": 2.45e-05,
+          "entry_thickness_m": 2.5e-05,
           "exit_tension_pa": 42000000.0,
           "exit_thickness_m": 1.2e-05,
-          "feedback_i_units": 0.2547639810205942,
+          "feedback_i_units": 0.25048636213295594,
           "friction_coefficient": 0.03,
-          "label": "ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed)",
-          "linear_feedback_i_units": 0.2547639810205942,
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "linear_feedback_i_units": 0.25048636213295594,
           "manifest_onset_height_reference_m": null,
           "manifest_onset_stripe_height_m": null,
           "mean_flow_stress_pa": 185000000.0,
           "released_buckling_utilisation": null,
-          "released_onset_height_reference_m": 6.793861539540133e-06,
+          "released_onset_height_reference_m": 6.90983395745259e-06,
           "released_onset_limited_by_reporting_threshold": true,
           "released_onset_reference_limited_by_reporting_threshold": true,
-          "released_onset_stripe_height_m": 7.528315139669498e-06,
-          "reporting_onset_height_reference_m": 6.793868333408467e-06,
-          "reporting_onset_stripe_height_m": 7.528322667992166e-06,
+          "released_onset_stripe_height_m": 7.656867304123901e-06,
+          "reporting_onset_height_reference_m": 6.9098408672934575e-06,
+          "reporting_onset_stripe_height_m": 7.656874960998862e-06,
           "rigid_i_units": 7990.64879382921,
-          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -8391319.596263777,
+          "roller_wrinkle_critical_lateral_stress_entry_span_pa": -8562571.016595691,
           "roller_wrinkle_critical_lateral_stress_exit_span_pa": -4110034.0879659317,
           "saturated": false,
-          "separating_force_per_width_n_m": 6037575.414857484,
+          "separating_force_per_width_n_m": 6187753.433178965,
           "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 0.0030071234017636306,
           "shohet_townsend_lower_i_units": -0.004009497869018174,
           "shohet_townsend_upper_i_units": 0.002004748934509087,
           "state": "BELOW_REPORTING_THRESHOLD",
           "state_after_tension_release": "BELOW_REPORTING_THRESHOLD",
-          "strip_stiffness_per_width_pa": 3572811952455.435,
-          "tension_feedback_stiffness_per_width_pa": 1374118905899261.8,
-          "transfer_factor_compliance_only": 0.014698093446272669,
-          "transfer_factor_with_feedback": 0.002618698038473087,
-          "trough_critical_lateral_stress_entry_span_pa": -25592.438684657598,
+          "strip_stiffness_per_width_pa": 3641068698950.888,
+          "tension_feedback_stiffness_per_width_pa": 1403748722543772.0,
+          "transfer_factor_compliance_only": 0.014489158407699366,
+          "transfer_factor_with_feedback": 0.00258137286158895,
+          "trough_critical_lateral_stress_entry_span_pa": -26114.733351691426,
           "trough_critical_lateral_stress_exit_span_pa": -13178.308803700442,
           "trough_critical_lateral_stress_pa": -13178.308803700442
         }
       ],
-      "text": "Same 0.959 um roll stripe on every pass, 0.135 mm -> 0.012 mm: linear-feedback I-units 42.3 -> 0.255 (x0.01; rigid bound x11.25). In the mill this stripe buckles on 0 of 6 passes (utilisation 0 -> 0); after tension release on 5 of 6 (utilisation 5.4e+02 -> 0). State changes along the schedule at ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed): BELOW_REPORTING_THRESHOLD / BELOW_REPORTING_THRESHOLD. Onset stripe height, model stripe: in the mill 1.19 um -> not reached below 50 um, after release 0.046 um (reporting-threshold limited) -> 7.53 um (reporting-threshold limited). For the model stripe the in-mill onset rises beyond the 50 um search ceiling on the thin pass (thick/thin ratio below 0.024). Onset stripe height, Gaussian reference: in the mill 1.11 um -> not reached below 50 um, after release 0.0415 um (reporting-threshold limited) -> 6.79 um (reporting-threshold limited). For the Gaussian reference the in-mill onset rises beyond the 50 um search ceiling on the thin pass (thick/thin ratio below 0.022). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.024 in the mill, 0.0061 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.022 in the mill, 0.0061 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed), F2 0.030->0.018 mm (plant pass 2, final), ALT 0.0245->0.012 mm (thinnest product, alternative final pass; 24.5 um assumed) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.00301 I-units."
+      "text": "Same 0.959 um roll stripe on every pass, 0.135 mm -> 0.018 mm: linear-feedback I-units 42.3 -> 3.23 (x0.08; rigid bound x7.50). In the mill this stripe buckles on 0 of 6 passes (utilisation 0 -> 0); after tension release on 6 of 6 (utilisation 5.4e+02 -> 2.3e+03). Onset stripe height, model stripe: in the mill 1.19 um -> 17.5 um, after release 0.046 um (reporting-threshold limited) -> 0.594 um (reporting-threshold limited). Onset stripe height, Gaussian reference: in the mill 1.11 um -> 16.2 um, after release 0.0415 um (reporting-threshold limited) -> 0.537 um (reporting-threshold limited). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.068 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.068 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed), ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed), F2 0.030->0.018 mm (plant pass 2, final) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.00639 I-units. Not credible (excluded from the trend): ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (extended-domain bite force 6.19 kN/mm, x2.7 the nearer end of the 0.9-2.3 kN/mm reported for battery-foil passes)."
     },
     "grinding_feed_pitch_m": null,
     "inputs_used": {
