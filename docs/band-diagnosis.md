@@ -686,7 +686,7 @@ this container. It tests the screening logic at foil gauge, not the physics.
 
 ### 3.10 Product survey
 
-`physicroll/band_survey.py` builds one synthetic **final pass per catalogue product** (24
+`physicroll/band_survey.py` builds one synthetic **final pass per catalogue product** (27
 products, every one with a published final gauge) from catalogue data only and evaluates it
 with the engine's own models, on one stated synthetic mill per gauge class: the battery-foil
 demo mill (work roll radius 0.135 m, strip 1.2 m) for an exit
@@ -716,7 +716,7 @@ assumption; `vendor_level_input` marks a row resting on vendor or trade-page dat
   H2x and other annealed final tempers the final cold pass is rolled hard and annealed
   afterwards: a published as-rolled H1x strength of the product is used if there is one,
   otherwise an ASSUMED 180 MPa, labelled
-  (18 of the 24 rows); annealed strength is never used as rolling flow stress;
+  (19 of the 27 rows); annealed strength is never used as rolling flow stress;
 - tensions 0.2 / 0.23 of the flow stress, friction 0.03 (the demos'
   value), speed from the middle of the published final-pass (or pass) speed span, else the demo
   mill's speed;
@@ -741,51 +741,54 @@ chatter: critical speed with / without bite damping at the survey speed, m/s):
 
 | product | survey pass | bite | dead band | ridge | trough | roller wrinkle | 1 um stripe | chatter | marks |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 `battery_collector_foil` | 20 -> 13, foil, 182 MPa | mattress, 2.54 | 0.00349 | 0.0755 | -14.3 | -4.45 | 0.992 I; not reached / 2.02 | stable / 4.28 at 13.6, not reliable | NOT CREDIBLE (x1.1); extended domain; closed gap; vendor-level input |
+| 1 `battery_collector_foil` | 20 -> 13, foil, 180 MPa | mattress, 2.4 | 0.00349 | 0.0743 | -14.2 | -4.45 | 1.1 I; not reached / 1.83 | stable / 4.11 at 13.6, not reliable | NOT CREDIBLE (x1); extended domain; closed gap; vendor-level input |
 | 2 `battery_pouch_laminate_foil` | 64 -> 30, foil, 180 MPa | mattress, 1.41 | 0.0165 | 0.171 | -32.7 | -10.3 | 7.1 I; 8.46 / 0.285 | stable / 5.33 at 7.92, not reliable | extended domain; closed gap; flow stress assumed |
-| 3 `capacitor_anode_foil_high_voltage` | 180 -> 86.6, foil, 180 MPa | Hitchcock, 0.888 | 0.119 | 0.495 | -94.4 | -29.7 | 36.5 I; 1.71 / 0.0555 | 5.27 / 1.06 at 10 | extended domain; closed gap; flow stress assumed |
-| 4 `capacitor_anode_foil_low_voltage` | 169 -> 81.2, foil, 180 MPa | Hitchcock, 0.892 | 0.105 | 0.464 | -88.5 | -27.8 | 34.8 I; 1.8 / 0.0583 | 5.61 / 1.22 at 10 | extended domain; closed gap; flow stress assumed |
-| 5 `capacitor_cathode_foil` | 72.1 -> 34.6, foil, 180 MPa | mattress, 1.25 | 0.0216 | 0.198 | -37.7 | -11.9 | 8.8 I; 6.85 / 0.23 | 24.9 / 5.68 at 10, not reliable | extended domain; closed gap; flow stress assumed |
-| 6 `pharma_blister_lidding` | 55.8 -> 26.8 per sheet, foil, 150 MPa | doubled pass not modelled | 0.0134 | 0.123 | -26.7 | -9.18 | doubled pass not modelled | doubled pass not modelled | closed gap; vendor-level input |
-| 7 `pharma_cold_form_foil` | 108 -> 52, foil, 180 MPa | Hitchcock, 0.967 | 0.046 | 0.297 | -56.7 | -17.8 | 22.9 I; 2.67 / 0.0886 | 9.22 / 4.06 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
-| 8 `pharma_strip_pack_foil` | 65.8 -> 31.6, foil, 180 MPa | mattress, 1.32 | 0.0182 | 0.181 | -34.5 | -10.8 | 7.78 I; 7.79 / 0.26 | stable / 5.51 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
-| 9 `household_foil` | 23 -> 10.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00235 | 0.06 | -11.4 | -3.6 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
-| 10 `household_foil_heavy_duty` | 44.2 -> 21.2 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00867 | 0.121 | -23.1 | -7.26 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed |
-| 11 `converter_foil` | 14 -> 6.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000961 | 0.0371 | -7.09 | -2.23 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
-| 12 `cigarette_liner_foil` | 13.5 -> 6.48 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000956 | 0.037 | -7.07 | -2.22 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
-| 13 `dairy_lidding_foil` | 77.9 -> 37.4, foil, 180 MPa | mattress, 1.19 | 0.0249 | 0.214 | -40.8 | -12.8 | 9.77 I; 6.21 / 0.207 | 19.6 / 5.8 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
-| 14 `container_foil_wrinkle_wall` | 151 -> 72.7, foil, 180 MPa | Hitchcock, 0.899 | 0.0858 | 0.415 | -79.3 | -24.9 | 31.8 I; 1.94 / 0.0637 | 6.29 / 1.58 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
-| 15 `container_foil_smooth_wall` | 279 -> 134, foil, 180 MPa | Hitchcock, 0.902 | 0.267 | 0.766 | -146 | -45.9 | 51.1 I; 1.26 / 0.0397 | 3.17 / 0.469 at 10 | extended domain; flow stress assumed; vendor-level input |
-| 16 `container_foil_retortable` | 191 -> 91.7, foil, 180 MPa | Hitchcock, 0.888 | 0.132 | 0.524 | -100 | -31.4 | 38.2 I; 1.63 / 0.0531 | 4.95 / 0.937 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
-| 17 `brazed_fin_stock` | 128 -> 89.4, foil, 148 MPa | Hitchcock, 0.484 | 0.126 | 0.4 | -88.2 | -30.6 | 37.9 I; 1.36 / 0.0534 | 6.87 / 2.31 at 10 | closed gap; vendor-level input |
-| 18 `brazing_sheet_tube` | 404 -> 283, sheet, 180 MPa | Hitchcock, 1.05 | 0.709 | 1.94 | -231 | -80.8 | 30 I; 2.29 / 0.0676 | 7.8 / 2.24 at 12 | flow stress assumed; vendor-level input |
-| 19 `hvac_fin_stock` | 130 -> 82.46, foil, 175 MPa | Hitchcock, 0.676 | 0.108 | 0.456 | -88.7 | -28.2 | 33.6 I; 1.81 / 0.0604 | 7.34 / 2.45 at 10 | closed gap |
-| 20 `litho_sheet` | 494.5 -> 272, sheet, 135 MPa | Hitchcock, 0.955 | 0.659 | 1.34 | -193 | -77.6 | 39.7 I; 1.32 / 0.0511 | 3.76 / 0.878 at 12 | – |
-| 21 `can_body_stock` | 414 -> 290, sheet, 180 MPa | Hitchcock, 1.05 | 0.742 | 1.99 | -237 | -82.8 | 30.2 I; 2.28 / 0.0672 | 7.76 / 2.23 at 12 | flow stress assumed |
-| 22 `can_end_stock` | 391 -> 274, sheet, 180 MPa | Hitchcock, 1.04 | 0.668 | 1.88 | -224 | -78.2 | 29.8 I; 2.3 / 0.0681 | 7.87 / 2.27 at 12 | flow stress assumed |
-| 23 `closure_sheet` | 303 -> 212, sheet, 148 MPa | Hitchcock, 0.782 | 0.415 | 1.16 | -157 | -60.5 | 29.7 I; 1.85 / 0.0683 | 7.28 / 2.14 at 12 | vendor-level input |
-| 24 `transformer_strip` | 756 -> 529, sheet, 180 MPa | Hitchcock, 1.26 | 2.27 | 3.63 | -433 | -151 | 35.4 I; 2.17 / 0.114 | 6.73 / 1.91 at 12 | flow stress assumed; vendor-level input |
+| 3 `battery_thick_collector_foil` | 65.8 -> 31.6, foil, 185 MPa | mattress, 1.38 | 0.0182 | 0.187 | -34.9 | -10.8 | 7.54 I; 8.2 / 0.268 | stable / 5.59 at 10, not reliable | extended domain; closed gap; vendor-level input |
+| 4 `battery_carbon_coated_base_foil` | 34.2 -> 16.4, foil, 140 MPa | mattress, 1.48 | 0.00538 | 0.0687 | -15.8 | -5.62 | 3.95 I; 11.8 / 0.507 | stable / 3.55 at 10, not reliable | extended domain; closed gap; vendor-level input |
+| 5 `battery_tab_foil` | 114 -> 54.8, foil, 180 MPa | Hitchcock, 0.951 | 0.0507 | 0.313 | -59.7 | -18.8 | 24.3 I; 2.52 / 0.0833 | 8.58 / 3.42 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 6 `capacitor_anode_foil_high_voltage` | 180 -> 86.6, foil, 180 MPa | Hitchcock, 0.888 | 0.119 | 0.495 | -94.4 | -29.7 | 36.5 I; 1.71 / 0.0555 | 5.27 / 1.06 at 10 | extended domain; closed gap; flow stress assumed |
+| 7 `capacitor_anode_foil_low_voltage` | 169 -> 81.2, foil, 180 MPa | Hitchcock, 0.892 | 0.105 | 0.464 | -88.5 | -27.8 | 34.8 I; 1.8 / 0.0583 | 5.61 / 1.22 at 10 | extended domain; closed gap; flow stress assumed |
+| 8 `capacitor_cathode_foil` | 72.1 -> 34.6, foil, 180 MPa | mattress, 1.25 | 0.0216 | 0.198 | -37.7 | -11.9 | 8.8 I; 6.85 / 0.23 | 24.9 / 5.68 at 10, not reliable | extended domain; closed gap; flow stress assumed |
+| 9 `pharma_blister_lidding` | 55.8 -> 26.8 per sheet, foil, 150 MPa | doubled pass not modelled | 0.0134 | 0.123 | -26.7 | -9.18 | doubled pass not modelled | doubled pass not modelled | closed gap; vendor-level input |
+| 10 `pharma_cold_form_foil` | 108 -> 52, foil, 180 MPa | Hitchcock, 0.967 | 0.046 | 0.297 | -56.7 | -17.8 | 22.9 I; 2.67 / 0.0886 | 9.22 / 4.06 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 11 `pharma_strip_pack_foil` | 65.8 -> 31.6, foil, 180 MPa | mattress, 1.32 | 0.0182 | 0.181 | -34.5 | -10.8 | 7.78 I; 7.79 / 0.26 | stable / 5.51 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 12 `household_foil` | 23 -> 10.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00235 | 0.06 | -11.4 | -3.6 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 13 `household_foil_heavy_duty` | 44.2 -> 21.2 per sheet, foil, 180 MPa | doubled pass not modelled | 0.00867 | 0.121 | -23.1 | -7.26 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed |
+| 14 `converter_foil` | 14 -> 6.5 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000961 | 0.0371 | -7.09 | -2.23 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 15 `cigarette_liner_foil` | 13.5 -> 6.48 per sheet, foil, 180 MPa | doubled pass not modelled | 0.000956 | 0.037 | -7.07 | -2.22 | doubled pass not modelled | doubled pass not modelled | closed gap; flow stress assumed; vendor-level input |
+| 16 `dairy_lidding_foil` | 77.9 -> 37.4, foil, 180 MPa | mattress, 1.19 | 0.0249 | 0.214 | -40.8 | -12.8 | 9.77 I; 6.21 / 0.207 | 19.6 / 5.8 at 10, not reliable | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 17 `container_foil_wrinkle_wall` | 151 -> 72.7, foil, 180 MPa | Hitchcock, 0.899 | 0.0858 | 0.415 | -79.3 | -24.9 | 31.8 I; 1.94 / 0.0637 | 6.29 / 1.58 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 18 `container_foil_smooth_wall` | 279 -> 134, foil, 180 MPa | Hitchcock, 0.902 | 0.267 | 0.766 | -146 | -45.9 | 51.1 I; 1.26 / 0.0397 | 3.17 / 0.469 at 10 | extended domain; flow stress assumed; vendor-level input |
+| 19 `container_foil_retortable` | 191 -> 91.7, foil, 180 MPa | Hitchcock, 0.888 | 0.132 | 0.524 | -100 | -31.4 | 38.2 I; 1.63 / 0.0531 | 4.95 / 0.937 at 10 | extended domain; closed gap; flow stress assumed; vendor-level input |
+| 20 `brazed_fin_stock` | 128 -> 89.4, foil, 148 MPa | Hitchcock, 0.484 | 0.126 | 0.4 | -88.2 | -30.6 | 37.9 I; 1.36 / 0.0534 | 6.87 / 2.31 at 10 | closed gap; vendor-level input |
+| 21 `brazing_sheet_tube` | 404 -> 283, sheet, 180 MPa | Hitchcock, 1.05 | 0.709 | 1.94 | -231 | -80.8 | 30 I; 2.29 / 0.0676 | 7.8 / 2.24 at 12 | flow stress assumed; vendor-level input |
+| 22 `hvac_fin_stock` | 130 -> 82.46, foil, 175 MPa | Hitchcock, 0.676 | 0.108 | 0.456 | -88.7 | -28.2 | 33.6 I; 1.81 / 0.0604 | 7.34 / 2.45 at 10 | closed gap |
+| 23 `litho_sheet` | 494.5 -> 272, sheet, 135 MPa | Hitchcock, 0.955 | 0.659 | 1.34 | -193 | -77.6 | 39.7 I; 1.32 / 0.0511 | 3.76 / 0.878 at 12 | – |
+| 24 `can_body_stock` | 414 -> 290, sheet, 180 MPa | Hitchcock, 1.05 | 0.742 | 1.99 | -237 | -82.8 | 30.2 I; 2.28 / 0.0672 | 7.76 / 2.23 at 12 | flow stress assumed |
+| 25 `can_end_stock` | 391 -> 274, sheet, 180 MPa | Hitchcock, 1.04 | 0.668 | 1.88 | -224 | -78.2 | 29.8 I; 2.3 / 0.0681 | 7.87 / 2.27 at 12 | flow stress assumed |
+| 26 `closure_sheet` | 303 -> 212, sheet, 148 MPa | Hitchcock, 0.782 | 0.415 | 1.16 | -157 | -60.5 | 29.7 I; 1.85 / 0.0683 | 7.28 / 2.14 at 12 | vendor-level input |
+| 27 `transformer_strip` | 756 -> 529, sheet, 180 MPa | Hitchcock, 1.26 | 2.27 | 3.63 | -433 | -151 | 35.4 I; 2.17 / 0.114 | 6.73 / 1.91 at 12 | flow stress assumed; vendor-level input |
 
 **Rankings** (most sensitive first; a ranking uses only rows carrying the quantity, never mixes
 a not-credible bite with credible ones, and lists every excluded row with its reason):
 
 - **Coil ridges (critical ridge height at the outer coil radius)**: most sensitive cigarette_liner_foil (0.037 um), converter_foil (0.0371 um), household_foil (0.06 um); rank correlation with thinner gauge +0.99; none excluded.
-- **Troughs and creases in the exit span (trough onset lateral stress, magnitude)**: most sensitive cigarette_liner_foil (7.07 kPa), converter_foil (7.09 kPa), household_foil (11.4 kPa); rank correlation with thinner gauge +0.99; none excluded.
+- **Troughs and creases in the exit span (trough onset lateral stress, magnitude)**: most sensitive cigarette_liner_foil (7.07 kPa), converter_foil (7.09 kPa), household_foil (11.4 kPa); rank correlation with thinner gauge +1.00; none excluded.
 - **Roller wrinkles on the deflector roll (threshold magnitude)**: most sensitive cigarette_liner_foil (2.22 MPa), converter_foil (2.23 MPa), household_foil (3.6 MPa); rank correlation with thinner gauge +1.00; none excluded.
-- **Cooling stripes visible in the mill (in-mill onset height of a roll stripe)**: most sensitive container_foil_smooth_wall (1.26 um), litho_sheet (1.32 um), brazed_fin_stock (1.36 um); rank correlation with thinner gauge -0.47; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
-- **Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited)**: most sensitive container_foil_smooth_wall (0.0397 um), litho_sheet (0.0511 um), container_foil_retortable (0.0531 um); rank correlation with thinner gauge -0.43; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
-- **Chatter margin (survey speed over the critical speed without bite damping)**: most sensitive container_foil_smooth_wall (21.3), litho_sheet (13.7), container_foil_retortable (10.7); rank correlation with thinner gauge -0.11; 10 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); chatter onset above the span-wave limit (not reliable); doubled pass not modelled).
+- **Cooling stripes visible in the mill (in-mill onset height of a roll stripe)**: most sensitive container_foil_smooth_wall (1.26 um), litho_sheet (1.32 um), brazed_fin_stock (1.36 um); rank correlation with thinner gauge -0.66; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
+- **Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited)**: most sensitive container_foil_smooth_wall (0.0397 um), litho_sheet (0.0511 um), container_foil_retortable (0.0531 um); rank correlation with thinner gauge -0.62; 6 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); doubled pass not modelled).
+- **Chatter margin (survey speed over the critical speed without bite damping)**: most sensitive container_foil_smooth_wall (21.3), litho_sheet (13.7), container_foil_retortable (10.7); rank correlation with thinner gauge -0.28; 12 excluded (bite NOT CREDIBLE (force outside the range reported for battery foil); chatter onset above the span-wave limit (not reliable); doubled pass not modelled).
 
-The generated summary (`summary`): "24 catalogue products, one synthetic final pass each: 19 with a roll bite, 5 doubled (bite not modelled), 1 with a bite marked not credible, 18 with an assumed flow stress. Coil ridges (critical ridge height at the outer coil radius): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Troughs and creases in the exit span (trough onset lateral stress, magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Roller wrinkles on the deflector roll (threshold magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Cooling stripes visible in the mill (in-mill onset height of a roll stripe): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), brazed_fin_stock (89.4 um); no clear gauge order (rank correlation -0.47); 6 excluded. Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.43); 6 excluded. Chatter margin (survey speed over the critical speed without bite damping): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.11); 10 excluded. These are model sensitivities on one synthetic mill per gauge class with literature inputs, not plant defect rates."
+The generated summary (`summary`): "27 catalogue products, one synthetic final pass each: 22 with a roll bite, 5 doubled (bite not modelled), 1 with a bite marked not credible, 19 with an assumed flow stress. Coil ridges (critical ridge height at the outer coil radius): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Troughs and creases in the exit span (trough onset lateral stress, magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Roller wrinkles on the deflector roll (threshold magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Cooling stripes visible in the mill (in-mill onset height of a roll stripe): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), brazed_fin_stock (89.4 um); no clear gauge order (rank correlation -0.66); 6 excluded. Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.62); 6 excluded. Chatter margin (survey speed over the critical speed without bite damping): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.28); 12 excluded. These are model sensitivities on one synthetic mill per gauge class with literature inputs, not plant defect rates."
 
 **How to read it.** The bite-free thresholds fall with gauge, so the thinnest products
 (cigarette liner, converter and household foil, all doubled) are the most sensitive to coil
 ridges, troughs and roller wrinkles. The cooling-stripe and chatter rankings show no clear gauge
 order across the two mills; within the foil mill the in-mill ranking runs against gauge (rank
-correlation of "more sensitive" with "thinner" -0.99 over 12 foil products),
+correlation of "more sensitive" with "thinner" -0.99 over 15 foil products),
 the finding of section 3.5: a given roll stripe is hidden more, not less, in thinner foil. The
 battery collector foil's survey pass (published 20 -> 13 um) has a bite force of
-2.54 kN/mm, x1.1 the top of the range reported for battery-foil passes, so its
+2.4 kN/mm, x1.04 the top of the range reported for battery-foil passes, so its
 bite is NOT CREDIBLE and it is excluded from every bite-dependent ranking.
 
 **What it is not.** One synthetic mill per gauge class, the same friction and tension fractions

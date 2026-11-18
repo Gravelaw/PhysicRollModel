@@ -4,11 +4,11 @@
 
 ## What this is and is not
 
-This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, properties, rolling routes, quality requirements and named band or streak defects. Every value is quoted from three research reports (battery and electronics foil, packaging and household foil, heat-exchanger stock, litho and other strip) and carries its source ids. It is not a validation: nothing here was measured on a plant, vendor and trade pages are low-confidence, and several standards were read from previews only. A value inside a published span is not evidence that a pass is good.
+This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, properties, rolling routes, quality requirements and named band or streak defects. Every value is quoted from four research reports (battery and electronics foil, a second battery report on alloy and temper by gauge, packaging and household foil, heat-exchanger stock, litho and other strip) and carries its source ids. It is not a validation: nothing here was measured on a plant, vendor and trade pages are low-confidence, and several standards were read from previews only. A value inside a published span is not evidence that a pass is good.
 
 Per-pass reductions are computed by `physicroll.band_products` from the published gauge sequences as 1 − h_exit/h_entry (per sheet for a doubled pass); a block of n passes shows its total and the equal-split mean 1 − (h_exit/h_entry)^(1/n). Ranges are kept as ranges, and the reports' disagreements and "not found" lists are kept below.
 
-Source ids: `BF-` battery report, `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
+Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by gauge), `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
 
 | Read status | Meaning | Report tags mapped onto it |
 |---|---|---|
@@ -19,14 +19,17 @@ Source ids: `BF-` battery report, `PK-` packaging report, `HX-` heat-exchanger a
 | memory_unverified | researcher's memory, unverified | MEM; M |
 | computed | computed by this module from published gauges | report "calc." values are recomputed |
 
-Catalogue: 24 products, 793 sourced facts, 119 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
+Catalogue: 27 products, 1081 sourced facts, 163 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
 
 ## Summary
 
 | Product | Final gauge | Alloys | Temper | Single or doubled | Per-pass reduction | Key requirement |
 |---|---|---|---|---|---|---|
-| Li-ion cathode current-collector foil | 8–20 µm [BF-S1] | 1070, 1060, 1050, 1235, 1100, 8011, 1C30, 8A21, … [BF-S1, BF-S6, BF-S45, BF-S46, BF-S8, BF-S5, BF-S12, BF-S13, BF-S20] | H18, O [BF-S1, BF-S48] | single or doubled | 29.4–63.6 % [computed from BF-S12, BF-S11, BF-S13, BF-S14, BF-S15, BF-S16, BF-S8, BF-S17] | Thickness ±3–5 % by precision class, wave height ≤2–5 mm at 1.0 m span, wettability ≥30 mN/m, pinhole limits by gauge (GB/T 33143). [BF-S1, BF-S2] |
-| Battery pouch-laminate barrier foil | 35–55 µm [BF-S29] | 8021, 8A21, 8079 [BF-S29, BF-S28] | O [BF-S29] | single or doubled | 47.9–53.1 % [computed from BF-S34] | O temper with high elongation (cupping); local thickness ±4 %; wettability class A (GB/T 22648-2023). [BF-S29] |
+| Li-ion cathode current-collector foil | 8–20 µm [BF-S1] | 1070, 1060, 1050, 1235, 1100, 8011, 1C30, 8A21, … [BF-S1, BF-S6, BF-S45, BF-S46, BF-S8, BF-S5, BF-S12, BF-S13, BF-S20] | H18, H19, O [BF-S1, BG-G4, BG-G14, BG-G15, BG-G17, BG-G18, BF-S48] | single or doubled | 29.4–63.6 % [computed from BF-S12, BF-S11, BF-S13, BF-S14, BF-S15, BF-S16, BF-S8, BF-S17] | Thickness ±3–5 % by precision class, wave height ≤2–5 mm at 1.0 m span, wettability ≥30 mN/m, pinhole limits by gauge (GB/T 33143). [BF-S1, BF-S2] |
+| Battery pouch-laminate barrier foil | 35–55 µm [BF-S29] | 8021, 8A21, 8079 [BF-S29, BF-S28, BG-G15, BG-G17] | O [BF-S29] | single or doubled | 47.9–53.1 % [computed from BF-S34] | O temper with high elongation (cupping); local thickness ±4 %; wettability class A (GB/T 22648-2023). [BF-S29] |
+| Thick battery collector foil | 20–50 µm [BG-G24, BG-G35] | 1235, 1N30, 1085, 3003 [BG-G35, BG-G7] | H18 [BG-G35] | not published | not published (general foil span applies) | Supplied hard (H18): 170–200 MPa, A ≥1.6 % (vendor; weak evidence). [BG-G35] |
+| Carbon-coated collector base foil | 9–30 µm [BG-G38] | 1070, 1060, 1235 [BG-G38] | H18 [BG-G38] | not published | not published (general foil span applies) | Base foil supplied hard (H18), ≥140–180 MPa (vendor only). [BG-G38] |
+| Battery tab foil and strip | 30–100 µm [BG-G34] | 1070, 1235 [BG-G34] | O [BG-G34] | not published | not published (general foil span applies) | Soft (values imply O): 85–110 MPa, ≥25–30 % (one vendor; weak). [BG-G34] |
 | Electrolytic capacitor anode foil, high voltage | 50–150 µm [BF-S36, BF-S37] | 99.99 % Al, 1A97, 1A99 [BF-S37, BF-S36] | soft [BF-S37] | not published | not published (general foil span applies) | Cube texture ≥90–95 % (GB/T 3615-2016). [BF-S36] |
 | Electrolytic capacitor anode foil, low voltage | 60–110 µm [BF-S37] | 99.9–99.99 % Al [BF-S37] | soft, hard [BF-S37] | not published | not published (general foil span applies) | 99.9–99.99 % Al, soft or hard, 60–110 µm. [BF-S37] |
 | Electrolytic capacitor cathode foil | 15–80 µm [BF-S36, BF-S37] | 99.4–99.8 % Al, Cu-bearing alloy, 1A90, 1070A, 3003 [BF-S37, BF-S36] | soft, hard, O, H18, H22 [BF-S37, BF-S36] | not published | not published (general foil span applies) | Thickness ±5 % up to 50 µm, ±3 % above (GB/T 3615). [BF-S36] |
@@ -166,6 +169,239 @@ Most important flag of the battery report: the two schedules quoted in earlier v
 - EN 485-1 with special requirements: How litho strip is ordered, plus qualification. [HX-S19]
 - ISO 12635: Litho plate thickness ±0.010 mm; CtP edge wave ≤3.0 mm (1.5 mm recommended). [HX-S35b]
 
+## Battery foil: alloy and temper by gauge
+
+From the second battery survey (sources `BG-`): which alloy and temper are used at each gauge. A process engineer can read off, for a final gauge: the alloys, the temper label, the standard minimum and typical strength, and the evidence. The tool uses the proposals below when the plant has not stated a material; each carries the status LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT and must be confirmed or corrected by the plant.
+
+### Three findings first
+
+1. No source gives a hard "gauge X → alloy Y" rule. What exists is a strength floor that rises as gauge falls; producers meet it by moving from 1085/1070/1060/1235 to Cu-bearing 1100-type or 1C30-type alloys. [BG-G2, BG-G6, BG-G11, BG-G21]
+2. The first survey's 8011 figure was wrong: the GB/T 33143-2022 minimum for 8011 is 180 MPa, not 220–230 MPa. [BG-G2, BF-S2]
+3. "H18" on battery foil is a label for a strength table. The foil gets 97–99 % cold reduction after the last anneal, far above the 75 % that defines H18, so European sources call the same product H19. [BG-G40, BG-G8, BG-G26, BG-G14, BG-G17]
+
+How the standard minima were read: GB/T 33143-2022 Table 9 minima (all H18) were read from a producer page that reproduces the table, cross-checked against the garbled draft translation and against T/ZZB 2638-2022, which copies four of its rows. Where the table sets no value for an alloy in a band, none is given here. An official copy of Table 9 was not found. [BG-G2, BG-G1, BG-G3]
+
+Evidence ratings are the report's own (strong / medium / weak / vendor-level), kept as data: "minima" rates the standard minima of the band, "choice" rates the usual alloy choice.
+
+### Collector foil: selection table by gauge band
+
+| Gauge band | GB/T 33143-2022 minimum Rm by alloy, MPa (H18) | Typical producer values | Alloy usually chosen | Typical cells | Pinholes (T/ZZB 2638) | Evidence |
+|---|---|---|---|---|---|---|
+| ≤10 µm (8, 9, 10) | 1100 230; 1C30 220; 1070 185; 8011 180; 1060, 1050, 1235 — [BG-G2] | 240–285 MPa, 2.5–3.8 % in Chinese patents. [BG-G21] | 1100-type or 1C30-type; 8021 at 10 µm one-side-bright. [BG-G21, BF-S4] | Energy-dense EV, consumer. [BG-G21] | T/ZZB 2638: ≤20 pinholes per m² at 8–10 µm. [BG-G3] | Minima strong; alloy preference medium. (minima strong, choice medium) [BG-G2, BG-G21, BF-S4] |
+| >10–13 µm (12, 13) | 1100 230; 1235 180; 1060 190; 1C30 230; 1050 190; 1070 185; 8011 180 [BG-G2] | 1060-type 180–230 MPa, A >3 %; 1100-type 230–270 MPa, A >2.5 %, or 260–310 MPa, A >1.5 % [BG-G14]; Speira high-strength ≥250 MPa [BF-S8]. [BG-G14, BF-S8] | 1100-type for EV; 1235 or 1060 where 180–190 MPa suffices. [BG-G21, BG-G23] | Mainstream EV and storage. [BG-G21, BG-G23] | T/ZZB 2638: ≤10 pinholes per m² at 10–13 µm. [BG-G3] | Minima strong; cell type medium. (minima strong, choice medium) [BG-G2, BG-G21, BG-G23] |
+| >13–15 µm (15) | 1235 185; 1060 190; 1100 220; 1C30 225; 1050 190; 1070 180; 8011 180; 8A21 165 [BG-G2] | At 15 µm: 1085 175–180 / 163–165 MPa / 4–5 %; 1N30 or 1230 185–194 / 165–175 / 4.5 %; 1C32 230 / 200 / 4.5 %; A730H 290 / 250 / 4.0 %; 3003 270–275 / 240 / 3 %; KS81 274 / — / 5.4 % (Rm / Rp0.2 / A). [BG-G5, BG-G6, BG-G8, BG-G9] | 1235, 1060, 1N30 standard; 1085 for high power; 1100-type or 3003 when ≥250 MPa is specified. [BG-G5, BG-G6, BG-G8, BG-G9] | EV, storage, consumer. [BG-G5, BG-G6, BG-G8, BG-G9] | T/ZZB 2638: ≤5 pinholes per m² at 13–15 µm. [BG-G3] | Strong: several producers agree. (minima strong, choice strong) [BG-G2, BG-G5, BG-G6, BG-G8, BG-G9] |
+| >15–20 µm (16, 18, 20) | 1235 175; 1060 185; 1070 175; 1050 185; 1100 220; 1C30 220; 8011 — [BG-G2] | Same grades; 16 µm 1235 typically 200–220 MPa, A 2.2 %. [BG-G42] | 1235, 1060, 1070, 1085 (same grades as at 15 µm). [BG-G42, BG-G19] | Storage, LFP [BG-G19]; carbon-coated base, 16 µm most ordered [BG-G38]. [BG-G19, BG-G38] | T/ZZB 2638: no pinholes (0 per m²) at 15–20 µm. [BG-G3] | Minima strong; cell type vendor-level. (minima strong, choice vendor_level) [BG-G2, BG-G19, BG-G38] |
+| >20–30 µm (21–30) | none | 1235-H18 21–35 µm: 170–200 MPa, A ≥1.6 %. [BG-G35] | 1235, 1N30, 1085, 3003. [BG-G35, BG-G7] | Older and high-power Li-ion ("normally 15–30 µm", 2009); supercapacitors 20 µm. [BG-G7, BG-G36, BG-G37] | — | Weak. (minima not_rated, choice weak) [BG-G35, BG-G7] |
+
+- Elongation: GB/T 33143-2022 elongation minima are 1.0–3.0 %, depending on alloy, gauge length and one- or two-side-bright; 8A21 is ≥4.0 %. [BG-G2]
+- Temper label: Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; "H18, H19" in T/ZZB 1203, Gränges, Symetal and Armor; "H19" at Innoval. "H18" on battery foil is a label for a strength table: the foil gets 97–99 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil. [BG-G2, BG-G3, BG-G25, BG-G4, BG-G14, BG-G15, BG-G18, BG-G17, BG-G40]
+- Surface: Single-sheet two-side-bright foil is preferred. [BG-G17]
+- Surface: Sam-A rolls single-sheet down to 10 µm and says Japanese mills double at 10 µm. [BG-G11]
+- Surface: UACJ sells 10 µm 8021 as bright/matte (one-side-bright). [BF-S4]
+- ≤10 µm: The ≤10 µm band first appeared in GB/T 33143-2022. [BG-G21]
+- >15–20 µm: The report rates the cell-type column vendor-level and gives no separate rating for the alloy column; the usual-choice rating is recorded as vendor_level. [BG-G19, BG-G42]
+- >20–30 µm: GB/T 33143 stops at 20 µm: no standard minima above it. [BG-G2]
+
+### The two bands that matter for a 17–19 µm and a 12 µm product
+
+- A usual final gauge of 17–19 µm is in the **>15–20 µm** band; 12 µm is in the **>10–13 µm** band. From 50 µm in two equal single-sheet passes (computed): 50→18 µm is 40 % per pass (50→30→18 µm), 50→12 µm is 51 % per pass (50→24.5→12 µm).
+
+**18 µm: band >15–20 µm.** Proposals:
+
+- standard: **1235-H18**; Rm 210 MPa used (middle of the typical range 200–220 MPa; range 175–220 MPa); Rp0.2 185 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence vendor_level. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G42, BG-G19]
+- high-strength: **1100-H18**; Rm 220 MPa used (the standard minimum (a lower bound); range ≥220 MPa); Rp0.2 193.8 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence weak. Rule: no usual choice of this grade is published for the band: the option of this grade with the highest standard minimum (ties: the report's order) is used, rated weak. [BG-G2]
+
+**12 µm: band >10–13 µm.** Proposals:
+
+- standard: **1235-H18**; Rm 180 MPa used (the standard minimum (a lower bound); range ≥180 MPa); Rp0.2 158.5 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence medium. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G21, BG-G23]
+- high-strength: **1100-H18**; Rm 250 MPa used (middle of the typical range 230–270 MPa; range 230–310 MPa); Rp0.2 220.2 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence medium. Rule: the usual high-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G14, BG-G21, BG-G23]
+
+The research-stated numbers for 12 µm: standard minimum 180–190 MPa for 1235/1060, 230 MPa for the 1100/1C30 type that EV practice favours [BG-G2, BG-G21, BG-G23].
+
+### Options by band
+
+Order: Presentation order (a rule of this module, never a claim that one alloy is best): options the research calls the usual choice at this gauge first, then by evidence rating (strong, medium, weak, vendor_level, not_rated), then by strength (middle of the first typical range, else the standard minimum) from high to low, then by name. Options outside their published gauge span or usual only for another surface come after the others.
+
+Proposal rule: standard = the usual standard-strength choice of the gauge band (first in the report's list); high-strength = the usual high-strength choice of the gauge band (first in the report's list); when there is none, no usual choice of this grade is published for the band: the option of this grade with the highest standard minimum (ties: the report's order) is used, rated weak. Strength value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum. Proof strength, where not published, is assumed from the median Rp0.2/Rm ratio of the 15 µm grades that publish both (computed).
+
+#### ≤10 µm
+
+| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | Usual choice | Evidence | Note | Sources |
+|---|---|---|---|---|---|---|---|---|---|
+| 1100 | high-strength | H18/H19 | 230 | 1100-type, 1C30-type: 240–285 MPa / A 2.5–3.8 % (≤10 µm, Chinese patents) [BG-G21] | 56–59.5 | 1100-type or 1C30-type is the usual choice at ≤10 µm (energy-dense EV and consumer cells). | medium | — | BG-G2, BG-G21 |
+| 1C30 | high-strength | H18/H19 | 220 | 1100-type, 1C30-type: 240–285 MPa / A 2.5–3.8 % (≤10 µm, Chinese patents) [BG-G21] | — | 1100-type or 1C30-type is the usual choice at ≤10 µm (energy-dense EV and consumer cells). | medium | — | BG-G2, BG-G21 |
+| 1070 | standard | H18/H19 | 185 | — | — | — | not_rated | — | BG-G2 |
+| 8011 | standard | H18/H19 | 180 | — | — | — | not_rated | — | BG-G2 |
+| 1050 | standard | H18/H19 | — | — | — | — | not_rated | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G2 |
+| 1060 | standard | H18/H19 | — | — | 62 | — | not_rated | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G2 |
+| 1235 | standard | H18/H19 | — | — | 58–60 | — | not_rated | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G2 |
+| 8021 | standard | H18/H19 | — | — | 58–59 | 8021 at 10 µm for one-side-bright foil (UACJ bright/matte). | medium | not a GB/T 33143-2022 alloy; usual only for one-side-bright foil | BF-S4, BF-S1 |
+
+- Proposal, standard: **1070-H18**; Rm 185 MPa used (the standard minimum (a lower bound); range ≥185 MPa); Rp0.2 162.9 MPa (assumed: not published for 1070 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence weak. Rule: no usual choice of this grade is published for the band: the option of this grade with the highest standard minimum (ties: the report's order) is used, rated weak. [BG-G2]
+- Proposal, high-strength: **1100-H18**; Rm 262.5 MPa used (middle of the typical range 240–285 MPa; range 230–285 MPa); Rp0.2 231.2 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence medium. Rule: the usual high-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G21]
+
+#### >10–13 µm
+
+| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | Usual choice | Evidence | Note | Sources |
+|---|---|---|---|---|---|---|---|---|---|
+| 1100 | high-strength | H18/H19 | 230 | 1100-type: 230–270 MPa / A ≥2.5 % (>10–13 µm band, Gränges datasheet) [BG-G14]; 1100-type: 260–310 MPa / A ≥1.5 % (>10–13 µm band, Gränges datasheet, stronger grade) [BG-G14] | 56–59.5 | 1100-type for EV cells (high strength). | medium | — | BG-G2, BG-G14, BG-G21, BG-G23 |
+| 1060 | standard | H18/H19 | 190 | 1060-type: 180–230 MPa / A ≥3 % (>10–13 µm band, Gränges datasheet) [BG-G14] | 62 | 1235 or 1060 where 180–190 MPa suffices. | medium | — | BG-G2, BG-G14, BG-G21, BG-G23 |
+| 1235 | standard | H18/H19 | 180 | — | 58–60 | 1235 or 1060 where 180–190 MPa suffices. | medium | — | BG-G2, BG-G21, BG-G23 |
+| Speira high-strength | high-strength | H18/H19 | — | Speira high-strength: ≥250 MPa (Speira high-strength grade) [BF-S8] | — | — | not_rated | Speira own composition (99.35–99.5 % Al, Cu 0.03–0.08 %) | BF-S8 |
+| 1C30 | high-strength | H18/H19 | 230 | — | — | — | not_rated | — | BG-G2 |
+| 1050 | standard | H18/H19 | 190 | — | — | — | not_rated | — | BG-G2 |
+| 1070 | standard | H18/H19 | 185 | — | — | — | not_rated | — | BG-G2 |
+| 8011 | standard | H18/H19 | 180 | — | — | — | not_rated | CORRECTED: the first survey grouped 8011 with the GB/T 33143 high-strength minima (about ≥220–230 MPa) [BF-S2]; the second survey reads 180 MPa [BG-G2] | BG-G2 |
+
+- Proposal, standard: **1235-H18**; Rm 180 MPa used (the standard minimum (a lower bound); range ≥180 MPa); Rp0.2 158.5 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence medium. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G21, BG-G23]
+- Proposal, high-strength: **1100-H18**; Rm 250 MPa used (middle of the typical range 230–270 MPa; range 230–310 MPa); Rp0.2 220.2 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence medium. Rule: the usual high-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G14, BG-G21, BG-G23]
+
+#### >13–15 µm
+
+| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | Usual choice | Evidence | Note | Sources |
+|---|---|---|---|---|---|---|---|---|---|
+| 3003 | high-strength | H18/H19 | — | 3003: 270–275 MPa / Rp0.2 240 MPa / A 3 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | 47–48.5 | 1100-type or 3003 when ≥250 MPa is specified. | strong | not a GB/T 33143-2022 alloy | BG-G5, BG-G6, BG-G8, BG-G9, BF-S1 |
+| 1100 | high-strength | H18/H19 | 220 | — | 56–59.5 | 1100-type or 3003 when ≥250 MPa is specified. | strong | — | BG-G2, BG-G5, BG-G6, BG-G8, BG-G9 |
+| 1060 | standard | H18/H19 | 190 | — | 62 | 1235, 1060 or 1N30 as standard. | strong | — | BG-G2, BG-G5, BG-G6, BG-G8, BG-G9 |
+| 1N30 | standard | H18/H19 | — | 1N30, 1230: 185–194 MPa / Rp0.2 165–175 MPa / A 4.5 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | 58–60 | 1235, 1060 or 1N30 as standard. | strong | not a GB/T 33143-2022 alloy; 1N30 is a JIS alloy; grade names: 1230 | BG-G5, BG-G6, BG-G8, BG-G9, BF-S1 |
+| 1235 | standard | H18/H19 | 185 | — | 58–60 | 1235, 1060 or 1N30 as standard. | strong | — | BG-G2, BG-G5, BG-G6, BG-G8, BG-G9 |
+| 1085 | standard | H18/H19 | — | 1085: 175–180 MPa / Rp0.2 163–165 MPa / A 4–5 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | 60–61.5 | 1085 for high-power cells. | strong | not a GB/T 33143-2022 alloy | BG-G5, BG-G6, BG-G8, BG-G9, BG-G7, BF-S1 |
+| A730H | high-strength | H18/H19 | — | A730H: 290 MPa / Rp0.2 250 MPa / A 4 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | — | — | not_rated | UACJ high-strength grade, 1100 base; grade names: UACJ A730H | BG-G5, BG-G6, BG-G8, BG-G9 |
+| KS81 | high-strength | H18/H19 | — | KS81: 274 MPa / A 5.4 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | — | — | not_rated | producer grade | BG-G5, BG-G6, BG-G8, BG-G9 |
+| 1C32 | high-strength | H18/H19 | — | 1C32: 230 MPa / Rp0.2 200 MPa / A 4.5 % (15 µm, producers) [BG-G5, BG-G6, BG-G8, BG-G9] | — | — | not_rated | UACJ high-strength grade, 1N30 chemistry; grade names: UACJ 1C32 | BG-G5, BG-G6, BG-G8, BG-G9 |
+| 1C30 | high-strength | H18/H19 | 225 | — | — | — | not_rated | — | BG-G2 |
+| 1050 | standard | H18/H19 | 190 | — | — | — | not_rated | — | BG-G2 |
+| 1070 | standard | H18/H19 | 180 | — | — | — | not_rated | — | BG-G2 |
+| 8011 | standard | H18/H19 | 180 | — | — | — | not_rated | CORRECTED: the first survey grouped 8011 with the GB/T 33143 high-strength minima (about ≥220–230 MPa) [BF-S2]; the second survey reads 180 MPa [BG-G2] | BG-G2 |
+| 8A21 | standard | H18/H19 | 165 | — | — | — | not_rated | — | BG-G2 |
+
+- Proposal, standard: **1235-H18**; Rm 185 MPa used (the standard minimum (a lower bound); range ≥185 MPa); Rp0.2 162.9 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence strong. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G5, BG-G6, BG-G8, BG-G9]
+- Proposal, high-strength: **1100-H18**; Rm 220 MPa used (the standard minimum (a lower bound); range ≥220 MPa); Rp0.2 193.8 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence strong. Rule: the usual high-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G5, BG-G6, BG-G8, BG-G9]
+
+#### >15–20 µm
+
+| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | Usual choice | Evidence | Note | Sources |
+|---|---|---|---|---|---|---|---|---|---|
+| 1235 | standard | H18/H19 | 175 | 1235: 200–220 MPa / A 2.2 % (16 µm, lab-supply page) [BG-G42] | 58–60 | 1235, 1060, 1070 or 1085. | vendor_level | — | BG-G2, BG-G42, BG-G19 |
+| 1060 | standard | H18/H19 | 185 | — | 62 | 1235, 1060, 1070 or 1085. | vendor_level | — | BG-G2, BG-G42, BG-G19 |
+| 1070 | standard | H18/H19 | 175 | — | — | 1235, 1060, 1070 or 1085. | vendor_level | — | BG-G2, BG-G42, BG-G19 |
+| 1085 | standard | H18/H19 | — | — | 60–61.5 | 1235, 1060, 1070 or 1085. | vendor_level | not a GB/T 33143-2022 alloy | BG-G42, BG-G19, BF-S1 |
+| 1100 | high-strength | H18/H19 | 220 | — | 56–59.5 | — | not_rated | — | BG-G2 |
+| 1C30 | high-strength | H18/H19 | 220 | — | — | — | not_rated | — | BG-G2 |
+| 1050 | standard | H18/H19 | 185 | — | — | — | not_rated | — | BG-G2 |
+| 8011 | standard | H18/H19 | — | — | — | — | not_rated | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G2 |
+
+- Proposal, standard: **1235-H18**; Rm 210 MPa used (middle of the typical range 200–220 MPa; range 175–220 MPa); Rp0.2 185 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence vendor_level. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G2, BG-G42, BG-G19]
+- Proposal, high-strength: **1100-H18**; Rm 220 MPa used (the standard minimum (a lower bound); range ≥220 MPa); Rp0.2 193.8 MPa (assumed: not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence weak. Rule: no usual choice of this grade is published for the band: the option of this grade with the highest standard minimum (ties: the report's order) is used, rated weak. [BG-G2]
+
+#### >20–30 µm
+
+| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | Usual choice | Evidence | Note | Sources |
+|---|---|---|---|---|---|---|---|---|---|
+| 1235 | standard | H18/H19 | — | 1235: 170–200 MPa / A ≥1.6 % (21–35 µm, vendor) [BG-G35] | 58–60 | 1235, 1N30 or 1085. | weak | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G35, BG-G7, BG-G2 |
+| 1085 | standard | H18/H19 | — | — | 60–61.5 | 1235, 1N30 or 1085. | weak | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G35, BG-G7, BG-G2 |
+| 1N30 | standard | H18/H19 | — | — | 58–60 | 1235, 1N30 or 1085. | weak | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G35, BG-G7, BG-G2 |
+| 3003 | high-strength | H18/H19 | — | — | 47–48.5 | 3003 (also listed for >20–30 µm). | weak | GB/T 33143-2022 sets no minimum for this alloy in this band | BG-G35, BG-G7, BG-G2 |
+
+- Proposal, standard: **1235-H18**; Rm 185 MPa used (middle of the typical range 170–200 MPa; range 170–200 MPa); Rp0.2 162.9 MPa (assumed: not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 µm (span 0.862–0.924; computed)); evidence weak. Rule: the usual standard-strength choice of the gauge band (first in the report's list). [BG-G35, BG-G7, BG-G2]
+- Proposal, high-strength: **3003-H18**; tensile strength not published for this option; Rp0.2 not published; evidence weak. Rule: the usual high-strength choice of the gauge band (first in the report's list). [BG-G35, BG-G7, BG-G2]
+
+### Conductivity
+
+- 1085: 60–61.5 % IACS. [BG-G6, BG-G7, BG-G41]
+- 1N30: 58–60 % IACS. [BG-G6, BG-G7, BG-G41]
+- 1235: 58–60 % IACS (given together with 1N30). [BG-G6, BG-G7, BG-G41]
+- 1100: 56–59.5 % IACS. [BG-G6, BG-G7, BG-G41]
+- 8021: 58–59 % IACS. [BG-G6, BG-G7, BG-G41]
+- 3003: 47–48.5 % IACS. [BG-G6, BG-G7, BG-G41]
+- 1060: about 62 % IACS on vendor pages; does not line up with the producer figures. [BG-G20]
+
+### Other documents that set strength by gauge
+
+- T/ZZB 1203-2019: T/ZZB 1203-2019, power cells, 10–16 µm: 1060/1070 H18 ≥160, H19 ≥180 MPa; 1100 H18 ≥180, H19 ≥200 MPa; A100 ≥2.0–3.0 %; thickness ±2 %. [BG-G4]
+- JIS H 4160: JIS H 4160 (1994 text): 1085, 1070, 1050, 1N30, 1100, 3003, 3004, 8021, 8079 in O and H18; it has no strength table. [BG-G25]
+- Targray: Targray purchase specification, 12–15 µm: 1235-H18 and 1060-H18 ≥165 MPa, ≥1.5 %; 1235D-H18 ≥200 MPa, ≥2.0 %. [BG-G24]
+
+### Gauges in use
+
+- Sam-A lists 12–20 µm in A1050, A1100, A1235. [BG-G10]
+- Lotte: 12 µm in 2020 with 10 µm on test. [BG-G12]
+- Korean EV foil 10–11 µm in 2024. [BG-G13]
+- China: 12–15 µm mainstream. [BG-G21]
+- Single-sheet two-side-bright is preferred; Sam-A rolls single to 10 µm and says Japanese mills double at 10 µm. [BG-G17, BG-G11]
+
+### The 25–60 µm battery products
+
+| Product | Gauge | Alloy, temper | Properties | Last pass | Evidence |
+|---|---|---|---|---|---|
+| Battery pouch-laminate barrier foil | 35–55 µm [BF-S29] | 8021, 8079, 8A21; O | 8021 Toyo guaranteed minimum: ≥85 MPa, ≥9 % [BF-S28]; 8021 Chinese typical: 90–110 MPa, 16–20 % [BG-G32]; 8021, 8079 25–45 µm, vendor: 80–100 MPa, ≥12 % [BG-G31] | Rolled hard, then fully annealed; one-side-bright unless ordered otherwise. [BG-G28] | Alloy, temper, gauge strong; values medium. [BG-G28, BG-G15, BG-G17, BG-G32] |
+| Battery tab foil and strip | 30–100 µm [BG-G34] | 1070, 1235; O | 85–110 MPa, ≥25–30 %. [BG-G34] | Annealed after rolling (inferred) [BG-G34] | Weak: one vendor. [BG-G34] |
+| Thick battery collector foil | 20–50 µm [BG-G24, BG-G35] | 1235, 1N30, 1085, 3003; H18/H19 | 1235 21–35 µm, vendor: 170–200 MPa, ≥1.6 % [BG-G35] | Supplied hard [BG-G35] | Weak. [BG-G24, BG-G35] |
+| Carbon-coated collector base foil | 9–30 µm [BG-G38] | 1070, 1060, 1235; H18 | ≥140–180 MPa. [BG-G38] | Supplied hard [BG-G38] | Vendor only. [BG-G38] |
+| Case, lid, busbar, cooling plate (not a catalogue product) | ≥0.3 mm | 3003, 1050 | — | Not foil | Case, lid, busbar and cooling plate: ≥0.3 mm, 3003 and 1050; not foil (evidence medium). [BG-G17] |
+
+- Pouch: T/ZZB 2076-2021 (reseller summary only): ≥70–85 MPa, cupping ≥5.5–7.0 mm. [BG-G29]
+- Pouch: A ≥26 µm aluminium layer already gives near-zero water and oxygen transmission; the extra gauge is for drawing depth. [BG-G33]
+- Pouch: Laminates: 35 µm in an 88 µm laminate; 40 µm in 113 and 153 µm laminates. [BG-G30]
+- Pouch: 8021-O is confirmed for pouch foil by Symetal (35–40 µm) and Innoval (40–50 µm). [BG-G15, BG-G17]
+
+### Why alloy and temper change with gauge
+
+1. Constant line force: "thinning alone gives insufficient strength per unit width and foil breaks on the coating line", so strength must rise as gauge falls. One broker report puts numbers on it: 20 µm ≥170 MPa, 13 µm ≥190 MPa. [BG-G6, BG-G22]
+2. The floor keeps rising: 1070 minimum 150 MPa (GB 2016) → 160 (2019 group standard) → 185 (GB 2022); 1100 170 → 180 → 230 (read from a flattened chart). The ≤10 µm band first appeared in 2022. [BG-G21]
+3. Calendering: higher compaction breaks strip, so buyers raise strength and elongation together; ≥200 MPa is common, some ask ≥270; a conventional route gives 200–230 MPa at 3.4–3.9 %. [BG-G21]
+4. Conductivity against strength: 3003 costs 11–13 points of IACS, so producers strengthen 1xxx instead. In 2009: 1085 for automotive high-power cells; 1N30 general; 1100, 3003, 8021 for consumer lines run at high productivity. [BG-G6, BG-G7]
+5. Observed shift: Sam-A's A1100 (10–17 µm) rose from 4.6 % of sales in 2012 to 73 % in 2020 as demand moved from ≥15 µm to ≤12 µm. [BG-G11]
+6. Strength after drying: drying softens hard foil, purer foil most; one patent requires ≥230 MPa as rolled and ≥210 MPa after drying. [BG-G7, BG-G26]
+7. Rollability and stability: 2xxx, 5xxx, 6xxx and 7xxx are "extremely difficult to roll to foil"; 1xxx, 3003 and 8021 all passivate in LiPF6. Cu above 0.2 % caused foil-rolling breaks. [BG-G41, BG-G26]
+8. Sodium-ion: aluminium on both electrodes, 800–900 t/GWh against 350–400 (NMC) and 450–550 (LFP); 12–15 µm conventional, 8–10 µm thin. [BG-G21, BG-G39]
+
+### How each temper is produced
+
+| Temper | Definition | How battery foil reaches it |
+|---|---|---|
+| H18 | Strength of about 75 % cold reduction after a full anneal. [BG-G40] | Last anneal at 0.5–2.5 mm, or none after hot rolling; none in the foil mill. Computed: 0.5 mm → 15 µm is 97 % (strain 3.5); 1 mm → 12 µm is 98.8 % (strain 4.4). [BG-G8, BG-G26, BF-S8, BF-S18] |
+| H19 | Minimum Rm at least 10 MPa (2 ksi) above H18. [BG-G40] | Same route, more strain or solute. T/ZZB 1203 puts H19 20 MPa above H18. [BG-G4] |
+| High-strength grades | Sold as H18 or H19. [BG-G26, BG-G8] | Cu 0.05–0.2 % (1100, 1C30); Fe and Mn held in solution by hot homogenising and no intermediate anneal; starting cold rolling at ≥1 mm so strain reaches 4–5 instead of about 3, which raised strength and elongation together. [BG-G26, BG-G8] |
+| H2x | Strain hardened, then partially annealed. [BG-G40] | Not used in any public collector-foil specification. [BG-G40] |
+| O | Fully annealed. [BG-G40] | Pouch foil: rolled hard, then coil-annealed at 240–260 °C for 40–45 h; the anneal also removes rolling oil. [BF-S32, BF-S33, BG-G44] |
+
+### Strength after heating
+
+Strength after heating is from Table 3 of the patent; its composition and process tables were not in the excerpt read. These are temperature-dependent facts kept as data; no calculation in this package uses them. [BG-G26]
+
+| Material | as rolled | 100 °C × 24 h | 150 °C × 3 h | 200 °C × 15 min | Loss (computed) | Sources |
+|---|---|---|---|---|---|---|
+| Invention alloy, no intermediate anneal | 252 MPa | 258 MPa | 261 MPa | 227 MPa | 10 % | BG-G26 |
+| Comparison alloy at 59.1 % IACS | 266 MPa | 258 MPa | 221 MPa | 194 MPa | 27 % | BG-G26 |
+| Nine comparison process routes | 216–245 MPa | 199–233 MPa | 182–209 MPa | 155–188 MPa | 23–28 % | BG-G26 |
+| 99.85 % Al grade (specification) (specified minima, not measurements) | ≥175 MPa | after 100–160 °C (time not given): ≥170 MPa | — | — | 3 % | BG-G27 |
+
+### Correction
+
+- 8011 GB/T 33143-2022 minimum corrected: 180 MPa [BG-G2], not the "about ≥220–230 MPa" high-strength group the first survey read from the garbled draft translation [BF-S2]. The first-survey entry is kept for 1C30 and 1100 only; 8011 now carries 180 MPa. [BG-G2, BF-S2]
+
+### Disagreements (second survey)
+
+- 8011 minimum: 180 MPa [BG-G2] against 220–230 MPa in the first survey [BF-S2]. [BG-G2, BF-S2]
+- H18 or H19: Asian standards say H18; European producers say H18/H19 or H19 for the same product. [BG-G2, BG-G3, BG-G25, BG-G4, BG-G14, BG-G15, BG-G17, BG-G18]
+- Group standard below national: T/ZZB 1203-2019 (160–200 MPa) is lower than GB/T 33143-2022 (175–230 MPa), even in its H19 column. [BG-G4, BG-G2]
+- 1060 strength: GB minimum 185–190 MPa; Gränges 180–230 MPa; a trade article claims 230–250 MPa. [BG-G2, BG-G14, BG-G20]
+- "Mainstream" alloy: 1060 and 1235 in Chinese sources; 1100 at Sam-A; 1085, 1N30, 3003 in Japan. [BG-G20, BG-G22, BG-G11, BG-G7]
+- Gauge by cell type: vendor pages put 1070 at 10–12 µm for consumer cells and 1060 at 15–20 µm for storage, with no data. [BG-G19]
+- Soft collector foil: some reseller pages list O temper; no standard or producer datasheet supports it, and the second survey treats it as an error. [BF-S48, BG-G2]
+- Cu in 1100: one trade article warns of micro-galvanic corrosion; no measurement was found. [BG-G20]
+
+### Not found (second survey)
+
+- GB/T 22648-2023 Tables 5–9 (pouch-foil strength, cupping, pinholes by gauge); every mirror drops them. T/ZZB 2076-2021 is known only from a reseller summary. [BG-G28, BG-G29]
+- An official copy of GB/T 33143-2022 Table 9; the draft translation's host was outside the research session's allowed network domains for direct download.
+- Any cell-maker purchase specification, and any LFP-against-NMC rule for gauge or alloy.
+- Datasheets with numbers from Lotte, Dong-IL, Dongwon, Novelis, Hydro, Constellium, Hindalco, Assan, Dingsheng, Nanshan, Wanshun, Yong Jie, Xiashun, Shenhuo; Speira's page gives gauge only (12–20 µm). [BG-G16]
+- JIS H 4160:2006 itself; the mirror carries the 1994 text. [BG-G25]
+- Recrystallisation temperature by alloy for hard foil: Furukawa-Sky plots it but the values are not extractable; one vendor page says 1235-H18 softens fast above 220 °C. [BG-G7, BG-G43]
+- Any standard for thick collector foil or tab foil.
+
 ## 1. Li-ion cathode current-collector foil (`battery_collector_foil`)
 
 Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/bright) foil is rolled single-sheet to final gauge; the report's single-sheet schedules are two-side-bright. Doubled (pack) rolling gives one-side-bright foil: UACJ sells 10 µm 8021 as bright/matte and the BF-S17 schedules finish with a doubled pass. Single rolling to final gauge is feasible for 9–20 µm; below 9 µm high-strength foil is "difficult" single, and pack rolling covers 5–20 µm. The Mino battery finishing mill minimum is 1×12 µm or 2×6 µm. [BF-S4, BF-S11, BF-S12, BF-S13, BF-S14, BF-S15, BF-S16, BF-S17, BF-S18, BF-S25]
@@ -206,7 +442,8 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 ### Tempers and properties
 
 - H18: Consensus temper; all GB/T 33143 alloys are H18. [BF-S1]
-- O: Listed by some vendor pages (disagrees with the H18 consensus). [BF-S48]
+- H19: The same product as labelled H18/H19 or H19 by European producers (T/ZZB 1203 also has an H19 column); see the temper naming note. [BG-G4, BG-G14, BG-G15, BG-G17, BG-G18]
+- O: Listed by some vendor pages (disagrees with the H18 consensus; the second survey treats it as an error). [BF-S48]
 
 | Alloy | Temper | Condition | Grade | Rm | Rp0.2 | Elongation | Note | Sources |
 |---|---|---|---|---|---|---|---|---|
@@ -219,7 +456,8 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 | 1050A | H18 | EN 546-2 minimum (EN 546-2 has no battery table) | — | ≥135 MPa | — | — | — | BF-S31 |
 | 1200 | H18 | EN 546-2 minimum (EN 546-2 has no battery table) | — | ≥140 MPa | — | — | — | BF-S31 |
 | 8011A | H18 | EN 546-2 minimum (EN 546-2 has no battery table) | — | ≥160 MPa | — | — | — | BF-S31 |
-| 1C30, 1100, 8011 | H18 | GB/T 33143 high-strength minima | high-strength | ≥220–230 MPa | — | — | "about ≥220–230 MPa" | BF-S2 |
+| 1C30, 1100 | H18 | GB/T 33143 high-strength minima | high-strength | ≥220–230 MPa | — | — | "about ≥220–230 MPa"; 8011 removed from this group (see the next row) | BF-S2 |
+| 8011 | H18 | GB/T 33143-2022 minimum (corrected) | standard | ≥180 MPa | — | — | CORRECTED: the first survey grouped 8011 with the GB/T 33143 high-strength minima (about ≥220–230 MPa) [BF-S2]; the second survey reads 180 MPa [BG-G2] | BG-G2, BF-S2 |
 | 1C32 | not stated | UACJ | high-strength | 230 MPa | — | — | — | BF-S5 |
 | A730H | not stated | UACJ | high-strength | 290 MPa | — | 4 % | conductivity 56 %IACS | BF-S5 |
 | Speira high-strength | not stated | Speira high-strength grade | high-strength | ≥250 MPa | ≥200 MPa | ≥2 % | elongation is A100 | BF-S8 |
@@ -423,8 +661,13 @@ Family: battery_electronics. Rolled: single or doubled. Two-side-bright (bright/
 
 - Most important flag of the battery report: the two schedules quoted in earlier versions of this project's documentation as single-sheet battery-foil practice (260→135→65→30 µm and 280→120→55→24 µm) come from the trade page BF-S17. There the next pass is listed as 24×2→12×2 µm and 28×2→15×2 µm, i.e. doubled. So 30 µm and 24 µm are doubling-entry gauges for one-side-bright foil, not single-sheet final gauges. The trade page's first-plant row prints "302→152", which the report reads as 30×2→15×2 µm. [BF-S17]
 - The GB/T 33143 property table was partly garbled in the report's read; the minima are quoted as "about". [BF-S2]
+- 8011 GB/T 33143-2022 minimum corrected: 180 MPa [BG-G2], not the "about ≥220–230 MPa" high-strength group the first survey read from the garbled draft translation [BF-S2]. The first-survey entry is kept for 1C30 and 1100 only; 8011 now carries 180 MPa. [BG-G2, BF-S2]
 
 Key requirement: Thickness ±3–5 % by precision class, wave height ≤2–5 mm at 1.0 m span, wettability ≥30 mN/m, pinhole limits by gauge (GB/T 33143). [BF-S1, BF-S2]
+
+Evidence: Gauge-by-gauge alloy and temper: see the battery grade table (minima strong; usual choice medium to strong by band, vendor-level at >15–20 µm, weak above 20 µm). [BG-G2, BG-G21, BG-G19, BG-G35]
+
+Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.
 
 ## 2. Battery pouch-laminate barrier foil (`battery_pouch_laminate_foil`)
 
@@ -435,6 +678,8 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 - Final gauge: 35–55 µm [BF-S29]. GB/T 22648-2023: 8021 35–55 µm, 8A21 40–50 µm, 8079 40–55 µm; width 200–1400 mm.
 - GB/T 22648-2023: 8021 35–55 µm, 8A21 40–50 µm, 8079 40–55 µm, width 200–1400 mm. [BF-S29]
 - Toyo TY-X2: 8079 at 40 µm, 8021 at 35 µm. [BF-S28]
+- GB/T 22648-2023 gauges by alloy: 8021 35–55, 8A21 40–50, 8079 40–55 µm. [BG-G28]
+- Laminates: 35 µm in an 88 µm laminate; 40 µm in 113 and 153 µm laminates. [BG-G30]
 
 ### Alloys and why
 
@@ -443,6 +688,7 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 | 8021 | GB/T 22648-2023 alloy; Toyo TY-X2 at 35 µm. | BF-S29, BF-S28 |
 | 8A21 | GB/T 22648-2023 alloy. | BF-S29 |
 | 8079 | GB/T 22648-2023 alloy; Toyo TY-X2 at 40 µm. | BF-S29, BF-S28 |
+| 8021 | Confirmed for pouch foil (O) by Symetal (35–40 µm) and Innoval (40–50 µm). | BG-G15, BG-G17 |
 
 ### Tempers and properties
 
@@ -456,6 +702,10 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 | 8021 | O | Chinese improved | — | 108 MPa | — | 25 % | cupping 8.2 mm | BF-S32, BF-S33 |
 | 8021B | O | EN 546-2 | — | 70–110 MPa | — | ≥7–12 % | A ≥7 % at 25–40 µm and ≥12 % at 40–90 µm | BF-S31 |
 | 8079 | O | EN 546-2 | — | 55–110 MPa | — | ≥4–8 % | A ≥4 % at 25–40 µm and ≥8 % at 40–90 µm | BF-S31 |
+| 8021 | O | Chinese typical | — | 90–110 MPa | — | 16–20 % | cupping 7–7.5 mm; high-formability target ≥20 % and ≥7.5 mm | BG-G32 |
+| 8021 | O | high-formability target | — | — | — | ≥20 % | cupping ≥7.5 mm | BG-G32 |
+| 8021, 8079 | O | 25–45 µm, vendor | — | 80–100 MPa | — | ≥12 % | — | BG-G31 |
+| pouch foil (alloy not stated) | not stated | T/ZZB 2076-2021, reseller summary | — | ≥70–85 MPa | — | — | cupping ≥5.5–7.0 mm | BG-G29 |
 
 ### Rolling route and schedules
 
@@ -463,6 +713,7 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 - Pass speed: 350–600 m/min [BF-S34]. From a 6–7 µm 8021 schedule.
 - Foil stock 0.2–0.3 mm. [BF-S32, BF-S33]
 - Hot band, intermediate anneal at 0.5–1.0 mm, foil stock 0.2–0.3 mm, final anneal 240–260 °C for 40–45 h. [BF-S32, BF-S33]
+- Rolled hard, then fully annealed; one-side-bright unless ordered otherwise. [BG-G28]
 
 **BF-S34 8021 foil passes** (8021) [BF-S34]. From a 6–7 µm 8021 schedule; 350–600 m/min; work-roll Ra 0.12–0.14 µm then 0.07–0.09 µm.
 
@@ -482,6 +733,7 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 - Thickness tolerance: Local thickness ±4 % (GB/T 22648-2023). [BF-S29]
 - Wettability: Wettability class A; contact angle ≤20° (recommended). [BF-S29]
 - Other: GB/T 22648: no splices, bright-side Ra ≤0.100 µm, cupping and bend tests. [BF-S29]
+- Other: A ≥26 µm aluminium layer already gives near-zero water and oxygen transmission; the extra gauge is for drawing depth. [BG-G33]
 
 ### Named band and streak defects
 
@@ -494,7 +746,123 @@ Family: battery_electronics. Rolled: single or doubled. Supplied one-side-bright
 
 Key requirement: O temper with high elongation (cupping); local thickness ±4 %; wettability class A (GB/T 22648-2023). [BF-S29]
 
-## 3. Electrolytic capacitor anode foil, high voltage (`capacitor_anode_foil_high_voltage`)
+Evidence: Alloy, temper, gauge strong; values medium. [BG-G28, BG-G15, BG-G17, BG-G32]
+
+Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.
+
+## 3. Thick battery collector foil (`battery_thick_collector_foil`)
+
+Family: battery_electronics. Rolled: not published.
+
+### Gauge
+
+- Final gauge: 20–50 µm [BG-G24, BG-G35]. 20–35 µm; up to 50 µm in one specification.
+- 20–35 µm; up to 50 µm in one specification. [BG-G24, BG-G35]
+- Supercapacitor electrodes use 20 µm. [BG-G36, BG-G37]
+
+### Alloys and why
+
+| Alloy | Role | Sources |
+|---|---|---|
+| 1235 | Listed for thick collector foil (weak evidence). | BG-G35, BG-G7 |
+| 1N30 | Listed for thick collector foil (weak evidence). | BG-G35, BG-G7 |
+| 1085 | Listed for thick collector foil (weak evidence). | BG-G35, BG-G7 |
+| 3003 | Listed for thick collector foil (weak evidence). | BG-G35, BG-G7 |
+
+### Tempers and properties
+
+- H18: Supplied hard. [BG-G35]
+
+| Alloy | Temper | Condition | Grade | Rm | Rp0.2 | Elongation | Note | Sources |
+|---|---|---|---|---|---|---|---|---|
+| 1235 | H18 | 21–35 µm, vendor | standard | 170–200 MPa | — | ≥1.6 % | — | BG-G35 |
+
+### Named band and streak defects
+
+- None named in the reports.
+
+Key requirement: Supplied hard (H18): 170–200 MPa, A ≥1.6 % (vendor; weak evidence). [BG-G35]
+
+Evidence: Weak. [BG-G24, BG-G35]
+
+Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.
+
+## 4. Carbon-coated collector base foil (`battery_carbon_coated_base_foil`)
+
+Family: battery_electronics. Rolled: not published.
+
+### Gauge
+
+- Final gauge: 9–30 µm [BG-G38]. Mostly 12–16 µm; 16 µm most ordered.
+- 9–30 µm, mostly 12–16 µm; 16 µm is the most ordered. [BG-G38]
+
+### Alloys and why
+
+| Alloy | Role | Sources |
+|---|---|---|
+| 1070 | Base-foil alloy stated by the vendor. | BG-G38 |
+| 1060 | Base-foil alloy stated by the vendor. | BG-G38 |
+| 1235 | Base-foil alloy stated by the vendor. | BG-G38 |
+
+### Tempers and properties
+
+- H18: Base foil supplied hard. [BG-G38]
+
+| Alloy | Temper | Condition | Grade | Rm | Rp0.2 | Elongation | Note | Sources |
+|---|---|---|---|---|---|---|---|---|
+| 1070, 1060, 1235 | H18 | carbon-coated base foil, vendor | standard | ≥140–180 MPa | — | — | — | BG-G38 |
+
+### Quality requirements
+
+- Other: Carbon-coated foil: GB/T 33143 coating areal-density class 0.30–2.00 g/m². [BF-S1]
+- Other: Carbon-coated foil vendors: 0.6–2 µm per side on 12–16 µm base, dyne ≥40–64. [BF-S49]
+
+### Named band and streak defects
+
+- None named in the reports.
+
+Key requirement: Base foil supplied hard (H18), ≥140–180 MPa (vendor only). [BG-G38]
+
+Evidence: Vendor only. [BG-G38]
+
+Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.
+
+## 5. Battery tab foil and strip (`battery_tab_foil`)
+
+Family: battery_electronics. Rolled: not published.
+
+### Gauge
+
+- Final gauge: 30–100 µm [BG-G34]
+- Tab foil 30–100 µm. [BG-G34]
+- Tab leads 80–400 µm. [BF-S41]
+
+### Alloys and why
+
+| Alloy | Role | Sources |
+|---|---|---|
+| 1070 | Consumer cells. | BG-G34 |
+| 1235 | Power cells. | BG-G34 |
+
+### Tempers and properties
+
+- O: Implied by the values (85–110 MPa, ≥25–30 %); annealed after rolling (inferred by the report). [BG-G34]
+
+| Alloy | Temper | Condition | Grade | Rm | Rp0.2 | Elongation | Note | Sources |
+|---|---|---|---|---|---|---|---|---|
+| 1070, 1235 | O (implied by the values) | tab foil, one vendor | standard | 85–110 MPa | — | ≥25–30 % | the values imply O temper; the vendor states no temper | BG-G34 |
+
+### Named band and streak defects
+
+- None named in the reports.
+
+Key requirement: Soft (values imply O): 85–110 MPa, ≥25–30 % (one vendor; weak). [BG-G34]
+
+Evidence: Weak: one vendor. [BG-G34]
+
+Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.
+
+## 6. Electrolytic capacitor anode foil, high voltage (`capacitor_anode_foil_high_voltage`)
 
 Family: battery_electronics. Rolled: not published.
 
@@ -534,7 +902,7 @@ Family: battery_electronics. Rolled: not published.
 
 Key requirement: Cube texture ≥90–95 % (GB/T 3615-2016). [BF-S36]
 
-## 4. Electrolytic capacitor anode foil, low voltage (`capacitor_anode_foil_low_voltage`)
+## 7. Electrolytic capacitor anode foil, low voltage (`capacitor_anode_foil_low_voltage`)
 
 Family: battery_electronics. Rolled: not published.
 
@@ -563,7 +931,7 @@ Family: battery_electronics. Rolled: not published.
 
 Key requirement: 99.9–99.99 % Al, soft or hard, 60–110 µm. [BF-S37]
 
-## 5. Electrolytic capacitor cathode foil (`capacitor_cathode_foil`)
+## 8. Electrolytic capacitor cathode foil (`capacitor_cathode_foil`)
 
 Family: battery_electronics. Rolled: not published.
 
@@ -606,7 +974,7 @@ Family: battery_electronics. Rolled: not published.
 
 Key requirement: Thickness ±5 % up to 50 µm, ±3 % above (GB/T 3615). [BF-S36]
 
-## 6. Pharma blister lidding foil (push-through) (`pharma_blister_lidding`)
+## 9. Pharma blister lidding foil (push-through) (`pharma_blister_lidding`)
 
 Family: packaging_household. Rolled: doubled. Doubled (bright/matt). [PK-S9, PK-S18, PK-S20, PK-S15]
 
@@ -659,7 +1027,7 @@ Family: packaging_household. Rolled: doubled. Doubled (bright/matt). [PK-S9, PK-
 
 Key requirement: Rm ≥160 MPa (8011A), ≥150 (8079), ≥140 (1200); pinholes 0 per m² at 25–30 µm; burst ≥98 kPa. [PK-S9, PK-S20, PK-S15]
 
-## 7. Pharma cold-form (alu-alu) base foil (`pharma_cold_form_foil`)
+## 10. Pharma cold-form (alu-alu) base foil (`pharma_cold_form_foil`)
 
 Family: packaging_household. Rolled: not published. Listed bright/matt at 45–60 µm (Impol). [PK-S18]
 
@@ -700,7 +1068,7 @@ Family: packaging_household. Rolled: not published. Listed bright/matt at 45–6
 
 Key requirement: 8021B-O >40–90 µm: Rm 75–110 MPa, A ≥12 %. [PK-S9]
 
-## 8. Pharma strip-pack foil (`pharma_strip_pack_foil`)
+## 11. Pharma strip-pack foil (`pharma_strip_pack_foil`)
 
 Family: packaging_household. Rolled: not published.
 
@@ -737,7 +1105,7 @@ Family: packaging_household. Rolled: not published.
 
 Key requirement: ±8 %; pinholes nil; burst minimum by gauge. [PK-S20, PK-S22]
 
-## 9. Household foil, standard (`household_foil`)
+## 12. Household foil, standard (`household_foil`)
 
 Family: packaging_household. Rolled: doubled. Doubled; the final pass is the doubled pass. [PK-S8, PK-S9, PK-S18, PK-S30, PK-S2]
 
@@ -806,7 +1174,7 @@ Family: packaging_household. Rolled: doubled. Doubled; the final pass is the dou
 
 Key requirement: 8011A-O 10–25 µm: Rm 55–115 MPa, A ≥1 %. [PK-S9]
 
-## 10. Household foil, heavy-duty (`household_foil_heavy_duty`)
+## 13. Household foil, heavy-duty (`household_foil_heavy_duty`)
 
 Family: packaging_household. Rolled: doubled. Doubled. [PK-S11, PK-S30]
 
@@ -846,7 +1214,7 @@ Family: packaging_household. Rolled: doubled. Doubled. [PK-S11, PK-S30]
 
 Key requirement: Burst and stickiness tests (EN 546-4). [PK-S11]
 
-## 11. Converter / flexible-packaging foil (`converter_foil`)
+## 14. Converter / flexible-packaging foil (`converter_foil`)
 
 Family: packaging_household. Rolled: doubled. Doubled; the final pass is the doubled pass. [PK-S9, PK-S14, PK-S32, PK-S2, PK-S3, PK-S16]
 
@@ -940,7 +1308,7 @@ Family: packaging_household. Rolled: doubled. Doubled; the final pass is the dou
 
 Key requirement: Pinholes about 500 per m² at 6 µm falling to 50–100 at 9 µm; wettability A to B. [PK-S9, PK-S14, PK-S32]
 
-## 12. Cigarette inner-liner foil (`cigarette_liner_foil`)
+## 15. Cigarette inner-liner foil (`cigarette_liner_foil`)
 
 Family: packaging_household. Rolled: doubled. Doubled. [PK-S24]
 
@@ -986,7 +1354,7 @@ Family: packaging_household. Rolled: doubled. Doubled. [PK-S24]
 
 Key requirement: Rm 45–95 MPa (1xxx), 50–105 MPa (8011); pinholes ≤500 per m². [PK-S24]
 
-## 13. Dairy (yoghurt) lidding foil (`dairy_lidding_foil`)
+## 16. Dairy (yoghurt) lidding foil (`dairy_lidding_foil`)
 
 Family: packaging_household. Rolled: not published.
 
@@ -1024,7 +1392,7 @@ Family: packaging_household. Rolled: not published.
 
 Key requirement: ±8 %; heat-seal lacquer 6–8 g/m². [PK-S20, PK-S33, PK-S22]
 
-## 14. Container foil, wrinkle-wall (`container_foil_wrinkle_wall`)
+## 17. Container foil, wrinkle-wall (`container_foil_wrinkle_wall`)
 
 Family: packaging_household. Rolled: single. Single-rolled (EN: 35–200 µm). [PK-S17, PK-S9, PK-S8]
 
@@ -1079,7 +1447,7 @@ Family: packaging_household. Rolled: single. Single-rolled (EN: 35–200 µm). [
 
 Key requirement: 8011A H22 Rm 90–150 MPa, H24 110–165 MPa; Erichsen test. [PK-S9, PK-S11]
 
-## 15. Container foil, smooth-wall (`container_foil_smooth_wall`)
+## 18. Container foil, smooth-wall (`container_foil_smooth_wall`)
 
 Family: packaging_household. Rolled: single. Single-rolled. [PK-S17]
 
@@ -1116,7 +1484,7 @@ Family: packaging_household. Rolled: single. Single-rolled. [PK-S17]
 
 Key requirement: Deeper draw, sealable rim. [PK-S17]
 
-## 16. Container foil, retortable (`container_foil_retortable`)
+## 19. Container foil, retortable (`container_foil_retortable`)
 
 Family: packaging_household. Rolled: single. Single-rolled. [PK-S17]
 
@@ -1147,7 +1515,7 @@ Family: packaging_household. Rolled: single. Single-rolled. [PK-S17]
 
 Key requirement: No requirement beyond gauge, alloy and temper given (vendor page). [PK-S17]
 
-## 17. Brazed automotive fin stock (radiator, condenser, evaporator, heater, CAC) (`brazed_fin_stock`)
+## 20. Brazed automotive fin stock (radiator, condenser, evaporator, heater, CAC) (`brazed_fin_stock`)
 
 Family: heat_exchanger. Rolled: not published.
 
@@ -1234,7 +1602,7 @@ Family: heat_exchanger. Rolled: not published.
 
 Key requirement: Pre-braze H14 Rm 150–210 MPa; post-braze Rp 40–65 MPa; sag 15–35 mm. [HX-S10, HX-S11, HX-S1, HX-S3, HX-S9]
 
-## 18. Brazing sheet (tube, header, plate) (`brazing_sheet_tube`)
+## 21. Brazing sheet (tube, header, plate) (`brazing_sheet_tube`)
 
 Family: heat_exchanger. Rolled: not published.
 
@@ -1286,7 +1654,7 @@ Family: heat_exchanger. Rolled: not published.
 
 Key requirement: Post-braze Rp 40–90 MPa, Rm 110–190 MPa. [HX-S1]
 
-## 19. HVAC fin stock (mechanically assembled) (`hvac_fin_stock`)
+## 22. HVAC fin stock (mechanically assembled) (`hvac_fin_stock`)
 
 Family: heat_exchanger. Rolled: not published.
 
@@ -1385,7 +1753,7 @@ Family: heat_exchanger. Rolled: not published.
 
 Key requirement: 8011-H22: Rm 100–135 MPa, A ≥17–22 %, Erichsen ≥6.0 mm. [HX-S20]
 
-## 20. Lithographic sheet (`litho_sheet`)
+## 23. Lithographic sheet (`litho_sheet`)
 
 Family: litho. Rolled: single. Single-stand, one pass per coiling, coils cooled between passes, polished mill-finish rolls. [HX-S25]
 
@@ -1514,7 +1882,7 @@ Family: litho. Rolled: single. Single-stand, one pass per coiling, coils cooled 
 
 Key requirement: Streak-free electrograining; strip Ra 0.15–0.25 µm. [HX-S34]
 
-## 21. Can body stock (`can_body_stock`)
+## 24. Can body stock (`can_body_stock`)
 
 Family: other_strip. Rolled: not published.
 
@@ -1553,7 +1921,7 @@ Family: other_strip. Rolled: not published.
 
 Key requirement: YS 255–296 MPa; ±5 µm; earing ≤4 %. [HX-S38]
 
-## 22. Can end and tab stock (`can_end_stock`)
+## 25. Can end and tab stock (`can_end_stock`)
 
 Family: other_strip. Rolled: not published.
 
@@ -1595,7 +1963,7 @@ Family: other_strip. Rolled: not published.
 
 Key requirement: Coated 5182-H48: UTS ≥365 MPa, YS 331–362 MPa; ±5 µm; edge wave ≤3.2 mm. [HX-S38]
 
-## 23. Closure sheet (`closure_sheet`)
+## 26. Closure sheet (`closure_sheet`)
 
 Family: other_strip. Rolled: not published.
 
@@ -1637,7 +2005,7 @@ Family: other_strip. Rolled: not published.
 
 Key requirement: 8011-H14/16 Rm 130–165 MPa; 3105-H19 234–259 MPa; earing ≤3–4 %. [HX-S38, HX-S39]
 
-## 24. Transformer strip and cable foil (`transformer_strip`)
+## 27. Transformer strip and cable foil (`transformer_strip`)
 
 Family: other_strip. Rolled: not published.
 
@@ -1778,7 +2146,15 @@ Key requirement: ≥60–62 % IACS, burr-free edge, Rm 60–95 MPa. [HX-S39]
 - Clean copies of GB/T 22648 Tables 5–9.
 - One secondary summary gives 8A21 ≥85 MPa / ≥16 % and pinholes ≤30 or ≤20 per m²; it is self-disclaimed. [BF-S30]
 - A pass schedule for 40 µm pouch foil.
-- Group standard T/ZZB 2076-2021 exists; not read.
+- Group standard T/ZZB 2076-2021 was not read; the second survey found only a reseller summary (≥70–85 MPa, cupping ≥5.5–7.0 mm). [BG-G29]
+
+### Thick battery collector foil
+
+- Any standard for thick collector foil.
+
+### Battery tab foil and strip
+
+- Any standard for tab foil.
 
 ### Pharma blister lidding foil (push-through)
 
@@ -1927,3 +2303,47 @@ Key requirement: ≥60–62 % IACS, burr-free edge, Rm 60–95 MPa. [HX-S39]
 | HX-S39 | Closure, transformer and cable vendors | vendor_or_trade_page | V | <https://www.worthwillaluminium.com/application/aluminum-in-packaging/aluminum-closure-stock/><br><https://www.worthwillaluminium.com/product/aluminum-coil-strip/aluminum-strip-foil-for-transformer-windings/><br><https://www.gneealuminum.com/info/aluminum-foil-for-cable-93970330.html> | — |
 | HX-S40 | 3003 work-hardening study | abstract_or_snippet | A | <https://pdf.hanspub.org/ms20180500000_10774181.pdf> | — |
 | HX-S41 | Vollmer flatness paper | abstract_or_snippet | A | <https://vollmergmbh.de/fileadmin/user_upload/news/2019/aktuelles-2019-03.pdf> | a copper/thin-strip paper |
+| BG-G1 | GB/T 33143-2022 draft English translation | excerpt | EX | <http://www.cnsmq.com/uploadfile/2025/0227/20250227042900196.pdf> | same document as BF-S2; tables garbled |
+| BG-G2 | Chalco page reproducing GB/T 33143-2022 Tables 1, 2, 9 | vendor_or_trade_page | VP | <https://www.chalcoaluminum.com/knowledge/lithium-ion-battery-foil/> | producer page; the second survey's reading of GB/T 33143 Table 9 |
+| BG-G3 | T/ZZB 2638-2022 | full_text | FT | <https://www.ttbz.org.cn/Home/PdfFileStreamGet/c3QsNTk5MjU(eq)> | group standard; copies four rows of GB/T 33143 Table 9 |
+| BG-G4 | T/ZZB 1203-2019 (power-cell foil, 10–16 µm) | full_text | FT | <https://qxb-img-osscache.qixin.com/standards/e7007ea8cb458ac1eb6e98d305058bfd.pdf> | — |
+| BG-G5 | UACJ Foil battery foil page (Japanese) | vendor_or_trade_page | VP | <https://ufo.uacj-group.com/techno/rd/battery.html> | Japanese version of the BF-S3 page |
+| BG-G6 | Motoi et al., UACJ Technical Reports 1 (2014) 125 | excerpt | EX | <https://www.uacj.co.jp/development/rd/review/vol1no1/pdf/vol1no1_18.pdf> | same document as BF-S5 |
+| BG-G7 | Ashizawa, Yamamoto, Furukawa-Sky Review 5 (2009) 1 | full_text | FT | <https://www.uacj.co.jp/development/rd/review/furukawasky/005/pdf/05_abst01.pdf> | — |
+| BG-G8 | Ihara et al., Kobe Steel Engineering Reports 65(2) (2015) 29 | full_text | FT | <https://www.kobelco.co.jp/r-d/technology-review/dumm/__icsFiles/afieldfile/2025/03/19/235_029-032.pdf> | — |
+| BG-G9 | Kohan Shoji high-strength collector foil | vendor_or_trade_page | VP | <https://battery-jp.net/strong_positive_electrode.html> | — |
+| BG-G10 | Sam-A product page (Korean) | vendor_or_trade_page | VP | <https://sama-al.com/kor/business/foil/car> | Korean version of the BF-S45 page |
+| BG-G11 | ETNews, Sam-A talk, 2021-04-28 | full_text | FT, trade press | <https://www.etnews.com/20210428000130> | trade-press article read in full |
+| BG-G12 | Newspim, Lotte Aluminium, 2020-09-16 | excerpt | EX | <https://www.newspim.com/news/view/20200916000922> | — |
+| BG-G13 | Asia Economy, 2024-03-02 | excerpt | EX | <https://www.asiae.co.kr/article/2024022716372407494> | — |
+| BG-G14 | Gränges cathode foil datasheet 2024 | full_text | FT | <https://www.granges.com/globalassets/09.-kampanjer/06.-battery-cathode-foil/03.-contact/granges-datablad_cathode-foil_2024.pdf> | — |
+| BG-G15 | Symetal battery foil | vendor_or_trade_page | VP | <https://www.symetal.gr/en/battery-foil> | — |
+| BG-G16 | Speira battery foil | vendor_or_trade_page | VP | <https://www.speira.com/markets-products/battery-systems/battery-foil/> | — |
+| BG-G17 | Innoval Technology, "Aluminium battery foil", 2023 | excerpt | EX | <https://www.innovaltec.com/www-innovaltec-com-insights-aluminium_battery_foil/> | — |
+| BG-G18 | Armor primed foil | vendor_or_trade_page | VP | <https://www.armorbatteryfilms.com/our-products/primed-aluminium-foil/> | — |
+| BG-G19 | Mingtai and Haomei alloy-by-gauge pages | vendor_or_trade_page | VP | <https://www.mt5083lb.com/knowledge/585.html><br><https://www.aluminum-hm.com/application/battery-aluminum-foil/> | — |
+| BG-G20 | OFweek, 1060 against 1100 | vendor_or_trade_page | VP | <https://libattery.ofweek.com/2025-06/ART-36000-8110-30665024.html> | — |
+| BG-G21 | Orient Securities, battery foil report, 2023-02 | excerpt | EX | <https://pdf.dfcfw.com/pdf/H3_AP202302131583078254_1.pdf> | broker report; one figure read from a flattened chart |
+| BG-G22 | Huaxin Securities, 2022-12 | excerpt | EX | <https://pdf.dfcfw.com/pdf/H3_AP202212191581210899_1.pdf> | broker report |
+| BG-G23 | LeadLeo, Li-ion battery foil, 2023 | excerpt | EX | <https://pdf.dfcfw.com/pdf/H3_AP202303271584589758_1.pdf> | — |
+| BG-G24 | Targray cathode foil specification | vendor_or_trade_page | VP | <https://www.targray.com/li-ion-battery/cathode-materials/foils> | — |
+| BG-G25 | JIS H 4160, 1994 text | full_text | FT | <https://jis.eomec.com/jish41601994> | mirror of the 1994 text; JIS H 4160:2006 itself not found |
+| BG-G26 | UACJ US 9,698,426 B2 | excerpt | EX, with Table 3 | <https://exa.ai/library/legal/patent/z7mfjkqz2bs> | Table 3 read; the composition and process tables were not in the excerpt |
+| BG-G27 | UACJ CN application 201380010002 | excerpt | EX | <https://www.xjishu.com/zhuanli/24/201380010002.html> | — |
+| BG-G28 | GB/T 22648-2023 mirrors | excerpt | EX | <https://www.duodown.com/biaozhun/2155908.html><br><https://www.guifanku.com/784986.html> | same standard as BF-S29; the second survey read it as excerpts (Tables 5–9 dropped) |
+| BG-G29 | T/ZZB 2076-2021 reseller summary | vendor_or_trade_page | VP | <https://kpt-bj.com/t-zzb-2076-2021-aluminum-foil-for-aluminum-laminate-film-of-pouch-cell-1302142151.html> | — |
+| BG-G30 | Laminate structures | vendor_or_trade_page | VP, EX | <https://www.libmachine.cn/?products_66%2F372.html=><br><https://xiaoweitop.com/zh-CN/equipments/aluminum-laminated-film-for-pouch-cell-case-t-113um/><br><http://www.taiwanbattery.org.tw/media/file/admin/20230901094346tBWI.pdf> | tagged VP and EX; recorded at the weaker status |
+| BG-G31 | HDM battery foil | vendor_or_trade_page | VP | <https://hdmetalm.com/battery-aluminum-foil/> | — |
+| BG-G32 | 8021 pouch-foil stock patent | excerpt | EX | <https://www.xjishu.com/zhuanli/24/202511388492.html> | same document as BF-S33 |
+| BG-G33 | He et al., Material Sciences 12 (2022) 123 | excerpt | EX | <https://pdf.hanspub.org/ms20220200000_28186169.pdf> | — |
+| BG-G34 | Mingtai tab foil | vendor_or_trade_page | VP | <https://www.mt6061lb.com/lvbannews/1102.html><br><https://www.mt6061lb.com/lvbannews/1103.html> | — |
+| BG-G35 | MC Aluminum | vendor_or_trade_page | VP | <https://www.alummc-foil.com/product/battery-aluminum-foil.html> | same page as BF-S48 |
+| BG-G36 | Supercapacitor electrode and etched foil | vendor_or_trade_page | VP | <https://www.ssntm.com/product/dry-coating-electrode-edlc-eletrode-tape/><br><https://www.sciencegears.com.au/eal-foil-etched-aluminum-foil> | — |
+| BG-G37 | Xia et al., Electronic Components and Materials 2025(11) | abstract_or_snippet | SN | <http://www.qikanvip.com/qkml/141553.html> | — |
+| BG-G38 | HSMetal carbon-coated foil | vendor_or_trade_page | VP | <https://www.lyhsmetal.com/lithium-battery-materials/double-side-carbon-coated-aluminium-foil.html> | — |
+| BG-G39 | Sodium-ion foil gauges | vendor_or_trade_page | VP, EX | <http://www.newsijie.com/chanye/dianzidianqi/jujiao/2026/0608/11366463.html><br><https://www.xjishu.com/zhuanli/59/202511576733.html> | tagged VP and EX; recorded at the weaker status |
+| BG-G40 | Temper definitions | vendor_or_trade_page | EX, VP | <https://www.totalmateria.com/en-us/articles/work-hardening-aluminum-alloys-1/><br><https://unitedaluminum.com/aluminum-technical-data-alloy-chemistry-and-mechanical/><br><https://www.chalcoaluminum.com/blog/temper-aluminum-alloys/> | tagged EX and VP; recorded at the weaker status |
+| BG-G41 | Saito, Tanaka, UACJ Technical Reports 9 (2022) 63 | full_text | FT | <https://www.uacj.co.jp/development/rd/review/vol9no1/pdf/vol9no1_11.pdf> | same document as BF-S6, which the first survey read as excerpts |
+| BG-G42 | Lab-supply battery foil page, 16 µm 1235 | vendor_or_trade_page | VP | <http://www.scimaterials.cn/ProDetail.aspx?ProId=1797> | — |
+| BG-G43 | 1235 foil vendor note | vendor_or_trade_page | VP | <https://www.cnal.com/product/39026221.shtml> | — |
+| BG-G44 | Matsuoka, Higashi, J. JILM 67 (2017) 641 | excerpt | EX | <https://www.jstage.jst.go.jp/article/jilm/67/12/67_671206/_pdf> | — |

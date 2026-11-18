@@ -45,6 +45,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import argparse
 import json
 import math
+import statistics
 import sys
 from pathlib import Path
 
@@ -66,7 +67,7 @@ DISPLAY = {
     'um': ('m', 1e-6, 'µm'), 'mm': ('m', 1e-3, 'mm'), 'MPa': ('Pa', 1e6, 'MPa'),
     'kPa': ('Pa', 1e3, 'kPa'), '%': ('fraction', 0.01, '%'), 'm/min': ('m/s', 1 / 60, 'm/min'),
     'mN/m': ('N/m', 1e-3, 'mN/m'), 'per_m2': ('1/m^2', 1.0, 'per m²'),
-    'g/m2': ('kg/m^2', 1e-3, 'g/m²'),
+    'g/m2': ('kg/m^2', 1e-3, 'g/m²'), '%IACS': ('fraction', 0.01, '% IACS'),
 }
 UNITS = tuple(sorted({v[0] for v in DISPLAY.values()}))
 LIMITATIONS = (
@@ -77,6 +78,10 @@ LIMITATIONS = (
     'indicator only.',
     'Spans mix minima, typical values and ranges from different sources; read the basis.',
 )
+EVIDENCE_RATINGS = ('strong', 'medium', 'weak', 'vendor_level', 'not_rated')
+GRADES = ('standard', 'high_strength')
+BG_STATUS = 'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT'
+_BAND_TOL = 1e-9
 FLAGS = ('LITERATURE_SURVEY_NOT_VALIDATION', 'VENDOR_PAGES_LOW_CONFIDENCE',
          'REDUCTIONS_COMPUTED_FROM_PUBLISHED_GAUGES')
 
@@ -176,8 +181,8 @@ class Source:
 
     def validate(self):
         _text('Source.id', self.id)
-        if not self.id.startswith(('BF-', 'PK-', 'HX-')):
-            raise ValueError(f'source id {self.id!r} must start with BF-, PK- or HX-')
+        if not self.id.startswith(('BF-', 'PK-', 'HX-', 'BG-')):
+            raise ValueError(f'source id {self.id!r} must start with BF-, PK-, HX- or BG-')
         _text('Source.title', self.title)
         if not isinstance(self.urls, tuple) or not self.urls:
             raise ValueError(f'source {self.id}: urls must be a nonempty tuple')
@@ -543,11 +548,13 @@ class Product:
     caveats: tuple = ()
     disagreements: tuple = ()
     not_found: tuple = ()
+    evidence: tuple = ()
 
     _STATEMENT_FIELDS = ('common_gauges', 'foil_stock', 'annealing', 'route',
                          'work_roll_roughness', 'rolls_and_oil', 'surface',
                          'thickness_tolerance', 'flatness_requirement', 'wettability',
-                         'pinholes', 'other_requirements', 'caveats', 'disagreements')
+                         'pinholes', 'other_requirements', 'caveats', 'disagreements',
+                         'evidence')
 
     def validate(self):
         _text('Product.id', self.id)
@@ -601,6 +608,222 @@ class Product:
         for f in fields(self):
             out[f.name] = _json(getattr(self, f.name))
         return out
+
+
+@dataclass(frozen=True)
+class GradeOption:
+    """One alloy option of a gauge band (battery grade table). ``standard_min_rm_pa`` is the
+    GB/T 33143-2022 Table 9 minimum for this alloy and band (None: the standard sets none);
+    ``typical`` holds producer values that apply to this alloy in this band; ``usual`` is set
+    when the research calls it the usual choice (the text says for which cells or condition);
+    ``usual_surface`` restricts that to one surface; ``gauge_m`` restricts the option itself to
+    a published gauge span (e.g. pouch alloys)."""
+    alloy: str
+    grade: str
+    temper_labels: tuple
+    standard_min_rm_pa: Range | None = None
+    typical: tuple = ()
+    usual: Statement | None = None
+    usual_surface: str | None = None
+    gauge_m: Range | None = None
+    grade_names: tuple = ()
+    note: str = ''
+    basis_sources: tuple = ()
+
+    def validate(self):
+        _text('GradeOption.alloy', self.alloy)
+        _src_tuple('GradeOption.basis_sources', self.basis_sources)
+        if self.grade not in GRADES:
+            raise ValueError(f'GradeOption {self.alloy}: grade must be one of {GRADES}')
+        if not self.temper_labels or not all(isinstance(t, str) and t for t in
+                                             self.temper_labels):
+            raise ValueError(f'GradeOption {self.alloy}: temper_labels required')
+        if self.standard_min_rm_pa is not None:
+            self.standard_min_rm_pa.validate()
+            if self.standard_min_rm_pa.unit != 'Pa' or self.standard_min_rm_pa.bound != 'minimum':
+                raise ValueError(f'GradeOption {self.alloy}: standard minimum must be a Pa minimum')
+        for s in self.typical:
+            if not isinstance(s, Strength):
+                raise ValueError(f'GradeOption {self.alloy}: typical entries must be Strength')
+            s.validate()
+        if self.usual is not None:
+            self.usual.validate()
+        if self.usual_surface not in (None,) + SURFACES:
+            raise ValueError(f'GradeOption {self.alloy}: bad usual_surface')
+        if self.gauge_m is not None:
+            self.gauge_m.validate()
+        for g in self.grade_names:
+            _text('GradeOption.grade_names', g)
+        _text('GradeOption.note', self.note, allow_empty=True)
+        if self.standard_min_rm_pa is None and not self.typical and self.usual is None \
+                and not self.basis_sources and self.gauge_m is None:
+            raise ValueError(f'GradeOption {self.alloy}: needs a sourced value, gauge span, '
+                             'usual-choice statement or basis source')
+        return self
+
+    def option_sources(self):
+        objs = ([self.standard_min_rm_pa] if self.standard_min_rm_pa else []) + list(
+            self.typical) + ([self.usual] if self.usual else []) + (
+            [self.gauge_m] if self.gauge_m else [])
+        out = list(_union_sources(objs))
+        out += [s for s in self.basis_sources if s not in out]
+        return tuple(out)
+
+    def to_dict(self):
+        return {'alloy': self.alloy, 'grade': self.grade,
+                'temper_labels': list(self.temper_labels),
+                'standard_min_rm_pa': _json(self.standard_min_rm_pa),
+                'typical': _json(self.typical), 'usual': _json(self.usual),
+                'usual_surface': self.usual_surface, 'gauge_m': _json(self.gauge_m),
+                'grade_names': list(self.grade_names), 'note': self.note,
+                'basis_sources': list(self.basis_sources),
+                'sources': list(self.option_sources())}
+
+
+@dataclass(frozen=True)
+class GaugeBand:
+    """One gauge band of a product's grade table: ``low_m`` < gauge <= ``high_m`` (``low_m``
+    inclusive when ``low_inclusive``). Ratings are the report's evidence column kept as data:
+    ``minima_evidence`` for the standard minima, ``choice_evidence`` for the usual choice."""
+    id: str
+    label: str
+    low_m: float
+    high_m: float
+    low_inclusive: bool
+    gauges_named: str
+    options: tuple
+    usual_choice: Statement
+    typical_producer: Statement | None
+    typical_cells: Statement | None
+    evidence: Statement
+    minima_evidence: str
+    choice_evidence: str
+    elongation: Statement | None = None
+    surface: tuple = ()
+    pinholes: Statement | None = None
+    notes: tuple = ()
+
+    def validate(self):
+        _text('GaugeBand.id', self.id)
+        _text('GaugeBand.label', self.label)
+        _num('GaugeBand.low_m', self.low_m, hi=0.02)
+        _num('GaugeBand.high_m', self.high_m, positive=True, hi=0.02)
+        if not self.low_m < self.high_m:
+            raise ValueError(f'GaugeBand {self.id}: low_m must be < high_m')
+        for r in (self.minima_evidence, self.choice_evidence):
+            if r not in EVIDENCE_RATINGS:
+                raise ValueError(f'GaugeBand {self.id}: rating must be one of {EVIDENCE_RATINGS}')
+        if not self.options:
+            raise ValueError(f'GaugeBand {self.id}: options required')
+        names = [o.alloy for o in self.options]
+        if len(set(names)) != len(names):
+            raise ValueError(f'GaugeBand {self.id}: duplicate alloy options')
+        for o in self.options:
+            if not isinstance(o, GradeOption):
+                raise ValueError(f'GaugeBand {self.id}: options must be GradeOption')
+            o.validate()
+        for s in (self.usual_choice, self.typical_producer, self.typical_cells, self.evidence,
+                  self.elongation, self.pinholes) + self.surface + self.notes:
+            if s is not None:
+                s.validate()
+        return self
+
+    def contains(self, h):
+        lo_ok = (h >= self.low_m * (1 - _BAND_TOL) if self.low_inclusive
+                 else h > self.low_m * (1 + _BAND_TOL))
+        return lo_ok and h <= self.high_m * (1 + _BAND_TOL)
+
+    def to_dict(self):
+        return {'id': self.id, 'label': self.label, 'low_m': self.low_m, 'high_m': self.high_m,
+                'low_inclusive': self.low_inclusive, 'gauges_named': self.gauges_named,
+                'minima_evidence': self.minima_evidence,
+                'choice_evidence': self.choice_evidence,
+                'options': [o.to_dict() for o in self.options],
+                'usual_choice': _json(self.usual_choice),
+                'typical_producer': _json(self.typical_producer),
+                'typical_cells': _json(self.typical_cells), 'evidence': _json(self.evidence),
+                'elongation': _json(self.elongation), 'surface': _json(self.surface),
+                'pinholes': _json(self.pinholes), 'notes': _json(self.notes)}
+
+
+@dataclass(frozen=True)
+class HeatingStep:
+    """One condition of a strength-after-heating series: temperature in °C (a number, a
+    (low, high) span, or None for as rolled) and duration in s (None when not given)."""
+    label: str
+    temperature_c: object
+    duration_s: float | None
+    rm_pa: Range
+
+    def validate(self):
+        _text('HeatingStep.label', self.label)
+        t = self.temperature_c
+        if isinstance(t, tuple):
+            if len(t) != 2 or not _num('temperature', t[0]) <= _num('temperature', t[1]):
+                raise ValueError('HeatingStep.temperature_c span must be (low, high)')
+        elif t is not None:
+            _num('HeatingStep.temperature_c', t, hi=700)
+        if self.duration_s is not None:
+            _num('HeatingStep.duration_s', self.duration_s, positive=True)
+        self.rm_pa.validate()
+        if self.rm_pa.unit != 'Pa':
+            raise ValueError('HeatingStep.rm_pa must be in Pa')
+        return self
+
+    def to_dict(self):
+        t = self.temperature_c
+        return {'label': self.label, 'temperature_c': list(t) if isinstance(t, tuple) else t,
+                'duration_s': self.duration_s, 'rm_pa': self.rm_pa.to_dict()}
+
+
+@dataclass(frozen=True)
+class StrengthAfterHeating:
+    """Tensile strength of hard foil as rolled and after heating (a temperature-dependent fact;
+    kept as data for a later process-temperature package, not used by any calculation)."""
+    material: str
+    steps: tuple
+    note: str = ''
+
+    def validate(self):
+        _text('StrengthAfterHeating.material', self.material)
+        if len(self.steps) < 2:
+            raise ValueError('StrengthAfterHeating needs as-rolled and at least one heated step')
+        for s in self.steps:
+            s.validate()
+        return self
+
+    def loss_fraction(self):
+        """Computed loss from as rolled to the last step, (low, high) over the spans."""
+        a, b = self.steps[0].rm_pa, self.steps[-1].rm_pa
+        if a.low is None or b.low is None:
+            return None
+        ahi = a.high if a.high is not None else a.low
+        bhi = b.high if b.high is not None else b.low
+        vals = (1 - b.low / a.low, 1 - bhi / ahi)
+        return (min(vals), max(vals))
+
+    def to_dict(self):
+        loss = self.loss_fraction()
+        return {'material': self.material, 'steps': _json(self.steps), 'note': self.note,
+                'loss_fraction_computed': list(loss) if loss else None}
+
+
+@dataclass(frozen=True)
+class TemperRow:
+    """How a temper is defined and how battery foil reaches it."""
+    temper: str
+    definition: Statement
+    route: Statement
+
+    def validate(self):
+        _text('TemperRow.temper', self.temper)
+        self.definition.validate()
+        self.route.validate()
+        return self
+
+    def to_dict(self):
+        return {'temper': self.temper, 'definition': self.definition.to_dict(),
+                'route': self.route.to_dict()}
 
 
 # --------------------------------------------------------------------------- sources
@@ -937,6 +1160,118 @@ _SOURCE_LIST = (
     _S('HX-S41', 'Vollmer flatness paper',
        'https://vollmergmbh.de/fileadmin/user_upload/news/2019/aktuelles-2019-03.pdf', _AB, 'A',
        'a copper/thin-strip paper'),
+    # ---- battery grade-by-gauge report (second survey); ids BG-G<n>
+    _S('BG-G1', 'GB/T 33143-2022 draft English translation',
+       'http://www.cnsmq.com/uploadfile/2025/0227/20250227042900196.pdf', _EX, 'EX',
+       'same document as BF-S2; tables garbled'),
+    _S('BG-G2', 'Chalco page reproducing GB/T 33143-2022 Tables 1, 2, 9',
+       'https://www.chalcoaluminum.com/knowledge/lithium-ion-battery-foil/', _VP, 'VP',
+       'producer page; the second survey\'s reading of GB/T 33143 Table 9'),
+    _S('BG-G3', 'T/ZZB 2638-2022', 'https://www.ttbz.org.cn/Home/PdfFileStreamGet/c3QsNTk5MjU(eq)',
+       _FT, 'FT', 'group standard; copies four rows of GB/T 33143 Table 9'),
+    _S('BG-G4', 'T/ZZB 1203-2019 (power-cell foil, 10–16 µm)',
+       'https://qxb-img-osscache.qixin.com/standards/e7007ea8cb458ac1eb6e98d305058bfd.pdf', _FT,
+       'FT'),
+    _S('BG-G5', 'UACJ Foil battery foil page (Japanese)',
+       'https://ufo.uacj-group.com/techno/rd/battery.html', _VP, 'VP',
+       'Japanese version of the BF-S3 page'),
+    _S('BG-G6', 'Motoi et al., UACJ Technical Reports 1 (2014) 125',
+       'https://www.uacj.co.jp/development/rd/review/vol1no1/pdf/vol1no1_18.pdf', _EX, 'EX',
+       'same document as BF-S5'),
+    _S('BG-G7', 'Ashizawa, Yamamoto, Furukawa-Sky Review 5 (2009) 1',
+       'https://www.uacj.co.jp/development/rd/review/furukawasky/005/pdf/05_abst01.pdf', _FT, 'FT'),
+    _S('BG-G8', 'Ihara et al., Kobe Steel Engineering Reports 65(2) (2015) 29',
+       'https://www.kobelco.co.jp/r-d/technology-review/dumm/__icsFiles/afieldfile/2025/03/19/'
+       '235_029-032.pdf', _FT, 'FT'),
+    _S('BG-G9', 'Kohan Shoji high-strength collector foil',
+       'https://battery-jp.net/strong_positive_electrode.html', _VP, 'VP'),
+    _S('BG-G10', 'Sam-A product page (Korean)', 'https://sama-al.com/kor/business/foil/car', _VP,
+       'VP', 'Korean version of the BF-S45 page'),
+    _S('BG-G11', 'ETNews, Sam-A talk, 2021-04-28', 'https://www.etnews.com/20210428000130', _FT,
+       'FT, trade press', 'trade-press article read in full'),
+    _S('BG-G12', 'Newspim, Lotte Aluminium, 2020-09-16',
+       'https://www.newspim.com/news/view/20200916000922', _EX, 'EX'),
+    _S('BG-G13', 'Asia Economy, 2024-03-02',
+       'https://www.asiae.co.kr/article/2024022716372407494', _EX, 'EX'),
+    _S('BG-G14', 'Gränges cathode foil datasheet 2024',
+       'https://www.granges.com/globalassets/09.-kampanjer/06.-battery-cathode-foil/03.-contact/'
+       'granges-datablad_cathode-foil_2024.pdf', _FT, 'FT'),
+    _S('BG-G15', 'Symetal battery foil', 'https://www.symetal.gr/en/battery-foil', _VP, 'VP'),
+    _S('BG-G16', 'Speira battery foil',
+       'https://www.speira.com/markets-products/battery-systems/battery-foil/', _VP, 'VP'),
+    _S('BG-G17', 'Innoval Technology, "Aluminium battery foil", 2023',
+       'https://www.innovaltec.com/www-innovaltec-com-insights-aluminium_battery_foil/', _EX,
+       'EX'),
+    _S('BG-G18', 'Armor primed foil',
+       'https://www.armorbatteryfilms.com/our-products/primed-aluminium-foil/', _VP, 'VP'),
+    _S('BG-G19', 'Mingtai and Haomei alloy-by-gauge pages',
+       'https://www.mt5083lb.com/knowledge/585.html '
+       'https://www.aluminum-hm.com/application/battery-aluminum-foil/', _VP, 'VP'),
+    _S('BG-G20', 'OFweek, 1060 against 1100',
+       'https://libattery.ofweek.com/2025-06/ART-36000-8110-30665024.html', _VP, 'VP'),
+    _S('BG-G21', 'Orient Securities, battery foil report, 2023-02',
+       'https://pdf.dfcfw.com/pdf/H3_AP202302131583078254_1.pdf', _EX, 'EX',
+       'broker report; one figure read from a flattened chart'),
+    _S('BG-G22', 'Huaxin Securities, 2022-12',
+       'https://pdf.dfcfw.com/pdf/H3_AP202212191581210899_1.pdf', _EX, 'EX', 'broker report'),
+    _S('BG-G23', 'LeadLeo, Li-ion battery foil, 2023',
+       'https://pdf.dfcfw.com/pdf/H3_AP202303271584589758_1.pdf', _EX, 'EX'),
+    _S('BG-G24', 'Targray cathode foil specification',
+       'https://www.targray.com/li-ion-battery/cathode-materials/foils', _VP, 'VP'),
+    _S('BG-G25', 'JIS H 4160, 1994 text', 'https://jis.eomec.com/jish41601994', _FT, 'FT',
+       'mirror of the 1994 text; JIS H 4160:2006 itself not found'),
+    _S('BG-G26', 'UACJ US 9,698,426 B2', 'https://exa.ai/library/legal/patent/z7mfjkqz2bs', _EX,
+       'EX, with Table 3', 'Table 3 read; the composition and process tables were not in the '
+       'excerpt'),
+    _S('BG-G27', 'UACJ CN application 201380010002',
+       'https://www.xjishu.com/zhuanli/24/201380010002.html', _EX, 'EX'),
+    _S('BG-G28', 'GB/T 22648-2023 mirrors', 'https://www.duodown.com/biaozhun/2155908.html '
+       'https://www.guifanku.com/784986.html', _EX, 'EX',
+       'same standard as BF-S29; the second survey read it as excerpts (Tables 5–9 dropped)'),
+    _S('BG-G29', 'T/ZZB 2076-2021 reseller summary',
+       'https://kpt-bj.com/t-zzb-2076-2021-aluminum-foil-for-aluminum-laminate-film-of-pouch-'
+       'cell-1302142151.html', _VP, 'VP'),
+    _S('BG-G30', 'Laminate structures',
+       'https://www.libmachine.cn/?products_66%2F372.html= '
+       'https://xiaoweitop.com/zh-CN/equipments/aluminum-laminated-film-for-pouch-cell-case-t-'
+       '113um/ http://www.taiwanbattery.org.tw/media/file/admin/20230901094346tBWI.pdf', _VP,
+       'VP, EX', 'tagged VP and EX; recorded at the weaker status'),
+    _S('BG-G31', 'HDM battery foil', 'https://hdmetalm.com/battery-aluminum-foil/', _VP, 'VP'),
+    _S('BG-G32', '8021 pouch-foil stock patent',
+       'https://www.xjishu.com/zhuanli/24/202511388492.html', _EX, 'EX',
+       'same document as BF-S33'),
+    _S('BG-G33', 'He et al., Material Sciences 12 (2022) 123',
+       'https://pdf.hanspub.org/ms20220200000_28186169.pdf', _EX, 'EX'),
+    _S('BG-G34', 'Mingtai tab foil', 'https://www.mt6061lb.com/lvbannews/1102.html '
+       'https://www.mt6061lb.com/lvbannews/1103.html', _VP, 'VP'),
+    _S('BG-G35', 'MC Aluminum', 'https://www.alummc-foil.com/product/battery-aluminum-foil.html',
+       _VP, 'VP', 'same page as BF-S48'),
+    _S('BG-G36', 'Supercapacitor electrode and etched foil',
+       'https://www.ssntm.com/product/dry-coating-electrode-edlc-eletrode-tape/ '
+       'https://www.sciencegears.com.au/eal-foil-etched-aluminum-foil', _VP, 'VP'),
+    _S('BG-G37', 'Xia et al., Electronic Components and Materials 2025(11)',
+       'http://www.qikanvip.com/qkml/141553.html', _AB, 'SN'),
+    _S('BG-G38', 'HSMetal carbon-coated foil',
+       'https://www.lyhsmetal.com/lithium-battery-materials/double-side-carbon-coated-aluminium-'
+       'foil.html', _VP, 'VP'),
+    _S('BG-G39', 'Sodium-ion foil gauges',
+       'http://www.newsijie.com/chanye/dianzidianqi/jujiao/2026/0608/11366463.html '
+       'https://www.xjishu.com/zhuanli/59/202511576733.html', _VP, 'VP, EX',
+       'tagged VP and EX; recorded at the weaker status'),
+    _S('BG-G40', 'Temper definitions',
+       'https://www.totalmateria.com/en-us/articles/work-hardening-aluminum-alloys-1/ '
+       'https://unitedaluminum.com/aluminum-technical-data-alloy-chemistry-and-mechanical/ '
+       'https://www.chalcoaluminum.com/blog/temper-aluminum-alloys/', _VP, 'EX, VP',
+       'tagged EX and VP; recorded at the weaker status'),
+    _S('BG-G41', 'Saito, Tanaka, UACJ Technical Reports 9 (2022) 63',
+       'https://www.uacj.co.jp/development/rd/review/vol9no1/pdf/vol9no1_11.pdf', _FT, 'FT',
+       'same document as BF-S6, which the first survey read as excerpts'),
+    _S('BG-G42', 'Lab-supply battery foil page, 16 µm 1235',
+       'http://www.scimaterials.cn/ProDetail.aspx?ProId=1797', _VP, 'VP'),
+    _S('BG-G43', '1235 foil vendor note', 'https://www.cnal.com/product/39026221.shtml', _VP,
+       'VP'),
+    _S('BG-G44', 'Matsuoka, Higashi, J. JILM 67 (2017) 641',
+       'https://www.jstage.jst.go.jp/article/jilm/67/12/67_671206/_pdf', _EX, 'EX'),
 )
 _SOURCES = {s.id: s for s in _SOURCE_LIST}
 
@@ -1235,6 +1570,485 @@ _BF_DOUBLED = (
                 'it follows'),
 )
 
+# --------------------------------------------------------------------------- battery grade table
+# Second battery survey (sources BG-G<n>): which alloy and temper at which gauge. Every value is
+# quoted from that report; the usual-choice and evidence columns are the report's own synthesis
+# and carry the sources of the report's table row.
+_GB_NOTE = ('GB/T 33143-2022 Table 9 minimum, H18 (read from a producer page reproducing the '
+            'table [BG-G2]; cross-checked against BG-G1 and BG-G3)')
+
+
+def _gb(v):
+    return _min(v, 'MPa', 'BG-G2', _GB_NOTE)
+
+
+GB_TABLE_READ = _s(
+    'GB/T 33143-2022 Table 9 minima (all H18) were read from a producer page that reproduces the '
+    'table, cross-checked against the garbled draft translation and against T/ZZB 2638-2022, '
+    'which copies four of its rows. Where the table sets no value for an alloy in a band, none '
+    'is given here. An official copy of Table 9 was not found.', 'BG-G2 BG-G1 BG-G3',
+    topic='gb_table_read')
+GB_ELONGATION = _s(
+    'GB/T 33143-2022 elongation minima are 1.0–3.0 %, depending on alloy, gauge length and one- '
+    'or two-side-bright; 8A21 is ≥4.0 %.', 'BG-G2',
+    _min(1.0, '%', 'BG-G2', 'range of elongation minima', hi=3.0),
+    _min(4.0, '%', 'BG-G2', '8A21'), topic='elongation')
+TEMPER_NAMING = _s(
+    'Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; "H18, H19" in T/ZZB 1203, '
+    'Gränges, Symetal and Armor; "H19" at Innoval. "H18" on battery foil is a label for a '
+    'strength table: the foil gets 97–99 % cold reduction after the last anneal, far above the '
+    'about 75 % that defines H18, so European sources call the same product H19. Both labels '
+    'are consistent with collector foil.',
+    'BG-G2 BG-G3 BG-G25 BG-G4 BG-G14 BG-G15 BG-G18 BG-G17 BG-G40', topic='temper_naming')
+COLLECTOR_TEMPERS = ('H18', 'H19')
+SURFACE_SINGLE = _s('Single-sheet two-side-bright foil is preferred.', 'BG-G17',
+                    topic='surface')
+SURFACE_SAMA = _s('Sam-A rolls single-sheet down to 10 µm and says Japanese mills double at '
+                  '10 µm.', 'BG-G11', topic='surface')
+SURFACE_8021 = _s('UACJ sells 10 µm 8021 as bright/matte (one-side-bright).', 'BF-S4',
+                  topic='surface')
+
+_T15 = 'BG-G5 BG-G6 BG-G8 BG-G9'
+TYP_LE10 = _st(('1100-type', '1C30-type'), 'not stated', '≤10 µm, Chinese patents', 'BG-G21',
+               rm=('span', 240, 285), a=('span', 2.5, 3.8), grade='high_strength',
+               note='band-level values from Chinese patents; not tied to one alloy')
+TYP_1060_12 = _st(('1060-type',), 'H18/H19', '>10–13 µm band, Gränges datasheet', 'BG-G14',
+                  rm=('span', 180, 230), a=('min', 3), grade='standard', note='A >3 %')
+TYP_1100_12A = _st(('1100-type',), 'H18/H19', '>10–13 µm band, Gränges datasheet', 'BG-G14',
+                   rm=('span', 230, 270), a=('min', 2.5), grade='high_strength', note='A >2.5 %')
+TYP_1100_12B = _st(('1100-type',), 'H18/H19', '>10–13 µm band, Gränges datasheet, stronger '
+                   'grade', 'BG-G14', rm=('span', 260, 310), a=('min', 1.5),
+                   grade='high_strength', note='A >1.5 %')
+TYP_SPEIRA_HS = _st(('Speira high-strength',), 'not stated', 'Speira high-strength grade',
+                    'BF-S8', rm=('min', 250), grade='high_strength')
+TYP_1085_15 = _st(('1085',), 'not stated', '15 µm, producers', _T15, rm=('span', 175, 180),
+                  rp=('span', 163, 165), a=('span', 4, 5), grade='standard')
+TYP_1N30_15 = _st(('1N30', '1230'), 'not stated', '15 µm, producers', _T15,
+                  rm=('span', 185, 194), rp=('span', 165, 175), a=('typ', 4.5),
+                  grade='standard', note='1N30 or 1230')
+TYP_1C32_15 = _st(('1C32',), 'not stated', '15 µm, producers', _T15, rm=('typ', 230),
+                  rp=('typ', 200), a=('typ', 4.5), grade='high_strength')
+TYP_A730H_15 = _st(('A730H',), 'not stated', '15 µm, producers', _T15, rm=('typ', 290),
+                   rp=('typ', 250), a=('typ', 4.0), grade='high_strength')
+TYP_3003_15 = _st(('3003',), 'not stated', '15 µm, producers', _T15, rm=('span', 270, 275),
+                  rp=('typ', 240), a=('typ', 3), grade='high_strength')
+TYP_KS81_15 = _st(('KS81',), 'not stated', '15 µm, producers', _T15, rm=('typ', 274),
+                  a=('typ', 5.4), grade='high_strength', note='proof strength not given')
+TYP_1235_16 = _st(('1235',), 'not stated', '16 µm, lab-supply page', 'BG-G42',
+                  rm=('span', 200, 220), a=('typ', 2.2), grade='standard')
+TYP_1235_21_35 = _st(('1235',), 'H18', '21–35 µm, vendor', 'BG-G35', rm=('span', 170, 200),
+                     a=('min', 1.6), grade='standard')
+
+_NO_GB = 'GB/T 33143-2022 sets no minimum for this alloy in this band'
+_NOT_GB = 'not a GB/T 33143-2022 alloy'
+
+
+def _o(alloy, grade, gb=None, typical=(), usual=None, surface=None, names=(), note='',
+       tempers=COLLECTOR_TEMPERS, gauge=None):
+    basis = (('BG-G2',) if note.startswith(_NO_GB) else
+             ('BF-S1',) if note.startswith(_NOT_GB) else ())
+    return GradeOption(alloy, grade, tuple(tempers), None if gb is None else _gb(gb),
+                       tuple(typical), usual, surface, gauge, tuple(names), note, basis)
+
+
+# ---- ≤10 µm
+_U_LE10 = _s('1100-type or 1C30-type is the usual choice at ≤10 µm (energy-dense EV and '
+             'consumer cells).', 'BG-G21', topic='usual_choice')
+_U_8021 = _s('8021 at 10 µm for one-side-bright foil (UACJ bright/matte).', 'BF-S4',
+             topic='usual_choice')
+BAND_LE10 = GaugeBand(
+    'le10', '≤10 µm', 8e-6, 10e-6, True, '8, 9, 10',
+    options=(
+        _o('1100', 'high_strength', 230, (TYP_LE10,), _U_LE10),
+        _o('1C30', 'high_strength', 220, (TYP_LE10,), _U_LE10),
+        _o('8021', 'standard', None, (), _U_8021, 'one_side_bright',
+           note=_NOT_GB + '; usual only for one-side-bright foil'),
+        _o('1070', 'standard', 185),
+        _o('8011', 'standard', 180),
+        _o('1060', 'standard', note=_NO_GB),
+        _o('1050', 'standard', note=_NO_GB),
+        _o('1235', 'standard', note=_NO_GB),
+    ),
+    usual_choice=_s('1100-type or 1C30-type; 8021 at 10 µm one-side-bright.', 'BG-G21 BF-S4'),
+    typical_producer=_s('240–285 MPa, 2.5–3.8 % in Chinese patents.', 'BG-G21', TYP_LE10.rm_pa),
+    typical_cells=_s('Energy-dense EV, consumer.', 'BG-G21'),
+    evidence=_s('Minima strong; alloy preference medium.', 'BG-G2 BG-G21 BF-S4'),
+    minima_evidence='strong', choice_evidence='medium', elongation=GB_ELONGATION,
+    surface=(SURFACE_SINGLE, SURFACE_SAMA, SURFACE_8021),
+    pinholes=_s('T/ZZB 2638: ≤20 pinholes per m² at 8–10 µm.', 'BG-G3',
+                _max(20, 'per_m2', 'BG-G3')),
+    notes=(_s('The ≤10 µm band first appeared in GB/T 33143-2022.', 'BG-G21'),))
+
+# ---- >10–13 µm
+_U_EV = _s('1100-type for EV cells (high strength).', 'BG-G21 BG-G23', topic='usual_choice')
+_U_STD12 = _s('1235 or 1060 where 180–190 MPa suffices.', 'BG-G21 BG-G23',
+              topic='usual_choice')
+_CORR_8011 = ('CORRECTED: the first survey grouped 8011 with the GB/T 33143 high-strength minima '
+              '(about ≥220–230 MPa) [BF-S2]; the second survey reads 180 MPa [BG-G2]')
+BAND_10_13 = GaugeBand(
+    '10_13', '>10–13 µm', 10e-6, 13e-6, False, '12, 13',
+    options=(
+        _o('1100', 'high_strength', 230, (TYP_1100_12A, TYP_1100_12B), _U_EV),
+        _o('1235', 'standard', 180, (), _U_STD12),
+        _o('1060', 'standard', 190, (TYP_1060_12,), _U_STD12),
+        _o('1C30', 'high_strength', 230),
+        _o('Speira high-strength', 'high_strength', None, (TYP_SPEIRA_HS,),
+           note='Speira own composition (99.35–99.5 % Al, Cu 0.03–0.08 %)'),
+        _o('1050', 'standard', 190),
+        _o('1070', 'standard', 185),
+        _o('8011', 'standard', 180, note=_CORR_8011),
+    ),
+    usual_choice=_s('1100-type for EV; 1235 or 1060 where 180–190 MPa suffices.',
+                    'BG-G21 BG-G23'),
+    typical_producer=_s('1060-type 180–230 MPa, A >3 %; 1100-type 230–270 MPa, A >2.5 %, or '
+                        '260–310 MPa, A >1.5 % [BG-G14]; Speira high-strength ≥250 MPa '
+                        '[BF-S8].', 'BG-G14 BF-S8'),
+    typical_cells=_s('Mainstream EV and storage.', 'BG-G21 BG-G23'),
+    evidence=_s('Minima strong; cell type medium.', 'BG-G2 BG-G21 BG-G23'),
+    minima_evidence='strong', choice_evidence='medium', elongation=GB_ELONGATION,
+    surface=(SURFACE_SINGLE,),
+    pinholes=_s('T/ZZB 2638: ≤10 pinholes per m² at 10–13 µm.', 'BG-G3',
+                _max(10, 'per_m2', 'BG-G3')))
+
+# ---- >13–15 µm
+_U_STD15 = _s('1235, 1060 or 1N30 as standard.', _T15, topic='usual_choice')
+_U_1085 = _s('1085 for high-power cells.', _T15 + ' BG-G7', topic='usual_choice')
+_U_HS15 = _s('1100-type or 3003 when ≥250 MPa is specified.', _T15, topic='usual_choice')
+BAND_13_15 = GaugeBand(
+    '13_15', '>13–15 µm', 13e-6, 15e-6, False, '15',
+    options=(
+        _o('1235', 'standard', 185, (), _U_STD15),
+        _o('1060', 'standard', 190, (), _U_STD15),
+        _o('1N30', 'standard', None, (TYP_1N30_15,), _U_STD15, names=('1230',),
+           note=_NOT_GB + '; 1N30 is a JIS alloy'),
+        _o('1085', 'standard', None, (TYP_1085_15,), _U_1085, note=_NOT_GB),
+        _o('1100', 'high_strength', 220, (), _U_HS15),
+        _o('3003', 'high_strength', None, (TYP_3003_15,), _U_HS15, note=_NOT_GB),
+        _o('1C30', 'high_strength', 225),
+        _o('1C32', 'high_strength', None, (TYP_1C32_15,), names=('UACJ 1C32',),
+           note='UACJ high-strength grade, 1N30 chemistry'),
+        _o('A730H', 'high_strength', None, (TYP_A730H_15,), names=('UACJ A730H',),
+           note='UACJ high-strength grade, 1100 base'),
+        _o('KS81', 'high_strength', None, (TYP_KS81_15,), note='producer grade'),
+        _o('1050', 'standard', 190),
+        _o('1070', 'standard', 180),
+        _o('8011', 'standard', 180, note=_CORR_8011),
+        _o('8A21', 'standard', 165),
+    ),
+    usual_choice=_s('1235, 1060, 1N30 standard; 1085 for high power; 1100-type or 3003 when '
+                    '≥250 MPa is specified.', _T15),
+    typical_producer=_s('At 15 µm: 1085 175–180 / 163–165 MPa / 4–5 %; 1N30 or 1230 185–194 / '
+                        '165–175 / 4.5 %; 1C32 230 / 200 / 4.5 %; A730H 290 / 250 / 4.0 %; 3003 '
+                        '270–275 / 240 / 3 %; KS81 274 / — / 5.4 % (Rm / Rp0.2 / A).', _T15),
+    typical_cells=_s('EV, storage, consumer.', _T15),
+    evidence=_s('Strong: several producers agree.', 'BG-G2 ' + _T15),
+    minima_evidence='strong', choice_evidence='strong', elongation=GB_ELONGATION,
+    surface=(SURFACE_SINGLE,),
+    pinholes=_s('T/ZZB 2638: ≤5 pinholes per m² at 13–15 µm.', 'BG-G3',
+                _max(5, 'per_m2', 'BG-G3')))
+
+# ---- >15–20 µm
+_U_STD20 = _s('1235, 1060, 1070 or 1085.', 'BG-G42 BG-G19', topic='usual_choice')
+BAND_15_20 = GaugeBand(
+    '15_20', '>15–20 µm', 15e-6, 20e-6, False, '16, 18, 20',
+    options=(
+        _o('1235', 'standard', 175, (TYP_1235_16,), _U_STD20),
+        _o('1060', 'standard', 185, (), _U_STD20),
+        _o('1070', 'standard', 175, (), _U_STD20),
+        _o('1085', 'standard', None, (), _U_STD20, note=_NOT_GB),
+        _o('1050', 'standard', 185),
+        _o('1100', 'high_strength', 220),
+        _o('1C30', 'high_strength', 220),
+        _o('8011', 'standard', note=_NO_GB),
+    ),
+    usual_choice=_s('1235, 1060, 1070, 1085 (same grades as at 15 µm).', 'BG-G42 BG-G19'),
+    typical_producer=_s('Same grades; 16 µm 1235 typically 200–220 MPa, A 2.2 %.', 'BG-G42',
+                        TYP_1235_16.rm_pa),
+    typical_cells=_s('Storage, LFP [BG-G19]; carbon-coated base, 16 µm most ordered [BG-G38].',
+                     'BG-G19 BG-G38'),
+    evidence=_s('Minima strong; cell type vendor-level.', 'BG-G2 BG-G19 BG-G38'),
+    minima_evidence='strong', choice_evidence='vendor_level', elongation=GB_ELONGATION,
+    surface=(SURFACE_SINGLE,),
+    pinholes=_s('T/ZZB 2638: no pinholes (0 per m²) at 15–20 µm.', 'BG-G3',
+                _max(0, 'per_m2', 'BG-G3')),
+    notes=(_s('The report rates the cell-type column vendor-level and gives no separate rating '
+              'for the alloy column; the usual-choice rating is recorded as vendor_level.',
+              'BG-G19 BG-G42'),))
+
+# ---- >20–30 µm
+_U_STD30 = _s('1235, 1N30 or 1085.', 'BG-G35 BG-G7', topic='usual_choice')
+_U_3003_30 = _s('3003 (also listed for >20–30 µm).', 'BG-G35 BG-G7', topic='usual_choice')
+_THICK_OPTIONS = (
+    _o('1235', 'standard', None, (TYP_1235_21_35,), _U_STD30, note=_NO_GB),
+    _o('1N30', 'standard', None, (), _U_STD30, note=_NO_GB),
+    _o('1085', 'standard', None, (), _U_STD30, note=_NO_GB),
+    _o('3003', 'high_strength', None, (), _U_3003_30, note=_NO_GB),
+)
+_THICK_USUAL = _s('1235, 1N30, 1085, 3003.', 'BG-G35 BG-G7')
+_THICK_TYP = _s('1235-H18 21–35 µm: 170–200 MPa, A ≥1.6 %.', 'BG-G35', TYP_1235_21_35.rm_pa)
+_THICK_CELLS = _s('Older and high-power Li-ion ("normally 15–30 µm", 2009); supercapacitors '
+                  '20 µm.', 'BG-G7 BG-G36 BG-G37')
+_THICK_NOTE = _s('GB/T 33143 stops at 20 µm: no standard minima above it.', 'BG-G2')
+BAND_20_30 = GaugeBand(
+    '20_30', '>20–30 µm', 20e-6, 30e-6, False, '21–30',
+    options=_THICK_OPTIONS, usual_choice=_THICK_USUAL, typical_producer=_THICK_TYP,
+    typical_cells=_THICK_CELLS, evidence=_s('Weak.', 'BG-G35 BG-G7'),
+    minima_evidence='not_rated', choice_evidence='weak', notes=(_THICK_NOTE,))
+COLLECTOR_BANDS = (BAND_LE10, BAND_10_13, BAND_13_15, BAND_15_20, BAND_20_30)
+
+# ---- 25–60 µm products: bands of one span each
+BAND_THICK = GaugeBand(
+    'thick_20_50', '>20–35 µm (up to 50 µm in one specification)', 20e-6, 50e-6, False,
+    '20–35, up to 50', options=_THICK_OPTIONS, usual_choice=_THICK_USUAL,
+    typical_producer=_THICK_TYP, typical_cells=_THICK_CELLS,
+    evidence=_s('Weak.', 'BG-G24 BG-G35'), minima_evidence='not_rated', choice_evidence='weak',
+    notes=(_THICK_NOTE, _s('No standard for thick collector foil was found.', 'BG-G35')))
+
+TYP_CC_BASE = _st(('1070', '1060', '1235'), 'H18', 'carbon-coated base foil, vendor', 'BG-G38',
+                  rm=('min', 140, 180), grade='standard')
+_U_CC = _s('Alloys stated for carbon-coated base foil: 1070, 1060, 1235 (vendor only).',
+           'BG-G38', topic='usual_choice')
+BAND_CC = GaugeBand(
+    'cc_9_30', '9–30 µm (mostly 12–16 µm)', 9e-6, 30e-6, True, '9–30, mostly 12–16',
+    options=tuple(_o(a, 'standard', None, (TYP_CC_BASE,), _U_CC, tempers=('H18',),
+                     note='vendor values only') for a in ('1070', '1060', '1235')),
+    usual_choice=_U_CC, typical_producer=_s('≥140–180 MPa.', 'BG-G38', TYP_CC_BASE.rm_pa),
+    typical_cells=_s('Carbon-coated base, 16 µm most ordered.', 'BG-G38'),
+    evidence=_s('Vendor only.', 'BG-G38'), minima_evidence='not_rated',
+    choice_evidence='vendor_level')
+
+TYP_TAB = _st(('1070', '1235'), 'O (implied by the values)', 'tab foil, one vendor', 'BG-G34',
+              rm=('span', 85, 110), a=('min', 25, 30), grade='standard',
+              note='the values imply O temper; the vendor states no temper')
+BAND_TAB = GaugeBand(
+    'tab_30_100', '30–100 µm', 30e-6, 100e-6, True, '30–100',
+    options=(_o('1070', 'standard', None, (TYP_TAB,),
+                _s('1070 for consumer cells.', 'BG-G34', topic='usual_choice'),
+                tempers=('O',), note='temper implied by the values'),
+             _o('1235', 'standard', None, (TYP_TAB,),
+                _s('1235 for power cells.', 'BG-G34', topic='usual_choice'),
+                tempers=('O',), note='temper implied by the values')),
+    usual_choice=_s('1070 (consumer), 1235 (power).', 'BG-G34'),
+    typical_producer=_s('85–110 MPa, ≥25–30 %.', 'BG-G34', TYP_TAB.rm_pa),
+    typical_cells=_s('Consumer (1070) and power (1235) cells.', 'BG-G34'),
+    evidence=_s('Weak: one vendor.', 'BG-G34'), minima_evidence='not_rated',
+    choice_evidence='weak',
+    notes=(_s('Tab leads are 80–400 µm.', 'BF-S41'),
+           _s('No standard for tab foil was found.', 'BG-G34')))
+
+TYP_POUCH_TOYO_8021 = _st(('8021',), 'O', 'Toyo guaranteed minimum', 'BF-S28', rm=('min', 85),
+                          a=('min', 9))
+TYP_POUCH_TOYO_8079 = _st(('8079',), 'O', 'Toyo guaranteed minimum', 'BF-S28', rm=('min', 75),
+                          a=('min', 10))
+TYP_POUCH_8021_CN = _st(('8021',), 'O', 'Chinese typical', 'BG-G32', rm=('span', 90, 110),
+                        a=('span', 16, 20), note='cupping 7–7.5 mm; high-formability target '
+                        '≥20 % and ≥7.5 mm')
+TYP_POUCH_VENDOR = _st(('8021', '8079'), 'O', '25–45 µm, vendor', 'BG-G31',
+                       rm=('span', 80, 100), a=('min', 12))
+_U_POUCH = _s('8021-O is confirmed for pouch foil by Symetal (35–40 µm) and Innoval '
+              '(40–50 µm).', 'BG-G15 BG-G17', topic='usual_choice')
+BAND_POUCH = GaugeBand(
+    'pouch_35_55', '35–55 µm', 35e-6, 55e-6, True, '35, 40, 45, 50, 55',
+    options=(
+        _o('8021', 'standard', None, (TYP_POUCH_TOYO_8021, TYP_POUCH_8021_CN,
+                                      TYP_POUCH_VENDOR), _U_POUCH, tempers=('O',),
+           gauge=_r(35, 55, 'um', 'BG-G28', 'GB/T 22648-2023 gauge for 8021')),
+        _o('8079', 'standard', None, (TYP_POUCH_TOYO_8079, TYP_POUCH_VENDOR), tempers=('O',),
+           gauge=_r(40, 55, 'um', 'BG-G28', 'GB/T 22648-2023 gauge for 8079')),
+        _o('8A21', 'standard', None, (), tempers=('O',),
+           gauge=_r(40, 50, 'um', 'BG-G28', 'GB/T 22648-2023 gauge for 8A21'),
+           note='GB/T 22648-2023 alloy; its property tables were not found'),
+    ),
+    usual_choice=_U_POUCH,
+    typical_producer=_s('Toyo minima 8079 ≥75 MPa / ≥10 %, 8021 ≥85 / ≥9 % [BF-S28]; Chinese '
+                        '8021-O 90–110 MPa, 16–20 % [BG-G32]; vendor 25–45 µm 80–100 MPa, ≥12 % '
+                        '[BG-G31].', 'BF-S28 BG-G32 BG-G31'),
+    typical_cells=_s('Pouch cells: 35 µm in an 88 µm laminate; 40 µm in 113 and 153 µm '
+                     'laminates.', 'BG-G30'),
+    evidence=_s('Alloy, temper, gauge strong; values medium.', 'BG-G28 BG-G15 BG-G17 BG-G32'),
+    minima_evidence='medium', choice_evidence='strong',
+    notes=(_s('Rolled hard, then fully annealed; one-side-bright unless ordered otherwise.',
+              'BG-G28'),
+           _s('T/ZZB 2076-2021 (reseller summary only): ≥70–85 MPa, cupping ≥5.5–7.0 mm.',
+              'BG-G29', _min(70, 'MPa', 'BG-G29', 'range of minima', hi=85)),
+           _s('A ≥26 µm aluminium layer already gives near-zero water and oxygen transmission; '
+              'the extra gauge is for drawing depth.', 'BG-G33')))
+
+# ---- general facts of the second survey
+CONDUCTIVITY = (
+    _s('1085: 60–61.5 % IACS.', 'BG-G6 BG-G7 BG-G41', _r(60, 61.5, '%IACS', 'BG-G6 BG-G7 BG-G41'),
+       topic='1085'),
+    _s('1N30: 58–60 % IACS.', 'BG-G6 BG-G7 BG-G41', _r(58, 60, '%IACS', 'BG-G6 BG-G7 BG-G41'),
+       topic='1N30'),
+    _s('1235: 58–60 % IACS (given together with 1N30).', 'BG-G6 BG-G7 BG-G41',
+       _r(58, 60, '%IACS', 'BG-G6 BG-G7 BG-G41'), topic='1235'),
+    _s('1100: 56–59.5 % IACS.', 'BG-G6 BG-G7 BG-G41',
+       _r(56, 59.5, '%IACS', 'BG-G6 BG-G7 BG-G41'), topic='1100'),
+    _s('8021: 58–59 % IACS.', 'BG-G6 BG-G7 BG-G41', _r(58, 59, '%IACS', 'BG-G6 BG-G7 BG-G41'),
+       topic='8021'),
+    _s('3003: 47–48.5 % IACS.', 'BG-G6 BG-G7 BG-G41',
+       _r(47, 48.5, '%IACS', 'BG-G6 BG-G7 BG-G41'), topic='3003'),
+    _s('1060: about 62 % IACS on vendor pages; does not line up with the producer figures.',
+       'BG-G20', _pt(62, '%IACS', 'BG-G20', 'vendor figure ("about")'), topic='1060'),
+)
+OTHER_GRADE_DOCUMENTS = (
+    _s('T/ZZB 1203-2019, power cells, 10–16 µm: 1060/1070 H18 ≥160, H19 ≥180 MPa; 1100 H18 '
+       '≥180, H19 ≥200 MPa; A100 ≥2.0–3.0 %; thickness ±2 %.', 'BG-G4',
+       _min(160, 'MPa', 'BG-G4', '1060/1070 H18'), _min(180, 'MPa', 'BG-G4', '1060/1070 H19'),
+       _min(180, 'MPa', 'BG-G4', '1100 H18'), _min(200, 'MPa', 'BG-G4', '1100 H19'),
+       topic='T/ZZB 1203-2019'),
+    _s('JIS H 4160 (1994 text): 1085, 1070, 1050, 1N30, 1100, 3003, 3004, 8021, 8079 in O and '
+       'H18; it has no strength table.', 'BG-G25', topic='JIS H 4160'),
+    _s('Targray purchase specification, 12–15 µm: 1235-H18 and 1060-H18 ≥165 MPa, ≥1.5 %; '
+       '1235D-H18 ≥200 MPa, ≥2.0 %.', 'BG-G24', _min(165, 'MPa', 'BG-G24', '1235-H18, 1060-H18'),
+       _min(200, 'MPa', 'BG-G24', '1235D-H18'), topic='Targray'),
+)
+HEADLINE_FINDINGS = (
+    _s('No source gives a hard "gauge X → alloy Y" rule. What exists is a strength floor that '
+       'rises as gauge falls; producers meet it by moving from 1085/1070/1060/1235 to Cu-bearing '
+       '1100-type or 1C30-type alloys.', 'BG-G2 BG-G6 BG-G11 BG-G21', topic='headline'),
+    _s('The first survey\'s 8011 figure was wrong: the GB/T 33143-2022 minimum for 8011 is '
+       '180 MPa, not 220–230 MPa.', 'BG-G2 BF-S2', topic='headline'),
+    _s('"H18" on battery foil is a label for a strength table. The foil gets 97–99 % cold '
+       'reduction after the last anneal, far above the 75 % that defines H18, so European '
+       'sources call the same product H19.', 'BG-G40 BG-G8 BG-G26 BG-G14 BG-G17',
+       topic='headline'),
+)
+CORRECTIONS = (
+    _s('8011 GB/T 33143-2022 minimum corrected: 180 MPa [BG-G2], not the "about ≥220–230 MPa" '
+       'high-strength group the first survey read from the garbled draft translation [BF-S2]. '
+       'The first-survey entry is kept for 1C30 and 1100 only; 8011 now carries 180 MPa.',
+       'BG-G2 BF-S2', _min(180, 'MPa', 'BG-G2', '8011, corrected'), topic='correction'),
+)
+GRADE_REASONS = (
+    _s('Constant line force: "thinning alone gives insufficient strength per unit width and '
+       'foil breaks on the coating line", so strength must rise as gauge falls. One broker '
+       'report puts numbers on it: 20 µm ≥170 MPa, 13 µm ≥190 MPa.', 'BG-G6 BG-G22',
+       topic='1'),
+    _s('The floor keeps rising: 1070 minimum 150 MPa (GB 2016) → 160 (2019 group standard) → '
+       '185 (GB 2022); 1100 170 → 180 → 230 (read from a flattened chart). The ≤10 µm band first '
+       'appeared in 2022.', 'BG-G21', topic='2'),
+    _s('Calendering: higher compaction breaks strip, so buyers raise strength and elongation '
+       'together; ≥200 MPa is common, some ask ≥270; a conventional route gives 200–230 MPa at '
+       '3.4–3.9 %.', 'BG-G21', topic='3'),
+    _s('Conductivity against strength: 3003 costs 11–13 points of IACS, so producers strengthen '
+       '1xxx instead. In 2009: 1085 for automotive high-power cells; 1N30 general; 1100, 3003, '
+       '8021 for consumer lines run at high productivity.', 'BG-G6 BG-G7', topic='4'),
+    _s('Observed shift: Sam-A\'s A1100 (10–17 µm) rose from 4.6 % of sales in 2012 to 73 % in '
+       '2020 as demand moved from ≥15 µm to ≤12 µm.', 'BG-G11', topic='5'),
+    _s('Strength after drying: drying softens hard foil, purer foil most; one patent requires '
+       '≥230 MPa as rolled and ≥210 MPa after drying.', 'BG-G7 BG-G26', topic='6'),
+    _s('Rollability and stability: 2xxx, 5xxx, 6xxx and 7xxx are "extremely difficult to roll to '
+       'foil"; 1xxx, 3003 and 8021 all passivate in LiPF6. Cu above 0.2 % caused foil-rolling '
+       'breaks.', 'BG-G41 BG-G26', topic='7'),
+    _s('Sodium-ion: aluminium on both electrodes, 800–900 t/GWh against 350–400 (NMC) and '
+       '450–550 (LFP); 12–15 µm conventional, 8–10 µm thin.', 'BG-G21 BG-G39', topic='8'),
+)
+
+
+def _cold(h0_mm, h1_um):
+    r = 1 - h1_um * 1e-3 / h0_mm
+    return r, math.log(h0_mm / (h1_um * 1e-3))
+
+
+_C1, _C2 = _cold(0.5, 15), _cold(1.0, 12)
+TEMPER_TABLE = (
+    TemperRow('H18', _s('Strength of about 75 % cold reduction after a full anneal.', 'BG-G40'),
+              _s(f'Last anneal at 0.5–2.5 mm, or none after hot rolling; none in the foil mill. '
+                 f'Computed: 0.5 mm → 15 µm is {_C1[0] * 100:.0f} % (strain {_C1[1]:.1f}); '
+                 f'1 mm → 12 µm is {_C2[0] * 100:.1f} % (strain {_C2[1]:.1f}).',
+                 'BG-G8 BG-G26 BF-S8 BF-S18',
+                 Range(_q(_C1[0]), _q(_C1[0]), 'fraction', ('BG-G8', 'BG-G26'),
+                       'computed: 0.5 mm → 15 µm', 'typical', 'computed', '%'),
+                 Range(_q(_C2[0]), _q(_C2[0]), 'fraction', ('BG-G8', 'BG-G26'),
+                       'computed: 1 mm → 12 µm', 'typical', 'computed', '%'))),
+    TemperRow('H19', _s('Minimum Rm at least 10 MPa (2 ksi) above H18.', 'BG-G40'),
+              _s('Same route, more strain or solute. T/ZZB 1203 puts H19 20 MPa above H18.',
+                 'BG-G4')),
+    TemperRow('High-strength grades', _s('Sold as H18 or H19.', 'BG-G26 BG-G8'),
+              _s('Cu 0.05–0.2 % (1100, 1C30); Fe and Mn held in solution by hot homogenising and '
+                 'no intermediate anneal; starting cold rolling at ≥1 mm so strain reaches 4–5 '
+                 'instead of about 3, which raised strength and elongation together.',
+                 'BG-G26 BG-G8')),
+    TemperRow('H2x', _s('Strain hardened, then partially annealed.', 'BG-G40'),
+              _s('Not used in any public collector-foil specification.', 'BG-G40')),
+    TemperRow('O', _s('Fully annealed.', 'BG-G40'),
+              _s('Pouch foil: rolled hard, then coil-annealed at 240–260 °C for 40–45 h; the '
+                 'anneal also removes rolling oil.', 'BF-S32 BF-S33 BG-G44')),
+)
+_HEAT = (('as rolled', None, None), ('100 °C × 24 h', 100, 86400.0),
+         ('150 °C × 3 h', 150, 10800.0), ('200 °C × 15 min', 200, 900.0))
+
+
+def _heat(material, values, note=''):
+    steps = []
+    for (label, t, d), v in zip(_HEAT, values):
+        rng = (_pt(v, 'MPa', 'BG-G26', 'UACJ US 9,698,426 Table 3') if not isinstance(v, tuple)
+               else _r(v[0], v[1], 'MPa', 'BG-G26', 'UACJ US 9,698,426 Table 3, span of routes'))
+        steps.append(HeatingStep(label, t, d, rng))
+    return StrengthAfterHeating(material, tuple(steps), note)
+
+
+STRENGTH_AFTER_HEATING = (
+    _heat('Invention alloy, no intermediate anneal', (252, 258, 261, 227)),
+    _heat('Comparison alloy at 59.1 % IACS', (266, 258, 221, 194)),
+    _heat('Nine comparison process routes', ((216, 245), (199, 233), (182, 209), (155, 188))),
+    StrengthAfterHeating('99.85 % Al grade (specification)', (
+        HeatingStep('as rolled', None, None, _min(175, 'MPa', 'BG-G27')),
+        HeatingStep('after 100–160 °C (time not given)', (100, 160), None,
+                    _min(170, 'MPa', 'BG-G27'))),
+        'specified minima, not measurements'),
+)
+HEATING_NOTE = _s('Strength after heating is from Table 3 of the patent; its composition and '
+                  'process tables were not in the excerpt read. These are temperature-dependent '
+                  'facts kept as data; no calculation in this package uses them.', 'BG-G26',
+                  topic='strength_after_heating')
+GAUGES_IN_USE = (
+    _s('Sam-A lists 12–20 µm in A1050, A1100, A1235.', 'BG-G10'),
+    _s('Lotte: 12 µm in 2020 with 10 µm on test.', 'BG-G12'),
+    _s('Korean EV foil 10–11 µm in 2024.', 'BG-G13'),
+    _s('China: 12–15 µm mainstream.', 'BG-G21'),
+    _s('Single-sheet two-side-bright is preferred; Sam-A rolls single to 10 µm and says '
+       'Japanese mills double at 10 µm.', 'BG-G17 BG-G11'),
+)
+CELL_CASE_STOCK = _s('Case, lid, busbar and cooling plate: ≥0.3 mm, 3003 and 1050; not foil '
+                     '(evidence medium).', 'BG-G17', topic='cell_case_stock')
+GRADE_DISAGREEMENTS = (
+    _s('8011 minimum: 180 MPa [BG-G2] against 220–230 MPa in the first survey [BF-S2].',
+       'BG-G2 BF-S2'),
+    _s('H18 or H19: Asian standards say H18; European producers say H18/H19 or H19 for the same '
+       'product.', 'BG-G2 BG-G3 BG-G25 BG-G4 BG-G14 BG-G15 BG-G17 BG-G18'),
+    _s('Group standard below national: T/ZZB 1203-2019 (160–200 MPa) is lower than GB/T '
+       '33143-2022 (175–230 MPa), even in its H19 column.', 'BG-G4 BG-G2'),
+    _s('1060 strength: GB minimum 185–190 MPa; Gränges 180–230 MPa; a trade article claims '
+       '230–250 MPa.', 'BG-G2 BG-G14 BG-G20'),
+    _s('"Mainstream" alloy: 1060 and 1235 in Chinese sources; 1100 at Sam-A; 1085, 1N30, 3003 '
+       'in Japan.', 'BG-G20 BG-G22 BG-G11 BG-G7'),
+    _s('Gauge by cell type: vendor pages put 1070 at 10–12 µm for consumer cells and 1060 at '
+       '15–20 µm for storage, with no data.', 'BG-G19'),
+    _s('Soft collector foil: some reseller pages list O temper; no standard or producer '
+       'datasheet supports it, and the second survey treats it as an error.', 'BF-S48 BG-G2'),
+    _s('Cu in 1100: one trade article warns of micro-galvanic corrosion; no measurement was '
+       'found.', 'BG-G20'),
+)
+GRADE_NOT_FOUND = (
+    _nf('GB/T 22648-2023 Tables 5–9 (pouch-foil strength, cupping, pinholes by gauge); every '
+        'mirror drops them. T/ZZB 2076-2021 is known only from a reseller summary.', 'BG-G28 '
+        'BG-G29'),
+    _nf('An official copy of GB/T 33143-2022 Table 9; the draft translation\'s host was outside '
+        'the research session\'s allowed network domains for direct download.'),
+    _nf('Any cell-maker purchase specification, and any LFP-against-NMC rule for gauge or '
+        'alloy.'),
+    _nf('Datasheets with numbers from Lotte, Dong-IL, Dongwon, Novelis, Hydro, Constellium, '
+        'Hindalco, Assan, Dingsheng, Nanshan, Wanshun, Yong Jie, Xiashun, Shenhuo; Speira\'s page '
+        'gives gauge only (12–20 µm).', 'BG-G16'),
+    _nf('JIS H 4160:2006 itself; the mirror carries the 1994 text.', 'BG-G25'),
+    _nf('Recrystallisation temperature by alloy for hard foil: Furukawa-Sky plots it but the '
+        'values are not extractable; one vendor page says 1235-H18 softens fast above 220 °C.',
+        'BG-G7 BG-G43'),
+    _nf('Any standard for thick collector foil or tab foil.'),
+)
+
 _BF_WAVE = 'GB/T 33143 wave height at 8 N/mm²'
 BATTERY_COLLECTOR = Product(
     id='battery_collector_foil', name='Li-ion cathode current-collector foil',
@@ -1265,8 +2079,11 @@ BATTERY_COLLECTOR = Product(
         _i('Al-Fe 1.0–1.7 %', 'Japanese high-strength alloy with Fe 1.0–1.7 %.', 'BF-S20'),
     ),
     tempers=(_i('H18', 'Consensus temper; all GB/T 33143 alloys are H18.', 'BF-S1'),
-             _i('O', 'Listed by some vendor pages (disagrees with the H18 consensus).',
-                'BF-S48')),
+             _i('H19', 'The same product as labelled H18/H19 or H19 by European producers '
+                '(T/ZZB 1203 also has an H19 column); see the temper naming note.',
+                'BG-G4 BG-G14 BG-G15 BG-G17 BG-G18'),
+             _i('O', 'Listed by some vendor pages (disagrees with the H18 consensus; the second '
+                'survey treats it as an error).', 'BF-S48')),
     strength=(
         _st('1085', 'H18', '15 µm, UACJ typical', 'BF-S3 BF-S4', rm=('typ', 180),
             a=('typ', 5.0), grade='standard', note='conductivity 60 %IACS'),
@@ -1289,8 +2106,11 @@ BATTERY_COLLECTOR = Product(
             rm=('min', 140)),
         _st('8011A', 'H18', 'EN 546-2 minimum (EN 546-2 has no battery table)', 'BF-S31',
             rm=('min', 160)),
-        _st('1C30, 1100, 8011', 'H18', 'GB/T 33143 high-strength minima', 'BF-S2',
-            rm=('min', 220, 230), grade='high_strength', note='"about ≥220–230 MPa"'),
+        _st('1C30, 1100', 'H18', 'GB/T 33143 high-strength minima', 'BF-S2',
+            rm=('min', 220, 230), grade='high_strength',
+            note='"about ≥220–230 MPa"; 8011 removed from this group (see the next row)'),
+        _st('8011', 'H18', 'GB/T 33143-2022 minimum (corrected)', 'BG-G2 BF-S2',
+            rm=('min', 180), grade='standard', note=_CORR_8011),
         _st('1C32', 'not stated', 'UACJ', 'BF-S5', rm=('typ', 230), grade='high_strength'),
         _st('A730H', 'not stated', 'UACJ', 'BF-S5', rm=('typ', 290), a=('typ', 4.0),
             grade='high_strength', note='conductivity 56 %IACS'),
@@ -1450,7 +2270,11 @@ BATTERY_COLLECTOR = Product(
         BATTERY_SCHEDULE_CAVEAT,
         _s('The GB/T 33143 property table was partly garbled in the report\'s read; the '
            'minima are quoted as "about".', 'BF-S2'),
+        CORRECTIONS[0],
     ),
+    evidence=(_s('Gauge-by-gauge alloy and temper: see the battery grade table (minima strong; '
+                 'usual choice medium to strong by band, vendor-level at >15–20 µm, weak above '
+                 '20 µm).', 'BG-G2 BG-G21 BG-G19 BG-G35'),),
     disagreements=(
         _s('1xxx strength: EN 546-2 H18 minima are 135–140 MPa, Speira standard ≥165 MPa, '
            'GB/T 175–190 MPa, UACJ typical 180–185 MPa. One vendor page claims 1060 at '
@@ -1500,10 +2324,16 @@ POUCH = Product(
                      '8079 40–55 µm; width 200–1400 mm'),
     common_gauges=(_s('GB/T 22648-2023: 8021 35–55 µm, 8A21 40–50 µm, 8079 40–55 µm, width '
                       '200–1400 mm.', 'BF-S29'),
-                   _s('Toyo TY-X2: 8079 at 40 µm, 8021 at 35 µm.', 'BF-S28')),
+                   _s('Toyo TY-X2: 8079 at 40 µm, 8021 at 35 µm.', 'BF-S28'),
+                   _s('GB/T 22648-2023 gauges by alloy: 8021 35–55, 8A21 40–50, 8079 40–55 µm.',
+                      'BG-G28'),
+                   _s('Laminates: 35 µm in an 88 µm laminate; 40 µm in 113 and 153 µm '
+                      'laminates.', 'BG-G30')),
     alloys=(_i('8021', 'GB/T 22648-2023 alloy; Toyo TY-X2 at 35 µm.', 'BF-S29 BF-S28'),
             _i('8A21', 'GB/T 22648-2023 alloy.', 'BF-S29'),
-            _i('8079', 'GB/T 22648-2023 alloy; Toyo TY-X2 at 40 µm.', 'BF-S29 BF-S28')),
+            _i('8079', 'GB/T 22648-2023 alloy; Toyo TY-X2 at 40 µm.', 'BF-S29 BF-S28'),
+            _i('8021', 'Confirmed for pouch foil (O) by Symetal (35–40 µm) and Innoval '
+               '(40–50 µm).', 'BG-G15 BG-G17')),
     tempers=(_i('O', 'All GB/T 22648-2023 grades are O temper.', 'BF-S29'),),
     strength=(
         _st('8079', 'O', 'Toyo guaranteed minimum', 'BF-S28', rm=('min', 75), a=('min', 10)),
@@ -1516,6 +2346,12 @@ POUCH = Product(
             note='A ≥7 % at 25–40 µm and ≥12 % at 40–90 µm'),
         _st('8079', 'O', 'EN 546-2', 'BF-S31', rm=('span', 55, 110), a=('min', 4, 8),
             note='A ≥4 % at 25–40 µm and ≥8 % at 40–90 µm'),
+        TYP_POUCH_8021_CN,
+        _st('8021', 'O', 'high-formability target', 'BG-G32', a=('min', 20),
+            note='cupping ≥7.5 mm'),
+        TYP_POUCH_VENDOR,
+        _st(('pouch foil (alloy not stated)',), 'not stated', 'T/ZZB 2076-2021, reseller summary',
+            'BG-G29', rm=('min', 70, 85), note='cupping ≥5.5–7.0 mm'),
     ),
     rolled_mode='either',
     mode_note=_s('Supplied one-side-bright unless two-side-bright is ordered (GB/T 22648).',
@@ -1527,7 +2363,9 @@ POUCH = Product(
     foil_stock=(_s('Foil stock 0.2–0.3 mm.', 'BF-S32 BF-S33', _r(0.2, 0.3, 'mm',
                                                                'BF-S32 BF-S33')),),
     annealing=(_s('Hot band, intermediate anneal at 0.5–1.0 mm, foil stock 0.2–0.3 mm, final '
-                  'anneal 240–260 °C for 40–45 h.', 'BF-S32 BF-S33'),),
+                  'anneal 240–260 °C for 40–45 h.', 'BF-S32 BF-S33'),
+               _s('Rolled hard, then fully annealed; one-side-bright unless ordered otherwise.',
+                  'BG-G28')),
     work_roll_roughness=(
         _s('Work-roll Ra 0.12–0.14 µm on the earlier foil passes.', 'BF-S34',
            _r(0.12, 0.14, 'um', 'BF-S34'), topic='earlier passes'),
@@ -1540,7 +2378,10 @@ POUCH = Product(
     other_requirements=(
         _s('GB/T 22648: no splices, bright-side Ra ≤0.100 µm, cupping and bend tests.', 'BF-S29',
            _max(0.100, 'um', 'BF-S29', 'bright-side Ra')),
+        _s('A ≥26 µm aluminium layer already gives near-zero water and oxygen transmission; the '
+           'extra gauge is for drawing depth.', 'BG-G33'),
     ),
+    evidence=(_s('Alloy, temper, gauge strong; values medium.', 'BG-G28 BG-G15 BG-G17 BG-G32'),),
     standards=(_i('GB/T 22648-2023', 'Pouch foil: alloys, gauges, O temper, ±4 %, no splices, '
                   'wettability class A, bright-side Ra, contact angle, cupping and bend tests; '
                   'one-side-bright by default.', 'BF-S29'),
@@ -1556,8 +2397,59 @@ POUCH = Product(
         _nf('One secondary summary gives 8A21 ≥85 MPa / ≥16 % and pinholes ≤30 or ≤20 per m²; '
             'it is self-disclaimed.', 'BF-S30'),
         _nf('A pass schedule for 40 µm pouch foil.'),
-        _nf('Group standard T/ZZB 2076-2021 exists; not read.'),
+        _nf('Group standard T/ZZB 2076-2021 was not read; the second survey found only a '
+            'reseller summary (≥70–85 MPa, cupping ≥5.5–7.0 mm).', 'BG-G29'),
     ),
+)
+
+
+THICK_COLLECTOR = Product(
+    id='battery_thick_collector_foil', name='Thick battery collector foil',
+    family='battery_electronics',
+    final_gauge_m=_r(20, 50, 'um', 'BG-G24 BG-G35', '20–35 µm; up to 50 µm in one '
+                     'specification'),
+    common_gauges=(_s('20–35 µm; up to 50 µm in one specification.', 'BG-G24 BG-G35'),
+                   _s('Supercapacitor electrodes use 20 µm.', 'BG-G36 BG-G37')),
+    alloys=_items(('1235', '1N30', '1085', '3003'), 'Listed for thick collector foil (weak '
+                  'evidence).', 'BG-G35 BG-G7'),
+    tempers=(_i('H18', 'Supplied hard.', 'BG-G35'),),
+    strength=(TYP_1235_21_35,),
+    rolled_mode='not_published',
+    key_requirement=_s('Supplied hard (H18): 170–200 MPa, A ≥1.6 % (vendor; weak evidence).',
+                       'BG-G35'),
+    evidence=(_s('Weak.', 'BG-G24 BG-G35'),),
+    not_found=(_nf('Any standard for thick collector foil.'),),
+)
+CARBON_COATED_BASE = Product(
+    id='battery_carbon_coated_base_foil', name='Carbon-coated collector base foil',
+    family='battery_electronics',
+    final_gauge_m=_r(9, 30, 'um', 'BG-G38', 'mostly 12–16 µm; 16 µm most ordered'),
+    common_gauges=(_s('9–30 µm, mostly 12–16 µm; 16 µm is the most ordered.', 'BG-G38'),),
+    alloys=_items(('1070', '1060', '1235'), 'Base-foil alloy stated by the vendor.', 'BG-G38'),
+    tempers=(_i('H18', 'Base foil supplied hard.', 'BG-G38'),),
+    strength=(TYP_CC_BASE,),
+    rolled_mode='not_published',
+    other_requirements=(
+        _s('Carbon-coated foil: GB/T 33143 coating areal-density class 0.30–2.00 g/m².', 'BF-S1',
+           _r(0.30, 2.00, 'g/m2', 'BF-S1'), topic='carbon_coated'),
+        _s('Carbon-coated foil vendors: 0.6–2 µm per side on 12–16 µm base, dyne ≥40–64.',
+           'BF-S49', topic='carbon_coated')),
+    key_requirement=_s('Base foil supplied hard (H18), ≥140–180 MPa (vendor only).', 'BG-G38'),
+    evidence=(_s('Vendor only.', 'BG-G38'),),
+)
+TAB_FOIL = Product(
+    id='battery_tab_foil', name='Battery tab foil and strip', family='battery_electronics',
+    final_gauge_m=_r(30, 100, 'um', 'BG-G34'),
+    common_gauges=(_s('Tab foil 30–100 µm.', 'BG-G34'), _s('Tab leads 80–400 µm.', 'BF-S41')),
+    alloys=(_i('1070', 'Consumer cells.', 'BG-G34'), _i('1235', 'Power cells.', 'BG-G34')),
+    tempers=(_i('O', 'Implied by the values (85–110 MPa, ≥25–30 %); annealed after rolling '
+                '(inferred by the report).', 'BG-G34'),),
+    strength=(TYP_TAB,),
+    rolled_mode='not_published',
+    key_requirement=_s('Soft (values imply O): 85–110 MPa, ≥25–30 % (one vendor; weak).',
+                       'BG-G34'),
+    evidence=(_s('Weak: one vendor.', 'BG-G34'),),
+    not_found=(_nf('Any standard for tab foil.'),),
 )
 
 CAP_HV = Product(
@@ -2402,11 +3294,21 @@ MINOR_DISAGREEMENTS = (
     _s('Wine-capsule foil gauge: 6–10 µm versus 16–50 µm.', 'PK-S33'),
 )
 
-_PRODUCT_LIST = (BATTERY_COLLECTOR, POUCH, CAP_HV, CAP_LV, CAP_CATHODE, BLISTER, COLD_FORM,
+_PRODUCT_LIST = (BATTERY_COLLECTOR, POUCH, THICK_COLLECTOR, CARBON_COATED_BASE, TAB_FOIL, CAP_HV, CAP_LV, CAP_CATHODE, BLISTER, COLD_FORM,
                  STRIP_PACK, HOUSEHOLD, HOUSEHOLD_HD, CONVERTER, CIGARETTE, DAIRY, CONTAINER_WW,
                  CONTAINER_SW, CONTAINER_RT, BRAZED_FIN, BRAZING_SHEET, HVAC_FIN, LITHO, CAN_BODY,
                  CAN_END, CLOSURE, TRANSFORMER)
 _PRODUCTS = {p.id: p for p in _PRODUCT_LIST}
+GRADE_TABLES = {
+    'battery_collector_foil': COLLECTOR_BANDS,
+    'battery_pouch_laminate_foil': (BAND_POUCH,),
+    'battery_thick_collector_foil': (BAND_THICK,),
+    'battery_carbon_coated_base_foil': (BAND_CC,),
+    'battery_tab_foil': (BAND_TAB,),
+}
+GRADE_GENERAL = (GB_TABLE_READ, GB_ELONGATION, TEMPER_NAMING, HEATING_NOTE, CELL_CASE_STOCK) + \
+    CONDUCTIVITY + OTHER_GRADE_DOCUMENTS + HEADLINE_FINDINGS + CORRECTIONS + GRADE_REASONS + \
+    GAUGES_IN_USE + GRADE_DISAGREEMENTS
 
 
 def _validate_all():
@@ -2426,6 +3328,20 @@ def _validate_all():
         i.validate()
     for s in (BATTERY_SCHEDULE_CAVEAT, TENSION_LINES):
         s.validate()
+    for pid, bands in GRADE_TABLES.items():
+        if pid not in _PRODUCTS:
+            raise ValueError(f'grade table for unknown product {pid}')
+        for b in bands:
+            b.validate()
+        for a, b in zip(bands, bands[1:]):
+            if abs(a.high_m - b.low_m) > 1e-12 or b.low_inclusive:
+                raise ValueError(f'{pid}: grade bands must be contiguous')
+    for s in GRADE_GENERAL:
+        s.validate()
+    for s in GRADE_NOT_FOUND:
+        s.validate(require_sources=False)
+    for t in TEMPER_TABLE + STRENGTH_AFTER_HEATING:
+        t.validate()
 
 
 _validate_all()
@@ -2472,7 +3388,8 @@ def _all_facts():
     _walk_sourced(_PRODUCT_LIST, out)
     _walk_sourced((GENERAL_FOIL_ROLLING, GENERAL_DISAGREEMENTS, GENERAL_NOT_FOUND,
                    MINOR_PRODUCTS, MINOR_DISAGREEMENTS, FOIL_DEFECTS, STRIP_DEFECTS,
-                   GENERAL_STANDARDS), out)
+                   GENERAL_STANDARDS, tuple(GRADE_TABLES.values()), GRADE_GENERAL,
+                   GRADE_NOT_FOUND, TEMPER_TABLE, STRENGTH_AFTER_HEATING), out)
     unique, seen = [], set()
     for f in out:
         if id(f) not in seen:
@@ -2511,6 +3428,20 @@ def catalogue_dict():
         'tension_lines': TENSION_LINES.to_dict(),
         'products': [p.to_dict() for p in _PRODUCT_LIST],
         'minor_products': _json(MINOR_PRODUCTS),
+        'battery_grades': {
+            'status': BG_STATUS, 'ordering_rule': ORDERING_RULE,
+            'proposal_rules': {**PROPOSAL_RULE, 'fallback': PROPOSAL_FALLBACK_RULE,
+                               'value': VALUE_RULE},
+            'tables': {pid: [b.to_dict() for b in bands]
+                       for pid, bands in GRADE_TABLES.items()},
+            'headline_findings': _json(HEADLINE_FINDINGS), 'corrections': _json(CORRECTIONS),
+            'gb_table_read': GB_TABLE_READ.to_dict(), 'temper_naming': TEMPER_NAMING.to_dict(),
+            'conductivity': _json(CONDUCTIVITY), 'other_documents': _json(OTHER_GRADE_DOCUMENTS),
+            'reasons': _json(GRADE_REASONS), 'temper_table': _json(TEMPER_TABLE),
+            'strength_after_heating': _json(STRENGTH_AFTER_HEATING),
+            'strength_after_heating_note': HEATING_NOTE.to_dict(),
+            'gauges_in_use': _json(GAUGES_IN_USE), 'cell_case_stock': CELL_CASE_STOCK.to_dict(),
+            'disagreements': _json(GRADE_DISAGREEMENTS), 'not_found': _json(GRADE_NOT_FOUND)},
     })
 
 
@@ -2651,32 +3582,102 @@ def check_pass(product_id, entry_thickness_m, exit_thickness_m, *, exit_speed_m_
         out.append(_finding('single_sheet_final_gauge', h1, 'm', p.single_sheet_gauge_m,
                             'single-sheet final gauge against the published single-rolling '
                             'span'))
-    # alloy / temper
+    # alloy / temper (band-aware where the product has a grade table: the exit gauge's band)
+    band = _band_of(p.id, h1)
+    band_opt = None
+    if band is not None and alloy is not None:
+        band_opt = next((o for o in band.options if _norm(o.alloy) == _norm(alloy)), None)
     alloy_names = {_norm(a.name) for a in p.alloys}
     if alloy is not None:
-        known = _norm(alloy) in alloy_names
-        out.append({'item': 'alloy', 'value': alloy, 'published_low': None,
-                    'published_high': None, 'unit': '',
-                    'verdict': 'WITHIN_PUBLISHED_RANGE' if known else 'NO_PUBLISHED_RANGE',
-                    'basis': 'alloy listed for this product' if known
-                    else 'alloy not listed for this product in the reports',
-                    'sources': list(_union_sources([a for a in p.alloys
-                                                    if _norm(a.name) == _norm(alloy)])),
-                    'read_status': _weakest_of([a for a in p.alloys
-                                                if _norm(a.name) == _norm(alloy)]),
-                    'note': ''})
+        listed = [a for a in p.alloys if _norm(a.name) == _norm(alloy)]
+        if band_opt is not None:
+            srcs = list(band_opt.option_sources())
+            out.append({'item': 'alloy', 'value': alloy, 'published_low': None,
+                        'published_high': None, 'unit': '', 'verdict': 'WITHIN_PUBLISHED_RANGE',
+                        'basis': f'alloy is an option of the {band.label} band of the grade '
+                                 'table (exit gauge of this pass)'
+                                 + (f'; usual choice: {band_opt.usual.text}' if band_opt.usual
+                                    else '; not a usual choice at this gauge'),
+                        'sources': srcs,
+                        'read_status': _weakest(_SOURCES[s].read_status for s in srcs),
+                        'note': band_opt.note})
+        elif band is not None:
+            out.append({'item': 'alloy', 'value': alloy, 'published_low': None,
+                        'published_high': None, 'unit': '', 'verdict': 'NO_PUBLISHED_RANGE',
+                        'basis': f'alloy is not an option of the {band.label} band of the grade '
+                                 'table' + (' (it is listed for the product at other gauges)'
+                                            if listed else ''),
+                        'sources': list(_union_sources(listed)),
+                        'read_status': _weakest_of(listed), 'note': ''})
+        else:
+            known = _norm(alloy) in alloy_names
+            out.append({'item': 'alloy', 'value': alloy, 'published_low': None,
+                        'published_high': None, 'unit': '',
+                        'verdict': 'WITHIN_PUBLISHED_RANGE' if known else 'NO_PUBLISHED_RANGE',
+                        'basis': 'alloy listed for this product' if known
+                        else 'alloy not listed for this product in the reports',
+                        'sources': list(_union_sources(listed)),
+                        'read_status': _weakest_of(listed), 'note': ''})
     if temper is not None:
         hits = [t for t in p.tempers if _norm(t.name) == _norm(temper)]
-        out.append({'item': 'temper', 'value': temper, 'published_low': None,
-                    'published_high': None, 'unit': '',
-                    'verdict': 'WITHIN_PUBLISHED_RANGE' if hits else 'NO_PUBLISHED_RANGE',
-                    'basis': 'temper listed for this product' if hits
-                    else 'temper not listed for this product in the reports',
-                    'sources': list(_union_sources(hits)), 'read_status': _weakest_of(hits),
-                    'note': ''})
+        hard_band = band is not None and 'H18' in band.options[0].temper_labels
+        if hard_band and _norm(temper) in ('H18', 'H19'):
+            srcs = list(_union_sources(hits + [TEMPER_NAMING]))
+            out.append({'item': 'temper', 'value': temper, 'published_low': None,
+                        'published_high': None, 'unit': '', 'verdict': 'WITHIN_PUBLISHED_RANGE',
+                        'basis': f'H18 and H19 are both consistent with this product at the '
+                                 f'{band.label} band (naming note)',
+                        'sources': srcs, 'read_status': _weakest_of(hits + [TEMPER_NAMING]),
+                        'note': TEMPER_NAMING.text})
+        elif hard_band and hits:
+            out.append({'item': 'temper', 'value': temper, 'published_low': None,
+                        'published_high': None, 'unit': '', 'verdict': 'NO_PUBLISHED_RANGE',
+                        'basis': f'temper listed for this product only by low-confidence pages; '
+                                 f'the grade table of the {band.label} band has H18/H19 (the '
+                                 'second survey treats soft collector foil as an error)',
+                        'sources': list(_union_sources(hits)), 'read_status': _weakest_of(hits),
+                        'note': ''})
+        else:
+            out.append({'item': 'temper', 'value': temper, 'published_low': None,
+                        'published_high': None, 'unit': '',
+                        'verdict': 'WITHIN_PUBLISHED_RANGE' if hits else 'NO_PUBLISHED_RANGE',
+                        'basis': 'temper listed for this product' if hits
+                        else 'temper not listed for this product in the reports',
+                        'sources': list(_union_sources(hits)), 'read_status': _weakest_of(hits),
+                        'note': ''})
     if sigma is not None:
-        out.append(_flow_stress_finding(p, sigma, alloy, temper))
+        f = _band_flow_stress_finding(band, band_opt, alloy, sigma) if band is not None else None
+        out.append(f or _flow_stress_finding(p, sigma, alloy, temper))
     return _checked(out)
+
+
+_FLOW_TAIL = ('; INDICATOR ONLY: finished-product tensile strength is not the rolling flow '
+              'stress')
+
+
+def _band_flow_stress_finding(band, opt, alloy, sigma):
+    """Flow stress against the band row: standard minimum to the top of the typical range."""
+    opts = [opt] if opt is not None else ([] if alloy is not None else list(band.options))
+    los, his, objs = [], [], []
+    for o in opts:
+        lo, hi = _rm_range(o)
+        if lo is not None:
+            los.append(lo)
+        if hi is not None:
+            his.append(hi)
+        objs += ([o.standard_min_rm_pa] if o.standard_min_rm_pa else []) + _typ_rm_spans(o)
+    if not los:
+        return None
+    lo, hi = min(los), (max(his) if his else None)
+    scope = (f'alloy {opt.alloy} in the {band.label} band' if opt is not None
+             else f'every option of the {band.label} band')
+    rng = Range(lo, hi, 'Pa', _union_sources(objs),
+                f'{scope}: standard minimum (else lowest typical) to the top of the typical '
+                'producer range', 'span' if hi is not None else 'minimum', None, 'MPa')
+    return _finding('mean_flow_stress_indicator', sigma, 'Pa', rng,
+                    f'mean flow stress against the grade table, {scope}' + _FLOW_TAIL
+                    + ('; no typical upper value is published, so only the minimum is checked'
+                       if hi is None else ''), extra_sources=objs)
 
 
 def _mode_finding(p, doubled, is_final_pass, surface, h1):
@@ -2739,6 +3740,429 @@ def _flow_stress_finding(p, sigma, alloy, temper):
                  f'mean flow stress against the span of {scope}' + basis_tail,
                  extra_sources=rms)
     return f
+
+
+# --------------------------------------------------------------------------- grade selection
+ORDERING_RULE = (
+    'Presentation order (a rule of this module, never a claim that one alloy is best): options '
+    'the research calls the usual choice at this gauge first, then by evidence rating '
+    '(strong, medium, weak, vendor_level, not_rated), then by strength (middle of the first '
+    'typical range, else the standard minimum) from high to low, then by name. Options outside '
+    'their published gauge span or usual only for another surface come after the others.')
+PROPOSAL_RULE = {
+    'standard': 'the usual standard-strength choice of the gauge band (first in the report\'s '
+                'list)',
+    'high_strength': 'the usual high-strength choice of the gauge band (first in the report\'s '
+                     'list)',
+}
+PROPOSAL_FALLBACK_RULE = (
+    'no usual choice of this grade is published for the band: the option of this grade with the '
+    'highest standard minimum (ties: the report\'s order) is used, rated weak')
+VALUE_RULE = ('value used: the middle of the first published typical tensile range for this '
+              'alloy in this band; if none, the standard minimum (a lower bound: finished foil '
+              'is usually above it), else the lowest published typical minimum')
+_EV_RANK = {r: i for i, r in enumerate(EVIDENCE_RATINGS)}
+
+
+def grade_bands(product_id):
+    """The grade-table bands of a product (empty tuple when it has none)."""
+    product(product_id)
+    return GRADE_TABLES.get(product_id, ())
+
+
+def _band_of(product_id, h):
+    for b in grade_bands(product_id):
+        if b.contains(h):
+            return b
+    return None
+
+
+def gauge_band(product_id, final_gauge_m):
+    """The grade-table band of ``final_gauge_m`` for a product, or an 'outside' result.
+
+    Returns a JSON-serialisable dict: ``status`` 'IN_BAND' with ``band`` (the band record), or
+    'OUTSIDE_PUBLISHED_BANDS' / 'NO_GRADE_TABLE' with ``band`` None and the reason.
+    """
+    p = product(product_id)
+    h = _num('final_gauge_m', final_gauge_m, positive=True, hi=0.02)
+    bands = grade_bands(product_id)
+    out = {'product_id': p.id, 'final_gauge_m': h}
+    if not bands:
+        return _checked({**out, 'status': 'NO_GRADE_TABLE', 'band': None,
+                         'reason': f'no gauge-by-gauge grade table was published for {p.name}'})
+    b = _band_of(product_id, h)
+    if b is None:
+        lo = min(x.low_m for x in bands)
+        hi = max(x.high_m for x in bands)
+        side = 'below' if h < lo else 'above'
+        return _checked({**out, 'status': 'OUTSIDE_PUBLISHED_BANDS', 'band': None,
+                         'reason': f'{h * 1e6:.4g} µm is {side} every published band of '
+                                   f'{p.name} ({lo * 1e6:.4g}–{hi * 1e6:.4g} µm)'})
+    return _checked({**out, 'status': 'IN_BAND', 'band': b.to_dict(),
+                     'band_id': b.id, 'band_label': b.label})
+
+
+def _conductivity(alloy):
+    for s in CONDUCTIVITY:
+        if _norm(s.topic) == _norm(alloy):
+            return s
+    return None
+
+
+def _typ_rm_spans(o):
+    return [s.rm_pa for s in o.typical if s.rm_pa is not None]
+
+
+def _rm_value(o):
+    """(value, basis) per VALUE_RULE, or (None, '')."""
+    for r in _typ_rm_spans(o):
+        if r.bound in ('span', 'typical') and r.low is not None and r.high is not None:
+            return 0.5 * (r.low + r.high), f'middle of the typical range {_fmt_range(r)}'
+    if o.standard_min_rm_pa is not None:
+        return o.standard_min_rm_pa.low, 'the standard minimum (a lower bound)'
+    lows = [r.low for r in _typ_rm_spans(o) if r.low is not None]
+    if lows:
+        return min(lows), 'the lowest published typical minimum (a lower bound)'
+    return None, ''
+
+
+def _typ_range(o):
+    """(low, high) over the typical producer values only (None where none is published)."""
+    los = [r.low for r in _typ_rm_spans(o) if r.low is not None]
+    his = [r.high for r in _typ_rm_spans(o) if r.high is not None and r.bound != 'minimum']
+    return (min(los) if los else None), (max(his) if his else None)
+
+
+def _rm_range(o):
+    los, his = [], []
+    if o.standard_min_rm_pa is not None:
+        los.append(o.standard_min_rm_pa.low)
+    for r in _typ_rm_spans(o):
+        if r.low is not None:
+            los.append(r.low)
+        if r.high is not None and r.bound != 'minimum':
+            his.append(r.high)
+        elif r.high is not None and r.bound == 'minimum':
+            los.append(r.high)
+    lo = (o.standard_min_rm_pa.low if o.standard_min_rm_pa is not None
+          else (min(los) if los else None))
+    hi = max(his) if his else None
+    return lo, hi
+
+
+def _option_evidence(band, o):
+    if o.usual is not None:
+        return band.choice_evidence, 'the report\'s rating of the usual choice in this band'
+    if o.standard_min_rm_pa is not None:
+        return 'not_rated', ('not a usual choice; its standard minimum is rated '
+                             f'{band.minima_evidence} in this band')
+    return 'not_rated', 'not a usual choice; producer values only'
+
+
+def _first(o, attr):
+    for s in o.typical:
+        r = getattr(s, attr)
+        if r is not None:
+            return r
+    return None
+
+
+def _option_row(band, o, h, req, surface):
+    ev, ev_basis = _option_evidence(band, o)
+    lo, hi = _rm_range(o)
+    val, _ = _rm_value(o)
+    if req is None:
+        check = None
+    else:
+        guaranteed = o.standard_min_rm_pa.low if o.standard_min_rm_pa is not None else None
+        best = max([v for v in (lo, hi, guaranteed) if v is not None], default=None)
+        if guaranteed is not None and guaranteed >= req * (1 - _TOL):
+            check = 'MEETS_REQUESTED_MINIMUM'
+        elif best is None:
+            check = 'NO_DATA'
+        elif best < req * (1 - _TOL):
+            check = 'BELOW_REQUESTED_MINIMUM'
+        elif lo is not None and lo >= req * (1 - _TOL):
+            check = 'MEETS_REQUESTED_MINIMUM'
+        else:
+            check = 'NOT_GUARANTEED'
+    outside = o.gauge_m is not None and not (
+        o.gauge_m.low * (1 - _BAND_TOL) <= h <= o.gauge_m.high * (1 + _BAND_TOL))
+    surf_cond = o.usual_surface
+    mismatch = surf_cond is not None and surface != surf_cond
+    rp, a = _first(o, 'rp_pa'), _first(o, 'elongation')
+    cond = _conductivity(o.alloy)
+    srcs = list(o.option_sources())
+    return {
+        'alloy': o.alloy, 'grade': o.grade, 'temper_labels': list(o.temper_labels),
+        'grade_names': list(o.grade_names),
+        'standard_min_rm_pa': o.standard_min_rm_pa.low if o.standard_min_rm_pa else None,
+        'standard_min_sources': list(o.standard_min_rm_pa.sources) if o.standard_min_rm_pa
+        else [],
+        'typical_rm_pa': list(_typ_range(o)), 'rm_range_pa': [lo, hi], 'rm_value_pa': val,
+        'typical': [s.to_dict() for s in o.typical],
+        'proof_strength_pa': [rp.low, rp.high] if rp else None,
+        'elongation_fraction': [a.low, a.high, a.bound] if a else None,
+        'conductivity_iacs_fraction': ([cond.values[0].low, cond.values[0].high]
+                                       if cond else None),
+        'conductivity_sources': list(cond.sources) if cond else [],
+        'usual': o.usual is not None, 'usual_for': o.usual.text if o.usual else '',
+        'usual_surface': surf_cond, 'surface_mismatch': mismatch,
+        'outside_alloy_gauge_span': outside,
+        'evidence': ev, 'evidence_basis': ev_basis,
+        'requested_minimum_check': check,
+        'below_requested_minimum': check == 'BELOW_REQUESTED_MINIMUM',
+        'note': o.note, 'sources': srcs,
+        'read_status': _weakest(_SOURCES[s].read_status for s in srcs) if srcs else None}
+
+
+def _order_key(row):
+    strength = row['rm_value_pa'] or row['standard_min_rm_pa'] or 0.0
+    return (row['outside_alloy_gauge_span'] or row['surface_mismatch'], not row['usual'],
+            _EV_RANK[row['evidence']], -strength, row['alloy'])
+
+
+def grade_options(product_id, final_gauge_m, *, min_tensile_strength_pa=None, surface=None):
+    """Every alloy option of the band of ``final_gauge_m`` (marked, never removed).
+
+    Each option: temper label(s), standard minimum, typical producer range, proof strength,
+    elongation, conductivity, grade names, usual choice and for what, evidence rating, sources,
+    read status, and ``requested_minimum_check`` against ``min_tensile_strength_pa``
+    (MEETS_REQUESTED_MINIMUM / NOT_GUARANTEED / BELOW_REQUESTED_MINIMUM / NO_DATA).
+    The order is a presentation rule stated in ``ordering_rule``.
+    """
+    gb = gauge_band(product_id, final_gauge_m)
+    req = (None if min_tensile_strength_pa is None else
+           _num('min_tensile_strength_pa', min_tensile_strength_pa, positive=True, hi=2e9))
+    if surface is not None and surface not in SURFACES:
+        raise ValueError(f'surface must be None or one of {SURFACES}')
+    out = {'product_id': gb['product_id'], 'final_gauge_m': gb['final_gauge_m'],
+           'status': gb['status'], 'band_id': gb.get('band_id'),
+           'band_label': gb.get('band_label'), 'reason': gb.get('reason', ''),
+           'requested_min_tensile_strength_pa': req, 'surface': surface,
+           'ordering_rule': ORDERING_RULE, 'options': [], 'band_facts': None,
+           'literature_status': STATUS}
+    if gb['status'] != 'IN_BAND':
+        return _checked(out)
+    band = _band_of(product_id, gb['final_gauge_m'])
+    rows = [_option_row(band, o, gb['final_gauge_m'], req, surface) for o in band.options]
+    rows.sort(key=_order_key)
+    out['options'] = rows
+    out['band_facts'] = {
+        'usual_choice': band.usual_choice.to_dict(),
+        'typical_producer': _json(band.typical_producer),
+        'typical_cells': _json(band.typical_cells), 'evidence': band.evidence.to_dict(),
+        'minima_evidence': band.minima_evidence, 'choice_evidence': band.choice_evidence,
+        'elongation': _json(band.elongation), 'surface': _json(band.surface),
+        'pinholes': _json(band.pinholes), 'notes': _json(band.notes),
+        'temper_naming': TEMPER_NAMING.to_dict() if 'H18' in band.options[0].temper_labels
+        else None,
+        'gb_table_read': GB_TABLE_READ.to_dict() if any(o.standard_min_rm_pa
+                                                        for o in band.options) else None}
+    return _checked(out)
+
+
+def _rp_ratio():
+    """Computed Rp0.2/Rm ratios of the options that publish both at 15 µm (median, span)."""
+    ratios, used = [], []
+    for o in BAND_13_15.options:
+        for s in o.typical:
+            if s.rm_pa is not None and s.rp_pa is not None:
+                rm = 0.5 * (s.rm_pa.low + s.rm_pa.high)
+                rp = 0.5 * (s.rp_pa.low + s.rp_pa.high)
+                ratios.append(rp / rm)
+                used.append(s)
+    ratios.sort()
+    return statistics.median(ratios), (ratios[0], ratios[-1]), _union_sources(used)
+
+
+def proposed_material(product_id, final_gauge_m, *, alloy=None, grade='standard',
+                      surface=None):
+    """One concrete material for the tool to use when the plant has not stated one.
+
+    ``status`` is 'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT' when a proposal is made, else
+    'NO_LITERATURE_PROPOSAL' with the reason. The rule applied is stated in ``rule``.
+    """
+    if grade not in GRADES:
+        raise ValueError(f'grade must be one of {GRADES}')
+    if alloy is not None:
+        _text('alloy', alloy)
+    if surface is not None and surface not in SURFACES:
+        raise ValueError(f'surface must be None or one of {SURFACES}')
+    gb = gauge_band(product_id, final_gauge_m)
+    h = gb['final_gauge_m']
+    base = {'product_id': gb['product_id'], 'final_gauge_m': h, 'grade': grade,
+            'requested_alloy': alloy, 'surface': surface, 'band_id': gb.get('band_id'),
+            'band_label': gb.get('band_label')}
+    if gb['status'] != 'IN_BAND':
+        return _checked({**base, 'status': 'NO_LITERATURE_PROPOSAL', 'reason': gb['reason'],
+                         'rule': '', 'alloy': None})
+    band = _band_of(product_id, h)
+
+    def applicable(o):
+        if o.gauge_m is not None and not (o.gauge_m.low * (1 - _BAND_TOL) <= h
+                                          <= o.gauge_m.high * (1 + _BAND_TOL)):
+            return False
+        return o.usual_surface is None or o.usual_surface == surface
+
+    if alloy is not None:
+        hits = [o for o in band.options if _norm(o.alloy) == _norm(alloy)]
+        if not hits:
+            return _checked({**base, 'status': 'NO_LITERATURE_PROPOSAL', 'alloy': None,
+                             'rule': 'requested alloy',
+                             'reason': f'alloy {alloy} is not an option of the {band.label} band '
+                                       f'({", ".join(o.alloy for o in band.options)})'})
+        o, rule, ev = hits[0], f'the requested alloy {alloy}', _option_evidence(band, hits[0])[0]
+    else:
+        cands = [x for x in band.options if x.grade == grade and applicable(x)]
+        usual = [x for x in cands if x.usual is not None]
+        if usual:
+            o, rule, ev = usual[0], PROPOSAL_RULE[grade], band.choice_evidence
+        else:
+            withmin = [x for x in cands if x.standard_min_rm_pa is not None]
+            if not withmin:
+                return _checked({**base, 'status': 'NO_LITERATURE_PROPOSAL', 'alloy': None,
+                                 'rule': PROPOSAL_RULE[grade],
+                                 'reason': f'no {grade.replace("_", "-")} option with a usual '
+                                           f'choice or a standard minimum is published for the '
+                                           f'{band.label} band'})
+            top = max(x.standard_min_rm_pa.low for x in withmin)
+            o = next(x for x in withmin if x.standard_min_rm_pa.low == top)
+            rule, ev = PROPOSAL_FALLBACK_RULE, 'weak'
+    val, val_basis = _rm_value(o)
+    if val is None:
+        val_basis = f'tensile strength not published for {o.alloy} in this band'
+    lo, hi = _rm_range(o)
+    rp = _first(o, 'rp_pa')
+    if rp is not None:
+        rp_val = 0.5 * (rp.low + rp.high) if rp.high is not None else rp.low
+        rp_out = {'value_pa': rp_val, 'range_pa': [rp.low, rp.high], 'published': True,
+                  'basis': f'published typical proof strength {_fmt_range(rp)}',
+                  'sources': list(rp.sources)}
+    elif any(t.startswith('H') for t in o.temper_labels) and val is not None:
+        med, (rlo, rhi), rsrc = _rp_ratio()
+        rp_out = {'value_pa': _q(med * val), 'range_pa': [_q(rlo * val), _q(rhi * val)],
+                  'published': False, 'ratio_used': med, 'ratio_span': [rlo, rhi],
+                  'basis': f'not published for {o.alloy} in this band; assumed Rp0.2 = '
+                           f'{med:.3f} x Rm, the median Rp0.2/Rm ratio of the hard-foil grades '
+                           f'that publish both at 15 µm (span {rlo:.3f}–{rhi:.3f}; computed)',
+                  'sources': list(rsrc), 'read_status': 'computed'}
+    else:
+        rp_out = {'value_pa': None, 'range_pa': None, 'published': False,
+                  'basis': f'not published for {o.alloy} in this band, and no assumption is '
+                           'made for this temper', 'sources': []}
+    a = _first(o, 'elongation')
+    if a is not None:
+        el = {'range_fraction': [a.low, a.high], 'bound': a.bound,
+              'basis': f'published {_fmt_range(a)}', 'sources': list(a.sources)}
+    elif band.elongation is not None:
+        e0 = band.elongation.values[0]
+        el = {'range_fraction': [e0.low, e0.high], 'bound': 'minimum',
+              'basis': 'not published for this alloy; the band\'s standard elongation minima',
+              'sources': list(band.elongation.sources)}
+    else:
+        el = {'range_fraction': None, 'bound': None, 'basis': 'not published', 'sources': []}
+    cond = _conductivity(o.alloy)
+    srcs = list(o.option_sources())
+    hard = any(t.startswith('H') for t in o.temper_labels)
+    notes = [f'Literature proposal for the {band.label} band; confirm or correct with the '
+             'plant (alloy, temper, strength).']
+    if hard:
+        notes.append(TEMPER_NAMING.text)
+    else:
+        notes.append(f'{o.temper_labels[0]} is the finished temper reached after rolling; the '
+                     'finished strength is not the rolling flow stress.')
+    return _checked({
+        **base, 'status': BG_STATUS, 'rule': rule, 'value_rule': VALUE_RULE,
+        'alloy': o.alloy, 'option_grade': o.grade, 'temper': o.temper_labels[0],
+        'temper_labels': list(o.temper_labels), 'grade_names': list(o.grade_names),
+        'tensile_strength_pa': {'value_pa': val, 'range_pa': [lo, hi],
+                                'standard_min_pa': (o.standard_min_rm_pa.low
+                                                    if o.standard_min_rm_pa else None),
+                                'basis': val_basis},
+        'proof_strength': rp_out, 'elongation': el,
+        'conductivity_iacs_fraction': ([cond.values[0].low, cond.values[0].high]
+                                       if cond else None),
+        'usual_for': o.usual.text if o.usual else '', 'evidence': ev,
+        'evidence_basis': band.evidence.text, 'sources': srcs,
+        'read_status': _weakest(_SOURCES[s].read_status for s in srcs) if srcs else None,
+        'notes': notes})
+
+
+def format_grade_options(product_id, final_gauge_m, *, min_tensile_strength_pa=None,
+                         surface=None):
+    """Plain-text options table and the two proposals (what the CLI prints)."""
+    g = grade_options(product_id, final_gauge_m, min_tensile_strength_pa=min_tensile_strength_pa,
+                      surface=surface)
+    L = [f'{g["product_id"]} at {g["final_gauge_m"] * 1e6:.4g} µm: '
+         + (f'band {g["band_label"]}' if g['status'] == 'IN_BAND' else g['reason'])]
+    if g['status'] != 'IN_BAND':
+        return '\n'.join(L) + '\n'
+
+    def mpa(v):
+        return '—' if v is None else f'{v * 1e-6:.0f}'
+
+    hdr = ('alloy', 'grade', 'temper', 'GB min', 'typical Rm', 'Rp0.2', 'A %', '% IACS',
+           'usual', 'evidence', 'sources')
+    rows = []
+    for o in g['options']:
+        lo, hi = o['typical_rm_pa']
+        typ = '—' if lo is None and hi is None else (
+            f'{mpa(lo)}–{mpa(hi)}' if hi is not None else f'≥{mpa(lo)}')
+        rp = o['proof_strength_pa']
+        rps = '—' if not rp else (mpa(rp[0]) if rp[1] in (None, rp[0]) else
+                                  f'{mpa(rp[0])}–{mpa(rp[1])}')
+        el = o['elongation_fraction']
+        els = '—' if not el else ((('≥' if el[2] == 'minimum' else '') + f'{el[0] * 100:g}')
+                                  if el[1] in (None, el[0]) or el[2] == 'minimum'
+                                  else f'{el[0] * 100:g}–{el[1] * 100:g}')
+        c = o['conductivity_iacs_fraction']
+        cs = '—' if not c else (f'{c[0] * 100:g}' if c[0] == c[1] else
+                                f'{c[0] * 100:g}–{c[1] * 100:g}')
+        usual = ('yes' + (f' ({o["usual_surface"].replace("_", "-")} only)'
+                          if o['usual_surface'] else '')) if o['usual'] else ''
+        mark = []
+        if o['below_requested_minimum']:
+            mark.append('BELOW REQUESTED MIN')
+        elif o['requested_minimum_check'] == 'NOT_GUARANTEED':
+            mark.append('min not guaranteed')
+        if o['outside_alloy_gauge_span']:
+            mark.append('outside alloy gauge')
+        if lo is not None and hi is None and o['typical'] and all(
+                t['rm_pa'] is None or t['rm_pa']['bound'] == 'minimum' for t in o['typical']):
+            typ = f'≥{mpa(lo)}'
+        rows.append((o['alloy'] + (' [' + ', '.join(mark) + ']' if mark else ''),
+                     o['grade'].replace('_', '-'), '/'.join(o['temper_labels']),
+                     mpa(o['standard_min_rm_pa']), typ, rps, els, cs, usual, o['evidence'],
+                     ' '.join(o['sources'])))
+    w = [max(len(str(r[i])) for r in rows + [hdr]) for i in range(len(hdr))]
+    L.append('  '.join(h.ljust(w[i]) for i, h in enumerate(hdr)).rstrip())
+    for r in rows:
+        L.append('  '.join(str(c).ljust(w[i]) for i, c in enumerate(r)).rstrip())
+    bf = g['band_facts']
+    L.append(f'Usual choice: {bf["usual_choice"]["text"]} Evidence: {bf["evidence"]["text"]}')
+    L.append(g['ordering_rule'])
+    for grade in GRADES:
+        p = proposed_material(product_id, final_gauge_m, grade=grade, surface=surface)
+        if p['status'] != BG_STATUS:
+            L.append(f'Proposal ({grade.replace("_", "-")}): none — {p["reason"]}')
+            continue
+        t = p['tensile_strength_pa']
+        rng = t['range_pa']
+        if t['value_pa'] is None:
+            rm_txt = 'Rm not published for this option in this band'
+        else:
+            rtxt = (f'{mpa(rng[0])}–{mpa(rng[1])}' if rng[1] is not None
+                    else f'≥{mpa(rng[0])}')
+            rm_txt = f'Rm {mpa(t["value_pa"])} MPa used ({t["basis"]}; range {rtxt} MPa)'
+        ps = p['proof_strength']
+        rp_txt = ('Rp0.2 not published' if ps['value_pa'] is None else
+                  f'Rp0.2 {mpa(ps["value_pa"])} MPa '
+                  f'({"published" if ps["published"] else "assumed, " + ps.get("basis", "")})')
+        L.append(f'Proposal ({grade.replace("_", "-")}): {p["alloy"]}-{p["temper"]}, {rm_txt}, '
+                 f'{rp_txt}; evidence {p["evidence"]}; rule: {p["rule"]}; '
+                 f'status {p["status"]}.')
+    return '\n'.join(L) + '\n'
 
 
 # --------------------------------------------------------------------------- nearest schedules
@@ -2999,6 +4423,11 @@ def _product_md(p, n):
         L += _stmt_lines(p.caveats)
         L.append('')
     L += [f'Key requirement: {p.key_requirement.text}{_cite(p.key_requirement)}', '']
+    if p.evidence:
+        L += [f'Evidence: ' + ' '.join(f'{s.text}{_cite(s)}' for s in p.evidence), '']
+    if p.id in GRADE_TABLES:
+        L += ['Alloy and temper by gauge: see "Battery foil: alloy and temper by gauge" above.',
+              '']
     return L
 
 
@@ -3031,6 +4460,201 @@ def _general_md():
     return L
 
 
+_BC = 'battery_collector_foil'
+
+
+def _mpa(v):
+    return '—' if v is None else f'{v * 1e-6:.4g}'
+
+
+def _band_min_txt(b):
+    have = [f'{o.alloy} {_mpa(o.standard_min_rm_pa.low)}' for o in b.options
+            if o.standard_min_rm_pa is not None]
+    none = [o.alloy for o in b.options if o.standard_min_rm_pa is None
+            and o.note.startswith(_NO_GB)]
+    txt = '; '.join(have) if have else 'none'
+    if none and have:
+        txt += f'; {", ".join(none)} —'
+    return txt + (' [BG-G2]' if have else '')
+
+
+def _opt_md_row(row):
+    typ = '; '.join(
+        f'{_esc(", ".join(t["alloys"]))}: '
+        + ' / '.join(x for x in (
+            _fmt_range(_range_from(t['rm_pa'])) if t['rm_pa'] else '',
+            ('Rp0.2 ' + _fmt_range(_range_from(t['rp_pa']))) if t['rp_pa'] else '',
+            ('A ' + _fmt_range(_range_from(t['elongation']))) if t['elongation'] else '')
+            if x) + f' ({_esc(t["condition"])}) [{", ".join(t["sources"])}]'
+        for t in row['typical']) or '—'
+    c = row['conductivity_iacs_fraction']
+    ctxt = '—' if not c else (f'{c[0] * 100:g}' if c[0] == c[1] else
+                              f'{c[0] * 100:g}–{c[1] * 100:g}')
+    usual = '—'
+    if row['usual']:
+        usual = _esc(row['usual_for'])
+    note = ('; '.join(x for x in (row['note'], 'grade names: ' + ', '.join(row['grade_names'])
+                                  if row['grade_names'] else '') if x)) or '—'
+    return (f'| {_esc(row["alloy"])} | {row["grade"].replace("_", "-")} | '
+            f'{"/".join(row["temper_labels"])} | {_mpa(row["standard_min_rm_pa"])} | {typ} | '
+            f'{ctxt} | {usual} | {row["evidence"]} | {_esc(note)} | '
+            f'{", ".join(row["sources"]) or "—"} |')
+
+
+def _range_from(d):
+    return Range(d['low'], d['high'], d['unit'], tuple(d['sources']), d['note'], d['bound'],
+                 None, d['display_unit'])
+
+
+def _proposal_line(pid, h, grade):
+    p = proposed_material(pid, h, grade=grade)
+    g = grade.replace('_', '-')
+    if p['status'] != BG_STATUS:
+        return f'- {g}: no proposal ({p["reason"]}).'
+    t = p['tensile_strength_pa']
+    lo, hi = t['range_pa']
+    if t['value_pa'] is None:
+        rm = 'tensile strength not published for this option'
+    else:
+        rng = f'{_mpa(lo)}–{_mpa(hi)}' if hi is not None else f'≥{_mpa(lo)}'
+        rm = f'Rm {_mpa(t["value_pa"])} MPa used ({t["basis"]}; range {rng} MPa)'
+    ps = p['proof_strength']
+    rp = ('Rp0.2 not published' if ps['value_pa'] is None else
+          f'Rp0.2 {_mpa(ps["value_pa"])} MPa ({"published" if ps["published"] else "assumed: " + ps["basis"]})')
+    return (f'- {g}: **{p["alloy"]}-{p["temper"]}**; {rm}; {rp}; evidence {p["evidence"]}. '
+            f'Rule: {p["rule"]}. [{", ".join(p["sources"])}]')
+
+
+def _grades_md():
+    L = ['## Battery foil: alloy and temper by gauge', '',
+         'From the second battery survey (sources `BG-`): which alloy and temper are used at '
+         'each gauge. A process engineer can read off, for a final gauge: the alloys, the '
+         'temper label, the standard minimum and typical strength, and the evidence. The tool '
+         f'uses the proposals below when the plant has not stated a material; each carries the '
+         f'status {BG_STATUS} and must be confirmed or corrected by the plant.', '',
+         '### Three findings first', '']
+    L += [f'{i}. {s.text}{_cite(s)}' for i, s in enumerate(HEADLINE_FINDINGS, 1)]
+    L += ['', f'How the standard minima were read: {GB_TABLE_READ.text}{_cite(GB_TABLE_READ)}',
+          '', 'Evidence ratings are the report\'s own (strong / medium / weak / vendor-level), '
+          'kept as data: "minima" rates the standard minima of the band, "choice" rates the '
+          'usual alloy choice.', '',
+          '### Collector foil: selection table by gauge band', '',
+          '| Gauge band | GB/T 33143-2022 minimum Rm by alloy, MPa (H18) | Typical producer '
+          'values | Alloy usually chosen | Typical cells | Pinholes (T/ZZB 2638) | Evidence |',
+          '|---|---|---|---|---|---|---|']
+    for b in COLLECTOR_BANDS:
+        tp = f'{b.typical_producer.text}{_cite(b.typical_producer)}' if b.typical_producer \
+            else '—'
+        cells = f'{b.typical_cells.text}{_cite(b.typical_cells)}' if b.typical_cells else '—'
+        pin = f'{b.pinholes.text}{_cite(b.pinholes)}' if b.pinholes else '—'
+        L.append(f'| {b.label} ({b.gauges_named}) | {_band_min_txt(b)} | {_esc(tp)} | '
+                 f'{_esc(b.usual_choice.text)}{_cite(b.usual_choice)} | {_esc(cells)} | '
+                 f'{_esc(pin)} | {_esc(b.evidence.text)} (minima {b.minima_evidence}, choice '
+                 f'{b.choice_evidence}){_cite(b.evidence)} |')
+    L += ['', f'- Elongation: {GB_ELONGATION.text}{_cite(GB_ELONGATION)}',
+          f'- Temper label: {TEMPER_NAMING.text}{_cite(TEMPER_NAMING)}']
+    L += [f'- Surface: {s.text}{_cite(s)}' for s in (SURFACE_SINGLE, SURFACE_SAMA, SURFACE_8021)]
+    for b in COLLECTOR_BANDS:
+        L += [f'- {b.label}: {s.text}{_cite(s)}' for s in b.notes]
+    L += ['', '### The two bands that matter for a 17–19 µm and a 12 µm product', '']
+    r1 = 1 - (18 / 50) ** 0.5
+    r2 = 1 - (12 / 50) ** 0.5
+    L += [f'- A usual final gauge of 17–19 µm is in the **{_band_of(_BC, 18e-6).label}** band; '
+          f'12 µm is in the **{_band_of(_BC, 12e-6).label}** band. From 50 µm in two equal '
+          f'single-sheet passes (computed): 50→18 µm is {r1 * 100:.0f} % per pass '
+          f'(50→{50 * (1 - r1):.0f}→18 µm), 50→12 µm is {r2 * 100:.0f} % per pass '
+          f'(50→{50 * (1 - r2):.1f}→12 µm).', '']
+    for h in (18e-6, 12e-6):
+        b = _band_of(_BC, h)
+        L += [f'**{h * 1e6:.0f} µm: band {b.label}.** Proposals:', '']
+        L += [_proposal_line(_BC, h, g) for g in GRADES]
+        L += ['']
+    L += ['The research-stated numbers for 12 µm: standard minimum 180–190 MPa for 1235/1060, '
+          '230 MPa for the 1100/1C30 type that EV practice favours [BG-G2, BG-G21, BG-G23].', '',
+          '### Options by band', '',
+          f'Order: {ORDERING_RULE}', '',
+          f'Proposal rule: standard = {PROPOSAL_RULE["standard"]}; high-strength = '
+          f'{PROPOSAL_RULE["high_strength"]}; when there is none, {PROPOSAL_FALLBACK_RULE}. '
+          f'Strength {VALUE_RULE}. Proof strength, where not published, is assumed from the '
+          'median Rp0.2/Rm ratio of the 15 µm grades that publish both (computed).', '']
+    for b in COLLECTOR_BANDS:
+        g = grade_options(_BC, b.high_m)
+        L += [f'#### {b.label}', '',
+              '| Alloy | Grade | Temper | GB min Rm, MPa | Typical producer values | % IACS | '
+              'Usual choice | Evidence | Note | Sources |',
+              '|---|---|---|---|---|---|---|---|---|---|']
+        L += [_opt_md_row(r) for r in g['options']]
+        L += ['', _proposal_line(_BC, b.high_m, 'standard').replace('- standard:',
+                                                                    '- Proposal, standard:'),
+              _proposal_line(_BC, b.high_m, 'high_strength').replace(
+                  '- high-strength:', '- Proposal, high-strength:'), '']
+    L += ['### Conductivity', '']
+    L += [f'- {s.text}{_cite(s)}' for s in CONDUCTIVITY]
+    L += ['', '### Other documents that set strength by gauge', '']
+    L += [f'- {s.topic}: {s.text}{_cite(s)}' for s in OTHER_GRADE_DOCUMENTS]
+    L += ['', '### Gauges in use', '']
+    L += _stmt_lines(GAUGES_IN_USE)
+    L += ['', '### The 25–60 µm battery products', '',
+          '| Product | Gauge | Alloy, temper | Properties | Last pass | Evidence |',
+          '|---|---|---|---|---|---|']
+    for pid, last in (('battery_pouch_laminate_foil', BAND_POUCH.notes[0]),
+                      ('battery_tab_foil', None), ('battery_thick_collector_foil', None),
+                      ('battery_carbon_coated_base_foil', None)):
+        p = _PRODUCTS[pid]
+        b = GRADE_TABLES[pid][0]
+        alloys = ', '.join(o.alloy for o in b.options)
+        temper = '/'.join(dict.fromkeys(t for o in b.options for t in o.temper_labels))
+        props = '; '.join(f'{_esc(", ".join(s.alloys))} {_esc(s.condition)}: '
+                          + ', '.join(_fmt_range(r) for r in (s.rm_pa, s.elongation) if r)
+                          + f' [{", ".join(s.sources)}]' for o in b.options[:1]
+                          for s in o.typical) or '—'
+        if pid == 'battery_tab_foil' or pid == 'battery_carbon_coated_base_foil':
+            props = (f'{b.typical_producer.text}{_cite(b.typical_producer)}')
+        last_txt = (f'{last.text}{_cite(last)}' if last else
+                    {'battery_tab_foil': 'Annealed after rolling (inferred) [BG-G34]',
+                     'battery_thick_collector_foil': 'Supplied hard [BG-G35]',
+                     'battery_carbon_coated_base_foil': 'Supplied hard [BG-G38]'}[pid])
+        ev = p.evidence[0]
+        L.append(f'| {p.name} | {_rng_cell(p.final_gauge_m)} | {_esc(alloys)}; '
+                 f'{_esc(temper)} | {_esc(props)} | {_esc(last_txt)} | '
+                 f'{_esc(ev.text)}{_cite(ev)} |')
+    L.append(f'| Case, lid, busbar, cooling plate (not a catalogue product) | ≥0.3 mm | '
+             f'3003, 1050 | — | Not foil | {_esc(CELL_CASE_STOCK.text)}{_cite(CELL_CASE_STOCK)} |')
+    L += ['']
+    L += [f'- Pouch: {s.text}{_cite(s)}' for s in BAND_POUCH.notes[1:] + (
+        _PRODUCTS['battery_pouch_laminate_foil'].common_gauges[-1], BAND_POUCH.usual_choice)]
+    L += ['', '### Why alloy and temper change with gauge', '']
+    L += [f'{s.topic}. {s.text}{_cite(s)}' for s in GRADE_REASONS]
+    L += ['', '### How each temper is produced', '', '| Temper | Definition | How battery foil '
+          'reaches it |', '|---|---|---|']
+    L += [f'| {t.temper} | {_esc(t.definition.text)}{_cite(t.definition)} | '
+          f'{_esc(t.route.text)}{_cite(t.route)} |' for t in TEMPER_TABLE]
+    L += ['', '### Strength after heating', '', f'{HEATING_NOTE.text}{_cite(HEATING_NOTE)}', '',
+          '| Material | ' + ' | '.join(lbl for lbl, _, _ in _HEAT) + ' | Loss (computed) | '
+          'Sources |', '|---|---|---|---|---|---|---|']
+    for sh in STRENGTH_AFTER_HEATING:
+        loss = sh.loss_fraction()
+        lt = ('—' if loss is None else (f'{loss[0] * 100:.0f} %' if round(loss[0] * 100) ==
+                                        round(loss[1] * 100) else
+                                        f'{loss[0] * 100:.0f}–{loss[1] * 100:.0f} %'))
+        if len(sh.steps) == len(_HEAT):
+            cells = [_fmt_range(s.rm_pa) for s in sh.steps]
+        else:
+            cells = [_fmt_range(sh.steps[0].rm_pa), f'{sh.steps[1].label}: '
+                     f'{_fmt_range(sh.steps[1].rm_pa)}', '—', '—']
+        src = ', '.join(_union_sources([s.rm_pa for s in sh.steps]))
+        L.append(f'| {_esc(sh.material)}{" (" + sh.note + ")" if sh.note else ""} | '
+                 + ' | '.join(cells) + f' | {lt} | {src} |')
+    L += ['', '### Correction', '']
+    L += _stmt_lines(CORRECTIONS)
+    L += ['', '### Disagreements (second survey)', '']
+    L += _stmt_lines(GRADE_DISAGREEMENTS)
+    L += ['', '### Not found (second survey)', '']
+    L += _stmt_lines(GRADE_NOT_FOUND)
+    L.append('')
+    return L
+
+
 def render_reference_markdown():
     """The reference document (deterministic; ``docs/thin-gauge-products.md`` must equal it)."""
     L = ['# Thin-gauge aluminium products: literature reference', '',
@@ -3039,8 +4663,9 @@ def render_reference_markdown():
          '## What this is and is not', '',
          'This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, '
          'properties, rolling routes, quality requirements and named band or streak defects. '
-         'Every value is quoted from three research reports (battery and electronics foil, '
-         'packaging and household foil, heat-exchanger stock, litho and other strip) and '
+         'Every value is quoted from four research reports (battery and electronics foil, a '
+         'second battery report on alloy and temper by gauge, packaging and household foil, '
+         'heat-exchanger stock, litho and other strip) and '
          'carries its source ids. It is not a validation: nothing here was measured on a plant, '
          'vendor and trade pages are low-confidence, and several standards were read from '
          'previews only. A value inside a published span is not evidence that a pass is good.',
@@ -3050,8 +4675,8 @@ def render_reference_markdown():
          'passes shows its total and the equal-split mean 1 − (h_exit/h_entry)^(1/n). Ranges '
          'are kept as ranges, and the reports\' disagreements and "not found" lists are kept '
          'below.', '',
-         'Source ids: `BF-` battery report, `PK-` packaging report, `HX-` heat-exchanger and '
-         'litho report. A citation such as [PK-S20] shows the sources; a fact whose own read '
+         'Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by '
+         'gauge), `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read '
          'status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. '
          'Read-status legend:', '',
          '| Read status | Meaning | Report tags mapped onto it |', '|---|---|---|',
@@ -3079,6 +4704,7 @@ def render_reference_markdown():
           f'{BATTERY_SCHEDULE_CAVEAT.text}{_cite(BATTERY_SCHEDULE_CAVEAT)}', '',
           f'{TENSION_LINES.text}{_cite(TENSION_LINES)}', '']
     L += _general_md()
+    L += _grades_md()
     for n, p in enumerate(_PRODUCT_LIST, 1):
         L += _product_md(p, n)
     L += ['## Minor products (one-liners, low confidence)', '']
@@ -3113,8 +4739,43 @@ def main(argv=None):
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument('--write', metavar='PATH', help='write the reference markdown to PATH')
     g.add_argument('--list', action='store_true', help='list product ids and names')
-    g.add_argument('--json', action='store_true', help='print the catalogue as JSON')
+    g.add_argument('--json', action='store_true', help='print the catalogue as JSON (with '
+                   '--grades: the options and proposals as JSON)')
+    g.add_argument('--grades', metavar='PRODUCT_ID', help='alloy and temper options and the two '
+                   'literature proposals at --gauge-um')
+    parser.add_argument('--gauge-um', type=float, help='final gauge in µm (with --grades)')
+    parser.add_argument('--min-strength-mpa', type=float,
+                        help='mark options below this tensile strength (with --grades)')
+    parser.add_argument('--surface', choices=SURFACES, help='surface (with --grades)')
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # '--grades X --json' is allowed: --json then formats the --grades output
+    as_json = '--grades' in argv and '--json' in argv
+    if as_json:
+        argv.remove('--json')
     args = parser.parse_args(argv)
+    if args.grades:
+        if args.gauge_um is None:
+            parser.error('--grades needs --gauge-um')
+        h = args.gauge_um * 1e-6
+        req = None if args.min_strength_mpa is None else args.min_strength_mpa * 1e6
+        try:
+            if as_json:
+                out = {'options': grade_options(args.grades, h, min_tensile_strength_pa=req,
+                                                surface=args.surface),
+                       'proposals': {gr: proposed_material(args.grades, h, grade=gr,
+                                                           surface=args.surface)
+                                     for gr in GRADES}}
+                json.dump(out, sys.stdout, ensure_ascii=False, indent=1, allow_nan=False)
+                print()
+            else:
+                sys.stdout.write(format_grade_options(args.grades, h,
+                                                      min_tensile_strength_pa=req,
+                                                      surface=args.surface))
+        except ValueError as exc:
+            parser.error(str(exc))
+        return 0
+    if args.gauge_um is not None or args.min_strength_mpa is not None or args.surface:
+        parser.error('--gauge-um, --min-strength-mpa and --surface go with --grades')
     if args.write:
         path = Path(args.write)
         path.parent.mkdir(parents=True, exist_ok=True)

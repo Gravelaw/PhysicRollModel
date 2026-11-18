@@ -70,13 +70,13 @@
   "rankings": [
     {
       "excluded": [],
-      "gauge_rank_correlation": 0.9904347826086957,
+      "gauge_rank_correlation": 0.9925202374833367,
       "meaning": "a lower critical ridge height lets a smaller incoming ridge yield the strip in the coil",
       "mechanism": "coil_ridges",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 6.48e-06,
-          "label": "12 cigarette_liner_foil",
+          "label": "15 cigarette_liner_foil",
           "mill": "foil",
           "product_id": "cigarette_liner_foil",
           "rank": 1,
@@ -85,7 +85,7 @@
         },
         {
           "exit_thickness_m": 6.5e-06,
-          "label": "11 converter_foil",
+          "label": "14 converter_foil",
           "mill": "foil",
           "product_id": "converter_foil",
           "rank": 2,
@@ -94,7 +94,7 @@
         },
         {
           "exit_thickness_m": 1.05e-05,
-          "label": "9 household_foil",
+          "label": "12 household_foil",
           "mill": "foil",
           "product_id": "household_foil",
           "rank": 3,
@@ -102,29 +102,38 @@
           "value": 0.060000000000000005
         },
         {
+          "exit_thickness_m": 1.64e-05,
+          "label": "4 battery_carbon_coated_base_foil",
+          "mill": "foil",
+          "product_id": "battery_carbon_coated_base_foil",
+          "rank": 4,
+          "unvalidated_extended_bite": true,
+          "value": 0.06872380952380952
+        },
+        {
           "exit_thickness_m": 1.3e-05,
           "label": "1 battery_collector_foil",
           "mill": "foil",
           "product_id": "battery_collector_foil",
-          "rank": 4,
+          "rank": 5,
           "unvalidated_extended_bite": true,
-          "value": 0.07552380952380953
+          "value": 0.07428571428571429
         },
         {
           "exit_thickness_m": 2.12e-05,
-          "label": "10 household_foil_heavy_duty",
+          "label": "13 household_foil_heavy_duty",
           "mill": "foil",
           "product_id": "household_foil_heavy_duty",
-          "rank": 5,
+          "rank": 6,
           "unvalidated_extended_bite": false,
           "value": 0.12114285714285716
         },
         {
           "exit_thickness_m": 2.68e-05,
-          "label": "6 pharma_blister_lidding",
+          "label": "9 pharma_blister_lidding",
           "mill": "foil",
           "product_id": "pharma_blister_lidding",
-          "rank": 6,
+          "rank": 7,
           "unvalidated_extended_bite": false,
           "value": 0.12251428571428571
         },
@@ -133,160 +142,178 @@
           "label": "2 battery_pouch_laminate_foil",
           "mill": "foil",
           "product_id": "battery_pouch_laminate_foil",
-          "rank": 7,
+          "rank": 8,
           "unvalidated_extended_bite": true,
           "value": 0.17142857142857146
         },
         {
           "exit_thickness_m": 3.16e-05,
-          "label": "8 pharma_strip_pack_foil",
+          "label": "11 pharma_strip_pack_foil",
           "mill": "foil",
           "product_id": "pharma_strip_pack_foil",
-          "rank": 8,
+          "rank": 9,
           "unvalidated_extended_bite": true,
           "value": 0.1805714285714286
         },
         {
+          "exit_thickness_m": 3.16e-05,
+          "label": "3 battery_thick_collector_foil",
+          "mill": "foil",
+          "product_id": "battery_thick_collector_foil",
+          "rank": 10,
+          "unvalidated_extended_bite": true,
+          "value": 0.18659047619047622
+        },
+        {
           "exit_thickness_m": 3.46e-05,
-          "label": "5 capacitor_cathode_foil",
+          "label": "8 capacitor_cathode_foil",
           "mill": "foil",
           "product_id": "capacitor_cathode_foil",
-          "rank": 9,
+          "rank": 11,
           "unvalidated_extended_bite": true,
           "value": 0.19771428571428576
         },
         {
           "exit_thickness_m": 3.74e-05,
-          "label": "13 dairy_lidding_foil",
+          "label": "16 dairy_lidding_foil",
           "mill": "foil",
           "product_id": "dairy_lidding_foil",
-          "rank": 10,
+          "rank": 12,
           "unvalidated_extended_bite": true,
           "value": 0.21371428571428575
         },
         {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 11,
+          "rank": 13,
           "unvalidated_extended_bite": true,
           "value": 0.29714285714285715
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 14,
+          "unvalidated_extended_bite": true,
+          "value": 0.31314285714285717
+        },
+        {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
-          "rank": 12,
+          "rank": 15,
           "unvalidated_extended_bite": false,
           "value": 0.4001714285714286
         },
         {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
-          "rank": 13,
+          "rank": 16,
           "unvalidated_extended_bite": true,
           "value": 0.4154285714285715
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
-          "rank": 14,
+          "rank": 17,
           "unvalidated_extended_bite": false,
           "value": 0.4555050024491892
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
-          "rank": 15,
+          "rank": 18,
           "unvalidated_extended_bite": true,
           "value": 0.464
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
-          "rank": 16,
+          "rank": 19,
           "unvalidated_extended_bite": true,
           "value": 0.4948571428571429
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
-          "rank": 17,
+          "rank": 20,
           "unvalidated_extended_bite": true,
           "value": 0.5240000000000001
         },
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
-          "rank": 18,
+          "rank": 21,
           "unvalidated_extended_bite": true,
           "value": 0.7657142857142859
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
-          "rank": 19,
+          "rank": 22,
           "unvalidated_extended_bite": false,
           "value": 1.1584285714285714
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
-          "rank": 20,
+          "rank": 23,
           "unvalidated_extended_bite": false,
           "value": 1.3404482142857146
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
-          "rank": 21,
+          "rank": 24,
           "unvalidated_extended_bite": false,
           "value": 1.8788571428571426
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
-          "rank": 22,
+          "rank": 25,
           "unvalidated_extended_bite": false,
           "value": 1.9405714285714286
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
-          "rank": 23,
+          "rank": 26,
           "unvalidated_extended_bite": false,
           "value": 1.9885714285714284
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
-          "rank": 24,
+          "rank": 27,
           "unvalidated_extended_bite": false,
           "value": 3.6274285714285703
         }
@@ -296,13 +323,13 @@
     },
     {
       "excluded": [],
-      "gauge_rank_correlation": 0.9947826086956522,
+      "gauge_rank_correlation": 0.9961838003408575,
       "meaning": "a smaller lateral compression starts troughs",
       "mechanism": "troughs",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 6.48e-06,
-          "label": "12 cigarette_liner_foil",
+          "label": "15 cigarette_liner_foil",
           "mill": "foil",
           "product_id": "cigarette_liner_foil",
           "rank": 1,
@@ -311,7 +338,7 @@
         },
         {
           "exit_thickness_m": 6.5e-06,
-          "label": "11 converter_foil",
+          "label": "14 converter_foil",
           "mill": "foil",
           "product_id": "converter_foil",
           "rank": 2,
@@ -320,7 +347,7 @@
         },
         {
           "exit_thickness_m": 1.05e-05,
-          "label": "9 household_foil",
+          "label": "12 household_foil",
           "mill": "foil",
           "product_id": "household_foil",
           "rank": 3,
@@ -334,23 +361,32 @@
           "product_id": "battery_collector_foil",
           "rank": 4,
           "unvalidated_extended_bite": true,
-          "value": 14.272251612843375
+          "value": 14.174159374084583
+        },
+        {
+          "exit_thickness_m": 1.64e-05,
+          "label": "4 battery_carbon_coated_base_foil",
+          "mill": "foil",
+          "product_id": "battery_carbon_coated_base_foil",
+          "rank": 5,
+          "unvalidated_extended_bite": true,
+          "value": 15.769777750114178
         },
         {
           "exit_thickness_m": 2.12e-05,
-          "label": "10 household_foil_heavy_duty",
+          "label": "13 household_foil_heavy_duty",
           "mill": "foil",
           "product_id": "household_foil_heavy_duty",
-          "rank": 5,
+          "rank": 6,
           "unvalidated_extended_bite": false,
           "value": 23.114782979276402
         },
         {
           "exit_thickness_m": 2.68e-05,
-          "label": "6 pharma_blister_lidding",
+          "label": "9 pharma_blister_lidding",
           "mill": "foil",
           "product_id": "pharma_blister_lidding",
-          "rank": 6,
+          "rank": 7,
           "unvalidated_extended_bite": false,
           "value": 26.674613186234975
         },
@@ -359,160 +395,178 @@
           "label": "2 battery_pouch_laminate_foil",
           "mill": "foil",
           "product_id": "battery_pouch_laminate_foil",
-          "rank": 7,
+          "rank": 8,
           "unvalidated_extended_bite": true,
           "value": 32.70959855557982
         },
         {
           "exit_thickness_m": 3.16e-05,
-          "label": "8 pharma_strip_pack_foil",
+          "label": "11 pharma_strip_pack_foil",
           "mill": "foil",
           "product_id": "pharma_strip_pack_foil",
-          "rank": 8,
+          "rank": 9,
           "unvalidated_extended_bite": true,
           "value": 34.45411047854407
         },
         {
+          "exit_thickness_m": 3.16e-05,
+          "label": "3 battery_thick_collector_foil",
+          "mill": "foil",
+          "product_id": "battery_thick_collector_foil",
+          "rank": 10,
+          "unvalidated_extended_bite": true,
+          "value": 34.92936203894052
+        },
+        {
           "exit_thickness_m": 3.46e-05,
-          "label": "5 capacitor_cathode_foil",
+          "label": "8 capacitor_cathode_foil",
           "mill": "foil",
           "product_id": "capacitor_cathode_foil",
-          "rank": 9,
+          "rank": 11,
           "unvalidated_extended_bite": true,
           "value": 37.72507033410204
         },
         {
           "exit_thickness_m": 3.74e-05,
-          "label": "13 dairy_lidding_foil",
+          "label": "16 dairy_lidding_foil",
           "mill": "foil",
           "product_id": "dairy_lidding_foil",
-          "rank": 10,
+          "rank": 12,
           "unvalidated_extended_bite": true,
           "value": 40.7779661992895
         },
         {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 11,
+          "rank": 13,
           "unvalidated_extended_bite": true,
           "value": 56.69663749633833
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 14,
+          "unvalidated_extended_bite": true,
+          "value": 59.74953336152579
+        },
+        {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
-          "rank": 12,
+          "rank": 15,
           "unvalidated_extended_bite": true,
           "value": 79.26626049968841
         },
         {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
-          "rank": 13,
+          "rank": 16,
           "unvalidated_extended_bite": false,
           "value": 88.23710195102821
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
-          "rank": 14,
+          "rank": 17,
           "unvalidated_extended_bite": true,
           "value": 88.53398009043602
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
-          "rank": 15,
+          "rank": 18,
           "unvalidated_extended_bite": false,
           "value": 88.65254088341823
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
-          "rank": 16,
+          "rank": 19,
           "unvalidated_extended_bite": true,
           "value": 94.4217078304404
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
-          "rank": 17,
+          "rank": 20,
           "unvalidated_extended_bite": true,
           "value": 99.98233958488896
         },
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
-          "rank": 18,
+          "rank": 21,
           "unvalidated_extended_bite": true,
           "value": 146.1028735482565
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
-          "rank": 19,
+          "rank": 22,
           "unvalidated_extended_bite": false,
           "value": 156.93175850350656
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
-          "rank": 20,
+          "rank": 23,
           "unvalidated_extended_bite": false,
           "value": 192.6082298281553
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
-          "rank": 21,
+          "rank": 24,
           "unvalidated_extended_bite": false,
           "value": 224.0607501057217
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
-          "rank": 22,
+          "rank": 25,
           "unvalidated_extended_bite": false,
           "value": 231.42040978072717
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
-          "rank": 23,
+          "rank": 26,
           "unvalidated_extended_bite": false,
           "value": 237.14458952795363
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
-          "rank": 24,
+          "rank": 27,
           "unvalidated_extended_bite": false,
           "value": 432.58444089754295
         }
@@ -522,13 +576,13 @@
     },
     {
       "excluded": [],
-      "gauge_rank_correlation": 1.0,
+      "gauge_rank_correlation": 0.9998473631983783,
       "meaning": "a smaller lateral compression wrinkles the strip on the roll",
       "mechanism": "roller_wrinkles",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 6.48e-06,
-          "label": "12 cigarette_liner_foil",
+          "label": "15 cigarette_liner_foil",
           "mill": "foil",
           "product_id": "cigarette_liner_foil",
           "rank": 1,
@@ -537,7 +591,7 @@
         },
         {
           "exit_thickness_m": 6.5e-06,
-          "label": "11 converter_foil",
+          "label": "14 converter_foil",
           "mill": "foil",
           "product_id": "converter_foil",
           "rank": 2,
@@ -546,7 +600,7 @@
         },
         {
           "exit_thickness_m": 1.05e-05,
-          "label": "9 household_foil",
+          "label": "12 household_foil",
           "mill": "foil",
           "product_id": "household_foil",
           "rank": 3,
@@ -563,20 +617,29 @@
           "value": 4.452536928629759
         },
         {
+          "exit_thickness_m": 1.64e-05,
+          "label": "4 battery_carbon_coated_base_foil",
+          "mill": "foil",
+          "product_id": "battery_carbon_coated_base_foil",
+          "rank": 5,
+          "unvalidated_extended_bite": true,
+          "value": 5.617046586886773
+        },
+        {
           "exit_thickness_m": 2.12e-05,
-          "label": "10 household_foil_heavy_duty",
+          "label": "13 household_foil_heavy_duty",
           "mill": "foil",
           "product_id": "household_foil_heavy_duty",
-          "rank": 5,
+          "rank": 6,
           "unvalidated_extended_bite": false,
           "value": 7.261060222073146
         },
         {
           "exit_thickness_m": 2.68e-05,
-          "label": "6 pharma_blister_lidding",
+          "label": "9 pharma_blister_lidding",
           "mill": "foil",
           "product_id": "pharma_blister_lidding",
-          "rank": 6,
+          "rank": 7,
           "unvalidated_extended_bite": false,
           "value": 9.179076129790582
         },
@@ -585,160 +648,178 @@
           "label": "2 battery_pouch_laminate_foil",
           "mill": "foil",
           "product_id": "battery_pouch_laminate_foil",
-          "rank": 7,
+          "rank": 8,
           "unvalidated_extended_bite": true,
           "value": 10.275085219914828
         },
         {
           "exit_thickness_m": 3.16e-05,
-          "label": "8 pharma_strip_pack_foil",
+          "label": "3 battery_thick_collector_foil",
+          "mill": "foil",
+          "product_id": "battery_thick_collector_foil",
+          "rank": 9,
+          "unvalidated_extended_bite": true,
+          "value": 10.823089764976954
+        },
+        {
+          "exit_thickness_m": 3.16e-05,
+          "label": "11 pharma_strip_pack_foil",
           "mill": "foil",
           "product_id": "pharma_strip_pack_foil",
-          "rank": 8,
+          "rank": 10,
           "unvalidated_extended_bite": true,
           "value": 10.823089764976954
         },
         {
           "exit_thickness_m": 3.46e-05,
-          "label": "5 capacitor_cathode_foil",
+          "label": "8 capacitor_cathode_foil",
           "mill": "foil",
           "product_id": "capacitor_cathode_foil",
-          "rank": 9,
+          "rank": 11,
           "unvalidated_extended_bite": true,
           "value": 11.850598286968436
         },
         {
           "exit_thickness_m": 3.74e-05,
-          "label": "13 dairy_lidding_foil",
+          "label": "16 dairy_lidding_foil",
           "mill": "foil",
           "product_id": "dairy_lidding_foil",
-          "rank": 10,
+          "rank": 12,
           "unvalidated_extended_bite": true,
           "value": 12.809606240827154
         },
         {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 11,
+          "rank": 13,
           "unvalidated_extended_bite": true,
           "value": 17.810147714519037
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 14,
+          "unvalidated_extended_bite": true,
+          "value": 18.769155668377753
+        },
+        {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
-          "rank": 12,
+          "rank": 15,
           "unvalidated_extended_bite": true,
           "value": 24.899956516260268
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
-          "rank": 13,
+          "rank": 16,
           "unvalidated_extended_bite": true,
           "value": 27.8112306619028
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
-          "rank": 14,
+          "rank": 17,
           "unvalidated_extended_bite": false,
           "value": 28.243507782621144
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
-          "rank": 15,
+          "rank": 18,
           "unvalidated_extended_bite": true,
           "value": 29.660746001487475
         },
         {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
-          "rank": 16,
+          "rank": 19,
           "unvalidated_extended_bite": false,
           "value": 30.61975395534619
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
-          "rank": 17,
+          "rank": 20,
           "unvalidated_extended_bite": true,
           "value": 31.407510488872994
         },
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
-          "rank": 18,
+          "rank": 21,
           "unvalidated_extended_bite": true,
           "value": 45.8953806489529
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
-          "rank": 19,
+          "rank": 22,
           "unvalidated_extended_bite": false,
           "value": 60.50883518394288
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
-          "rank": 20,
+          "rank": 23,
           "unvalidated_extended_bite": false,
           "value": 77.62684174128711
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
-          "rank": 21,
+          "rank": 24,
           "unvalidated_extended_bite": false,
           "value": 78.20481528490731
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
-          "rank": 22,
+          "rank": 25,
           "unvalidated_extended_bite": false,
           "value": 80.77358658988602
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
-          "rank": 23,
+          "rank": 26,
           "unvalidated_extended_bite": false,
           "value": 82.77151982709168
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
-          "rank": 24,
+          "rank": 27,
           "unvalidated_extended_bite": false,
           "value": 150.9866689259707
         }
@@ -753,33 +834,33 @@
           "reason": "bite NOT CREDIBLE (force outside the range reported for battery foil)"
         },
         {
-          "label": "6 pharma_blister_lidding",
+          "label": "9 pharma_blister_lidding",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "9 household_foil",
+          "label": "12 household_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "10 household_foil_heavy_duty",
+          "label": "13 household_foil_heavy_duty",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "11 converter_foil",
+          "label": "14 converter_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "12 cigarette_liner_foil",
+          "label": "15 cigarette_liner_foil",
           "reason": "doubled pass not modelled"
         }
       ],
-      "gauge_rank_correlation": -0.46542827657378744,
+      "gauge_rank_correlation": -0.6632023733997053,
       "meaning": "a smaller roll stripe buckles the strip under mill tension",
       "mechanism": "cooling_stripes_in_mill",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
           "rank": 1,
@@ -788,7 +869,7 @@
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
           "rank": 2,
@@ -797,7 +878,7 @@
         },
         {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
           "rank": 3,
@@ -806,7 +887,7 @@
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
           "rank": 4,
@@ -815,7 +896,7 @@
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
           "rank": 5,
@@ -824,7 +905,7 @@
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
           "rank": 6,
@@ -833,7 +914,7 @@
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
           "rank": 7,
@@ -842,7 +923,7 @@
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
           "rank": 8,
@@ -851,7 +932,7 @@
         },
         {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
           "rank": 9,
@@ -860,7 +941,7 @@
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
           "rank": 10,
@@ -869,7 +950,7 @@
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
           "rank": 11,
@@ -878,7 +959,7 @@
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
           "rank": 12,
@@ -887,7 +968,7 @@
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
           "rank": 13,
@@ -895,49 +976,76 @@
           "value": 2.2959817086700416
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 14,
+          "unvalidated_extended_bite": true,
+          "value": 2.522561060643407
+        },
+        {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 14,
+          "rank": 15,
           "unvalidated_extended_bite": true,
           "value": 2.6746443237672866
         },
         {
           "exit_thickness_m": 3.74e-05,
-          "label": "13 dairy_lidding_foil",
+          "label": "16 dairy_lidding_foil",
           "mill": "foil",
           "product_id": "dairy_lidding_foil",
-          "rank": 15,
+          "rank": 16,
           "unvalidated_extended_bite": true,
           "value": 6.207737114254347
         },
         {
           "exit_thickness_m": 3.46e-05,
-          "label": "5 capacitor_cathode_foil",
+          "label": "8 capacitor_cathode_foil",
           "mill": "foil",
           "product_id": "capacitor_cathode_foil",
-          "rank": 16,
+          "rank": 17,
           "unvalidated_extended_bite": true,
           "value": 6.853112000697925
         },
         {
           "exit_thickness_m": 3.16e-05,
-          "label": "8 pharma_strip_pack_foil",
+          "label": "11 pharma_strip_pack_foil",
           "mill": "foil",
           "product_id": "pharma_strip_pack_foil",
-          "rank": 17,
+          "rank": 18,
           "unvalidated_extended_bite": true,
           "value": 7.787553876138385
+        },
+        {
+          "exit_thickness_m": 3.16e-05,
+          "label": "3 battery_thick_collector_foil",
+          "mill": "foil",
+          "product_id": "battery_thick_collector_foil",
+          "rank": 19,
+          "unvalidated_extended_bite": true,
+          "value": 8.201905535547523
         },
         {
           "exit_thickness_m": 3e-05,
           "label": "2 battery_pouch_laminate_foil",
           "mill": "foil",
           "product_id": "battery_pouch_laminate_foil",
-          "rank": 18,
+          "rank": 20,
           "unvalidated_extended_bite": true,
           "value": 8.459487989491102
+        },
+        {
+          "exit_thickness_m": 1.64e-05,
+          "label": "4 battery_carbon_coated_base_foil",
+          "mill": "foil",
+          "product_id": "battery_carbon_coated_base_foil",
+          "rank": 21,
+          "unvalidated_extended_bite": true,
+          "value": 11.795112364599541
         }
       ],
       "title": "Cooling stripes visible in the mill (in-mill onset height of a roll stripe)",
@@ -950,33 +1058,33 @@
           "reason": "bite NOT CREDIBLE (force outside the range reported for battery foil)"
         },
         {
-          "label": "6 pharma_blister_lidding",
+          "label": "9 pharma_blister_lidding",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "9 household_foil",
+          "label": "12 household_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "10 household_foil_heavy_duty",
+          "label": "13 household_foil_heavy_duty",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "11 converter_foil",
+          "label": "14 converter_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "12 cigarette_liner_foil",
+          "label": "15 cigarette_liner_foil",
           "reason": "doubled pass not modelled"
         }
       ],
-      "gauge_rank_correlation": -0.4324045407636739,
+      "gauge_rank_correlation": -0.6242286785867941,
       "meaning": "a smaller roll stripe shows on the coil or the table",
       "mechanism": "cooling_stripes_after_release",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
           "rank": 1,
@@ -985,7 +1093,7 @@
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
           "rank": 2,
@@ -994,7 +1102,7 @@
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
           "rank": 3,
@@ -1003,7 +1111,7 @@
         },
         {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
           "rank": 4,
@@ -1012,7 +1120,7 @@
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
           "rank": 5,
@@ -1021,7 +1129,7 @@
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
           "rank": 6,
@@ -1030,7 +1138,7 @@
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
           "rank": 7,
@@ -1039,7 +1147,7 @@
         },
         {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
           "rank": 8,
@@ -1048,7 +1156,7 @@
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
           "rank": 9,
@@ -1057,7 +1165,7 @@
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
           "rank": 10,
@@ -1066,7 +1174,7 @@
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
           "rank": 11,
@@ -1075,7 +1183,7 @@
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
           "rank": 12,
@@ -1083,58 +1191,85 @@
           "value": 0.06833429868535078
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 13,
+          "unvalidated_extended_bite": true,
+          "value": 0.08328197982600945
+        },
+        {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 13,
+          "rank": 14,
           "unvalidated_extended_bite": true,
           "value": 0.08862557585848502
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
-          "rank": 14,
+          "rank": 15,
           "unvalidated_extended_bite": false,
           "value": 0.11407630819734746
         },
         {
           "exit_thickness_m": 3.74e-05,
-          "label": "13 dairy_lidding_foil",
+          "label": "16 dairy_lidding_foil",
           "mill": "foil",
           "product_id": "dairy_lidding_foil",
-          "rank": 15,
+          "rank": 16,
           "unvalidated_extended_bite": true,
           "value": 0.2069406959223229
         },
         {
           "exit_thickness_m": 3.46e-05,
-          "label": "5 capacitor_cathode_foil",
+          "label": "8 capacitor_cathode_foil",
           "mill": "foil",
           "product_id": "capacitor_cathode_foil",
-          "rank": 16,
+          "rank": 17,
           "unvalidated_extended_bite": true,
           "value": 0.22978383387484974
         },
         {
           "exit_thickness_m": 3.16e-05,
-          "label": "8 pharma_strip_pack_foil",
+          "label": "11 pharma_strip_pack_foil",
           "mill": "foil",
           "product_id": "pharma_strip_pack_foil",
-          "rank": 17,
+          "rank": 18,
           "unvalidated_extended_bite": true,
           "value": 0.26002230760813727
+        },
+        {
+          "exit_thickness_m": 3.16e-05,
+          "label": "3 battery_thick_collector_foil",
+          "mill": "foil",
+          "product_id": "battery_thick_collector_foil",
+          "rank": 19,
+          "unvalidated_extended_bite": true,
+          "value": 0.2682317968053694
         },
         {
           "exit_thickness_m": 3e-05,
           "label": "2 battery_pouch_laminate_foil",
           "mill": "foil",
           "product_id": "battery_pouch_laminate_foil",
-          "rank": 18,
+          "rank": 20,
           "unvalidated_extended_bite": true,
           "value": 0.28488825760509395
+        },
+        {
+          "exit_thickness_m": 1.64e-05,
+          "label": "4 battery_carbon_coated_base_foil",
+          "mill": "foil",
+          "product_id": "battery_carbon_coated_base_foil",
+          "rank": 21,
+          "unvalidated_extended_bite": true,
+          "value": 0.5065409997174638
         }
       ],
       "title": "Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited)",
@@ -1151,45 +1286,53 @@
           "reason": "chatter onset above the span-wave limit (not reliable)"
         },
         {
-          "label": "5 capacitor_cathode_foil",
+          "label": "3 battery_thick_collector_foil",
           "reason": "chatter onset above the span-wave limit (not reliable)"
         },
         {
-          "label": "6 pharma_blister_lidding",
-          "reason": "doubled pass not modelled"
-        },
-        {
-          "label": "8 pharma_strip_pack_foil",
+          "label": "4 battery_carbon_coated_base_foil",
           "reason": "chatter onset above the span-wave limit (not reliable)"
         },
         {
-          "label": "9 household_foil",
+          "label": "8 capacitor_cathode_foil",
+          "reason": "chatter onset above the span-wave limit (not reliable)"
+        },
+        {
+          "label": "9 pharma_blister_lidding",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "10 household_foil_heavy_duty",
+          "label": "11 pharma_strip_pack_foil",
+          "reason": "chatter onset above the span-wave limit (not reliable)"
+        },
+        {
+          "label": "12 household_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "11 converter_foil",
+          "label": "13 household_foil_heavy_duty",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "12 cigarette_liner_foil",
+          "label": "14 converter_foil",
           "reason": "doubled pass not modelled"
         },
         {
-          "label": "13 dairy_lidding_foil",
+          "label": "15 cigarette_liner_foil",
+          "reason": "doubled pass not modelled"
+        },
+        {
+          "label": "16 dairy_lidding_foil",
           "reason": "chatter onset above the span-wave limit (not reliable)"
         }
       ],
-      "gauge_rank_correlation": -0.11208791208791209,
+      "gauge_rank_correlation": -0.2785714285714286,
       "meaning": "a higher speed ratio means less margin to third-octave chatter",
       "mechanism": "chatter_margin",
       "most_sensitive_first": [
         {
           "exit_thickness_m": 0.000134,
-          "label": "15 container_foil_smooth_wall",
+          "label": "18 container_foil_smooth_wall",
           "mill": "foil",
           "product_id": "container_foil_smooth_wall",
           "rank": 1,
@@ -1198,7 +1341,7 @@
         },
         {
           "exit_thickness_m": 0.00027197500000000004,
-          "label": "20 litho_sheet",
+          "label": "23 litho_sheet",
           "mill": "sheet",
           "product_id": "litho_sheet",
           "rank": 2,
@@ -1207,7 +1350,7 @@
         },
         {
           "exit_thickness_m": 9.17e-05,
-          "label": "16 container_foil_retortable",
+          "label": "19 container_foil_retortable",
           "mill": "foil",
           "product_id": "container_foil_retortable",
           "rank": 3,
@@ -1216,7 +1359,7 @@
         },
         {
           "exit_thickness_m": 8.66e-05,
-          "label": "3 capacitor_anode_foil_high_voltage",
+          "label": "6 capacitor_anode_foil_high_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_high_voltage",
           "rank": 4,
@@ -1225,7 +1368,7 @@
         },
         {
           "exit_thickness_m": 8.12e-05,
-          "label": "4 capacitor_anode_foil_low_voltage",
+          "label": "7 capacitor_anode_foil_low_voltage",
           "mill": "foil",
           "product_id": "capacitor_anode_foil_low_voltage",
           "rank": 5,
@@ -1234,7 +1377,7 @@
         },
         {
           "exit_thickness_m": 7.27e-05,
-          "label": "14 container_foil_wrinkle_wall",
+          "label": "17 container_foil_wrinkle_wall",
           "mill": "foil",
           "product_id": "container_foil_wrinkle_wall",
           "rank": 6,
@@ -1243,7 +1386,7 @@
         },
         {
           "exit_thickness_m": 0.000529,
-          "label": "24 transformer_strip",
+          "label": "27 transformer_strip",
           "mill": "sheet",
           "product_id": "transformer_strip",
           "rank": 7,
@@ -1252,7 +1395,7 @@
         },
         {
           "exit_thickness_m": 0.000212,
-          "label": "23 closure_sheet",
+          "label": "26 closure_sheet",
           "mill": "sheet",
           "product_id": "closure_sheet",
           "rank": 8,
@@ -1261,7 +1404,7 @@
         },
         {
           "exit_thickness_m": 0.00029,
-          "label": "21 can_body_stock",
+          "label": "24 can_body_stock",
           "mill": "sheet",
           "product_id": "can_body_stock",
           "rank": 9,
@@ -1270,7 +1413,7 @@
         },
         {
           "exit_thickness_m": 0.000283,
-          "label": "18 brazing_sheet_tube",
+          "label": "21 brazing_sheet_tube",
           "mill": "sheet",
           "product_id": "brazing_sheet_tube",
           "rank": 10,
@@ -1279,7 +1422,7 @@
         },
         {
           "exit_thickness_m": 0.000274,
-          "label": "22 can_end_stock",
+          "label": "25 can_end_stock",
           "mill": "sheet",
           "product_id": "can_end_stock",
           "rank": 11,
@@ -1288,7 +1431,7 @@
         },
         {
           "exit_thickness_m": 8.94e-05,
-          "label": "17 brazed_fin_stock",
+          "label": "20 brazed_fin_stock",
           "mill": "foil",
           "product_id": "brazed_fin_stock",
           "rank": 12,
@@ -1297,7 +1440,7 @@
         },
         {
           "exit_thickness_m": 8.246211251235322e-05,
-          "label": "19 hvac_fin_stock",
+          "label": "22 hvac_fin_stock",
           "mill": "foil",
           "product_id": "hvac_fin_stock",
           "rank": 13,
@@ -1305,11 +1448,20 @@
           "value": 4.0895646098302105
         },
         {
+          "exit_thickness_m": 5.48e-05,
+          "label": "5 battery_tab_foil",
+          "mill": "foil",
+          "product_id": "battery_tab_foil",
+          "rank": 14,
+          "unvalidated_extended_bite": true,
+          "value": 2.924155747116682
+        },
+        {
           "exit_thickness_m": 5.2e-05,
-          "label": "7 pharma_cold_form_foil",
+          "label": "10 pharma_cold_form_foil",
           "mill": "foil",
           "product_id": "pharma_cold_form_foil",
-          "rank": 14,
+          "rank": 15,
           "unvalidated_extended_bite": true,
           "value": 2.4610771266801272
         }
@@ -1327,8 +1479,8 @@
           "item": "tensions",
           "unit": "Pa",
           "value": [
-            36500000.0,
-            41975000.0
+            36000000.0,
+            41400000.0
           ]
         },
         {
@@ -1362,7 +1514,7 @@
         "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
         "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
       ],
-      "bite_force_ratio_to_reported_range": 1.106439392490039,
+      "bite_force_ratio_to_reported_range": 1.042653070460984,
       "bite_model": "experimental_mattress",
       "bite_status": "BITE",
       "catalogue_values_used": [
@@ -1406,10 +1558,11 @@
             "BF-S3",
             "BF-S4",
             "BF-S2",
-            "BF-S31"
+            "BF-S31",
+            "BG-G2"
           ],
           "unit": "Pa",
-          "value": 182500000.0
+          "value": 180000000.0
         },
         {
           "basis": "middle of the published single-sheet final-pass speed span 430-1200 m/min",
@@ -1426,18 +1579,18 @@
       ],
       "chatter_reliability": "NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT",
       "closed_gap_likely": true,
-      "contact_radius_ratio": 7.839624247217114,
+      "contact_radius_ratio": 7.383509757780223,
       "critical_exit_speed_m_s": null,
-      "critical_exit_speed_without_bite_damping_m_s": 4.280239915487478,
-      "critical_ridge_height_m": 7.552380952380953e-08,
+      "critical_exit_speed_without_bite_damping_m_s": 4.112572396889143,
+      "critical_ridge_height_m": 7.428571428571429e-08,
       "critical_status": "STABLE_OVER_SCANNED_RANGE",
       "dead_band_half_width_i_units": 0.003489866131012635,
       "doubled": false,
       "engine_bite_credibility": "FORCE_OUTSIDE_REPORTED_RANGE",
-      "entry_tension_pa": 36500000.0,
+      "entry_tension_pa": 36000000.0,
       "entry_thickness_m": 2e-05,
       "exit_speed_m_s": 13.583333333335,
-      "exit_tension_pa": 41975000.0,
+      "exit_tension_pa": 41400000.0,
       "exit_thickness_m": 1.3e-05,
       "extended_domain_flags": [
         "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
@@ -1448,12 +1601,12 @@
         "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED"
       ],
       "flow_stress_assumed": false,
-      "forward_slip_fraction": 0.31234239432932265,
+      "forward_slip_fraction": 0.3131729507873826,
       "friction_coefficient": 0.03,
       "gauge_basis": "published_schedule",
       "index": 1,
       "label": "1 battery_collector_foil",
-      "mean_flow_stress_pa": 182500000.0,
+      "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
         {
@@ -1596,51 +1749,62 @@
         },
         {
           "item": "alloy",
-          "read_status": "full_text",
+          "read_status": "vendor_or_trade_page",
           "sources": [
-            "BF-S1"
+            "BG-G2"
           ],
           "verdict": "WITHIN_PUBLISHED_RANGE"
         },
         {
           "item": "temper",
-          "read_status": "full_text",
+          "read_status": "vendor_or_trade_page",
           "sources": [
-            "BF-S1"
+            "BF-S1",
+            "BG-G2",
+            "BG-G3",
+            "BG-G25",
+            "BG-G4",
+            "BG-G14",
+            "BG-G15",
+            "BG-G18",
+            "BG-G17",
+            "BG-G40"
           ],
           "verdict": "WITHIN_PUBLISHED_RANGE"
         },
         {
           "item": "mean_flow_stress_indicator",
-          "read_status": "excerpt",
+          "read_status": "vendor_or_trade_page",
           "sources": [
-            "BF-S2"
+            "BG-G2"
           ],
-          "verdict": "WITHIN_PUBLISHED_RANGE"
+          "verdict": "BELOW_PUBLISHED_RANGE"
         }
       ],
-      "product_check_outside": [],
+      "product_check_outside": [
+        "mean_flow_stress_indicator"
+      ],
       "product_id": "battery_collector_foil",
       "product_name": "Li-ion cathode current-collector foil",
       "reduction_fraction": 0.3500000000000001,
       "roller_wrinkle_threshold_pa": -4452536.92862976,
       "rolling_mode_published": "either",
       "schedule": "BF-S11 5 passes from 240 \u00b5m",
-      "separating_force_per_width_n_m": 2544810.60272709,
+      "separating_force_per_width_n_m": 2398102.062060263,
       "speed_ratio": null,
-      "speed_ratio_without_bite_damping": 3.17349812195936,
-      "strip_to_mill_modulus_ratio": 527.4892364840397,
+      "speed_ratio_without_bite_damping": 3.3028800523024926,
+      "strip_to_mill_modulus_ratio": 476.8836752818339,
       "stripe": {
-        "after_release_onset_height_m": 2.017380763123027e-06,
+        "after_release_onset_height_m": 1.8255438806003495e-06,
         "after_release_onset_limited_by_reporting_threshold": true,
         "in_mill_onset_height_m": null,
-        "linear_feedback_i_units": 0.9915313880964124,
+        "linear_feedback_i_units": 1.0957414405508314,
         "onset_search_ceiling_m": 5e-05,
-        "reporting_onset_height_m": 2.0173827805058076e-06,
+        "reporting_onset_height_m": 1.8255457061460557e-06,
         "state_after_tension_release": "BELOW_REPORTING_THRESHOLD",
         "state_in_mill": "BELOW_REPORTING_THRESHOLD"
       },
-      "trough_onset_lateral_stress_pa": -14272.251612843374,
+      "trough_onset_lateral_stress_pa": -14174.159374084584,
       "vendor_level_input": true,
       "weakest_read_status": "vendor_or_trade_page"
     },
@@ -1812,7 +1976,9 @@
           "read_status": "vendor_or_trade_page",
           "sources": [
             "BF-S29",
-            "BF-S28"
+            "BF-S28",
+            "BG-G15",
+            "BG-G17"
           ],
           "verdict": "WITHIN_PUBLISHED_RANGE"
         },
@@ -1830,7 +1996,9 @@
           "sources": [
             "BF-S28",
             "BF-S32",
-            "BF-S33"
+            "BF-S33",
+            "BG-G32",
+            "BG-G31"
           ],
           "verdict": "ABOVE_PUBLISHED_RANGE"
         }
@@ -1862,6 +2030,676 @@
       "trough_onset_lateral_stress_pa": -32709.598555579814,
       "vendor_level_input": false,
       "weakest_read_status": "excerpt"
+    },
+    {
+      "alloy_checked": "1235",
+      "assumed_values": [
+        {
+          "basis": "no rolling mode published for this product: single-sheet final pass assumed",
+          "item": "rolling mode",
+          "unit": "",
+          "value": "single_sheet"
+        },
+        {
+          "basis": "no published speed for this product: the foil demo final-pass speed (600 m/min)",
+          "item": "exit speed",
+          "unit": "m/s",
+          "value": 10.0
+        },
+        {
+          "basis": "entry 0.2 and exit 0.23 of the flow stress [D, stated]",
+          "item": "tensions",
+          "unit": "Pa",
+          "value": [
+            37000000.0,
+            42550000.0
+          ]
+        },
+        {
+          "basis": "the demos' supplied 0.03 (no catalogue value)",
+          "item": "friction",
+          "unit": "",
+          "value": 0.03
+        },
+        {
+          "basis": "battery-foil demo mill (single-stand four-high foil mill, synthetic): the same synthetic mill for every product of this gauge class",
+          "item": "mill",
+          "unit": "",
+          "value": "foil"
+        },
+        {
+          "basis": "first alloy listed for the product in the catalogue",
+          "item": "alloy for the product check",
+          "unit": "",
+          "value": "1235"
+        }
+      ],
+      "bite_credibility": null,
+      "bite_flags": [
+        "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+        "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+        "MATTRESS_REGIME_FOIL",
+        "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+        "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+        "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+      ],
+      "bite_force_ratio_to_reported_range": null,
+      "bite_model": "experimental_mattress",
+      "bite_status": "BITE",
+      "catalogue_values_used": [
+        {
+          "basis": "geometric middle of the published final-gauge span 20-50 um (common nominal gauge)",
+          "item": "exit gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G24",
+            "BG-G35"
+          ],
+          "unit": "m",
+          "value": 3.16e-05
+        },
+        {
+          "basis": "middle of the general packaging-foil per-pass reduction (no span of its own) span 44-60 %",
+          "item": "reduction",
+          "read_status": "computed",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "unit": "fraction",
+          "value": 0.52
+        },
+        {
+          "basis": "median of the published tensile-strength numbers of the as-rolled temper H18 (170-200 MPa)",
+          "item": "flow stress",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G35"
+          ],
+          "unit": "Pa",
+          "value": 185000000.0
+        }
+      ],
+      "chatter_reliability": "NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT",
+      "closed_gap_likely": true,
+      "contact_radius_ratio": 1.9910995608762982,
+      "critical_exit_speed_m_s": null,
+      "critical_exit_speed_without_bite_damping_m_s": 5.593820822756559,
+      "critical_ridge_height_m": 1.8659047619047623e-07,
+      "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "dead_band_half_width_i_units": 0.01820925200842572,
+      "doubled": false,
+      "engine_bite_credibility": null,
+      "entry_tension_pa": 37000000.0,
+      "entry_thickness_m": 6.58e-05,
+      "exit_speed_m_s": 10.0,
+      "exit_tension_pa": 42550000.0,
+      "exit_thickness_m": 3.16e-05,
+      "extended_domain_flags": [
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN"
+      ],
+      "family": "battery_electronics",
+      "final_temper": "H18",
+      "flags": [
+        "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED"
+      ],
+      "flow_stress_assumed": false,
+      "forward_slip_fraction": 0.2627217039316079,
+      "friction_coefficient": 0.03,
+      "gauge_basis": "nominal_gauge",
+      "index": 3,
+      "label": "3 battery_thick_collector_foil",
+      "mean_flow_stress_pa": 185000000.0,
+      "mill": "foil",
+      "named_defects": [],
+      "onset_frequency_hz": null,
+      "product_check": [
+        {
+          "item": "final_gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G24",
+            "BG-G35"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "per_pass_reduction",
+          "read_status": "abstract_or_snippet",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_reduction",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_entry_gauge",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "exit_speed",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "rolled_mode",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "alloy",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G35",
+            "BG-G7",
+            "BG-G2"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "temper",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G35",
+            "BG-G2",
+            "BG-G3",
+            "BG-G25",
+            "BG-G4",
+            "BG-G14",
+            "BG-G15",
+            "BG-G18",
+            "BG-G17",
+            "BG-G40"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "mean_flow_stress_indicator",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G35"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        }
+      ],
+      "product_check_outside": [],
+      "product_id": "battery_thick_collector_foil",
+      "product_name": "Thick battery collector foil",
+      "reduction_fraction": 0.5197568389057751,
+      "roller_wrinkle_threshold_pa": -10823089.764976954,
+      "rolling_mode_published": "not_published",
+      "schedule": null,
+      "separating_force_per_width_n_m": 1383519.2310537754,
+      "speed_ratio": null,
+      "speed_ratio_without_bite_damping": 1.787686863211349,
+      "strip_to_mill_modulus_ratio": 42.30642456585229,
+      "stripe": {
+        "after_release_onset_height_m": 2.682317968053694e-07,
+        "after_release_onset_limited_by_reporting_threshold": true,
+        "in_mill_onset_height_m": 8.201905535547523e-06,
+        "linear_feedback_i_units": 7.536805158167748,
+        "onset_search_ceiling_m": 5e-05,
+        "reporting_onset_height_m": 2.6550183275638816e-07,
+        "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+        "state_in_mill": "LATENT_UNDER_TENSION"
+      },
+      "trough_onset_lateral_stress_pa": -34929.36203894052,
+      "vendor_level_input": true,
+      "weakest_read_status": "vendor_or_trade_page"
+    },
+    {
+      "alloy_checked": "1070",
+      "assumed_values": [
+        {
+          "basis": "no rolling mode published for this product: single-sheet final pass assumed",
+          "item": "rolling mode",
+          "unit": "",
+          "value": "single_sheet"
+        },
+        {
+          "basis": "no published speed for this product: the foil demo final-pass speed (600 m/min)",
+          "item": "exit speed",
+          "unit": "m/s",
+          "value": 10.0
+        },
+        {
+          "basis": "entry 0.2 and exit 0.23 of the flow stress [D, stated]",
+          "item": "tensions",
+          "unit": "Pa",
+          "value": [
+            28000000.0,
+            32200000.0
+          ]
+        },
+        {
+          "basis": "the demos' supplied 0.03 (no catalogue value)",
+          "item": "friction",
+          "unit": "",
+          "value": 0.03
+        },
+        {
+          "basis": "battery-foil demo mill (single-stand four-high foil mill, synthetic): the same synthetic mill for every product of this gauge class",
+          "item": "mill",
+          "unit": "",
+          "value": "foil"
+        },
+        {
+          "basis": "first alloy listed for the product in the catalogue",
+          "item": "alloy for the product check",
+          "unit": "",
+          "value": "1070"
+        }
+      ],
+      "bite_credibility": "NO_REPORTED_LOAD_RANGE_IN_CATALOGUE",
+      "bite_credibility_note": "extended-domain bite; the catalogue has no reported load range for this product (the 0.9-2.3 kN/mm range is reported for battery-foil passes only); unvalidated",
+      "bite_flags": [
+        "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
+        "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
+        "MATTRESS_REGIME_FOIL",
+        "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
+        "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
+        "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+        "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
+        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
+      ],
+      "bite_model": "experimental_mattress",
+      "bite_status": "BITE",
+      "catalogue_values_used": [
+        {
+          "basis": "geometric middle of the published final-gauge span 9-30 um (common nominal gauge)",
+          "item": "exit gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38"
+          ],
+          "unit": "m",
+          "value": 1.64e-05
+        },
+        {
+          "basis": "middle of the general packaging-foil per-pass reduction (no span of its own) span 44-60 %",
+          "item": "reduction",
+          "read_status": "computed",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "unit": "fraction",
+          "value": 0.52
+        },
+        {
+          "basis": "median of the published tensile-strength numbers of the as-rolled temper H18 (140-140 MPa)",
+          "item": "flow stress",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38"
+          ],
+          "unit": "Pa",
+          "value": 140000000.0
+        }
+      ],
+      "chatter_reliability": "NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT",
+      "closed_gap_likely": true,
+      "contact_radius_ratio": 2.493164972851312,
+      "critical_exit_speed_m_s": null,
+      "critical_exit_speed_without_bite_damping_m_s": 3.545616449776827,
+      "critical_ridge_height_m": 6.872380952380952e-08,
+      "critical_status": "STABLE_OVER_SCANNED_RANGE",
+      "dead_band_half_width_i_units": 0.005376302420802887,
+      "doubled": false,
+      "engine_bite_credibility": "FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED",
+      "entry_tension_pa": 28000000.0,
+      "entry_thickness_m": 3.42e-05,
+      "exit_speed_m_s": 10.0,
+      "exit_tension_pa": 32200000.0,
+      "exit_thickness_m": 1.64e-05,
+      "extended_domain_flags": [
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+        "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN"
+      ],
+      "family": "battery_electronics",
+      "final_temper": "H18",
+      "flags": [
+        "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED"
+      ],
+      "flow_stress_assumed": false,
+      "forward_slip_fraction": 0.4342706318692162,
+      "friction_coefficient": 0.03,
+      "gauge_basis": "nominal_gauge",
+      "index": 4,
+      "label": "4 battery_carbon_coated_base_foil",
+      "mean_flow_stress_pa": 140000000.0,
+      "mill": "foil",
+      "named_defects": [],
+      "onset_frequency_hz": null,
+      "product_check": [
+        {
+          "item": "final_gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "per_pass_reduction",
+          "read_status": "abstract_or_snippet",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_reduction",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_entry_gauge",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "exit_speed",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "rolled_mode",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "alloy",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "temper",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38",
+            "BG-G2",
+            "BG-G3",
+            "BG-G25",
+            "BG-G4",
+            "BG-G14",
+            "BG-G15",
+            "BG-G18",
+            "BG-G17",
+            "BG-G40"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "mean_flow_stress_indicator",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G38"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        }
+      ],
+      "product_check_outside": [],
+      "product_id": "battery_carbon_coated_base_foil",
+      "product_name": "Carbon-coated collector base foil",
+      "reduction_fraction": 0.52046783625731,
+      "roller_wrinkle_threshold_pa": -5617046.586886774,
+      "rolling_mode_published": "not_published",
+      "schedule": null,
+      "separating_force_per_width_n_m": 1479128.7508828603,
+      "speed_ratio": null,
+      "speed_ratio_without_bite_damping": 2.8203840267690072,
+      "strip_to_mill_modulus_ratio": 106.64706897098948,
+      "stripe": {
+        "after_release_onset_height_m": 5.065409997174638e-07,
+        "after_release_onset_limited_by_reporting_threshold": true,
+        "in_mill_onset_height_m": 1.1795112364599541e-05,
+        "linear_feedback_i_units": 3.950269270664883,
+        "onset_search_ceiling_m": 5e-05,
+        "reporting_onset_height_m": 5.065415062589701e-07,
+        "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+        "state_in_mill": "LATENT_UNDER_TENSION"
+      },
+      "trough_onset_lateral_stress_pa": -15769.777750114177,
+      "vendor_level_input": true,
+      "weakest_read_status": "vendor_or_trade_page"
+    },
+    {
+      "alloy_checked": "1070",
+      "assumed_values": [
+        {
+          "basis": "no rolling mode published for this product: single-sheet final pass assumed",
+          "item": "rolling mode",
+          "unit": "",
+          "value": "single_sheet"
+        },
+        {
+          "basis": "ASSUMED 180 MPa as-rolled flow stress [D]: the catalogue publishes no as-rolled (H1x) strength for this product; a dilute-alloy foil value, likely low for 3xxx / 5xxx sheet; the final temper O is reached by annealing after the final cold pass, so annealed strength is not used",
+          "item": "flow stress",
+          "unit": "Pa",
+          "value": 180000000.0
+        },
+        {
+          "basis": "no published speed for this product: the foil demo final-pass speed (600 m/min)",
+          "item": "exit speed",
+          "unit": "m/s",
+          "value": 10.0
+        },
+        {
+          "basis": "entry 0.2 and exit 0.23 of the flow stress [D, stated]",
+          "item": "tensions",
+          "unit": "Pa",
+          "value": [
+            36000000.0,
+            41400000.0
+          ]
+        },
+        {
+          "basis": "the demos' supplied 0.03 (no catalogue value)",
+          "item": "friction",
+          "unit": "",
+          "value": 0.03
+        },
+        {
+          "basis": "battery-foil demo mill (single-stand four-high foil mill, synthetic): the same synthetic mill for every product of this gauge class",
+          "item": "mill",
+          "unit": "",
+          "value": "foil"
+        },
+        {
+          "basis": "first alloy listed for the product in the catalogue",
+          "item": "alloy for the product check",
+          "unit": "",
+          "value": "1070"
+        }
+      ],
+      "bite_credibility": null,
+      "bite_flags": [
+        "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
+        "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
+      ],
+      "bite_force_ratio_to_reported_range": null,
+      "bite_model": "hitchcock",
+      "bite_status": "BITE",
+      "catalogue_values_used": [
+        {
+          "basis": "geometric middle of the published final-gauge span 30-100 um (common nominal gauge)",
+          "item": "exit gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G34"
+          ],
+          "unit": "m",
+          "value": 5.48e-05
+        },
+        {
+          "basis": "middle of the general packaging-foil per-pass reduction (no span of its own) span 44-60 %",
+          "item": "reduction",
+          "read_status": "computed",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "unit": "fraction",
+          "value": 0.52
+        }
+      ],
+      "chatter_reliability": "WITHIN_SPAN_WAVE_LIMIT",
+      "closed_gap_likely": true,
+      "contact_radius_ratio": 1.354713984053025,
+      "critical_exit_speed_m_s": 8.580077669254013,
+      "critical_exit_speed_without_bite_damping_m_s": 3.4197904847785017,
+      "critical_ridge_height_m": 3.131428571428572e-07,
+      "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
+      "dead_band_half_width_i_units": 0.05069976794061838,
+      "doubled": false,
+      "engine_bite_credibility": null,
+      "entry_tension_pa": 36000000.0,
+      "entry_thickness_m": 0.000114,
+      "exit_speed_m_s": 10.0,
+      "exit_tension_pa": 41400000.0,
+      "exit_thickness_m": 5.48e-05,
+      "extended_domain_flags": [
+        "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN"
+      ],
+      "family": "battery_electronics",
+      "final_temper": "O",
+      "flags": [
+        "CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED"
+      ],
+      "flow_stress_assumed": true,
+      "forward_slip_fraction": 0.10903959553917542,
+      "friction_coefficient": 0.03,
+      "gauge_basis": "nominal_gauge",
+      "index": 5,
+      "label": "5 battery_tab_foil",
+      "mean_flow_stress_pa": 180000000.0,
+      "mill": "foil",
+      "named_defects": [],
+      "onset_frequency_hz": 234.23827265845227,
+      "product_check": [
+        {
+          "item": "final_gauge",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G34"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "per_pass_reduction",
+          "read_status": "abstract_or_snippet",
+          "sources": [
+            "PK-S2",
+            "PK-S3",
+            "PK-S16"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_reduction",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "final_pass_entry_gauge",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "exit_speed",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "rolled_mode",
+          "read_status": null,
+          "sources": [],
+          "verdict": "NO_PUBLISHED_RANGE"
+        },
+        {
+          "item": "alloy",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G34"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "temper",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G34"
+          ],
+          "verdict": "WITHIN_PUBLISHED_RANGE"
+        },
+        {
+          "item": "mean_flow_stress_indicator",
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G34"
+          ],
+          "verdict": "ABOVE_PUBLISHED_RANGE"
+        }
+      ],
+      "product_check_outside": [
+        "mean_flow_stress_indicator"
+      ],
+      "product_id": "battery_tab_foil",
+      "product_name": "Battery tab foil and strip",
+      "reduction_fraction": 0.5192982456140351,
+      "roller_wrinkle_threshold_pa": -18769155.668377753,
+      "rolling_mode_published": "not_published",
+      "schedule": null,
+      "separating_force_per_width_n_m": 951497.8460133285,
+      "speed_ratio": 1.1654906150598332,
+      "speed_ratio_without_bite_damping": 2.924155747116682,
+      "strip_to_mill_modulus_ratio": 9.161695370048545,
+      "stripe": {
+        "after_release_onset_height_m": 8.328197982600945e-08,
+        "after_release_onset_limited_by_reporting_threshold": true,
+        "in_mill_onset_height_m": 2.5225610606434066e-06,
+        "linear_feedback_i_units": 24.325152730393253,
+        "onset_search_ceiling_m": 5e-05,
+        "reporting_onset_height_m": 8.226806737002207e-08,
+        "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+        "state_in_mill": "LATENT_UNDER_TENSION"
+      },
+      "trough_onset_lateral_stress_pa": -59749.53336152579,
+      "vendor_level_input": true,
+      "weakest_read_status": "vendor_or_trade_page"
     },
     {
       "alloy_checked": "99.99 % Al",
@@ -1973,8 +2811,8 @@
       "forward_slip_fraction": 0.07573886257579088,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 3,
-      "label": "3 capacitor_anode_foil_high_voltage",
+      "index": 6,
+      "label": "6 capacitor_anode_foil_high_voltage",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [],
@@ -2180,8 +3018,8 @@
       "forward_slip_fraction": 0.08058302161970565,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 4,
-      "label": "4 capacitor_anode_foil_low_voltage",
+      "index": 7,
+      "label": "7 capacitor_anode_foil_low_voltage",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [],
@@ -2393,8 +3231,8 @@
       "forward_slip_fraction": 0.23202973092560764,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 5,
-      "label": "5 capacitor_cathode_foil",
+      "index": 8,
+      "label": "8 capacitor_cathode_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [],
@@ -2598,8 +3436,8 @@
       "flow_stress_assumed": false,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 6,
-      "label": "6 pharma_blister_lidding",
+      "index": 9,
+      "label": "9 pharma_blister_lidding",
       "mean_flow_stress_pa": 150000000.0,
       "mill": "foil",
       "named_defects": [
@@ -2848,8 +3686,8 @@
       "forward_slip_fraction": 0.11255070230962683,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 7,
-      "label": "7 pharma_cold_form_foil",
+      "index": 10,
+      "label": "10 pharma_cold_form_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -3116,8 +3954,8 @@
       "forward_slip_fraction": 0.2586337440553932,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 8,
-      "label": "8 pharma_strip_pack_foil",
+      "index": 11,
+      "label": "11 pharma_strip_pack_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -3355,8 +4193,8 @@
       "flow_stress_assumed": true,
       "friction_coefficient": 0.03,
       "gauge_basis": "published_schedule",
-      "index": 9,
-      "label": "9 household_foil",
+      "index": 12,
+      "label": "12 household_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -3598,8 +4436,8 @@
       "flow_stress_assumed": true,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 10,
-      "label": "10 household_foil_heavy_duty",
+      "index": 13,
+      "label": "13 household_foil_heavy_duty",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -3827,8 +4665,8 @@
       "flow_stress_assumed": true,
       "friction_coefficient": 0.03,
       "gauge_basis": "published_schedule",
-      "index": 11,
-      "label": "11 converter_foil",
+      "index": 14,
+      "label": "14 converter_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -4073,8 +4911,8 @@
       "flow_stress_assumed": true,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 12,
-      "label": "12 cigarette_liner_foil",
+      "index": 15,
+      "label": "15 cigarette_liner_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -4321,8 +5159,8 @@
       "forward_slip_fraction": 0.20999996016199263,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 13,
-      "label": "13 dairy_lidding_foil",
+      "index": 16,
+      "label": "16 dairy_lidding_foil",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -4584,8 +5422,8 @@
       "forward_slip_fraction": 0.08876031041454313,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 14,
-      "label": "14 container_foil_wrinkle_wall",
+      "index": 17,
+      "label": "17 container_foil_wrinkle_wall",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -4846,8 +5684,8 @@
       "forward_slip_fraction": 0.04245134911364956,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 15,
-      "label": "15 container_foil_smooth_wall",
+      "index": 18,
+      "label": "18 container_foil_smooth_wall",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -5101,8 +5939,8 @@
       "forward_slip_fraction": 0.07137791150519446,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 16,
-      "label": "16 container_foil_retortable",
+      "index": 19,
+      "label": "19 container_foil_retortable",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "foil",
       "named_defects": [
@@ -5351,8 +6189,8 @@
       "forward_slip_fraction": 0.055587504235540264,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 17,
-      "label": "17 brazed_fin_stock",
+      "index": 20,
+      "label": "20 brazed_fin_stock",
       "mean_flow_stress_pa": 147500000.0,
       "mill": "foil",
       "named_defects": [
@@ -5589,8 +6427,8 @@
       "forward_slip_fraction": 0.035643749930871715,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 18,
-      "label": "18 brazing_sheet_tube",
+      "index": 21,
+      "label": "21 brazing_sheet_tube",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "sheet",
       "named_defects": [
@@ -5823,8 +6661,8 @@
       "forward_slip_fraction": 0.06750463826835773,
       "friction_coefficient": 0.03,
       "gauge_basis": "published_schedule",
-      "index": 19,
-      "label": "19 hvac_fin_stock",
+      "index": 22,
+      "label": "22 hvac_fin_stock",
       "mean_flow_stress_pa": 175000000.0,
       "mill": "foil",
       "named_defects": [
@@ -6070,8 +6908,8 @@
       "forward_slip_fraction": 0.02922370257923057,
       "friction_coefficient": 0.03,
       "gauge_basis": "published_schedule",
-      "index": 20,
-      "label": "20 litho_sheet",
+      "index": 23,
+      "label": "23 litho_sheet",
       "mean_flow_stress_pa": 135000000.0,
       "mill": "sheet",
       "named_defects": [
@@ -6324,8 +7162,8 @@
       "forward_slip_fraction": 0.03492179029245346,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 21,
-      "label": "21 can_body_stock",
+      "index": 24,
+      "label": "24 can_body_stock",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "sheet",
       "named_defects": [
@@ -6551,8 +7389,8 @@
       "forward_slip_fraction": 0.036589899272506665,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 22,
-      "label": "22 can_end_stock",
+      "index": 25,
+      "label": "25 can_end_stock",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "sheet",
       "named_defects": [
@@ -6788,8 +7626,8 @@
       "forward_slip_fraction": 0.04305834831420485,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 23,
-      "label": "23 closure_sheet",
+      "index": 26,
+      "label": "26 closure_sheet",
       "mean_flow_stress_pa": 147500000.0,
       "mill": "sheet",
       "named_defects": [
@@ -7021,8 +7859,8 @@
       "forward_slip_fraction": 0.017051538207015993,
       "friction_coefficient": 0.03,
       "gauge_basis": "nominal_gauge",
-      "index": 24,
-      "label": "24 transformer_strip",
+      "index": 27,
+      "label": "27 transformer_strip",
       "mean_flow_stress_pa": 180000000.0,
       "mill": "sheet",
       "named_defects": [
@@ -7190,6 +8028,11 @@
     "BF-S36",
     "BF-S37",
     "BF-S4",
+    "BG-G2",
+    "BG-G24",
+    "BG-G34",
+    "BG-G35",
+    "BG-G38",
     "HX-S10",
     "HX-S11",
     "HX-S12",
@@ -7224,6 +8067,6 @@
     "PK-S9"
   ],
   "status": "SYNTHETIC_SURVEY_LITERATURE_INPUTS_UNVALIDATED",
-  "summary": "24 catalogue products, one synthetic final pass each: 19 with a roll bite, 5 doubled (bite not modelled), 1 with a bite marked not credible, 18 with an assumed flow stress. Coil ridges (critical ridge height at the outer coil radius): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Troughs and creases in the exit span (trough onset lateral stress, magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Roller wrinkles on the deflector roll (threshold magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Cooling stripes visible in the mill (in-mill onset height of a roll stripe): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), brazed_fin_stock (89.4 um); no clear gauge order (rank correlation -0.47); 6 excluded. Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.43); 6 excluded. Chatter margin (survey speed over the critical speed without bite damping): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.11); 10 excluded. These are model sensitivities on one synthetic mill per gauge class with literature inputs, not plant defect rates.",
+  "summary": "27 catalogue products, one synthetic final pass each: 22 with a roll bite, 5 doubled (bite not modelled), 1 with a bite marked not credible, 19 with an assumed flow stress. Coil ridges (critical ridge height at the outer coil radius): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +0.99). Troughs and creases in the exit span (trough onset lateral stress, magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Roller wrinkles on the deflector roll (threshold magnitude): most sensitive cigarette_liner_foil (6.48 um), converter_foil (6.5 um), household_foil (10.5 um); the thinner the product, the more sensitive (rank correlation +1.00). Cooling stripes visible in the mill (in-mill onset height of a roll stripe): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), brazed_fin_stock (89.4 um); no clear gauge order (rank correlation -0.66); 6 excluded. Cooling stripes visible after tension release (after-release onset height, an upper bound where reporting-limited): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.62); 6 excluded. Chatter margin (survey speed over the critical speed without bite damping): most sensitive container_foil_smooth_wall (134 um), litho_sheet (272 um), container_foil_retortable (91.7 um); no clear gauge order (rank correlation -0.28); 12 excluded. These are model sensitivities on one synthetic mill per gauge class with literature inputs, not plant defect rates.",
   "synthetic": true
 }

@@ -44,6 +44,7 @@ class IntegrityTests(unittest.TestCase):
         self.assertEqual(ids[0], 'battery_collector_foil')
         self.assertEqual(set(ids), {
             'battery_collector_foil', 'battery_pouch_laminate_foil',
+            'battery_thick_collector_foil', 'battery_carbon_coated_base_foil', 'battery_tab_foil',
             'capacitor_anode_foil_high_voltage', 'capacitor_anode_foil_low_voltage',
             'capacitor_cathode_foil', 'pharma_blister_lidding', 'pharma_cold_form_foil',
             'pharma_strip_pack_foil', 'household_foil', 'household_foil_heavy_duty',
@@ -57,13 +58,22 @@ class IntegrityTests(unittest.TestCase):
     def test_sources_have_urls_and_valid_status(self):
         for sid, s in sources().items():
             self.assertEqual(sid, s.id)
-            self.assertRegex(sid, r'^(BF|PK|HX)-S\d+b?$')
+            self.assertRegex(sid, r'^((BF|PK|HX)-S\d+b?|BG-G\d+)$')
             self.assertTrue(s.urls)
             for u in s.urls:
                 self.assertRegex(u, r'^https?://\S+$')
             self.assertIn(s.read_status, READ_STATUSES)
             self.assertNotEqual(s.read_status, 'computed')
         self.assertEqual(sources()['BF-S17'].read_status, 'vendor_or_trade_page')
+        bg = sorted(int(k[4:]) for k in sources() if k.startswith('BG-'))
+        self.assertEqual(bg, list(range(1, 45)))
+        tag = {'FT': 'full_text', 'EX': 'excerpt', 'SN': 'abstract_or_snippet',
+               'VP': 'vendor_or_trade_page'}
+        for n, t in ((1, 'EX'), (2, 'VP'), (3, 'FT'), (14, 'FT'), (21, 'EX'), (37, 'SN'),
+                     (42, 'VP')):
+            self.assertEqual(sources()[f'BG-G{n}'].read_status, tag[t])
+        for n in (30, 39, 40):  # two tags: recorded at the weaker one
+            self.assertEqual(sources()[f'BG-G{n}'].read_status, 'vendor_or_trade_page')
 
     def test_every_fact_sourced_and_status_never_upgraded(self):
         src = sources()
@@ -104,7 +114,9 @@ class IntegrityTests(unittest.TestCase):
         self.assertEqual(d['schema'], 'physicroll.band_products.v1')
         self.assertEqual(d['status'], 'LITERATURE_SURVEY_UNVALIDATED')
         self.assertTrue(d['limitations'])
-        self.assertEqual(d['counts']['products'], 24)
+        self.assertEqual(d['counts']['products'], 27)
+        self.assertEqual(d['battery_grades']['status'],
+                         'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT')
         self.assertEqual(d['counts']['sources'], len(sources()))
         for v in walk_numbers(d):
             self.assertTrue(math.isfinite(v))
@@ -118,6 +130,16 @@ class IntegrityTests(unittest.TestCase):
         grades = {s.grade for s in p.strength}
         self.assertTrue({'standard', 'high_strength'} <= grades)
         self.assertEqual(len(p.pinholes), 4)
+        # the 8011 correction: 180 MPa, marked, both sources; the 1C30/1100 group keeps 220-230
+        hs = [s for s in p.strength if s.condition == 'GB/T 33143 high-strength minima']
+        self.assertEqual(len(hs), 1)
+        self.assertNotIn('8011', hs[0].alloys)
+        c = [s for s in p.strength if s.alloys == ('8011',) and 'corrected' in s.condition]
+        self.assertEqual(len(c), 1)
+        self.assertAlmostEqual(c[0].rm_pa.low, 180e6)
+        self.assertEqual(set(c[0].sources), {'BG-G2', 'BF-S2'})
+        self.assertTrue(c[0].note.startswith('CORRECTED'))
+        self.assertEqual(set(bp.CORRECTIONS[0].sources), {'BG-G2', 'BF-S2'})
         self.assertTrue(p.wettability and p.flatness_requirement and p.thickness_tolerance)
         pitch, gauge = TENSION_LINES.values
         self.assertAlmostEqual(pitch.low, 5e-3)
@@ -357,6 +379,17 @@ class DocumentTests(unittest.TestCase):
         self.assertIn('## 1. Li-ion cathode current-collector foil (`battery_collector_foil`)',
                       text)
         self.assertIn('302→152', text)
+        i = text.index('## Battery foil: alloy and temper by gauge')
+        self.assertLess(i, text.index('## 1. Li-ion cathode current-collector foil'))
+        sec = text[i:text.index('## 1. Li-ion')]
+        for want in ('### Three findings first', '### Collector foil: selection table by gauge '
+                     'band', 'The two bands that matter for a 17–19 µm and a 12 µm product',
+                     '**>15–20 µm** band', '**>10–13 µm** band', '### The 25–60 µm battery '
+                     'products', '### Why alloy and temper change with gauge',
+                     '### How each temper is produced', '### Strength after heating',
+                     '### Disagreements (second survey)', '### Not found (second survey)',
+                     '252 MPa', '50→30→18 µm', '50→24.5→12 µm'):
+            self.assertIn(want, sec)
 
     def test_cli(self):
         import io
@@ -364,12 +397,198 @@ class DocumentTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.assertEqual(bp.main(['--list']), 0)
-        self.assertEqual(len(buf.getvalue().strip().splitlines()), 24)
+        self.assertEqual(len(buf.getvalue().strip().splitlines()), 27)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(bp.main(['--grades', 'battery_collector_foil', '--gauge-um', '18']),
+                             0)
+        text = buf.getvalue()
+        self.assertIn('band >15–20 µm', text)
+        self.assertIn('Proposal (standard): 1235-H18', text)
+        self.assertIn('Proposal (high-strength): 1100-H18', text)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            bp.main(['--grades', 'battery_collector_foil', '--gauge-um', '12', '--json'])
+        d = json.loads(buf.getvalue())
+        self.assertEqual(d['options']['band_id'], '10_13')
+        self.assertEqual(d['proposals']['high_strength']['alloy'], '1100')
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            bp.main(['--grades', 'battery_collector_foil'])
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             bp.main(['--json'])
         self.assertEqual(json.loads(buf.getvalue())['schema'], 'physicroll.band_products.v1')
         self.assertTrue(re.search(r'\d+ sourced facts', render_reference_markdown()))
+
+
+def _opt(pid, gauge_um, alloy, **kw):
+    for o in bp.grade_options(pid, gauge_um * UM, **kw)['options']:
+        if o['alloy'] == alloy:
+            return o
+    raise AssertionError(f'{alloy} not an option at {gauge_um} µm')
+
+
+class GradeTableTests(unittest.TestCase):
+    """SPEC13 part 1: alloy and temper by gauge (second battery survey)."""
+    PID = 'battery_collector_foil'
+
+    def test_band_lookup(self):
+        for um, band in ((8, 'le10'), (9, 'le10'), (10, 'le10'), (10.001, '10_13'),
+                         (12, '10_13'), (13, '10_13'), (13.001, '13_15'), (15, '13_15'),
+                         (15.001, '15_20'), (18, '15_20'), (20, '15_20'), (20.001, '20_30'),
+                         (25, '20_30'), (30, '20_30')):
+            g = bp.gauge_band(self.PID, um * UM)
+            self.assertEqual(g['status'], 'IN_BAND', um)
+            self.assertEqual(g['band_id'], band, um)
+        for um in (7.99, 5, 30.01, 40):
+            g = bp.gauge_band(self.PID, um * UM)
+            self.assertEqual(g['status'], 'OUTSIDE_PUBLISHED_BANDS', um)
+            self.assertIsNone(g['band'])
+            self.assertIn('every published band', g['reason'])
+        self.assertEqual(bp.gauge_band('household_foil', 10 * UM)['status'], 'NO_GRADE_TABLE')
+        self.assertEqual(bp.gauge_band('battery_pouch_laminate_foil', 40 * UM)['band_id'],
+                         'pouch_35_55')
+        self.assertEqual(bp.gauge_band('battery_thick_collector_foil', 45 * UM)['band_id'],
+                         'thick_20_50')
+        with self.assertRaises(ValueError):
+            bp.gauge_band(self.PID, -1.0)
+
+    def test_gb_minima_pinned(self):
+        want = {
+            8: {'1070': 185, '1100': 230, '1C30': 220, '8011': 180, '1060': None,
+                '1050': None, '1235': None},
+            12: {'1070': 185, '1060': 190, '1050': 190, '1235': 180, '1100': 230, '1C30': 230,
+                 '8011': 180},
+            15: {'1070': 180, '1060': 190, '1050': 190, '1235': 185, '1100': 220, '1C30': 225,
+                 '8011': 180, '8A21': 165},
+            18: {'1070': 175, '1060': 185, '1050': 185, '1235': 175, '1100': 220, '1C30': 220,
+                 '8011': None},
+            25: {'1235': None, '1N30': None, '1085': None, '3003': None},
+        }
+        for um, table in want.items():
+            for alloy, v in table.items():
+                o = _opt(self.PID, um, alloy)
+                if v is None:
+                    self.assertIsNone(o['standard_min_rm_pa'], (um, alloy))
+                else:
+                    self.assertAlmostEqual(o['standard_min_rm_pa'], v * 1e6, msg=(um, alloy))
+                    self.assertEqual(o['standard_min_sources'], ['BG-G2'])
+        # the 8011 correction: 180 at every band that sets a value, never 220-230
+        for um in (10, 12, 15):
+            self.assertAlmostEqual(_opt(self.PID, um, '8011')['standard_min_rm_pa'], 180e6)
+            self.assertEqual(_opt(self.PID, um, '8011')['grade'], 'standard')
+
+    def test_grade_options_marks_not_removes(self):
+        g = bp.grade_options(self.PID, 12 * UM, min_tensile_strength_pa=200e6)
+        alloys = [o['alloy'] for o in g['options']]
+        self.assertEqual(len(alloys), len(bp.BAND_10_13.options))
+        by = {o['alloy']: o for o in g['options']}
+        self.assertEqual(by['1235']['requested_minimum_check'], 'BELOW_REQUESTED_MINIMUM')
+        self.assertTrue(by['1235']['below_requested_minimum'])
+        self.assertEqual(by['1060']['requested_minimum_check'], 'NOT_GUARANTEED')
+        self.assertEqual(by['1100']['requested_minimum_check'], 'MEETS_REQUESTED_MINIMUM')
+        self.assertIn('never a claim that one alloy is best', g['ordering_rule'])
+        self.assertTrue(by['1100']['usual'] and by['1235']['usual'])
+        self.assertFalse(by['1C30']['usual'])
+        usual_first = [o['usual'] for o in g['options']]
+        self.assertEqual(usual_first, sorted(usual_first, reverse=True))
+        self.assertEqual(by['1100']['evidence'], 'medium')
+        self.assertEqual(by['1100']['temper_labels'], ['H18', 'H19'])
+        self.assertAlmostEqual(by['1100']['conductivity_iacs_fraction'][0], 0.56)
+        none = bp.grade_options(self.PID, 12 * UM)
+        self.assertTrue(all(o['requested_minimum_check'] is None for o in none['options']))
+        # surface: 8021 at 10 µm is usual only for one-side-bright foil
+        self.assertTrue(_opt(self.PID, 10, '8021')['surface_mismatch'])
+        self.assertFalse(_opt(self.PID, 10, '8021', surface='one_side_bright')['surface_mismatch'])
+        # pouch alloy outside its own gauge span is marked
+        self.assertTrue(_opt('battery_pouch_laminate_foil', 36, '8079')['outside_alloy_gauge_span'])
+        json.dumps(g, allow_nan=False)
+
+    def _prop(self, um, grade, **kw):
+        p = bp.proposed_material(self.PID, um * UM, grade=grade, **kw)
+        self.assertEqual(p['status'], 'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT')
+        self.assertTrue(p['rule'])
+        json.dumps(p, allow_nan=False)
+        return p
+
+    def test_proposals(self):
+        p = self._prop(18, 'standard')
+        self.assertEqual((p['alloy'], p['temper'], p['band_id']), ('1235', 'H18', '15_20'))
+        self.assertAlmostEqual(p['tensile_strength_pa']['value_pa'], 210e6)
+        self.assertEqual(p['tensile_strength_pa']['range_pa'], [175e6, 220e6])
+        self.assertFalse(p['proof_strength']['published'])
+        self.assertIn('not published', p['proof_strength']['basis'])
+        p = self._prop(12, 'standard')
+        self.assertEqual(p['alloy'], '1235')
+        self.assertAlmostEqual(p['tensile_strength_pa']['value_pa'], 180e6)
+        self.assertEqual(p['evidence'], 'medium')
+        p = self._prop(12, 'high_strength')
+        self.assertEqual(p['alloy'], '1100')
+        self.assertAlmostEqual(p['tensile_strength_pa']['value_pa'], 250e6)
+        self.assertAlmostEqual(p['tensile_strength_pa']['standard_min_pa'], 230e6)
+        self.assertIn('usual high-strength choice', p['rule'])
+        p = self._prop(18, 'high_strength')  # no usual high-strength choice at >15-20
+        self.assertEqual(p['alloy'], '1100')
+        self.assertEqual(p['evidence'], 'weak')
+        self.assertIn('no usual choice', p['rule'])
+        p = self._prop(15, 'standard', alloy='1085')
+        self.assertTrue(p['proof_strength']['published'])
+        self.assertAlmostEqual(p['proof_strength']['value_pa'], 164e6)
+        self.assertEqual(self._prop(10, 'standard', surface='one_side_bright')['alloy'], '8021')
+        self.assertEqual(self._prop(10, 'standard')['alloy'], '1070')
+        no = bp.proposed_material(self.PID, 40 * UM)
+        self.assertEqual(no['status'], 'NO_LITERATURE_PROPOSAL')
+        no = bp.proposed_material('battery_pouch_laminate_foil', 40 * UM, grade='high_strength')
+        self.assertEqual(no['status'], 'NO_LITERATURE_PROPOSAL')
+        self.assertEqual(bp.proposed_material('battery_pouch_laminate_foil', 40 * UM)['alloy'],
+                         '8021')
+        with self.assertRaises(ValueError):
+            bp.proposed_material(self.PID, 12 * UM, grade='strong')
+
+    def test_temper_naming_and_band_aware_check(self):
+        for t in ('H18', 'H19'):
+            f = by_item(check_pass(self.PID, 30 * UM, 12 * UM, temper=t, is_final_pass=True))
+            self.assertEqual(f['temper']['verdict'], 'WITHIN_PUBLISHED_RANGE', t)
+            self.assertIn('H18 and H19 are both consistent', f['temper']['basis'])
+            self.assertIn('European sources call the same product H19', f['temper']['note'])
+        f = by_item(check_pass(self.PID, 30 * UM, 12 * UM, temper='O'))
+        self.assertEqual(f['temper']['verdict'], 'NO_PUBLISHED_RANGE')
+        # 1235 at 12 µm is judged against the >10-13 µm row (minimum 180, no typical top)
+        f = by_item(check_pass(self.PID, 25 * UM, 12 * UM, alloy='1235',
+                               mean_flow_stress_pa=175e6))
+        ind = f['mean_flow_stress_indicator']
+        self.assertEqual(ind['verdict'], 'BELOW_PUBLISHED_RANGE')
+        self.assertAlmostEqual(ind['published_low'], 180e6)
+        self.assertIn('>10–13 µm', ind['basis'])
+        self.assertIn('INDICATOR ONLY', ind['basis'])
+        self.assertIn('>10–13 µm', f['alloy']['basis'])
+        f = by_item(check_pass(self.PID, 30 * UM, 18 * UM, alloy='1235',
+                               mean_flow_stress_pa=230e6))
+        self.assertEqual(f['mean_flow_stress_indicator']['verdict'], 'ABOVE_PUBLISHED_RANGE')
+        self.assertAlmostEqual(f['mean_flow_stress_indicator']['published_high'], 220e6)
+        f = by_item(check_pass(self.PID, 30 * UM, 18 * UM, alloy='3003'))
+        self.assertEqual(f['alloy']['verdict'], 'NO_PUBLISHED_RANGE')
+        self.assertIn('listed for the product at other gauges', f['alloy']['basis'])
+
+    def test_general_grade_facts(self):
+        self.assertEqual(len(bp.GRADE_REASONS), 8)
+        self.assertEqual(len(bp.GRADE_DISAGREEMENTS), 8)
+        self.assertEqual(len(bp.GRADE_NOT_FOUND), 7)
+        self.assertEqual([t.temper for t in bp.TEMPER_TABLE],
+                         ['H18', 'H19', 'High-strength grades', 'H2x', 'O'])
+        red = [v.low for v in bp.TEMPER_TABLE[0].route.values]
+        self.assertAlmostEqual(red[0], 0.97)
+        self.assertAlmostEqual(red[1], 0.988)
+        losses = [sh.loss_fraction() for sh in bp.STRENGTH_AFTER_HEATING[:3]]
+        self.assertEqual(round(losses[0][0] * 100), 10)
+        self.assertEqual(round(losses[1][0] * 100), 27)
+        self.assertEqual((round(losses[2][0] * 100), round(losses[2][1] * 100)), (23, 28))
+        self.assertEqual(bp.STRENGTH_AFTER_HEATING[0].steps[3].temperature_c, 200)
+        for p in ('battery_thick_collector_foil', 'battery_carbon_coated_base_foil',
+                  'battery_tab_foil'):
+            self.assertTrue(product(p).evidence)
+        self.assertNotIn('cell_case', [p for p in product_ids() if 'case' in p])
+        self.assertIn('not foil', bp.CELL_CASE_STOCK.text)
 
 
 class PackagedSurveyDefaultsTests(unittest.TestCase):
