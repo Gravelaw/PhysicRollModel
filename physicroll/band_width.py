@@ -69,6 +69,7 @@ second work roll's own header (``rolls_carrying_stripe`` says how many rolls car
 closed-gap (roll-kissing) rolling; any physical model of foil tension lines.
 """
 import math
+import sys
 
 from . import band_products
 from . import roll_thermal as rt
@@ -1909,6 +1910,15 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
     except ValueError as exc:
         out['gauge_trend'] = failed('gauge_trend', exc)
         out['failures'].append(out['gauge_trend']['error'])
+    # SPEC14 Part 3: heat partition and spray coefficient sensitivity of the stripe result
+    try:
+        from . import band_thermal
+        out['thermal_sensitivity'] = band_thermal.thermal_sensitivity(
+            case, w, th, sp, steady, actual, out['thermal_events'], sys.modules[__name__],
+            shape.get('steady_stripe_table') if isinstance(shape, dict) else None)
+    except ValueError as exc:
+        out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
+        out['failures'].append(out['thermal_sensitivity']['error'])
     if out['failures']:
         flags.append('WIDTH_SECTION_PARTIAL_FAILURE')
     if steady and any(s['sign'] == 'HOT_HIGH' for s in steady['stripes']):

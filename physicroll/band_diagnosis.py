@@ -73,6 +73,7 @@ import math
 from . import band_process as bp
 from . import band_products
 from . import band_signatures as bs
+from . import band_thermal
 from . import band_width as bw
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
@@ -335,7 +336,7 @@ COOLANT_KEYS = ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_
                 'assumed_excess_temperature_k')
 OPTION_KEYS = ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
                'bite_response_override')
-OPTION_OPTIONAL = ('bite_model',)
+OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity')
 OBS_KEYS = ('orientation', 'pitch_observations', 'faces', 'gauge_variation_detected',
             'gauge_variation_amplitude_m', 'first_seen', 'disappears_after_work_roll_change',
             'disappears_after_backup_roll_change', 'onset_above_exit_speed_m_s',
@@ -505,6 +506,11 @@ def validate_case(case):
         'bite_model': o.get('bite_model', 'hitchcock')}
     if out['model_options']['bite_model'] not in BITE_MODELS:
         raise ValueError(f'model_options.bite_model must be one of {BITE_MODELS}')
+    if 'thermal_sensitivity' in o:      # kept only when given (results without it unchanged)
+        if o['thermal_sensitivity'] not in band_thermal.MODES:
+            raise ValueError('model_options.thermal_sensitivity must be one of '
+                             f'{band_thermal.MODES}')
+        out['model_options']['thermal_sensitivity'] = o['thermal_sensitivity']
 
     ob = case['observation']
     _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()),
@@ -3330,6 +3336,13 @@ def diagnose(case):
     except ValueError as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
+    try:
+        band_thermal.attach_per_pass(result)
+    except (ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
+        ts = (result.get('width') or {}).get('thermal_sensitivity')
+        if isinstance(ts, dict):
+            ts['per_pass'] = None
+            ts['per_pass_note'] = f'per-pass extension failed: {exc}'
 
     if bite is not None:
         fpw_case = bite.separating_force_n / eff['pass']['width_m']
