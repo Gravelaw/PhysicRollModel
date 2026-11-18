@@ -843,6 +843,12 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
                 'separating_force_change_n': shift['separating_force_change_n'],
                 'cylinder_stroke_change_m': shift['cylinder_stroke_change_m'],
                 'label': STATIC_LABEL}
+            if supplied_bite_mix(bite):
+                note = SENSITIVITY_MIX_NOTE.format(sens['bite_model'])
+                out['speed_change_gauge_shift']['flags'] = [SENSITIVITY_MIX_FLAG]
+                out['speed_change_gauge_shift']['note'] = note
+                out['flags'].append(SENSITIVITY_MIX_FLAG)
+                out['limitations'].append(note)
         except ValueError as exc:
             out['speed_change_gauge_shift'] = {'rejected': str(exc)}
     return out
@@ -908,6 +914,9 @@ def incoming_section(case, iv, stand, bite, spans, beta, gc, get_bite):
                       'relative_exit_thickness_change': shift['exit_thickness_change_m'] / h1,
                       'label': STATIC_LABEL},
            'coil_synchronous': None, 'flags': list(sens['flags'])}
+    if supplied_bite_mix(bite):
+        out['flags'].append(SENSITIVITY_MIX_FLAG)
+        out['limitations'] = [SENSITIVITY_MIX_NOTE.format(sens['bite_model'])]
     d_coil = case['kinematics']['entry_coil_diameter_m']
     if iv['coil_synchronous']:
         if d_coil is None:
@@ -934,6 +943,18 @@ def incoming_section(case, iv, stand, bite, spans, beta, gc, get_bite):
                                        'decoiler_rotation_hz': cs['decoiler_rotation_hz'],
                                        'harmonics': rows}
     return out
+
+
+SENSITIVITY_MIX_FLAG = 'FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE'
+SENSITIVITY_MIX_NOTE = ('With a supplied bite response the force sensitivity here comes from '
+                        'perturbed bites of the derived bite model ({}) while the strip modulus '
+                        'is the supplied one, so the two may be inconsistent.')
+
+
+def supplied_bite_mix(bite):
+    """True when ``bite`` is a supplied (override) bite: finite-difference force sensitivities
+    then come from a derived model and are combined with the supplied strip modulus."""
+    return bite.source == 'supplied' and not is_mattress(bite)
 
 
 def replace_bite_flags(bite, extra):

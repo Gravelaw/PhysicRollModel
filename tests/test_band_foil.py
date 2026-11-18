@@ -581,6 +581,31 @@ class SuppliedBiteScheduleTablesTests(unittest.TestCase):
         self.assertEqual(fr['schedule'][0]['bite_source'], 'derived_slab_hitchcock')
 
 
+class SensitivityMixFlagTests(unittest.TestCase):
+    def test_flag_only_with_a_supplied_bite(self):
+        flag = 'FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE'
+        for override in (True, False):
+            c = v2(override=override, orientation='longitudinal')
+            c['tribology'] = dict(TRIBOLOGY)
+            c['gauge_control'] = {'compensation_gain': 0.9, 'bandwidth_hz': 25.0,
+                                  'force_filter_hz': None}
+            c['incoming_variation'] = {'flow_stress_variation_fraction': 0.02,
+                                       'coil_synchronous': False}
+            r = diagnose(c)
+            gc, iv = r['gauge_control'], r['incoming_variation']
+            sc = gc['speed_change_gauge_shift']
+            for sec in (gc, iv, sc):
+                self.assertEqual(flag in (sec.get('flags') or []), override, override)
+            self.assertEqual(flag in r['flags'], override)
+            if override:
+                for text in (gc['limitations'][-1], iv['limitations'][0], sc['note']):
+                    self.assertIn('may be inconsistent', text)
+                self.assertIn(flag, render_band_report(r))
+            else:
+                self.assertNotIn('limitations', iv)
+                self.assertNotIn('note', sc)
+
+
 class CollectorFoilBelowFloorTests(unittest.TestCase):
     """SPEC9 addendum: a 0.030 -> 0.017 mm case pass (below the 20 um roll-bite floor)."""
 

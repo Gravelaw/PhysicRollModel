@@ -2406,6 +2406,11 @@ def diagnose(case):
         except ValueError as exc:
             result['incoming_variation'] = bp.failed('incoming_variation', exc)
 
+    for key in ('gauge_control', 'incoming_variation'):
+        sec = result.get(key)
+        if isinstance(sec, dict) and bp.SENSITIVITY_MIX_FLAG in (sec.get('flags') or []):
+            flags.append(bp.SENSITIVITY_MIX_FLAG)     # also on the rendered top-level list
+
     def get_bite(src):
         return cache.get(bp.bite_pass(eff, src))
     try:

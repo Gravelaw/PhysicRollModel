@@ -1719,6 +1719,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   table or of the speed-consistent critical speed could fall back to the mattress model while
   the operating bite is Hitchcock; not reproduced on the demos. The flow-stress and friction
   sensitivities are not affected (10.2).
+- **Supplied bite with derived force sensitivities**: with `bite_response_override` the
+  gauge-control speed-change shift and the incoming-variation hardness response take their
+  force sensitivities from perturbed bites of the derived (slab or mattress) model while the
+  strip modulus is the supplied one, so the two may be inconsistent (flag
+  `FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE` on both sections and in the top-level flags).
 - **Coil hypothesis scoring picks the nearest coil per pitch independently (known, not
   fixed)**: with several pitch observations, different observations can be matched to
   different coils; only `matched_coil` (the strip map) uses one coil for all of them.
