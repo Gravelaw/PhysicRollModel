@@ -589,6 +589,16 @@ def _um(v, d=3):
     return _f(v, 1e6, d, 'µm')
 
 
+def _onset_um(x, key, d=3):
+    """An onset height, or the feedback model's domain limit that ended its search (never
+    shown as an onset)."""
+    v = x.get(key)
+    dl = x.get(key[:-2] + '_domain_limit_m')
+    if not _ok(v) and _ok(dl):
+        return f'not reached before the feedback model\'s domain limit (about {_um(dl, d)})'
+    return _um(v, d)
+
+
 def _mm2(v, d=3):
     return _f(v, 1e3, d, 'mm')
 
@@ -1017,7 +1027,7 @@ def _stripe_table(w):
     out = []
     for x in rows_src:
         fb = x.get('with_feedback') or {}
-        rel = _um(x.get('released_onset_peak_height_m'))
+        rel = _onset_um(x, 'released_onset_peak_height_m')
         if x.get('released_onset_limited_by_reporting_threshold'):
             rel += ' (upper bound: limited by the reporting threshold)'
         row = [_f(x.get('position_m'), 1, 4, 'm'), _um(x.get('peak_radius_deviation_m')),
@@ -1031,7 +1041,7 @@ def _stripe_table(w):
                if fb.get('state_after_tension_release') else 'n/a',
                f'{_util(fb.get("buckling_utilisation"))} / '
                f'{_util(fb.get("released_buckling_utilisation"))}',
-               _um(x.get('manifest_onset_peak_height_m'))]
+               _onset_um(x, 'manifest_onset_peak_height_m')]
         if has('released_onset_peak_height_m'):
             row.append(rel)
         if has('reporting_onset_peak_height_m'):
@@ -1456,13 +1466,13 @@ def _event_table(events):
         rows.append(('attribution flags',
                      lambda e: _e(', '.join(e.get('flags') or []) or 'none')))
     rows += [('time to half peak', lambda e: _f(e.get('time_to_half_peak_s'), unit='s')),
-             ('in-mill manifest threshold', lambda e: _um(e.get('manifest_threshold_m'))),
+             ('in-mill manifest threshold', lambda e: _onset_um(e, 'manifest_threshold_m')),
              ('time to the in-mill threshold',
               lambda e: _f(e.get('time_to_manifest_threshold_s'), unit='s')
               if _ok(e.get('time_to_manifest_threshold_s')) else 'not reached')]
     if any('released_threshold_m' in e for e in events):
         rows += [('after-release threshold',
-                  lambda e: _um(e.get('released_threshold_m'))
+                  lambda e: _onset_um(e, 'released_threshold_m')
                   + (' (set by the reporting threshold)'
                      if e.get('released_threshold_limited_by_reporting_threshold') else '')),
                  ('time to the after-release threshold', opt('time_to_released_threshold_s'))]
@@ -1669,6 +1679,10 @@ def _onset_direction(ok, key, limited_key):
             n -= 1
         if n < 1 or n == len(vals) or not all(_ok(v) and v > 0 for v in vals[:n]):
             return 'is not stated (not reached on every assessable pass)', None
+        if any(_ok(x.get(key[:-2] + '_domain_limit_m')) for x in ok[n:]):
+            # the search ended at the feedback model's domain, not at the ceiling: no bound
+            return ('is not stated (on ' + ', '.join(str(x.get('label', '')) for x in ok[n:])
+                    + ' the search ended where the feedback model leaves its domain)'), None
         above = [str(x.get('label', '')) for x in ok[n:]]
         vals = vals[:n] + [ONSET_SEARCH_CEILING_M] * (len(vals) - n)
     a, b = vals[0], vals[-1]
@@ -1759,7 +1773,7 @@ def _gauge_section(r):
     out.append(_gauge_charts(rows, g.get('reference_stripe_peak_m')))
 
     def onset(x, k, lk=None):
-        v = _um(x.get(k))
+        v = _onset_um(x, k)
         return ('≤ ' + v + ' (limited)') if lk and x.get(lk) else v
     cols = [('in the mill', lambda x: _short(x.get('state'))
              + (' (feedback saturated)' if x.get('saturated') else '')),

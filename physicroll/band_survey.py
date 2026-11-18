@@ -485,7 +485,10 @@ def _stripe(mill, case, bite, row):
 
     def h(s):
         return None if s is None else s * peak
-    return {'linear_feedback_i_units': lv['linear_feedback_peak_i_units'],
+    dom = {f'{k}_onset_domain_limit_m': on[f'{n}_domain_limit'] * peak
+           for k, n in (('in_mill', 'mill'), ('after_release', 'released'))
+           if f'{n}_domain_limit' in on}          # keys only then: never an onset
+    return {**dom, 'linear_feedback_i_units': lv['linear_feedback_peak_i_units'],
             'state_in_mill': st['state'],
             'state_after_tension_release': st['state_after_tension_release'],
             'in_mill_onset_height_m': h(on['mill']),
@@ -740,6 +743,13 @@ MECHANISMS = (
 )
 
 
+def _domain(r, key):
+    st = r.get('stripe') or {}
+    return {'cooling_stripes_in_mill': st.get('in_mill_onset_domain_limit_m'),
+            'cooling_stripes_after_release': st.get('after_release_onset_domain_limit_m')
+            }.get(key)
+
+
 def rankings(rows):
     out = []
     for key, title, get, scale, unit, needs_bite, small_first, meaning in MECHANISMS:
@@ -759,6 +769,8 @@ def rankings(rows):
             elif key == 'chatter_margin' and r.get('chatter_reliability') != \
                     'WITHIN_SPAN_WAVE_LIMIT':
                 why = 'chatter onset above the span-wave limit (not reliable)'
+            elif get(r) is None and _domain(r, key):
+                why = bw.domain_limit_text(_domain(r, key))
             elif get(r) is None:
                 why = ('stable over the scanned speed range even without bite damping'
                        if key == 'chatter_margin' else
@@ -982,7 +994,9 @@ def _chatter_cell(r):
     return f'{_e(a)} / {_e(b)} at {r["exit_speed_m_s"]:.3g} m/s{rel}'
 
 
-def _onset(h):
+def _onset(h, dom=None):
+    if h is None and dom:
+        return bw.domain_limit_text(dom).replace(' um', ' µm')
     return (f'not reached within {bw.ONSET_SEARCH_MAX_M * 1e6:.3g} µm' if h is None
             else f'{h * 1e6:.3g} µm')
 
@@ -991,6 +1005,8 @@ def _table_rows(rows):
     out = []
     for r in rows:
         st = r.get('stripe') or {}
+        dm = st.get('in_mill_onset_domain_limit_m')
+        dr = st.get('after_release_onset_domain_limit_m')
         lim = ' (≤, reporting-limited)' if st.get(
             'after_release_onset_limited_by_reporting_threshold') else ''
         out.append([
@@ -1008,8 +1024,9 @@ def _table_rows(rows):
             _e(_f(r.get('trough_onset_lateral_stress_pa'), 1e-3)),
             _e(_f(r.get('roller_wrinkle_threshold_pa'), 1e-6)),
             _cell_bite(r, lambda: _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
-                                     f'{_onset(st.get("in_mill_onset_height_m"))}; after '
-                                     f'release {_onset(st.get("after_release_onset_height_m"))}'
+                                     f'{_onset(st.get("in_mill_onset_height_m"), dm)}; '
+                                     f'after release '
+                                     f'{_onset(st.get("after_release_onset_height_m"), dr)}'
                                      f'{lim}')),
             _chatter_cell(r),
             _marks(r)])

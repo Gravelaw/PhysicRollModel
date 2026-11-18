@@ -396,5 +396,88 @@ class UndefinedBoundLevelTests(unittest.TestCase):
         self.assertNotRegex(html, r'\b(nan|inf|NaN|Infinity)\b')
 
 
+class OnsetSearchDomainTests(unittest.TestCase):
+    """Review finding: the onset search counted an undefined compliance-only bound or any
+    ValueError as 'manifest'; it now decides from the with-feedback result and reports a
+    search ended by the feedback model's domain as its own outcome, never as an onset."""
+
+    def test_reviewer_reproducer_onset_is_a_manifest_feedback_result(self):
+        bw, z, dev, sp, lv = _bump_levels(9e-6, q=1e9)
+        on = bw.onsets(z, dev, sp)
+        h = on['mill'] * 9e-6
+        self.assertGreater(h, 5e-6)                 # not the old 4.28 um artefact
+        at = bw._tsf(z, [on['mill'] * v for v in dev], sp)
+        below = bw._tsf(z, [on['mill'] / (1 + 2 * bw.ONSET_RELATIVE_TOL) * v for v in dev], sp)
+        self.assertEqual(at['status'], 'MANIFEST_BUCKLE_BANDS')
+        self.assertNotEqual(below['status'], 'MANIFEST_BUCKLE_BANDS')
+        self.assertIn('compliance_only_level_reason', at)    # the bound is undefined there
+        self.assertNotIn('mill_domain_limit', on)
+
+    def test_domain_limit_is_its_own_outcome(self):
+        from unittest import mock
+        bw, z, dev, sp, lv = _bump_levels(1e-6)
+        real = bw._tsf
+
+        def stub(limit, onset):
+            def f(z_, d_, sp_, feedback=True):
+                peak = max(abs(v) for v in d_)
+                if peak > limit:
+                    raise ValueError('elongation outside the model')
+                r = dict(real(z_, [1e-9 * v / max(abs(x) for x in d_) for v in d_], sp_))
+                r['status'] = ('MANIFEST_BUCKLE_BANDS' if onset is not None and peak >= onset
+                               else 'LATENT_BANDS_UNDER_TENSION')
+                return r
+            return f
+        with mock.patch.object(bw, '_tsf', stub(20e-6, None)):
+            r = bw.onset_search(z, dev, sp, 'mill')
+        self.assertEqual(r['status'], bw.ONSET_DOMAIN_LIMIT)
+        self.assertIsNone(r['scale'])
+        self.assertAlmostEqual(r['domain_limit_scale'] * 1e-6, 20e-6,
+                               delta=20e-6 * 2 * bw.ONSET_RELATIVE_TOL)
+        with mock.patch.object(bw, '_tsf', stub(20e-6, 12e-6)):
+            r = bw.onset_search(z, dev, sp, 'mill')
+        self.assertEqual(r['status'], bw.ONSET_FOUND)
+        self.assertAlmostEqual(r['scale'] * 1e-6, 12e-6, delta=12e-6 * 2 * bw.ONSET_RELATIVE_TOL)
+        with mock.patch.object(bw, '_tsf', stub(1.0, None)):
+            r = bw.onset_search(z, dev, sp, 'mill')
+        self.assertEqual(r['status'], bw.ONSET_NOT_REACHED)
+        # consumers never read the domain-limit height as an onset
+        row = {'label': 'thin', 'exit_thickness_m': 8e-6, 'manifest_onset_stripe_height_m': None,
+               'manifest_onset_stripe_height_domain_limit_m': 20e-6}
+        self.assertIn('not reached before the feedback model leaves its domain at about 20 um',
+                      bw.domain_limit_text(row['manifest_onset_stripe_height_domain_limit_m']))
+        from physicroll.band_report import _onset_um
+        self.assertIn("domain limit (about 20 µm)",
+                      _onset_um(row, 'manifest_onset_stripe_height_m'))
+
+    def test_normal_sheet_case_unchanged(self):
+        import math
+        from physicroll import band_width as bw
+        z = [i * 0.01 for i in range(171)]
+        dev = [3e-6 * math.exp(-0.5 * ((x - 0.85) / 0.04) ** 2) for x in z]
+        sp = {'exit_thickness_m': 0.21e-3, 'entry_thickness_m': 0.3e-3,
+              'strip_stiffness_per_width_pa': 1.1e10, 'bite_half_length_m': 4.87e-3,
+              'roll_radius_m': 0.2, 'strip_width_m': 1.5, 'mean_tension_pa': 30e6,
+              'strip_centre_m': 0.85, 'n_rolls': 2, 'roll_youngs_modulus_pa': 210e9,
+              'roll_poisson_ratio': 0.3, 'strip_youngs_modulus_pa': 70e9,
+              'strip_poisson_ratio': 0.33, 'xi': 1.0, 'yield_stress_pa': 285e6,
+              'exit_tension_force_sensitivity_per_width_m': 5.9e-3,
+              'entry_force_sensitivity_per_width_pa': None}
+
+        def old(kind):          # the search before the fix (no domain failure at sheet gauge)
+            key, value = bw.ONSET_KINDS[kind]
+            peak = max(abs(v) for v in dev)
+            hi, lo = bw.ONSET_SEARCH_MAX_M / peak, bw.ONSET_SEARCH_MAX_M / peak * 1e-4
+            m = lambda sc: bw._tsf(z, [sc * v for v in dev], sp)[key] == value  # noqa: E731
+            if not m(hi):
+                return None
+            while hi / lo > 1 + bw.ONSET_RELATIVE_TOL:
+                mid = math.sqrt(lo * hi)
+                hi, lo = (mid, lo) if m(mid) else (hi, mid)
+            return hi
+        for kind in ('mill', 'released'):
+            self.assertEqual(bw.onset_scale(z, dev, sp, kind), old(kind))
+
+
 if __name__ == '__main__':
     unittest.main()

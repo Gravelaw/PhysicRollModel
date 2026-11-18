@@ -628,36 +628,75 @@ def coarse_grid(z, prof):
     return zc, [_interp(z, prof, x) for x in zc]
 
 
-def onset_scale(z, shape, sp, kind='mill', hi=None, lo=None):
+ONSET_FOUND = 'FOUND'
+ONSET_NOT_REACHED = 'NOT_REACHED_WITHIN_SEARCH_CEILING'
+ONSET_DOMAIN_LIMIT = 'NOT_REACHED_BEFORE_FEEDBACK_MODEL_DOMAIN_LIMIT'
+
+
+def onset_search(z, shape, sp, kind='mill', hi=None, lo=None):
     """Smallest factor s with a MANIFEST band (kind 'mill': in the mill; 'released': after
-    tension release) for s*shape, by geometric bisection to ONSET_RELATIVE_TOL; None if not
-    reached at ``hi``. ``lo``: a scale known not to exceed the onset (bracket)."""
+    tension release) for s*shape, decided from the with-feedback result only.
+
+    Returns ``{'status', 'scale', 'domain_limit_scale'}``: ``FOUND`` with the onset scale
+    (geometric bisection to ONSET_RELATIVE_TOL); ``NOT_REACHED_WITHIN_SEARCH_CEILING`` when the
+    band is still latent at ``hi``; ``NOT_REACHED_BEFORE_FEEDBACK_MODEL_DOMAIN_LIMIT`` when the
+    with-feedback calculation itself leaves its domain (ValueError) before any manifest band,
+    with the largest valid scale in ``domain_limit_scale`` (never an onset). An undefined
+    compliance-only bound does not decide anything (review finding: it used to count as
+    manifest). ``lo``: a scale known not to exceed the onset (bracket)."""
+    out = {'status': ONSET_NOT_REACHED, 'scale': None, 'domain_limit_scale': None}
     peak = max(abs(v) for v in shape)
     if peak <= 0:
-        return None
+        return out
     key, value = ONSET_KINDS[kind]
     s_hi = (ONSET_SEARCH_MAX_M if hi is None else hi) / peak
 
     def manifest(sc):
+        """True / False from the with-feedback result; None when it is outside its domain."""
         try:
             r = _tsf(z, [sc * v for v in shape], sp)
         except ValueError:
-            return True        # thickness change exceeds the gauge: far beyond onset
-        if r.get('compliance_only_level_reason'):
-            return True        # as before: the compliance-only change reaches the gauge
+            return None
         return r[key] == value
-    if not manifest(s_hi):
-        return None
     s_lo = s_hi * 1e-4 if lo is None or lo >= s_hi else lo
+    top = manifest(s_hi)
+    if top is None:
+        # bracket the domain boundary: largest valid scale below s_hi
+        if manifest(s_lo) is None:
+            out.update(status=ONSET_DOMAIN_LIMIT, domain_limit_scale=s_lo)
+            return out
+        a, b = s_lo, s_hi
+        while b / a > 1 + ONSET_RELATIVE_TOL:
+            mid = math.sqrt(a * b)
+            if manifest(mid) is None:
+                b = mid
+            else:
+                a = mid
+        if not manifest(a):
+            out.update(status=ONSET_DOMAIN_LIMIT, domain_limit_scale=a)
+            return out
+        s_hi = a
+    elif not top:
+        return out
     if manifest(s_lo):
-        return s_lo
+        out.update(status=ONSET_FOUND, scale=s_lo)
+        return out
     while s_hi / s_lo > 1 + ONSET_RELATIVE_TOL:
         mid = math.sqrt(s_lo * s_hi)
-        if manifest(mid):
+        m = manifest(mid)
+        if m is None:        # domain failure inside a valid bracket: keep the valid top
+            s_hi = mid
+        elif m:
             s_hi = mid
         else:
             s_lo = mid
-    return s_hi
+    out.update(status=ONSET_FOUND, scale=s_hi)
+    return out
+
+
+def onset_scale(z, shape, sp, kind='mill', hi=None, lo=None):
+    """Onset scale of ``onset_search`` (None unless FOUND)."""
+    return onset_search(z, shape, sp, kind, hi, lo)['scale']
 
 
 def manifest_onset_scale(z, shape, sp, hi=None):
@@ -681,10 +720,27 @@ def onsets(z, shape, sp):
     if li > 0:
         out['reporting'] = REFERENCE_STRIPE_HEIGHT_M / peak * thr / li
     lo = None if out['reporting'] is None else out['reporting'] * (1 - 1e-6)
-    out['released'] = onset_scale(zc, pc, sp, 'released', lo=lo)
-    out['mill'] = onset_scale(zc, pc, sp, 'mill',
-                              lo=None if out['released'] is None else out['released'] * 0.999)
+    rel = onset_search(zc, pc, sp, 'released', lo=lo)
+    out['released'] = rel['scale']
+    mil = onset_search(zc, pc, sp, 'mill',
+                       lo=None if out['released'] is None else out['released'] * 0.999)
+    out['mill'] = mil['scale']
+    # the scale at which the with-feedback calculation leaves its domain, when that ends the
+    # search before an onset (never an onset); keys only then
+    for name, r in (('released', rel), ('mill', mil)):
+        if r['status'] == ONSET_DOMAIN_LIMIT:
+            out[f'{name}_domain_limit'] = r['domain_limit_scale']
     return out
+
+
+DOMAIN_LIMIT_NOTE = ('not reached before the with-feedback flatness calculation leaves its '
+                     'domain (elongation or thickness outside the model)')
+
+
+def domain_limit_text(height):
+    """Plain words for a search ended by the feedback model's domain (never an onset)."""
+    return f'not reached before the feedback model leaves its domain at about ' \
+           f'{height * 1e6:.3g} um'
 
 
 def _limited(onset, reporting):
@@ -984,6 +1040,10 @@ def _events_section(th, sp, actual, events, shape_reason=None):
                 key = {'mill': 'manifest', 'released': 'released',
                        'reporting': 'reporting'}[name]
                 row[f'{key}_threshold_m'] = None if on[name] is None else on[name] * at_mon
+                if f'{name}_domain_limit' in on:
+                    # the search ended at the feedback model's domain: no threshold (the band
+                    # is treated as not reaching this state), never read as a threshold
+                    row[f'{key}_threshold_domain_limit_m'] = on[f'{name}_domain_limit'] * at_mon
             row['released_threshold_limited_by_reporting_threshold'] = _limited(
                 on['released'], on['reporting'])
             states = stripe_states(shape, z[k_pk])
@@ -1413,6 +1473,15 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                                                      REFERENCE_STRIPE_HEIGHT_M),
                 released_onset_reference_limited_by_reporting_threshold=_limited(
                     on_ref['released'], on_ref['reporting']))
+            for o, height, keys_ in (
+                    (on, abs(peak_ref), {'mill': 'manifest_onset_stripe_height_m',
+                                         'released': 'released_onset_stripe_height_m'}),
+                    (on_ref, REFERENCE_STRIPE_HEIGHT_M,
+                     {'mill': 'manifest_onset_height_reference_m',
+                      'released': 'released_onset_height_reference_m'})):
+                for name, k in keys_.items():
+                    if f'{name}_domain_limit' in o:      # keys only then (no onset)
+                        row[k[:-2] + '_domain_limit_m'] = o[f'{name}_domain_limit'] * height
         except ValueError as exc:
             row['rejected'] = str(exc)
         h1 = src['exit_thickness_m']
@@ -1544,9 +1613,10 @@ def _trend_text(rows, peak):
                 else 'No pass assessable.') + _rejected_text(rows)
     a, b = ok[0], ok[-1]
 
-    def um(x, limited=False):
+    def um(x, limited=False, row=None, key=None):
         if x is None:
-            return 'not reached below 50 um'
+            dl = None if row is None else row.get(key[:-2] + '_domain_limit_m')
+            return domain_limit_text(dl) if dl else 'not reached below 50 um'
         return f'{x * 1e6:.3g} um' + (' (reporting-threshold limited)' if limited else '')
 
     def ratio(x, y):
@@ -1582,9 +1652,10 @@ def _trend_text(rows, peak):
              'released_onset_height_reference_m',
              'released_onset_reference_limited_by_reporting_threshold')):
         rm, rr = ratio(a[mk], b[mk]), ratio(a[rk], b[rk])
-        text += (f'Onset stripe height, {label}: in the mill {um(a[mk])} -> {um(b[mk])}, after '
-                 f'release {um(a[rk], a[lk])} -> {um(b[rk], b[lk])}. ')
-        if rm is None and a[mk] and b[mk] is None:
+        text += (f'Onset stripe height, {label}: in the mill {um(a[mk], row=a, key=mk)} -> '
+                 f'{um(b[mk], row=b, key=mk)}, after release {um(a[rk], a[lk], a, rk)} -> '
+                 f'{um(b[rk], b[lk], b, rk)}. ')
+        if rm is None and a[mk] and b[mk] is None and not b.get(mk[:-2] + '_domain_limit_m'):
             # SPEC12 stage A: not reached on the thin pass = above the 50 um search ceiling,
             # so the thick/thin ratio is at most a/50 um (a rise beyond the search)
             rm = a[mk] / ONSET_SEARCH_MAX_M
@@ -1759,6 +1830,8 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
                                   ('released_onset_peak_height_m', 'released'),
                                   ('reporting_onset_peak_height_m', 'reporting')):
                     row[key] = None if on[name] is None else on[name] * pk
+                    if f'{name}_domain_limit' in on:
+                        row[key[:-2] + '_domain_limit_m'] = on[f'{name}_domain_limit'] * pk
                 row['released_onset_limited_by_reporting_threshold'] = _limited(
                     on['released'], on['reporting'])
         except ValueError as exc:

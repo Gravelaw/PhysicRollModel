@@ -856,7 +856,7 @@
           "product_id": "container_foil_wrinkle_wall",
           "rank": 9,
           "unvalidated_extended_bite": true,
-          "value": 1.9534983973295381
+          "value": 1.9404511968196814
         },
         {
           "exit_thickness_m": 0.000529,
@@ -901,7 +901,7 @@
           "product_id": "pharma_cold_form_foil",
           "rank": 14,
           "unvalidated_extended_bite": true,
-          "value": 2.6952522043071836
+          "value": 2.6746443237672866
         },
         {
           "exit_thickness_m": 3.74e-05,
@@ -910,7 +910,7 @@
           "product_id": "dairy_lidding_foil",
           "rank": 15,
           "unvalidated_extended_bite": true,
-          "value": 6.182623931956846
+          "value": 6.207737114254347
         },
         {
           "exit_thickness_m": 3.46e-05,
@@ -1044,7 +1044,7 @@
           "product_id": "container_foil_wrinkle_wall",
           "rank": 8,
           "unvalidated_extended_bite": true,
-          "value": 0.06366740414301746
+          "value": 0.06366578198582684
         },
         {
           "exit_thickness_m": 0.00029,
@@ -1089,7 +1089,7 @@
           "product_id": "pharma_cold_form_foil",
           "rank": 13,
           "unvalidated_extended_bite": true,
-          "value": 0.08865133099050403
+          "value": 0.08862557585848502
         },
         {
           "exit_thickness_m": 0.000529,
@@ -1107,7 +1107,7 @@
           "product_id": "dairy_lidding_foil",
           "rank": 15,
           "unvalidated_extended_bite": true,
-          "value": 0.20694503622768798
+          "value": 0.2069406959223229
         },
         {
           "exit_thickness_m": 3.46e-05,
@@ -2987,9 +2987,9 @@
       "speed_ratio_without_bite_damping": 2.4610771266801272,
       "strip_to_mill_modulus_ratio": 10.494877264423609,
       "stripe": {
-        "after_release_onset_height_m": 8.865133099050403e-08,
+        "after_release_onset_height_m": 8.862557585848501e-08,
         "after_release_onset_limited_by_reporting_threshold": true,
-        "in_mill_onset_height_m": 2.6952522043071834e-06,
+        "in_mill_onset_height_m": 2.6746443237672866e-06,
         "linear_feedback_i_units": 22.85539606714269,
         "onset_search_ceiling_m": 5e-05,
         "reporting_onset_height_m": 8.75591578424626e-08,
@@ -4454,9 +4454,9 @@
       "speed_ratio_without_bite_damping": 1.722984241596562,
       "strip_to_mill_modulus_ratio": 27.43198497305639,
       "stripe": {
-        "after_release_onset_height_m": 2.06945036227688e-07,
+        "after_release_onset_height_m": 2.0694069592232288e-07,
         "after_release_onset_limited_by_reporting_threshold": true,
-        "in_mill_onset_height_m": 6.182623931956846e-06,
+        "in_mill_onset_height_m": 6.2077371142543475e-06,
         "linear_feedback_i_units": 9.774248368282441,
         "onset_search_ceiling_m": 5e-05,
         "reporting_onset_height_m": 2.047348704789043e-07,
@@ -4721,9 +4721,9 @@
       "speed_ratio_without_bite_damping": 6.323117436889378,
       "strip_to_mill_modulus_ratio": 4.739116338455511,
       "stripe": {
-        "after_release_onset_height_m": 6.366740414301746e-08,
+        "after_release_onset_height_m": 6.366578198582684e-08,
         "after_release_onset_limited_by_reporting_threshold": true,
-        "in_mill_onset_height_m": 1.953498397329538e-06,
+        "in_mill_onset_height_m": 1.9404511968196813e-06,
         "linear_feedback_i_units": 31.84202581863092,
         "onset_search_ceiling_m": 5e-05,
         "reporting_onset_height_m": 6.284230582786512e-08,
