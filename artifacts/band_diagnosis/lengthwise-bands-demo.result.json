@@ -13034,7 +13034,7 @@
     ],
     "gauge_trend": {
       "evaluation_grid_m": 0.009970588235294118,
-      "own_stripe_text": "The text above holds the case-pass stripe on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6 and stay latent on P1. (width.thermal_sensitivity.per_pass)",
+      "own_stripe_text": "The text above holds the case-pass stripe on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6; it would stay latent on P1. (width.thermal_sensitivity.per_pass)",
       "reference_stripe_basis": "largest steady stripe (peak 2.715e-06 m at 0.6675 m), isolated; onsets by scaling its own shape",
       "reference_stripe_description": "smooth Gaussian stripe, half-peak width 0.1 m (about one cooling zone), centred at 0.6705 m; its height is bisected for the *_onset_height_reference_m columns",
       "reference_stripe_peak_m": 2.7129858300586348e-06,
@@ -23199,12 +23199,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 6.255742410725247e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 471018.52012001624,
           "exit_thickness_m": 0.0014,
           "in_mill_onset_height_m": 3.6127508988543453e-06,
           "label": "P1 2.20->1.40 mm",
           "ratio_stripe_to_after_release_onset": 5.031349098397051,
           "ratio_stripe_to_in_mill_onset": 0.8712148946662163,
+          "scaled_largest_deviation_m": 3.1474823938006667e-06,
           "strip_exit_temperature_c": 78.76695638847872,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 3.1474823938006667e-06
@@ -23212,12 +23214,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 6.255742410725247e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 471018.52012001624,
           "exit_thickness_m": 0.0014,
           "in_mill_onset_height_m": 3.6127508988543453e-06,
           "label": "P1 2.20->1.40 mm",
           "ratio_stripe_to_after_release_onset": 21.06877434953765,
           "ratio_stripe_to_in_mill_onset": 3.6482123714147803,
+          "scaled_largest_deviation_m": 1.318008252404029e-05,
           "strip_exit_temperature_c": 55.2298757240452,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 1.318008252404029e-05
@@ -23225,12 +23229,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 6.255742410725247e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 471018.52012001624,
           "exit_thickness_m": 0.0014,
           "in_mill_onset_height_m": 3.6127508988543453e-06,
           "label": "P1 2.20->1.40 mm",
           "ratio_stripe_to_after_release_onset": 27.9868793598336,
           "ratio_stripe_to_in_mill_onset": 4.846132851580829,
+          "scaled_largest_deviation_m": 1.750787081551621e-05,
           "strip_exit_temperature_c": 45.07662524134838,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 1.750787081551621e-05
@@ -23238,12 +23244,14 @@
         {
           "above_battery_coil_limit_80c": true,
           "after_release_onset_height_m": 2.4827051611412843e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 731388.0481112656,
           "exit_thickness_m": 0.0009,
           "in_mill_onset_height_m": 3.5952756414670347e-06,
           "label": "P2 1.40->0.90 mm",
           "ratio_stripe_to_after_release_onset": 19.68557196992567,
           "ratio_stripe_to_in_mill_onset": 1.3593803647780975,
+          "scaled_largest_deviation_m": 4.8873471129752665e-06,
           "strip_exit_temperature_c": 96.18344402500804,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 4.8873471129752665e-06
@@ -23251,12 +23259,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 2.4827051611412843e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 731388.0481112656,
           "exit_thickness_m": 0.0009,
           "in_mill_onset_height_m": 3.5952756414670347e-06,
           "label": "P2 1.40->0.90 mm",
           "ratio_stripe_to_after_release_onset": 82.43333262406374,
           "ratio_stripe_to_in_mill_onset": 5.692405277508283,
+          "scaled_largest_deviation_m": 2.0465766035583925e-05,
           "strip_exit_temperature_c": 62.072067295538886,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 2.0465766035583925e-05
@@ -23264,12 +23274,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 2.4827051611412843e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 731388.0481112656,
           "exit_thickness_m": 0.0009,
           "in_mill_onset_height_m": 3.5952756414670347e-06,
           "label": "P2 1.40->0.90 mm",
           "ratio_stripe_to_after_release_onset": 109.50099408271154,
           "ratio_stripe_to_in_mill_onset": 7.561553279078168,
+          "scaled_largest_deviation_m": 2.7185868315924918e-05,
           "strip_exit_temperature_c": 47.35735576517965,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 2.7185868315924918e-05
@@ -23277,12 +23289,14 @@
         {
           "above_battery_coil_limit_80c": true,
           "after_release_onset_height_m": 1.5149834690792552e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 775288.9347401967,
           "exit_thickness_m": 0.0006,
           "in_mill_onset_height_m": 3.1873561378769364e-06,
           "label": "P3 0.90->0.60 mm",
           "ratio_stripe_to_after_release_onset": 34.196449524396414,
           "ratio_stripe_to_in_mill_onset": 1.6253927546725873,
+          "scaled_largest_deviation_m": 5.180705573066373e-06,
           "strip_exit_temperature_c": 99.55580294300552,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 5.180705573066373e-06
@@ -23290,12 +23304,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.5149834690792552e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 775288.9347401967,
           "exit_thickness_m": 0.0006,
           "in_mill_onset_height_m": 3.1873561378769364e-06,
           "label": "P3 0.90->0.60 mm",
           "ratio_stripe_to_after_release_onset": 143.19763238340997,
           "ratio_stripe_to_in_mill_onset": 6.806332160191458,
+          "scaled_largest_deviation_m": 2.169420458721543e-05,
           "strip_exit_temperature_c": 63.39692258475219,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 2.169420458721543e-05
@@ -23303,12 +23319,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.5149834690792552e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 775288.9347401967,
           "exit_thickness_m": 0.0006,
           "in_mill_onset_height_m": 3.1873561378769364e-06,
           "label": "P3 0.90->0.60 mm",
           "ratio_stripe_to_after_release_onset": 190.21775047945502,
           "ratio_stripe_to_in_mill_onset": 9.041247197866264,
+          "scaled_largest_deviation_m": 2.881767475018169e-05,
           "strip_exit_temperature_c": 47.79897419491738,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 2.881767475018169e-05
@@ -23316,12 +23334,14 @@
         {
           "above_battery_coil_limit_80c": true,
           "after_release_onset_height_m": 1.3875571608108893e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 662921.2288486854,
           "exit_thickness_m": 0.00042,
           "in_mill_onset_height_m": 3.2755750987712626e-06,
           "label": "P4 0.60->0.42 mm",
           "ratio_stripe_to_after_release_onset": 31.925401630778268,
           "ratio_stripe_to_in_mill_onset": 1.3523829650911459,
+          "scaled_largest_deviation_m": 4.429831964455003e-06,
           "strip_exit_temperature_c": 94.56141801223748,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 4.429831964455003e-06
@@ -23329,12 +23349,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.3875571608108893e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 662921.2288486854,
           "exit_thickness_m": 0.00042,
           "in_mill_onset_height_m": 3.2755750987712626e-06,
           "label": "P4 0.60->0.42 mm",
           "ratio_stripe_to_after_release_onset": 133.68761932888398,
           "ratio_stripe_to_in_mill_onset": 5.663103666319173,
+          "scaled_largest_deviation_m": 1.8549921351155324e-05,
           "strip_exit_temperature_c": 61.434842790521884,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 1.8549921351155324e-05
@@ -23342,12 +23364,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.3875571608108893e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 662921.2288486854,
           "exit_thickness_m": 0.00042,
           "in_mill_onset_height_m": 3.2755750987712626e-06,
           "label": "P4 0.60->0.42 mm",
           "ratio_stripe_to_after_release_onset": 177.58504657120412,
           "ratio_stripe_to_in_mill_onset": 7.522630243319499,
+          "scaled_largest_deviation_m": 2.4640940302280955e-05,
           "strip_exit_temperature_c": 47.14494759684061,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 2.4640940302280955e-05
@@ -23355,12 +23379,14 @@
         {
           "above_battery_coil_limit_80c": true,
           "after_release_onset_height_m": 1.2533431079474673e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 589635.1465772423,
           "exit_thickness_m": 0.0003,
           "in_mill_onset_height_m": 2.8791978751954227e-06,
           "label": "P5 0.42->0.30 mm",
           "ratio_stripe_to_after_release_onset": 31.436827453377852,
           "ratio_stripe_to_in_mill_onset": 1.368475969083943,
+          "scaled_largest_deviation_m": 3.940113102442486e-06,
           "strip_exit_temperature_c": 92.26269105464638,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 3.940113102442486e-06
@@ -23368,12 +23394,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.2533431079474673e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 589635.1465772423,
           "exit_thickness_m": 0.0003,
           "in_mill_onset_height_m": 2.8791978751954227e-06,
           "label": "P5 0.42->0.30 mm",
           "ratio_stripe_to_after_release_onset": 131.64171496101974,
           "ratio_stripe_to_in_mill_onset": 5.730493120539012,
+          "scaled_largest_deviation_m": 1.649922361647791e-05,
           "strip_exit_temperature_c": 60.53177148575395,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 1.649922361647791e-05
@@ -23381,12 +23409,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.2533431079474673e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 589635.1465772423,
           "exit_thickness_m": 0.0003,
           "in_mill_onset_height_m": 2.8791978751954227e-06,
           "label": "P5 0.42->0.30 mm",
           "ratio_stripe_to_after_release_onset": 174.8673527094143,
           "ratio_stripe_to_in_mill_onset": 7.612147578029433,
+          "scaled_largest_deviation_m": 2.1916879132336327e-05,
           "strip_exit_temperature_c": 46.84392382858465,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 2.1916879132336327e-05
@@ -23394,12 +23424,14 @@
         {
           "above_battery_coil_limit_80c": true,
           "after_release_onset_height_m": 1.0839910607156174e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 406315.461037247,
           "exit_thickness_m": 0.00021,
           "in_mill_onset_height_m": 2.4411589376639697e-06,
           "label": "P6 0.30->0.21 mm",
           "ratio_stripe_to_after_release_onset": 25.047418572579204,
           "ratio_stripe_to_in_mill_onset": 1.1122249111997637,
+          "scaled_largest_deviation_m": 2.7151177826678185e-06,
           "strip_exit_temperature_c": 95.73600288576773,
           "strip_heat_share": 0.84,
           "stripe_peak_m": 2.7151177826678185e-06
@@ -23407,12 +23439,14 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.0839910607156174e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 406315.461037247,
           "exit_thickness_m": 0.00021,
           "in_mill_onset_height_m": 2.4411589376639697e-06,
           "label": "P6 0.30->0.21 mm",
           "ratio_stripe_to_after_release_onset": 104.8860652726754,
           "ratio_stripe_to_in_mill_onset": 4.65744181564901,
+          "scaled_largest_deviation_m": 1.1369555714921488e-05,
           "strip_exit_temperature_c": 61.89628684798021,
           "strip_heat_share": 0.33,
           "stripe_peak_m": 1.1369555714921488e-05
@@ -23420,19 +23454,21 @@
         {
           "above_battery_coil_limit_80c": false,
           "after_release_onset_height_m": 1.0839910607156174e-07,
+          "below_detection_threshold": false,
           "bite_heat_per_width_w_m": 406315.461037247,
           "exit_thickness_m": 0.00021,
           "in_mill_onset_height_m": 2.4411589376639697e-06,
           "label": "P6 0.30->0.21 mm",
           "ratio_stripe_to_after_release_onset": 139.3262658099718,
           "ratio_stripe_to_in_mill_onset": 6.186751068548686,
+          "scaled_largest_deviation_m": 1.5102842666089739e-05,
           "strip_exit_temperature_c": 47.29876228266005,
           "strip_heat_share": 0.11,
           "stripe_peak_m": 1.5102842666089739e-05
         }
       ],
       "per_pass_note": "Stripe at a pass = the case-pass stripe x (that pass's bite heat / the case pass's) x (roll share / case roll share), at the case spray coefficient (linear model, same stripe shape); onsets from the gauge trend (the case stripe's shape at each pass). Strip exit temperature = entry + pass-heating rise x (share / the strip fraction that pass-heating row used, tribology.strip_heat_fraction); a strip exit temperature is not a coil temperature (the 80 C battery limit is for the coil [PT-T1]), and the experimental mattress bite inflates friction heat.",
-      "per_pass_text": "Two questions, two answers. The gauge trend holds the case-pass stripe (2.72 um) unchanged on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6 and stay latent on P1.",
+      "per_pass_text": "Two questions, two answers. The gauge trend holds the case-pass stripe (2.72 um) unchanged on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6; it would stay latent on P1.",
       "rows": [
         {
           "after_release_onset_height_m": 1.0848428961895146e-07,
@@ -23477,7 +23513,9 @@
             }
           ],
           "in_mill_onset_height_m": 2.4430772798495133e-06,
+          "largest_deviation_in_strip_m": 2.7151177826678185e-06,
           "linear_feedback_i_units": 50.66776941933276,
+          "onset_basis": "the stripe extent at strip share 0.84 (one window per spray coefficient; a direct run at another share isolates its own extent, onsets differ by about 1 %)",
           "ratio_stripe_to_after_release_onset": 25.027750950894426,
           "ratio_stripe_to_in_mill_onset": 1.1113515749428369,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
@@ -23538,7 +23576,9 @@
             }
           ],
           "in_mill_onset_height_m": 2.4430772798495133e-06,
+          "largest_deviation_in_strip_m": 1.1369555714921488e-05,
           "linear_feedback_i_units": 213.31618498303408,
+          "onset_basis": "the stripe extent at strip share 0.84 (one window per spray coefficient; a direct run at another share isolates its own extent, onsets differ by about 1 %)",
           "ratio_stripe_to_after_release_onset": 104.80370710687039,
           "ratio_stripe_to_in_mill_onset": 4.653784720073129,
           "roll_heat_fraction_per_roll": 0.33499999999999996,
@@ -23599,7 +23639,9 @@
             }
           ],
           "in_mill_onset_height_m": 2.4430772798495133e-06,
+          "largest_deviation_in_strip_m": 1.5102842666089739e-05,
           "linear_feedback_i_units": 284.02143224034484,
+          "onset_basis": "the stripe extent at strip share 0.84 (one window per spray coefficient; a direct run at another share isolates its own extent, onsets differ by about 1 %)",
           "ratio_stripe_to_after_release_onset": 139.21686466435023,
           "ratio_stripe_to_in_mill_onset": 6.1818931356195295,
           "roll_heat_fraction_per_roll": 0.445,
@@ -23642,6 +23684,7 @@
           "basis": "case value",
           "event_basis": "the event section itself; other shares from its scaled entries (band_width.event_metrics)",
           "in_mill_onset_height_m": 2.4430772798495133e-06,
+          "onset_window_share": 0.84,
           "spray_htc_w_m2k": 3000.0,
           "stripe_peak_at_case_share_m": 2.7151177826678185e-06,
           "stripe_position_m": 0.6675,

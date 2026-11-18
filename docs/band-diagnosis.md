@@ -756,7 +756,7 @@ extended domain (force inside the reported range, unvalidated); the 12 um ALT2 b
 CREDIBLE (6.19 kN/mm, 2.7 times the top of the reported range) and is kept out of the trend
 statements, while its bite-free thresholds stand; the 30 um case pass lies below every reported
 closed-gap onset (`BELOW_EVERY_REPORTED_ONSET`) with no roll-kissing model, and the lever and
-gauge-control sections carry the open-gap note. The CLI run of this demo took about 37 s on
+gauge-control sections carry the open-gap note. The CLI run of this demo took about 56 s on
 this container (the full thermal sensitivity block included). It tests the screening logic at foil gauge, not the physics.
 
 ### 3.10 Product survey
@@ -924,14 +924,17 @@ tension at the case pass and visible after release; the event is visible after r
 hypothesis score and the leader (`nozzle_thermal_stripe`) are unchanged. Sensitivity at the
 case pass (`width.thermal_sensitivity`, `model_options.thermal_sensitivity: "full"`; stripe and
 event scaled linearly with the roll heat at a fixed spray coefficient, checked by a direct
-solve; flatness states recomputed for every row):
+solve; the stripe is detected on every row's own scaled profile and its flatness states and, in
+`full` mode, its onsets over its own extent are recomputed for every row, as a direct run at that
+share would; in the default `partition` mode one onset window per spray coefficient is used, about
+1 % from a direct run):
 
 | strip share (per roll) | spray [kW/m2K] | stripe [um] | I-units | in mill / after release | stripe / in-mill onset | event peak [um] | event visible after release [s] |
 |---|---|---|---|---|---|---|---|
 | 0.22 (0.39) | 3.4 | 2.96 | 25.1 | latent under tension / manifest after tension release | 0.434 | 2.12 | 311 |
 | 0.33 (0.335) | 3.4 | 2.54 | 21.5 | latent under tension / manifest after tension release | 0.373 | 1.82 | 276 |
 | 0.11 (0.445) | 3.4 | 3.38 | 28.7 | latent under tension / manifest after tension release | 0.496 | 2.42 | 343 |
-| 0.84 (0.08) | 3.4 | 0.607 | 5.12 | latent under tension / manifest after tension release | 0.0891 | 0.435 | 51.6 |
+| 0.84 (0.08) | 3.4 | 0.607 | 5.12 | latent under tension / manifest after tension release | 0.0901 | 0.435 | 51.6 |
 | 0.22 (0.39) | 2.5 | 3.87 | 32.7 | latent under tension / manifest after tension release | 0.567 | 2.3 | 371 |
 | 0.33 (0.335) | 2.5 | 3.32 | 28.1 | latent under tension / manifest after tension release | 0.487 | 1.98 | 332 |
 | 0.11 (0.445) | 2.5 | 4.42 | 37.4 | latent under tension / manifest after tension release | 0.647 | 2.63 | 406 |
@@ -939,11 +942,11 @@ solve; flatness states recomputed for every row):
 | 0.22 (0.39) | 4.3 | 2.4 | 20.4 | latent under tension / manifest after tension release | 0.356 | 1.96 | 272 |
 | 0.33 (0.335) | 4.3 | 2.06 | 17.5 | latent under tension / manifest after tension release | 0.306 | 1.69 | 240 |
 | 0.11 (0.445) | 4.3 | 2.73 | 23.3 | latent under tension / manifest after tension release | 0.406 | 2.24 | 301 |
-| 0.84 (0.08) | 4.3 | 0.492 | 4.16 | latent under tension / manifest after tension release | 0.073 | 0.403 | 41.8 |
+| 0.84 (0.08) | 4.3 | 0.492 | 4.16 | latent under tension / manifest after tension release | 0.0731 | 0.403 | 41.8 |
 | 0.22 (0.39) | 13 | 0.851 | 7.28 | latent under tension / manifest after tension release | 0.127 | 1.12 | 136 |
 | 0.33 (0.335) | 13 | 0.731 | 6.25 | latent under tension / manifest after tension release | 0.109 | 0.959 | 116 |
 | 0.11 (0.445) | 13 | 0.971 | 8.31 | latent under tension / manifest after tension release | 0.145 | 1.27 | 155 |
-| 0.84 (0.08) | 13 | 0.175 | - | below reporting threshold / below reporting threshold | 0.026 | 0.229 | 9.14 |
+| 0.84 (0.08) | 13 | 0.175 | - | below reporting threshold / below reporting threshold | 0.0261 | 0.229 | 9.14 |
 | 0.22 (0.39) | 2 | 4.67 | 39.4 | latent under tension / manifest after tension release | 0.684 | 2.41 | 421 |
 | 0.33 (0.335) | 2 | 4.02 | 33.8 | latent under tension / manifest after tension release | 0.587 | 2.07 | 379 |
 | 0.11 (0.445) | 2 | 5.33 | 45.1 | latent under tension / manifest after tension release | 0.78 | 2.76 | 459 |

@@ -2236,7 +2236,7 @@ def _foil_block(r):
 PC_WORDS = {'WITHIN_PUBLISHED_RANGE': 'within', 'BELOW_PUBLISHED_RANGE': 'BELOW',
             'ABOVE_PUBLISHED_RANGE': 'ABOVE', 'NO_PUBLISHED_RANGE': 'no published range',
             'INCONSISTENT_WITH_PUBLISHED_MODE': 'INCONSISTENT',
-            'ABOVE_PUBLISHED_LIMIT': 'ABOVE LIMIT'}
+            'ABOVE_PUBLISHED_LIMIT': 'ABOVE LIMIT', 'NOT_ASSESSABLE': 'not assessable'}
 PC_ITEMS = ('final_gauge', 'per_pass_reduction', 'final_pass_reduction', 'final_pass_entry_gauge',
             'exit_speed', 'rolled_mode', 'single_sheet_final_gauge', 'alloy', 'temper',
             'mean_flow_stress_indicator')

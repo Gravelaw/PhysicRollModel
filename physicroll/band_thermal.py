@@ -24,6 +24,7 @@ import math
 from dataclasses import replace
 
 from . import band_products as bp
+from .band_width import STRIPE_THRESHOLD_M
 from . import roll_thermal as rt
 
 MODES = ('off', 'partition', 'full')
@@ -201,64 +202,102 @@ def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_
                     ev_basis = 'event transient rerun at this spray coefficient'
                 except ValueError as exc:
                     ev_basis = f'event transient failed: {exc}'
-        s0 = _largest(st, th, bw)
+        # SPEC14 review: the detector (band_width._runs) is a height threshold whose run
+        # EXTENT also depends on the height, so a stripe is detected on every row's own scaled
+        # profile; the position and shape are the same at every share for a fixed spray
+        # coefficient
+        z, dev = st['z_m'], st['local_deviation_m']
+        idx = bw._inside(z, th.centre, th.width)
+        zi = [z[i] for i in idx]
         info = {'spray_htc_w_m2k': htc, 'basis': hwhy, 'event_basis': ev_basis,
                 'thermal_crown_at_case_share_m': st['thermal_crown_m']}
-        on = None
-        if s0 is not None:
-            z, dev = st['z_m'], st['local_deviation_m']
-            pk = abs(s0['peak_deviation_m'])
-            reuse = next((t for t in (stripe_table or []) if htc == case_htc
-                          and abs(t['position_m'] - s0['peak_position_m']) < 1e-12
+        per_row = []
+        for k in scales:
+            runs = bw._runs(zi, [dev[i] * k for i in idx], bw.STRIPE_THRESHOLD_M)
+            per_row.append(max(runs, key=lambda x: abs(x['peak_deviation_m'])) if runs
+                           else None)
+        ref_i = next((i for i, x in enumerate(per_row) if x is not None), None)
+        ref_on = None
+        if ref_i is not None:
+            ref = per_row[ref_i]
+            pk_ref = abs(ref['peak_deviation_m'])
+            reuse = next((t for t in (stripe_table or []) if htc == case_htc and ref_i == 0
+                          and abs(t['position_m'] - ref['peak_position_m']) < 1e-12
                           and 'manifest_onset_peak_height_m' in t), None)
-            if reuse is not None:      # the case's own onsets (same stripe, same shape)
-                on = {k: (None if reuse[key] is None else reuse[key] / pk)
-                      for k, key in (('mill', 'manifest_onset_peak_height_m'),
-                                     ('released', 'released_onset_peak_height_m'))}
+            if reuse is not None:      # the case's own onsets (same stripe, same window)
+                ref_on = {kk: reuse[key] for kk, key in
+                          (('mill', 'manifest_onset_peak_height_m'),
+                           ('released', 'released_onset_peak_height_m'))}
             else:
-                on = bw.onsets(z, bw._isolate(z, dev, s0), sp)
-            info.update({'stripe_position_m': s0['peak_position_m'],
-                         'stripe_sign': 'HOT_HIGH' if s0['peak_deviation_m'] > 0 else 'COLD_LOW',
-                         'stripe_peak_at_case_share_m': s0['peak_deviation_m'],
-                         'in_mill_onset_height_m': None if on['mill'] is None
-                         else on['mill'] * pk,
-                         'after_release_onset_height_m': None if on['released'] is None
-                         else on['released'] * pk})
+                sd = [v * scales[ref_i] for v in dev]
+                o = bw.onsets(z, bw._isolate(z, sd, ref), sp)
+                ref_on = {kk: None if o[kk] is None else o[kk] * pk_ref
+                          for kk in ('mill', 'released')}
+            info.update({'stripe_position_m': ref['peak_position_m'],
+                         'stripe_sign': 'HOT_HIGH' if ref['peak_deviation_m'] > 0
+                         else 'COLD_LOW',
+                         'stripe_peak_at_case_share_m': (per_row[0]['peak_deviation_m']
+                                                         if per_row[0] else None),
+                         'in_mill_onset_height_m': ref_on['mill'],
+                         'after_release_onset_height_m': ref_on['released'],
+                         'onset_window_share': shares[ref_i][0]})
         else:
             info['largest_stripe'] = None
         htc_info.append(info)
-        for (share, swhy), k in zip(shares, scales):
+        # the largest deviation inside the strip at the case share (unthresholded)
+        peak_any = max((abs(dev[i]) for i in idx), default=0.0)
+        for (share, swhy), k, s_row in zip(shares, scales, per_row):
             row = {'strip_heat_share': share, 'share_basis': swhy,
                    'roll_heat_fraction_per_roll': share_to_fraction(share),
                    'spray_htc_w_m2k': htc, 'spray_basis': hwhy,
                    'thermal_crown_m': st['thermal_crown_m'] * k,
+                   'largest_deviation_in_strip_m': peak_any * k,
                    'events': _event_rows(ev, k) if ev is not None else None}
-            if s0 is None:
-                row.update(status='NO_STEADY_STRIPE_ABOVE_THRESHOLD', stripe_peak_m=0.0,
+            if s_row is None:
+                row.update(status='NO_STEADY_STRIPE_ABOVE_THRESHOLD', stripe_peak_m=None,
+                           stripe_threshold_m=bw.STRIPE_THRESHOLD_M,
                            state_in_mill=None, state_after_tension_release=None)
             else:
                 sd = [v * k for v in dev]
                 lv = bw.shape_levels(z, sd, sp)
-                mill, rel, iu = _state(bw.stripe_states(lv, s0['peak_position_m']))
-                peak = pk * k                      # magnitude; the sign is in stripe_sign
-                m_on = None if on['mill'] is None else on['mill'] * pk
-                r_on = None if on['released'] is None else on['released'] * pk
+                mill, rel, iu = _state(bw.stripe_states(lv, s_row['peak_position_m']))
+                peak = abs(s_row['peak_deviation_m'])  # magnitude; the sign is in stripe_sign
+                if mode == 'full':
+                    # a direct run isolates the stripe over its OWN extent: same onsets
+                    o = bw.onsets(z, bw._isolate(z, sd, s_row), sp)
+                    m_on = None if o['mill'] is None else o['mill'] * peak
+                    r_on = None if o['released'] is None else o['released'] * peak
+                    on_basis = 'this row\'s own stripe extent (as a direct run)'
+                else:
+                    m_on, r_on = ref_on['mill'], ref_on['released']
+                    on_basis = (f'the stripe extent at strip share {shares[ref_i][0]:.3g} '
+                                '(one window per spray coefficient; a direct run at another '
+                                'share isolates its own extent, onsets differ by about 1 %)')
                 row.update({
-                    'status': 'EVALUATED', 'stripe_position_m': s0['peak_position_m'],
-                    'stripe_sign': info['stripe_sign'], 'stripe_peak_m': peak,
+                    'status': 'EVALUATED', 'stripe_position_m': s_row['peak_position_m'],
+                    'stripe_sign': 'HOT_HIGH' if s_row['peak_deviation_m'] > 0
+                    else 'COLD_LOW', 'stripe_peak_m': peak,
                     'stripe_peak_on_diameter_m': 2 * peak,
                     'with_feedback_i_units': iu,
                     'linear_feedback_i_units': lv['linear_feedback_peak_i_units'],
                     'state_in_mill': mill, 'state_after_tension_release': rel,
                     'in_mill_onset_height_m': m_on, 'after_release_onset_height_m': r_on,
+                    'onset_basis': on_basis,
                     'ratio_stripe_to_in_mill_onset': None if not m_on else peak / m_on,
                     'ratio_stripe_to_after_release_onset': None if not r_on else peak / r_on})
             rows.append(row)
     base = rows[0]
     changed = []
     for r in rows[1:]:
-        what = [f'steady stripe {k}' for k in ('state_in_mill', 'state_after_tension_release')
-                if r[k] != base[k]]
+        what = []
+        if r['status'] != base['status']:
+            what.append('steady stripe ' + ('appears above the detection threshold'
+                                            if r['status'] == 'EVALUATED' else
+                                            'falls below the detection threshold'))
+        else:
+            what += [f'steady stripe {k}' for k in ('state_in_mill',
+                                                    'state_after_tension_release')
+                     if r[k] != base[k]]
         for e0, e1 in zip(base['events'] or [], r['events'] or []):
             for k in ('in_mill', 'after_release'):
                 if e0[k] != e1[k]:
@@ -267,7 +306,10 @@ def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_
             changed.append({'strip_heat_share': r['strip_heat_share'],
                             'spray_htc_w_m2k': r['spray_htc_w_m2k'], 'changes': what})
     build = None
-    if mode == 'full' and rows[0]['status'] == 'EVALUATED':
+    if mode == 'full' and rows[0]['status'] != 'EVALUATED':
+        build = {'status': 'NOT_ASSESSABLE',
+                 'reason': 'no steady stripe above the detection threshold at the case share'}
+    elif mode == 'full':
         try:
             build = steady_build_up(th, rows[0]['stripe_position_m'])
         except ValueError as exc:
@@ -400,51 +442,76 @@ def attach_per_pass(result):
     by_label = {x['label']: x for x in heating.get('schedule') or []}
     base_row = next((r for r in ts['rows'] if r['strip_heat_share'] == ts['case_strip_heat_share']
                      and r['spray_htc_w_m2k'] == ts['case_spray_htc_w_m2k']), None)
-    if base_row is None or base_row['status'] != 'EVALUATED':
+    if base_row is None:
         ts['per_pass'] = None
+        ts['per_pass_note'] = 'no case row in the sensitivity block'
         return
-    case_share, peak0 = ts['case_strip_heat_share'], base_row['stripe_peak_m']
+    case_share = ts['case_strip_heat_share']
+    # unthresholded largest deviation inside the strip at the case pass and share (the stripe
+    # shape is the same at every pass and share in the linear model); a pass reports a stripe
+    # only where its scaled height clears the detection threshold, as a direct run would
+    peak0 = base_row.get('largest_deviation_in_strip_m') or 0.0
+    thr = STRIPE_THRESHOLD_M
+    op_heat = None if op.get('rejected') else op.get('bite_heat_per_width_w_m')
     out = []
     for g in gt['rows']:
         h = by_label.get(g['label'])
-        if h is None and abs(g['exit_thickness_m'] - op['exit_thickness_m']) < 1e-12:
+        if h is None and not op.get('rejected') and 'exit_thickness_m' in g and abs(
+                g['exit_thickness_m'] - op['exit_thickness_m']) < 1e-12:
             h = op
-        heat = None if h is None else h.get('bite_heat_per_width_w_m')
-        if not op.get('bite_heat_per_width_w_m'):
-            heat = None                           # zero case-pass heat: nothing to scale
-        for s in ts['shares']:
-            share = s['strip_heat_share']
+        reasons = []
+        if g.get('rejected'):
+            reasons.append(f'gauge trend: {g["rejected"]}')
+        if h is not None and h.get('rejected'):
+            reasons.append(f'pass heating: {h["rejected"]}')
+        h_ok = h is not None and not h.get('rejected')
+        heat = h.get('bite_heat_per_width_w_m') if h_ok else None
+        if not op_heat:
+            heat = None                           # no case-pass heat: nothing to scale
+        for sh in ts['shares']:
+            share = sh['strip_heat_share']
             k = share_to_fraction(share) / ts['case_roll_heat_fraction_per_roll']
-            stripe = (None if heat is None else
-                      peak0 * k * heat / op['bite_heat_per_width_w_m'])
-            on = g.get('manifest_onset_stripe_height_m')
-            ron = g.get('released_onset_stripe_height_m')
-            rise = None if h is None else strip_rise_at_share(h, share)
-            t_exit = None if h is None else h['entry_temperature_k'] + rise
-            out.append({'label': g['label'], 'exit_thickness_m': g['exit_thickness_m'],
-                        'strip_heat_share': share, 'bite_heat_per_width_w_m': heat,
-                        'stripe_peak_m': stripe, 'in_mill_onset_height_m': on,
-                        'after_release_onset_height_m': ron,
-                        'ratio_stripe_to_in_mill_onset': (None if stripe is None or not on
-                                                          else stripe / on),
-                        'ratio_stripe_to_after_release_onset': (None if stripe is None
-                                                                or not ron else stripe / ron),
-                        'strip_exit_temperature_c': None if t_exit is None else t_exit - 273.15,
-                        'above_battery_coil_limit_80c': (None if t_exit is None
-                                                         else t_exit - 273.15 > 80.0)})
+            height = None if heat is None else peak0 * k * heat / op_heat
+            stripe = height if height is not None and height > thr else None
+            on = None if g.get('rejected') else g.get('manifest_onset_stripe_height_m')
+            ron = None if g.get('rejected') else g.get('released_onset_stripe_height_m')
+            t_exit = None
+            if h_ok and h.get('strip_temperature_rise_k') is not None:
+                t_exit = h['entry_temperature_k'] + strip_rise_at_share(h, share)
+            row = {'label': g['label'], 'exit_thickness_m': g.get('exit_thickness_m'),
+                   'strip_heat_share': share, 'bite_heat_per_width_w_m': heat,
+                   'stripe_peak_m': stripe, 'scaled_largest_deviation_m': height,
+                   'below_detection_threshold': height is not None and stripe is None,
+                   'in_mill_onset_height_m': on, 'after_release_onset_height_m': ron,
+                   'ratio_stripe_to_in_mill_onset': (None if stripe is None or not on
+                                                     else stripe / on),
+                   'ratio_stripe_to_after_release_onset': (None if stripe is None or not ron
+                                                           else stripe / ron),
+                   'strip_exit_temperature_c': None if t_exit is None else t_exit - 273.15,
+                   'above_battery_coil_limit_80c': (None if t_exit is None
+                                                    else t_exit - 273.15 > 80.0)}
+            if reasons:
+                row['not_assessable_reason'] = '; '.join(reasons)
+            out.append(row)
     ts['per_pass'] = out
     own = [r for r in out if r['strip_heat_share'] == case_share]
     man = [r['label'].split()[0] for r in own if (r['ratio_stripe_to_in_mill_onset'] or 0) >= 1]
     lat = [r['label'].split()[0] for r in own if r['ratio_stripe_to_in_mill_onset'] is not None
            and r['ratio_stripe_to_in_mill_onset'] < 1]
+    below = [r['label'].split()[0] for r in own if r['below_detection_threshold']]
+    na = [r['label'].split()[0] for r in own if r.get('not_assessable_reason')]
     ts['per_pass_text'] = (
         'Two questions, two answers. The gauge trend holds the case-pass stripe '
         f'({peak0 * 1e6:.3g} um) unchanged on every pass. The stripe each pass would itself '
         'produce scales with that pass\'s bite heat (same spray, same nozzle, steady state; the '
         'roll needs minutes to reach it, radial time constant about 4-7 min computed for a '
-        '260 mm roll [PT-T25]): at the case heat share it would '
-        + (f'buckle in the mill on {", ".join(man)}' if man else 'buckle in the mill on no pass')
-        + (f' and stay latent on {", ".join(lat)}' if lat else '') + '.')
+        '260 mm roll [PT-T25]): at the case heat share '
+        + '; '.join(x for x in (
+            f'it would buckle in the mill on {", ".join(man)}' if man else '',
+            f'it would stay latent on {", ".join(lat)}' if lat else '',
+            f'no stripe above the detection threshold on {", ".join(below)}' if below else '',
+            f'not assessable on {", ".join(na)}' if na else '') if x)
+        + ('' if (man or lat or below or na) else 'no pass to assess') + '.')
     # beside the gauge-trend text (which band_diagnosis may rebuild for credibility)
     gt['own_stripe_text'] = ('The text above holds the case-pass stripe on every pass. '
                              + ts['per_pass_text'].split('. ', 2)[-1]
@@ -580,11 +647,28 @@ def thermal_check(result, case):
     heat = (result.get('process') or {}).get('heating') if isinstance(
         result.get('process'), dict) else None
     if isinstance(heat, dict) and 'operating' in heat:
-        src = list(heat.get('schedule') or []) or [heat['operating']]
+        src = list(heat.get('schedule') or [])
+        op = heat['operating']
+        if not any(abs(x.get('exit_thickness_m', -1) - op.get('exit_thickness_m', -2)) < 1e-12
+                   and abs(x.get('exit_speed_m_s', -1) - op.get('exit_speed_m_s', -2)) < 1e-12
+                   for x in src):
+            src = [op] + src             # the case pass when the schedule does not list it
         for h in src:
-            rows.append((h['label'], _k_to_c(h['exit_temperature_k']), h['label'] in finals))
+            rows.append((h['label'], None if h.get('rejected') else _k_to_c(
+                h.get('exit_temperature_k')), h['label'] in finals, h.get('rejected')))
     temps = []
-    for label, t, final in rows:
+    for label, t, final, why in rows:
+        if t is None:
+            # a pass whose bite (hence pass heating) was rejected: not assessable, never a
+            # property risk; the other passes keep their comparisons
+            temps.append({'item': 'modelled_strip_exit_temperature', 'label': label,
+                          'value': None, 'published_low': None, 'published_high': None,
+                          'unit': 'degC', 'verdict': 'NOT_ASSESSABLE',
+                          'basis': 'no pass-heating result for this pass',
+                          'reason': why or 'no exit temperature', 'sources': [],
+                          'read_status': None, 'note': why or '', 'is_final_pass': final,
+                          'above_90c': None})
+            continue
         if collector:
             f = bp.check_thermal(prod, coil_temperature_leaving_final_pass_c=t)[0]
             f['item'] = 'modelled_strip_exit_temperature'

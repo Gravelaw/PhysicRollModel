@@ -789,6 +789,8 @@ class FoilDemoTests(unittest.TestCase):
         # coarse thermal numerics, final pass only, no AGC / drive (they do not enter the
         # lengthwise evidence) to keep the module fast
         demo['width_model']['numerics'] = dict(COARSE)
+        # the full thermal sensitivity (spray rows, per-row onsets) is not under test here
+        demo['model_options']['thermal_sensitivity'] = 'partition'
         demo['schedule'] = [x for x in demo['schedule']            # F1, F2 and ALT2
                             if x['label'].split()[0] in ('F1', 'F2', 'ALT2')]
         demo['gauge_control'] = demo['drive'] = None
@@ -874,6 +876,8 @@ class FoilDemoTests(unittest.TestCase):
         # the module fast; the published demo result uses the scenario's own numerics.
         demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
         demo['width_model']['numerics'] = dict(COARSE)
+        # the full thermal sensitivity (spray rows, per-row onsets) is not under test here
+        demo['model_options']['thermal_sensitivity'] = 'partition'
         demo['model_options']['cells'] = 64
         demo['gauge_control'] = demo['drive'] = None
         r = diagnose(demo)
