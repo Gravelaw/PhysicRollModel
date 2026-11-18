@@ -4,11 +4,11 @@
 
 ## What this is and is not
 
-This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, properties, rolling routes, quality requirements and named band or streak defects. Every value is quoted from four research reports (battery and electronics foil, a second battery report on alloy and temper by gauge, packaging and household foil, heat-exchanger stock, litho and other strip) and carries its source ids. It is not a validation: nothing here was measured on a plant, vendor and trade pages are low-confidence, and several standards were read from previews only. A value inside a published span is not evidence that a pass is good.
+This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, properties, rolling routes, quality requirements and named band or streak defects. Every value is quoted from five research reports (battery and electronics foil, a second battery report on alloy and temper by gauge, process temperatures, packaging and household foil, heat-exchanger stock, litho and other strip) and carries its source ids. It is not a validation: nothing here was measured on a plant, vendor and trade pages are low-confidence, and several standards were read from previews only. A value inside a published span is not evidence that a pass is good.
 
 Per-pass reductions are computed by `physicroll.band_products` from the published gauge sequences as 1 − h_exit/h_entry (per sheet for a doubled pass); a block of n passes shows its total and the equal-split mean 1 − (h_exit/h_entry)^(1/n). Ranges are kept as ranges, and the reports' disagreements and "not found" lists are kept below.
 
-Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by gauge), `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
+Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
 
 | Read status | Meaning | Report tags mapped onto it |
 |---|---|---|
@@ -19,7 +19,7 @@ Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper 
 | memory_unverified | researcher's memory, unverified | MEM; M |
 | computed | computed by this module from published gauges | report "calc." values are recomputed |
 
-Catalogue: 27 products, 1081 sourced facts, 163 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
+Catalogue: 27 products, 1211 sourced facts, 201 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
 
 ## Summary
 
@@ -401,6 +401,119 @@ Strength after heating is from Table 3 of the patent; its composition and proces
 - JIS H 4160:2006 itself; the mirror carries the 1994 text. [BG-G25]
 - Recrystallisation temperature by alloy for hard foil: Furukawa-Sky plots it but the values are not extractable; one vendor page says 1235-H18 softens fast above 220 °C. [BG-G7, BG-G43]
 - Any standard for thick collector foil or tab foil.
+
+## Process temperatures in foil rolling
+
+From the third research pass (sources `PT-`): temperatures of strip, oil and rolls and their effects on properties, roll wear and surface finish. Literature statements, not model outputs: the tool has no roll-wear model and no model linking temperature to surface finish or wettability. `check_thermal` compares supplied values with the ranges below.
+
+### Temperature map
+
+| Temperature | Typical range | Limit | Reason given |
+|---|---|---|---|
+| Coil entering a pass | Not stated for foil; 60–100 °C entry gave exit above 150 °C at sheet gauge. [PT-T3] | ≤75 °C before the battery-foil final pass (≥10 h natural cooling). [PT-T1] | Keeps the final-pass coil below 80 °C. [PT-T1] |
+| Strip inside the bite | Calculated to reach about 200 °C at high speed. [PT-T4] | Above 200 °C needed before softening shows. [PT-T4] | "Almost adiabatic" above about 2000 m/min roll speed. [PT-T4] |
+| Coil off the final pass, battery foil (20→13 µm, 35 %, oil 42 °C) | 77.2 °C at 550 m/min; 97.9 and 99.7 °C at 600 m/min; prior art "above 90 °C". [PT-T1, PT-T2] | ≤80 °C (≤90 °C at the least), also when slit within 30 min. [PT-T1, PT-T2] | Recovery and possible solute clustering: strength and elongation fall for weeks. [PT-T1, PT-T2] |
+| Coil leaving a cold-mill pass (sheet gauge) | "About 121 °C"; cold rolling defined as below 129 °C; metal at 20–200 °C. [PT-T14, PT-T13, PT-T37] | No stated limit; trouble above 150–160 °C. [PT-T3] | Erichsen value of 8150 fin stock fell over 10 % above 160 °C; coarse grains after anneal. [PT-T3] |
+| Oil supply, roughing and intermediate | 30–40 °C and 40–50 °C. [PT-T5, PT-T6] | — | Thick stock, more heat to remove. [PT-T5, PT-T6] |
+| Oil supply, finishing | 50–60 °C general foil; 40–45 °C battery foil. [PT-T5, PT-T1, PT-T6] | Window 38–55 °C at one plant; legal cap 68 °C (cold mill), 71 °C (foil mills) in one US rule. [PT-T3, PT-T13] | Thin film for lustre; lower bound set by the "ladder" tear defect; the cap is for vapour emissions. [PT-T5, PT-T3, PT-T13] |
+| Hot edge spray | Oil up to 120 °C in 25 mm zones. [PT-T21, PT-T5] | — | Expands the roll at the strip edge against tight edges and breaks. [PT-T21, PT-T5] |
+| Work-roll surface and bulk | Not found measured; a cold-mill model uses 50 °C surface with 35 °C oil. [PT-T18] | Thermal load 40–50 kcal/m²s of roll surface (167–209 kW/m², computed by the report). [PT-T4] | Above it the thermal balance is unstable; herringbone. [PT-T4, PT-T18] |
+
+### Four findings first
+
+1. Battery foil has a published coil-temperature limit: ≤80 °C on the final pass (≤75 °C coil entering it, after ≥10 h cooling); above 90 °C elongation decays with time for weeks. [PT-T1, PT-T2]
+2. The only measured heat partition for a foil mill gives 67–89 % of the heat to the rolls and 11–33 % to the strip (abstract only; a net balance, not necessarily the split inside the bite). [PT-T16]
+3. No measured spray coefficient for kerosene on a rotating work roll was found; the nearest are a simulated 2.5–4.3 kW/m²K on an aluminium cold mill and "3–6 times below water" on a sprayed plate (about 5–13 kW/m²K, computed). [PT-T18, PT-T19]
+4. No source quantifies a blocked-nozzle band on foil; the mechanism is documented in words only (under-cooled roll bands between spray footprints, blocked filter or header, a turned-down spray whose narrow roll expansion grows until a wave appears, quarter-barrel looseness from a hotter roll at 1/5–1/4 of the barrel). [PT-T22, PT-T23, PK-S7, PT-T38]
+
+### Temperature rise per pass
+
+- Coil temperature rises with speed. The one number pair is 77 °C at 550 m/min against 98–100 °C at 600 m/min, but the cooler case also had a pre-cooled coil and finer rolls; the entry temperature of the hot case is not given. [PT-T15, PT-T1]
+- Computed by the report: plastic work alone (200 MPa flow stress, plane strain) heats the strip 41 K for 20→13 µm and 48 K for 50→30 or 30→18 µm if no heat leaves; friction adds. A 77 °C coil from a ≤75 °C entry suggests most of that heat left the strip (the report's inference; coil and strip temperature are not the same measurement). [computed from PT-T1]
+- Cooling between passes: ≥10 h natural cooling; 24 h rest in the Speira patent. [PT-T1, BF-S8]
+
+### Rolling oil
+
+- Viscosity at 40 °C: 1.50–1.75 cSt (Somentor 29); 1.8 and 2.0 (grades 80, 110); 1.5–2.0 (electronic foil); 1.8–2.0 in use at one plant. [PT-T9, PT-T10, PT-T8, PT-T3]
+- Flash point: ≥74 °C (Somentor 29); 105–110 °C open cup (grades 80, 110); 80–111 °C for additive concentrates. [PT-T9, PT-T10, PT-T11]
+- Boiling range: 192–248 °C; 204–240 °C; 210–250 and 240–280 °C. [PT-T9, PT-T8, PT-T10]
+- Viscosity against temperature: 2.16–2.3 cSt at 25 °C and 1.64–1.68 cSt at 40 °C for a comparable fluid, about −1.7 % per K (computed). [PT-T12]
+- Flow: not found for foil mills. A cold-mill example: 3, 6 and 12 L/min per nozzle in three rows, about 400 L/min per metre per header at 52 mm pitch (computed by the report). [PT-T20]
+
+What goes wrong:
+
+- Oil too hot (thin film): film ruptures, dry contact, light-and-dark marks; more aluminium fines; herringbone when load and temperature run away. [PT-T8, PT-T15, PT-T4, PT-T28]
+- Oil too cold or viscous (thick film): lower speed, more oil carried out, yellow-brown stain after anneal; ladder defect below 38 °C (the report's reading of "min 38 °C for ladder"). [PT-T8, PT-T3]
+- Gauge: a thicker film gives thinner foil in closed-gap rolling (speed effect). [PT-T4]
+- Fire: the chance rises sharply once strip reaches the flash point; ignition comes from strip breaks, static, hot bearings and electrics. [PT-T15, PT-T14]
+
+### Temperature and material properties
+
+- Battery foil 1060 (also 1235, 1100), 13 µm: strength and elongation tracked for days after rolling at coil temperatures 80–110 °C. Hotter coils lose more; elongation drops at ≥90 °C, by over 20 % at worst. A 98 °C coil decays for over 60 days; ≤80 °C coils settle in 16–20 days (figures not seen by the report). [PT-T1, PT-T2]
+- 1100-H18 tested hot after holding up to 10 000 h: 165 / 150 MPa (tensile / yield) at room temperature; 145 / 130 at 100 °C; 125 at 150 °C; 40 at 205 °C. [PT-T31, PT-T39]
+- 99.5 % Al: flow stress at 200 °C about 35 % below room temperature; hardness after deforming at 200 °C only 10 % lower. [PT-T4]
+- Recovery of 1050 rolled 99.6 %: measured at 140–220 °C from 1 min; activation energy 131 rising to 186 kJ/mol. [PT-T32]
+- Strain-rate sensitivity of 1050: m about 0.04 at 100 °C and 0.07 at 200 °C (H14, slow tensile tests); taken as zero for cold deformation. [PT-T33, PT-T7]
+- 8021 pouch foil: controlling coil and oil temperature avoids work softening during foil rolling. [PT-T36]
+- Additive film: kerosene with 2.2 % fatty acid failed at 150–155 °C in ball-on-disc tests; 0.022 % acid held to 250 °C. [PT-T27]
+- Across the width: a transverse strip temperature gradient goes unnoticed while rolling and changes shape as the coil cools; no source reports strength or thickness bands from this cause. [PT-T23]
+
+### Temperature and roll wear / roll surface
+
+Literature statements, not model outputs: the tool has no roll-wear model and no model linking temperature to surface finish or wettability.
+
+- Roll coating: fresh aluminium sticks to the roll and is re-deposited; the additive limits this layer. Physically adsorbed films desorb as temperature rises. [PT-T37, PT-T15, PT-T27]
+- Fines: more fines with higher oil temperature, speed, reduction and roll roughness. [PT-T15]
+- Circumferential temperature swing: keeping it small reduces thermal fatigue, surface degradation and wear (a general cold-mill statement; nothing foil-specific on spalling). [PT-T23]
+- Bending: edge heating lowers the bending force and therefore work-roll wear. [PT-T24]
+- Roll hardness: 115–125 HSD rolls held shape on ≥250 MPa foil; 98 HSD rolls drifted after 1–3 h. [PT-T29]
+- Roll change and regrind interval for foil finishing rolls: not found.
+
+### Temperature and surface finish
+
+Literature statements, not model outputs: the tool has no roll-wear model and no model linking temperature to surface finish or wettability.
+
+| Defect or property | Thermal cause | Magnitude given | Sources |
+|---|---|---|---|
+| Heat stripes (EAFA) | Temperature or flatness difference across the width; locally overheated roll. | None | PK-S7 |
+| Stripes on strip | Gaps between spray footprints leave under-cooled roll bands; overlap should be 10–30 %, never above 50 %. | Zone pitch 25–100 mm | PT-T22, PT-T21 |
+| Surface striping; local buckle | Blocked filter or header gives differential oil plate-out and cooling; after a spray is turned down the roll first expands in a narrow band, which grows until a wave appears. | None | PT-T23 |
+| Rib (quarter) looseness after roughing | Roll hotter at 1/5–1/4 of the barrel; nozzles of twice the diameter there removed it. | None | PT-T38 |
+| Herringbone | Thermal runaway at the film-strength limit. | Thermal load above 167–209 kW/m² (computed by the report) | PT-T4, PT-T28 |
+| Wettability (dyne) | Set mainly by oil carried out; additive at 3.5 % gave 29–30 dyn, at 8 % gave 28 dyn; dyne can start above 32 and fall below 30 within 12–24 h as base oil evaporates. | 1–2 dyn | PT-T29, PT-T30 |
+
+- Spray footprint overlap should be 10–30 %, never above 50 %; zone pitch 25–100 mm. [PT-T22, PT-T21]
+- No source links oil, roll or strip temperature directly to dyne level, gloss bands or white streaks. [PT-T29, PT-T30]
+
+### Numbers for simulation
+
+- Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; a net balance. [PT-T16]
+- Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at 500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll 50 °C); viscosity ranks first among spray factors. [PT-T18, PT-T17]
+- Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about 5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll). [PT-T19]
+- Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll. [PT-T25]
+- Zone-cooling authority: ±3.6 to ±4.2 µm on diameter 20 revolutions after a change; grows linearly with rolled length; halves from 100 to 300 m/min (simulated, 1100 alloy). [PT-T18]
+- Bite contact conductance: 25–40 kW/m²K in aluminium models; measurements span 7–800. [PT-T34]
+- Radial time constant of a 260 mm roll about 4–7 min; axial decay of a 52 mm stripe about 23 s (recomputed here; the report says about 20 s); free expansion 3.0 µm on diameter per K for a 260 mm roll. All computed. [computed from PT-T25, PT-T18]
+
+- Axial decay time computed here: 22.831 s [computed from PT-T18]. computed: wavelength² / (4 π² × diffusivity) for a 52 mm stripe (104 mm wavelength; 52 mm zone pitch of PT-T18), steel diffusivity 1.2e-5 m²/s as stated by the report (the report: "about 20 s").
+
+### Disagreements (process temperatures)
+
+- Heat partition: 67–89 % to the rolls from measured strip surface temperature, against "almost adiabatic" strip heating to about 200 °C inside the bite at high speed. Both can hold if the strip gives heat back to roll and oil before coiling; gauge and speed of the measurement are not in the abstract. [PT-T16, PT-T4]
+- Finishing oil temperature: 50–60 °C in general foil texts; 40–45 °C for battery foil; 38–55 °C at one plant. [PT-T5, PT-T1, PT-T6, PT-T3]
+- Spray coefficient: 2.5–4.3 kW/m²K simulated; 4.65–5.5 overall in a cold-mill model example (coolant not named); 5–13 back-computed from a plate test. [PT-T18, PT-T20, PT-T19]
+- Hot-spray temperature: up to 120 °C is above the flash point of some base oils (74–110 °C). [PT-T21, PT-T9, PT-T10]
+
+### Not found (process temperatures)
+
+- Measured work-roll surface or bulk temperatures on a foil mill.
+- A quantified blocked-nozzle case on foil (temperature difference, diameter change, I-units, band width).
+- Plant-identified time constants; Davies et al. describe three but only the abstract was reachable. [PT-T26]
+- A curve of strip temperature rise against reduction, speed and gauge; micrometres of gauge per kelvin of oil; oil-film thickness against temperature.
+- Oil flow per metre of barrel on a foil mill; roll-change and regrind intervals for finishing rolls.
+- A direct measurement of temperature against dyne, gloss or roll wear; property or thickness bands traced to a width-wise temperature difference.
+- Full texts on hosts outside the research session's allowed network domains: the heat-partition paper, the Collins thesis (measured thermal cambers), the Mansell thesis, engineeringmechanics.cz, alufoil.org, aluminium-guide.com.
+- A published heat partition or spray coefficient for sheet-gauge cold rolling: the survey has foil-mill data only.
 
 ## 1. Li-ion cathode current-collector foil (`battery_collector_foil`)
 
@@ -2347,3 +2460,41 @@ Key requirement: ≥60–62 % IACS, burr-free edge, Rm 60–95 MPa. [HX-S39]
 | BG-G42 | Lab-supply battery foil page, 16 µm 1235 | vendor_or_trade_page | VP | <http://www.scimaterials.cn/ProDetail.aspx?ProId=1797> | — |
 | BG-G43 | 1235 foil vendor note | vendor_or_trade_page | VP | <https://www.cnal.com/product/39026221.shtml> | — |
 | BG-G44 | Matsuoka, Higashi, J. JILM 67 (2017) 641 | excerpt | EX | <https://www.jstage.jst.go.jp/article/jilm/67/12/67_671206/_pdf> | — |
+| PT-T1 | CN112934967B, battery foil and processing method | excerpt | EX | <https://patents.google.com/patent/CN112934967B/zh> | — |
+| PT-T2 | CN application 202110122451 (same applicant, slitting variant) | excerpt | EX | <https://www.xjishu.com/zhuanli/23/202110122451.html> | — |
+| PT-T3 | Mansell, PhD thesis, UTS 2007, part 2 | excerpt | EX | <https://opus.lib.uts.edu.au/bitstream/10453/44028/13/02Whole%20part%202.pdf> | — |
+| PT-T4 | Kerth, Amann, Raber, Weber, Int. Metall. Rev. 20 (1975) 185 | excerpt | EX | <https://www.scribd.com/document/949516974/kerth1975> | same document as PK-S1; read from the text copy saved by the packaging survey |
+| PT-T5 | Li, Yang, Huang, foil rolling process factors, 2019 | excerpt | EX | <https://www.zzqklm.com/w/kjlw/24793.html><br><https://bbs.plcjs.com/thread-601856-1-1.html> | — |
+| PT-T6 | Three-pass battery foil patent (Jiangyin Xinren) | excerpt | EX | <https://www.xjishu.com/zhuanli/23/202311439469.html> | same document as BF-S16 |
+| PT-T7 | Bátorfi, Pál, Chakravarty, Sidor, Appl. Sci. 13 (2023) 4359 | abstract_or_snippet | AB | <https://www.mdpi.com/2076-3417/13/7/4359> | — |
+| PT-T8 | Chen Jiuxia, rolling-oil control for electronic foil, Metal World 2008(2) | excerpt | EX | <https://metalworld.ustb.edu.cn/cn/article/pdf/preview/JSSJ200802016.pdf> | — |
+| PT-T9 | ExxonMobil Somentor 29 sales specification | full_text | FT | <https://www.exxonmobilchemical.com/en/chemicals/webapi/dps/v1/datasheets/130000107309/1/en> | — |
+| PT-T10 | Eastto aluminium rolling oils 80 and 110 | vendor_or_trade_page | VP | <https://www.eastopet.com/Aluminium_Rolling_Oil/ALUMINIUM_ROLLING_OILS.pdf> | — |
+| PT-T11 | Mobil Wyrol additive concentrates | vendor_or_trade_page | VP | <https://www.mobil.com/en/sap/our-products/product-series/wyrol> | — |
+| PT-T12 | Exxsol D80 safety data sheets | abstract_or_snippet | AB | <https://nextsds.com/sds/en/281331501287376/exxsol-d80-fluid><br><https://pure-chemical.com/site/others/msds/Exxsol%20D80.pdf> | — |
+| PT-T13 | Missouri rule 10 CSR 10-5.451, aluminium foil rolling | full_text | FT | <https://www.epa.gov/sites/default/files/2017-09/documents/10-5451_0.pdf> | — |
+| PT-T14 | AXA XL PRC.17.13.1, Aluminum Rolling Mills | excerpt | EX | <https://axaxl.com/prc-guidelines/-/media/axaxl/files/pdfs/prc-guidelines/prc-17/prc17131aluminumrollingmillsv1.pdf> | — |
+| PT-T15 | Foil rolling and lubrication technology (presentation text) | vendor_or_trade_page | VP | <https://alfoilworld.com/knowledge/knowledge-2d1c71f1/?lang=zh> | — |
+| PT-T16 | Yin, Li, Zhang, Li, J. Univ. Sci. Technol. Beijing 25(6) 2003 (heat partition) | abstract_or_snippet | AB | <https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2003.06.020> | abstract only; a net heat balance from measured strip surface temperature |
+| PT-T17 | Yin, Li, Zhang, J. Univ. Sci. Technol. Beijing 27(4) 2005 | abstract_or_snippet | AB | <https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2005.04.023> | — |
+| PT-T18 | Shao, He, Yang et al., Chin. J. Eng. 37(8) 2015, 1092 | excerpt | FT, garbled mirror | <http://download.cucdc.com/wenku/7e866ecc01884bf4b0beb581b59e030c.html> | tagged FT by the report but read from a garbled mirror; recorded as excerpt |
+| PT-T19 | Horák, Raudenský, Pohanka et al., Engineering Mechanics 18 (2011) 81 | excerpt | EX | <https://www.engineeringmechanics.cz/pdf/18_2_081.pdf> | — |
+| PT-T20 | Innoval, "Optimising spray cooling", 2016 | full_text | FT | <https://www.innovaltec.com/optimising-spray-cooling-blog/> | — |
+| PT-T21 | Lechler SELECTOSPRAY brochure and product page | vendor_or_trade_page | VP | <https://www.lechlerusa.com/fileadmin/media-usa/Literature/Brochures/metal/Roll_Cooling_SELECTOSPRAY_brochure.pdf><br><https://www.lechlerusa.com/en/products/product-by-market/metals/nozzles-for-roll-cooling/selectospray> | — |
+| PT-T22 | Tucker (Lechler), flatness and profile: spray actuator design, 2006 | excerpt | EX | <https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_walzenkuehlung_01-2006_flatness-and-profile-the-problems-that-can-exist-in-the-design-of-the-spray-actuators_dtucker_en.pdf> | — |
+| PT-T23 | Lloyd (Lechler), fundamentals of roll cooling and flatness control, 2010 | excerpt | EX | <https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_walzenkuehlung_09-2010_fundamentals-of-roll-cooling-and-control-of-flatness-at-primary-cold-reduction_dlloyd_en.pdf> | — |
+| PT-T24 | Primetals hot edge induction heating | vendor_or_trade_page | VP | <https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/hot-edge-induction-heating/> | — |
+| PT-T25 | Liu, Wu, He, Yang, Chen, J. Univ. Sci. Technol. Beijing 27(1) 2005 | excerpt | EX | <http://download.cucdc.com.cn/wenku/e4745e5b77164f1b8568a4905130a323.html> | — |
+| PT-T26 | Davies, Sivilotti, Tulett, Metals Technology 2 (1975) | abstract_or_snippet | AB | <https://doi.org/10.1179/030716975803277735> | — |
+| PT-T27 | Li Fang, additive for aluminium cold rolling lubrication, thesis | excerpt | EX | <https://www.collectionscanada.gc.ca/obj/thesescanada/vol2/OWA/TC-OWA-5135.pdf> | — |
+| PT-T28 | Reich, Wise, Colbert, Tribology Transactions 2008 | abstract_or_snippet | AB | <https://doi.org/10.1080/10402000801911796> | — |
+| PT-T29 | CN111438187A, high-hardness rolls for battery foil | excerpt | EX | <https://patents.google.com/patent/CN111438187A/zh> | same document as BF-S13 |
+| PT-T30 | CN application 202310021340, raising wetting tension of battery foil | excerpt | EX | <https://www.xjishu.com/zhuanli/23/202310021340.html> | — |
+| PT-T31 | Matmatch, AA 1100-H18 | abstract_or_snippet | AB | <https://matmatch.com/materials/mitf51-aa-1100-h18> | — |
+| PT-T32 | Recovery kinetics in AA1050 deformed to ultrahigh strain (DTU postprint) | excerpt | EX | <https://backend.orbit.dtu.dk/ws/portalfiles/portal/125728953/postprint.pdf> | — |
+| PT-T33 | Allazadeh, strain-rate sensitivity of AA1050, 2020 | excerpt | EX | <https://strathprints.strath.ac.uk/74717/1/Allazadeh_ISSJ_2020_Computing_strain_rate_sensitivity_of_aluminium_alloy_1050.pdf> | — |
+| PT-T34 | Wu, Liang, Tang, Pan, Appl. Therm. Eng. 106 (2016) 1002 (introduction) | excerpt | EX | <https://www.sciencedirect.com/science/article/abs/pii/S1359431116309929> | — |
+| PT-T36 | Fu, Zhang, Liao, Jiang, Heat Treatment of Metals 50(9) 2025, 181 | abstract_or_snippet | AB | <http://www.jsrcl.net/CN/10.13251/j.issn.0254-6051.2025.09.029> | — |
+| PT-T37 | "Milling Over Rolling Oils", Lubes'n'Greases 2017 | excerpt | EX | <https://www.lubesngreases.com/magazine/23_9/milling-over-rolling-oils/> | — |
+| PT-T38 | CN202803755U, coolant spray device for a foil roughing mill | full_text | FT | <https://www.xjishu.com/zhuanli/23/201220412752.html> | — |
+| PT-T39 | Toei Denka, typical mechanical properties of aluminium alloys | excerpt | EX | <https://toeidenka.co.jp/refer/mechanical_strength_of_aluminum.html> | — |

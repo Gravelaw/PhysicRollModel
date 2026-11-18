@@ -61,6 +61,7 @@ ROLLED_MODES = ('single_sheet', 'doubled', 'either', 'not_published')
 SURFACES = ('two_side_bright', 'one_side_bright')
 BOUNDS = ('span', 'minimum', 'maximum', 'typical')
 VERDICTS = ('WITHIN_PUBLISHED_RANGE', 'BELOW_PUBLISHED_RANGE', 'ABOVE_PUBLISHED_RANGE',
+            'ABOVE_PUBLISHED_LIMIT',
             'NO_PUBLISHED_RANGE', 'INCONSISTENT_WITH_PUBLISHED_MODE')
 # display unit -> (SI unit, factor to SI, label)
 DISPLAY = {
@@ -68,6 +69,13 @@ DISPLAY = {
     'kPa': ('Pa', 1e3, 'kPa'), '%': ('fraction', 0.01, '%'), 'm/min': ('m/s', 1 / 60, 'm/min'),
     'mN/m': ('N/m', 1e-3, 'mN/m'), 'per_m2': ('1/m^2', 1.0, 'per m²'),
     'g/m2': ('kg/m^2', 1e-3, 'g/m²'), '%IACS': ('fraction', 0.01, '% IACS'),
+    # process temperatures (SPEC14); temperatures stay in °C (an offset scale, no conversion)
+    'C': ('degC', 1.0, '°C'), 'K': ('K', 1.0, 'K'), 'cSt': ('m^2/s', 1e-6, 'cSt'),
+    'kW/m2K': ('W/m^2K', 1e3, 'kW/m²K'), 'kW/m2': ('W/m^2', 1e3, 'kW/m²'),
+    's': ('s', 1.0, 's'), 'min': ('s', 60.0, 'min'),
+    'h': ('s', 3600.0, 'h'), 'days': ('s', 86400.0, 'days'),
+    'kJ/mol': ('J/mol', 1e3, 'kJ/mol'), 'ratio': ('1', 1.0, ''),
+    'um/K': ('m/K', 1e-6, 'µm/K'),
 }
 UNITS = tuple(sorted({v[0] for v in DISPLAY.values()}))
 LIMITATIONS = (
@@ -181,8 +189,8 @@ class Source:
 
     def validate(self):
         _text('Source.id', self.id)
-        if not self.id.startswith(('BF-', 'PK-', 'HX-', 'BG-')):
-            raise ValueError(f'source id {self.id!r} must start with BF-, PK-, HX- or BG-')
+        if not self.id.startswith(('BF-', 'PK-', 'HX-', 'BG-', 'PT-')):
+            raise ValueError(f'source id {self.id!r} must start with BF-, PK-, HX-, BG- or PT-')
         _text('Source.title', self.title)
         if not isinstance(self.urls, tuple) or not self.urls:
             raise ValueError(f'source {self.id}: urls must be a nonempty tuple')
@@ -1272,6 +1280,102 @@ _SOURCE_LIST = (
        'VP'),
     _S('BG-G44', 'Matsuoka, Higashi, J. JILM 67 (2017) 641',
        'https://www.jstage.jst.go.jp/article/jilm/67/12/67_671206/_pdf', _EX, 'EX'),
+    # ---- process-temperature report (third research pass); ids PT-T<n>; T35 = PK-S7
+    _S('PT-T1', 'CN112934967B, battery foil and processing method',
+       'https://patents.google.com/patent/CN112934967B/zh', _EX, 'EX'),
+    _S('PT-T2', 'CN application 202110122451 (same applicant, slitting variant)',
+       'https://www.xjishu.com/zhuanli/23/202110122451.html', _EX, 'EX'),
+    _S('PT-T3', 'Mansell, PhD thesis, UTS 2007, part 2',
+       'https://opus.lib.uts.edu.au/bitstream/10453/44028/13/02Whole%20part%202.pdf', _EX, 'EX'),
+    _S('PT-T4', 'Kerth, Amann, Raber, Weber, Int. Metall. Rev. 20 (1975) 185',
+       'https://www.scribd.com/document/949516974/kerth1975', _EX, 'EX',
+       'same document as PK-S1; read from the text copy saved by the packaging survey'),
+    _S('PT-T5', 'Li, Yang, Huang, foil rolling process factors, 2019',
+       'https://www.zzqklm.com/w/kjlw/24793.html https://bbs.plcjs.com/thread-601856-1-1.html',
+       _EX, 'EX'),
+    _S('PT-T6', 'Three-pass battery foil patent (Jiangyin Xinren)',
+       'https://www.xjishu.com/zhuanli/23/202311439469.html', _EX, 'EX',
+       'same document as BF-S16'),
+    _S('PT-T7', 'Bátorfi, Pál, Chakravarty, Sidor, Appl. Sci. 13 (2023) 4359',
+       'https://www.mdpi.com/2076-3417/13/7/4359', _AB, 'AB'),
+    _S('PT-T8', 'Chen Jiuxia, rolling-oil control for electronic foil, Metal World 2008(2)',
+       'https://metalworld.ustb.edu.cn/cn/article/pdf/preview/JSSJ200802016.pdf', _EX, 'EX'),
+    _S('PT-T9', 'ExxonMobil Somentor 29 sales specification',
+       'https://www.exxonmobilchemical.com/en/chemicals/webapi/dps/v1/datasheets/130000107309/'
+       '1/en', _FT, 'FT'),
+    _S('PT-T10', 'Eastto aluminium rolling oils 80 and 110',
+       'https://www.eastopet.com/Aluminium_Rolling_Oil/ALUMINIUM_ROLLING_OILS.pdf', _VP, 'VP'),
+    _S('PT-T11', 'Mobil Wyrol additive concentrates',
+       'https://www.mobil.com/en/sap/our-products/product-series/wyrol', _VP, 'VP'),
+    _S('PT-T12', 'Exxsol D80 safety data sheets',
+       'https://nextsds.com/sds/en/281331501287376/exxsol-d80-fluid '
+       'https://pure-chemical.com/site/others/msds/Exxsol%20D80.pdf', _AB, 'AB'),
+    _S('PT-T13', 'Missouri rule 10 CSR 10-5.451, aluminium foil rolling',
+       'https://www.epa.gov/sites/default/files/2017-09/documents/10-5451_0.pdf', _FT, 'FT'),
+    _S('PT-T14', 'AXA XL PRC.17.13.1, Aluminum Rolling Mills',
+       'https://axaxl.com/prc-guidelines/-/media/axaxl/files/pdfs/prc-guidelines/prc-17/'
+       'prc17131aluminumrollingmillsv1.pdf', _EX, 'EX'),
+    _S('PT-T15', 'Foil rolling and lubrication technology (presentation text)',
+       'https://alfoilworld.com/knowledge/knowledge-2d1c71f1/?lang=zh', _VP, 'VP'),
+    _S('PT-T16', 'Yin, Li, Zhang, Li, J. Univ. Sci. Technol. Beijing 25(6) 2003 (heat partition)',
+       'https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2003.06.020', _AB, 'AB',
+       'abstract only; a net heat balance from measured strip surface temperature'),
+    _S('PT-T17', 'Yin, Li, Zhang, J. Univ. Sci. Technol. Beijing 27(4) 2005',
+       'https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2005.04.023', _AB, 'AB'),
+    _S('PT-T18', 'Shao, He, Yang et al., Chin. J. Eng. 37(8) 2015, 1092',
+       'http://download.cucdc.com/wenku/7e866ecc01884bf4b0beb581b59e030c.html', _EX,
+       'FT, garbled mirror', 'tagged FT by the report but read from a garbled mirror; '
+       'recorded as excerpt'),
+    _S('PT-T19', 'Horák, Raudenský, Pohanka et al., Engineering Mechanics 18 (2011) 81',
+       'https://www.engineeringmechanics.cz/pdf/18_2_081.pdf', _EX, 'EX'),
+    _S('PT-T20', 'Innoval, "Optimising spray cooling", 2016',
+       'https://www.innovaltec.com/optimising-spray-cooling-blog/', _FT, 'FT'),
+    _S('PT-T21', 'Lechler SELECTOSPRAY brochure and product page',
+       'https://www.lechlerusa.com/fileadmin/media-usa/Literature/Brochures/metal/'
+       'Roll_Cooling_SELECTOSPRAY_brochure.pdf '
+       'https://www.lechlerusa.com/en/products/product-by-market/metals/nozzles-for-roll-cooling/'
+       'selectospray', _VP, 'VP'),
+    _S('PT-T22', 'Tucker (Lechler), flatness and profile: spray actuator design, 2006',
+       'https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_'
+       'walzenkuehlung_01-2006_flatness-and-profile-the-problems-that-can-exist-in-the-design-'
+       'of-the-spray-actuators_dtucker_en.pdf', _EX, 'EX'),
+    _S('PT-T23', 'Lloyd (Lechler), fundamentals of roll cooling and flatness control, 2010',
+       'https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_'
+       'walzenkuehlung_09-2010_fundamentals-of-roll-cooling-and-control-of-flatness-at-primary-'
+       'cold-reduction_dlloyd_en.pdf', _EX, 'EX'),
+    _S('PT-T24', 'Primetals hot edge induction heating',
+       'https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/'
+       'hot-edge-induction-heating/', _VP, 'VP'),
+    _S('PT-T25', 'Liu, Wu, He, Yang, Chen, J. Univ. Sci. Technol. Beijing 27(1) 2005',
+       'http://download.cucdc.com.cn/wenku/e4745e5b77164f1b8568a4905130a323.html', _EX, 'EX'),
+    _S('PT-T26', 'Davies, Sivilotti, Tulett, Metals Technology 2 (1975)',
+       'https://doi.org/10.1179/030716975803277735', _AB, 'AB'),
+    _S('PT-T27', 'Li Fang, additive for aluminium cold rolling lubrication, thesis',
+       'https://www.collectionscanada.gc.ca/obj/thesescanada/vol2/OWA/TC-OWA-5135.pdf', _EX,
+       'EX'),
+    _S('PT-T28', 'Reich, Wise, Colbert, Tribology Transactions 2008',
+       'https://doi.org/10.1080/10402000801911796', _AB, 'AB'),
+    _S('PT-T29', 'CN111438187A, high-hardness rolls for battery foil',
+       'https://patents.google.com/patent/CN111438187A/zh', _EX, 'EX', 'same document as BF-S13'),
+    _S('PT-T30', 'CN application 202310021340, raising wetting tension of battery foil',
+       'https://www.xjishu.com/zhuanli/23/202310021340.html', _EX, 'EX'),
+    _S('PT-T31', 'Matmatch, AA 1100-H18', 'https://matmatch.com/materials/mitf51-aa-1100-h18',
+       _AB, 'AB'),
+    _S('PT-T32', 'Recovery kinetics in AA1050 deformed to ultrahigh strain (DTU postprint)',
+       'https://backend.orbit.dtu.dk/ws/portalfiles/portal/125728953/postprint.pdf', _EX, 'EX'),
+    _S('PT-T33', 'Allazadeh, strain-rate sensitivity of AA1050, 2020',
+       'https://strathprints.strath.ac.uk/74717/1/Allazadeh_ISSJ_2020_Computing_strain_rate_'
+       'sensitivity_of_aluminium_alloy_1050.pdf', _EX, 'EX'),
+    _S('PT-T34', 'Wu, Liang, Tang, Pan, Appl. Therm. Eng. 106 (2016) 1002 (introduction)',
+       'https://www.sciencedirect.com/science/article/abs/pii/S1359431116309929', _EX, 'EX'),
+    _S('PT-T36', 'Fu, Zhang, Liao, Jiang, Heat Treatment of Metals 50(9) 2025, 181',
+       'http://www.jsrcl.net/CN/10.13251/j.issn.0254-6051.2025.09.029', _AB, 'AB'),
+    _S('PT-T37', '"Milling Over Rolling Oils", Lubes\'n\'Greases 2017',
+       'https://www.lubesngreases.com/magazine/23_9/milling-over-rolling-oils/', _EX, 'EX'),
+    _S('PT-T38', 'CN202803755U, coolant spray device for a foil roughing mill',
+       'https://www.xjishu.com/zhuanli/23/201220412752.html', _FT, 'FT'),
+    _S('PT-T39', 'Toei Denka, typical mechanical properties of aluminium alloys',
+       'https://toeidenka.co.jp/refer/mechanical_strength_of_aluminum.html', _EX, 'EX'),
 )
 _SOURCES = {s.id: s for s in _SOURCE_LIST}
 
@@ -2048,6 +2152,362 @@ GRADE_NOT_FOUND = (
         'BG-G7 BG-G43'),
     _nf('Any standard for thick collector foil or tab foil.'),
 )
+
+# --------------------------------------------------------------------------- process temperatures
+# Third research pass (sources PT-T<n>): temperatures of strip, oil and rolls in foil rolling and
+# their effects. Everything here is a literature statement or the report's (or this module's)
+# arithmetic; the tool has no roll-wear model and no temperature-to-surface-finish model.
+@dataclass(frozen=True)
+class TempMapRow:
+    """One row of the temperature map: typical range, limit and the reason given."""
+    name: str
+    typical: Statement
+    limit: Statement | None
+    reason: Statement
+
+    def validate(self):
+        _text('TempMapRow.name', self.name)
+        for s in (self.typical, self.limit, self.reason):
+            if s is not None:
+                s.validate()
+        return self
+
+    def to_dict(self):
+        return {'name': self.name, 'typical': _json(self.typical), 'limit': _json(self.limit),
+                'reason': _json(self.reason)}
+
+
+@dataclass(frozen=True)
+class ThermalDefect:
+    """A defect or property with its thermal cause and the magnitude the literature gives."""
+    name: str
+    thermal_cause: str
+    magnitude: str
+    sources: tuple
+    read_status: str | None = None
+
+    def validate(self):
+        for k in ('name', 'thermal_cause', 'magnitude'):
+            _text(f'ThermalDefect.{k}', getattr(self, k))
+        _check_status(f'ThermalDefect {self.name!r}', self.sources, self.read_status)
+        return self
+
+    def to_dict(self):
+        return {'name': self.name, 'thermal_cause': self.thermal_cause,
+                'magnitude': self.magnitude, 'sources': list(self.sources),
+                'read_status': _effective(self.sources, self.read_status)}
+
+
+PT_NOT_A_MODEL = ('Literature statements, not model outputs: the tool has no roll-wear model and '
+                  'no model linking temperature to surface finish or wettability.')
+
+# ---- named values used by check_thermal
+COIL_IN_FINAL_LIMIT = _max(75, 'C', 'PT-T1', 'battery foil: coil entering the final pass, after '
+                           '≥10 h natural cooling')
+COIL_OUT_FINAL_LIMIT = _max(80, 'C', 'PT-T1 PT-T2', 'battery foil: coil off the final pass, '
+                            'also when slit within 30 min')
+COIL_OUT_FINAL_LIMIT_LOOSE = _max(90, 'C', 'PT-T1 PT-T2', 'battery foil: "≤90 °C at the least"; '
+                                  'elongation decays with time above it')
+COIL_OUT_SHEET_TROUBLE = _min(150, 'C', 'PT-T3', 'sheet gauge: trouble above 150–160 °C (8150 '
+                              'fin stock lost over 10 % Erichsen above 160 °C)', hi=160)
+COIL_OUT_SHEET_TYPICAL = _pt(121, 'C', 'PT-T14', 'coil leaving a cold-mill pass, "about 121 °C"')
+COLD_ROLLING_DEF = _max(129, 'C', 'PT-T13', 'cold rolling defined as below 129 °C (regulatory '
+                        'definition)')
+STRIP_IN_BITE = _pt(200, 'C', 'PT-T4', 'calculated, high speed ("almost adiabatic" above about '
+                    '2000 m/min roll speed)')
+OIL_ROUGHING = _r(30, 40, 'C', 'PT-T5 PT-T6', 'oil supply, roughing')
+OIL_INTERMEDIATE = _r(40, 50, 'C', 'PT-T5 PT-T6', 'oil supply, intermediate')
+OIL_FINISHING = _r(50, 60, 'C', 'PT-T5', 'oil supply, finishing, general foil')
+OIL_FINISHING_BATTERY = _r(40, 45, 'C', 'PT-T1 PT-T6', 'oil supply, finishing, battery foil')
+OIL_WINDOW_PLANT = _r(38, 55, 'C', 'PT-T3', 'oil window at one plant; lower bound set by the '
+                      '"ladder" tear defect')
+OIL_CAP_COLD = _max(68, 'C', 'PT-T13', 'legal cap, cold mill (vapour emissions, one US rule)')
+OIL_CAP_FOIL = _max(71, 'C', 'PT-T13', 'legal cap, foil mills (vapour emissions, one US rule)')
+HOT_EDGE = _max(120, 'C', 'PT-T21', 'hot edge spray oil, in 25 mm zones')
+ROLL_SURFACE_MODEL = _pt(50, 'C', 'PT-T18', 'cold-mill model value with 35 °C oil (not measured)')
+THERMAL_LOAD_LIMIT = _r(167, 209, 'kW/m2', 'PT-T4', '40–50 kcal/m²s of roll surface, converted by '
+                        'the report', status='computed')
+VISC_40C = _r(1.5, 2.0, 'cSt', 'PT-T9 PT-T10 PT-T8', 'rolling-oil viscosity at 40 °C, all values '
+              'found (1.50–1.75, 1.8, 2.0, 1.5–2.0)')
+_VPK = (1.66 - 2.23) / (2.23 * 15)       # middles of 1.64-1.68 at 40 °C and 2.16-2.3 at 25 °C
+VISC_PER_K = Range(_q(_VPK), _q(_VPK), 'fraction', ('PT-T12',), 'computed: (1.66 - 2.23) / '
+                   '(2.23 x 15 K), middles of 2.16–2.3 cSt at 25 °C and 1.64–1.68 cSt at 40 °C '
+                   '(linear, relative to 25 °C)', 'typical', 'computed', '%')
+HEAT_STRIP_SHARE = _r(11, 33, '%', 'PT-T16', 'measured foil-mill heat partition, strip share '
+                      '(abstract only; a net balance, not necessarily the split inside the bite)')
+HEAT_ROLL_SHARE = _r(67, 89, '%', 'PT-T16', 'measured foil-mill heat partition, roll share '
+                     '(abstract only; net balance); the roll share rises with cooling')
+SPRAY_ROLL = _r(2.5, 4.3, 'kW/m2K', 'PT-T18', 'kerosene spray on a work roll, SIMULATED (1800 mm '
+                'cold mill, 34 nozzles at 52 mm, roll 50 °C), 200–700 kPa')
+SPRAY_JET = _r(3.0, 4.0, 'kW/m2K', 'PT-T18', 'jet zone at 500 kPa, simulated')
+SPRAY_MODEL_OVERALL = _r(4.65, 5.5, 'kW/m2K', 'PT-T20', 'overall value in a cold-mill model '
+                         'example; coolant not named')
+OIL_VS_WATER = _r(3, 6, 'ratio', 'PT-T19', 'water spray coefficient over oil at equal impingement '
+                  'density (measured on a steel plate)')
+SPRAY_PLATE = Range(_q(31e3 / 6), _q(38e3 / 3), 'W/m^2K', ('PT-T19',), 'computed: water about '
+                    '31–38 kW/m²K at 5 bar divided by 3–6 (steel plate at 25–250 °C, not a roll)',
+                    'span', 'computed', 'kW/m2K')
+THERMAL_CROWN_MAX = _max(30, 'um', 'PT-T25', 'foil mill, "from measured values"; 260 × 900 mm '
+                         'work roll; whether on diameter or radius is not stated')
+ZONE_AUTHORITY = _r(3.6, 4.2, 'um', 'PT-T18', '± on diameter 20 revolutions after a zone change '
+                    '(simulated, 1100 alloy); grows linearly with rolled length, halves from 100 to '
+                    '300 m/min')
+CONTACT_MODELS = _r(25, 40, 'kW/m2K', 'PT-T34', 'bite contact conductance used in aluminium models')
+CONTACT_MEASURED = _r(7, 800, 'kW/m2K', 'PT-T34', 'measured bite contact conductances (review)')
+_DIFF = 1.2e-5
+_LAM = 0.104
+AXIAL_TAU = Range(_q(_LAM ** 2 / (4 * math.pi ** 2 * _DIFF)), _q(_LAM ** 2 / (4 * math.pi ** 2
+                  * _DIFF)), 's', ('PT-T18',), 'computed: wavelength² / (4 π² × diffusivity) for '
+                  'a 52 mm stripe (104 mm wavelength; 52 mm zone pitch of PT-T18), steel '
+                  'diffusivity 1.2e-5 m²/s as stated by the report (the report: "about 20 s")',
+                  'typical', 'computed', 's')
+RADIAL_TAU = _r(4, 7, 'min', 'PT-T25', 'computed by the report for a 260 mm roll: steel '
+                'diffusivity 1.2e-5 m²/s, Biot number 3–9', status='computed')
+FREE_EXPANSION = _pt(3.0, 'um/K', 'PT-T25', 'computed by the report: µm on diameter per K for a '
+                     '260 mm roll (its expansion coefficient is not stated)', status='computed')
+PLASTIC_HEATING = (_pt(41, 'K', 'PT-T1', 'computed by the report: plastic work alone, 200 MPa, '
+                       'plane strain, 20→13 µm, no heat leaving', status='computed'),
+                   _pt(48, 'K', 'PT-T1', 'computed by the report: same for 50→30 or 30→18 µm',
+                       status='computed'))
+
+PT_HEADLINE = (
+    _s('Battery foil has a published coil-temperature limit: ≤80 °C on the final pass (≤75 °C '
+       'coil entering it, after ≥10 h cooling); above 90 °C elongation decays with time for '
+       'weeks.', 'PT-T1 PT-T2', COIL_OUT_FINAL_LIMIT, COIL_IN_FINAL_LIMIT, topic='headline'),
+    _s('The only measured heat partition for a foil mill gives 67–89 % of the heat to the rolls '
+       'and 11–33 % to the strip (abstract only; a net balance, not necessarily the split inside '
+       'the bite).', 'PT-T16', HEAT_ROLL_SHARE, HEAT_STRIP_SHARE, topic='headline'),
+    _s('No measured spray coefficient for kerosene on a rotating work roll was found; the nearest '
+       'are a simulated 2.5–4.3 kW/m²K on an aluminium cold mill and "3–6 times below water" on '
+       'a sprayed plate (about 5–13 kW/m²K, computed).', 'PT-T18 PT-T19', SPRAY_ROLL, SPRAY_PLATE,
+       topic='headline'),
+    _s('No source quantifies a blocked-nozzle band on foil; the mechanism is documented in words '
+       'only (under-cooled roll bands between spray footprints, blocked filter or header, a '
+       'turned-down spray whose narrow roll expansion grows until a wave appears, quarter-barrel '
+       'looseness from a hotter roll at 1/5–1/4 of the barrel).', 'PT-T22 PT-T23 PK-S7 PT-T38',
+       topic='headline'),
+)
+TEMPERATURE_MAP = (
+    TempMapRow('Coil entering a pass',
+               _s('Not stated for foil; 60–100 °C entry gave exit above 150 °C at sheet gauge.',
+                  'PT-T3', _r(60, 100, 'C', 'PT-T3', 'sheet gauge entry'), topic='typical'),
+               _s('≤75 °C before the battery-foil final pass (≥10 h natural cooling).', 'PT-T1',
+                  COIL_IN_FINAL_LIMIT, topic='limit'),
+               _s('Keeps the final-pass coil below 80 °C.', 'PT-T1', topic='reason')),
+    TempMapRow('Strip inside the bite',
+               _s('Calculated to reach about 200 °C at high speed.', 'PT-T4', STRIP_IN_BITE,
+                  topic='typical'),
+               _s('Above 200 °C needed before softening shows.', 'PT-T4', topic='limit'),
+               _s('"Almost adiabatic" above about 2000 m/min roll speed.', 'PT-T4',
+                  topic='reason')),
+    TempMapRow('Coil off the final pass, battery foil (20→13 µm, 35 %, oil 42 °C)',
+               _s('77.2 °C at 550 m/min; 97.9 and 99.7 °C at 600 m/min; prior art "above 90 °C".',
+                  'PT-T1 PT-T2', _pt(77.2, 'C', 'PT-T1', '550 m/min'),
+                  _r(97.9, 99.7, 'C', 'PT-T1', '600 m/min'), topic='typical'),
+               _s('≤80 °C (≤90 °C at the least), also when slit within 30 min.', 'PT-T1 PT-T2',
+                  COIL_OUT_FINAL_LIMIT, COIL_OUT_FINAL_LIMIT_LOOSE, topic='limit'),
+               _s('Recovery and possible solute clustering: strength and elongation fall for '
+                  'weeks.', 'PT-T1 PT-T2', topic='reason')),
+    TempMapRow('Coil leaving a cold-mill pass (sheet gauge)',
+               _s('"About 121 °C"; cold rolling defined as below 129 °C; metal at 20–200 °C.',
+                  'PT-T14 PT-T13 PT-T37', COIL_OUT_SHEET_TYPICAL, COLD_ROLLING_DEF,
+                  topic='typical'),
+               _s('No stated limit; trouble above 150–160 °C.', 'PT-T3', COIL_OUT_SHEET_TROUBLE,
+                  topic='limit'),
+               _s('Erichsen value of 8150 fin stock fell over 10 % above 160 °C; coarse grains '
+                  'after anneal.', 'PT-T3', topic='reason')),
+    TempMapRow('Oil supply, roughing and intermediate',
+               _s('30–40 °C and 40–50 °C.', 'PT-T5 PT-T6', OIL_ROUGHING, OIL_INTERMEDIATE,
+                  topic='typical'), None,
+               _s('Thick stock, more heat to remove.', 'PT-T5 PT-T6', topic='reason')),
+    TempMapRow('Oil supply, finishing',
+               _s('50–60 °C general foil; 40–45 °C battery foil.', 'PT-T5 PT-T1 PT-T6',
+                  OIL_FINISHING, OIL_FINISHING_BATTERY, topic='typical'),
+               _s('Window 38–55 °C at one plant; legal cap 68 °C (cold mill), 71 °C (foil mills) '
+                  'in one US rule.', 'PT-T3 PT-T13', OIL_WINDOW_PLANT, OIL_CAP_COLD, OIL_CAP_FOIL,
+                  topic='limit'),
+               _s('Thin film for lustre; lower bound set by the "ladder" tear defect; the cap is '
+                  'for vapour emissions.', 'PT-T5 PT-T3 PT-T13', topic='reason')),
+    TempMapRow('Hot edge spray',
+               _s('Oil up to 120 °C in 25 mm zones.', 'PT-T21 PT-T5', HOT_EDGE, topic='typical'),
+               None,
+               _s('Expands the roll at the strip edge against tight edges and breaks.',
+                  'PT-T21 PT-T5', topic='reason')),
+    TempMapRow('Work-roll surface and bulk',
+               _s('Not found measured; a cold-mill model uses 50 °C surface with 35 °C oil.',
+                  'PT-T18', ROLL_SURFACE_MODEL, topic='typical'),
+               _s('Thermal load 40–50 kcal/m²s of roll surface (167–209 kW/m², computed by the '
+                  'report).', 'PT-T4', THERMAL_LOAD_LIMIT, topic='limit'),
+               _s('Above it the thermal balance is unstable; herringbone.', 'PT-T4 PT-T18',
+                  topic='reason')),
+)
+PT_RISE_PER_PASS = (
+    _s('Coil temperature rises with speed. The one number pair is 77 °C at 550 m/min against '
+       '98–100 °C at 600 m/min, but the cooler case also had a pre-cooled coil and finer rolls; '
+       'the entry temperature of the hot case is not given.', 'PT-T15 PT-T1'),
+    _s('Computed by the report: plastic work alone (200 MPa flow stress, plane strain) heats the '
+       'strip 41 K for 20→13 µm and 48 K for 50→30 or 30→18 µm if no heat leaves; friction adds. '
+       'A 77 °C coil from a ≤75 °C entry suggests most of that heat left the strip (the report\'s '
+       'inference; coil and strip temperature are not the same measurement).', 'PT-T1',
+       *PLASTIC_HEATING, status='computed'),
+    _s('Cooling between passes: ≥10 h natural cooling; 24 h rest in the Speira patent.',
+       'PT-T1 BF-S8'),
+)
+OIL_PROPERTIES = (
+    _s('Viscosity at 40 °C: 1.50–1.75 cSt (Somentor 29); 1.8 and 2.0 (grades 80, 110); 1.5–2.0 '
+       '(electronic foil); 1.8–2.0 in use at one plant.', 'PT-T9 PT-T10 PT-T8 PT-T3', VISC_40C,
+       topic='viscosity_40c'),
+    _s('Flash point: ≥74 °C (Somentor 29); 105–110 °C open cup (grades 80, 110); 80–111 °C for '
+       'additive concentrates.', 'PT-T9 PT-T10 PT-T11', _min(74, 'C', 'PT-T9'),
+       _r(105, 110, 'C', 'PT-T10'), _r(80, 111, 'C', 'PT-T11'), topic='flash_point'),
+    _s('Boiling range: 192–248 °C; 204–240 °C; 210–250 and 240–280 °C.', 'PT-T9 PT-T8 PT-T10',
+       topic='boiling_range'),
+    _s('Viscosity against temperature: 2.16–2.3 cSt at 25 °C and 1.64–1.68 cSt at 40 °C for a '
+       'comparable fluid, about −1.7 % per K (computed).', 'PT-T12', VISC_PER_K,
+       topic='viscosity_per_k'),
+    _s('Flow: not found for foil mills. A cold-mill example: 3, 6 and 12 L/min per nozzle in three '
+       'rows, about 400 L/min per metre per header at 52 mm pitch (computed by the report).',
+       'PT-T20', topic='flow'),
+)
+OIL_WHAT_GOES_WRONG = (
+    _s('Oil too hot (thin film): film ruptures, dry contact, light-and-dark marks; more aluminium '
+       'fines; herringbone when load and temperature run away.', 'PT-T8 PT-T15 PT-T4 PT-T28',
+       topic='too_hot'),
+    _s('Oil too cold or viscous (thick film): lower speed, more oil carried out, yellow-brown '
+       'stain after anneal; ladder defect below 38 °C (the report\'s reading of "min 38 °C for '
+       'ladder").', 'PT-T8 PT-T3', topic='too_cold'),
+    _s('Gauge: a thicker film gives thinner foil in closed-gap rolling (speed effect).', 'PT-T4',
+       topic='gauge'),
+    _s('Fire: the chance rises sharply once strip reaches the flash point; ignition comes from '
+       'strip breaks, static, hot bearings and electrics.', 'PT-T15 PT-T14', topic='fire'),
+)
+PT_MATERIAL = (
+    _s('Battery foil 1060 (also 1235, 1100), 13 µm: strength and elongation tracked for days after '
+       'rolling at coil temperatures 80–110 °C. Hotter coils lose more; elongation drops at '
+       '≥90 °C, by over 20 % at worst. A 98 °C coil decays for over 60 days; ≤80 °C coils settle '
+       'in 16–20 days (figures not seen by the report).', 'PT-T1 PT-T2',
+       _min(20, '%', 'PT-T1 PT-T2', 'elongation loss at worst ("over 20 %")'),
+       _min(60, 'days', 'PT-T1 PT-T2', 'decay time of a 98 °C coil ("over 60 days")'),
+       _r(16, 20, 'days', 'PT-T1 PT-T2', 'settling time of ≤80 °C coils'),
+       topic='battery_property_decay'),
+    _s('1100-H18 tested hot after holding up to 10 000 h: 165 / 150 MPa (tensile / yield) at room '
+       'temperature; 145 / 130 at 100 °C; 125 at 150 °C; 40 at 205 °C.', 'PT-T31 PT-T39',
+       _pt(165, 'MPa', 'PT-T39', 'tensile, room temperature'),
+       _pt(145, 'MPa', 'PT-T31 PT-T39', 'tensile at 100 °C'),
+       _pt(125, 'MPa', 'PT-T31 PT-T39', 'tensile at 150 °C'),
+       _pt(40, 'MPa', 'PT-T31 PT-T39', 'tensile at 205 °C'), topic='1100_h18_hot'),
+    _s('99.5 % Al: flow stress at 200 °C about 35 % below room temperature; hardness after '
+       'deforming at 200 °C only 10 % lower.', 'PT-T4', topic='flow_stress_200c'),
+    _s('Recovery of 1050 rolled 99.6 %: measured at 140–220 °C from 1 min; activation energy 131 '
+       'rising to 186 kJ/mol.', 'PT-T32', _r(131, 186, 'kJ/mol', 'PT-T32'),
+       topic='recovery_kinetics'),
+    _s('Strain-rate sensitivity of 1050: m about 0.04 at 100 °C and 0.07 at 200 °C (H14, slow '
+       'tensile tests); taken as zero for cold deformation.', 'PT-T33 PT-T7',
+       topic='strain_rate_sensitivity'),
+    _s('8021 pouch foil: controlling coil and oil temperature avoids work softening during foil '
+       'rolling.', 'PT-T36', topic='pouch_8021'),
+    _s('Additive film: kerosene with 2.2 % fatty acid failed at 150–155 °C in ball-on-disc tests; '
+       '0.022 % acid held to 250 °C.', 'PT-T27', _r(150, 155, 'C', 'PT-T27', 'failure, 2.2 % acid'),
+       topic='additive_film'),
+    _s('Across the width: a transverse strip temperature gradient goes unnoticed while rolling and '
+       'changes shape as the coil cools; no source reports strength or thickness bands from this '
+       'cause.', 'PT-T23', topic='across_width'),
+)
+PT_ROLL_WEAR = (
+    _s('Roll coating: fresh aluminium sticks to the roll and is re-deposited; the additive limits '
+       'this layer. Physically adsorbed films desorb as temperature rises.',
+       'PT-T37 PT-T15 PT-T27', topic='roll_coating'),
+    _s('Fines: more fines with higher oil temperature, speed, reduction and roll roughness.',
+       'PT-T15', topic='fines'),
+    _s('Circumferential temperature swing: keeping it small reduces thermal fatigue, surface '
+       'degradation and wear (a general cold-mill statement; nothing foil-specific on spalling).',
+       'PT-T23', topic='temperature_swing'),
+    _s('Bending: edge heating lowers the bending force and therefore work-roll wear.', 'PT-T24',
+       topic='bending'),
+    _s('Roll hardness: 115–125 HSD rolls held shape on ≥250 MPa foil; 98 HSD rolls drifted after '
+       '1–3 h.', 'PT-T29', topic='roll_hardness'),
+)
+PT_SURFACE = (
+    ThermalDefect('Heat stripes (EAFA)', 'Temperature or flatness difference across the width; '
+                  'locally overheated roll.', 'None', ('PK-S7',)),
+    ThermalDefect('Stripes on strip', 'Gaps between spray footprints leave under-cooled roll '
+                  'bands; overlap should be 10–30 %, never above 50 %.', 'Zone pitch 25–100 mm',
+                  ('PT-T22', 'PT-T21')),
+    ThermalDefect('Surface striping; local buckle', 'Blocked filter or header gives differential '
+                  'oil plate-out and cooling; after a spray is turned down the roll first expands '
+                  'in a narrow band, which grows until a wave appears.', 'None', ('PT-T23',)),
+    ThermalDefect('Rib (quarter) looseness after roughing', 'Roll hotter at 1/5–1/4 of the barrel; '
+                  'nozzles of twice the diameter there removed it.', 'None', ('PT-T38',)),
+    ThermalDefect('Herringbone', 'Thermal runaway at the film-strength limit.', 'Thermal load above '
+                  '167–209 kW/m² (computed by the report)', ('PT-T4', 'PT-T28')),
+    ThermalDefect('Wettability (dyne)', 'Set mainly by oil carried out; additive at 3.5 % gave '
+                  '29–30 dyn, at 8 % gave 28 dyn; dyne can start above 32 and fall below 30 within '
+                  '12–24 h as base oil evaporates.', '1–2 dyn', ('PT-T29', 'PT-T30')),
+)
+SPRAY_OVERLAP = _s('Spray footprint overlap should be 10–30 %, never above 50 %; zone pitch '
+                   '25–100 mm.', 'PT-T22 PT-T21', _r(10, 30, '%', 'PT-T22 PT-T21', 'overlap'),
+                   _max(50, '%', 'PT-T22 PT-T21', 'overlap never above'),
+                   _r(25, 100, 'mm', 'PT-T22 PT-T21', 'zone pitch'), topic='spray_overlap')
+PT_SURFACE_NOTE = _s('No source links oil, roll or strip temperature directly to dyne level, gloss '
+                     'bands or white streaks.', 'PT-T29 PT-T30', topic='surface_not_linked')
+PT_SIMULATION = (
+    _s('Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with '
+       'cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; '
+       'a net balance.', 'PT-T16', HEAT_STRIP_SHARE, HEAT_ROLL_SHARE, topic='heat_partition'),
+    _s('Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at '
+       '500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll '
+       '50 °C); viscosity ranks first among spray factors.', 'PT-T18 PT-T17', SPRAY_ROLL,
+       SPRAY_JET, topic='spray_coefficient'),
+    _s('Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a '
+       'steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about '
+       '5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll).', 'PT-T19', OIL_VS_WATER,
+       SPRAY_PLATE, topic='oil_vs_water'),
+    _s('Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll.',
+       'PT-T25', THERMAL_CROWN_MAX, topic='thermal_crown'),
+    _s('Zone-cooling authority: ±3.6 to ±4.2 µm on diameter 20 revolutions after a change; grows '
+       'linearly with rolled length; halves from 100 to 300 m/min (simulated, 1100 alloy).',
+       'PT-T18', ZONE_AUTHORITY, topic='zone_authority'),
+    _s('Bite contact conductance: 25–40 kW/m²K in aluminium models; measurements span 7–800.',
+       'PT-T34', CONTACT_MODELS, CONTACT_MEASURED, topic='contact_conductance'),
+    _s(f'Radial time constant of a 260 mm roll about 4–7 min; axial decay of a 52 mm stripe about '
+       f'{AXIAL_TAU.low:.0f} s (recomputed here; the report says about 20 s); free expansion '
+       '3.0 µm on diameter per K for a 260 mm roll. All computed.', 'PT-T25 PT-T18', RADIAL_TAU,
+       AXIAL_TAU, FREE_EXPANSION, topic='time_constants', status='computed'),
+)
+PT_DISAGREEMENTS = (
+    _s('Heat partition: 67–89 % to the rolls from measured strip surface temperature, against '
+       '"almost adiabatic" strip heating to about 200 °C inside the bite at high speed. Both can '
+       'hold if the strip gives heat back to roll and oil before coiling; gauge and speed of the '
+       'measurement are not in the abstract.', 'PT-T16 PT-T4'),
+    _s('Finishing oil temperature: 50–60 °C in general foil texts; 40–45 °C for battery foil; '
+       '38–55 °C at one plant.', 'PT-T5 PT-T1 PT-T6 PT-T3'),
+    _s('Spray coefficient: 2.5–4.3 kW/m²K simulated; 4.65–5.5 overall in a cold-mill model example '
+       '(coolant not named); 5–13 back-computed from a plate test.', 'PT-T18 PT-T20 PT-T19'),
+    _s('Hot-spray temperature: up to 120 °C is above the flash point of some base oils '
+       '(74–110 °C).', 'PT-T21 PT-T9 PT-T10'),
+)
+PT_NOT_FOUND = (
+    _nf('Measured work-roll surface or bulk temperatures on a foil mill.'),
+    _nf('A quantified blocked-nozzle case on foil (temperature difference, diameter change, '
+        'I-units, band width).'),
+    _nf('Plant-identified time constants; Davies et al. describe three but only the abstract was '
+        'reachable.', 'PT-T26'),
+    _nf('A curve of strip temperature rise against reduction, speed and gauge; micrometres of gauge '
+        'per kelvin of oil; oil-film thickness against temperature.'),
+    _nf('Oil flow per metre of barrel on a foil mill; roll-change and regrind intervals for '
+        'finishing rolls.'),
+    _nf('A direct measurement of temperature against dyne, gloss or roll wear; property or '
+        'thickness bands traced to a width-wise temperature difference.'),
+    _nf('Full texts on hosts outside the research session\'s allowed network domains: the '
+        'heat-partition paper, the Collins thesis (measured thermal cambers), the Mansell thesis, '
+        'engineeringmechanics.cz, alufoil.org, aluminium-guide.com.'),
+    _nf('A published heat partition or spray coefficient for sheet-gauge cold rolling: the survey '
+        'has foil-mill data only.'),
+)
+PT_ALL_STATEMENTS = (PT_HEADLINE + PT_RISE_PER_PASS + OIL_PROPERTIES + OIL_WHAT_GOES_WRONG
+                     + PT_MATERIAL + PT_ROLL_WEAR + (SPRAY_OVERLAP, PT_SURFACE_NOTE)
+                     + PT_SIMULATION + PT_DISAGREEMENTS)
+
 
 _BF_WAVE = 'GB/T 33143 wave height at 8 N/mm²'
 BATTERY_COLLECTOR = Product(
@@ -3340,8 +3800,12 @@ def _validate_all():
         s.validate()
     for s in GRADE_NOT_FOUND:
         s.validate(require_sources=False)
-    for t in TEMPER_TABLE + STRENGTH_AFTER_HEATING:
+    for t in TEMPER_TABLE + STRENGTH_AFTER_HEATING + TEMPERATURE_MAP + PT_SURFACE:
         t.validate()
+    for s in PT_ALL_STATEMENTS:
+        s.validate()
+    for s in PT_NOT_FOUND:
+        s.validate(require_sources=False)
 
 
 _validate_all()
@@ -3389,7 +3853,8 @@ def _all_facts():
     _walk_sourced((GENERAL_FOIL_ROLLING, GENERAL_DISAGREEMENTS, GENERAL_NOT_FOUND,
                    MINOR_PRODUCTS, MINOR_DISAGREEMENTS, FOIL_DEFECTS, STRIP_DEFECTS,
                    GENERAL_STANDARDS, tuple(GRADE_TABLES.values()), GRADE_GENERAL,
-                   GRADE_NOT_FOUND, TEMPER_TABLE, STRENGTH_AFTER_HEATING), out)
+                   GRADE_NOT_FOUND, TEMPER_TABLE, STRENGTH_AFTER_HEATING, TEMPERATURE_MAP,
+                   PT_SURFACE, PT_ALL_STATEMENTS, PT_NOT_FOUND), out)
     unique, seen = [], set()
     for f in out:
         if id(f) not in seen:
@@ -3442,6 +3907,7 @@ def catalogue_dict():
             'strength_after_heating_note': HEATING_NOTE.to_dict(),
             'gauges_in_use': _json(GAUGES_IN_USE), 'cell_case_stock': CELL_CASE_STOCK.to_dict(),
             'disagreements': _json(GRADE_DISAGREEMENTS), 'not_found': _json(GRADE_NOT_FOUND)},
+        'process_temperatures': process_temperature_reference(),
     })
 
 
@@ -4168,6 +4634,175 @@ def format_grade_options(product_id, final_gauge_m, *, min_tensile_strength_pa=N
     return '\n'.join(L) + '\n'
 
 
+# --------------------------------------------------------------------------- check_thermal
+THERMAL_COLLECTOR_PRODUCTS = ('battery_collector_foil', 'battery_thick_collector_foil',
+                              'battery_carbon_coated_base_foil')
+OIL_STANDS = ('roughing', 'intermediate', 'finishing')
+SHEET_FAMILIES = ('heat_exchanger', 'litho', 'other_strip')
+
+
+def process_temperature_reference():
+    """The process-temperature reference as one JSON-serialisable dict."""
+    return _checked({
+        'status': STATUS, 'not_a_model': PT_NOT_A_MODEL,
+        'headline_findings': _json(PT_HEADLINE), 'temperature_map': _json(TEMPERATURE_MAP),
+        'rise_per_pass': _json(PT_RISE_PER_PASS), 'oil_properties': _json(OIL_PROPERTIES),
+        'oil_what_goes_wrong': _json(OIL_WHAT_GOES_WRONG), 'material': _json(PT_MATERIAL),
+        'roll_wear': _json(PT_ROLL_WEAR), 'surface_finish': _json(PT_SURFACE),
+        'spray_overlap': SPRAY_OVERLAP.to_dict(), 'surface_note': PT_SURFACE_NOTE.to_dict(),
+        'simulation_numbers': _json(PT_SIMULATION),
+        'disagreements': _json(PT_DISAGREEMENTS), 'not_found': _json(PT_NOT_FOUND),
+        'check_thermal_items': list(THERMAL_ITEMS)})
+
+
+THERMAL_ITEMS = ('coil_temperature_entering_final_pass', 'coil_temperature_leaving_final_pass',
+                 'oil_supply_temperature', 'oil_viscosity_40c', 'strip_heat_fraction',
+                 'spray_heat_transfer_coefficient', 'thermal_crown', 'stripe_height_on_diameter',
+                 'bite_contact_conductance')
+
+
+def _limit_finding(item, value, unit, limit, basis, note=''):
+    v = ('ABOVE_PUBLISHED_LIMIT' if value > limit.high * (1 + _TOL) + 1e-15
+         else 'WITHIN_PUBLISHED_RANGE')
+    return _finding(item, value, unit, limit, basis + ' (a published limit)', verdict=v,
+                    note=note or limit.note)
+
+
+def format_temperature_map():
+    """Plain-text temperature map (what ``--temperatures`` prints)."""
+    L = ['Process temperatures in foil rolling (literature; ' + PT_NOT_A_MODEL + ')']
+    for r in TEMPERATURE_MAP:
+        L.append(f'- {r.name}: {r.typical.text} [{", ".join(r.typical.sources)}]')
+        if r.limit is not None:
+            L.append(f'    limit: {r.limit.text} [{", ".join(r.limit.sources)}]')
+        L.append(f'    reason: {r.reason.text}')
+    return '\n'.join(L) + '\n'
+
+
+def check_thermal(product_id, *, coil_temperature_entering_final_pass_c=None,
+                  coil_temperature_leaving_final_pass_c=None, oil_supply_temperature_c=None,
+                  stand='finishing', oil_viscosity_40c_m2_s=None, strip_heat_fraction=None,
+                  spray_htc_w_m2k=None, thermal_crown_m=None, stripe_height_diameter_m=None,
+                  bite_contact_conductance_w_m2k=None):
+    """Compare supplied process temperatures and thermal inputs with the literature.
+
+    One finding per supplied value, shaped as in ``check_pass``; verdicts as there plus
+    ``ABOVE_PUBLISHED_LIMIT`` for a published limit. Temperatures in °C, other values SI.
+    Battery coil limits [PT-T1, PT-T2] apply only to the collector-type battery products
+    (``THERMAL_COLLECTOR_PRODUCTS``); the basis says which range was used. Literature
+    comparison only: nothing here is a model or a validation.
+    """
+    p = product(product_id)
+    if stand not in OIL_STANDS:
+        raise ValueError(f'stand must be one of {OIL_STANDS}')
+    vals = {}
+    for name, v, kw in (
+            ('coil_temperature_entering_final_pass_c', coil_temperature_entering_final_pass_c,
+             dict(hi=700)),
+            ('coil_temperature_leaving_final_pass_c', coil_temperature_leaving_final_pass_c,
+             dict(hi=700)),
+            ('oil_supply_temperature_c', oil_supply_temperature_c, dict(hi=400)),
+            ('oil_viscosity_40c_m2_s', oil_viscosity_40c_m2_s, dict(positive=True, hi=1e-3)),
+            ('strip_heat_fraction', strip_heat_fraction, dict(hi=1.0)),
+            ('spray_htc_w_m2k', spray_htc_w_m2k, dict(positive=True, hi=1e7)),
+            ('thermal_crown_m', thermal_crown_m, dict(hi=0.01)),
+            ('stripe_height_diameter_m', stripe_height_diameter_m, dict(hi=0.01)),
+            ('bite_contact_conductance_w_m2k', bite_contact_conductance_w_m2k,
+             dict(positive=True, hi=1e9))):
+        if v is not None:
+            vals[name] = _num(name, v, **kw)
+    if 'strip_heat_fraction' in vals and vals['strip_heat_fraction'] < 0:
+        raise ValueError('strip_heat_fraction must be >= 0')
+    collector = p.id in THERMAL_COLLECTOR_PRODUCTS
+    battery = p.id in GRADE_TABLES
+    out = []
+    v = vals.get('coil_temperature_entering_final_pass_c')
+    if v is not None:
+        if collector:
+            out.append(_limit_finding('coil_temperature_entering_final_pass', v, 'degC',
+                                      COIL_IN_FINAL_LIMIT, 'battery collector foil: coil '
+                                      'entering the final pass ≤75 °C [PT-T1]'))
+        else:
+            out.append(_none_finding('coil_temperature_entering_final_pass', v, 'degC',
+                                     'no entry-coil temperature published for this product (the '
+                                     '≤75 °C limit is for battery collector foil)'))
+    v = vals.get('coil_temperature_leaving_final_pass_c')
+    if v is not None:
+        if collector:
+            f = _limit_finding('coil_temperature_leaving_final_pass', v, 'degC',
+                               COIL_OUT_FINAL_LIMIT, 'battery collector foil: coil off the final '
+                               'pass ≤80 °C [PT-T1, PT-T2]')
+            if v > COIL_OUT_FINAL_LIMIT_LOOSE.high:
+                f['note'] = ('above 90 °C, the looser limit: elongation decays with time for '
+                             'weeks (a 98 °C coil for over 60 days) [PT-T1, PT-T2]')
+            out.append(f)
+        elif p.family in SHEET_FAMILIES:
+            f = _finding('coil_temperature_leaving_final_pass', v, 'degC', COIL_OUT_SHEET_TROUBLE,
+                         'sheet gauge: no stated limit; trouble above 150–160 °C [PT-T3]',
+                         verdict=('ABOVE_PUBLISHED_LIMIT' if v > COIL_OUT_SHEET_TROUBLE.low
+                                  else 'WITHIN_PUBLISHED_RANGE'))
+            out.append(f)
+        else:
+            out.append(_none_finding('coil_temperature_leaving_final_pass', v, 'degC',
+                                     'no coil temperature limit published for this product'
+                                     + (' (pouch and tab foil: none found; the 80 °C limit is '
+                                        'for collector foil)' if battery else '')))
+    v = vals.get('oil_supply_temperature_c')
+    if v is not None:
+        rng = {'roughing': OIL_ROUGHING, 'intermediate': OIL_INTERMEDIATE,
+               'finishing': OIL_FINISHING_BATTERY if battery else OIL_FINISHING}[stand]
+        basis = (f'oil supply, {stand}'
+                 + (', battery foil [PT-T1, PT-T6]' if stand == 'finishing' and battery else ''))
+        if v > OIL_CAP_FOIL.high:
+            out.append(_finding('oil_supply_temperature', v, 'degC', OIL_CAP_FOIL,
+                                'above the 71 °C legal cap for foil mills in one US rule (vapour '
+                                'emissions) [PT-T13]', verdict='ABOVE_PUBLISHED_LIMIT',
+                                extra_sources=(rng,)))
+        else:
+            f = _finding('oil_supply_temperature', v, 'degC', rng, basis)
+            if v < OIL_WINDOW_PLANT.low:
+                f['note'] = ('below 38 °C: ladder defect at one plant (window 38–55 °C) '
+                             '[PT-T3]; oil too cold gives a thick film and stain after anneal '
+                             '[PT-T8]')
+            out.append(f)
+    v = vals.get('oil_viscosity_40c_m2_s')
+    if v is not None:
+        out.append(_finding('oil_viscosity_40c', v, 'm^2/s', VISC_40C,
+                            'rolling-oil kinematic viscosity at 40 °C'))
+    v = vals.get('strip_heat_fraction')
+    if v is not None:
+        out.append(_finding('strip_heat_fraction', v, 'fraction', HEAT_STRIP_SHARE,
+                            'strip share of the heat against the only measured foil-mill '
+                            'partition (abstract only; a net balance, not necessarily the split '
+                            'inside the bite) [PT-T16]'))
+    v = vals.get('spray_htc_w_m2k')
+    if v is not None:
+        f = _finding('spray_heat_transfer_coefficient', v, 'W/m^2K', SPRAY_ROLL,
+                     'kerosene spray on a work roll, SIMULATED 2.5–4.3 kW/m²K [PT-T18]; no '
+                     'measured value on a roll was found')
+        f['note'] = ('wider published values: 4.65–5.5 kW/m²K in a cold-mill model example '
+                     '(coolant not named) [PT-T20]; about 5–13 kW/m²K computed from a plate test '
+                     '[PT-T19]')
+        out.append(f)
+    v = vals.get('thermal_crown_m')
+    if v is not None:
+        out.append(_limit_finding('thermal_crown', v, 'm', THERMAL_CROWN_MAX,
+                                  'foil-mill thermal crown, 30 µm maximum from measured values '
+                                  '[PT-T25]; diameter or radius not stated'))
+    v = vals.get('stripe_height_diameter_m')
+    if v is not None:
+        out.append(_finding('stripe_height_on_diameter', v, 'm', ZONE_AUTHORITY,
+                            'against the simulated zone-cooling authority, ±3.6 to ±4.2 µm on '
+                            'diameter 20 revolutions after a zone change [PT-T18]'))
+    v = vals.get('bite_contact_conductance_w_m2k')
+    if v is not None:
+        f = _finding('bite_contact_conductance', v, 'W/m^2K', CONTACT_MODELS,
+                     'bite contact conductance used in aluminium models, 25–40 kW/m²K [PT-T34]')
+        f['note'] = 'measured values span 7–800 kW/m²K [PT-T34]'
+        out.append(f)
+    return _checked(out)
+
+
 # --------------------------------------------------------------------------- nearest schedules
 def nearest_published_schedules(product_id, entry_thickness_m, exit_thickness_m, n=3):
     """The published single passes of a product closest in log-gauge to a given pass.
@@ -4658,6 +5293,49 @@ def _grades_md():
     return L
 
 
+def _pt_md():
+    L = ['## Process temperatures in foil rolling', '',
+         'From the third research pass (sources `PT-`): temperatures of strip, oil and rolls and '
+         'their effects on properties, roll wear and surface finish. ' + PT_NOT_A_MODEL
+         + ' `check_thermal` compares supplied values with the ranges below.', '',
+         '### Temperature map', '',
+         '| Temperature | Typical range | Limit | Reason given |', '|---|---|---|---|']
+    for r in TEMPERATURE_MAP:
+        lim = f'{r.limit.text}{_cite(r.limit)}' if r.limit else '—'
+        L.append(f'| {_esc(r.name)} | {_esc(r.typical.text)}{_cite(r.typical)} | {_esc(lim)} | '
+                 f'{_esc(r.reason.text)}{_cite(r.reason)} |')
+    L += ['', '### Four findings first', '']
+    L += [f'{i}. {s.text}{_cite(s)}' for i, s in enumerate(PT_HEADLINE, 1)]
+    L += ['', '### Temperature rise per pass', '']
+    L += _stmt_lines(PT_RISE_PER_PASS)
+    L += ['', '### Rolling oil', '']
+    L += _stmt_lines(OIL_PROPERTIES)
+    L += ['', 'What goes wrong:', '']
+    L += _stmt_lines(OIL_WHAT_GOES_WRONG)
+    L += ['', '### Temperature and material properties', '']
+    L += _stmt_lines(PT_MATERIAL)
+    L += ['', '### Temperature and roll wear / roll surface', '',
+          f'{PT_NOT_A_MODEL}', '']
+    L += _stmt_lines(PT_ROLL_WEAR)
+    L += ['- Roll change and regrind interval for foil finishing rolls: not found.', '',
+          '### Temperature and surface finish', '', PT_NOT_A_MODEL, '',
+          '| Defect or property | Thermal cause | Magnitude given | Sources |',
+          '|---|---|---|---|']
+    L += [f'| {_esc(d.name)} | {_esc(d.thermal_cause)} | {_esc(d.magnitude)} | '
+          f'{", ".join(d.sources)} |' for d in PT_SURFACE]
+    L += ['', f'- {SPRAY_OVERLAP.text}{_cite(SPRAY_OVERLAP)}',
+          f'- {PT_SURFACE_NOTE.text}{_cite(PT_SURFACE_NOTE)}', '',
+          '### Numbers for simulation', '']
+    L += _stmt_lines(PT_SIMULATION)
+    L += ['', f'- Axial decay time computed here: {_rng_cell(AXIAL_TAU)}. {AXIAL_TAU.note}.',
+          '', '### Disagreements (process temperatures)', '']
+    L += _stmt_lines(PT_DISAGREEMENTS)
+    L += ['', '### Not found (process temperatures)', '']
+    L += _stmt_lines(PT_NOT_FOUND)
+    L.append('')
+    return L
+
+
 def render_reference_markdown():
     """The reference document (deterministic; ``docs/thin-gauge-products.md`` must equal it)."""
     L = ['# Thin-gauge aluminium products: literature reference', '',
@@ -4666,8 +5344,9 @@ def render_reference_markdown():
          '## What this is and is not', '',
          'This is a literature survey of thin-gauge aluminium products: gauges, alloys, tempers, '
          'properties, rolling routes, quality requirements and named band or streak defects. '
-         'Every value is quoted from four research reports (battery and electronics foil, a '
-         'second battery report on alloy and temper by gauge, packaging and household foil, '
+         'Every value is quoted from five research reports (battery and electronics foil, a '
+         'second battery report on alloy and temper by gauge, process temperatures, packaging '
+         'and household foil, '
          'heat-exchanger stock, litho and other strip) and '
          'carries its source ids. It is not a validation: nothing here was measured on a plant, '
          'vendor and trade pages are low-confidence, and several standards were read from '
@@ -4679,7 +5358,7 @@ def render_reference_markdown():
          'are kept as ranges, and the reports\' disagreements and "not found" lists are kept '
          'below.', '',
          'Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by '
-         'gauge), `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read '
+         'gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read '
          'status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. '
          'Read-status legend:', '',
          '| Read status | Meaning | Report tags mapped onto it |', '|---|---|---|',
@@ -4708,6 +5387,7 @@ def render_reference_markdown():
           f'{TENSION_LINES.text}{_cite(TENSION_LINES)}', '']
     L += _general_md()
     L += _grades_md()
+    L += _pt_md()
     for n, p in enumerate(_PRODUCT_LIST, 1):
         L += _product_md(p, n)
     L += ['## Minor products (one-liners, low confidence)', '']
@@ -4744,6 +5424,8 @@ def main(argv=None):
     g.add_argument('--list', action='store_true', help='list product ids and names')
     g.add_argument('--json', action='store_true', help='print the catalogue as JSON (with '
                    '--grades: the options and proposals as JSON)')
+    g.add_argument('--temperatures', action='store_true',
+                   help='print the process-temperature map (literature, PT- sources)')
     g.add_argument('--grades', metavar='PRODUCT_ID', help='alloy and temper options and the two '
                    'literature proposals at --gauge-um')
     parser.add_argument('--gauge-um', type=float, help='final gauge in µm (with --grades)')
@@ -4776,6 +5458,9 @@ def main(argv=None):
                                                       surface=args.surface))
         except ValueError as exc:
             parser.error(str(exc))
+        return 0
+    if args.temperatures:
+        sys.stdout.write(format_temperature_map())
         return 0
     if args.gauge_um is not None or args.min_strength_mpa is not None or args.surface:
         parser.error('--gauge-um, --min-strength-mpa and --surface go with --grades')

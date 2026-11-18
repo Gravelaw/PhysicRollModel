@@ -58,7 +58,7 @@ class IntegrityTests(unittest.TestCase):
     def test_sources_have_urls_and_valid_status(self):
         for sid, s in sources().items():
             self.assertEqual(sid, s.id)
-            self.assertRegex(sid, r'^((BF|PK|HX)-S\d+b?|BG-G\d+)$')
+            self.assertRegex(sid, r'^((BF|PK|HX)-S\d+b?|BG-G\d+|PT-T\d+)$')
             self.assertTrue(s.urls)
             for u in s.urls:
                 self.assertRegex(u, r'^https?://\S+$')
