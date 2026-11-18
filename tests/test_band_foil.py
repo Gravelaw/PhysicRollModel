@@ -804,13 +804,28 @@ class FoilDemoTests(unittest.TestCase):
         demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
         self.assertTrue(demo['synthetic'])
         self.assertIn('GENERATED FROM THE MODEL', demo['provenance'])
-        red = [(x['entry_thickness_m'] - x['exit_thickness_m']) / x['entry_thickness_m']
-               for x in demo['schedule']]
-        self.assertTrue(all(x <= 0.5 for x in red))
+        # plant route (plant statements): 50 um input, two single-sheet passes, final
+        # 17-19 um (F2 at 18 um), thinnest 12 um (ALT, alternative final pass, ~51 %)
+        sched = {x['label'].split()[0]: x for x in demo['schedule']}
+        self.assertEqual(list(sched), ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT'])
+        self.assertAlmostEqual(sched['F1']['entry_thickness_m'], 50e-6)
+        self.assertAlmostEqual(sched['F1']['exit_thickness_m'], 30e-6)
+        self.assertAlmostEqual(sched['F2']['exit_thickness_m'], 18e-6)
+        self.assertAlmostEqual(sched['ALT']['exit_thickness_m'], 12e-6)
+        self.assertEqual(demo['pass']['entry_thickness_m'], 50e-6)   # case pass = F1
+        self.assertEqual(demo['pass']['exit_thickness_m'], 30e-6)
+        red = {k: (x['entry_thickness_m'] - x['exit_thickness_m']) / x['entry_thickness_m']
+               for k, x in sched.items()}
+        self.assertTrue(all(v <= 0.5 for k, v in red.items() if k != 'ALT'))
+        self.assertGreater(red['ALT'], 0.5)          # the thinnest route exceeds the limit
+        for k in ('S1', 'S2', 'S3'):
+            self.assertIn('assumed', sched[k]['label'])
+        self.assertIn('assumed', sched['ALT']['label'])
+        self.assertIn('plant statements', demo['provenance'])
         # coarse thermal numerics, final pass only, no AGC / drive (they do not enter the
         # lengthwise evidence) to keep the module fast
         demo['width_model']['numerics'] = dict(COARSE)
-        demo['schedule'] = demo['schedule'][-2:]   # case pass and the 18 um final pass
+        demo['schedule'] = demo['schedule'][-3:]   # case pass F1, final F2 and ALT
         demo['gauge_control'] = demo['drive'] = None
         r = diagnose(demo)
         self.assertEqual(r['leading_hypotheses'], ['nozzle_thermal_stripe'])
@@ -830,11 +845,15 @@ class FoilDemoTests(unittest.TestCase):
         lines = ' '.join(r['recommended_next_measurements'])
         self.assertIn('offline sag', lines)
         self.assertTrue(math.isfinite(fr['bite']['separating_force_per_width_n_m']))
-        # the 35 -> 18 um final pass is below the roll-bite floor: rows rejected with reason
+        # F2 (30 -> 18 um) and ALT (24.5 -> 12 um) are below the roll-bite floor: rows
+        # rejected with the reason, both listed in the foil block
         self.assertIn(BITE_FLOOR_FLAG, r['flags'])
-        last = r['schedule_sweep']['rows'][-1]
-        self.assertIn('20 um floor', last['rejected'])
-        self.assertIn('20 um floor', r['width']['gauge_trend']['rows'][-1]['rejected'])
+        for row in r['schedule_sweep']['rows'][-2:] + r['width']['gauge_trend']['rows'][-2:]:
+            self.assertIn('20 um floor', row['rejected'])
+        self.assertNotIn('rejected', r['schedule_sweep']['rows'][0])
+        self.assertEqual(r['schedule_sweep']['rows'][0]['bite_model'], 'experimental_mattress')
+        self.assertEqual([x['exit_thickness_m'] for x in
+                          r['foil_regime']['below_bite_model_floor']['passes']], [18e-6, 12e-6])
         self.assertIn('Not assessable', r['width']['gauge_trend']['text'])
         fl = fr['below_bite_model_floor']
         self.assertFalse(fl['case_pass_below_floor'])
@@ -852,7 +871,8 @@ class FoilDemoTests(unittest.TestCase):
         # in the mill) it runs AGAINST the plant observation: the exit-tension feedback grows
         # as gauge falls, so the same roll stripe needs a taller height to buckle on the
         # thinner pass. Only the direction is pinned, not the numbers. The whole schedule
-        # (P1-P3 assessable, P4 below the bite floor) is run with coarse thermal numerics and
+        # (S1-S3 and the plant's F1 assessable; F2 and ALT below the bite floor) is run with
+        # coarse thermal numerics and
         # cells 64 (the mattress bite uses its own minimum) and without AGC / drive, to keep
         # the module fast; the published demo result uses the scenario's own numerics.
         demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
@@ -861,9 +881,9 @@ class FoilDemoTests(unittest.TestCase):
         demo['gauge_control'] = demo['drive'] = None
         r = diagnose(demo)
         rows = r['width']['gauge_trend']['rows']
-        self.assertEqual(len(rows), 4)
+        self.assertEqual(len(rows), 6)
         ok = [x for x in rows if 'rejected' not in x]
-        self.assertEqual([x['label'][:2] for x in ok], ['P1', 'P2', 'P3'])
+        self.assertEqual([x['label'].split()[0] for x in ok], ['S1', 'S2', 'S3', 'F1'])
         self.assertTrue(all(a['exit_thickness_m'] > b['exit_thickness_m']
                             for a, b in zip(ok, ok[1:])))
 
@@ -876,15 +896,19 @@ class FoilDemoTests(unittest.TestCase):
             vals = [abs(x[key]) for x in ok]
             self.assertTrue(all(sign * (b - a) > 0 for a, b in zip(vals, vals[1:])),
                             (key, vals))
-        last = rows[-1]
-        self.assertTrue(last['label'].startswith('P4'))
-        self.assertAlmostEqual(last['exit_thickness_m'], 18e-6)
-        self.assertIn('20 um floor', last['rejected'])
+        for row, h1 in zip(rows[-2:], (18e-6, 12e-6)):
+            self.assertAlmostEqual(row['exit_thickness_m'], h1)
+            self.assertIn('20 um floor', row['rejected'])
+            # bite-free columns still computed below the floor, still falling with gauge
+            self.assertLess(row['critical_ridge_height_m'], ok[-1]['critical_ridge_height_m'])
+            self.assertLess(abs(row['trough_critical_lateral_stress_pa']),
+                            abs(ok[-1]['trough_critical_lateral_stress_pa']))
+        self.assertLess(rows[-1]['critical_ridge_height_m'], rows[-2]['critical_ridge_height_m'])
         # the report's neutral heading and generated direction sentence say the same
         html = render_band_report(r)
         self.assertIn('<h2>How the result changes with gauge</h2>', html)
         self.assertIn('thinner is less sensitive for this mechanism in the model', html)
-        self.assertIn('Not assessable (excluded from the direction): P4', html)
+        self.assertIn('Not assessable (excluded from the direction): F2', html)
         self.assertNotIn('Why thin gauge is worse', html)
 
 

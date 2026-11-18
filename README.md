@@ -250,9 +250,12 @@ observations, not by probability.
 cannot assess there. It warns that the mill is in or near closed-gap rolling, which it does
 not model; it has no roll bite below 20 um exit gauge or above 50 % reduction, and none for a
 doubled pass; between 20 and about 60 um the bite comes from an experimental model (order of
-magnitude only). It adds six foil observations and a rule-based tension-line hypothesis. In
-its foil demo a cooling stripe becomes harder, not easier, to see in the mill as the gauge
-thins; see section 3 of the doc. Four synthetic demos:
+magnitude only). It adds six foil observations and a rule-based tension-line hypothesis. The
+foil demo follows the plant's route (50 um input, two single-sheet passes, final 17-19 um,
+down to 12 um; intermediates assumed): the first pass to about 30 um gets an experimental
+bite, the final pass is below the 20 um floor and gets only the bite-free screens. In the demo
+a cooling stripe becomes harder, not easier, to see in the mill as the gauge thins; see
+section 3 of the doc. Four synthetic demos:
 
 ```
 python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
