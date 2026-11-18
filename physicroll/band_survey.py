@@ -108,6 +108,12 @@ LIMITATIONS = (
 )
 
 
+USER_MILL_LIMITATION = (
+    'Mill from the user\'s case file(s): its machine keys are used as entered and not verified '
+    'by the tool; product and pass values remain literature values or stated assumptions '
+    'unless overridden.')
+
+
 # --------------------------------------------------------------------------- helpers
 def _mid(r):
     """Middle of a catalogue Range (arithmetic), or its one published bound."""
@@ -270,6 +276,8 @@ def survey_flow_stress(p):
 
 
 def survey_speed(p, doubled, mill):
+    """(speed, used, assumed); ``mill`` is a ``_Mill`` (its default speed when none is
+    published)."""
     fp = p.final_pass
     for rng, what in ((fp.doubled_speed_m_s if fp is not None and doubled else None,
                        'published doubled final-pass speed'),
@@ -281,17 +289,80 @@ def survey_speed(p, doubled, mill):
             return v, [_used('exit speed', v, 'm/s',
                              f'middle of the {what} span {rng.low * 60:.4g}-{rng.high * 60:.4g} '
                              'm/min', rng.sources, rng.effective_read_status())], []
-    v = MILLS[mill]['default_speed_m_s']
+    v = mill.default_speed_m_s
     return v, [], [_assumed('exit speed', v, 'm/s',
                             'no published speed for this product: ' +
-                            MILLS[mill]['default_speed_basis'])]
+                            mill.default_speed_basis)]
 
 
 # --------------------------------------------------------------------------- mill models
-def _load_mill(kind):
-    case = bd.load_case(SCENARIOS / MILLS[kind]['scenario'])
+# Which case keys describe the MACHINE (stand and line) and which the PRODUCT / pass or the
+# observations, decided from how the engine uses them. A mill file supplies the machine keys;
+# the survey supplies the product keys (catalogue, assumptions, overrides).
+MACHINE_KEYS = {
+    'pass': ('width_m', 'work_roll_radius_m', 'friction_coefficient'),
+    'stand': 'all', 'spans': 'all', 'kinematics': 'all', 'lubrication': 'all',
+    'coolant': ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_rad',
+                'offset_angle_rad', 'roll_expansion_coefficient_per_k',
+                'assumed_excess_temperature_k'),
+    'tribology': 'all', 'gauge_control': 'all', 'drive': 'all',
+    'model_options': ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
+                      'bite_model'),
+    'width_model': ('roll', 'spray_header', 'coolant_temperature_k', 'strip_centre_m',
+                    'roll_heat_fraction_per_roll', 'numerics', 'rolls_carrying_stripe',
+                    'shape_disturbing_coefficient', 'heredity_coefficient', 'coil',
+                    'grinding', 'cooling_zone_pitch_m', 'deflector_roll_radius_m'),
+}
+PRODUCT_KEYS = {
+    'pass': ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
+             'entry_tension_pa', 'exit_tension_pa', 'exit_speed_m_s'),
+    'material': 'all', 'hardening': 'all', 'schedule': 'all', 'incoming_variation': 'all',
+    'model_options': ('bite_response_override',),
+    'coolant': ('blocked_nozzle_indices',),
+    'width_model': ('bite_heat_per_width_w_m', 'blocked_nozzle_indices', 'nozzle_levels',
+                    'events', 'gap_crown_m', 'entry_crown_m', 'incoming_ridges',
+                    'previous_strip_widths_m', 'lateral_compressive_stress_pa',
+                    'shape_inputs'),
+    'observation': 'all', 'name': 'all', 'provenance': 'all', 'notes': 'all',
+}
+_CASE_SPECIFIC_WIDTH = PRODUCT_KEYS['width_model']
+
+
+def machine_keys_taken(case):
+    """Dotted machine keys a mill case supplies (sections present in the file)."""
+    out = []
+    for sec, ks in MACHINE_KEYS.items():
+        if case.get(sec) is None:
+            continue
+        if ks == 'all':
+            out.append(sec)
+        else:
+            out += [f'{sec}.{k}' for k in ks if k in case[sec]]
+    return out
+
+
+def _machine_case(case, where):
+    """The mill case with the product / case-specific keys reset (validated case dict)."""
+    if case.get('case_schema') != bd.CASE_SCHEMA_V2:
+        raise ValueError(f'{where}: the mill file must be a {bd.CASE_SCHEMA_V2} case')
+    if case.get('width_model') is None:
+        raise ValueError(f'{where}: the mill file needs a width_model (roll, spray header, '
+                         'coil and deflector of the line)')
+    if case['model_options']['bite_response_override'] is not None:
+        raise ValueError(f'{where}: model_options.bite_response_override is a pass-specific '
+                         'bite and cannot describe a mill; set it to null')
+    c = copy.deepcopy(case)
+    for k in _CASE_SPECIFIC_WIDTH:
+        c['width_model'][k] = copy.deepcopy(bw.WIDTH_DEFAULTS[k])
+    if c.get('coolant') is not None:
+        c['coolant']['blocked_nozzle_indices'] = []
+    c['material']['youngs_modulus_pa'] = ss.ALUMINIUM_E_PA
+    return c
+
+
+def _describe(case, kind, name, source, user):
     p, st, sp, w = case['pass'], case['stand'], case['spans'], case['width_model']
-    desc = {'kind': kind, 'name': MILLS[kind]['name'], 'scenario': MILLS[kind]['scenario'],
+    desc = {'kind': kind, 'name': name, 'scenario': source,
             'work_roll_radius_m': p['work_roll_radius_m'], 'strip_width_m': p['width_m'],
             'backup_roll_diameter_m': case['kinematics']['backup_roll_diameter_m'],
             'work_roll_mass_kg': st['work_roll_mass_kg'],
@@ -301,22 +372,60 @@ def _load_mill(kind):
             'entry_span_length_m': sp['entry_span_length_m'],
             'exit_span_length_m': sp['exit_span_length_m'],
             'deflector_roll_radius_m': w['deflector_roll_radius_m'],
-            'coil': dict(w['coil']), 'barrel_length_m': w['roll']['barrel_length_m'],
+            'coil': None if w['coil'] is None else dict(w['coil']),
+            'barrel_length_m': w['roll']['barrel_length_m'],
             'bite_model': case['model_options']['bite_model'],
             'bite_damping_transit_fraction': case['model_options'][
                 'bite_damping_transit_fraction'],
             'span_wave_limit_hz': bd._span_wave_limit_hz(case)}
-    return case, desc
+    if user:
+        # keys only for a user-supplied mill, so the default survey keeps its exact content
+        desc.update(source='user mill file', file=source,
+                    keys_taken=machine_keys_taken(case),
+                    keys_not_taken=sorted(PRODUCT_KEYS),
+                    friction_coefficient=p['friction_coefficient'],
+                    default_speed_m_s=p['exit_speed_m_s'])
+    return desc
+
+
+def load_mill_file(path, kind):
+    """Validated machine case and description from a user's v2 case file."""
+    path = Path(path)
+    try:
+        case = bd.load_case(path)
+    except (ValueError, OSError) as exc:
+        raise ValueError(f'mill file {path}: {exc}') from exc
+    case = _machine_case(case, f'mill file {path}')
+    return case, _describe(case, kind, f'user mill from {path.name}', path.name, True)
+
+
+def _load_mill(kind):
+    case = _machine_case(bd.load_case(SCENARIOS / MILLS[kind]['scenario']),
+                         MILLS[kind]['scenario'])
+    return case, _describe(case, kind, MILLS[kind]['name'], MILLS[kind]['scenario'], False)
 
 
 class _Mill:
-    def __init__(self, kind):
+    def __init__(self, kind, loaded=None):
         self.kind = kind
-        self.case, self.desc = _load_mill(kind)
+        self.user = loaded is not None
+        self.case, self.desc = loaded if loaded is not None else _load_mill(kind)
         self.cache = bd._BiteCache(self.case)
         self.stand = bd._stand(self.case)
         self.spans = bd._spans(self.case)
         self.beta = self.case['model_options']['bite_damping_transit_fraction']
+        if self.user:
+            self.friction = self.case['pass']['friction_coefficient']
+            self.friction_basis = (f'from the mill file {self.desc["file"]} '
+                                   '(pass.friction_coefficient)')
+            self.default_speed_m_s = self.case['pass']['exit_speed_m_s']
+            self.default_speed_basis = (f'the mill file\'s pass speed '
+                                        f'({self.default_speed_m_s * 60:.4g} m/min)')
+        else:
+            self.friction = FRICTION
+            self.friction_basis = 'the demos\' supplied 0.03 (no catalogue value)'
+            self.default_speed_m_s = MILLS[kind]['default_speed_m_s']
+            self.default_speed_basis = MILLS[kind]['default_speed_basis']
         w = self.case['width_model']
         length = w['roll']['barrel_length_m']
         n = max(4, int(round(length / bw.ONSET_GRID_M)))
@@ -326,25 +435,30 @@ class _Mill:
         # the grid point nearest the strip centre carries the stripe peak
         self.centre = min(self.z, key=lambda x: abs(x - self.centre))
 
-    def case_for(self, row, sigma):
+    def case_for(self, row, sigma, width=None):
         c = copy.deepcopy(self.case)
         c['pass'].update({k: row[k] for k in (
             'entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
             'friction_coefficient', 'entry_tension_pa', 'exit_tension_pa', 'exit_speed_m_s')})
+        if width is not None:
+            c['pass']['width_m'] = width
         c['material']['yield_stress_pa'] = sigma
         c['schedule'] = [row]
         return c
 
 
-def bite_free(mill, h1, sigma, exit_tension):
+def bite_free(mill, h1, sigma, exit_tension, width=None):
     """Bite-free thresholds of one sheet (the engine's strip_shape calls)."""
     d = mill.desc
+    width = d['strip_width_m'] if width is None else width
     out = {}
-    win = ss.shohet_townsend_window(h1, d['strip_width_m'])
+    win = ss.shohet_townsend_window(h1, width)
     out['dead_band_half_width_i_units'] = (win['upper_bound_i_units']
                                            - win['lower_bound_i_units']) / 2
     coil = d['coil']
     try:
+        if coil is None:
+            raise ValueError('the mill has no width_model.coil')
         cb = ss.coil_ridge_buildup(0.0, h1, coil['inner_radius_m'], coil['outer_radius_m'],
                                    sigma, coil['winding_tension_pa'], ss.ALUMINIUM_E_PA,
                                    coil['compaction_factor'] or ss.DEFAULT_COMPACTION_FACTOR)
@@ -352,7 +466,7 @@ def bite_free(mill, h1, sigma, exit_tension):
     except ValueError as exc:
         out['critical_ridge_height_m'] = None
         out['critical_ridge_error'] = str(exc)
-    tr = ss.tension_trough_screen(h1, d['exit_span_length_m'], exit_tension, d['strip_width_m'],
+    tr = ss.tension_trough_screen(h1, d['exit_span_length_m'], exit_tension, width,
                                   roller_radius_m=d['deflector_roll_radius_m'],
                                   youngs_modulus_pa=ss.ALUMINIUM_E_PA,
                                   poisson_ratio=bw.STRIP_POISSON_RATIO)
@@ -383,25 +497,119 @@ def _stripe(mill, case, bite, row):
 
 
 # --------------------------------------------------------------------------- one product
-def survey_row(p, mills, index):
+OVERRIDE_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa', 'exit_speed_m_s',
+                 'entry_tension_pa', 'exit_tension_pa', 'friction_coefficient', 'width_m',
+                 'doubled')
+_OVERRIDE_ITEMS = {   # override key -> provenance items it replaces
+    'entry_thickness_m': ('final pass gauges', 'exit gauge', 'reduction'),
+    'exit_thickness_m': ('final pass gauges', 'exit gauge', 'reduction'),
+    'mean_flow_stress_pa': ('flow stress',), 'exit_speed_m_s': ('exit speed',),
+    'entry_tension_pa': ('tensions',), 'exit_tension_pa': ('tensions',),
+    'friction_coefficient': ('friction',), 'width_m': (), 'doubled': ('rolling mode',)}
+_OVERRIDE_UNITS = {'entry_thickness_m': 'm', 'exit_thickness_m': 'm',
+                   'mean_flow_stress_pa': 'Pa', 'exit_speed_m_s': 'm/s',
+                   'entry_tension_pa': 'Pa', 'exit_tension_pa': 'Pa',
+                   'friction_coefficient': '', 'width_m': 'm', 'doubled': ''}
+
+
+def validate_overrides(raw, where='overrides'):
+    """Strict per-product overrides ``{product_id: {key: value}}`` of the survey pass."""
+    if not isinstance(raw, dict):
+        raise ValueError(f'{where} must be a JSON object {{product_id: {{key: value}}}}')
+    ids = bp.product_ids()
+    out = {}
+    for pid, ov in raw.items():
+        if pid not in ids:
+            raise ValueError(f'{where}: unknown product id {pid!r}; valid ids: {", ".join(ids)}')
+        if not isinstance(ov, dict) or not ov:
+            raise ValueError(f'{where}.{pid} must be a nonempty JSON object')
+        bad = [k for k in ov if k not in OVERRIDE_KEYS]
+        if bad:
+            raise ValueError(f'{where}.{pid}: unknown key(s) {", ".join(map(repr, bad))}; '
+                             f'allowed: {", ".join(OVERRIDE_KEYS)}')
+        clean = {}
+        for k, v in ov.items():
+            name = f'{where}.{pid}.{k}'
+            if k == 'doubled':
+                if not isinstance(v, bool):
+                    raise ValueError(f'{name} must be true or false')
+                clean[k] = v
+                continue
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                raise ValueError(f'{name} must be a finite number')
+            v = float(v)
+            if k == 'friction_coefficient':
+                if not 0 < v < 1:
+                    raise ValueError(f'{name} must be in (0, 1)')
+            elif k in ('entry_tension_pa', 'exit_tension_pa'):
+                if v < 0:
+                    raise ValueError(f'{name} must be >= 0')
+            elif v <= 0:
+                raise ValueError(f'{name} must be > 0')
+            clean[k] = v
+        out[pid] = clean
+    return out
+
+
+def load_overrides(path):
+    path = Path(path)
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'overrides file {path}: {exc}') from exc
+    return validate_overrides(raw, f'overrides file {path.name}')
+
+
+def survey_row(p, mills, index, override=None, override_source='overrides file'):
     sp = survey_pass(p)
     h0, h1, dbl = sp['entry_thickness_m'], sp['exit_thickness_m'], sp['doubled']
+    ov = override or {}
+    h0, h1 = ov.get('entry_thickness_m', h0), ov.get('exit_thickness_m', h1)
+    dbl = ov.get('doubled', dbl)
+    if not h1 < h0:
+        raise ValueError(f'{p.id}: the survey pass needs exit_thickness_m < entry_thickness_m '
+                         f'(got {h0:g} -> {h1:g} m after overrides)')
     kind = 'foil' if h1 < FOIL_MILL_MAX_EXIT_M else 'sheet'
     mill = mills[kind]
     sigma, temper, used_s, assumed_s = survey_flow_stress(p)
-    u, used_u, assumed_u = survey_speed(p, dbl, kind)
-    t_in, t_out = ENTRY_TENSION_FRACTION * sigma, EXIT_TENSION_FRACTION * sigma
+    u, used_u, assumed_u = survey_speed(p, dbl, mill)
+    sigma = ov.get('mean_flow_stress_pa', sigma)
+    u = ov.get('exit_speed_m_s', u)
+    t_in = ov.get('entry_tension_pa', ENTRY_TENSION_FRACTION * sigma)
+    t_out = ov.get('exit_tension_pa', EXIT_TENSION_FRACTION * sigma)
+    mu = ov.get('friction_coefficient', mill.friction)
+    width = ov.get('width_m')
     alloy = p.alloys[0].name
     assumed = sp['assumed'] + assumed_s + assumed_u + [
         _assumed('tensions', [t_in, t_out], 'Pa',
                  f'entry {ENTRY_TENSION_FRACTION:g} and exit {EXIT_TENSION_FRACTION:g} of the '
                  'flow stress [D, stated]'),
-        _assumed('friction', FRICTION, '', 'the demos\' supplied 0.03 (no catalogue value)'),
-        _assumed('mill', kind, '', mill.desc['name'] + ': the same synthetic mill for every '
-                 'product of this gauge class'),
+        _assumed('friction', mu, '', mill.friction_basis),
+        _assumed('mill', kind, '', mill.desc['name'] + (
+            ': the user\'s mill for every product of this gauge class' if mill.user else
+            ': the same synthetic mill for every product of this gauge class')),
         _assumed('alloy for the product check', alloy, '',
                  'first alloy listed for the product in the catalogue')]
     used = sp['used'] + used_s + used_u
+    user = []
+    if ov:
+        gone = {i for k in ov for i in _OVERRIDE_ITEMS[k]}
+        used = [x for x in used if x['item'] not in gone]
+        assumed = [x for x in assumed if x['item'] not in gone]
+        for k in OVERRIDE_KEYS:
+            if k in ov:
+                user.append({'item': k, 'value': ov[k], 'unit': _OVERRIDE_UNITS[k],
+                             'basis': f'user-supplied ({override_source})'})
+        for k, v in (('entry_thickness_m', h0), ('exit_thickness_m', h1)):
+            if k not in ov and gone & {'final pass gauges'}:
+                assumed.append(_assumed(k, v, 'm', 'kept from the survey rule while the '
+                                        'other gauge is user-supplied'))
+        if ('entry_tension_pa' in ov) != ('exit_tension_pa' in ov):
+            k = 'exit_tension_pa' if 'entry_tension_pa' in ov else 'entry_tension_pa'
+            assumed.append(_assumed(k, t_out if k == 'exit_tension_pa' else t_in, 'Pa',
+                                    'stated fraction of the flow stress (the other tension '
+                                    'is user-supplied)'))
     statuses = [x['read_status'] for x in used if x.get('read_status')]
     out = {'index': index, 'product_id': p.id, 'product_name': p.name, 'family': p.family,
            'mill': kind, 'label': f'{index} {p.id}',
@@ -409,18 +617,22 @@ def survey_row(p, mills, index):
            'reduction_fraction': 1 - h1 / h0, 'doubled': dbl,
            'rolling_mode_published': p.rolled_mode, 'gauge_basis': sp['gauge_basis'],
            'schedule': sp['schedule'], 'final_temper': temper, 'alloy_checked': alloy,
-           'mean_flow_stress_pa': sigma, 'flow_stress_assumed': bool(assumed_s),
+           'mean_flow_stress_pa': sigma,
+           'flow_stress_assumed': bool(assumed_s) and 'mean_flow_stress_pa' not in ov,
            'entry_tension_pa': t_in, 'exit_tension_pa': t_out, 'exit_speed_m_s': u,
-           'friction_coefficient': FRICTION,
+           'friction_coefficient': mu,
            'catalogue_values_used': used, 'assumed_values': assumed,
            'weakest_read_status': bp._weakest(statuses) if statuses else None,
            'vendor_level_input': any(s in ('vendor_or_trade_page', 'memory_unverified')
                                      for s in statuses),
            'closed_gap_likely': h1 < CLOSED_GAP_BELOW_M,
            'flags': []}
+    if user:
+        out['user_supplied_values'] = user
+    if width is not None:
+        out['strip_width_m'] = width
     if h1 < CLOSED_GAP_BELOW_M:
         out['flags'].append(bd.CLOSED_GAP_FLAG)
-    out.update(bite_free(mill, h1, sigma, t_out))
     out['named_defects'] = [{'name': d.name, 'sources': list(d.sources),
                              'read_status': bp._effective(d.sources, d.read_status)}
                             for d in p.named_defects]
@@ -431,6 +643,14 @@ def survey_row(p, mills, index):
                             for f in chk]
     out['product_check_outside'] = [f['item'] for f in chk if f['verdict'] in (
         'BELOW_PUBLISHED_RANGE', 'ABOVE_PUBLISHED_RANGE', 'INCONSISTENT_WITH_PUBLISHED_MODE')]
+    try:
+        bf = bite_free(mill, h1, sigma, t_out, width)
+    except ValueError as exc:
+        # the mill cannot take this pass (a domain guard): a rejected row, not a crash
+        out.update(bite_status='REJECTED', rejected=f'rejected by the mill: {exc}',
+                   bite_note=f'rejected by the mill: {exc}')
+        return out
+    out.update(bf)
     if dbl:
         out['bite_status'] = 'DOUBLED_PASS_NOT_MODELLED'
         out['bite_note'] = (f'{DOUBLED_NOT_MODELLED}: the tool has no model of two sheets in '
@@ -438,13 +658,15 @@ def survey_row(p, mills, index):
         out['flags'].append('DOUBLED_FINAL_PASS_NOT_MODELLED')
         return out
     row = {'label': out['label'], 'entry_thickness_m': h0, 'exit_thickness_m': h1,
-           'mean_flow_stress_pa': sigma, 'friction_coefficient': FRICTION,
+           'mean_flow_stress_pa': sigma, 'friction_coefficient': mu,
            'entry_tension_pa': t_in, 'exit_tension_pa': t_out, 'exit_speed_m_s': u}
-    case = mill.case_for(row, sigma)
-    sw = bd._schedule_rows(case, mill.cache, mill.stand, mill.spans, mill.beta)['rows'][0]
+    case = mill.case_for(row, sigma, width)
+    cache = mill.cache if width is None else bd._BiteCache(case)
+    sw = bd._schedule_rows(case, cache, mill.stand, mill.spans, mill.beta)['rows'][0]
     if 'rejected' in sw:
         out['bite_status'] = 'NO_BITE'
         out['bite_note'] = sw['rejected']
+        out['rejected'] = f'no roll bite: {sw["rejected"]}'
         return out
     fpw = sw['separating_force_per_width_n_m']
     out.update(bite_status='BITE', bite_model=sw['bite_model'], bite_flags=sw['bite_flags'],
@@ -460,7 +682,7 @@ def survey_row(p, mills, index):
                speed_ratio_without_bite_damping=sw['speed_ratio_without_bite_damping'],
                onset_frequency_hz=sw['onset_frequency_hz'])
     limit = mill.desc['span_wave_limit_hz']
-    bite = mill.cache.get(bd._bite_pass(case, row))
+    bite = cache.get(bd._bite_pass(case, row))
     c0 = bd._crit_pair(mill.stand, bite, mill.spans, mill.beta)[1]
     onsets_hz = [f for f in (sw['onset_frequency_hz'], c0['onset_frequency_hz']) if f]
     out['chatter_reliability'] = ('NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT'
@@ -478,7 +700,10 @@ def survey_row(p, mills, index):
     else:
         out['bite_credibility'] = mark
         out['bite_force_ratio_to_reported_range'] = ratio
-    out['stripe'] = _stripe(mill, case, bite, row)
+    try:
+        out['stripe'] = _stripe(mill, case, bite, row)
+    except ValueError as exc:
+        out['stripe_error'] = str(exc)
     return out
 
 
@@ -521,9 +746,11 @@ def rankings(rows):
         ranked, excluded = [], []
         for r in rows:
             why = None
-            if needs_bite and r['bite_status'] != 'BITE':
+            if r.get('bite_status') == 'REJECTED':
+                why = r['rejected']
+            elif needs_bite and r['bite_status'] != 'BITE':
                 why = (DOUBLED_NOT_MODELLED if r['bite_status'] == 'DOUBLED_PASS_NOT_MODELLED'
-                       else 'no roll bite')
+                       else r.get('rejected') or 'no roll bite')
             elif needs_bite and not _credible(r):
                 why = 'bite NOT CREDIBLE (force outside the range reported for battery foil)'
             elif key == 'chatter_margin' and bd._outside_scan(r['exit_speed_m_s']):
@@ -601,7 +828,7 @@ def _trend_words(rho):
     return f'no clear gauge order (rank correlation {rho:+.2f})'
 
 
-def summary(rows, ranks):
+def summary(rows, ranks, user_mill=False):
     """Generated plain-language summary from the rankings."""
     n = len(rows)
     nd = sum(r['doubled'] for r in rows)
@@ -619,15 +846,46 @@ def summary(rows, ranks):
         parts.append(f'{rk["title"]}: most sensitive {_names(top)}; '
                      f'{_trend_words(gauge_correlation(rk))}'
                      + (f'; {len(rk["excluded"])} excluded' if rk['excluded'] else '') + '.')
-    parts.append('These are model sensitivities on one synthetic mill per gauge class with '
-                 'literature inputs, not plant defect rates.')
+    parts.append(('These are model sensitivities on the user\'s mill with literature inputs '
+                  'unless overridden, not plant defect rates.') if user_mill else
+                 ('These are model sensitivities on one synthetic mill per gauge class with '
+                  'literature inputs, not plant defect rates.'))
     return ' '.join(parts)
 
 
 # --------------------------------------------------------------------------- top level
-def survey():
-    mills = {k: _Mill(k) for k in MILLS}
-    rows = [survey_row(p, mills, i + 1) for i, p in enumerate(bp.products())]
+def select_products(ids):
+    """Catalogue products (with their catalogue index) restricted to ``ids`` (None: all)."""
+    allp = list(enumerate(bp.products(), 1))
+    if ids is None:
+        return allp
+    valid = bp.product_ids()
+    bad = [x for x in ids if x not in valid]
+    if bad or not ids:
+        raise ValueError(f'unknown product id(s) {", ".join(map(repr, bad)) or "(none given)"}; '
+                         f'valid ids: {", ".join(valid)}')
+    return [(i, p) for i, p in allp if p.id in ids]
+
+
+def survey(products=None, foil_mill=None, sheet_mill=None, overrides=None,
+           override_source='overrides file'):
+    """The survey result (see ``survey_with_mills``)."""
+    return survey_with_mills(products, foil_mill, sheet_mill, overrides, override_source)[0]
+
+
+def survey_with_mills(products=None, foil_mill=None, sheet_mill=None, overrides=None,
+                      override_source='overrides file'):
+    """Run the survey. ``products``: ids to keep (None: all); ``foil_mill`` / ``sheet_mill``:
+    paths of v2 case files whose machine keys replace the demo mills; ``overrides``: validated
+    per-product overrides (``validate_overrides``). Without options the result equals the
+    committed artifact."""
+    mills = {'foil': _Mill('foil', None if foil_mill is None else
+                           load_mill_file(foil_mill, 'foil')),
+             'sheet': _Mill('sheet', None if sheet_mill is None else
+                            load_mill_file(sheet_mill, 'sheet'))}
+    overrides = overrides or {}
+    rows = [survey_row(p, mills, i, overrides.get(p.id), override_source)
+            for i, p in select_products(products)]
     ranks = rankings(rows)
     for rk in ranks:
         rk['gauge_rank_correlation'] = gauge_correlation(rk)
@@ -645,12 +903,26 @@ def survey():
                         'closed_gap_flag_below_exit_m': CLOSED_GAP_BELOW_M,
                         'reported_load_range_n_m': list(bd.FOIL_LOAD_RANGE_N_M),
                         'reported_load_range_applies_to': LOAD_RANGE_PRODUCT},
-              'rows': rows, 'rankings': ranks, 'summary': summary(rows, ranks),
-              'limitations': list(LIMITATIONS) + list(bp.LIMITATIONS),
+              'rows': rows, 'rankings': ranks,
+              'summary': summary(rows, ranks, any(m.user for m in mills.values())),
+              'limitations': ([USER_MILL_LIMITATION] + list(LIMITATIONS[1:])
+                              if any(m.user for m in mills.values()) else list(LIMITATIONS))
+              + list(bp.LIMITATIONS),
               'sources': sorted({s for r in rows for x in r['catalogue_values_used']
                                  for s in x['sources']})}
+    opts = {}
+    if products is not None:
+        opts['products'] = [r['product_id'] for r in rows]
+    if foil_mill is not None or sheet_mill is not None:
+        opts['mill_files'] = {k: m.desc['file'] for k, m in mills.items() if m.user}
+    if overrides:
+        opts['overrides'] = {'source': override_source, 'products': sorted(overrides)}
+    if opts:
+        # key only with options, so the default survey keeps its exact content
+        result['options'] = opts
+        result['synthetic'] = not any(m.user for m in mills.values()) and not overrides
     json.dumps(result, allow_nan=False)
-    return result
+    return result, mills
 
 
 def result_json(result):
@@ -665,10 +937,12 @@ def _f(v, scale=1.0, d=3):
 
 
 def _cell_bite(r, text):
+    if r['bite_status'] == 'REJECTED':
+        return f'<em>{_e(r["rejected"])}</em>'
     if r['bite_status'] == 'DOUBLED_PASS_NOT_MODELLED':
         return f'<em>{_e(DOUBLED_NOT_MODELLED)}</em>'
     if r['bite_status'] != 'BITE':
-        return '<em>no roll bite</em>'
+        return f'<em>{_e(r.get("rejected") or "no roll bite")}</em>'
     return text() if callable(text) else text
 
 
@@ -729,10 +1003,10 @@ def _table_rows(rows):
             _cell_bite(r, lambda: _e(
                 f'{r["bite_model"]}, {r["separating_force_per_width_n_m"] * 1e-6:.3g} kN/mm, '
                 f'strip/mill {r["strip_to_mill_modulus_ratio"]:.3g}')),
-            _e(_f(r['dead_band_half_width_i_units'])),
-            _e(_f(r['critical_ridge_height_m'], 1e6)),
-            _e(_f(r['trough_onset_lateral_stress_pa'], 1e-3)),
-            _e(_f(r['roller_wrinkle_threshold_pa'], 1e-6)),
+            _e(_f(r.get('dead_band_half_width_i_units'))),
+            _e(_f(r.get('critical_ridge_height_m'), 1e6)),
+            _e(_f(r.get('trough_onset_lateral_stress_pa'), 1e-3)),
+            _e(_f(r.get('roller_wrinkle_threshold_pa'), 1e-6)),
             _cell_bite(r, lambda: _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
                                      f'{_onset(st.get("in_mill_onset_height_m"))}; after '
                                      f'release {_onset(st.get("after_release_onset_height_m"))}'
@@ -782,6 +1056,8 @@ def _rank_section(rank, rows, n):
 def _inputs_section(rows):
     out = []
     for r in rows:
+        mine = ''.join(f'<li>{_e(x["item"])} = {_e(x["value"])} {_e(x["unit"])}: '
+                       f'{_e(x["basis"])}</li>' for x in r.get('user_supplied_values') or [])
         used = ''.join(f'<li>{_e(x["item"])}: {_e(x["basis"])} [{_e(", ".join(x["sources"]))}; '
                        f'{_e(x["read_status"] or "")}]</li>' for x in r['catalogue_values_used'])
         ass = ''.join(f'<li>{_e(x["item"])}: {_e(x["basis"])}</li>' for x in r['assumed_values'])
@@ -790,36 +1066,55 @@ def _inputs_section(rows):
         out.append(f'<details><summary>{_e(r["label"])}: {_e(r["product_name"])}</summary>'
                    f'<p>From the catalogue:</p><ul>{used or "<li>nothing</li>"}</ul>'
                    f'<p>Assumed:</p><ul>{ass}</ul>'
-                   f'<p>Product check of the survey pass: {_e(pc)}.</p>'
+                   + (f'<p>User-supplied:</p><ul>{mine}</ul>' if mine else '')
+                   + f'<p>Product check of the survey pass: {_e(pc)}.</p>'
                    f'<p>Named defects in the catalogue: {_e(nd)}.</p>'
                    + (f'<p class="note">{_e(r["bite_note"])}</p>' if r.get('bite_note') else '')
                    + '</details>')
     return ''.join(out)
 
 
+def _mill_line(m):
+    coil = m.get('coil')
+    txt = (f'<li>{_e(m["name"])} (<code>{_e(m["scenario"])}</code>): work roll radius '
+           f'{m["work_roll_radius_m"]:.3g} m, strip width {m["strip_width_m"]:.3g} m, spans '
+           f'{m["entry_span_length_m"]:.3g} / {m["exit_span_length_m"]:.3g} m, deflector radius '
+           + ('not given' if m['deflector_roll_radius_m'] is None
+              else f'{m["deflector_roll_radius_m"]:.3g} m')
+           + ', coil ' + ('not given' if coil is None else
+                          f'{coil["inner_radius_m"]:.3g}-{coil["outer_radius_m"]:.3g} m at '
+                          f'{coil["winding_tension_pa"] * 1e-6:.3g} MPa winding tension')
+           + f', span-wave limit {m["span_wave_limit_hz"]:.4g} Hz')
+    if m.get('source') == 'user mill file':
+        txt += (f'. Machine keys taken from the file: {_e(", ".join(m["keys_taken"]))}; the '
+                'product and pass, material, schedule, observations and case-specific inputs '
+                '(blocked nozzles, events, ridges, crowns, shape inputs, bite heat) come from '
+                f'the survey, not the file. Friction {m["friction_coefficient"]:g} from the '
+                'file')
+    return txt + '</li>'
+
+
 def render_survey_report(result):
     r = result
     rows = r['rows']
-    mills = ''.join(
-        f'<li>{_e(m["name"])} (<code>{_e(m["scenario"])}</code>): work roll radius '
-        f'{m["work_roll_radius_m"]:.3g} m, strip width {m["strip_width_m"]:.3g} m, spans '
-        f'{m["entry_span_length_m"]:.3g} / {m["exit_span_length_m"]:.3g} m, deflector radius '
-        f'{m["deflector_roll_radius_m"]:.3g} m, coil {m["coil"]["inner_radius_m"]:.3g}-'
-        f'{m["coil"]["outer_radius_m"]:.3g} m at {m["coil"]["winding_tension_pa"] * 1e-6:.3g} '
-        f'MPa winding tension, span-wave limit {m["span_wave_limit_hz"]:.4g} Hz</li>'
-        for m in r['mills'].values())
+    mills = ''.join(_mill_line(m) for m in r['mills'].values())
+    user = any(m.get('source') == 'user mill file' for m in r['mills'].values())
     head = ['#', 'product', 'survey pass', 'bite', 'dead band [I]', 'ridge height [µm]',
             'trough onset [kPa]', 'roller wrinkle [MPa]', '1 µm stripe',
             'chatter u_crit with / without bite damping', 'marks']
     body = [
         '<h1>Product survey</h1>',
-        f'<div class="warn"><strong>{_e(r["status"])}</strong>: one synthetic final pass per '
-        'catalogue product on one stated synthetic mill per gauge class, built from literature '
-        'values; nothing here is validated against plant data.</div>',
+        (f'<div class="warn"><strong>{_e(r["status"])}</strong>: one synthetic final pass per '
+         'catalogue product on one stated synthetic mill per gauge class, built from literature '
+         'values; nothing here is validated against plant data.</div>' if not user else
+         f'<div class="warn"><strong>{_e(r["status"])}</strong>: one final pass per catalogue '
+         'product on the mill(s) from the user\'s file(s) listed below, built from literature '
+         'values unless overridden; nothing here is validated against plant data.</div>'),
         f'<p class="lead">{_e(r["summary"])}</p>',
         f'<section><h2>Mills</h2><ul>{mills}</ul><p class="note">Exit gauge below '
         f'{r["rules"]["foil_mill_below_exit_m"] * 1e3:.3g} mm: foil mill; otherwise the sheet '
-        f'mill. Friction {r["rules"]["friction_coefficient"]:g}; tensions '
+        f'mill. Friction {r["rules"]["friction_coefficient"]:g}'
+        + (' (a user mill uses the friction of its file)' if user else '') + '; tensions '
         f'{r["rules"]["entry_tension_fraction_of_flow_stress"]:g} / '
         f'{r["rules"]["exit_tension_fraction_of_flow_stress"]:g} of the flow stress; reference '
         f'stripe {r["rules"]["reference_stripe_height_m"] * 1e6:g} µm Gaussian, half-peak width '
@@ -849,31 +1144,138 @@ def render_survey_report(result):
             + ''.join(body) + '</body></html>\n')
 
 
-def write(out_dir):
+# --------------------------------------------------------------------------- starter cases
+def _fmt_value(v, unit):
+    if isinstance(v, list):
+        return ' / '.join(_fmt_value(x, unit) for x in v)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return str(v)
+    return f'{v:.4g}{(" " + unit) if unit else ""}'
+
+
+def starter_case(row, mill):
+    """A ready-to-edit v2 case for one survey row: the survey pass on the chosen mill,
+    ``material.product`` set, every observation null, notes on where each value came from."""
+    c = copy.deepcopy(mill.case)
+    p = c['pass']
+    p.update(entry_thickness_m=row['entry_thickness_m'],
+             exit_thickness_m=row['exit_thickness_m'],
+             mean_flow_stress_pa=row['mean_flow_stress_pa'],
+             friction_coefficient=row['friction_coefficient'],
+             entry_tension_pa=row['entry_tension_pa'], exit_tension_pa=row['exit_tension_pa'],
+             exit_speed_m_s=row['exit_speed_m_s'])
+    if row.get('strip_width_m') is not None:
+        p['width_m'] = row['strip_width_m']
+    c['material'] = {'alloy': row['alloy_checked'], 'temper': row['final_temper'],
+                     'yield_stress_pa': row['mean_flow_stress_pa'],
+                     'youngs_modulus_pa': ss.ALUMINIUM_E_PA, 'luders_strain': None,
+                     'magnesium_wt_pct': None, 'grain_size_m': None,
+                     'final_pass_doubled': row['doubled'], 'product': row['product_id']}
+    c['schedule'] = []
+    c['hardening'] = None
+    c['incoming_variation'] = None
+    c['observation'] = {k: ([] if isinstance(v, list) else None)
+                        for k, v in c['observation'].items()}
+    d = mill.desc
+    c['name'] = f'Starter case: {row["product_name"]} ({row["product_id"]})'
+    c['synthetic'] = True
+    c['provenance'] = (
+        f'STARTER CASE written by physicroll.band_survey for {row["product_id"]} on '
+        f'{d["name"]}: a starting point to replace with plant values, not plant data. The '
+        'survey pass comes from the product catalogue (a literature survey) with the '
+        'assumptions listed in notes; every observation is null.')
+    notes = [f'Machine (stand, spans, kinematics, lubrication, coolant, tribology, gauge '
+             f'control, drive, model options, width-model roll / header / coil / deflector, '
+             f'pass width, roll radius and friction) from '
+             + (f'the user mill file {d["file"]}' if mill.user
+                else f'the demo scenario {d["scenario"]} (synthetic)')
+             + '. Case-specific inputs (width-model blocked nozzles, nozzle levels, events, '
+             'ridges, crowns, previous widths, lateral stress, shape inputs, bite heat, and '
+             'coolant.blocked_nozzle_indices) are reset; enter your own when you have them.']
+    for x in row['catalogue_values_used']:
+        notes.append(f'From the catalogue: {x["item"]} = {_fmt_value(x["value"], x["unit"])}: '
+                     f'{x["basis"]} [{", ".join(x["sources"])}; {x["read_status"]}]')
+    for x in row['assumed_values']:
+        notes.append(f'ASSUMED: {x["item"]} = {_fmt_value(x["value"], x["unit"])}: '
+                     f'{x["basis"]}')
+    for x in row.get('user_supplied_values') or []:
+        notes.append(f'User-supplied: {x["item"]} = {_fmt_value(x["value"], x["unit"])} '
+                     f'({x["basis"]})')
+    if row['doubled']:
+        notes.append('The final pass is doubled: the tool models one sheet in the bite '
+                     '(flag DOUBLED_FINAL_PASS_NOT_MODELLED); the gauges are per sheet.')
+    notes.append('Replace the pass, material and mill values with plant values, then record '
+                 'the observations (docs/band-diagnosis.md, section 5) before reading a '
+                 'diagnosis from this file.')
+    c['notes'] = notes
+    return bd.validate_case(json.loads(json.dumps(c)))
+
+
+def write_cases(result, mills, out_dir):
+    """Write one starter case per surveyed product; returns the written paths."""
     from .__main__ import _save_complete
-    result = survey()
+    out_dir = Path(out_dir)
+    paths = []
+    for row in result['rows']:
+        case = starter_case(row, mills[row['mill']])
+        path = out_dir / f'{row["product_id"]}.case.json'
+        _save_complete(path, json.dumps(case, indent=2, sort_keys=True, allow_nan=False)
+                       + '\n')
+        paths.append(path)
+    return paths
+
+
+def write(out_dir, products=None, foil_mill=None, sheet_mill=None, overrides=None,
+          override_source='overrides file', cases_dir=None):
+    from .__main__ import _save_complete
+    result, mills = survey_with_mills(products, foil_mill, sheet_mill, overrides,
+                                      override_source)
     html = render_survey_report(result)
     out_dir = Path(out_dir)
     jp, hp = out_dir / f'{SLUG}.result.json', out_dir / f'{SLUG}.report.html'
     _save_complete(jp, result_json(result))
     _save_complete(hp, html)
-    return result, jp, hp
+    cases = write_cases(result, mills, cases_dir) if cases_dir is not None else []
+    return result, jp, hp, cases
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description='Product survey: one synthetic final pass per catalogue product '
-                    '(literature inputs, unvalidated)')
+        description='Product survey: one final pass per catalogue product (literature inputs, '
+                    'unvalidated), on the demo mills or on your own mill')
     parser.add_argument('--out', type=Path, required=True, help='output directory')
+    parser.add_argument('--mill', type=Path,
+                        help='v2 case file whose machine keys are used for every product')
+    parser.add_argument('--foil-mill', type=Path,
+                        help='v2 case file for exit gauges below 0.2 mm (overrides --mill)')
+    parser.add_argument('--sheet-mill', type=Path,
+                        help='v2 case file for exit gauges of 0.2 mm and above '
+                             '(overrides --mill)')
+    parser.add_argument('--products', help='comma-separated catalogue product ids to survey')
+    parser.add_argument('--overrides', type=Path,
+                        help='JSON file {product_id: {key: value}} replacing survey-pass values '
+                             f'({", ".join(OVERRIDE_KEYS)})')
+    parser.add_argument('--write-cases', type=Path,
+                        help='directory for one ready-to-edit v2 case file per product')
     args = parser.parse_args(argv)
     try:
-        result, jp, hp = write(args.out)
+        products = (None if args.products is None else
+                    [x.strip() for x in args.products.split(',') if x.strip()])
+        overrides = None
+        if args.overrides is not None:
+            overrides = load_overrides(args.overrides)
+        result, jp, hp, cases = write(
+            args.out, products, args.foil_mill or args.mill, args.sheet_mill or args.mill,
+            overrides, f'overrides file {args.overrides.name}' if args.overrides else
+            'overrides file', args.write_cases)
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
     print(f'{result["status"]}: {len(result["rows"])} products')
     print(result['summary'])
     print(f'result: {jp}')
     print(f'report: {hp}')
+    for c in cases:
+        print(f'case: {c}')
 
 
 if __name__ == '__main__':

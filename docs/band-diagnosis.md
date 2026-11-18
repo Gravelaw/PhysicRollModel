@@ -698,7 +698,7 @@ python -m physicroll.band_survey --out artifacts/band_diagnosis
 python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis
 ```
 
-It writes `product-survey.result.json` (schema `physicroll.band_survey.v1`, status `SYNTHETIC_SURVEY_LITERATURE_INPUTS_UNVALIDATED`) and
+To run it on your own machine instead of the demo mills, with your own pass values or with starter case files, see section 5.3. It writes `product-survey.result.json` (schema `physicroll.band_survey.v1`, status `SYNTHETIC_SURVEY_LITERATURE_INPUTS_UNVALIDATED`) and
 `product-survey.report.html` (about 27 s on this container).
 
 **How the survey pass is built** (every row lists, in `catalogue_values_used`, each value taken
@@ -941,6 +941,132 @@ Lengthwise observation fields in plain words:
    the spindle / coupling candidate (twice work-roll rotation, from the work-roll diameter)
    is checked: a match still supports the drive/bearing hypothesis, a mismatch is
    `NOT_OBSERVED` rather than a contradiction.
+
+### 5.3 Using your own mill
+
+The question this section answers: *"I have a machine of a different spec making these
+products; how do I change the values?"* A case file holds three kinds of input: the
+**machine** (stand and line), the **product and pass**, and the **observations**. For one
+diagnosis you edit all three in one case file. For the product survey (section 3.10) you
+give the tool a case file of your machine and it takes only the machine keys from it.
+
+**(a) The machine specification.** These keys describe the stand and the line; the product
+survey takes exactly these from your file (`physicroll/band_survey.py`, `MACHINE_KEYS`, and
+the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
+
+| key | what it is, in plain words | unit | where a mill engineer finds it |
+|---|---|---|---|
+| `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
+| `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
+| `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model |
+| `stand.work_roll_mass_kg`, `stand.backup_roll_mass_kg` | moving mass of one work-roll and one backup-roll assembly (roll, necks, chocks, bearings) | kg | roll and chock drawings |
+| `stand.work_backup_contact_stiffness_n_m` | stiffness of the work-roll / backup-roll contact | N/m | stand designer's data, or a roll-contact calculation |
+| `stand.housing_stiffness_n_m` | stiffness of housing, screws or cylinders: the mill modulus | N/m | mill-modulus (stretch) test at commissioning, the AGC setup |
+| `stand.modal_damping_ratio` | damping of the stand vibration modes | – | modal or tap test; 0.03 is the demo value |
+| `stand.roll_youngs_modulus_pa`, `stand.roll_poisson_ratio` | roll material elasticity | Pa, – | roll supplier certificate (forged steel about 210 GPa, 0.3) |
+| `spans.entry_span_length_m`, `spans.exit_span_length_m` | free strip length from the bite to the first roll on each side | m | line layout drawing |
+| `spans.strip_youngs_modulus_pa` | strip modulus used for the span waves (70 GPa for aluminium) | Pa | material data |
+| `kinematics.backup_roll_diameter_m`, `gear_meshes`, `bearings`, `grinder_marks`, `deflector_roll_diameters_m`, `entry_coil_diameter_m`, `exit_coil_diameter_m` | roll and drive geometry that sets the pitches of roll-, gear- and bearing-borne marks | m, teeth, – | drive and bearing drawings, gearbox data sheet, roll shop |
+| `lubrication` | rolling-oil viscosity and pressure coefficient, roll and strip roughness (simple film screen) | Pa s, 1/Pa, m | oil supplier sheet, roughness measurements |
+| `coolant` (except `blocked_nozzle_indices`) | spray header for the coverage screen: barrel length, nozzle pitch, stand-off, spray and offset angles, roll expansion, assumed excess roll temperature | m, rad, 1/K, K | spray header drawing, nozzle supplier data |
+| `tribology` | oil viscosity law, roughness, inlet and strip temperatures, strip heat fraction, friction closure (pass heating and the friction-speed slope) | SI | oil supplier, process data; the strip heat fraction is an assumption unless measured |
+| `gauge_control` | gaugemeter AGC compensation gain, cylinder bandwidth, force filter | –, Hz | AGC commissioning sheet |
+| `drive` | drive-train inertias and shaft stiffnesses (torsional modes) | kg m², N m/rad | drive-train data, torsional analysis |
+| `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
+| `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
+| `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map |
+| `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
+
+**(b) The product and the pass.** `pass` gauges (`entry_thickness_m`, `exit_thickness_m`),
+`mean_flow_stress_pa`, `entry_tension_pa`, `exit_tension_pa`, `exit_speed_m_s`; `material`
+(alloy, temper, yield stress, modulus, Lüders strain, magnesium, grain size,
+`final_pass_doubled`, `product`); `hardening`; `schedule` (the other passes of the route);
+`incoming_variation`; and the case-specific width inputs `bite_heat_per_width_w_m`, crowns,
+incoming ridges, previous strip widths, lateral compressive stress and `shape_inputs`. Take
+them from the pass schedule, the material certificate and the process data of the coil you
+are diagnosing.
+
+**(c) The observations.** `observation` (sections 5.1, 5.2 and 3.8), plus the fault state of
+the cooling system you know of: `width_model.blocked_nozzle_indices`, `nozzle_levels`,
+`events` and `coolant.blocked_nozzle_indices`. Leave an observation `null` when nobody has
+looked.
+
+**(d) One diagnosis on your mill.** Copy the template, replace the machine keys of (a) with
+your mill's, the pass and material of (b) with the coil's, record the observations of (c),
+and run it:
+
+```
+cp scenarios/band_diagnosis_template.json my_mill.json
+python -m physicroll.band_cli my_mill.json --out my_output
+```
+
+**(e) The product survey on your mill.** The survey keeps its rules for the product side
+(section 3.10) and takes the machine keys from your file; the pass, material, schedule,
+observations and case-specific inputs of that file are ignored. The file is validated by the
+engine's own case validation; it must be a `physicroll.band_case.v2` case with a
+`width_model` and with `model_options.bite_response_override` null. A product whose survey
+pass your mill cannot take (for example the bite model's guards `h0/R <= 0.05` and
+`width/h0 >= 20`) appears as a row with the reason, not as an error.
+
+```
+python -m physicroll.band_survey --out my_survey --mill my_mill.json
+python -m physicroll.band_survey --out my_survey --foil-mill scenarios/band_diagnosis_battery_foil.json --sheet-mill my_mill.json
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,household_foil,litho_sheet
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,household_foil --overrides scenarios/band_survey_overrides_example.json
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,litho_sheet --write-cases my_cases
+python -m physicroll.band_cli my_cases/litho_sheet.case.json --out my_output
+python -m physicroll.band_cli --product-survey --out my_survey --mill my_mill.json --products litho_sheet
+```
+
+- `--mill` uses one file for both gauge classes; `--foil-mill` (exit gauge below 0.2 mm) and
+  `--sheet-mill` (0.2 mm and above) supply them separately and take precedence over `--mill`.
+  The friction of your file's pass is used for every product, and its pass speed where the
+  catalogue publishes none. The result records the file and the keys taken
+  (`options.mill_files`, `mills.<kind>.source`, `keys_taken`, `keys_not_taken`).
+- `--products` takes catalogue ids (`docs/thin-gauge-products.md`); an unknown id is an
+  error that lists the valid ones. Rows keep their catalogue number.
+- `--overrides FILE.json` replaces survey-pass values per product with your own:
+  `{"product_id": {"key": value}}` with the keys `entry_thickness_m`, `exit_thickness_m`,
+  `mean_flow_stress_pa`, `exit_speed_m_s`, `entry_tension_pa`, `exit_tension_pa`,
+  `friction_coefficient`, `width_m` and `doubled`; other keys are rejected. Each overridden
+  value is listed in the row's `user_supplied_values` ("user-supplied (overrides file ...)")
+  and the catalogue or assumed entry it replaces is dropped from the row's provenance.
+  `scenarios/band_survey_overrides_example.json` is a synthetic example (the battery-foil
+  demo's 30 -> 18 um final pass).
+- `--write-cases DIR` writes one ready-to-edit case per surveyed product
+  (`DIR/<product_id>.case.json`): the survey pass on the chosen mill, `material.product` set,
+  every observation null, the case-specific inputs reset, and `notes` that say which values
+  came from the catalogue (with source ids and read status), which were assumed, which came
+  from your mill file and which you supplied. It is a starting point: replace the pass and
+  material with plant values and record the observations before reading a diagnosis from it.
+
+Without any of these options the survey is the one of section 3.10, unchanged.
+
+**(f) What stays synthetic or literature-based, and what matters most.** Unless you replace
+them: the product side of the survey is the literature catalogue plus the stated assumptions
+(the 0.20 / 0.23 tension fractions, 180 MPa where no as-rolled strength is published, 30 %
+where no reduction is published, friction 0.03 on the demo mills); the demo mills and the
+template are synthetic; the strip heat fraction (`tribology.strip_heat_fraction`) and the
+bite-damping fraction (`model_options.bite_damping_transit_fraction`) are assumptions in
+every case. What the code shows the results depend on most:
+
+- the roll-bite force rises steeply with friction (section 3.3 probe: 0.959 to 2.49 kN/mm
+  from friction 0.03 to 0.05 at the demo case pass), and the bite is rejected above a
+  friction limit; supply your friction if you have it;
+- the chatter critical speed: each diagnosis's lever table (`levers.rows`, section 11.5)
+  gives its change with friction, reduction, entry and exit tension, entry span length and
+  structural damping on your mill, and the speed margin is given with and without bite
+  damping because the closure is unvalidated;
+- the strip-to-mill modulus ratio, and hence how far the roll gap moves the gauge, follows
+  `housing_stiffness_n_m` and `work_backup_contact_stiffness_n_m`;
+- the thermal stripe heights scale with the heat share into the rolls
+  (`roll_heat_fraction_per_roll` or `1 - strip_heat_fraction`) and the spray coefficients
+  (section 3.9);
+- the bite-free thresholds follow closed-form expressions of the inputs: the trough onset
+  stress scales as `(h/a)*sqrt(E*sigma)` (gauge, span length, span tension), the
+  roller-wrinkle threshold with the deflector radius, the critical coil ridge height with the
+  gauge, the coil radii, the yield stress minus the winding tension and the compaction factor
+  (section 7.2), and the dead band with gauge over width.
 
 ## 6. Hypotheses and evidence rules
 
@@ -2058,7 +2184,7 @@ real mill.
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`) |
 | `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`); speed margin beyond the 0.05-60 m/s scan (`SpeedMarginScanRangeTests`): the reviewer's case (supplied bite, damping 0.21, 100 m/s, scan `STABLE_OVER_SCANNED_RANGE`, operating point unstable) supports strongly with the basis named and the chatter score 5 instead of 0; 10 m/s with no crossing still contradicts as before; 100 m/s stable at the operating point (damping 0.6) contradicts with the new wording; supplied `shape_inputs` with a zero exit-tension force sensitivity (`ZeroFeedbackSensitivityTests`): the steady shape and the case-pass gauge-trend row are assessed, feedback-level numbers equal the compliance-only ones, no nan / inf, a negative value is rejected at validation |
 | foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions and the film-ratio gate (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Case-pass identity, zone-duration fallback, supplied-bite tables, sensitivity-mix flag** (`CasePassIdentityTests`, `ZoneDurationFallbackTests`, `SuppliedBiteGaugeTrendTests`, `SuppliedBiteScheduleTablesTests`, `SensitivityMixFlagTests`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (`FoilDemoTests`, coarse numerics, the plant's passes and the alternative route, no AGC or drive): the route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT1 50 -> 25 um and ALT2 25 -> 12 um at 52 %, assumed gauges labelled, every other pass at or below 50 %, speeds inside the published spans, `material.product`), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, no floor flag, mattress bites on F2, ALT1 and ALT2 with their extended-domain flags, `extended_bite_domain` listing 18 and 12 um with the credibility marks (ALT2 ratio above 2, "NOT CREDIBLE" in the text), no case-pass mark, the product check (alloy `1235`, final passes F2 and ALT2, nothing outside the published range on the case and final passes, nearest published passes present), the extended-domain limitation, single-sheet statement, foil box before the leading hypotheses, "Extended roll-bite domain" and "Product check" in the report (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`): seven rows, ALT2 marked not credible with ratio above 2, the credible rows ordered by exit gauge S1, S2, S3, F1, ALT1, F2, along which the in-mill onset and rigid bound rise and linear-feedback I-units fall, the exit-span bite-free thresholds fall on every row, the text names ALT2 after "Not credible (excluded from the trend):" and spans 0.135 -> 0.018 mm, and the report's direction sentence ends at F2, says "thinner is less sensitive for this mechanism in the model", names ALT2 as not credible and marks its table row. **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. The direction test also pins the **bite-free values**: dead band, ridge height, trough onset and roller-wrinkle thresholds of both spans on every row, and the bite-free sentence ("falls on every pass" four times; the two entry-span quantities are not monotonic across the two routes). The **product question** is worded from the case ("The thinnest pass in this case exits at 18 um" or "... 30 um, which fits ..."; no "16-18"; `FinalPassDoubledTests`, `test_foil_regime_block_without_bite`); a sheet schedule with every pass assessable gets no span-threshold keys and no bite-free sentence (`test_case_pass_row_keeps_the_supplied_bite`). **Rules** (`test_tension_lines_rules`) also pin the stage-B tension-line weights: regular 5-20 mm strong, 25 mm weak, 80 mm a weak contradiction, irregular weak; exit gauge 12 um moderate, 25 um weak, 45 and 80 um neutral, 210 um a contradiction. **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite and the friction at which the mattress model rejects |
-| product survey (`band_survey.py`) / `tests/test_band_survey.py` | the survey computed once: every catalogue product appears, with its catalogue values (sources, read status) and assumptions, the as-rolled flow stress assumed for O temper (`test_every_catalogue_product_appears`); on the foil mill at equal flow stress a thinner product has a lower critical ridge height, trough onset and roller-wrinkle threshold, and the three bite-free rankings correlate with thinner gauge above 0.9 (`test_thinner_product_lower_ridge_and_trough_thresholds`); doubled products have no bite and keep their per-sheet thresholds (`test_doubled_products_have_no_bite`); credibility marks equal the engine's (`_bite_credibility`), the load range applied to battery collector foil only, no bite-dependent ranking contains a not-credible row, ranked plus excluded rows cover every product (`test_credibility_marks_consistent_with_the_engine`); one row recomputed is identical, and the committed result and report equal a fresh run (`test_determinism_and_committed_artifacts`); the report renders, escapes text and has no nan / inf (`test_report_renders_escapes_and_is_finite`) |
+| product survey (`band_survey.py`) / `tests/test_band_survey.py` | the survey computed once: every catalogue product appears, with its catalogue values (sources, read status) and assumptions, the as-rolled flow stress assumed for O temper (`test_every_catalogue_product_appears`); on the foil mill at equal flow stress a thinner product has a lower critical ridge height, trough onset and roller-wrinkle threshold, and the three bite-free rankings correlate with thinner gauge above 0.9 (`test_thinner_product_lower_ridge_and_trough_thresholds`); doubled products have no bite and keep their per-sheet thresholds (`test_doubled_products_have_no_bite`); credibility marks equal the engine's (`_bite_credibility`), the load range applied to battery collector foil only, no bite-dependent ranking contains a not-credible row, ranked plus excluded rows cover every product (`test_credibility_marks_consistent_with_the_engine`); one row recomputed is identical, and the committed result and report equal a fresh run (`test_determinism_and_committed_artifacts`); the report renders, escapes text and has no nan / inf (`test_report_renders_escapes_and_is_finite`); on the user's own mill (`UserMillSurveyTests`, three products): `--products` restricts and keeps catalogue numbers, unknown ids list the valid ones; a different mill (roll radius 0.11 m, housing 9e9 N/m, 2 m spans) changes the force per width, the strip-to-mill ratio and the trough onset while the catalogue provenance stays; overrides are applied and marked user-supplied, the replaced provenance dropped, and a pass too narrow for the bite model is a row with the reason; an invalid mill file and invalid override keys or values give clear errors; a starter case written with `--write-cases` loads and diagnoses |
 | extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
 | `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI |
 

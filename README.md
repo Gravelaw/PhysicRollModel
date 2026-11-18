@@ -274,6 +274,9 @@ python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out 
 `python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis` screens one
 synthetic final pass per catalogue product (literature inputs, one synthetic mill per gauge
 class, unvalidated) and ranks the products per mechanism; see section 3.10 of the doc.
+To use your own machine instead of the demo mills (`--mill my_mill.json`, also
+`--products`, `--overrides`, `--write-cases`), and for which case-file keys are the machine,
+the product and the observations, see "Using your own mill" (section 5.3 of the doc).
 
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see

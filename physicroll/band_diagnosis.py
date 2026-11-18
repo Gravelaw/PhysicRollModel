@@ -2659,8 +2659,13 @@ def diagnose(case):
     ctx.anti_upper_hz = nf['antisymmetric_hz'][1]
     ctx.drive_modes = drive_modes
     ctx.chatter_unreliable = False
-    if bite is not None:
+    if bite is not None and abs(bite.forward_slip_fraction) < 0.5:
         ctx.slip = bite.forward_slip_fraction
+    elif bite is not None:
+        # an experimental mattress bite can report an implausible slip of 0.5 or more (no
+        # elastic strip zones); the roll-speed kinematics accept |slip| < 0.5 only
+        ctx.slip = 0.0
+        flags.append('FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS')
     else:
         ctx.slip = 0.0
         flags.append('FORWARD_SLIP_UNKNOWN_ZERO_USED_IN_KINEMATICS')

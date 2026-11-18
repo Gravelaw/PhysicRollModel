@@ -1,7 +1,9 @@
 """Band / chatter-mark root-cause screening from a case file (synthetic or user supplied).
 
     python -m physicroll.band_cli CASE.json --out DIR
-    python -m physicroll.band_cli --product-survey --out DIR   (physicroll.band_survey)
+    python -m physicroll.band_cli --product-survey --out DIR [survey options]
+        (physicroll.band_survey: --mill, --foil-mill, --sheet-mill, --products,
+         --overrides, --write-cases)
 
 Writes ``DIR/<slug>.result.json`` and ``DIR/<slug>.report.html`` atomically and prints the
 ranked standings. The result is an unvalidated screening tally, not a certified cause.
@@ -9,6 +11,7 @@ ranked standings. The result is an unvalidated screening tally, not a certified 
 import argparse
 from pathlib import Path
 import re
+import sys
 
 from .__main__ import _save_complete
 from .band_diagnosis import diagnose, load_case, result_json
@@ -28,14 +31,15 @@ def main(argv=None):
                         help='band case JSON (physicroll.band_case.v1 or v2)')
     parser.add_argument('--out', type=Path, required=True, help='output directory')
     parser.add_argument('--product-survey', action='store_true',
-                        help='run the product survey (physicroll.band_survey) instead of a case')
-    args = parser.parse_args(argv)
-    if args.product_survey:
-        if args.case is not None:
-            parser.error('--product-survey takes no case file')
+                        help='run the product survey (physicroll.band_survey) instead of a case; '
+                             'its options (--mill, --products, ...) are passed on')
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if '--product-survey' in argv:
+        # every other argument belongs to the survey (it validates them itself)
         from . import band_survey
-        band_survey.main(['--out', str(args.out)])
+        band_survey.main([a for a in argv if a != '--product-survey'])
         return
+    args = parser.parse_args(argv)
     if args.case is None:
         parser.error('a case file is required (or --product-survey)')
     try:
