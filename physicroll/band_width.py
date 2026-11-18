@@ -634,7 +634,19 @@ ONSET_NOT_REACHED = 'NOT_REACHED_WITHIN_SEARCH_CEILING'
 ONSET_DOMAIN_LIMIT = 'NOT_REACHED_BEFORE_FEEDBACK_MODEL_DOMAIN_LIMIT'
 
 
-def onset_search(z, shape, sp, kind='mill', hi=None, lo=None):
+def band_state_at(result, x):
+    """In-mill and after-release state of the with-feedback band containing ``x`` in a
+    ``_tsf`` result (the rule of ``stripe_states``: the band whose [start, end] contains x,
+    the largest |peak| when two do; None outside every band)."""
+    b = _band_at(result['bands'], x)
+    return None if b is None else (b['state'], b['state_after_tension_release'])
+
+
+POSITION_STATES = {'mill': (0, 'MANIFEST_BUCKLE'),
+                   'released': (1, 'MANIFEST_AFTER_TENSION_RELEASE')}
+
+
+def onset_search(z, shape, sp, kind='mill', hi=None, lo=None, position=None):
     """Smallest factor s with a MANIFEST band (kind 'mill': in the mill; 'released': after
     tension release) for s*shape, decided from the with-feedback result only.
 
@@ -644,7 +656,9 @@ def onset_search(z, shape, sp, kind='mill', hi=None, lo=None):
     with-feedback calculation itself leaves its domain (ValueError) before any manifest band,
     with the largest valid scale in ``domain_limit_scale`` (never an onset). An undefined
     compliance-only bound does not decide anything (review finding: it used to count as
-    manifest). ``lo``: a scale known not to exceed the onset (bracket)."""
+    manifest). ``lo``: a scale known not to exceed the onset (bracket). ``position``: decide
+    from the band containing that position only (``band_state_at``, the rule of
+    ``stripe_states``) instead of any band of the profile (default)."""
     out = {'status': ONSET_NOT_REACHED, 'scale': None, 'domain_limit_scale': None}
     peak = max(abs(v) for v in shape)
     if peak <= 0:
@@ -658,7 +672,11 @@ def onset_search(z, shape, sp, kind='mill', hi=None, lo=None):
             r = _tsf(z, [sc * v for v in shape], sp)
         except ValueError:
             return None
-        return r[key] == value
+        if position is None:
+            return r[key] == value
+        st = band_state_at(r, position)
+        i, val = POSITION_STATES[kind]
+        return st is not None and st[i] == val
     s_lo = s_hi * 1e-4 if lo is None or lo >= s_hi else lo
     top = manifest(s_hi)
     if top is None:
@@ -695,6 +713,18 @@ def onset_search(z, shape, sp, kind='mill', hi=None, lo=None):
     return out
 
 
+def position_manifest(z, shape, sp, kind, scale, position):
+    """True / False: the band at ``position`` is manifest (kind) for scale*shape; None when the
+    with-feedback calculation leaves its domain."""
+    try:
+        r = _tsf(z, [scale * v for v in shape], sp)
+    except ValueError:
+        return None
+    st = band_state_at(r, position)
+    i, val = POSITION_STATES[kind]
+    return st is not None and st[i] == val
+
+
 def onset_scale(z, shape, sp, kind='mill', hi=None, lo=None):
     """Onset scale of ``onset_search`` (None unless FOUND)."""
     return onset_search(z, shape, sp, kind, hi, lo)['scale']
@@ -704,16 +734,24 @@ def manifest_onset_scale(z, shape, sp, hi=None):
     return onset_scale(z, shape, sp, 'mill', hi)
 
 
-def onsets(z, shape, sp):
+def onsets(z, shape, sp, position=None):
     """In-mill and after-release onset scales on the coarse grid, plus the scale at which the
     linear-feedback peak reaches the reporting threshold (bands exist only above it). The
     reporting scale brackets the after-release onset from below (a band must be reported
     before it can buckle), the after-release onset brackets the in-mill one (tension only
-    stabilises)."""
+    stabilises).
+
+    ``position`` (review of 631195a): the onsets of the band AT that position (the rule of
+    ``stripe_states``), so they pair with the states read there. A band elsewhere (the loose
+    lanes beside an over-cooled stripe) no longer counts; the whole-profile onsets are kept
+    under ``out['whole_profile']``. Where the band at the position is already manifest at
+    the whole-profile onset the two are the same number (a hot stripe: unchanged results)."""
     zc, pc = coarse_grid(z, shape)
     out = {'mill': None, 'released': None, 'reporting': None}
     peak = max(abs(v) for v in pc)
     if peak <= 0:
+        if position is not None:
+            out['whole_profile'] = dict(out)
         return out
     lin = _tsf(zc, [v * REFERENCE_STRIPE_HEIGHT_M / peak for v in pc], sp)
     li = lin['linear_feedback_peak_i_units'] or 0.0
@@ -731,6 +769,63 @@ def onsets(z, shape, sp):
     for name, r in (('released', rel), ('mill', mil)):
         if r['status'] == ONSET_DOMAIN_LIMIT:
             out[f'{name}_domain_limit'] = r['domain_limit_scale']
+    if position is None:
+        return out
+    whole = dict(out)
+    out = {'whole_profile': whole, 'position_m': position}
+    # reporting: the band at the position is the same-sign lane of the linear-feedback I-unit
+    # profile that contains it; it is reported once that lane's own peak exceeds the
+    # threshold (linear below buckling). When that lane holds the profile peak this is the
+    # whole-profile value (a hot stripe; the stripe of a restored nozzle when it is the
+    # largest |I|)
+    lin_i = _linear_feedback_i_units(lin, sp)
+    zs = lin['z_m']
+    j = min(range(len(zs)), key=lambda i: abs(zs[i] - position))
+    sgn = lin_i[j] > 0
+    a = b = j
+    while a > 0 and (lin_i[a - 1] > 0) == sgn and lin_i[a - 1] != 0:
+        a -= 1
+    while b < len(zs) - 1 and (lin_i[b + 1] > 0) == sgn and lin_i[b + 1] != 0:
+        b += 1
+    li_x = max(abs(lin_i[i]) for i in range(a, b + 1))
+    out['lane_m'] = [zs[a], zs[b]]
+    if li_x > 0 and whole['reporting'] is not None and abs(li_x - li) <= 1e-9 * li:
+        out['reporting'] = whole['reporting']   # the lane holds the profile peak
+    else:
+        out['reporting'] = None if li_x <= 0 else REFERENCE_STRIPE_HEIGHT_M / peak * thr / li_x
+    lo_rel = None if out['reporting'] is None else out['reporting'] * (1 - 1e-6)
+    for name in ('released', 'mill'):
+        sc = whole[name]
+        if sc is None:
+            # no band of the profile is manifest within the search (or before the feedback
+            # model's domain limit): neither is the band at the position
+            out[name] = None
+            if f'{name}_domain_limit' in whole:
+                out[f'{name}_domain_limit'] = whole[f'{name}_domain_limit']
+            continue
+        if position_manifest(zc, pc, sp, name, sc, position):
+            out[name] = sc                    # the band at the position is the first manifest
+            continue
+        lo_ = lo_rel if name == 'released' else (
+            None if out['released'] is None else out['released'] * 0.999)
+        lo_ = max(lo_ or 0.0, sc * (1 - 1e-6))
+        r = onset_search(zc, pc, sp, name, lo=lo_, position=position)
+        out[name] = r['scale']
+        if r['status'] == ONSET_DOMAIN_LIMIT:
+            out[f'{name}_domain_limit'] = r['domain_limit_scale']
+        # bands elsewhere in the profile reach this state first (or alone): where, at their
+        # onset (never fed to evidence; reported beside)
+        try:
+            rr = _tsf(zc, [sc * v for v in pc], sp)
+        except ValueError:
+            rr = None
+        i, val = POSITION_STATES[name]
+        where = [] if rr is None else [
+            {'peak_position_m': b['peak_position_m'], 'start_m': b['start_m'],
+             'end_m': b['end_m'], 'sense': b['sense']}
+            for b in rr['bands'] if (b['state'], b['state_after_tension_release'])[i] == val
+            and not b['start_m'] <= position <= b['end_m']]
+        out[f'neighbour_{name}'] = {'scale': sc, 'bands': where}
     return out
 
 
@@ -900,8 +995,28 @@ def _stripe_metrics(times, dev, sel, ts):
     return rt.history_metrics([times[i] - ts for i in sel], [dev[i] for i in sel])
 
 
+def _threshold_times(tw_times, tw_sdev, thr, sign, ts, te, tw):
+    """(time to the threshold from the event start, fade time after the event end, time
+    above) of the signed stripe history against a signed stripe-height threshold."""
+    t_on = fade = None
+    if thr is not None and thr * sign > 0:
+        t_on = _first_cross(tw_times, tw_sdev, ts, abs(thr), up=True)
+        if t_on is not None and max(te, t_on) <= tw + 1e-9:
+            t_off = _first_cross(tw_times, tw_sdev, max(te, t_on), abs(thr), up=False)
+            fade = None if t_off is None else t_off - te
+    return (None if t_on is None else t_on - ts, fade,
+            None if t_on is None or fade is None else te + fade - t_on)
+
+
+NEIGHBOUR_TEXT = ('The over-cooled stripe of a restored nozzle is tight (short) at its own '
+                  'position; the loose bands sit beside it, in the compensating lanes. The '
+                  'thresholds, times and visible time of this event are those of the band at '
+                  'the stripe; neighbour_bands_* give the lanes beside it (never used as '
+                  'evidence).')
+
+
 def event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, end, peak_change,
-                  duration, flags, scale=1.0):
+                  duration, flags, scale=1.0, nozzle_x=None):
     """States, thresholds and threshold times of an event stripe, its peak profile and history
     scaled by ``scale`` (1 = the event as simulated). Shared by the event section and the
     thermal sensitivity block (SPEC14), so the two cannot drift. Everything is evaluated on
@@ -943,17 +1058,48 @@ def event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, en
     tw_times = [times[i] for i in sel]
     tw_sdev = [sign * sdev[i] for i in sel]
     for name in ('manifest', 'released', 'reporting'):
-        thr = row[f'{name}_threshold_m']
-        t_on = fade = None
-        if thr is not None and thr * sign > 0:
-            t_on = _first_cross(tw_times, tw_sdev, ts, abs(thr), up=True)
-            if t_on is not None and max(te, t_on) <= tw + 1e-9:
-                t_off = _first_cross(tw_times, tw_sdev, max(te, t_on), abs(thr), up=False)
-                fade = None if t_off is None else t_off - te
-        row[f'time_to_{name}_threshold_s'] = None if t_on is None else t_on - ts
+        t_to, fade, above = _threshold_times(tw_times, tw_sdev, row[f'{name}_threshold_m'],
+                                             sign, ts, te, tw)
+        row[f'time_to_{name}_threshold_s'] = t_to
         row[f'fade_time_below_{name}_threshold_s'] = fade
-        row[f'time_above_{name}_threshold_s'] = (
-            None if t_on is None or fade is None else te + fade - t_on)
+        row[f'time_above_{name}_threshold_s'] = above
+    # review of 631195a: bands elsewhere in the profile that reach a manifest state before
+    # (or without) the band at the stripe: reported beside, labelled, never evidence
+    if shape is not None and on is not None:
+        nb = {}
+        for name, key in (('mill', 'manifest'), ('released', 'released')):
+            n = on.get(f'neighbour_{name}')
+            if not n:
+                continue
+            thr_n = n['scale'] * at_mon
+            t_to, fade, above = _threshold_times(tw_times, tw_sdev, thr_n, sign, ts, te, tw)
+            ref = z[k_pk] if nozzle_x is None else nozzle_x
+            nb[key] = {'threshold_m': thr_n,
+                       'band_offsets_from_event_nozzles_m': [
+                           b['peak_position_m'] - ref for b in n['bands']],
+                       'band_senses': [b['sense'] for b in n['bands']],
+                       'time_to_threshold_s': t_to, 'time_above_threshold_s': above,
+                       'reached_by_this_event': t_to is not None}
+        if nb:
+            row['neighbour_bands'] = nb
+            row['neighbour_bands_note'] = NEIGHBOUR_TEXT
+            words = []
+            for key, what in (('manifest', 'buckle in the mill'),
+                              ('released', 'show after tension release')):
+                if key not in nb:
+                    continue
+                n = nb[key]
+                where = ', '.join(f'{o:+.3g} m' for o in
+                                  n['band_offsets_from_event_nozzles_m']) or 'beside it'
+                words.append(
+                    f'bands at {where} from the event nozzles would {what} once the stripe '
+                    f'reaches {abs(n["threshold_m"]) * 1e6:.3g} um'
+                    + (f', which this event reaches, for {n["time_above_threshold_s"]:.3g} s'
+                       if n['time_above_threshold_s'] is not None else
+                       ', which this event reaches' if n['reached_by_this_event'] else
+                       ', which this event does not reach'))
+            row['neighbour_bands_text'] = (
+                'Whole profile: ' + '; '.join(words) + '. ' + NEIGHBOUR_TEXT)
     basis = ('manifest' if row['time_to_manifest_threshold_s'] is not None
              else 'reporting' if row['time_to_reporting_threshold_s'] is not None else None)
     row['band_life_basis'] = basis
@@ -1114,17 +1260,19 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
         try:
             if sp is None:
                 raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
-            on = onsets(z, prof, sp)
+            # the onsets of the band AT the stripe peak (the position its states are read at)
+            on = onsets(z, prof, sp, position=z[k_pk])
         except ValueError as exc:
             row['shape_error'] = str(exc)
         row.update(event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw,
-                                 end, met['peak_change'], e['duration_s'], flags, 1.0))
+                                 end, met['peak_change'], e['duration_s'], flags, 1.0,
+                                 nozzle_x=x))
         # SPEC14: the same metrics at other roll heat shares (the model is linear in the roll
         # heat at a fixed spray coefficient: profile and history scale, thresholds do not)
         if scales:
             row['scaled'] = [{k2: v for k2, v in event_metrics(
                 z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, end,
-                met['peak_change'], e['duration_s'], [], sc).items()
+                met['peak_change'], e['duration_s'], [], sc, nozzle_x=x).items()
                 if k2 not in ('peak_shape', 'peak_stripe_states')} | {'scale': sc}
                 for sc in scales]
         if flags:
@@ -1178,7 +1326,9 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
                                        'threshold, else above the reporting threshold '
                                        '(visible_time_basis says which); thresholds are '
                                        'stripe heights at the monitor position, from the peak '
-                                       'profile scaled (onsets on a >= 10 mm grid)'}
+                                       'profile scaled (onsets on a >= 10 mm grid), for the band '
+                                       'at the stripe peak, where the peak states are read '
+                                       '(bands elsewhere: neighbour_bands, never evidence)'}
 
 
 def _first_cross(times, values, after, thr, up):
@@ -1419,6 +1569,29 @@ def spacing_match(gaps, pitch):
             'gaps': m['gaps']}
 
 
+def steady_stripe_table(steady, lv, sp):
+    """States and onsets of each steady stripe; ``lv``: shape_levels of the whole steady
+    deviation. The onsets are those of the band at the stripe peak, where its states are
+    read (a cold stripe's loose neighbour lanes are not its onset)."""
+    table = [dict(position_m=s['peak_position_m'], peak_radius_deviation_m=s[
+        'peak_deviation_m'], stripe_width_m=s['width_m'],
+        width_at_half_peak_m=s['width_at_half_peak_m'],
+        **stripe_states(lv, s['peak_position_m'])) for s in steady['stripes']]
+    for s, row in zip(steady['stripes'], table):
+        on = onsets(steady['z_m'], _isolate(steady['z_m'], steady['local_deviation_m'], s), sp,
+                    position=s['peak_position_m'])
+        pk = abs(s['peak_deviation_m'])
+        for key, name in (('manifest_onset_peak_height_m', 'mill'),
+                          ('released_onset_peak_height_m', 'released'),
+                          ('reporting_onset_peak_height_m', 'reporting')):
+            row[key] = None if on[name] is None else on[name] * pk
+            if f'{name}_domain_limit' in on:
+                row[key[:-2] + '_domain_limit_m'] = on[f'{name}_domain_limit'] * pk
+        row['released_onset_limited_by_reporting_threshold'] = _limited(
+            on['released'], on['reporting'])
+    return table
+
+
 def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape_reason,
                  thermal_shape=None):
     """Same stripe on every schedule pass. ``steady`` may be None (Gaussian reference stripe
@@ -1468,7 +1641,7 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
             lv = shape_levels(zc, shape_c, sp)
             st = stripe_states(lv, peak_x)['with_feedback']
             win = ss.shohet_townsend_window(src['exit_thickness_m'], case['pass']['width_m'])
-            on = onsets(zc, shape_c, sp)
+            on = onsets(zc, shape_c, sp, position=peak_x)    # paired with st at peak_x
             on_ref = onsets(zc, ref, sp)
 
             def h(scale, height):
@@ -1516,7 +1689,7 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 released_onset_reference_limited_by_reporting_threshold=_limited(
                     on_ref['released'], on_ref['reporting']))
             if shape_t is not None and peak_t > 0:
-                on_t = onsets(zc, shape_t, sp)
+                on_t = onsets(zc, shape_t, sp, position=thermal_shape['position_m'])
                 row.update(thermal_shape_manifest_onset_height_m=h(on_t['mill'], peak_t),
                            thermal_shape_released_onset_height_m=h(on_t['released'], peak_t))
             for o, height, keys_ in (
@@ -1873,24 +2046,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         try:
             lv = shape_levels(steady['z_m'], steady['local_deviation_m'], sp)
             shape['steady'] = lv
-            shape['steady_stripe_table'] = [
-                dict(position_m=s['peak_position_m'], peak_radius_deviation_m=s[
-                    'peak_deviation_m'], stripe_width_m=s['width_m'],
-                     width_at_half_peak_m=s['width_at_half_peak_m'],
-                     **stripe_states(lv, s['peak_position_m']))
-                for s in steady['stripes']]
-            for s, row in zip(steady['stripes'], shape['steady_stripe_table']):
-                on = onsets(steady['z_m'], _isolate(steady['z_m'], steady['local_deviation_m'],
-                                                    s), sp)
-                pk = abs(s['peak_deviation_m'])
-                for key, name in (('manifest_onset_peak_height_m', 'mill'),
-                                  ('released_onset_peak_height_m', 'released'),
-                                  ('reporting_onset_peak_height_m', 'reporting')):
-                    row[key] = None if on[name] is None else on[name] * pk
-                    if f'{name}_domain_limit' in on:
-                        row[key[:-2] + '_domain_limit_m'] = on[f'{name}_domain_limit'] * pk
-                row['released_onset_limited_by_reporting_threshold'] = _limited(
-                    on['released'], on['reporting'])
+            shape['steady_stripe_table'] = steady_stripe_table(steady, lv, sp)
         except ValueError as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])

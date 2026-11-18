@@ -1553,6 +1553,8 @@ def _events_section(r):
         out.append(f'<h3>Event {k + 1}{lab} (nozzles '
                    f'{_e(", ".join("#" + str(i) for i in e.get("nozzle_indices") or []))}, '
                    f'{_f(e.get("duration_s"))} s)</h3>' + _event_chart(e, k))
+        if e.get('neighbour_bands_text'):
+            out.append(f'<p class="note">{_e(e["neighbour_bands_text"])}</p>')
     if events:
         out.append(_event_table(events))
     for name, label in (('growth_rate_note', 'Why the band appears within seconds'),

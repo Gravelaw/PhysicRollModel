@@ -129,7 +129,11 @@ class ReviewFindingTests(unittest.TestCase):
         self.assertNotEqual(e['visible_time_basis'], 'in_mill_manifest')
         for row in ts['rows']:
             for ev in row['events']:
-                self.assertLess(ev['ratio_peak_to_in_mill_threshold'], 1)
+                # the over-cooled stripe is tight: at its own position there is no in-mill
+                # manifest threshold (the loose lanes beside it are neighbour_bands), so the
+                # ratio is absent; where a threshold exists the peak stays below it
+                ratio = ev['ratio_peak_to_in_mill_threshold']
+                self.assertTrue(ratio is None or ratio < 1, ratio)
                 self.assertEqual(ev['in_mill'], 'LATENT_UNDER_TENSION')
 
     def test_event_only_case_evaluates_events(self):
@@ -183,8 +187,13 @@ class ReviewFindingTests(unittest.TestCase):
         self.assertGreater(r0['stripe_peak_m'], 0)            # a magnitude
         self.assertAlmostEqual(r0['stripe_peak_m'], p0['stripe_peak_m'])
         for x in ts['rows']:
-            self.assertGreater(x['ratio_stripe_to_in_mill_onset'], 0)
+            # review of 631195a: the onset is that of the band AT the stripe (the tight lane of
+            # an over-cooled stripe never buckles; the loose lanes beside it do not count)
             self.assertIsNotNone(x['state_in_mill'])
+            if x['state_in_mill'] == 'MANIFEST_BUCKLE':
+                self.assertGreaterEqual(x['ratio_stripe_to_in_mill_onset'], 0.97)
+            elif x['ratio_stripe_to_in_mill_onset'] is not None:
+                self.assertLess(x['ratio_stripe_to_in_mill_onset'], 1.03)
         lv = bw.shape_levels(z, neg['local_deviation_m'], sp)
         st = bw.stripe_states(lv, r0['stripe_position_m'])['with_feedback']
         self.assertEqual(r0['state_in_mill'], st['state'])

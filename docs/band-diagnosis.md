@@ -1851,6 +1851,12 @@ manifest threshold). These are integration choices of `band_width.py` [D]:
   that time falls between records the transient is run a second time to record it
   (`peak_snapshots_recorded_by_second_run`). A short event is therefore never evaluated on
   the unchanged initial state.
+- **Band at the stripe.** Thresholds, times, visible time and band life are the onsets of the
+  band at the stripe peak, the position where the peak states are read. A restored nozzle (a
+  level above the steady one) over-cools the roll: its stripe is tight at its own position
+  and the loose bands sit in the compensating lanes beside it. Those lanes are reported
+  separately (`neighbour_bands`: onset, offsets from the event nozzles, time above;
+  `neighbour_bands_text`) and never used as evidence.
 
 Demo events (`width.thermal_events`; the nearest switched nozzles of the two events are
 0.728 m apart, so each event's window runs to the end of the run at 1050 s, no event carries a flag, each has one stripe, nozzles 20 and 21

@@ -511,9 +511,14 @@ def bite_free(mill, h1, sigma, exit_tension, width=None):
     d = mill.desc
     width = d['strip_width_m'] if width is None else width
     out = {}
-    win = ss.shohet_townsend_window(h1, width)
-    out['dead_band_half_width_i_units'] = (win['upper_bound_i_units']
-                                           - win['lower_bound_i_units']) / 2
+    try:
+        win = ss.shohet_townsend_window(h1, width)
+        out['dead_band_half_width_i_units'] = (win['upper_bound_i_units']
+                                               - win['lower_bound_i_units']) / 2
+    except ValueError as exc:
+        # guarded on its own (review of 631195a): e.g. an override width below the gauge
+        out['dead_band_half_width_i_units'] = None
+        out['dead_band_error'] = str(exc)
     coil = d['coil']
     try:
         if coil is None:
@@ -525,12 +530,20 @@ def bite_free(mill, h1, sigma, exit_tension, width=None):
     except ValueError as exc:
         out['critical_ridge_height_m'] = None
         out['critical_ridge_error'] = str(exc)
-    tr = ss.tension_trough_screen(h1, d['exit_span_length_m'], exit_tension, width,
-                                  roller_radius_m=d['deflector_roll_radius_m'],
-                                  youngs_modulus_pa=ss.ALUMINIUM_E_PA,
-                                  poisson_ratio=bw.STRIP_POISSON_RATIO)
-    out['trough_onset_lateral_stress_pa'] = tr['trough_critical_lateral_stress_pa']
-    out['roller_wrinkle_threshold_pa'] = tr['roller_wrinkle_critical_lateral_stress_pa']
+    # review of 631195a: guarded on its own like the coil ridge (an exit tension of 0, which
+    # the overrides accept, has no trough model): only the trough and wrinkle values go
+    try:
+        tr = ss.tension_trough_screen(h1, d['exit_span_length_m'], exit_tension, width,
+                                      roller_radius_m=d['deflector_roll_radius_m'],
+                                      youngs_modulus_pa=ss.ALUMINIUM_E_PA,
+                                      poisson_ratio=bw.STRIP_POISSON_RATIO)
+        out['trough_onset_lateral_stress_pa'] = tr['trough_critical_lateral_stress_pa']
+        out['roller_wrinkle_threshold_pa'] = tr['roller_wrinkle_critical_lateral_stress_pa']
+    except ValueError as exc:
+        out['trough_onset_lateral_stress_pa'] = out['roller_wrinkle_threshold_pa'] = None
+        out['trough_error'] = str(exc)
+        out['trough_not_assessable_reason'] = (
+            f'trough model not assessable at exit tension {exit_tension:g} Pa: {exc}')
     return out
 
 
@@ -842,6 +855,10 @@ def rankings(rows):
             elif key == 'chatter_margin' and r.get('chatter_reliability') != \
                     'WITHIN_SPAN_WAVE_LIMIT':
                 why = 'chatter onset above the span-wave limit (not reliable)'
+            elif key in ('troughs', 'roller_wrinkles') and r.get('trough_error'):
+                why = r['trough_not_assessable_reason']
+            elif key == 'coil_ridges' and r.get('critical_ridge_error'):
+                why = f'coil ridge model not assessable: {r["critical_ridge_error"]}'
             elif get(r) is None and _domain(r, key):
                 why = bw.domain_limit_text(_domain(r, key))
             elif get(r) is None:
@@ -926,7 +943,9 @@ def summary(rows, ranks, user_mill=False):
     for rk in ranks:
         top = rk['most_sensitive_first']
         if not top:
-            parts.append(f'{rk["title"]}: no product ranked.')
+            parts.append(f'{rk["title"]}: no product ranked'
+                         + (f'; {len(rk["excluded"])} excluded' if rk['excluded'] else '')
+                         + '.')
             continue
         parts.append(f'{rk["title"]}: most sensitive {_names(top)}; '
                      f'{_trend_words(gauge_correlation(rk))}'
@@ -984,7 +1003,8 @@ _CELL_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'reduction_fraction', 'mi
               'dead_band_half_width_i_units', 'trough_onset_lateral_stress_pa',
               'roller_wrinkle_threshold_pa', 'stripe', 'critical_exit_speed_m_s',
               'critical_exit_speed_without_bite_damping_m_s', 'speed_ratio_without_bite_damping',
-              'chatter_reliability', 'rejected')
+              'chatter_reliability', 'rejected', 'trough_error', 'trough_not_assessable_reason',
+              'dead_band_error')
 
 
 def _matrix_cell(p, mills, g_um, grade):
@@ -1277,6 +1297,13 @@ def _onset(h, dom=None):
             else f'{h * 1e6:.3g} µm')
 
 
+def _free(r, key, scale, err):
+    """A bite-free value, or 'not assessable' with the model's reason."""
+    if r.get(key) is None and r.get(err):
+        return f'<em>not assessable: {_e(r[err])}</em>'
+    return _e(_f(r.get(key), scale))
+
+
 def _table_rows(rows):
     out = []
     for r in rows:
@@ -1295,10 +1322,10 @@ def _table_rows(rows):
             _cell_bite(r, lambda: _e(
                 f'{r["bite_model"]}, {r["separating_force_per_width_n_m"] * 1e-6:.3g} kN/mm, '
                 f'strip/mill {r["strip_to_mill_modulus_ratio"]:.3g}')),
-            _e(_f(r.get('dead_band_half_width_i_units'))),
-            _e(_f(r.get('critical_ridge_height_m'), 1e6)),
-            _e(_f(r.get('trough_onset_lateral_stress_pa'), 1e-3)),
-            _e(_f(r.get('roller_wrinkle_threshold_pa'), 1e-6)),
+            _free(r, 'dead_band_half_width_i_units', 1.0, 'dead_band_error'),
+            _free(r, 'critical_ridge_height_m', 1e6, 'critical_ridge_error'),
+            _free(r, 'trough_onset_lateral_stress_pa', 1e-3, 'trough_error'),
+            _free(r, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error'),
             _cell_bite(r, lambda: _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
                                      f'{_onset(st.get("in_mill_onset_height_m"), dm)}; '
                                      f'after release '
@@ -1410,10 +1437,10 @@ def _matrix_section(m):
             ev,
             _e(f'{c["entry_thickness_m"] * 1e6:.4g} → {c["exit_thickness_m"] * 1e6:.4g} µm: '
                f'{c["pass_basis"]}'),
-            bite, _e(_f(c.get('dead_band_half_width_i_units'))),
+            bite, _free(c, 'dead_band_half_width_i_units', 1.0, 'dead_band_error'),
             _e(_f(c.get('critical_ridge_height_m'), 1e6)),
-            _e(_f(c.get('trough_onset_lateral_stress_pa'), 1e-3)),
-            _e(_f(c.get('roller_wrinkle_threshold_pa'), 1e-6)), stripe, chat])
+            _free(c, 'trough_onset_lateral_stress_pa', 1e-3, 'trough_error'),
+            _free(c, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error'), stripe, chat])
     return ('<section><h2>Battery foil by gauge and grade</h2>'
             f'<p class="note">{_e(m["status"])}: {_e(m["note"])} {_e(m["rules"])}. '
             f'{_e(m["ridge_strength_basis"])}.</p>'

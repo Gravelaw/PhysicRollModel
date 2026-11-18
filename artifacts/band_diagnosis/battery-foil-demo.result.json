@@ -21958,7 +21958,7 @@
       "stripe_definition": "one monitor per connected group of adjacent switched nozzles (a stripe); the stripe with the largest peak radius deviation governs the event metrics (governing_stripe_index), the others are listed under stripes",
       "time_origin_s": 0.0,
       "timeline_end_s": 620.0,
-      "visible_time_definition": "visible_time_s = time above the in-mill manifest threshold if reached, else above the after-release threshold, else above the reporting threshold (visible_time_basis says which); thresholds are stripe heights at the monitor position, from the peak profile scaled (onsets on a >= 10 mm grid)"
+      "visible_time_definition": "visible_time_s = time above the in-mill manifest threshold if reached, else above the after-release threshold, else above the reporting threshold (visible_time_basis says which); thresholds are stripe heights at the monitor position, from the peak profile scaled (onsets on a >= 10 mm grid), for the band at the stripe peak, where the peak states are read (bands elsewhere: neighbour_bands, never evidence)"
     },
     "thermal_sensitivity": {
       "case_roll_heat_fraction_per_roll": 0.39,

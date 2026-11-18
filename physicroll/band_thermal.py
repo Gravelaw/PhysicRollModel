@@ -253,7 +253,7 @@ def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_
                            ('released', 'released_onset_peak_height_m'))}
             else:
                 sd = [v * scales[ref_i] for v in dev]
-                o = bw.onsets(z, bw._isolate(z, sd, ref), sp)
+                o = bw.onsets(z, bw._isolate(z, sd, ref), sp, position=ref['peak_position_m'])
                 ref_on = {kk: None if o[kk] is None else o[kk] * pk_ref
                           for kk in ('mill', 'released')}
             info.update({'stripe_position_m': ref['peak_position_m'],
@@ -287,7 +287,8 @@ def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_
                 peak = abs(s_row['peak_deviation_m'])  # magnitude; the sign is in stripe_sign
                 if mode == 'full':
                     # a direct run isolates the stripe over its OWN extent: same onsets
-                    o = bw.onsets(z, bw._isolate(z, sd, s_row), sp)
+                    o = bw.onsets(z, bw._isolate(z, sd, s_row), sp,
+                                  position=s_row['peak_position_m'])
                     m_on = None if o['mill'] is None else o['mill'] * peak
                     r_on = None if o['released'] is None else o['released'] * peak
                     on_basis = 'this row\'s own stripe extent (as a direct run)'
