@@ -1763,6 +1763,9 @@ def _gauge_section(r):
     ref_desc = g.get('reference_stripe_description') or g.get('onset_50mm_reference_basis')
     out = [f'<p class="lead">{_e(_gauge_direction(g))}</p>',
            f'<p>{_e(g.get("text") or "")}</p>']
+    if g.get('own_stripe_text'):
+        out.append(f'<p><strong>The stripe each pass would produce itself.</strong> '
+                   f'{_e(g["own_stripe_text"])}</p>')
     if g.get('bite_free_text'):
         out.append(f'<p><strong>Bite-free thresholds.</strong> {_e(g["bite_free_text"])}</p>')
     out += [

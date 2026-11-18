@@ -196,6 +196,16 @@ class DegenerateInputSweepTests(unittest.TestCase):
         _ok(self, _all_bools(v2case(), True), 'all true')
         _ok(self, _all_bools(v2case(), False), 'all false')
 
+    def test_v2_thermal_inputs(self):
+        # SPEC14 review: zero roll-heat fraction and a cooling (restore) event return and render
+        c = v2case(width=True)
+        c['width_model']['roll_heat_fraction_per_roll'] = 0.0
+        _ok(self, c, 'zero roll heat fraction')
+        c = v2case(width=True)
+        c['width_model']['events'] = [{'start_s': 0.0, 'duration_s': 20.0,
+                                       'nozzle_indices': [12], 'level': 1.0}]
+        _ok(self, c, 'cooling restore event')
+
     def test_v2_width_model_inputs(self):
         r, _ = _ok(self, v2case(width=True, orientation='longitudinal',
                                 band_positions_across_width_m=[0.6, 0.6, 0.7]), 'dup + width')

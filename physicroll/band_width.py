@@ -900,7 +900,86 @@ def _stripe_metrics(times, dev, sel, ts):
     return rt.history_metrics([times[i] - ts for i in sel], [dev[i] for i in sel])
 
 
-def _events_section(th, sp, actual, events, shape_reason=None):
+def event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, end, peak_change,
+                  duration, flags, scale=1.0):
+    """States, thresholds and threshold times of an event stripe, its peak profile and history
+    scaled by ``scale`` (1 = the event as simulated). Shared by the event section and the
+    thermal sensitivity block (SPEC14), so the two cannot drift. Everything is evaluated on
+    the event's own sign (a restored nozzle gives a negative, over-cooled stripe). ``on`` are
+    the onset scales of the unscaled profile (None: shape chain not assessable); thresholds are
+    stripe heights and do not change with ``scale``."""
+    row = {'scale': scale} if scale != 1.0 else {}
+    pk_prof = [v * scale for v in prof]
+    sdev = [v * scale for v in dev]
+    shape = None
+    if on is not None:
+        try:
+            shape = shape_levels(z, pk_prof, sp)
+        except ValueError as exc:
+            row['shape_error'] = str(exc)
+    if shape is None:
+        row['manifest_threshold_m'] = row['reporting_threshold_m'] = None
+        row['released_threshold_m'] = None
+        row['peak_state_with_feedback'] = row['peak_state_after_tension_release'] = None
+    else:
+        row['peak_shape'] = shape
+        for name in ('mill', 'released', 'reporting'):
+            key = {'mill': 'manifest', 'released': 'released', 'reporting': 'reporting'}[name]
+            row[f'{key}_threshold_m'] = None if on[name] is None else on[name] * at_mon
+            if f'{name}_domain_limit' in on:
+                # the search ended at the feedback model's domain: no threshold (the band
+                # is treated as not reaching this state), never read as a threshold
+                row[f'{key}_threshold_domain_limit_m'] = on[f'{name}_domain_limit'] * at_mon
+        row['released_threshold_limited_by_reporting_threshold'] = _limited(
+            on['released'], on['reporting'])
+        states = stripe_states(shape, z[k_pk])
+        row['peak_state_with_feedback'] = states['with_feedback']['state']
+        row['peak_state_after_tension_release'] = states['with_feedback'][
+            'state_after_tension_release']
+        row['peak_stripe_states'] = states
+    if scale != 1.0:
+        row['peak_deviation_m'] = peak_change * scale
+    sign = 1.0 if peak_change >= 0 else -1.0
+    tw_times = [times[i] for i in sel]
+    tw_sdev = [sign * sdev[i] for i in sel]
+    for name in ('manifest', 'released', 'reporting'):
+        thr = row[f'{name}_threshold_m']
+        t_on = fade = None
+        if thr is not None and thr * sign > 0:
+            t_on = _first_cross(tw_times, tw_sdev, ts, abs(thr), up=True)
+            if t_on is not None and max(te, t_on) <= tw + 1e-9:
+                t_off = _first_cross(tw_times, tw_sdev, max(te, t_on), abs(thr), up=False)
+                fade = None if t_off is None else t_off - te
+        row[f'time_to_{name}_threshold_s'] = None if t_on is None else t_on - ts
+        row[f'fade_time_below_{name}_threshold_s'] = fade
+        row[f'time_above_{name}_threshold_s'] = (
+            None if t_on is None or fade is None else te + fade - t_on)
+    basis = ('manifest' if row['time_to_manifest_threshold_s'] is not None
+             else 'reporting' if row['time_to_reporting_threshold_s'] is not None else None)
+    row['band_life_basis'] = basis
+    fade = row[f'fade_time_below_{basis}_threshold_s'] if basis else None
+    row['band_life_s'] = None if (basis is None or fade is None) else duration + fade
+    row['band_life_lower_bound_s'] = None
+    if basis and fade is None:
+        flags.append('FADE_BEYOND_ATTRIBUTION_WINDOW' if tw < end - 1e-9
+                     else 'FADE_BEYOND_SIMULATED_RECOVERY')
+        row['band_life_lower_bound_s'] = tw - ts
+    # visible time: in the mill if it buckles there, else after tension release, else
+    # the time it stays above the reporting threshold (a shapemeter stripe only)
+    vis = next((n for n in ('manifest', 'released', 'reporting')
+                if row[f'time_to_{n}_threshold_s'] is not None), None)
+    row['visible_time_basis'] = {'manifest': 'in_mill_manifest',
+                                 'released': 'manifest_after_tension_release',
+                                 'reporting': 'above_reporting_threshold_only',
+                                 None: None}[vis]
+    row['visible_time_s'] = None if vis is None else row[f'time_above_{vis}_threshold_s']
+    row['visible_time_lower_bound_s'] = (
+        tw - (ts + row[f'time_to_{vis}_threshold_s'])
+        if vis is not None and row['visible_time_s'] is None else None)
+    return row
+
+
+def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
     """One transient from the steady state through all events (overlaps combined).
 
     Per event: one monitor per connected group of adjacent switched nozzles (a stripe); the
@@ -1031,69 +1110,23 @@ def _events_section(th, sp, actual, events, shape_reason=None):
                'time_to_half_peak_s': met['time_to_half_peak_s'],
                'peak_snapshot_time_s': snap['time_s'] - ts,
                'stripe_peak_position_m': z[k_pk], 'stripe_peak_deviation_m': prof[k_pk]}
+        on = None
         try:
             if sp is None:
                 raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
-            shape = shape_levels(z, prof, sp)
-            row['peak_shape'] = shape
             on = onsets(z, prof, sp)
-            for name in ('mill', 'released', 'reporting'):
-                key = {'mill': 'manifest', 'released': 'released',
-                       'reporting': 'reporting'}[name]
-                row[f'{key}_threshold_m'] = None if on[name] is None else on[name] * at_mon
-                if f'{name}_domain_limit' in on:
-                    # the search ended at the feedback model's domain: no threshold (the band
-                    # is treated as not reaching this state), never read as a threshold
-                    row[f'{key}_threshold_domain_limit_m'] = on[f'{name}_domain_limit'] * at_mon
-            row['released_threshold_limited_by_reporting_threshold'] = _limited(
-                on['released'], on['reporting'])
-            states = stripe_states(shape, z[k_pk])
-            row['peak_state_with_feedback'] = states['with_feedback']['state']
-            row['peak_state_after_tension_release'] = states['with_feedback'][
-                'state_after_tension_release']
-            row['peak_stripe_states'] = states
         except ValueError as exc:
             row['shape_error'] = str(exc)
-            row['manifest_threshold_m'] = row['reporting_threshold_m'] = None
-            row['released_threshold_m'] = None
-            row['peak_state_with_feedback'] = row['peak_state_after_tension_release'] = None
-        sign = 1.0 if met['peak_change'] >= 0 else -1.0
-        tw_times = [times[i] for i in sel]
-        tw_sdev = [sign * dev[i] for i in sel]
-        for name in ('manifest', 'released', 'reporting'):
-            thr = row[f'{name}_threshold_m']
-            t_on = fade = None
-            if thr is not None and thr * sign > 0:
-                t_on = _first_cross(tw_times, tw_sdev, ts, abs(thr), up=True)
-                if t_on is not None and max(te, t_on) <= tw + 1e-9:
-                    t_off = _first_cross(tw_times, tw_sdev, max(te, t_on), abs(thr), up=False)
-                    fade = None if t_off is None else t_off - te
-            row[f'time_to_{name}_threshold_s'] = None if t_on is None else t_on - ts
-            row[f'fade_time_below_{name}_threshold_s'] = fade
-            row[f'time_above_{name}_threshold_s'] = (
-                None if t_on is None or fade is None else te + fade - t_on)
-        basis = ('manifest' if row['time_to_manifest_threshold_s'] is not None
-                 else 'reporting' if row['time_to_reporting_threshold_s'] is not None else None)
-        row['band_life_basis'] = basis
-        fade = row[f'fade_time_below_{basis}_threshold_s'] if basis else None
-        row['band_life_s'] = None if (basis is None or fade is None) else e['duration_s'] + fade
-        row['band_life_lower_bound_s'] = None
-        if basis and fade is None:
-            flags.append('FADE_BEYOND_ATTRIBUTION_WINDOW' if tw < end - 1e-9
-                         else 'FADE_BEYOND_SIMULATED_RECOVERY')
-            row['band_life_lower_bound_s'] = tw - ts
-        # visible time: in the mill if it buckles there, else after tension release, else
-        # the time it stays above the reporting threshold (a shapemeter stripe only)
-        vis = next((n for n in ('manifest', 'released', 'reporting')
-                    if row[f'time_to_{n}_threshold_s'] is not None), None)
-        row['visible_time_basis'] = {'manifest': 'in_mill_manifest',
-                                     'released': 'manifest_after_tension_release',
-                                     'reporting': 'above_reporting_threshold_only',
-                                     None: None}[vis]
-        row['visible_time_s'] = None if vis is None else row[f'time_above_{vis}_threshold_s']
-        row['visible_time_lower_bound_s'] = (
-            tw - (ts + row[f'time_to_{vis}_threshold_s'])
-            if vis is not None and row['visible_time_s'] is None else None)
+        row.update(event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw,
+                                 end, met['peak_change'], e['duration_s'], flags, 1.0))
+        # SPEC14: the same metrics at other roll heat shares (the model is linear in the roll
+        # heat at a fixed spray coefficient: profile and history scale, thresholds do not)
+        if scales:
+            row['scaled'] = [{k2: v for k2, v in event_metrics(
+                z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, end,
+                met['peak_change'], e['duration_s'], [], sc).items()
+                if k2 not in ('peak_shape', 'peak_stripe_states')} | {'scale': sc}
+                for sc in scales]
         if flags:
             row['flags'] = flags
         hist = [i for i, t in enumerate(times) if t >= ts - 1e-9]
@@ -1863,7 +1896,10 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         out['failures'].append(shape['crown']['error'])
     if w['events'] and actual is not None:
         try:
-            out['thermal_events'] = _events_section(th, sp, actual, w['events'], shape_reason)
+            from . import band_thermal
+            out['thermal_events'] = _events_section(
+                th, sp, actual, w['events'], shape_reason,
+                scales=band_thermal.event_scales(case, th.fraction))
         except ValueError as exc:
             out['thermal_events'] = failed('thermal_events', exc)
             out['failures'].append(out['thermal_events']['error'])
@@ -1916,9 +1952,11 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         out['thermal_sensitivity'] = band_thermal.thermal_sensitivity(
             case, w, th, sp, steady, actual, out['thermal_events'], sys.modules[__name__],
             shape.get('steady_stripe_table') if isinstance(shape, dict) else None)
-    except ValueError as exc:
+    except (ValueError, ArithmeticError) as exc:
+        # an optional block: no error inside it may abort the diagnosis
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
+        flags.append('THERMAL_SENSITIVITY_FAILED')
     if out['failures']:
         flags.append('WIDTH_SECTION_PARTIAL_FAILURE')
     if steady and any(s['sign'] == 'HOT_HIGH' for s in steady['stripes']):

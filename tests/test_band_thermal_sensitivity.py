@@ -55,7 +55,8 @@ class SensitivityBlockTests(unittest.TestCase):
         for x in ts['rows']:
             self.assertIsNotNone(x['events'])
             for e in x['events']:
-                self.assertIn(e['in_mill'], ('MANIFEST_IN_MILL', 'LATENT_UNDER_TENSION', None))
+                self.assertIn(e['in_mill'], ('MANIFEST_BUCKLE', 'LATENT_UNDER_TENSION',
+                                              'BELOW_REPORTING_THRESHOLD', None))
         base = by[(0.84, htcs[0])]
         listed = {(c['strip_heat_share'], c['spray_htc_w_m2k']) for c in
                   ts['combinations_changing_a_state']}
@@ -87,6 +88,106 @@ class SensitivityBlockTests(unittest.TestCase):
         self.assertEqual(bt._time_above([0, 1], [0, 0.5], 1), 0.0)
         self.assertAlmostEqual(bt.share_to_fraction(0.22), 0.39)
         self.assertAlmostEqual(bt.fraction_to_share(0.08), 0.84)
+
+
+def _events_case(**wm):
+    c = v2case(width=True)
+    c['width_model'].update(wm)
+    return c
+
+
+class ReviewFindingTests(unittest.TestCase):
+    """Review of 37fee15: signed events, event-only cases, zero roll-heat fraction, signed
+    steady stripes."""
+
+    def _case_row_matches_section(self, r):
+        ts = r['width']['thermal_sensitivity']
+        base = ts['rows'][0]
+        self.assertEqual(base['strip_heat_share'], ts['case_strip_heat_share'])
+        for e, row in zip(r['width']['thermal_events']['events'], base['events']):
+            for k in ('peak_deviation_m', 'manifest_threshold_m', 'released_threshold_m',
+                      'visible_time_s', 'visible_time_basis', 'band_life_s',
+                      'time_above_manifest_threshold_s', 'time_above_released_threshold_s'):
+                self.assertEqual(row[k], e[k], k)
+            self.assertEqual(row['in_mill'], e['peak_state_with_feedback'])
+            self.assertEqual(row['after_release'], e['peak_state_after_tension_release'])
+        return ts
+
+    def test_heating_and_cooling_events_reproduce_the_event_section(self):
+        # closure (heating) as in v2case; restore of the blocked nozzle 12 (cooling)
+        heat = diagnose(_events_case())
+        ts = self._case_row_matches_section(heat)
+        self.assertEqual(ts['rows'][0]['events'][0]['sign'], 'HEATING')
+        cool = diagnose(_events_case(events=[{'start_s': 0.0, 'duration_s': 20.0,
+                                              'nozzle_indices': [12], 'level': 1.0}]))
+        ts = self._case_row_matches_section(cool)
+        e = ts['rows'][0]['events'][0]
+        self.assertEqual(e['sign'], 'COOLING')
+        self.assertLess(e['peak_deviation_m'], 0)
+        # reviewer: -0.717 um against -23.2 um must stay latent, never manifest for 620 s
+        self.assertEqual(e['in_mill'], 'LATENT_UNDER_TENSION')
+        self.assertNotEqual(e['visible_time_basis'], 'in_mill_manifest')
+        for row in ts['rows']:
+            for ev in row['events']:
+                self.assertLess(ev['ratio_peak_to_in_mill_threshold'], 1)
+                self.assertEqual(ev['in_mill'], 'LATENT_UNDER_TENSION')
+
+    def test_event_only_case_evaluates_events(self):
+        r = diagnose(_events_case(blocked_nozzle_indices=[]))
+        ts = self._case_row_matches_section(r)
+        self.assertTrue(all(x['status'] == 'NO_STEADY_STRIPE_ABOVE_THRESHOLD'
+                            for x in ts['rows']))
+        low = next(x for x in ts['rows'] if x['strip_heat_share'] == 0.11)
+        self.assertEqual(low['events'][0]['in_mill'], 'MANIFEST_BUCKLE')
+        ch = [c for c in ts['combinations_changing_a_state'] if c['strip_heat_share'] == 0.11]
+        self.assertEqual(len(ch), 1)
+        self.assertTrue(all(w.startswith('event ') for w in ch[0]['changes']))
+
+    def test_zero_roll_heat_fraction_fails_soft(self):
+        r = diagnose(_events_case(roll_heat_fraction_per_roll=0.0))
+        ts = r['width']['thermal_sensitivity']
+        self.assertEqual(ts['status'], 'NOT_ASSESSABLE')
+        self.assertIn('nothing to scale', ts['reason'])
+        render_band_report(r)
+
+    def test_arithmetic_error_inside_the_block_fails_soft(self):
+        from unittest import mock
+
+        def boom(*a, **k):
+            raise ZeroDivisionError('planted')
+        with mock.patch.object(bt, 'thermal_sensitivity', boom):
+            r = diagnose(_events_case())
+        self.assertEqual(r['width']['thermal_sensitivity']['status'], 'FAILED')
+        self.assertIn('THERMAL_SENSITIVITY_FAILED', r['flags'])
+
+    def test_negative_steady_stripe(self):
+        # the model's actual-minus-healthy stripes are hot (levels <= 1); a cold (over-cooled)
+        # stripe is planted by negating the steady deviation of a real case
+        from physicroll import band_width as bw
+        from tests.test_band_diagnosis import _bite
+        c = validate_case(_events_case(events=[]))
+        w = c['width_model']
+        th = bw._Thermal(c, w, 4e5, 0.08)
+        sp, _ = bw.shape_params_or_none(c, _bite(c), w)
+        steady, _, actual, _ = bw._steady_section(th, sp)
+        neg = dict(steady, local_deviation_m=[-v for v in steady['local_deviation_m']])
+        z = neg['z_m']
+        idx = bw._inside(z, th.centre, th.width)
+        neg['stripes'] = bw._runs([z[i] for i in idx], [neg['local_deviation_m'][i]
+                                                        for i in idx], bw.STRIPE_THRESHOLD_M)
+        ts = bt.thermal_sensitivity(c, w, th, sp, neg, actual, None, bw)
+        pos = bt.thermal_sensitivity(c, w, th, sp, steady, actual, None, bw)
+        r0, p0 = ts['rows'][0], pos['rows'][0]
+        self.assertEqual(r0['stripe_sign'], 'COLD_LOW')
+        self.assertEqual(p0['stripe_sign'], 'HOT_HIGH')
+        self.assertGreater(r0['stripe_peak_m'], 0)            # a magnitude
+        self.assertAlmostEqual(r0['stripe_peak_m'], p0['stripe_peak_m'])
+        for x in ts['rows']:
+            self.assertGreater(x['ratio_stripe_to_in_mill_onset'], 0)
+            self.assertIsNotNone(x['state_in_mill'])
+        lv = bw.shape_levels(z, neg['local_deviation_m'], sp)
+        st = bw.stripe_states(lv, r0['stripe_position_m'])['with_feedback']
+        self.assertEqual(r0['state_in_mill'], st['state'])
 
 
 if __name__ == '__main__':

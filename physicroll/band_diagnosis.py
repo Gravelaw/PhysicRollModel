@@ -3338,11 +3338,12 @@ def diagnose(case):
     ctx.width = result['width']
     try:
         band_thermal.attach_per_pass(result)
-    except (ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
         ts = (result.get('width') or {}).get('thermal_sensitivity')
         if isinstance(ts, dict):
             ts['per_pass'] = None
             ts['per_pass_note'] = f'per-pass extension failed: {exc}'
+        flags.append('THERMAL_SENSITIVITY_PER_PASS_FAILED')
 
     if bite is not None:
         fpw_case = bite.separating_force_n / eff['pass']['width_m']
