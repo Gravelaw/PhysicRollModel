@@ -1310,11 +1310,13 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                'friction_coefficient': src['friction_coefficient'],
                'mean_flow_stress_pa': src['mean_flow_stress_pa']}
         try:
-            case_pass = is_case_pass(case, src)
-            if w.get('shape_inputs') is not None and case_pass:
+            # review finding: the case pass always uses the operating bite (the same object
+            # the steady shape section used, supplied or derived); only genuinely different
+            # passes derive their own
+            if is_case_pass(case, src):
+                if op_bite is None and w.get('shape_inputs') is None:
+                    raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
                 bite = op_bite
-            elif case_pass and op_bite is None:
-                raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
             else:
                 bite = get_bite(src)
             sp, sp_basis = shape_params_or_none(case, bite, w, src)
@@ -2043,6 +2045,20 @@ def _h_zone(f):
                     + ', '.join(f'{L:.4g} s ({b})' for L, b in lives),
                     'within 0.3-3 x model visible time', 'SUPPORTS' if ok else 'NEUTRAL',
                     'moderate' if ok else None, 'model'))
+    elif f.events:
+        # review finding: simulated events that never make a reportable band (or a mix of
+        # those and shape errors) are model output, not 'no model events': no literature
+        # support; the model amplitude is not trusted enough to contradict either
+        def state(x):
+            if x.get('shape_error'):
+                return f'shape error: {x["shape_error"]}'
+            return (f'{x.get("peak_state_with_feedback")} in the mill / '
+                    f'{x.get("peak_state_after_tension_release")} after release')
+        txt = '; '.join(f'{x.get("label") or "event " + str(x.get("index"))}: {state(x)}'
+                        for x in f.events)
+        e.append(ev(crit, f'{d:.4g} s; the supplied model events produce no reportable band '
+                    f'(no visible time) - {txt}', 'within 0.3-3 x model visible time',
+                    'NEUTRAL', basis='model'))
     else:
         lo, hi = LITERATURE_BAND_LIFE_S
         ok = 0.3 * lo <= d <= 3 * hi

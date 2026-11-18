@@ -458,6 +458,91 @@ class CasePassIdentityTests(unittest.TestCase):
             self.assertEqual(bw.shape_params_or_none(eff, None, w, other), (None, None), k)
 
 
+class ZoneDurationFallbackTests(unittest.TestCase):
+    """Review finding: the literature band-life comparison only when no events were supplied;
+    simulated events without a reportable band give NEUTRAL (basis model), never support."""
+    CRIT = 'intermittent duration vs model visible time'
+
+    def crit(self, events, d=60.0):
+        f = bw.Facts(validate_case(v2(orientation='longitudinal', intermittent_duration_s=d)),
+                     None, None, None)
+        f.events = events
+        e, _ = bw._h_zone(f)
+        return {x['criterion']: x for x in e}[self.CRIT], e
+
+    def test_event_below_reporting_threshold_is_neutral(self):
+        # reviewer's reproducer: 2 s event on nozzle 16 at level 0.999, observed 60 s band
+        c = v2(orientation='longitudinal', intermittent_duration_s=60.0)
+        c['width_model'] = width_model(events=[{'start_s': 0.0, 'duration_s': 2.0,
+                                                'nozzle_indices': [16], 'level': 0.999}])
+        r = diagnose(c)
+        ev0 = r['width']['thermal_events']['events'][0]
+        self.assertEqual(ev0['peak_state_with_feedback'], 'BELOW_REPORTING_THRESHOLD')
+        self.assertIsNone(ev0['visible_time_s'])
+        h = _h(r)['cooling_zone_switching_transient']
+        x = {e['criterion']: e for e in h['evidence']}[self.CRIT]
+        self.assertEqual((x['verdict'], x['weight'], x['basis']), ('NEUTRAL', None, 'model'))
+        self.assertNotIn('no model events', x['observed'])
+        self.assertIn('BELOW_REPORTING_THRESHOLD', x['observed'])
+        self.assertEqual(h['score'], 2)       # was 3 with the literature support point
+
+    def test_mixed_events_and_no_events(self):
+        below = {'index': 0, 'label': 'small', 'peak_state_with_feedback':
+                 'BELOW_REPORTING_THRESHOLD', 'peak_state_after_tension_release':
+                 'BELOW_REPORTING_THRESHOLD', 'visible_time_s': None,
+                 'visible_time_lower_bound_s': None}
+        broken = {'index': 1, 'label': 'broken', 'shape_error': 'shape failed: test',
+                  'peak_state_with_feedback': None, 'peak_state_after_tension_release': None,
+                  'visible_time_s': None, 'visible_time_lower_bound_s': None}
+        x, _ = self.crit([below, broken])
+        self.assertEqual((x['verdict'], x['basis']), ('NEUTRAL', 'model'))
+        self.assertIn('shape failed: test', x['observed'])
+        self.assertIn('small: BELOW_REPORTING_THRESHOLD', x['observed'])
+        x, _ = self.crit([broken])          # all shape errors: unchanged branch
+        self.assertEqual((x['verdict'], x['basis']), ('NEUTRAL', 'model not assessable'))
+        x, _ = self.crit([])                # no events supplied: literature comparison
+        self.assertEqual((x['verdict'], x['weight']), ('SUPPORTS', 'weak'))
+        self.assertIn('no model events', x['observed'])
+        x, _ = self.crit([], d=1000.0)
+        self.assertEqual(x['verdict'], 'NEUTRAL')
+        vis = dict(below, visible_time_s=50.0, visible_time_basis='in_mill_manifest')
+        x, _ = self.crit([vis])             # visible time: unchanged
+        self.assertEqual((x['verdict'], x['weight'], x['basis']),
+                         ('SUPPORTS', 'moderate', 'model'))
+        x, _ = self.crit([vis], d=500.0)
+        self.assertEqual((x['verdict'], x['basis']), ('NEUTRAL', 'model'))
+
+
+class SuppliedBiteGaugeTrendTests(unittest.TestCase):
+    def test_case_pass_row_keeps_the_supplied_bite(self):
+        # review finding: with a supplied bite and no shape_inputs the case-pass gauge-trend
+        # row re-derived a Hitchcock bite (8.11 GPa) while the steady shape used the supplied
+        # one (16.23 GPa with F_h doubled)
+        c = v2(orientation='longitudinal')
+        o = c['model_options']['bite_response_override']
+        o['dforce_dexit_thickness_n_m'] *= 2
+        p = c['pass']
+        c['schedule'] = [
+            {'label': 'thicker', 'entry_thickness_m': 0.9e-3, 'exit_thickness_m': 0.6e-3,
+             'mean_flow_stress_pa': 240e6, 'friction_coefficient': 0.05,
+             'entry_tension_pa': 20e6, 'exit_tension_pa': 25e6, 'exit_speed_m_s': 8.0},
+            dict({k: p[k] for k in ('entry_thickness_m', 'exit_thickness_m',
+                                    'mean_flow_stress_pa', 'friction_coefficient',
+                                    'entry_tension_pa', 'exit_tension_pa', 'exit_speed_m_s')},
+                 label='case pass row')]
+        c['width_model'] = width_model(blocked_nozzle_indices=[12])
+        r = diagnose(c)
+        w = r['width']
+        steady_q = w['inputs_used']['strip_stiffness_per_width_pa']
+        self.assertAlmostEqual(steady_q, -o['dforce_dexit_thickness_n_m'] / p['width_m'])
+        rows = w['gauge_trend']['rows']
+        self.assertEqual(rows[1]['strip_stiffness_per_width_pa'], steady_q)
+        self.assertEqual(rows[1]['bite_source'], 'supplied')
+        self.assertEqual(rows[1]['bite_model'], 'supplied')
+        self.assertEqual(rows[0]['bite_source'], 'derived_slab_hitchcock')
+        self.assertNotEqual(rows[0]['strip_stiffness_per_width_pa'], steady_q)
+
+
 class CollectorFoilBelowFloorTests(unittest.TestCase):
     """SPEC9 addendum: a 0.030 -> 0.017 mm case pass (below the 20 um roll-bite floor)."""
 
