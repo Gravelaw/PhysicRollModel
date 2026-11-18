@@ -2282,6 +2282,86 @@ def _product_block(r):
             + _e(' '.join(pc.get('limitations') or [])) + '</p></section>')
 
 
+MS_WORDS = {'INSIDE_TYPICAL_RANGE': 'inside typical', 'BELOW_STANDARD_MINIMUM':
+            'BELOW STANDARD MINIMUM', 'ABOVE_TYPICAL_RANGE': 'above typical',
+            'BETWEEN_STANDARD_MINIMUM_AND_TYPICAL_RANGE': 'between minimum and typical',
+            'BELOW_TYPICAL_RANGE': 'below typical (no standard minimum)',
+            'AT_OR_ABOVE_STANDARD_MINIMUM_NO_TYPICAL_PUBLISHED':
+                'at or above minimum (no typical published)',
+            'NO_PUBLISHED_VALUE': 'no published value',
+            'OUTSIDE_PUBLISHED_BANDS': 'outside the published bands'}
+
+
+def _mpa_txt(v):
+    return _f(v, 1e-6, 3) if _ok(v) else "–"
+
+
+def _material_block(r):
+    """SPEC13 2.6: literature alloy and temper for the final gauge, and the case against it."""
+    ms = r.get('material_selection')
+    head = '<section><h2>Material selection (literature proposal, to confirm with the plant)</h2>'
+    if not isinstance(ms, dict):
+        return ''
+    if ms.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(ms.get('error'))) + '</section>'
+    if ms.get('not_supplied'):
+        return (head + _state_p('not supplied: ' + str(ms.get('reason')) + '. '
+                                + str(ms.get('hint') or '')) + '</section>')
+    opts = ms.get('options') or {}
+    rows = []
+    for o in opts.get('options') or []:
+        lo, hi = (o.get('typical_rm_pa') or [None, None])[:2]
+        typ = ('–' if not _ok(lo) and not _ok(hi) else
+               f'{_mpa_txt(lo)}–{_mpa_txt(hi)}' if _ok(hi) else f'≥{_mpa_txt(lo)}')
+        rows.append([_e(o.get('alloy')), _e(str(o.get('grade', '')).replace('_', '-')),
+                     _e('/'.join(o.get('temper_labels') or [])),
+                     _mpa_txt(o.get('standard_min_rm_pa')), typ,
+                     _e(o.get('usual_for') or '–'), _e(o.get('evidence')),
+                     _e(', '.join(o.get('sources') or []))])
+    props = []
+    for g, p in (ms.get('proposals') or {}).items():
+        if p.get('status') != 'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT':
+            props.append(f'<li>{_e(g)}: none ({_e(p.get("reason"))})</li>')
+            continue
+        t = p.get('tensile_strength_pa') or {}
+        lo, hi = (t.get('range_pa') or [None, None])[:2]
+        weak = 'no usual choice' in str(p.get('rule'))
+        props.append(
+            f'<li>{_e(g.replace("_", "-"))}: <strong>{_e(p.get("alloy"))}-{_e(p.get("temper"))}'
+            f'</strong>, Rm {_mpa_txt(t.get("value_pa"))} MPa used (range {_mpa_txt(lo)}–'
+            f'{_mpa_txt(hi)} MPa), Rp0.2 {_mpa_txt(_get(p, "proof_strength", "value_pa"))} MPa '
+            f'({"published" if _get(p, "proof_strength", "published") else "assumed"}); '
+            + (f'<strong>evidence WEAK (fallback rule: no usual choice of this grade at this '
+               f'gauge)</strong>' if weak else f'evidence {_e(p.get("evidence"))}')
+            + f'. Rule: {_e(p.get("rule"))}.</li>')
+    cmp_ = ms.get('comparison') or {}
+    prow = [[_e(x.get('label')), _um(x.get('exit_thickness_m')), _e(x.get('band_label') or '–'),
+             _mpa_txt(x.get('mean_flow_stress_pa')), _e(x.get('option') or '–'),
+             _mpa_txt(x.get('standard_min_pa')),
+             _e(MS_WORDS.get(x.get('verdict'), str(x.get('verdict'))))]
+            for x in cmp_.get('passes') or []]
+    ys = cmp_.get('yield_stress') or {}
+    fb, cb = ms.get('final_pass_band') or {}, ms.get('case_pass_band') or {}
+    return (head + f'<p>{_e(ms.get("sentence"))}</p>'
+            + f'<p>Final pass {_e(ms.get("final_pass_label"))} '
+              f'({_um(ms.get("final_exit_thickness_m"))}): band {_e(fb.get("band_label") or fb.get("reason"))}; '
+              f'case pass: band {_e(cb.get("band_label") or cb.get("reason"))}.</p>'
+            + '<h3>Options at the final gauge</h3><p class="note">' + _e(opts.get('ordering_rule'))
+            + '</p>' + _table(['alloy', 'grade', 'temper', 'GB min [MPa]', 'typical Rm [MPa]',
+                               'usual choice', 'evidence', 'sources'], rows, 'wrapall')
+            + '<h3>Proposals</h3><ul>' + ''.join(props) + '</ul>'
+            + '<h3>The case against the band</h3>'
+            + f'<p>Alloy: {_e(_get(cmp_, "alloy", "text"))} Temper: '
+              f'{_e(_get(cmp_, "temper", "verdict"))}. Yield stress '
+              f'{_mpa_txt(ys.get("value_pa"))} MPa: {_e(ys.get("verdict"))} '
+              f'(proof strength {"published" if ys.get("published") else "assumed"}).</p>'
+            + _table(['pass', 'exit', 'band', 'flow stress [MPa]', 'compared with',
+                      'standard min [MPa]', 'verdict'], prow, 'wrapall')
+            + f'<p class="note">{_e(cmp_.get("flow_stress_caveat"))} {_e(ms.get("note"))} '
+              f'Flags: {_e(", ".join(ms.get("flags") or []) or "none")}. '
+              + _e(' '.join(ms.get('limitations') or [])) + '</p></section>')
+
+
 # ------------------------------------------------------------------------------ family + layout
 def _family_block(r):
     fs = r.get('family_summary') or {}
@@ -2653,7 +2733,7 @@ def render_band_report(result):
     v1 = r.get('case_schema', V1_SCHEMA) == V1_SCHEMA
     css = CSS
     s = _head_blocks(r)
-    foil = _foil_block(r) + _product_block(r)
+    foil = _foil_block(r) + _product_block(r) + _material_block(r)
     if foil:
         css += CSS3
         s.insert(len(s) - 1, foil)       # before the (long) provenance paragraph

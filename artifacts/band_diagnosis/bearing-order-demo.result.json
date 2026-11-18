@@ -2114,7 +2114,7 @@
           "basis": "observation",
           "criterion": "pitch-speed law",
           "expected": "FIXED_FREQUENCY, or SPEED_INDEPENDENT_PITCH with pi*D_b*(1+f)/p within 0.05 of an integer (backup roll already marked)",
-          "observed": "SPEED_INDEPENDENT_PITCH (exponent 0.000); 24.92 mm at 6 m/s (pi*D_b*(1+f)/p = 151.121); 24.92 mm at 7.833 m/s (pi*D_b*(1+f)/p = 151.121)",
+          "observed": "SPEED_INDEPENDENT_PITCH (exponent 0.000); 24.92 mm at 6 m/s (pi*D_b*(1+f)/p = 151.121 (one count 151 for all pitches)); 24.92 mm at 7.833 m/s (pi*D_b*(1+f)/p = 151.121 (one count 151 for all pitches))",
           "verdict": "NEUTRAL",
           "weight": null
         },
@@ -2587,8 +2587,8 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_b*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
-          "observed": "24.92 mm at 6 m/s (closest n = 8, mismatch 1789.01%); 24.92 mm at 7.833 m/s (closest n = 8, mismatch 1789.01%)",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
+          "observed": "24.92 mm at 6 m/s (n = 8 (best single count for all pitches), mismatch 1789.01%); 24.92 mm at 7.833 m/s (n = 8 (best single count for all pitches), mismatch 1789.01%)",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
         },
@@ -2634,6 +2634,9 @@
       "mechanism": "A mark or pattern on a backup roll transfers at equal surface pitch to the work roll and then to the strip, so the pitch is the backup-roll circumference over n.",
       "model_prediction": {
         "forward_slip_fraction_used": 0.042419216766307555,
+        "mark_count_basis": "best single count for all pitches",
+        "mark_count_used": 8,
+        "mark_count_worst_relative_mismatch": 17.890117954520967,
         "pitch_one_mark_m": 3.766085036356936,
         "pitch_two_marks_m": 1.883042518178468,
         "roll_diameter_m": 1.15
@@ -3315,8 +3318,8 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_w*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
-          "observed": "24.92 mm at 6 m/s (closest n = 8, mismatch 366.50%); 24.92 mm at 7.833 m/s (closest n = 8, mismatch 366.50%)",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
+          "observed": "24.92 mm at 6 m/s (n = 8 (best single count for all pitches), mismatch 366.50%); 24.92 mm at 7.833 m/s (n = 8 (best single count for all pitches), mismatch 366.50%)",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
         },
@@ -3355,6 +3358,9 @@
       "mechanism": "A mark, flat or grinder-chatter pattern on a work roll prints once (or n times) per revolution, so the strip pitch is the work-roll circumference over n.",
       "model_prediction": {
         "forward_slip_fraction_used": 0.042419216766307555,
+        "mark_count_basis": "best single count for all pitches",
+        "mark_count_used": 8,
+        "mark_count_worst_relative_mismatch": 3.665037825290396,
         "pitch_one_mark_m": 0.9300592611524956,
         "pitch_two_marks_m": 0.4650296305762478,
         "roll_diameter_m": 0.284

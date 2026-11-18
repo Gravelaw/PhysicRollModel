@@ -256,9 +256,13 @@ marked not credible and kept out of every trend statement. It adds six foil obse
 tension-line hypothesis built on the published description (no physical model), and, with
 `material.product`, an evidence-neutral check of every pass against a literature survey of
 published product ranges and schedules
-([thin-gauge products](docs/thin-gauge-products.md)). The foil demo follows the plant's route
-(50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates, alloy and
-temper assumed): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
+([thin-gauge products](docs/thin-gauge-products.md)). For a battery product it also proposes
+alloy and temper for the final gauge from a literature grade table (`material_selection`: the
+gauge band, its options with evidence ratings, a standard and a high-strength proposal, and
+the case compared with them; a proposal for the plant to confirm, never a change to the case or
+the scores). The foil demo follows the plant's route
+(50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates assumed;
+alloy and temper the literature proposal 1235-H18): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
 alternative. The 18 um final pass gets an extended-domain bite with its force inside the
 reported range (still unvalidated); the 12 um bite is not credible. In the demo a cooling
 stripe becomes harder, not easier, to see in the mill as the gauge thins; see
@@ -273,7 +277,9 @@ python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out 
 
 `python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis` screens one
 synthetic final pass per catalogue product (literature inputs, one synthetic mill per gauge
-class, unvalidated) and ranks the products per mechanism; see section 3.10 of the doc.
+class, unvalidated) and ranks the products per mechanism, with a battery-foil block by gauge
+(20 to 10 um) and grade (standard and high-strength proposals); see sections 3.10 and 3.11 of
+the doc.
 To use your own machine instead of the demo mills (`--mill my_mill.json`, also
 `--products`, `--overrides`, `--write-cases`), and for which case-file keys are the machine,
 the product and the observations, see "Using your own mill" (section 5.3 of the doc).

@@ -3475,8 +3475,8 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_b*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
-          "observed": "76.47 mm at 14.5 m/s (closest n = 8, mismatch 520.69%); 84.08 mm at 16 m/s (closest n = 8, mismatch 464.51%)",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
+          "observed": "76.47 mm at 14.5 m/s (n = 8 (best single count for all pitches), mismatch 520.69%); 84.08 mm at 16 m/s (n = 8 (best single count for all pitches), mismatch 464.51%)",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
         },
@@ -3522,6 +3522,9 @@
       "mechanism": "A mark or pattern on a backup roll transfers at equal surface pitch to the work roll and then to the strip, so the pitch is the backup-roll circumference over n.",
       "model_prediction": {
         "forward_slip_fraction_used": 0.05101747655249045,
+        "mark_count_basis": "best single count for all pitches",
+        "mark_count_used": 8,
+        "mark_count_worst_relative_mismatch": 5.206926083107026,
         "pitch_one_mark_m": 3.7971491006015543,
         "pitch_two_marks_m": 1.8985745503007772,
         "roll_diameter_m": 1.15
@@ -3555,8 +3558,8 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_w*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
-          "observed": "76.47 mm at 14.5 m/s (closest n = 8, mismatch 115.89%); 84.08 mm at 16 m/s (closest n = 8, mismatch 96.35%)",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
+          "observed": "76.47 mm at 14.5 m/s (n = 8 (best single count for all pitches), mismatch 115.89%); 84.08 mm at 16 m/s (n = 8 (best single count for all pitches), mismatch 96.35%)",
           "verdict": "CONTRADICTS",
           "weight": "moderate"
         },
@@ -3595,6 +3598,9 @@
       "mechanism": "A mark, flat or grinder-chatter pattern on a work roll prints once (or n times) per revolution, so the strip pitch is the work-roll circumference over n.",
       "model_prediction": {
         "forward_slip_fraction_used": 0.05101747655249045,
+        "mark_count_basis": "best single count for all pitches",
+        "mark_count_used": 8,
+        "mark_count_worst_relative_mismatch": 1.1589308115154877,
         "pitch_one_mark_m": 1.3207475132527147,
         "pitch_two_marks_m": 0.6603737566263573,
         "roll_diameter_m": 0.4

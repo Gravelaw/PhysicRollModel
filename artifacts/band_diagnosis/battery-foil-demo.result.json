@@ -703,6 +703,7 @@
     "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
     "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
     "LUDERS_STRAIN_NOT_SUPPLIED_ZERO_USED_IN_WINDOWS",
+    "MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN",
     "MATTRESS_REGIME_FOIL",
     "MODEL_STEADY_THERMAL_STRIPES_PRESENT",
     "SYNTHETIC_INPUTS",
@@ -824,8 +825,10 @@
       "Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated."
     ],
     "product_question": {
+      "asks_for_alloy_and_temper": false,
       "case_temper": "H18",
-      "text": "Ask the plant which product this is: 25-60 um can be pouch-laminate barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of thinner collector foil (collector foil is usually 9-20 um). The thinnest pass in this case exits at 12 um; a final gauge below about 20 um points to cathode current-collector foil in H18 with 25-60 um as intermediate passes. The case states that the final pass is rolled single-sheet (material.final_pass_doubled false). O against H18 changes buckling and winding behaviour; this case uses temper H18."
+      "product": "battery_collector_foil",
+      "text": "Product battery_collector_foil (material.product): the literature proposal for the final gauge 12 um (>10\u201313 \u00b5m band) is standard 1235-H18 (Rm 180 MPa; evidence medium) or high-strength 1100-H18 (Rm 250 MPa; evidence medium); confirm or correct it with the plant (see material_selection). The case states that the final pass is rolled single-sheet (material.final_pass_doubled false). O against H18 changes buckling and winding behaviour; this case uses temper H18."
     },
     "schedule_bites": [
       {
@@ -3534,7 +3537,7 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_b*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
           "observed": "pitch not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -4059,7 +4062,7 @@
         {
           "basis": "observation",
           "criterion": "observed frequency u/p",
-          "expected": "within +-15 % of a torsional mode (19.59, 40.06 Hz); above 60.09 Hz contradicts",
+          "expected": "within +-15 % of one torsional mode, the same for every observation (19.59, 40.06 Hz); above 60.09 Hz contradicts",
           "observed": "no pitch or vibration frequency observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -4135,7 +4138,7 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_w*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
           "observed": "pitch not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -4426,6 +4429,7 @@
     },
     "material": {
       "alloy": "AA1235",
+      "alloy_temper_stated": false,
       "final_pass_doubled": false,
       "grain_size_m": null,
       "luders_strain": null,
@@ -4445,7 +4449,7 @@
     "name": "battery_foil_demo",
     "notes": [
       "Closed-loop demo: planted causes are a partly blocked nozzle (continuous band hidden under mill tension, visible after tension release, nozzle_thermal_stripe) and a cooling-zone valve closure (cooling_zone_switching_transient).",
-      "Route: plant statements (50 um input, two single-sheet passes, final usually 17-19 um, down to 12 um); the intermediates 30 um and 25 um, the S1-S3 stock route, the alloy (1235-like) and the temper (H18) are ASSUMED: the plant has not stated the alloy and temper. The demo assumes a standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report); all mill and material numbers are synthetic.",
+      "Route: plant statements (50 um input, two single-sheet passes, final usually 17-19 um, down to 12 um); the intermediates 30 um and 25 um, the S1-S3 stock route, the alloy and temper 1235-H18 are the LITERATURE PROPOSAL of the catalogue's grade table (standard grade of the final-gauge bands), to confirm or correct with the plant, not a plant statement. The flow stresses (180 MPa at 18 um, 185 MPa at 12 um) lie inside the proposal's ranges and are unchanged. For the 12 um route the research gives a standard minimum of 180-190 MPa for 1235 / 1060 and 230 MPa for the 1100 / 1C30 type that EV practice favours (GB/T 33143-2022 as read in the second battery survey). All mill and material numbers are synthetic.",
       "At 30 um the mill is in or near closed-gap rolling, which the tool does not model: see the foil-regime block. The lever table and the gauge-control section assume an open gap.",
       "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
       "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
@@ -4498,7 +4502,7 @@
       "width_m": 1.2,
       "work_roll_radius_m": 0.135
     },
-    "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, consistent with standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report; stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
+    "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil. MATERIAL: 1235-H18 is the LITERATURE PROPOSAL (standard grade) of the catalogue's grade table for the final gauges of this case (>15-20 um band for 18 um, >10-13 um band for 12 um; band_products.proposed_material), to be confirmed or corrected by the plant: alloy and temper are NOT a plant statement (material.alloy_temper_stated false). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, inside the ranges of the standard proposal 1235-H18 (finished tensile strength 175-220 MPa at >15-20 um, at least 180 MPa at >10-13 um, 170-200 MPa at >20-30 um in the grade table; used as an indicator of flow stress only; no hardening law), so they are unchanged, friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
     "schedule": [
       {
         "entry_tension_pa": 30000000.0,
@@ -4883,6 +4887,1226 @@
     "Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only.",
     "Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated."
   ],
+  "material_selection": {
+    "case_pass_band": {
+      "band_id": "20_30",
+      "band_label": ">20\u201330 \u00b5m",
+      "reason": "",
+      "status": "IN_BAND"
+    },
+    "comparison": {
+      "alloy": {
+        "designation": "1235",
+        "evidence": "medium",
+        "matches_proposal": [
+          "standard"
+        ],
+        "text": "1235 is an option of the >10\u201313 \u00b5m band, a usual choice (1235 or 1060 where 180\u2013190 MPa suffices.); evidence medium.",
+        "value": "AA1235",
+        "verdict": "USUAL_CHOICE"
+      },
+      "final_pass": {
+        "band_id": "10_13",
+        "band_label": ">10\u201313 \u00b5m",
+        "compared_with": "the case alloy (an option of this band)",
+        "exit_thickness_m": 1.2e-05,
+        "is_final_pass": true,
+        "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+        "mean_flow_stress_pa": 185000000.0,
+        "option": "1235",
+        "sources": [
+          "BG-G2",
+          "BG-G21",
+          "BG-G23"
+        ],
+        "standard_min_pa": 180000000.0,
+        "typical_rm_pa": [
+          null,
+          null
+        ],
+        "verdict": "AT_OR_ABOVE_STANDARD_MINIMUM_NO_TYPICAL_PUBLISHED"
+      },
+      "flow_stress_caveat": "INDICATOR ONLY: the comparison puts the rolling flow stress of a pass against the finished tensile strength of the foil, which is not the same quantity; it never changes a number or a score.",
+      "passes": [
+        {
+          "band_id": "20_30",
+          "band_label": ">20\u201330 \u00b5m",
+          "compared_with": "the case alloy (an option of this band)",
+          "exit_thickness_m": 3e-05,
+          "is_final_pass": false,
+          "label": "case pass",
+          "mean_flow_stress_pa": 175000000.0,
+          "option": "1235",
+          "sources": [
+            "BG-G35",
+            "BG-G7",
+            "BG-G2"
+          ],
+          "standard_min_pa": null,
+          "typical_rm_pa": [
+            170000000.0,
+            200000000.0
+          ],
+          "verdict": "INSIDE_TYPICAL_RANGE"
+        },
+        {
+          "band_id": null,
+          "band_label": null,
+          "compared_with": "",
+          "exit_thickness_m": 0.000135,
+          "is_final_pass": false,
+          "label": "S1 0.260->0.135 mm (assumed stock route)",
+          "mean_flow_stress_pa": 150000000.0,
+          "option": null,
+          "verdict": "OUTSIDE_PUBLISHED_BANDS"
+        },
+        {
+          "band_id": null,
+          "band_label": null,
+          "compared_with": "",
+          "exit_thickness_m": 8.5e-05,
+          "is_final_pass": false,
+          "label": "S2 0.135->0.085 mm (assumed stock route)",
+          "mean_flow_stress_pa": 160000000.0,
+          "option": null,
+          "verdict": "OUTSIDE_PUBLISHED_BANDS"
+        },
+        {
+          "band_id": null,
+          "band_label": null,
+          "compared_with": "",
+          "exit_thickness_m": 5e-05,
+          "is_final_pass": false,
+          "label": "S3 0.085->0.050 mm (assumed stock route)",
+          "mean_flow_stress_pa": 168000000.0,
+          "option": null,
+          "verdict": "OUTSIDE_PUBLISHED_BANDS"
+        },
+        {
+          "band_id": "15_20",
+          "band_label": ">15\u201320 \u00b5m",
+          "compared_with": "the case alloy (an option of this band)",
+          "exit_thickness_m": 1.8e-05,
+          "is_final_pass": false,
+          "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+          "mean_flow_stress_pa": 180000000.0,
+          "option": "1235",
+          "sources": [
+            "BG-G2",
+            "BG-G42",
+            "BG-G19"
+          ],
+          "standard_min_pa": 175000000.0,
+          "typical_rm_pa": [
+            200000000.0,
+            220000000.0
+          ],
+          "verdict": "BETWEEN_STANDARD_MINIMUM_AND_TYPICAL_RANGE"
+        },
+        {
+          "band_id": "20_30",
+          "band_label": ">20\u201330 \u00b5m",
+          "compared_with": "the case alloy (an option of this band)",
+          "exit_thickness_m": 2.5e-05,
+          "is_final_pass": false,
+          "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+          "mean_flow_stress_pa": 178000000.0,
+          "option": "1235",
+          "sources": [
+            "BG-G35",
+            "BG-G7",
+            "BG-G2"
+          ],
+          "standard_min_pa": null,
+          "typical_rm_pa": [
+            170000000.0,
+            200000000.0
+          ],
+          "verdict": "INSIDE_TYPICAL_RANGE"
+        },
+        {
+          "band_id": "10_13",
+          "band_label": ">10\u201313 \u00b5m",
+          "compared_with": "the case alloy (an option of this band)",
+          "exit_thickness_m": 1.2e-05,
+          "is_final_pass": true,
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "mean_flow_stress_pa": 185000000.0,
+          "option": "1235",
+          "sources": [
+            "BG-G2",
+            "BG-G21",
+            "BG-G23"
+          ],
+          "standard_min_pa": 180000000.0,
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "verdict": "AT_OR_ABOVE_STANDARD_MINIMUM_NO_TYPICAL_PUBLISHED"
+        }
+      ],
+      "temper": {
+        "text": "H18 is a temper label of this band (H18/H19). Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
+        "value": "H18",
+        "verdict": "CONSISTENT"
+      },
+      "yield_stress": {
+        "basis": "not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 \u00b5m (span 0.862\u20130.924; computed); the range applies the ratio span to the tensile range",
+        "proof_range_pa": [
+          155172413.793,
+          null
+        ],
+        "proposal_grade": "standard",
+        "published": false,
+        "value_pa": 165000000.0,
+        "verdict": "INSIDE_RANGE"
+      }
+    },
+    "final_exit_thickness_m": 1.2e-05,
+    "final_pass_band": {
+      "band_id": "10_13",
+      "band_label": ">10\u201313 \u00b5m",
+      "reason": "",
+      "status": "IN_BAND"
+    },
+    "final_pass_label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+    "final_pass_rule": "the final pass is the thinnest pass of the case (case pass and schedule)",
+    "flags": [
+      "MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN"
+    ],
+    "limitations": [
+      "A literature synthesis with the stated evidence ratings; no source gives a hard gauge-to-alloy rule.",
+      "Finished tensile strength is used as an indicator of the rolling flow stress.",
+      "Several standard tables were read from mirrors or producer pages reproducing them."
+    ],
+    "not_supplied": false,
+    "note": "Evidence-neutral literature proposal: it never changes a number in the case or a hypothesis score. Confirm or correct alloy, temper and strength with the plant.",
+    "options": {
+      "band_facts": {
+        "choice_evidence": "medium",
+        "elongation": {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G2"
+          ],
+          "text": "GB/T 33143-2022 elongation minima are 1.0\u20133.0 %, depending on alloy, gauge length and one- or two-side-bright; 8A21 is \u22654.0 %.",
+          "topic": "elongation",
+          "values": [
+            {
+              "bound": "minimum",
+              "display_unit": "%",
+              "high": 0.03,
+              "low": 0.01,
+              "note": "range of elongation minima",
+              "read_status": "vendor_or_trade_page",
+              "sources": [
+                "BG-G2"
+              ],
+              "unit": "fraction"
+            },
+            {
+              "bound": "minimum",
+              "display_unit": "%",
+              "high": null,
+              "low": 0.04,
+              "note": "8A21",
+              "read_status": "vendor_or_trade_page",
+              "sources": [
+                "BG-G2"
+              ],
+              "unit": "fraction"
+            }
+          ]
+        },
+        "evidence": {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G2",
+            "BG-G21",
+            "BG-G23"
+          ],
+          "text": "Minima strong; cell type medium.",
+          "topic": "",
+          "values": []
+        },
+        "gb_table_read": {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G2",
+            "BG-G1",
+            "BG-G3"
+          ],
+          "text": "GB/T 33143-2022 Table 9 minima (all H18) were read from a producer page that reproduces the table, cross-checked against the garbled draft translation and against T/ZZB 2638-2022, which copies four of its rows. Where the table sets no value for an alloy in a band, none is given here. An official copy of Table 9 was not found.",
+          "topic": "gb_table_read",
+          "values": []
+        },
+        "minima_evidence": "strong",
+        "notes": [],
+        "pinholes": {
+          "read_status": "full_text",
+          "sources": [
+            "BG-G3"
+          ],
+          "text": "T/ZZB 2638: \u226410 pinholes per m\u00b2 at 10\u201313 \u00b5m.",
+          "topic": "",
+          "values": [
+            {
+              "bound": "maximum",
+              "display_unit": "per_m2",
+              "high": 10.0,
+              "low": null,
+              "note": "",
+              "read_status": "full_text",
+              "sources": [
+                "BG-G3"
+              ],
+              "unit": "1/m^2"
+            }
+          ]
+        },
+        "surface": [
+          {
+            "read_status": "excerpt",
+            "sources": [
+              "BG-G17"
+            ],
+            "text": "Single-sheet two-side-bright foil is preferred.",
+            "topic": "surface",
+            "values": []
+          }
+        ],
+        "temper_naming": {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "BG-G2",
+            "BG-G3",
+            "BG-G25",
+            "BG-G4",
+            "BG-G14",
+            "BG-G15",
+            "BG-G18",
+            "BG-G17",
+            "BG-G40"
+          ],
+          "text": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
+          "topic": "temper_naming",
+          "values": []
+        },
+        "typical_cells": {
+          "read_status": "excerpt",
+          "sources": [
+            "BG-G21",
+            "BG-G23"
+          ],
+          "text": "Mainstream EV and storage.",
+          "topic": "",
+          "values": []
+        },
+        "typical_producer": {
+          "read_status": "excerpt",
+          "sources": [
+            "BG-G14",
+            "BF-S8"
+          ],
+          "text": "1060-type 180\u2013230 MPa, A >3 %; 1100-type 230\u2013270 MPa, A >2.5 %, or 260\u2013310 MPa, A >1.5 % [BG-G14]; Speira high-strength \u2265250 MPa [BF-S8].",
+          "topic": "",
+          "values": []
+        },
+        "usual_choice": {
+          "read_status": "excerpt",
+          "sources": [
+            "BG-G21",
+            "BG-G23"
+          ],
+          "text": "1100-type for EV; 1235 or 1060 where 180\u2013190 MPa suffices.",
+          "topic": "",
+          "values": []
+        }
+      },
+      "band_id": "10_13",
+      "band_label": ">10\u201313 \u00b5m",
+      "final_gauge_m": 1.2e-05,
+      "literature_status": "LITERATURE_SURVEY_UNVALIDATED",
+      "options": [
+        {
+          "alloy": "1100",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": [
+            0.56,
+            0.595
+          ],
+          "conductivity_sources": [
+            "BG-G6",
+            "BG-G7",
+            "BG-G41"
+          ],
+          "elongation_fraction": [
+            0.025,
+            null,
+            "minimum"
+          ],
+          "evidence": "medium",
+          "evidence_basis": "the report's rating of the usual choice in this band",
+          "grade": "high_strength",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            230000000.0,
+            310000000.0
+          ],
+          "rm_value_pa": 250000000.0,
+          "sources": [
+            "BG-G2",
+            "BG-G14",
+            "BG-G21",
+            "BG-G23"
+          ],
+          "standard_min_rm_pa": 230000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [
+            {
+              "alloys": [
+                "1100-type"
+              ],
+              "condition": ">10\u201313 \u00b5m band, Gr\u00e4nges datasheet",
+              "elongation": {
+                "bound": "minimum",
+                "display_unit": "%",
+                "high": null,
+                "low": 0.025,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "fraction"
+              },
+              "grade": "high_strength",
+              "note": "A >2.5 %",
+              "read_status": "full_text",
+              "rm_pa": {
+                "bound": "span",
+                "display_unit": "MPa",
+                "high": 270000000.0,
+                "low": 230000000.0,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "Pa"
+              },
+              "rp_pa": null,
+              "sources": [
+                "BG-G14"
+              ],
+              "temper": "H18/H19"
+            },
+            {
+              "alloys": [
+                "1100-type"
+              ],
+              "condition": ">10\u201313 \u00b5m band, Gr\u00e4nges datasheet, stronger grade",
+              "elongation": {
+                "bound": "minimum",
+                "display_unit": "%",
+                "high": null,
+                "low": 0.015,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "fraction"
+              },
+              "grade": "high_strength",
+              "note": "A >1.5 %",
+              "read_status": "full_text",
+              "rm_pa": {
+                "bound": "span",
+                "display_unit": "MPa",
+                "high": 310000000.0,
+                "low": 260000000.0,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "Pa"
+              },
+              "rp_pa": null,
+              "sources": [
+                "BG-G14"
+              ],
+              "temper": "H18/H19"
+            }
+          ],
+          "typical_rm_pa": [
+            230000000.0,
+            310000000.0
+          ],
+          "usual": true,
+          "usual_for": "1100-type for EV cells (high strength).",
+          "usual_surface": null
+        },
+        {
+          "alloy": "1060",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": [
+            0.62,
+            0.62
+          ],
+          "conductivity_sources": [
+            "BG-G20"
+          ],
+          "elongation_fraction": [
+            0.03,
+            null,
+            "minimum"
+          ],
+          "evidence": "medium",
+          "evidence_basis": "the report's rating of the usual choice in this band",
+          "grade": "standard",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            190000000.0,
+            230000000.0
+          ],
+          "rm_value_pa": 205000000.0,
+          "sources": [
+            "BG-G2",
+            "BG-G14",
+            "BG-G21",
+            "BG-G23"
+          ],
+          "standard_min_rm_pa": 190000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [
+            {
+              "alloys": [
+                "1060-type"
+              ],
+              "condition": ">10\u201313 \u00b5m band, Gr\u00e4nges datasheet",
+              "elongation": {
+                "bound": "minimum",
+                "display_unit": "%",
+                "high": null,
+                "low": 0.03,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "fraction"
+              },
+              "grade": "standard",
+              "note": "A >3 %",
+              "read_status": "full_text",
+              "rm_pa": {
+                "bound": "span",
+                "display_unit": "MPa",
+                "high": 230000000.0,
+                "low": 180000000.0,
+                "note": "",
+                "read_status": "full_text",
+                "sources": [
+                  "BG-G14"
+                ],
+                "unit": "Pa"
+              },
+              "rp_pa": null,
+              "sources": [
+                "BG-G14"
+              ],
+              "temper": "H18/H19"
+            }
+          ],
+          "typical_rm_pa": [
+            180000000.0,
+            230000000.0
+          ],
+          "usual": true,
+          "usual_for": "1235 or 1060 where 180\u2013190 MPa suffices.",
+          "usual_surface": null
+        },
+        {
+          "alloy": "1235",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": [
+            0.58,
+            0.6
+          ],
+          "conductivity_sources": [
+            "BG-G6",
+            "BG-G7",
+            "BG-G41"
+          ],
+          "elongation_fraction": null,
+          "evidence": "medium",
+          "evidence_basis": "the report's rating of the usual choice in this band",
+          "grade": "standard",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            180000000.0,
+            null
+          ],
+          "rm_value_pa": 180000000.0,
+          "sources": [
+            "BG-G2",
+            "BG-G21",
+            "BG-G23"
+          ],
+          "standard_min_rm_pa": 180000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [],
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "usual": true,
+          "usual_for": "1235 or 1060 where 180\u2013190 MPa suffices.",
+          "usual_surface": null
+        },
+        {
+          "alloy": "Speira high-strength",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": null,
+          "conductivity_sources": [],
+          "elongation_fraction": null,
+          "evidence": "not_rated",
+          "evidence_basis": "not a usual choice; producer values only",
+          "grade": "high_strength",
+          "grade_names": [],
+          "note": "Speira own composition (99.35\u201399.5 % Al, Cu 0.03\u20130.08 %)",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "excerpt",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            250000000.0,
+            null
+          ],
+          "rm_value_pa": 250000000.0,
+          "sources": [
+            "BF-S8"
+          ],
+          "standard_min_rm_pa": null,
+          "standard_min_sources": [],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [
+            {
+              "alloys": [
+                "Speira high-strength"
+              ],
+              "condition": "Speira high-strength grade",
+              "elongation": null,
+              "grade": "high_strength",
+              "note": "",
+              "read_status": "excerpt",
+              "rm_pa": {
+                "bound": "minimum",
+                "display_unit": "MPa",
+                "high": null,
+                "low": 250000000.0,
+                "note": "",
+                "read_status": "excerpt",
+                "sources": [
+                  "BF-S8"
+                ],
+                "unit": "Pa"
+              },
+              "rp_pa": null,
+              "sources": [
+                "BF-S8"
+              ],
+              "temper": "not stated"
+            }
+          ],
+          "typical_rm_pa": [
+            250000000.0,
+            null
+          ],
+          "usual": false,
+          "usual_for": "",
+          "usual_surface": null
+        },
+        {
+          "alloy": "1C30",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": null,
+          "conductivity_sources": [],
+          "elongation_fraction": null,
+          "evidence": "not_rated",
+          "evidence_basis": "not a usual choice; its standard minimum is rated strong in this band",
+          "grade": "high_strength",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            230000000.0,
+            null
+          ],
+          "rm_value_pa": 230000000.0,
+          "sources": [
+            "BG-G2"
+          ],
+          "standard_min_rm_pa": 230000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [],
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "usual": false,
+          "usual_for": "",
+          "usual_surface": null
+        },
+        {
+          "alloy": "1050",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": null,
+          "conductivity_sources": [],
+          "elongation_fraction": null,
+          "evidence": "not_rated",
+          "evidence_basis": "not a usual choice; its standard minimum is rated strong in this band",
+          "grade": "standard",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            190000000.0,
+            null
+          ],
+          "rm_value_pa": 190000000.0,
+          "sources": [
+            "BG-G2"
+          ],
+          "standard_min_rm_pa": 190000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [],
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "usual": false,
+          "usual_for": "",
+          "usual_surface": null
+        },
+        {
+          "alloy": "1070",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": null,
+          "conductivity_sources": [],
+          "elongation_fraction": null,
+          "evidence": "not_rated",
+          "evidence_basis": "not a usual choice; its standard minimum is rated strong in this band",
+          "grade": "standard",
+          "grade_names": [],
+          "note": "",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            185000000.0,
+            null
+          ],
+          "rm_value_pa": 185000000.0,
+          "sources": [
+            "BG-G2"
+          ],
+          "standard_min_rm_pa": 185000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [],
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "usual": false,
+          "usual_for": "",
+          "usual_surface": null
+        },
+        {
+          "alloy": "8011",
+          "below_requested_minimum": false,
+          "conductivity_iacs_fraction": null,
+          "conductivity_sources": [],
+          "elongation_fraction": null,
+          "evidence": "not_rated",
+          "evidence_basis": "not a usual choice; its standard minimum is rated strong in this band",
+          "grade": "standard",
+          "grade_names": [],
+          "note": "CORRECTED: the first survey grouped 8011 with the GB/T 33143 high-strength minima (about \u2265220\u2013230 MPa) [BF-S2]; the second survey reads 180 MPa [BG-G2]",
+          "outside_alloy_gauge_span": false,
+          "proof_strength_pa": null,
+          "read_status": "vendor_or_trade_page",
+          "requested_minimum_check": null,
+          "rm_range_pa": [
+            180000000.0,
+            null
+          ],
+          "rm_value_pa": 180000000.0,
+          "sources": [
+            "BG-G2"
+          ],
+          "standard_min_rm_pa": 180000000.0,
+          "standard_min_sources": [
+            "BG-G2"
+          ],
+          "surface_mismatch": false,
+          "temper_labels": [
+            "H18",
+            "H19"
+          ],
+          "typical": [],
+          "typical_rm_pa": [
+            null,
+            null
+          ],
+          "usual": false,
+          "usual_for": "",
+          "usual_surface": null
+        }
+      ],
+      "ordering_rule": "Presentation order (a rule of this module, never a claim that one alloy is best): options the research calls the usual choice at this gauge first, then by evidence rating (strong, medium, weak, vendor_level, not_rated), then by strength (middle of the first typical range, else the standard minimum) from high to low, then by name. Options outside their published gauge span or usual only for another surface come after the others.",
+      "product_id": "battery_collector_foil",
+      "reason": "",
+      "requested_min_tensile_strength_pa": null,
+      "status": "IN_BAND",
+      "surface": null
+    },
+    "other_route_ends": [
+      {
+        "band_id": "15_20",
+        "band_label": ">15\u201320 \u00b5m",
+        "exit_thickness_m": 1.8e-05,
+        "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+        "proposals": {
+          "high_strength": {
+            "alloy": "1100",
+            "band_id": "15_20",
+            "band_label": ">15\u201320 \u00b5m",
+            "conductivity_iacs_fraction": [
+              0.56,
+              0.595
+            ],
+            "elongation": {
+              "basis": "not published for this alloy; the band's standard elongation minima",
+              "bound": "minimum",
+              "range_fraction": [
+                0.01,
+                0.03
+              ],
+              "sources": [
+                "BG-G2"
+              ]
+            },
+            "evidence": "weak",
+            "evidence_basis": "Minima strong; cell type vendor-level.",
+            "final_gauge_m": 1.8e-05,
+            "grade": "high_strength",
+            "grade_names": [],
+            "notes": [
+              "Literature proposal for the >15\u201320 \u00b5m band; confirm or correct with the plant (alloy, temper, strength).",
+              "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil."
+            ],
+            "option_grade": "high_strength",
+            "product_id": "battery_collector_foil",
+            "proof_strength": {
+              "basis": "not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 \u00b5m (span 0.862\u20130.924; computed); the range applies the ratio span to the tensile range",
+              "published": false,
+              "range_pa": [
+                189655172.414,
+                null
+              ],
+              "ratio_span": [
+                0.8620689655172413,
+                0.923943661971831
+              ],
+              "ratio_used": 0.8807339449541285,
+              "read_status": "computed",
+              "sources": [
+                "BG-G5",
+                "BG-G6",
+                "BG-G8",
+                "BG-G9"
+              ],
+              "value_pa": 193761467.89
+            },
+            "read_status": "vendor_or_trade_page",
+            "requested_alloy": null,
+            "rule": "no usual choice of this grade is published for the band: the option of this grade with the highest standard minimum (ties: the report's order) is used, rated weak",
+            "sources": [
+              "BG-G2"
+            ],
+            "status": "LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT",
+            "surface": null,
+            "temper": "H18",
+            "temper_labels": [
+              "H18",
+              "H19"
+            ],
+            "tensile_strength_pa": {
+              "basis": "the standard minimum (a lower bound)",
+              "range_pa": [
+                220000000.0,
+                null
+              ],
+              "standard_min_pa": 220000000.0,
+              "value_pa": 220000000.0
+            },
+            "usual_for": "",
+            "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
+          },
+          "standard": {
+            "alloy": "1235",
+            "band_id": "15_20",
+            "band_label": ">15\u201320 \u00b5m",
+            "conductivity_iacs_fraction": [
+              0.58,
+              0.6
+            ],
+            "elongation": {
+              "basis": "published 2.2 %",
+              "bound": "typical",
+              "range_fraction": [
+                0.022,
+                0.022
+              ],
+              "sources": [
+                "BG-G42"
+              ]
+            },
+            "evidence": "vendor_level",
+            "evidence_basis": "Minima strong; cell type vendor-level.",
+            "final_gauge_m": 1.8e-05,
+            "grade": "standard",
+            "grade_names": [],
+            "notes": [
+              "Literature proposal for the >15\u201320 \u00b5m band; confirm or correct with the plant (alloy, temper, strength).",
+              "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil."
+            ],
+            "option_grade": "standard",
+            "product_id": "battery_collector_foil",
+            "proof_strength": {
+              "basis": "not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 \u00b5m (span 0.862\u20130.924; computed); the range applies the ratio span to the tensile range",
+              "published": false,
+              "range_pa": [
+                150862068.966,
+                203267605.634
+              ],
+              "ratio_span": [
+                0.8620689655172413,
+                0.923943661971831
+              ],
+              "ratio_used": 0.8807339449541285,
+              "read_status": "computed",
+              "sources": [
+                "BG-G5",
+                "BG-G6",
+                "BG-G8",
+                "BG-G9"
+              ],
+              "value_pa": 184954128.44
+            },
+            "read_status": "vendor_or_trade_page",
+            "requested_alloy": null,
+            "rule": "the usual standard-strength choice of the gauge band (first in the report's list)",
+            "sources": [
+              "BG-G2",
+              "BG-G42",
+              "BG-G19"
+            ],
+            "status": "LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT",
+            "surface": null,
+            "temper": "H18",
+            "temper_labels": [
+              "H18",
+              "H19"
+            ],
+            "tensile_strength_pa": {
+              "basis": "middle of the typical range 200\u2013220 MPa",
+              "range_pa": [
+                175000000.0,
+                220000000.0
+              ],
+              "standard_min_pa": 175000000.0,
+              "value_pa": 210000000.0
+            },
+            "usual_for": "1235, 1060, 1070 or 1085.",
+            "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
+          }
+        },
+        "text": "F2 0.030->0.018 mm (plant pass 2, final) (18 um, >15\u201320 \u00b5m band): standard 1235-H18 (Rm 210 MPa; evidence vendor_level); high-strength 1100-H18 (Rm 220 MPa; evidence WEAK: no usual choice of this grade is published for this band, so the fallback rule (highest standard minimum) chose it)"
+      }
+    ],
+    "product_id": "battery_collector_foil",
+    "proposals": {
+      "high_strength": {
+        "alloy": "1100",
+        "band_id": "10_13",
+        "band_label": ">10\u201313 \u00b5m",
+        "conductivity_iacs_fraction": [
+          0.56,
+          0.595
+        ],
+        "elongation": {
+          "basis": "published \u22652.5 %",
+          "bound": "minimum",
+          "range_fraction": [
+            0.025,
+            null
+          ],
+          "sources": [
+            "BG-G14"
+          ]
+        },
+        "evidence": "medium",
+        "evidence_basis": "Minima strong; cell type medium.",
+        "final_gauge_m": 1.2e-05,
+        "grade": "high_strength",
+        "grade_names": [],
+        "notes": [
+          "Literature proposal for the >10\u201313 \u00b5m band; confirm or correct with the plant (alloy, temper, strength).",
+          "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil."
+        ],
+        "option_grade": "high_strength",
+        "product_id": "battery_collector_foil",
+        "proof_strength": {
+          "basis": "not published for 1100 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 \u00b5m (span 0.862\u20130.924; computed); the range applies the ratio span to the tensile range",
+          "published": false,
+          "range_pa": [
+            198275862.069,
+            286422535.211
+          ],
+          "ratio_span": [
+            0.8620689655172413,
+            0.923943661971831
+          ],
+          "ratio_used": 0.8807339449541285,
+          "read_status": "computed",
+          "sources": [
+            "BG-G5",
+            "BG-G6",
+            "BG-G8",
+            "BG-G9"
+          ],
+          "value_pa": 220183486.239
+        },
+        "read_status": "vendor_or_trade_page",
+        "requested_alloy": null,
+        "rule": "the usual high-strength choice of the gauge band (first in the report's list)",
+        "sources": [
+          "BG-G2",
+          "BG-G14",
+          "BG-G21",
+          "BG-G23"
+        ],
+        "status": "LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT",
+        "surface": null,
+        "temper": "H18",
+        "temper_labels": [
+          "H18",
+          "H19"
+        ],
+        "tensile_strength_pa": {
+          "basis": "middle of the typical range 230\u2013270 MPa",
+          "range_pa": [
+            230000000.0,
+            310000000.0
+          ],
+          "standard_min_pa": 230000000.0,
+          "value_pa": 250000000.0
+        },
+        "usual_for": "1100-type for EV cells (high strength).",
+        "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
+      },
+      "standard": {
+        "alloy": "1235",
+        "band_id": "10_13",
+        "band_label": ">10\u201313 \u00b5m",
+        "conductivity_iacs_fraction": [
+          0.58,
+          0.6
+        ],
+        "elongation": {
+          "basis": "not published for this alloy; the band's standard elongation minima",
+          "bound": "minimum",
+          "range_fraction": [
+            0.01,
+            0.03
+          ],
+          "sources": [
+            "BG-G2"
+          ]
+        },
+        "evidence": "medium",
+        "evidence_basis": "Minima strong; cell type medium.",
+        "final_gauge_m": 1.2e-05,
+        "grade": "standard",
+        "grade_names": [],
+        "notes": [
+          "Literature proposal for the >10\u201313 \u00b5m band; confirm or correct with the plant (alloy, temper, strength).",
+          "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil."
+        ],
+        "option_grade": "standard",
+        "product_id": "battery_collector_foil",
+        "proof_strength": {
+          "basis": "not published for 1235 in this band; assumed Rp0.2 = 0.881 x Rm, the median Rp0.2/Rm ratio of the hard-foil grades that publish both at 15 \u00b5m (span 0.862\u20130.924; computed); the range applies the ratio span to the tensile range",
+          "published": false,
+          "range_pa": [
+            155172413.793,
+            null
+          ],
+          "ratio_span": [
+            0.8620689655172413,
+            0.923943661971831
+          ],
+          "ratio_used": 0.8807339449541285,
+          "read_status": "computed",
+          "sources": [
+            "BG-G5",
+            "BG-G6",
+            "BG-G8",
+            "BG-G9"
+          ],
+          "value_pa": 158532110.092
+        },
+        "read_status": "vendor_or_trade_page",
+        "requested_alloy": null,
+        "rule": "the usual standard-strength choice of the gauge band (first in the report's list)",
+        "sources": [
+          "BG-G2",
+          "BG-G21",
+          "BG-G23"
+        ],
+        "status": "LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT",
+        "surface": null,
+        "temper": "H18",
+        "temper_labels": [
+          "H18",
+          "H19"
+        ],
+        "tensile_strength_pa": {
+          "basis": "the standard minimum (a lower bound)",
+          "range_pa": [
+            180000000.0,
+            null
+          ],
+          "standard_min_pa": 180000000.0,
+          "value_pa": 180000000.0
+        },
+        "usual_for": "1235 or 1060 where 180\u2013190 MPa suffices.",
+        "value_rule": "value used: the middle of the first published typical tensile range for this alloy in this band; if none, the standard minimum (a lower bound: finished foil is usually above it), else the lowest published typical minimum"
+      }
+    },
+    "sentence": "Alloy and temper are not stated by the plant (the case uses AA1235-H18); the final pass (ALT2 0.025->0.012 mm (thinnest product, alternative final pass), 12 um) is in the >10\u201313 \u00b5m band; LITERATURE PROPOSAL TO CONFIRM OR CORRECT WITH THE PLANT: standard proposal 1235-H18 (Rm 180 MPa; evidence medium); high-strength proposal 1100-H18 (Rm 250 MPa; evidence medium). The final-pass flow stress of the case, 185 MPa, is closest to the standard proposal (1235, 180 MPa; indicator only). Other route ends of the schedule: F2 0.030->0.018 mm (plant pass 2, final) (18 um, >15\u201320 \u00b5m band): standard 1235-H18 (Rm 210 MPa; evidence vendor_level); high-strength 1100-H18 (Rm 220 MPa; evidence WEAK: no usual choice of this grade is published for this band, so the fallback rule (highest standard minimum) chose it).",
+    "stated": {
+      "alloy": "AA1235",
+      "alloy_designation": "1235",
+      "alloy_temper_stated": false,
+      "pass_flow_stresses": [
+        {
+          "label": "case pass",
+          "mean_flow_stress_pa": 175000000.0
+        },
+        {
+          "label": "S1 0.260->0.135 mm (assumed stock route)",
+          "mean_flow_stress_pa": 150000000.0
+        },
+        {
+          "label": "S2 0.135->0.085 mm (assumed stock route)",
+          "mean_flow_stress_pa": 160000000.0
+        },
+        {
+          "label": "S3 0.085->0.050 mm (assumed stock route)",
+          "mean_flow_stress_pa": 168000000.0
+        },
+        {
+          "label": "F2 0.030->0.018 mm (plant pass 2, final)",
+          "mean_flow_stress_pa": 180000000.0
+        },
+        {
+          "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
+          "mean_flow_stress_pa": 178000000.0
+        },
+        {
+          "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
+          "mean_flow_stress_pa": 185000000.0
+        }
+      ],
+      "temper": "H18",
+      "yield_stress_pa": 165000000.0
+    },
+    "status": "LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT"
+  },
   "process": {
     "flow_stress": null,
     "friction": {
@@ -5623,6 +6847,7 @@
       },
       "tempers": [
         "H18",
+        "H19",
         "O"
       ]
     },
@@ -5846,42 +7071,53 @@
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "alloy listed for this product",
+            "basis": "alloy is an option of the >20\u201330 \u00b5m band of the grade table (exit gauge of this pass); usual choice: 1235, 1N30 or 1085.",
             "item": "alloy",
-            "note": "",
+            "note": "GB/T 33143-2022 sets no minimum for this alloy in this band",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BG-G35",
+              "BG-G7",
+              "BG-G2"
             ],
             "unit": "",
             "value": "1235",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "temper listed for this product",
+            "basis": "H18 and H19 are both consistent with this product at the >20\u201330 \u00b5m band (naming note)",
             "item": "temper",
-            "note": "",
+            "note": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BF-S1",
+              "BG-G2",
+              "BG-G3",
+              "BG-G25",
+              "BG-G4",
+              "BG-G14",
+              "BG-G15",
+              "BG-G18",
+              "BG-G17",
+              "BG-G40"
             ],
             "unit": "",
             "value": "H18",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "basis": "mean flow stress against the grade table, alloy 1235 in the >20\u201330 \u00b5m band; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress",
             "item": "mean_flow_stress_indicator",
-            "note": "span of published Rm numbers",
-            "published_high": 190000000.0,
-            "published_low": 175000000.0,
-            "read_status": "excerpt",
+            "note": "alloy 1235 in the >20\u201330 \u00b5m band: standard minimum (else lowest typical) to the top of the typical producer range",
+            "published_high": 200000000.0,
+            "published_low": 170000000.0,
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S2"
+              "BG-G35"
             ],
             "unit": "Pa",
             "value": 175000000.0,
@@ -6212,42 +7448,53 @@
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "alloy listed for this product",
+            "basis": "alloy is an option of the >20\u201330 \u00b5m band of the grade table (exit gauge of this pass); usual choice: 1235, 1N30 or 1085.",
             "item": "alloy",
-            "note": "",
+            "note": "GB/T 33143-2022 sets no minimum for this alloy in this band",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BG-G35",
+              "BG-G7",
+              "BG-G2"
             ],
             "unit": "",
             "value": "1235",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "temper listed for this product",
+            "basis": "H18 and H19 are both consistent with this product at the >20\u201330 \u00b5m band (naming note)",
             "item": "temper",
-            "note": "",
+            "note": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BF-S1",
+              "BG-G2",
+              "BG-G3",
+              "BG-G25",
+              "BG-G4",
+              "BG-G14",
+              "BG-G15",
+              "BG-G18",
+              "BG-G17",
+              "BG-G40"
             ],
             "unit": "",
             "value": "H18",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "basis": "mean flow stress against the grade table, alloy 1235 in the >20\u201330 \u00b5m band; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress",
             "item": "mean_flow_stress_indicator",
-            "note": "span of published Rm numbers",
-            "published_high": 190000000.0,
-            "published_low": 175000000.0,
-            "read_status": "excerpt",
+            "note": "alloy 1235 in the >20\u201330 \u00b5m band: standard minimum (else lowest typical) to the top of the typical producer range",
+            "published_high": 200000000.0,
+            "published_low": 170000000.0,
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S2"
+              "BG-G35"
             ],
             "unit": "Pa",
             "value": 175000000.0,
@@ -6392,42 +7639,54 @@
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "alloy listed for this product",
+            "basis": "alloy is an option of the >15\u201320 \u00b5m band of the grade table (exit gauge of this pass); usual choice: 1235, 1060, 1070 or 1085.",
             "item": "alloy",
             "note": "",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BG-G2",
+              "BG-G42",
+              "BG-G19"
             ],
             "unit": "",
             "value": "1235",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "temper listed for this product",
+            "basis": "H18 and H19 are both consistent with this product at the >15\u201320 \u00b5m band (naming note)",
             "item": "temper",
-            "note": "",
+            "note": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BF-S1",
+              "BG-G2",
+              "BG-G3",
+              "BG-G25",
+              "BG-G4",
+              "BG-G14",
+              "BG-G15",
+              "BG-G18",
+              "BG-G17",
+              "BG-G40"
             ],
             "unit": "",
             "value": "H18",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "basis": "mean flow stress against the grade table, alloy 1235 in the >15\u201320 \u00b5m band; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress",
             "item": "mean_flow_stress_indicator",
-            "note": "span of published Rm numbers",
-            "published_high": 190000000.0,
+            "note": "alloy 1235 in the >15\u201320 \u00b5m band: standard minimum (else lowest typical) to the top of the typical producer range",
+            "published_high": 220000000.0,
             "published_low": 175000000.0,
-            "read_status": "excerpt",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S2"
+              "BG-G2",
+              "BG-G42"
             ],
             "unit": "Pa",
             "value": 180000000.0,
@@ -6559,42 +7818,53 @@
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "alloy listed for this product",
+            "basis": "alloy is an option of the >20\u201330 \u00b5m band of the grade table (exit gauge of this pass); usual choice: 1235, 1N30 or 1085.",
             "item": "alloy",
-            "note": "",
+            "note": "GB/T 33143-2022 sets no minimum for this alloy in this band",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BG-G35",
+              "BG-G7",
+              "BG-G2"
             ],
             "unit": "",
             "value": "1235",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "temper listed for this product",
+            "basis": "H18 and H19 are both consistent with this product at the >20\u201330 \u00b5m band (naming note)",
             "item": "temper",
-            "note": "",
+            "note": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BF-S1",
+              "BG-G2",
+              "BG-G3",
+              "BG-G25",
+              "BG-G4",
+              "BG-G14",
+              "BG-G15",
+              "BG-G18",
+              "BG-G17",
+              "BG-G40"
             ],
             "unit": "",
             "value": "H18",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "basis": "mean flow stress against the grade table, alloy 1235 in the >20\u201330 \u00b5m band; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress",
             "item": "mean_flow_stress_indicator",
-            "note": "span of published Rm numbers",
-            "published_high": 190000000.0,
-            "published_low": 175000000.0,
-            "read_status": "excerpt",
+            "note": "alloy 1235 in the >20\u201330 \u00b5m band: standard minimum (else lowest typical) to the top of the typical producer range",
+            "published_high": 200000000.0,
+            "published_low": 170000000.0,
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S2"
+              "BG-G35"
             ],
             "unit": "Pa",
             "value": 178000000.0,
@@ -6739,42 +8009,53 @@
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "alloy listed for this product",
+            "basis": "alloy is an option of the >10\u201313 \u00b5m band of the grade table (exit gauge of this pass); usual choice: 1235 or 1060 where 180\u2013190 MPa suffices.",
             "item": "alloy",
             "note": "",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BG-G2",
+              "BG-G21",
+              "BG-G23"
             ],
             "unit": "",
             "value": "1235",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "temper listed for this product",
+            "basis": "H18 and H19 are both consistent with this product at the >10\u201313 \u00b5m band (naming note)",
             "item": "temper",
-            "note": "",
+            "note": "Temper as written: H18 in GB/T 33143, T/ZZB 2638 and JIS H 4160; \"H18, H19\" in T/ZZB 1203, Gr\u00e4nges, Symetal and Armor; \"H19\" at Innoval. \"H18\" on battery foil is a label for a strength table: the foil gets 97\u201399 % cold reduction after the last anneal, far above the about 75 % that defines H18, so European sources call the same product H19. Both labels are consistent with collector foil.",
             "published_high": null,
             "published_low": null,
-            "read_status": "full_text",
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S1"
+              "BF-S1",
+              "BG-G2",
+              "BG-G3",
+              "BG-G25",
+              "BG-G4",
+              "BG-G14",
+              "BG-G15",
+              "BG-G18",
+              "BG-G17",
+              "BG-G40"
             ],
             "unit": "",
             "value": "H18",
             "verdict": "WITHIN_PUBLISHED_RANGE"
           },
           {
-            "basis": "mean flow stress against the span of published tensile data for alloy 1235 temper H18; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress, and the span mixes minima, typical values and ranges",
+            "basis": "mean flow stress against the grade table, alloy 1235 in the >10\u201313 \u00b5m band; INDICATOR ONLY: finished-product tensile strength is not the rolling flow stress; no typical upper value is published, so only the minimum is checked",
             "item": "mean_flow_stress_indicator",
-            "note": "span of published Rm numbers",
-            "published_high": 190000000.0,
-            "published_low": 175000000.0,
-            "read_status": "excerpt",
+            "note": "alloy 1235 in the >10\u201313 \u00b5m band: standard minimum (else lowest typical) to the top of the typical producer range",
+            "published_high": null,
+            "published_low": 180000000.0,
+            "read_status": "vendor_or_trade_page",
             "sources": [
-              "BF-S2"
+              "BG-G2"
             ],
             "unit": "Pa",
             "value": 185000000.0,
@@ -6866,7 +8147,7 @@
     "status": "LITERATURE_SURVEY_UNVALIDATED",
     "temper_used": "H18"
   },
-  "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil (1235-H18-like). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, consistent with standard-grade H18 collector foil (finished tensile strength 165-190 MPa in the battery report; stock UTS 150-200 MPa in H18 [V S4]; no hardening law), friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
+  "provenance": "SYNTHETIC demonstration, not plant data, for EV battery cathode current-collector foil. MATERIAL: 1235-H18 is the LITERATURE PROPOSAL (standard grade) of the catalogue's grade table for the final gauges of this case (>15-20 um band for 18 um, >10-13 um band for 12 um; band_products.proposed_material), to be confirmed or corrected by the plant: alloy and temper are NOT a plant statement (material.alloy_temper_stated false). ROUTE FROM THE PLANT (plant statements): the foil mill takes a 50 um input and reaches final gauge in TWO single-sheet passes; the final gauge is usually 17-19 um and can go down to 12 um. The intermediate gauge, the alloy and the temper were NOT stated: 30 um (50 -> 30 -> 18 um, 40 % per pass; published 34 -> 20 and 32 -> 17 um passes are its neighbours) is ASSUMED for the usual product and 25 um (50 -> 25 -> 12 um, 50 % then 52 %, matching the published 50 -> 25 -> 15 and 55 -> 25 -> 12 um passes) for the thinnest [battery report, catalogue product battery_collector_foil]. Every mill and material number below remains synthetic. Foil mill: single-stand four-high, work roll 0.27 m diameter (230-330 mm reported, 260-280 typical [V S8]), backup roll 0.75 m (2.8 x the work roll; 2.4-2.8 x reported [V S8]), barrel 1.5 m, strip 1.2 m centred. Half-stack masses and stiffnesses are planner ESTIMATES scaled from the sheet demo mill [D]: work roll 1100 kg (steel barrel pi*0.135^2*1.5*7850 = 674 kg plus necks and chocks), backup roll 9000 kg (barrel 5200 kg plus necks and chocks), work/backup contact 2.0e10 N/m (shorter, smaller-diameter contact than the sheet mill 4e10), housing 6.0e9 N/m (lighter foil stand; sheet mill 1.4e10); 3 m free spans. Schedule: S1-S3 0.26 -> 0.135 -> 0.085 -> 0.050 mm is an ASSUMED stock route down to the plant's 50 um input (48 %, 37 %, 41 %), then the plant's two passes F1 0.050 -> 0.030 mm (the case pass) and F2 0.030 -> 0.018 mm (final), then the thinnest product's ALTERNATIVE route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %, inside the extended 65 % reduction domain). F2 and ALT2 lie below 20 um exit gauge: their roll bites come from the experimental mattress model in its extended domain (flag EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN; order of magnitude only; a bite whose force lies outside the range reported for battery-foil passes is marked not credible). The plant rolls the final pass single-sheet (material.final_pass_doubled false). material.product is battery_collector_foil (product check, evidence-neutral). Supplied mean flow stress 150 / 160 / 168 / 175 / 180 MPa along S1-F2 and 178 / 185 MPa for ALT1 / ALT2, inside the ranges of the standard proposal 1235-H18 (finished tensile strength 175-220 MPa at >15-20 um, at least 180 MPa at >10-13 um, 170-200 MPa at >20-30 um in the grade table; used as an indicator of flow stress only; no hardening law), so they are unchanged, friction 0.03 on every pass, tensions 30-38 / 35-42 MPa (entry 29-49, exit 34-44 MPa reported [V S3]), exit speeds 9.5 / 10.5 / 11.5 / 13 m/s on S1-F1 and ALT1 (570-780 m/min, inside the 550-1000 m/min published for earlier passes) and 10 m/s (600 m/min) on the single-sheet final passes F2 and ALT2 (inside the 450-650 m/min published for them), bite_model auto (Hitchcock solves S1-S3; it rejects the case pass and the experimental mattress model solves it, 0.96 kN/mm of width, inside the 0.9-2.3 kN/mm reported [V S3, S4]; the mattress model also gives F2, ALT1 and ALT2). Oil 1.6 mPa s (1.8-2.1 mm2/s at about 0.8 kg/l [V S3, S4]), work-roll Rq 0.15 um (Ra 0.11-0.125 um [V S3, S4] x 1.25 [D]), strip Rq 0.2 um. Neat-oil spray header: 28 nozzles at 52 mm pitch, mean spray coefficient 2 kW/m2K (CHOSEN lower than the 3 kW/m2K emulsion value of the sheet demo [D]). PLANTED CAUSES: nozzle 11 (0.62 m) PARTLY blocked at flow level 0.45, and a 20 s closure of the zone valve of nozzles 18-19. Observations were GENERATED FROM THE MODEL ITSELF at the case pass F1 (cells 256, default thermal numerics): band positions = model steady stripe peak and event stripe peak rounded to 1 mm (0.623, 0.988 m); the model bands are LATENT under the 40 MPa mill tension and MANIFEST after tension release, so visible_only_after_tension_release is true and the appearance loose_or_buckle; intermittent duration = model visible time of the event band after tension release rounded to 10 s (80 s: at foil gauge the after-release threshold is about 0.2 um of stripe, so even a 20 s valve closure leaves a band for over a minute); continuity both; positions repeat across coils and do not move after a work-roll change; the bands change with coolant zone switching; they do not change after roll wiper cleaning and do not track speed changes (a thermal stripe follows heat input slowly). worse_at_thinner_gauge is left NULL: on this mill the model gauge trend does NOT reproduce it (the onset heights rise toward the thin pass). The case therefore tests the screening logic at foil gauge, not the physics.",
   "recommended_next_measurements": [
     "Spray footprint check (pattern paper or water test) and header inspection; compare the band positions on three consecutive coils with the nozzle positions on the barrel coordinate; shapemeter zone map.",
     "Log the coolant valve states against the shapemeter zones and the band appearance times; compare the band duration with the valve-off intervals.",

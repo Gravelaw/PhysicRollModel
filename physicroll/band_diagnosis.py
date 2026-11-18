@@ -321,7 +321,7 @@ MATERIAL_KEYS = ('alloy', 'temper', 'yield_stress_pa', 'youngs_modulus_pa', 'lud
                  'magnesium_wt_pct', 'grain_size_m')
 # v2 optional (absent = null = not stated): whether the thinnest pass of the case is rolled
 # doubled (two sheets in one bite). Only read by the foil-regime block.
-MATERIAL_OPTIONAL = ('final_pass_doubled', 'product')
+MATERIAL_OPTIONAL = ('final_pass_doubled', 'product', 'alloy_temper_stated')
 STAND_KEYS = ('work_roll_mass_kg', 'backup_roll_mass_kg', 'work_backup_contact_stiffness_n_m',
               'housing_stiffness_n_m', 'modal_damping_ratio', 'roll_youngs_modulus_pa',
               'roll_poisson_ratio')
@@ -429,6 +429,13 @@ def validate_case(case):
             raise ValueError(f'material.product: {exc}') from exc
     if v2 and 'product' in m:
         out['material']['product'] = prod
+    if 'alloy_temper_stated' in m:
+        st = m['alloy_temper_stated']
+        if not v2:
+            raise ValueError(f'material.alloy_temper_stated needs case_schema {CASE_SCHEMA_V2!r}')
+        if st is not None and not isinstance(st, bool):
+            raise ValueError('material.alloy_temper_stated must be true, false or null')
+        out['material']['alloy_temper_stated'] = st
 
     s = case['stand']
     _keys('stand', s, STAND_KEYS)
@@ -1384,6 +1391,11 @@ def _law_ev(ctx, sup, contra, label_ff='FIXED_FREQUENCY', criterion='pitch-speed
 
 
 def _per_freq(ctx, criterion, expected, rule):
+    """Least-favourable observation decides. Single-source review (SPEC13): a rule whose
+    candidates are separate physical sources must pick one source for all observations first
+    (coil, roll mark count, torsional mode, backup-roll count in the fifth-octave law, order
+    source); a frequency or pitch BAND that every observation must fall in, or one fixed model
+    frequency, is correctly judged per observation."""
     if not ctx.freqs:
         return _ev(criterion, 'no pitch or vibration frequency observed', expected,
                    'NOT_OBSERVED')
@@ -1563,11 +1575,19 @@ def _h_fifth(ctx):
                   'NOT_OBSERVED' if g is None else ('CONTRADICTS' if g else 'SUPPORTS'),
                   None if g is None else ('weak' if g else 'moderate')))
     if ctx.law == 'SPEED_INDEPENDENT_PITCH':
+        # single source: one backup-roll mark count must explain every pitch (the integer
+        # with the smallest worst distance), as in _roll_mark
+        ratios = [math.pi * ctx.db * (1 + ctx.kin_slip) / q['pitch_m'] for q in ctx.pitches]
+        cands = sorted({max(1, round(x)) for x in ratios})
+        n_one = min(cands, key=lambda k: (max(abs(x - k) for x in ratios), k)) if cands else 1
+
         def near_int(p):
             n = math.pi * ctx.db * (1 + ctx.kin_slip) / p['pitch_m']
-            ok = n >= 0.95 and abs(n - round(n)) <= 0.05
-            return (('SUPPORTS', 'moderate', f'pi*D_b*(1+f)/p = {n:.3f}') if ok
-                    else ('NEUTRAL', None, f'pi*D_b*(1+f)/p = {n:.3f}'))
+            ok = n >= 0.95 and abs(n - n_one) <= 0.05
+            return (('SUPPORTS', 'moderate', f'pi*D_b*(1+f)/p = {n:.3f} (one count {n_one} '
+                     'for all pitches)') if ok
+                    else ('NEUTRAL', None, f'pi*D_b*(1+f)/p = {n:.3f} (one count {n_one} for '
+                          'all pitches)'))
         e = _per_pitch(ctx, 'pitch-speed law',
                        'FIXED_FREQUENCY, or SPEED_INDEPENDENT_PITCH with pi*D_b*(1+f)/p '
                        'within 0.05 of an integer (backup roll already marked)', near_int)
@@ -1601,21 +1621,50 @@ def _h_fifth(ctx):
     return ev, pred
 
 
-def _roll_mark(ctx, diameter, roll, label):
+def _mark_count(ctx, diameter, roll):
+    """Review finding (single source, as for the coil): ONE mark count n must explain every
+    pitch. n is the count with the smallest worst relative mismatch over all pitches; on a tie
+    a supplied grinder-mark count is preferred, then the smaller n. Returns (n, worst mismatch,
+    how chosen, supplied counts) or (None, None, '', counts) without pitches."""
     marks = sorted({g['marks_per_circumference'] for g in ctx.case['kinematics']['grinder_marks']
                     if g['roll'] == roll})
     ns = sorted(set(range(1, 9)) | set(marks))
+    if not ctx.pitches:
+        return None, None, '', marks
+    circ = math.pi * diameter * (1 + ctx.kin_slip)
+
+    def worst(n):
+        return max(abs(circ / n - p['pitch_m']) / p['pitch_m'] for p in ctx.pitches)
+    w = {n: worst(n) for n in ns}
+    lo = min(w.values())
+    tied = [n for n in ns if w[n] <= lo * (1 + 1e-9) + 1e-15]
+    pref = [n for n in tied if n in marks]
+    n = (pref or tied)[0]
+    how = 'best single count for all pitches'
+    if len(tied) > 1:
+        how += (f'; tie between n = {tied}, the supplied grinder-mark count preferred'
+                if pref else f'; tie between n = {tied}, the smaller count taken')
+    return n, w[n], how, marks
+
+
+def _roll_mark(ctx, diameter, roll, label):
+    n, _, how, marks = _mark_count(ctx, diameter, roll)
+    circ = math.pi * diameter * (1 + ctx.kin_slip)
+    mixed = len(ctx.pitches) > 1 and len({
+        min(sorted(set(range(1, 9)) | set(marks)),
+            key=lambda k: abs(circ / k - p['pitch_m'])) for p in ctx.pitches}) > 1
 
     def rule(p):
-        best = min(ns, key=lambda n: abs(math.pi * diameter * (1 + ctx.kin_slip) / n
-                                         - p['pitch_m']))
-        pred = math.pi * diameter * (1 + ctx.kin_slip) / best
-        mis = abs(pred - p['pitch_m']) / p['pitch_m']
+        mis = abs(circ / n - p['pitch_m']) / p['pitch_m']
+        note = f'n = {n} ({how}), mismatch {mis:.2%}'
+        if mixed:
+            note += '; the pitches fit different counts separately, one count is applied to all'
         if mis <= 0.03:
-            return ('SUPPORTS', 'strong', f'n = {best}, mismatch {mis:.2%}')
-        return ('CONTRADICTS', 'moderate', f'closest n = {best}, mismatch {mis:.2%}')
+            return ('SUPPORTS', 'strong', note)
+        return ('CONTRADICTS', 'moderate', note)
     return _per_pitch(ctx, f'pitch = pi*D_{label}*(1+f)/n',
-                      f'within 3 % for n in 1..8 or grinder marks {marks}', rule)
+                      f'within 3 % for one n in 1..8 or grinder marks {marks}, the same n for '
+                      'every pitch', rule)
 
 
 def _h_roll(ctx, which):
@@ -1643,9 +1692,13 @@ def _h_roll(ctx, which):
                   'NOT_OBSERVED' if ori is None else
                   ('CONTRADICTS' if ori == 'longitudinal' else 'NEUTRAL'),
                   'strong' if ori == 'longitudinal' else None))
+    n, worst, how, _ = _mark_count(ctx, d, 'work_roll' if work else 'backup_roll')
     pred = {'roll_diameter_m': d, 'pitch_one_mark_m': math.pi * d * (1 + ctx.kin_slip),
             'pitch_two_marks_m': math.pi * d * (1 + ctx.kin_slip) / 2,
             'forward_slip_fraction_used': ctx.kin_slip}
+    if n is not None:     # keys only with pitches
+        pred.update(mark_count_used=n, mark_count_worst_relative_mismatch=worst,
+                    mark_count_basis=how)
     return ev, pred
 
 
@@ -1726,14 +1779,21 @@ def _h_torsional(ctx):
         # SPEC6 6.2: computed torsional modes replace the generic 5-30 Hz band
         top = max(TORSIONAL_GENERIC_BAND_HZ[1] * 2, 1.5 * max(modes))
 
+        # single source: one torsional mode (the best single fit to every observed frequency,
+        # as in the strip map) must explain all observations
+        one = (min(modes, key=lambda m: (max(abs(fo - m) / m for _, fo in ctx.freqs), m))
+               if ctx.freqs else None)
+
         def rule(f):
-            if any(abs(f - m) <= 0.15 * m for m in modes):
+            if one is not None and abs(f - one) <= 0.15 * one:
                 return ('SUPPORTS', 'strong')
             if f > top:
                 return ('CONTRADICTS', 'strong')
             return ('NEUTRAL', None)
-        expected = (f'within +-15 % of a torsional mode ({", ".join(f"{m:.4g}" for m in modes)} '
-                    f'Hz); above {top:.4g} Hz contradicts')
+        expected = (f'within +-15 % of one torsional mode, the same for every observation '
+                    f'({", ".join(f"{m:.4g}" for m in modes)} Hz'
+                    + (f'; best single fit {one:.4g} Hz' if one is not None else '')
+                    + f'); above {top:.4g} Hz contradicts')
     else:
         def rule(f):
             if 5 <= f <= 30:
@@ -2127,12 +2187,8 @@ def _strip_map(hyps, ctx):
         elif lead['id'] == 'fifth_octave_roll_stack_resonance':
             pitch, basis = pr['pitch_at_operating_speed_m'], 'u_op / antisymmetric upper mode'
         elif lead['id'] in ('work_roll_borne_marks', 'backup_roll_borne_marks'):
-            note = next((e['observed'] for e in lead['evidence']
-                         if e['criterion'].startswith('pitch = pi*D') and
-                         e['verdict'] == 'SUPPORTS'), None)
-            n = 1
-            if note and 'n = ' in note:
-                n = int(note.split('n = ')[1].split(',')[0])
+            # the one mark count the hypothesis judged every pitch against (single source)
+            n = pr.get('mark_count_used') or 1
             pitch = pr['pitch_one_mark_m'] / n
             basis = f'pi*D*(1+f)/{n}'
         elif lead['id'] == 'order_locked_drive_or_bearing_excitation' and pr['best_match']:
@@ -2457,14 +2513,8 @@ def _foil_regime(eff, bite, bite_error, result, flags):
             'model_largest_band_i_units': band[0] if band else None,
             'model_largest_band_basis': band[1] if band else None,
             'comparison': comp, 'comparison_text': comp_text},
-        'product_question': {
-            'case_temper': temper,
-            'text': 'Ask the plant which product this is: 25-60 um can be pouch-laminate '
-                    'barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector '
-                    'foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of '
-                    'thinner collector foil (collector foil is usually 9-20 um). '
-                    + gauge_clue + product_doubling + 'O against H18 changes buckling and '
-                    f'winding behaviour; this case uses temper {temper}.'},
+        'product_question': _product_question(m, thinnest, gauge_clue, product_doubling,
+                                              temper),
         'flags': flist,
         'limitations': [
             'No roll-kissing (closed-gap) model; the bite models see only the strip contact.',
@@ -2476,6 +2526,46 @@ def _foil_regime(eff, bite, bite_error, result, flags):
     if not extended:
         del out['extended_bite_domain']
     return out
+
+
+def _product_question(m, thinnest, gauge_clue, product_doubling, temper):
+    """SPEC13 2.2: no longer asks the plant for alloy and temper; with a battery product it
+    states the literature proposal for the final gauge (material_selection), without one it asks
+    which product this is, using the catalogue's 25-60 um battery products."""
+    pid = m.get('product')
+    tail = (product_doubling + 'O against H18 changes buckling and winding behaviour; this case '
+            f'uses temper {temper}.')
+    if pid is not None and band_products.grade_bands(pid):
+        g = band_products.gauge_band(pid, thinnest)
+        if g['status'] == 'IN_BAND':
+            pr = {gr: band_products.proposed_material(pid, thinnest, grade=gr)
+                  for gr in band_products.GRADES}
+            text = (f'Product {pid} (material.product): the literature proposal for the final '
+                    f'gauge {thinnest * 1e6:.3g} um ({g["band_label"]} band) is standard '
+                    f'{_proposal_words(pr["standard"])} or high-strength '
+                    f'{_proposal_words(pr["high_strength"])}; confirm or correct it with the '
+                    'plant (see material_selection). ')
+        else:
+            text = (f'Product {pid} (material.product): {g["reason"]}, so the tool has no '
+                    'literature proposal for this gauge (see material_selection). ')
+        return {'case_temper': temper, 'product': pid, 'asks_for_alloy_and_temper': False,
+                'text': text + tail}
+    names = {k: band_products.product(k) for k in band_products.GRADE_TABLES}
+
+    def span(pid_):
+        r = names[pid_].final_gauge_m
+        return f'{r.low * 1e6:.3g}-{r.high * 1e6:.3g} um'
+    text = ('Ask the plant which product this is, and set material.product: 25-60 um can be '
+            f'pouch-laminate barrier foil ({span("battery_pouch_laminate_foil")}; 8021 35-55, '
+            '8079 40-55, 8A21 40-50 um by GB/T 22648-2023; O temper, rolled hard then fully '
+            'annealed), thick collector foil (1235 / 1N30 / 1085 / 3003, H18, 20-35 um and up to '
+            '50 um in one specification; weak evidence), tab foil (1070 / 1235, soft, '
+            f'{span("battery_tab_foil")}; one vendor) or an intermediate pass of thinner '
+            'collector foil (GB/T 33143-2022: 8-20 um, H18). With material.product the tool '
+            'proposes alloy and temper for the final gauge from the literature '
+            '(material_selection) for the plant to confirm or correct. ' + gauge_clue)
+    return {'case_temper': temper, 'product': None, 'asks_for_alloy_and_temper': False,
+            'text': text + tail}
 
 
 PRODUCT_CHECK_FLAGS = ('CASE_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE',
@@ -2568,6 +2658,244 @@ def _product_check(eff, flags):
         'note': 'Evidence-neutral literature check: it never changes hypothesis scores. A value '
                 'inside a published span is not evidence that a pass is good.',
         'limitations': list(band_products.LIMITATIONS)}
+
+
+MATERIAL_SELECTION_FLAGS = ('MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN',
+                            'CASE_STRENGTH_BELOW_STANDARD_MINIMUM_FOR_GAUGE')
+MATERIAL_SELECTION_HINT = (
+    'Set material.product to a battery product of the catalogue ('
+    + ', '.join(pid for pid in band_products.GRADE_TABLES) + ') to get the literature '
+    'proposal for alloy and temper at the final gauge, for the plant to confirm or correct.')
+FLOW_INDICATOR_CAVEAT = ('INDICATOR ONLY: the comparison puts the rolling flow stress of a pass '
+                         'against the finished tensile strength of the foil, which is not the '
+                         'same quantity; it never changes a number or a score.')
+_MPa = 1e-6
+
+
+def _strength_verdict(value, smin, tlo, thi):
+    """Where a strength sits against the standard minimum and the typical producer range."""
+    if smin is None and tlo is None and thi is None:
+        return 'NO_PUBLISHED_VALUE'
+    if smin is not None and value < smin * (1 - 1e-9):
+        return 'BELOW_STANDARD_MINIMUM'
+    if thi is not None and value > thi * (1 + 1e-9):
+        return 'ABOVE_TYPICAL_RANGE'
+    if tlo is not None and value < tlo * (1 - 1e-9):
+        return ('BETWEEN_STANDARD_MINIMUM_AND_TYPICAL_RANGE' if smin is not None
+                else 'BELOW_TYPICAL_RANGE')
+    if tlo is not None or thi is not None:
+        return 'INSIDE_TYPICAL_RANGE'
+    return 'AT_OR_ABOVE_STANDARD_MINIMUM_NO_TYPICAL_PUBLISHED'
+
+
+def _ms_option(opts, alloy, proposal):
+    """The option the comparison uses: the case alloy if it is an option of the band, else the
+    standard proposal's alloy."""
+    by = {o['alloy'].upper(): o for o in opts['options']}
+    if alloy.upper() in by:
+        return by[alloy.upper()], 'the case alloy (an option of this band)'
+    if proposal.get('alloy') and proposal['alloy'].upper() in by:
+        return (by[proposal['alloy'].upper()],
+                f'the standard proposal {proposal["alloy"]} (the case alloy {alloy} is not an '
+                'option of this band)')
+    return None, 'no option to compare with'
+
+
+def _proposal_words(p):
+    if p.get('status') != band_products.BG_STATUS:
+        return f'none ({p.get("reason")})'
+    t = p['tensile_strength_pa']
+    rm = ('tensile strength not published' if t['value_pa'] is None
+          else f'Rm {t["value_pa"] * _MPa:.0f} MPa')
+    if 'no usual choice' in p['rule']:
+        ev = ('evidence WEAK: no usual choice of this grade is published for this band, so the '
+              'fallback rule (highest standard minimum) chose it')
+    else:
+        ev = f'evidence {p["evidence"]}'
+    return f'{p["alloy"]}-{p["temper"]} ({rm}; {ev})'
+
+
+def _material_selection(eff, flags):
+    """SPEC13 2.1: literature alloy and temper for the final gauge, and the case against it.
+
+    Evidence-neutral: it never changes a number in the case or a hypothesis score. Returns None
+    for a case with neither a product nor a foil-regime exit gauge (results unchanged)."""
+    m, p = eff['material'], eff['pass']
+    pid = m.get('product')
+    if pid is None:
+        if p['exit_thickness_m'] >= FOIL_GAUGE_M:
+            return None
+        return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                'reason': 'material.product is null or absent', 'hint': MATERIAL_SELECTION_HINT}
+    if not band_products.grade_bands(pid):
+        return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                'reason': f'no gauge-by-gauge alloy and temper table is published for {pid}',
+                'hint': MATERIAL_SELECTION_HINT}
+    rows_src = [('case pass', p)] + [(r['label'], r) for r in eff['schedule']
+                                     if not bw.is_case_pass(eff, r)]
+    final_label, final_src = min(rows_src, key=lambda x: x[1]['exit_thickness_m'])
+    h_final = final_src['exit_thickness_m']
+    final_band = band_products.gauge_band(pid, h_final)
+    case_band = band_products.gauge_band(pid, p['exit_thickness_m'])
+    options = band_products.grade_options(pid, h_final)
+    props = {g: band_products.proposed_material(pid, h_final, grade=g)
+             for g in band_products.GRADES}
+    alloy = _alloy_designation(m['alloy'])
+    stated = m.get('alloy_temper_stated')
+    out_flags = []
+
+    def band_brief(g):
+        return {'status': g['status'], 'band_id': g.get('band_id'),
+                'band_label': g.get('band_label'), 'reason': g.get('reason', '')}
+
+    # alloy and temper
+    cmp_alloy = {'value': m['alloy'], 'designation': alloy}
+    if options['status'] == 'IN_BAND':
+        opt = next((o for o in options['options'] if o['alloy'].upper() == alloy.upper()), None)
+        if opt is None:
+            cmp_alloy.update(verdict='NOT_AN_OPTION_OF_THE_BAND',
+                             text=f'{alloy} is not an option of the {options["band_label"]} band.')
+        else:
+            cmp_alloy.update(
+                verdict='USUAL_CHOICE' if opt['usual'] else 'OPTION_NOT_USUAL_CHOICE',
+                evidence=opt['evidence'],
+                text=(f'{alloy} is an option of the {options["band_label"]} band'
+                      + (f', a usual choice ({opt["usual_for"]})' if opt['usual'] else
+                         ', not a usual choice there') + f'; evidence {opt["evidence"]}.'))
+        cmp_alloy['matches_proposal'] = [g for g, pr in props.items()
+                                         if (pr.get('alloy') or '').upper() == alloy.upper()]
+    else:
+        cmp_alloy.update(verdict='FINAL_GAUGE_OUTSIDE_PUBLISHED_BANDS', text=final_band['reason'])
+    t = m['temper'].strip().upper()
+    labels = sorted({x for o in options['options'] for x in o['temper_labels']})
+    if not labels:
+        tv, ttxt = 'NO_PUBLISHED_VALUE', 'no grade table at the final gauge'
+    elif t in labels:
+        tv = 'CONSISTENT'
+        ttxt = (f'{m["temper"]} is a temper label of this band ({"/".join(labels)}).'
+                + (' ' + band_products.TEMPER_NAMING.text if t in ('H18', 'H19') else ''))
+    else:
+        tv = 'NOT_A_TEMPER_OF_THE_BAND'
+        ttxt = f'{m["temper"]} is not a temper label of this band ({"/".join(labels)}).'
+    cmp_temper = {'value': m['temper'], 'verdict': tv, 'text': ttxt}
+
+    # pass strengths, each against its own exit-gauge band
+    passes = []
+    for label, src in rows_src:
+        h = src['exit_thickness_m']
+        g = band_products.grade_options(pid, h)
+        row = {'label': label, 'exit_thickness_m': h, 'is_final_pass': label == final_label,
+               'mean_flow_stress_pa': src['mean_flow_stress_pa'], 'band_id': g['band_id'],
+               'band_label': g['band_label']}
+        if g['status'] != 'IN_BAND':
+            row.update(verdict='OUTSIDE_PUBLISHED_BANDS', option=None, compared_with='')
+        else:
+            pr = band_products.proposed_material(pid, h, grade='standard')
+            o, why = _ms_option(g, alloy, pr)
+            if o is None:
+                row.update(verdict='NO_PUBLISHED_VALUE', option=None, compared_with=why)
+            else:
+                tlo, thi = o['typical_rm_pa']
+                smin = o['standard_min_rm_pa']
+                v = _strength_verdict(src['mean_flow_stress_pa'], smin, tlo, thi)
+                row.update(verdict=v, option=o['alloy'], compared_with=why,
+                           standard_min_pa=smin, typical_rm_pa=[tlo, thi],
+                           sources=o['sources'])
+                if v == 'BELOW_STANDARD_MINIMUM':
+                    out_flags.append(MATERIAL_SELECTION_FLAGS[1])
+        passes.append(row)
+    # yield stress against the assumed / published proof strength of the matching proposal
+    target = next((pr for pr in props.values() if (pr.get('alloy') or '').upper()
+                   == alloy.upper() and pr.get('status') == band_products.BG_STATUS),
+                  props['standard'])
+    ys = m['yield_stress_pa']
+    if target.get('status') == band_products.BG_STATUS and \
+            target['proof_strength']['range_pa'] is not None:
+        lo, hi = target['proof_strength']['range_pa']
+        yv = ('BELOW_RANGE' if lo is not None and ys < lo * (1 - 1e-9) else
+              'ABOVE_RANGE' if hi is not None and ys > hi * (1 + 1e-9) else 'INSIDE_RANGE')
+        cmp_yield = {'value_pa': ys, 'verdict': yv, 'proposal_grade': target['grade'],
+                     'proof_range_pa': [lo, hi],
+                     'published': target['proof_strength']['published'],
+                     'basis': target['proof_strength']['basis']}
+    else:
+        cmp_yield = {'value_pa': ys, 'verdict': 'NO_PUBLISHED_VALUE',
+                     'basis': 'no proof strength for this band'}
+
+    # the last pass of every other route of the schedule (no pass enters at its exit gauge)
+    entries = [src['entry_thickness_m'] for _, src in rows_src]
+    others = []
+    for label, src in rows_src:
+        h = src['exit_thickness_m']
+        if label == final_label or any(abs(e - h) <= 1e-9 * h for e in entries):
+            continue
+        g = band_products.gauge_band(pid, h)
+        if g['status'] != 'IN_BAND':
+            continue
+        pr = {gr: band_products.proposed_material(pid, h, grade=gr)
+              for gr in band_products.GRADES}
+        others.append({'label': label, 'exit_thickness_m': h, 'band_id': g['band_id'],
+                       'band_label': g['band_label'], 'proposals': pr,
+                       'text': (f'{label} ({h * 1e6:.3g} um, {g["band_label"]} band): standard '
+                                f'{_proposal_words(pr["standard"])}; high-strength '
+                                f'{_proposal_words(pr["high_strength"])}')})
+    # the plain sentence
+    final_row = next(r for r in passes if r['is_final_pass'])
+    ftxt = (f'the final pass ({final_label}, {h_final * 1e6:.3g} um) is in the '
+            f'{final_band.get("band_label")} band' if final_band['status'] == 'IN_BAND'
+            else f'the final pass ({final_label}, {h_final * 1e6:.3g} um) is outside every '
+                 'published band')
+    prop_txt = (f'standard proposal {_proposal_words(props["standard"])}; high-strength '
+                f'proposal {_proposal_words(props["high_strength"])}')
+    if stated is True:
+        sentence = (f'The case states the material (material.alloy_temper_stated true): '
+                    f'{m["alloy"]}-{m["temper"]}; {ftxt}; the literature gives {prop_txt}.')
+        if others:
+            sentence += ' Other route ends: ' + '; '.join(o['text'] for o in others) + '.'
+    else:
+        out_flags.insert(0, MATERIAL_SELECTION_FLAGS[0])
+        fs = final_src['mean_flow_stress_pa']
+        cands = [(abs(fs - pr['tensile_strength_pa']['value_pa']), g, pr)
+                 for g, pr in props.items() if pr.get('status') == band_products.BG_STATUS
+                 and pr['tensile_strength_pa']['value_pa'] is not None]
+        if cands:
+            _, g, pr = min(cands, key=lambda c: (c[0], c[1] != 'standard'))
+            closest = (f'The final-pass flow stress of the case, {fs * _MPa:.0f} MPa, is closest '
+                       f'to the {g.replace("_", "-")} proposal ({pr["alloy"]}, '
+                       f'{pr["tensile_strength_pa"]["value_pa"] * _MPa:.0f} MPa; indicator '
+                       'only).')
+        else:
+            closest = 'No proposal with a tensile value to compare the case numbers with.'
+        sentence = (f'Alloy and temper are not stated by the plant (the case uses '
+                    f'{m["alloy"]}-{m["temper"]}); {ftxt}; LITERATURE PROPOSAL TO CONFIRM OR '
+                    f'CORRECT WITH THE PLANT: {prop_txt}. {closest}')
+        if others:
+            sentence += (' Other route ends of the schedule: '
+                         + '; '.join(o['text'] for o in others) + '.')
+    flags.extend(dict.fromkeys(out_flags))
+    return {
+        'status': band_products.BG_STATUS, 'not_supplied': False, 'product_id': pid,
+        'final_pass_label': final_label, 'final_exit_thickness_m': h_final,
+        'final_pass_band': band_brief(final_band), 'case_pass_band': band_brief(case_band),
+        'final_pass_rule': 'the final pass is the thinnest pass of the case (case pass and '
+                           'schedule)',
+        'options': options, 'proposals': props, 'other_route_ends': others,
+        'stated': {'alloy': m['alloy'], 'alloy_designation': alloy, 'temper': m['temper'],
+                   'yield_stress_pa': ys, 'alloy_temper_stated': stated,
+                   'pass_flow_stresses': [{'label': r['label'],
+                                           'mean_flow_stress_pa': r['mean_flow_stress_pa']}
+                                          for r in passes]},
+        'comparison': {'alloy': cmp_alloy, 'temper': cmp_temper, 'yield_stress': cmp_yield,
+                       'passes': passes, 'final_pass': final_row,
+                       'flow_stress_caveat': FLOW_INDICATOR_CAVEAT},
+        'sentence': sentence, 'flags': list(dict.fromkeys(out_flags)),
+        'note': 'Evidence-neutral literature proposal: it never changes a number in the case or '
+                'a hypothesis score. Confirm or correct alloy, temper and strength with the plant.',
+        'limitations': [
+            'A literature synthesis with the stated evidence ratings; no source gives a hard '
+            'gauge-to-alloy rule.',
+            'Finished tensile strength is used as an indicator of the rolling flow stress.',
+            'Several standard tables were read from mirrors or producer pages reproducing them.']}
 
 
 CREDIBILITY_OUTSIDE = 'FORCE_OUTSIDE_REPORTED_RANGE'
@@ -3018,6 +3346,13 @@ def diagnose(case):
     pc = _product_check(eff, flags)
     if pc is not None:
         result['product_check'] = pc
+    try:
+        ms = _material_selection(eff, flags)
+    except ValueError as exc:
+        ms = {'status': 'FAILED', 'error': f'material_selection: {exc}', 'not_supplied': False}
+        flags.append('MATERIAL_SELECTION_FAILED')
+    if ms is not None:
+        result['material_selection'] = ms
     if result['foil_regime'] is not None:
         note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
                 'rolling (not modelled), where load is no longer a gauge actuator.')

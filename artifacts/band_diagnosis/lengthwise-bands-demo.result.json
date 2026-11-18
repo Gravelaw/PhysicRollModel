@@ -3506,7 +3506,7 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_b*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
           "observed": "pitch not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -3865,7 +3865,7 @@
         {
           "basis": "observation",
           "criterion": "observed frequency u/p",
-          "expected": "within +-15 % of a torsional mode (18.47, 37.56 Hz); above 60 Hz contradicts",
+          "expected": "within +-15 % of one torsional mode, the same for every observation (18.47, 37.56 Hz); above 60 Hz contradicts",
           "observed": "no pitch or vibration frequency observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -3941,7 +3941,7 @@
         {
           "basis": "observation",
           "criterion": "pitch = pi*D_w*(1+f)/n",
-          "expected": "within 3 % for n in 1..8 or grinder marks []",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
           "observed": "pitch not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null

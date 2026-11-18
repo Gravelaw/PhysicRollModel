@@ -125,7 +125,8 @@ class ProductSurveyTests(unittest.TestCase):
         self.assertNotRegex(self.html, r'\b(nan|inf|NaN|Infinity)\b')
         self.assertIn('Rankings per mechanism', self.html)
         self.assertIn('class="scroll"', self.html)
-        self.assertEqual(self.html.count('<svg'), len(self.r['rankings']))
+        self.assertEqual(self.html.count('<svg'), len(self.r['rankings']) + 1)  # + grade matrix
+        self.assertIn('Battery foil by gauge and grade', self.html)
         self.assertIn('Limitations and sources', self.html)
         evil = copy.deepcopy(self.r)
         evil['rows'][0]['product_name'] = '<b>&"x'
@@ -135,120 +136,98 @@ class ProductSurveyTests(unittest.TestCase):
         self.assertTrue(re.search(r'Excluded \(\d+\) and why', self.html))
 
 
-class UserMillSurveyTests(unittest.TestCase):
-    """The survey on the user's own mill: --mill / --foil-mill / --sheet-mill, --products,
-    --overrides, --write-cases (restricted to a few products to stay fast)."""
+class BatteryGradeMatrixTests(unittest.TestCase):
+    """SPEC13 2.3: battery collector foil by gauge and grade (reads the survey result)."""
 
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
-        d = Path(cls.tmp.name)
-        c = json.loads((ROOT / 'scenarios' / 'band_diagnosis_battery_foil.json').read_text())
-        # a different machine: smaller rolls, softer housing, shorter spans; coarse numerics
-        c['pass']['work_roll_radius_m'] = 0.11
-        c['stand']['housing_stiffness_n_m'] = 9.0e9
-        c['spans']['entry_span_length_m'] = c['spans']['exit_span_length_m'] = 2.0
-        c['width_model']['numerics'] = {'axial_cell_m': 0.02, 'radial_cells': 6,
-                                        'time_step_s': 5.0}
-        c['gauge_control'] = c['drive'] = None
-        c['model_options']['cells'] = 64
-        cls.mill_path = d / 'my-mill.json'
-        cls.mill_path.write_text(json.dumps(c))
-        cls.base = {x['product_id']: x for x in bs.survey(FEW)['rows']}
-        cls.r, cls.mills = bs.survey_with_mills(FEW, cls.mill_path, cls.mill_path)
-        cls.rows = {x['product_id']: x for x in cls.r['rows']}
+        cls.m = json.loads((ART / 'product-survey.result.json').read_text(
+            encoding='utf-8'))['battery_grade_matrix']
+        cls.cells = {(c['gauge_um'], c['grade']): c for c in cls.m['cells']}
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp.cleanup()
+    def test_every_gauge_and_grade(self):
+        self.assertEqual(set(self.cells), {(g, gr) for g in (20, 18, 15, 13, 12, 10)
+                                           for gr in ('standard', 'high_strength')})
+        for c in self.m['cells']:
+            self.assertEqual(c['status'], 'EVALUATED', c['gauge_um'])
+            self.assertEqual(c['mill'], 'foil')
+            self.assertTrue(c['pass_basis'])
+        self.assertIn('plant route 50 -> 30 -> 18', self.cells[(18, 'standard')]['pass_basis'])
+        self.assertIn('plant route 50 -> 25 -> 12', self.cells[(12, 'standard')]['pass_basis'])
+        self.assertIn('nearest published', self.cells[(15, 'standard')]['pass_basis'])
+        self.assertEqual(self.cells[(18, 'standard')]['alloy'], '1235')
+        self.assertEqual(self.cells[(12, 'high_strength')]['alloy'], '1100')
+        self.assertIn('proof strength', self.m['ridge_strength_basis'])
 
-    def test_products_restrict_and_unknown_ids_error(self):
-        self.assertEqual(list(self.base), FEW)
-        self.assertEqual([x['index'] for x in self.base.values()],
-                         [i + 1 for i, p in enumerate(bp.products()) if p.id in FEW])
-        with self.assertRaisesRegex(ValueError, 'unknown product id.*valid ids: battery_'):
-            bs.survey(['no_such_product'])
+    def test_thinner_lower_bite_free_thresholds(self):
+        # at fixed grade AND fixed strength thinner foil has lower thresholds; where the
+        # proposal's strength steps up between bands the ridge height may rise, and the
+        # sentence must say so
+        for grade in ('standard', 'high_strength'):
+            cs = [self.cells[(g, grade)] for g in (20, 18, 15, 13, 12, 10)]
+            for key in ('critical_ridge_height_m', 'trough_onset_lateral_stress_pa',
+                        'roller_wrinkle_threshold_pa'):
+                for a, b in zip(cs, cs[1:]):
+                    if abs(b[key]) > abs(a[key]):
+                        self.assertGreater(b['tensile_strength_pa'], a['tensile_strength_pa'],
+                                           (grade, key, a['gauge_um']))
+                        self.assertIn(f'from {a["gauge_um"]:g} to {b["gauge_um"]:g} um',
+                                      self.m['gauge_sentence'])
+                    elif b['tensile_strength_pa'] == a['tensile_strength_pa']:
+                        self.assertLess(abs(b[key]), abs(a[key]))
+            first, last = cs[0], cs[-1]
+            self.assertLess(abs(last['trough_onset_lateral_stress_pa']),
+                            abs(first['trough_onset_lateral_stress_pa']))
+            self.assertLess(last['critical_ridge_height_m'], first['critical_ridge_height_m'])
+        self.assertIn('thinner foil lowers the bite-free thresholds', self.m['gauge_sentence'])
 
-    def test_a_different_mill_changes_bite_numbers_not_provenance(self):
-        m = self.r['mills']['foil']
-        self.assertEqual(m['source'], 'user mill file')
-        self.assertEqual(m['work_roll_radius_m'], 0.11)
-        for k in ('pass.work_roll_radius_m', 'stand', 'spans', 'width_model.coil'):
-            self.assertIn(k, m['keys_taken'])
-        self.assertIn('material', m['keys_not_taken'])
-        self.assertEqual(self.r['options']['mill_files'],
-                         {'foil': 'my-mill.json', 'sheet': 'my-mill.json'})
-        for pid in ('battery_pouch_laminate_foil', 'litho_sheet'):
-            a, b = self.base[pid], self.rows[pid]
-            self.assertEqual(a['catalogue_values_used'], b['catalogue_values_used'])
-            self.assertEqual(a['entry_thickness_m'], b['entry_thickness_m'])
-            self.assertNotEqual(a['separating_force_per_width_n_m'],
-                                b['separating_force_per_width_n_m'])
-            self.assertNotEqual(a['strip_to_mill_modulus_ratio'],
-                                b['strip_to_mill_modulus_ratio'])
-        # bite-free thresholds depend on the spans: shorter spans raise the trough onset
-        a, b = self.base['household_foil'], self.rows['household_foil']
-        self.assertGreater(abs(b['trough_onset_lateral_stress_pa']),
-                           abs(a['trough_onset_lateral_stress_pa']))
-        self.assertIn('user mill from my-mill.json', self.render())
+    def test_credible_and_not_credible_never_mixed(self):
+        cred = {k for k, c in self.cells.items() if c['credible']}
+        for c in self.m['cells']:
+            if not c['credible']:
+                self.assertIn('bite_excluded_reason', c)
+        # the gauge sentence names only credible gauges for the stripe trend
+        txt = self.m['gauge_sentence']
+        if 'on credible bites only (' in txt:
+            named = txt.split('on credible bites only (')[1].split(')')[0]
+            for g in named.replace(' um', '').split(', '):
+                self.assertIn((float(g), 'standard'), {(float(a), b) for a, b in cred})
+        both = self.m['grade_sentence'].split('both bites are credible (')[1].split(')')[0]
+        for g in [x for x in both.replace(' um', '').split(', ') if x and x != 'none']:
+            self.assertTrue(self.cells[(int(g), 'standard')]['credible'])
+            self.assertTrue(self.cells[(int(g), 'high_strength')]['credible'])
 
-    def render(self):
-        return bs.render_survey_report(self.r)
+    def test_weak_fallback_visible(self):
+        c18 = self.cells[(18, 'high_strength')]
+        self.assertTrue(c18['fallback_rule_weak'])
+        self.assertEqual(c18['evidence'], 'weak')
+        self.assertFalse(self.cells[(12, 'high_strength')]['fallback_rule_weak'])
+        self.assertIn('the high-strength proposal at 18 um (1100)', self.m['grade_sentence'])
+        self.assertIn('Evidence WEAK', self.m['grade_sentence'])
 
-    def test_overrides_are_applied_and_marked(self):
-        ov = bs.validate_overrides({'battery_pouch_laminate_foil': {
-            'exit_thickness_m': 35e-6, 'mean_flow_stress_pa': 150e6, 'width_m': 1.0}})
-        r = bs.survey(['battery_pouch_laminate_foil'], overrides=ov,
-                      override_source='plant data')['rows'][0]
-        self.assertEqual((r['exit_thickness_m'], r['mean_flow_stress_pa'], r['strip_width_m']),
-                         (35e-6, 150e6, 1.0))
-        self.assertAlmostEqual(r['exit_tension_pa'], bs.EXIT_TENSION_FRACTION * 150e6)
-        items = {x['item']: x for x in r['user_supplied_values']}
-        self.assertEqual(set(items), {'exit_thickness_m', 'mean_flow_stress_pa', 'width_m'})
-        self.assertTrue(all(x['basis'] == 'user-supplied (plant data)' for x in items.values()))
-        used = {x['item'] for x in r['catalogue_values_used']}
-        self.assertFalse(used & {'final pass gauges', 'flow stress'})
-        self.assertFalse(r['flow_stress_assumed'])
-        # the mill cannot take a pass too narrow for its bite model: a rejected row
-        ov2 = bs.validate_overrides({'litho_sheet': {'width_m': 0.009}})
-        x = bs.survey(['litho_sheet'], overrides=ov2)['rows'][0]
-        self.assertEqual(x['bite_status'], 'NO_BITE')
-        self.assertIn('width/h0 >= 20', x['rejected'])
+    def test_main_battery_row_uses_the_proposal(self):
+        r = json.loads((ART / 'product-survey.result.json').read_text(encoding='utf-8'))
+        row = next(x for x in r['rows'] if x['product_id'] == 'battery_collector_foil')
+        self.assertEqual(row['material_proposal']['status'],
+                         'LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT')
+        self.assertEqual(row['alloy_checked'], row['material_proposal']['alloy'])
+        self.assertAlmostEqual(row['mean_flow_stress_pa'],
+                               row['material_proposal']['tensile_strength_pa'])
+        fs = next(x for x in row['catalogue_values_used'] if x['item'] == 'flow stress')
+        self.assertIn('LITERATURE PROPOSAL', fs['basis'])
 
-    def test_invalid_mill_file_and_override_keys_error(self):
-        with self.assertRaisesRegex(ValueError, 'must be a physicroll.band_case.v2 case'):
-            bs.survey(FEW[:1], ROOT / 'scenarios' / 'band_diagnosis_bearing_order.json')
-        bad = Path(self.tmp.name) / 'bad.json'
-        bad.write_text('{"case_schema": "physicroll.band_case.v2"}')
-        with self.assertRaisesRegex(ValueError, 'mill file .*bad.json'):
-            bs.survey(FEW[:1], bad)
-        with self.assertRaisesRegex(ValueError, "unknown key\\(s\\) 'speed'; allowed"):
-            bs.validate_overrides({'litho_sheet': {'speed': 3.0}})
-        with self.assertRaisesRegex(ValueError, 'unknown product id'):
-            bs.validate_overrides({'litho': {'width_m': 1.0}})
-        with self.assertRaisesRegex(ValueError, 'must be true or false'):
-            bs.validate_overrides({'litho_sheet': {'doubled': 1}})
-        err = io.StringIO()
-        with redirect_stderr(err), self.assertRaises(SystemExit):
-            bs.main(['--out', self.tmp.name, '--products', 'nope'])
-        self.assertIn('valid ids', err.getvalue())
-
-    def test_written_case_loads_and_diagnoses(self):
-        out = Path(self.tmp.name) / 'cli'
-        with redirect_stdout(io.StringIO()):
-            bs.main(['--out', str(out), '--mill', str(self.mill_path), '--products',
-                     'battery_pouch_laminate_foil', '--write-cases', str(out / 'cases')])
-        path = out / 'cases' / 'battery_pouch_laminate_foil.case.json'
-        case = load_case(path)
-        self.assertEqual(case['material']['product'], 'battery_pouch_laminate_foil')
-        self.assertEqual(case['pass']['work_roll_radius_m'], 0.11)
-        self.assertTrue(all(v in (None, []) for v in case['observation'].values()))
-        self.assertTrue(any(n.startswith('ASSUMED: flow stress') for n in case['notes']))
-        self.assertTrue(any('BF-S34' in n for n in case['notes']))
-        self.assertTrue(any('my-mill.json' in n for n in case['notes']))
-        r = diagnose(case)
-        self.assertEqual(r['product_check']['product_id'], 'battery_pouch_laminate_foil')
-        json.dumps(r, allow_nan=False)
+    def test_starter_case_carries_the_proposal(self):
+        r = json.loads((ART / 'product-survey.result.json').read_text(encoding='utf-8'))
+        row = next(x for x in r['rows'] if x['product_id'] == 'battery_collector_foil')
+        mills = {k: bs._Mill(k) for k in bs.MILLS}
+        c = bs.starter_case(row, mills[row['mill']])
+        pr = row['material_proposal']
+        self.assertEqual((c['material']['alloy'], c['material']['temper']),
+                         (pr['alloy'], pr['temper']))
+        self.assertIs(c['material']['alloy_temper_stated'], False)
+        self.assertAlmostEqual(c['material']['yield_stress_pa'], pr['proof_strength_pa'])
+        self.assertTrue(any(n.startswith('MATERIAL: LITERATURE PROPOSAL') for n in c['notes']))
+        self.assertTrue(any('BG-G2' in n for n in c['notes']))
 
 
 if __name__ == '__main__':

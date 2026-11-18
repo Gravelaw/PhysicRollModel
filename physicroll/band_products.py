@@ -4041,11 +4041,14 @@ def proposed_material(product_id, final_gauge_m, *, alloy=None, grade='standard'
                   'sources': list(rp.sources)}
     elif any(t.startswith('H') for t in o.temper_labels) and val is not None:
         med, (rlo, rhi), rsrc = _rp_ratio()
-        rp_out = {'value_pa': _q(med * val), 'range_pa': [_q(rlo * val), _q(rhi * val)],
+        rlo_rm = lo if lo is not None else val
+        rp_out = {'value_pa': _q(med * val),
+                  'range_pa': [_q(rlo * rlo_rm), None if hi is None else _q(rhi * hi)],
                   'published': False, 'ratio_used': med, 'ratio_span': [rlo, rhi],
                   'basis': f'not published for {o.alloy} in this band; assumed Rp0.2 = '
                            f'{med:.3f} x Rm, the median Rp0.2/Rm ratio of the hard-foil grades '
-                           f'that publish both at 15 µm (span {rlo:.3f}–{rhi:.3f}; computed)',
+                           f'that publish both at 15 µm (span {rlo:.3f}–{rhi:.3f}; computed); '
+                           'the range applies the ratio span to the tensile range',
                   'sources': list(rsrc), 'read_status': 'computed'}
     else:
         rp_out = {'value_pa': None, 'range_pa': None, 'published': False,

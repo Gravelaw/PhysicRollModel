@@ -118,29 +118,67 @@ thinner gauge. Code: `physicroll/band_diagnosis.py` (`_foil_regime`, bite floor)
 
 ### 3.1 Which product this probably is, and what to tell the tool
 
-Two products fit "battery foil at 16-60 um", and they behave differently:
+Two kinds of product fit "battery foil at 16-60 um": current-collector foil (rolled hard,
+H18 / H19) and pouch-laminate barrier foil (8021 / 8079 / 8A21, annealed O); tab foil and thick
+collector foil also sit at 20-100 um. The catalogue's second battery survey
+(`docs/thin-gauge-products.md`, "Battery foil: alloy and temper by gauge"; sources `BG-`)
+answers which alloy and temper are used at each gauge. Its three findings: no source gives a
+hard "gauge X -> alloy Y" rule, only a GB/T 33143-2022 strength floor that rises as gauge
+falls, met by moving from 1085 / 1070 / 1060 / 1235 to Cu-bearing 1100- or 1C30-type alloys;
+the first survey's 8011 minimum was wrong (180 MPa, not 220-230); and "H18" on battery foil is a
+label for a strength table that European producers call H19 (the foil gets 97-99 % cold
+reduction after the last anneal).
 
-| | current-collector foil | pouch-laminate barrier foil |
-|---|---|---|
-| alloy, temper | 1235 / 1060 / 1070 class (also 1100), H18 (full hard) [M] | 8021 / 8079, annealed (O temper) [M] |
-| gauges | final about 9-20 um [M, no source recorded], thicker collector foil 21-35 um [M], with 25-60 um as intermediate passes | 35-50 um [M] |
-| stock strength | UTS 150-200 MPa in H18 [V S4] | not in the research pass |
+Collector foil by gauge band (minimum tensile strength by GB/T 33143-2022, MPa, read from a
+producer page reproducing the table; the proposals the tool uses; numbers read from
+`physicroll.band_products` by script):
 
-A final gauge of usually 17-19 um, down to 12 um (plant statements), points to
-current-collector foil in H18 with 25-60 um as intermediate passes. The result's
-`foil_regime.product_question` words this from the case, not from any plant statement: it
-names the thinnest exit gauge of the case pass and schedule ("The thinnest pass in this case
-exits at 12 um; a final gauge below about 20 um points to cathode current-collector foil in H18
-with 25-60 um as intermediate passes" in the demo) and, at 20 um or above, says only that the
-gauge fits any of the listed products or an intermediate pass. Texts that depend on
-`material.final_pass_doubled` say "the case states" (the key is the plant's answer as entered),
-not "the plant states".
-One question remains open for the plant:
+| gauge band | standard minimum Rm by alloy | usually chosen | standard proposal | high-strength proposal | evidence |
+|---|---|---|---|---|---|
+| ≤10 um | 1100 230, 1C30 220, 1070 185, 8011 180 | 1100-type or 1C30-type; 8021 at 10 µm one-side-bright. | 1070-H18 185 MPa (fallback rule, evidence WEAK) | 1100-H18 262 MPa (evidence medium) | minima strong, choice medium |
+| >10–13 um | 1100 230, 1235 180, 1060 190, 1C30 230, 1050 190, 1070 185, 8011 180 | 1100-type for EV; 1235 or 1060 where 180–190 MPa suffices. | 1235-H18 180 MPa (evidence medium) | 1100-H18 250 MPa (evidence medium) | minima strong, choice medium |
+| >13–15 um | 1235 185, 1060 190, 1100 220, 1C30 225, 1050 190, 1070 180, 8011 180, 8A21 165 | 1235, 1060, 1N30 standard; 1085 for high power; 1100-type or 3003 when ≥250 MPa is specified. | 1235-H18 185 MPa (evidence strong) | 1100-H18 220 MPa (evidence strong) | minima strong, choice strong |
+| >15–20 um | 1235 175, 1060 185, 1070 175, 1050 185, 1100 220, 1C30 220 | 1235, 1060, 1070, 1085 (same grades as at 15 µm). | 1235-H18 210 MPa (evidence vendor_level) | 1100-H18 220 MPa (fallback rule, evidence WEAK) | minima strong, choice vendor_level |
+| >20–30 um | none (GB/T 33143 stops at 20 um) | 1235, 1N30, 1085, 3003. | 1235-H18 185 MPa (evidence weak) | 3003-H18, Rm not published (evidence weak) | minima not_rated, choice weak |
 
-1. **Alloy and temper.** O against H18 changes buckling and winding behaviour. In the tool
-   the temper acts through the numbers you enter: `material.yield_stress_pa` (coil-ridge
-   yield, critical ridge height) and the pass flow stress (bite). The demo uses
-   1235-H18-like values.
+**The two bands that matter for this plant.** The usual 17-19 um final gauge is in the
+**>15–20 um** band: standard proposal 1235-H18 210 MPa (evidence vendor_level)
+(range 175-220 MPa); the research names no usual
+high-strength choice there, so the high-strength proposal 1100-H18 220 MPa (fallback rule, evidence WEAK) comes
+from the fallback rule and is less supported than the 12 um one. 12 um is in the
+**>10–13 um** band: standard minimum 180 MPa for 1235 and
+190 MPa for 1060, 230 MPa for the 1100 / 1C30 type that EV practice favours; standard
+proposal 1235-H18 180 MPa (evidence medium), high-strength proposal 1100-H18 250 MPa (evidence medium).
+
+**What the tool does with it.** With `material.product` set to a battery product, the result
+section `material_selection` gives the gauge band of the final pass (the thinnest pass of the
+case) and of the case pass, every alloy option of the final band (temper labels, standard
+minimum, typical producer values, usual choice, evidence rating, sources), the standard and
+high-strength proposals (status `LITERATURE_PROPOSAL_TO_CONFIRM_WITH_PLANT`), the last pass of any other route in the
+schedule with its own proposals, and the case compared with the band: alloy (usual choice /
+option / not an option), temper (H18 and H19 both consistent), `material.yield_stress_pa`
+against the proof-strength range, and every pass's flow stress against the standard minimum
+and the typical range of its own exit-gauge band (INDICATOR ONLY: finished tensile strength is
+not the rolling flow stress). Flags, evidence-neutral: `MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN`
+(unless `material.alloy_temper_stated` is `true`) and
+`CASE_STRENGTH_BELOW_STANDARD_MINIMUM_FOR_GAUGE`. It never changes a number in the case or a
+hypothesis score. **The plant confirms or corrects** by entering its alloy, temper and
+strengths and setting `material.alloy_temper_stated: true` (optional, v2; `null` or absent =
+not stated). In the tool the temper acts through the numbers entered:
+`material.yield_stress_pa` (coil-ridge yield, critical ridge height) and the pass flow stress
+(bite).
+
+The result's `foil_regime.product_question` is worded from the case, not from any plant
+statement, and no longer asks the plant for alloy and temper. With a battery
+`material.product` it states the literature proposal for the thinnest exit gauge of the case
+and points to `material_selection` (in the demo: "the literature proposal for the final gauge
+12 um (>10–13 µm band) is standard 1235-H18 ... confirm or correct it with the plant").
+Without a product it asks which product this is (pouch-laminate barrier foil, thick collector
+foil, tab foil, or an intermediate pass of thinner collector foil, with the catalogue's gauges
+and tempers) and to set `material.product`, and names the thinnest exit gauge of the case
+pass and schedule (below about 20 um it points to collector foil in H18). Texts that depend on
+`material.final_pass_doubled` say "the case states" (the key is the plant's answer as
+entered), not "the plant states".
 
 **Answered: the final pass (usually 17-19 um, down to 12 um) is rolled single-sheet** (plant
 statement). Published
@@ -168,7 +206,8 @@ single sheet of the entered gauge, not the doubled pass, and one face of each sh
 matte sheet-to-sheet face). "Final pass" is the thinnest pass of the case (the product check
 also applies the key to the last pass of every route in the schedule); the key has no
 effect without a `foil_regime` block. The foil demo sets it to `false`. The plant has not
-stated the alloy and temper; the demo assumes a standard-grade H18 collector foil (1235-like).
+stated the alloy and temper; the demo uses the literature proposal 1235-H18 (standard grade
+of both final-gauge bands) and says so (`material.alloy_temper_stated: false`).
 
 **The plant's route** (plant statements): the foil mill takes a **50 um input** and reaches
 final gauge in **two single-sheet passes**; the final gauge is **usually 17-19 um** and can
@@ -278,7 +317,9 @@ or, with `material.final_pass_doubled` stated, records the answer: `false` says 
 bite is a limit of the tool, not of an unmodelled doubled pass; `true` adds the flag
 `DOUBLED_FINAL_PASS_NOT_MODELLED`; empty in the demo); `final_pass_doubled` when stated; with
 `false` also a sixth implication on `observation.faces` (section 3.1);
-`wrinkle_rule` (section 3.6); `product_question` (section 3.1); flags, limitations and the
+`wrinkle_rule` (section 3.6); `product_question` (section 3.1: with a battery
+`material.product` it states the literature proposal for the final gauge, without one it asks
+which product this is; it no longer asks for alloy and temper); flags, limitations and the
 foil sources. Above 100 um exit gauge there is no foil block, although one source puts the
 onset of closed-gap rolling at up to 200 um.
 
@@ -594,10 +635,11 @@ thinnest product's alternative route ALT1 0.050 -> 0.025 mm at 13 m/s (50 %, 25 
 ALT2 0.025 -> 0.012 mm at 10 m/s (52 %). The speeds follow the published practice of section 3.1:
 final single-sheet passes 600 m/min (inside 450-650 m/min), earlier passes 570-780 m/min (inside
 550-1000 m/min). Case pass F1, tensions 35 / 40 MPa, supplied flow stress 175 MPa, friction 0.03
-on every pass, `bite_model: auto`. Flow stress 150-185 MPa along the schedule (no hardening law),
-chosen consistent with a standard-grade H18 collector foil (finished tensile strength
-165-190 MPa in the catalogue's grade table); the plant has not stated the alloy and temper, so
-`material.alloy` AA1235 and temper H18 are assumptions. `material.product:
+on every pass, `bite_model: auto`. Flow stress 150-185 MPa along the schedule (no hardening law):
+180 MPa on F2 (18 um) and 185 MPa on ALT2 (12 um) lie inside the ranges of the standard
+proposal 1235-H18 (175-220 MPa at 18 um, at least 180 MPa at 12 um), so they were kept;
+the plant has not stated the alloy and temper, so `material.alloy` AA1235 and temper H18 are
+the literature proposal to confirm (`material.alloy_temper_stated: false`). `material.product:
 "battery_collector_foil"` (section 3.1); `material.final_pass_doubled: false` (plant
 statement). Neat-oil spray header of 28 nozzles at 52 mm
 pitch, mean spray coefficient 2000 W/m2K (chosen lower than the sheet demo's 3000 [D]); oil
@@ -667,14 +709,28 @@ product did not change any other score.
 **Product check** (`product_check`, section 3.1): alloy designation used `1235`, temper H18;
 no flag. The final passes are F2 (the last pass of the plant's route) and ALT2 (the thinnest);
 both are inside every published span checked (final gauge, per-pass and final-pass reduction,
-final-pass entry gauge, exit speed, rolled mode, single-sheet final gauge, alloy, temper, mean
-flow stress as an indicator against the finished-foil tensile span). The case pass, F1 and ALT1
+final-pass entry gauge, exit speed, rolled mode, single-sheet final gauge, alloy and temper
+against the grade-table row of the pass's exit-gauge band (H18 and H19 both consistent), mean
+flow stress as an indicator against that row: standard minimum to the top of the typical
+producer range). The case pass, F1 and ALT1
 are inside too; S1-S3 read `BELOW_PUBLISHED_RANGE` for the flow-stress indicator only (150-168 MPa
 against the finished-foil span; an indicator, and no flag, because they are neither the case
 pass nor a final pass). Nearest published passes: for the case pass 59 -> 30 um [BF-S14,
 excerpt], 50 -> 25 um [BF-S15, full text] and 55 -> 25 um [BF-S12, excerpt]; for the final pass
 (ALT2) 25 -> 12 um [BF-S12, excerpt], the doubled 24x2 -> 12x2 um [BF-S17, trade page] and
 26 -> 13 um [BF-S12, excerpt]. The check is evidence-neutral: it changes no score.
+
+**Material selection** (`material_selection`, section 3.1): final pass ALT2 at 12 um in the
+{ms['final_pass_band']['band_label'].replace('µm','um')} band, case pass in the {ms['case_pass_band']['band_label'].replace('µm','um')} band; standard proposal
+{ms['proposals']['standard']['alloy']}-{ms['proposals']['standard']['temper']} ({ms['proposals']['standard']['tensile_strength_pa']['value_pa']*1e-6:.0f} MPa, the standard minimum; evidence {ms['proposals']['standard']['evidence']}),
+high-strength proposal {ms['proposals']['high_strength']['alloy']}-{ms['proposals']['high_strength']['temper']} ({ms['proposals']['high_strength']['tensile_strength_pa']['value_pa']*1e-6:.0f} MPa; evidence {ms['proposals']['high_strength']['evidence']}); the other route end F2
+(18 um) has standard 1235-H18 (210 MPa, evidence vendor-level) and high-strength 1100-H18
+(220 MPa, evidence WEAK: fallback rule). The case's AA1235-H18 is the usual standard choice
+(alloy `{ms['comparison']['alloy']['verdict']}`, temper `{ms['comparison']['temper']['verdict']}`); flow stresses: F2
+`{v['F2']['verdict']}`, ALT2 `{v['ALT2']['verdict']}`, F1 and ALT1 `{v['F1']['verdict']}` (>20-30 um band),
+S1-S3 outside every published band; yield stress {ms['comparison']['yield_stress']['value_pa']*1e-6:.0f} MPa `{ms['comparison']['yield_stress']['verdict']}`
+of the assumed proof-strength range. Flag `{ms['flags'][0]}` (the plant has not stated the
+material). It changes no number and no score.
 
 What the demo shows the tool cannot say: the 18 um final pass F2 has a bite only in the
 extended domain (force inside the reported range, unvalidated); the 12 um ALT2 bite is NOT
@@ -1195,10 +1251,10 @@ Notation: `f_obs = u/p` per pitch observation (plus `measured_vibration_hz` when
 |---|---|---|
 | 1 | `third_octave_self_excited_chatter` | transverse S mod; longitudinal C str; diagonal/chevron C mod. law FIXED_FREQUENCY S str; SPEED_INDEPENDENT C str. `f_obs` within +-15 % of model dominant/onset frequency S str, else 90-300 Hz S mod, outside 60-400 Hz C str. gauge variation detected S str, not detected C mod. faces both S weak, one C mod. `u_op >= u_crit(beta)` S str; `u_crit(0) <= u_op < u_crit(beta)` S weak; `u_op < u_crit(0)` C mod. onset speed within 0.6-1.6 x `u_crit(beta)` S mod, otherwise S weak. disappears after any roll change C mod. worse at thinner gauge S weak. **Phase 2:** when the model onset or dominant frequency lies above the span-wave limit `c/(2L)` the speed-margin item is NEUTRAL and the model-frequency match is skipped (flag `CHATTER_NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT`). **Scan range:** the critical speeds come from a search over 0.05-60 m/s, so "no crossing" (`STABLE_OVER_SCANNED_RANGE`) says nothing about an operating speed outside it; there the speed-margin item is decided by the operating-point stability with and without bite damping (unstable with beta S str; unstable only with beta = 0 S weak; stable in both C mod, the text saying it rests on the operating point; stability unavailable NEUTRAL), the result carries `chatter.operating_speed_outside_scanned_range`, the flag `OPERATING_SPEED_OUTSIDE_SCANNED_RANGE` and a note on such schedule rows, and the report's chatter section warns that the scan status does not mean stable at the operating speed. |
 | 2 | `fifth_octave_roll_stack_resonance` | orientation as 1. `f_obs` within +-15 % of the antisymmetric upper mode S str, else 500-1200 Hz S mod, below 300 Hz C str. pitch 10-40 mm S mod. gauge variation not detected S mod, detected C weak. law FIXED_FREQUENCY S mod; SPEED_INDEPENDENT S mod if `pi*D_b*(1+f)/p` within 0.05 of an integer, else NEUTRAL. order-locked source within +-10 % of the antisymmetric upper mode at `u_op` S mod. disappears after backup-roll change S mod. faces both S weak. |
-| 3 | `work_roll_borne_marks` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. pitch = `pi*D_w*(1+f)/n` within 3 % for n = 1..8 or a supplied grinder-mark count S str, no match C mod. work-roll change: disappears S str, persists C str. faces one S mod, both C weak. longitudinal C str. |
+| 3 | `work_roll_borne_marks` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. pitch = `pi*D_w*(1+f)/n` within 3 % for ONE n (1..8 or a supplied grinder-mark count) that fits every pitch best (smallest worst mismatch; a supplied count preferred on a tie), S str, no match C mod; the same n in the prediction and the strip map. work-roll change: disappears S str, persists C str. faces one S mod, both C weak. longitudinal C str. |
 | 4 | `backup_roll_borne_marks` | as 3 with `D_b`; backup-roll change disappears S str, persists C str; disappears after work-roll change C str. |
 | 5 | `order_locked_drive_or_bearing_excitation` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. best gear / bearing / spindle source within 5 % S str (named). The spindle / coupling candidate `work_roll_2x` is scored whether or not gear or bearing geometry is supplied: with no gear and no bearing supplied, a spindle match S str (the text says only the spindle was checked) and no match NOT_OBSERVED; with geometry supplied but no match C weak. No pitch and no vibration frequency observed: NOT_OBSERVED. persists after both roll changes S weak. faces both S weak. longitudinal C str. |
-| 6 | `torsional_or_low_frequency_drive_vibration` | `f_obs` 5-30 Hz S str, above 60 Hz C str. **Phase 2:** with a `drive` section, within +-15 % of a computed torsional mode S str, above max(60 Hz, 1.5 x highest mode) C str. pitch 0.1-3 m S weak. law FIXED_FREQUENCY S mod. longitudinal C str. **Phase 3:** when it leads and torsional modes are computed, the strip map draws the pitch `u_op / f` with `f` the computed mode that best matches the observed frequencies (else the lowest mode) [D]. |
+| 6 | `torsional_or_low_frequency_drive_vibration` | `f_obs` 5-30 Hz S str, above 60 Hz C str. **Phase 2:** with a `drive` section, within +-15 % of ONE computed torsional mode (the best single fit to every observed frequency) S str, above max(60 Hz, 1.5 x highest mode) C str. pitch 0.1-3 m S weak. law FIXED_FREQUENCY S mod. longitudinal C str. **Phase 3:** when it leads and torsional modes are computed, the strip map draws the pitch `u_op / f` with `f` the computed mode that best matches the observed frequencies (else the lowest mode) [D]. |
 | 7 | `coil_or_mandrel_locked_marks` | One coil for all pitches (review fix): the coil with the smallest worst-case mismatch over the observed pitches is chosen first (`matched_coil`, `matched_coil_worst_relative_mismatch`, also drawn in the strip map), then every pitch is judged against it: within 10 % of `pi*D_exit_coil` or `pi*D_entry_coil*h0/h1` S str; coil diameters not supplied NOT_OBSERVED; supplied but no match C weak (gap filled, 6.4). When different pitches would have matched different coils, the text says the same coil is applied to every pitch. The entry-coil pitch uses the case pass's h0/h1: the pitch observations are assumed to be taken on the case pass's exit strip. first seen incoming S weak. law FIXED_FREQUENCY C mod. |
 | 8 | `yield_point_bending_marks` | not susceptible C str, susceptible S mod, unknown NOT_OBSERVED. diagonal/irregular S mod, chevron/longitudinal C mod. a regular law C mod. first seen incoming or after bending/levelling S str; at bite exit with `red > 0.02` C str. a deflector/coil in the yield-point window S mod, none C weak. worse at thinner gauge C mod (`t/D` falls with gauge). |
 | 9 | `herringbone_lubricant_film_breakdown` | chevron S str, diagonal S weak, longitudinal C str. `red >= 0.40` S mod, `red < 0.25` C mod. pitch 0.5-2 x contact length S str, > 5 x C mod. gauge variation not detected S weak. film ratio < 1 S weak. |
@@ -1216,6 +1272,20 @@ backup-roll barrel inspection; tensile test for a yield plateau; ...).
   observations are not independent evidence. In the bearing demo the same 24.9 mm pitch at
   6.0 and 7.83 m/s gives 241 Hz and 314 Hz; the 241 Hz observation (below 300 Hz)
   contradicts the fifth-octave hypothesis strongly.
+- **One source for all observations (review fix).** Where the candidates are separate
+  physical sources, one source is chosen first, the one with the smallest worst mismatch over
+  every observation, and every observation is judged against it: the coil (entry or exit),
+  the roll mark count n (work and backup roll; a supplied grinder-mark count preferred on a
+  tie, named in the evidence text, used in the prediction and the strip map), the backup-roll
+  count in the fifth-octave pitch-law item, the torsional mode, and the gear / bearing /
+  spindle order (already so). Before, two pitches matching n = 2 and n = 3 both supported the
+  work-roll hypothesis strongly. Per-observation matching is kept where it is physically
+  right: a frequency or pitch band every observation must fall in (chatter 90-300 Hz,
+  fifth-octave 500-1200 Hz, pitch 10-40 mm or 0.1-3 m), one fixed model frequency (the
+  fifth-octave mode; the chatter dominant and onset frequencies, which are one mode at two
+  speeds), one contact length (herringbone), the grinding feed pitch (one pitch; each gap may
+  be a different multiple of it), the signatures' per-observation catalogue listing (a
+  listing, not evidence) and band positions, each matched to its own nozzle or stripe.
 - **Band-risk stripes of the v1 coolant screen.** Only `BLOCKED_NOZZLE` stripes and interior
   `UNCOVERED` zones count; the regular overlap alternation of a healthy header does not.
   Without a `width_model`, the lengthwise nozzle hypothesis uses these stripes **as
@@ -2155,7 +2225,12 @@ has `product_check`: the product, the alloy designation and temper used, the evi
 note, a table of verdict words per pass and item (upper case for a value outside the published
 span, "(final pass)" marked), the nearest published passes for the case pass and the final
 pass with their read status, the flags and the catalogue limitations; without a product it
-says "not supplied" and lists the catalogue ids. Further down, the
+says "not supplied" and lists the catalogue ids. After it, **"Material selection (literature
+proposal, to confirm with the plant)"** when the result has `material_selection`: the plain
+sentence, the bands of the final and the case pass, the options table at the final gauge
+(GB minimum, typical Rm, usual choice, evidence, sources), the two proposals (a fallback
+proposal marked "evidence WEAK"), the case against the band (alloy, temper, yield stress, a
+verdict per pass) with the indicator-only caveat, flags and limitations. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
 assessable: <reason>" and lists what is still evaluated; with supplied shape inputs it says
@@ -2270,6 +2345,13 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
 - **Placeholder friction closure**: absolute friction values are placeholders; only the
   slope with speed is used.
+- **Alloy and temper selection is a literature synthesis.** The grade table by gauge band
+  and its proposals come from published standards, producer pages, patents and broker reports
+  with the stated evidence ratings (strong to vendor-level); no source gives a hard
+  gauge-to-alloy rule; several standard tables (GB/T 33143-2022 Table 9, GB/T 22648-2023) were
+  read from mirrors or producer pages reproducing them; finished tensile strength is used as an
+  indicator of the rolling flow stress and the proof strength is assumed from a ratio where not
+  published. The plant must confirm or correct the proposal.
 - **Supplied heat partition and spray coefficients.** The strip heat fraction (hence the roll
   heat fraction) and the spray heat-transfer coefficients are inputs; no measured value for a
   kerosene-based coolant spray was found. Stripe heights scale with these guesses.

@@ -275,6 +275,29 @@ def survey_flow_stress(p):
                          'cold pass, so annealed strength is not used'))])
 
 
+def survey_material(p, h1):
+    """The standard literature proposal for a battery product with a grade table at exit gauge
+    ``h1`` (``band_products.proposed_material``), when it is a hard (H1x) temper with a
+    published tensile value; else None (annealed finished tempers keep the as-rolled rule)."""
+    if not bp.grade_bands(p.id):
+        return None
+    pr = bp.proposed_material(p.id, h1, grade='standard')
+    if (pr['status'] != bp.BG_STATUS or not H1X.match(pr['temper'])
+            or pr['tensile_strength_pa']['value_pa'] is None):
+        return None
+    return pr
+
+
+def _proposal_used(pr, what='flow stress'):
+    t = pr['tensile_strength_pa']
+    return _used(what, t['value_pa'], 'Pa',
+                 f'standard LITERATURE PROPOSAL {pr["alloy"]}-{pr["temper"]} of the '
+                 f'{pr["band_label"]} band (band_products.proposed_material; {t["basis"]}; '
+                 f'evidence {pr["evidence"]}; to confirm with the plant); finished tensile '
+                 'strength used as an indicator of the rolling flow stress',
+                 pr['sources'], pr['read_status'])
+
+
 def survey_speed(p, doubled, mill):
     """(speed, used, assumed); ``mill`` is a ``_Mill`` (its default speed when none is
     published)."""
@@ -612,6 +635,12 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
     kind = 'foil' if h1 < FOIL_MILL_MAX_EXIT_M else 'sheet'
     mill = mills[kind]
     sigma, temper, used_s, assumed_s = survey_flow_stress(p)
+    proposal = survey_material(p, h1)
+    if proposal is not None:
+        # SPEC13: battery products with a grade table take the strength from the literature
+        # proposal for the survey pass's exit gauge instead of the product-wide median
+        sigma, temper = proposal['tensile_strength_pa']['value_pa'], proposal['temper']
+        used_s, assumed_s = [_proposal_used(proposal)], []
     u, used_u, assumed_u = survey_speed(p, dbl, mill)
     sigma = ov.get('mean_flow_stress_pa', sigma)
     u = ov.get('exit_speed_m_s', u)
@@ -619,7 +648,7 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
     t_out = ov.get('exit_tension_pa', EXIT_TENSION_FRACTION * sigma)
     mu = ov.get('friction_coefficient', mill.friction)
     width = ov.get('width_m')
-    alloy = p.alloys[0].name
+    alloy = proposal['alloy'] if proposal is not None else p.alloys[0].name
     assumed = sp['assumed'] + assumed_s + assumed_u + [
         _assumed('tensions', [t_in, t_out], 'Pa',
                  f'entry {ENTRY_TENSION_FRACTION:g} and exit {EXIT_TENSION_FRACTION:g} of the '
@@ -629,6 +658,8 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
             ': the user\'s mill for every product of this gauge class' if mill.user else
             ': the same synthetic mill for every product of this gauge class')),
         _assumed('alloy for the product check', alloy, '',
+                 'the standard literature proposal for the exit gauge (to confirm with the '
+                 'plant)' if proposal is not None else
                  'first alloy listed for the product in the catalogue')]
     used = sp['used'] + used_s + used_u
     user = []
@@ -657,6 +688,12 @@ def survey_row(p, mills, index, override=None, override_source='overrides file')
            'rolling_mode_published': p.rolled_mode, 'gauge_basis': sp['gauge_basis'],
            'schedule': sp['schedule'], 'final_temper': temper, 'alloy_checked': alloy,
            'mean_flow_stress_pa': sigma,
+           'material_proposal': (None if proposal is None else {
+               k: proposal[k] for k in ('status', 'alloy', 'temper', 'band_id', 'band_label',
+                                        'evidence', 'rule', 'sources')}
+               | {'tensile_strength_pa': proposal['tensile_strength_pa']['value_pa'],
+                  'proof_strength_pa': proposal['proof_strength']['value_pa'],
+                  'proof_strength_published': proposal['proof_strength']['published']}),
            'flow_stress_assumed': bool(assumed_s) and 'mean_flow_stress_pa' not in ov,
            'entry_tension_pa': t_in, 'exit_tension_pa': t_out, 'exit_speed_m_s': u,
            'friction_coefficient': mu,
@@ -901,6 +938,207 @@ def summary(rows, ranks, user_mill=False):
     return ' '.join(parts)
 
 
+# --------------------------------------------------------------------------- battery grade matrix
+GRADE_MATRIX_GAUGES_UM = (20, 18, 15, 13, 12, 10)
+GRADE_MATRIX_PLANT_ROUTES = {
+    18: (30, 'plant route 50 -> 30 -> 18 um, its second pass (the 30 um intermediate is the '
+             'battery demo\'s assumption)'),
+    12: (25, 'plant route 50 -> 25 -> 12 um, its second pass (the 25 um intermediate is the '
+             'battery demo\'s assumption)')}
+RIDGE_STRENGTH_BASIS = (
+    'critical ridge height computed with the proposal\'s proof strength Rp0.2 as the yield '
+    'stress of the wound foil (the coil-ridge criterion is a yield criterion; Rp0.2 is '
+    'published only for some grades, otherwise assumed from the median Rp0.2/Rm ratio, see '
+    'band_products.proposed_material); the main survey table uses the flow stress there, '
+    'kept here as critical_ridge_height_at_flow_stress_m for comparison')
+
+
+def _matrix_pass(p, g_um):
+    """(entry m, exit m, basis, sources): the plant route where the gauge matches, else the
+    nearest published single-sheet single pass of the product (reduction kept)."""
+    h1 = g_um * 1e-6
+    if g_um in GRADE_MATRIX_PLANT_ROUTES:
+        e, why = GRADE_MATRIX_PLANT_ROUTES[g_um]
+        return e * 1e-6, h1, why, []
+    cands = []
+    for s in p.schedules:
+        g, passes = s.gauges(), s.passes()
+        for i in range(s.steps()):
+            if passes[i] != 1 or s.is_doubled(i):
+                continue
+            x0, x1 = _gmid(*g[i]), _gmid(*g[i + 1])
+            cands.append((abs(math.log(x1 / h1)), s.label, i, x0, x1, s))
+    _, label, i, x0, x1, s = min(cands, key=lambda c: c[:3])
+    h0 = _sig(h1 * x0 / x1)
+    why = (f'nearest published single-sheet pass {x0 * 1e6:.4g} -> {x1 * 1e6:.4g} um of '
+           f'"{label}" (step {i + 1})')
+    if abs(x1 - h1) > 1e-12:
+        why += f', reduction kept and exit set to {g_um:g} um'
+    return h0, h1, why, list(s.sources)
+
+
+_CELL_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'reduction_fraction', 'mill',
+              'mean_flow_stress_pa', 'entry_tension_pa', 'exit_tension_pa', 'exit_speed_m_s',
+              'bite_status', 'bite_model', 'bite_flags', 'separating_force_per_width_n_m',
+              'bite_credibility', 'bite_force_ratio_to_reported_range', 'extended_domain_flags',
+              'dead_band_half_width_i_units', 'trough_onset_lateral_stress_pa',
+              'roller_wrinkle_threshold_pa', 'stripe', 'critical_exit_speed_m_s',
+              'critical_exit_speed_without_bite_damping_m_s', 'speed_ratio_without_bite_damping',
+              'chatter_reliability', 'rejected')
+
+
+def _matrix_cell(p, mills, g_um, grade):
+    h0, h1, why, srcs = _matrix_pass(p, g_um)
+    pr = bp.proposed_material(p.id, h1, grade=grade)
+    cell = {'gauge_um': g_um, 'grade': grade, 'pass_basis': why, 'pass_sources': srcs,
+            'proposal_status': pr['status']}
+    if pr['status'] != bp.BG_STATUS or pr['tensile_strength_pa']['value_pa'] is None:
+        cell.update(status='NO_PROPOSAL', reason=pr.get('reason') or 'no tensile value')
+        return cell
+    sigma = pr['tensile_strength_pa']['value_pa']
+    rp = pr['proof_strength']['value_pa']
+    row = survey_row(p, mills, 0, {'entry_thickness_m': h0, 'exit_thickness_m': h1,
+                                   'mean_flow_stress_pa': sigma}, 'battery grade matrix')
+    fallback = 'no usual choice' in pr['rule']
+    cell.update(status='EVALUATED', alloy=pr['alloy'], temper=pr['temper'],
+                band_id=pr['band_id'], band_label=pr['band_label'],
+                tensile_strength_pa=sigma, proof_strength_pa=rp,
+                proof_strength_published=pr['proof_strength']['published'],
+                evidence=pr['evidence'], proposal_rule=pr['rule'],
+                fallback_rule_weak=fallback, proposal_sources=pr['sources'],
+                **{k: row.get(k) for k in _CELL_KEYS if k in row})
+    cell['critical_ridge_height_at_flow_stress_m'] = row.get('critical_ridge_height_m')
+    try:
+        cell['critical_ridge_height_m'] = bite_free(mills['foil'], h1, rp,
+                                                    row['exit_tension_pa'])[
+            'critical_ridge_height_m']
+    except ValueError:
+        cell['critical_ridge_height_m'] = None
+    cell['credible'] = row.get('bite_status') == 'BITE' and _credible(row)
+    if row.get('bite_status') != 'BITE':
+        cell['bite_excluded_reason'] = row.get('rejected') or row.get('bite_note') or 'no bite'
+    elif not _credible(row):
+        cell['bite_excluded_reason'] = (
+            f'bite NOT CREDIBLE (force x{row["bite_force_ratio_to_reported_range"]:.3g} the '
+            'reported battery-foil range)')
+    return cell
+
+
+def _pct(a, b):
+    return (b / a - 1) * 100
+
+
+def _span_txt(vals, scale, unit, d=3):
+    return f'{vals[0] * scale:.{d}g} -> {vals[-1] * scale:.{d}g} {unit}'
+
+
+def _grade_sentences(cells):
+    by = {(c['gauge_um'], c['grade']): c for c in cells if c['status'] == 'EVALUATED'}
+    gauges = list(GRADE_MATRIX_GAUGES_UM)
+    parts = []
+    for grade in bp.GRADES:
+        cs = [by[(g, grade)] for g in gauges if (g, grade) in by]
+        if len(cs) < 2:
+            continue
+        free = []
+        for key, scale, unit, name, absval in (
+                ('critical_ridge_height_m', 1e6, 'um', 'critical ridge height', False),
+                ('trough_onset_lateral_stress_pa', 1e-3, 'kPa', 'trough onset magnitude', True),
+                ('roller_wrinkle_threshold_pa', 1e-6, 'MPa', 'roller-wrinkle threshold '
+                 'magnitude', True)):
+            v = [c.get(key) for c in cs]
+            if any(x is None for x in v):
+                continue
+            v = [abs(x) if absval else x for x in v]
+            free.append(f'{name} {_span_txt(v, scale, unit)}')
+        cred = [c for c in cs if c['credible']]
+        excl = [f'{c["gauge_um"]:g} um' for c in cs if not c['credible']]
+        bd_txt = ''
+        on = [(c['gauge_um'], (c.get('stripe') or {}).get('in_mill_onset_height_m'))
+              for c in cred]
+        on = [x for x in on if x[1] is not None]
+        if len(on) >= 2:
+            bd_txt = (f'; on credible bites only ({", ".join(f"{g:g}" for g, _ in on)} um) the '
+                      f'in-mill stripe onset height goes {on[0][1] * 1e6:.3g} -> '
+                      f'{on[-1][1] * 1e6:.3g} um from {on[0][0]:g} to {on[-1][0]:g} um')
+        elif cred:
+            bd_txt = '; fewer than two credible bites, so no bite-dependent gauge trend'
+        parts.append(f'{grade.replace("_", "-")} grade, {cs[0]["gauge_um"]:g} -> '
+                     f'{cs[-1]["gauge_um"]:g} um: ' + ', '.join(free) + bd_txt
+                     + (f' (bite-dependent results excluded at {", ".join(excl)}: not credible '
+                        'or no bite)' if excl else ''))
+    rises = []
+    for grade in bp.GRADES:
+        cs = [by[(g, grade)] for g in gauges if (g, grade) in by]
+        for k, name in (('critical_ridge_height_m', 'critical ridge height'),
+                        ('trough_onset_lateral_stress_pa', 'trough onset'),
+                        ('roller_wrinkle_threshold_pa', 'roller-wrinkle threshold')):
+            for a, b in zip(cs, cs[1:]):
+                if a.get(k) is not None and b.get(k) is not None and \
+                        abs(b[k]) > abs(a[k]) * (1 + 1e-9):
+                    rises.append(
+                        f'{grade.replace("_", "-")} {name} rises from {a["gauge_um"]:g} to '
+                        f'{b["gauge_um"]:g} um because the proposal steps from '
+                        f'{a["alloy"]} {a["tensile_strength_pa"] * 1e-6:.0f} to {b["alloy"]} '
+                        f'{b["tensile_strength_pa"] * 1e-6:.0f} MPa between the bands')
+    gauge_sentence = ('At fixed grade, thinner foil lowers the bite-free thresholds'
+                      + (' except where the proposed strength steps up between bands ('
+                         + '; '.join(rises) + ')' if rises else ' at every step')
+                      + ': ' + '; '.join(parts) + '.')
+    rows, weak, both = [], [], []
+    for g in gauges:
+        s, h = by.get((g, 'standard')), by.get((g, 'high_strength'))
+        if not s or not h:
+            continue
+        for c in (s, h):
+            if c['fallback_rule_weak']:
+                weak.append(f'the {c["grade"].replace("_", "-")} proposal at {g:g} um '
+                            f'({c["alloy"]})')
+        txt = (f'{g:g} um {s["alloy"]} {s["tensile_strength_pa"] * 1e-6:.0f} -> {h["alloy"]} '
+               f'{h["tensile_strength_pa"] * 1e-6:.0f} MPa (Rm {_pct(s["tensile_strength_pa"], h["tensile_strength_pa"]):+.0f} %, '
+               f'ridge {_pct(s["critical_ridge_height_m"], h["critical_ridge_height_m"]):+.0f} %, '
+               f'trough {_pct(abs(s["trough_onset_lateral_stress_pa"]), abs(h["trough_onset_lateral_stress_pa"])):+.0f} %')
+        if s['credible'] and h['credible']:
+            a = (s.get('stripe') or {}).get('in_mill_onset_height_m')
+            b = (h.get('stripe') or {}).get('in_mill_onset_height_m')
+            if a is not None and b is not None:
+                txt += f', in-mill stripe onset {_pct(a, b):+.0f} %'
+                both.append(f'{g:g}')
+        rows.append(txt + ')')
+    grade_sentence = (
+        'At fixed gauge, the high-strength proposal instead of the standard one: '
+        + '; '.join(rows) + '. Ridge height follows the proof strength and the trough and '
+        'roller-wrinkle thresholds follow the tensions, set as fixed fractions of the flow '
+        'stress in this survey; bite-dependent changes are given only where both bites are '
+        'credible' + (f' ({", ".join(both)} um)' if both else ' (none)') + '.'
+        + (f' Evidence WEAK (fallback rule: no usual choice of that grade is published for '
+           f'the band, so the option with the highest standard minimum is used): '
+           f'{"; ".join(weak)}. These rows are less supported than those where the research '
+           'names a usual choice.' if weak else ''))
+    return gauge_sentence, grade_sentence
+
+
+def battery_grade_matrix(mills):
+    """SPEC13 2.3: the battery collector foil at 20, 18, 15, 13, 12 and 10 um, standard and
+    high-strength literature proposals, on the foil mill (literature strengths, synthetic mill,
+    extended-domain bites flagged, non-credible bites excluded from every comparison)."""
+    p = bp.product(LOAD_RANGE_PRODUCT)
+    cells = [_matrix_cell(p, mills, g, grade) for g in GRADE_MATRIX_GAUGES_UM
+             for grade in bp.GRADES]
+    gauge_sentence, grade_sentence = _grade_sentences(cells)
+    return {'status': bp.BG_STATUS, 'product_id': p.id, 'mill': mills['foil'].desc['name'],
+            'gauges_um': list(GRADE_MATRIX_GAUGES_UM), 'grades': list(bp.GRADES),
+            'cells': cells, 'ridge_strength_basis': RIDGE_STRENGTH_BASIS,
+            'gauge_sentence': gauge_sentence, 'grade_sentence': grade_sentence,
+            'rules': 'final pass: the plant route where the gauge matches (18 and 12 um), else '
+                     'the nearest published single-sheet pass of the product; tensions, '
+                     'friction and speed by the survey rules; a bite outside the reported '
+                     'battery-foil force range is NOT CREDIBLE and excluded from every '
+                     'bite-dependent comparison and sentence',
+            'note': 'Literature strengths (proposals to confirm with the plant) on a synthetic '
+                    'mill; model sensitivities, not plant defect rates.'}
+
+
 # --------------------------------------------------------------------------- top level
 def select_products(ids):
     """Catalogue products (with their catalogue index) restricted to ``ids`` (None: all)."""
@@ -952,6 +1190,8 @@ def survey_with_mills(products=None, foil_mill=None, sheet_mill=None, overrides=
                         'reported_load_range_n_m': list(bd.FOIL_LOAD_RANGE_N_M),
                         'reported_load_range_applies_to': LOAD_RANGE_PRODUCT},
               'rows': rows, 'rankings': ranks,
+              'battery_grade_matrix': (battery_grade_matrix(mills) if any(
+                  r['product_id'] == LOAD_RANGE_PRODUCT for r in rows) else None),
               'summary': summary(rows, ranks, any(m.user for m in mills.values())),
               'limitations': ([USER_MILL_LIMITATION] + list(LIMITATIONS[1:])
                               if any(m.user for m in mills.values()) else list(LIMITATIONS))
@@ -1106,6 +1346,81 @@ def _rank_section(rank, rows, n):
                f'<ul>{exc}</ul></details>' if exc else '<p class="note">None excluded.</p>'))
 
 
+def _matrix_chart(m):
+    series = []
+    for i, grade in enumerate(bp.GRADES):
+        pts = [(c['gauge_um'], c['critical_ridge_height_m'] * 1e6, c['fallback_rule_weak'])
+               for c in m['cells'] if c['grade'] == grade and c['status'] == 'EVALUATED'
+               and c.get('critical_ridge_height_m')]
+        series.append((grade, COLOURS[i], sorted(pts)))
+    allp = [p for _, _, pts in series for p in pts]
+    if len(allp) < 2:
+        return ''
+    key = [(f'{g.replace("_", "-")} proposal', c, '', 'line') for g, c, _ in series]
+    key.append(('open marker: evidence WEAK (fallback rule)', '#374151', '', 'dot'))
+    ch = _Chart('Battery collector foil: critical coil ridge height by gauge and grade', key,
+                height=300)
+    xs, ys = [p[0] for p in allp], [p[1] for p in allp]
+    ch.axes(_Axis(min(xs) - 1, max(xs) + 1, ML, W - MR), _Axis(0.0, max(ys) * 1.15,
+                                                                ch.h - 52, ch.mt),
+            'final gauge [µm]', 'critical ridge height [µm] (at Rp0.2)')
+    for g, c, pts in series:
+        d = ' '.join(f'{"M" if i == 0 else "L"}{ch.x(x):.1f} {ch.y(y):.1f}'
+                     for i, (x, y, _) in enumerate(pts))
+        ch.inner.append(f'<path d="{d}" fill="none" stroke="{c}" stroke-width="2"/>')
+        for x, y, weak in pts:
+            ch.inner.append(f'<circle cx="{ch.x(x):.1f}" cy="{ch.y(y):.1f}" r="4" '
+                            f'fill="{"#fff" if weak else c}" stroke="{c}" stroke-width="1.5"/>')
+    return ch.render('grade-matrix')
+
+
+def _matrix_section(m):
+    if not m:
+        return ''
+    head = ['gauge', 'grade', 'material (literature proposal)', 'evidence', 'final pass',
+            'bite', 'dead band [I]', 'ridge at Rp0.2 [µm]', 'trough onset [kPa]',
+            'roller wrinkle [MPa]', '1 µm stripe', 'chatter u_crit with / without']
+    rows = []
+    for c in m['cells']:
+        if c['status'] != 'EVALUATED':
+            rows.append([f'{c["gauge_um"]:g} µm', _e(c['grade']), _e(c.get('reason', '')),
+                         '', '', '', '', '', '', '', '', ''])
+            continue
+        st = c.get('stripe') or {}
+        if c['credible']:
+            bite = _e(f'{c["bite_model"]}, {c["separating_force_per_width_n_m"] * 1e-6:.3g} '
+                      'kN/mm' + (' (extended domain, unvalidated)'
+                                 if c.get('extended_domain_flags') else ''))
+            stripe = _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
+                        f'{_onset(st.get("in_mill_onset_height_m"), st.get("in_mill_onset_domain_limit_m"))}; '
+                        f'after release {_onset(st.get("after_release_onset_height_m"), st.get("after_release_onset_domain_limit_m"))}')
+            uc, uc0 = c.get('critical_exit_speed_m_s'), c.get('critical_exit_speed_without_bite_damping_m_s')
+            chat = _e(f'{"stable" if uc is None else _f(uc)} / '
+                      f'{"stable" if uc0 is None else _f(uc0)} m/s')
+        else:
+            bite = '<strong>' + _e(c.get('bite_excluded_reason', 'excluded')) + '</strong>'
+            stripe = chat = 'excluded'
+        ev = _e(c['evidence']) + (' <strong>WEAK: fallback rule</strong>'
+                                  if c['fallback_rule_weak'] else '')
+        rows.append([
+            f'{c["gauge_um"]:g} µm', _e(c['grade'].replace('_', '-')),
+            _e(f'{c["alloy"]}-{c["temper"]}, Rm {c["tensile_strength_pa"] * 1e-6:.0f} MPa, '
+               f'Rp0.2 {c["proof_strength_pa"] * 1e-6:.0f} MPa '
+               f'({"published" if c["proof_strength_published"] else "assumed"})'),
+            ev,
+            _e(f'{c["entry_thickness_m"] * 1e6:.4g} → {c["exit_thickness_m"] * 1e6:.4g} µm: '
+               f'{c["pass_basis"]}'),
+            bite, _e(_f(c.get('dead_band_half_width_i_units'))),
+            _e(_f(c.get('critical_ridge_height_m'), 1e6)),
+            _e(_f(c.get('trough_onset_lateral_stress_pa'), 1e-3)),
+            _e(_f(c.get('roller_wrinkle_threshold_pa'), 1e-6)), stripe, chat])
+    return ('<section><h2>Battery foil by gauge and grade</h2>'
+            f'<p class="note">{_e(m["status"])}: {_e(m["note"])} {_e(m["rules"])}. '
+            f'{_e(m["ridge_strength_basis"])}.</p>'
+            f'<p>{_e(m["gauge_sentence"])}</p><p>{_e(m["grade_sentence"])}</p>'
+            + _matrix_chart(m) + _table(head, rows, 'survey') + '</section>')
+
+
 def _inputs_section(rows):
     out = []
     for r in rows:
@@ -1183,6 +1498,7 @@ def render_survey_report(result):
         'excluded rows are listed with the reason. Rankings across the two mills compare model '
         'sensitivities, not plant defect rates.</p>'
         + ''.join(_rank_section(x, rows, i) for i, x in enumerate(r['rankings'])) + '</section>',
+        _matrix_section(r.get('battery_grade_matrix')),
         f'<section><h2>Inputs per product: catalogue values and assumptions</h2>'
         f'{_inputs_section(rows)}</section>',
         '<section><h2>Limitations and sources</h2><ul>'
@@ -1224,6 +1540,35 @@ def starter_case(row, mill):
                      'youngs_modulus_pa': ss.ALUMINIUM_E_PA, 'luders_strain': None,
                      'magnesium_wt_pct': None, 'grain_size_m': None,
                      'final_pass_doubled': row['doubled'], 'product': row['product_id']}
+    pr = (bp.proposed_material(row['product_id'], row['exit_thickness_m'])
+          if bp.grade_bands(row['product_id']) else None)
+    mat_notes = []
+    if pr is not None and pr['status'] == bp.BG_STATUS:
+        # SPEC13 2.4: alloy and temper from the literature proposal for the final gauge
+        c['material']['alloy'], c['material']['temper'] = pr['alloy'], pr['temper']
+        c['material']['alloy_temper_stated'] = False
+        hard = pr['temper'].upper().startswith('H')
+        if hard and pr['proof_strength']['value_pa'] is not None:
+            c['material']['yield_stress_pa'] = pr['proof_strength']['value_pa']
+        t = pr['tensile_strength_pa']
+        mat_notes.append(
+            f'MATERIAL: LITERATURE PROPOSAL TO CONFIRM OR CORRECT WITH THE PLANT, not a plant '
+            f'statement (material.alloy_temper_stated false): {pr["alloy"]}-{pr["temper"]}, the '
+            f'standard proposal of the {pr["band_label"]} band (band_products.proposed_material; '
+            f'rule: {pr["rule"]}; evidence {pr["evidence"]}) [{", ".join(pr["sources"])}].')
+        if hard:
+            mat_notes.append(
+                f'Flow stress {row["mean_flow_stress_pa"] * 1e-6:.4g} MPa = the proposal\'s '
+                f'tensile strength ({t["basis"]}), an indicator of the rolling flow stress; '
+                f'yield stress {c["material"]["yield_stress_pa"] * 1e-6:.4g} MPa = its proof '
+                f'strength ({pr["proof_strength"]["basis"]}).')
+        else:
+            mat_notes.append(
+                f'{pr["temper"]} is the finished temper reached by annealing after rolling; the '
+                'pass is rolled hard, so the flow stress and yield stress keep the survey\'s '
+                'as-rolled rule and the annealed strength '
+                f'({t["value_pa"] * 1e-6:.4g} MPa) is not used.' if t['value_pa'] else
+                f'{pr["temper"]} is the finished temper reached by annealing after rolling.')
     c['schedule'] = []
     c['hardening'] = None
     c['incoming_variation'] = None
@@ -1245,6 +1590,7 @@ def starter_case(row, mill):
              + '. Case-specific inputs (width-model blocked nozzles, nozzle levels, events, '
              'ridges, crowns, previous widths, lateral stress, shape inputs, bite heat, and '
              'coolant.blocked_nozzle_indices) are reset; enter your own when you have them.']
+    notes += mat_notes
     for x in row['catalogue_values_used']:
         notes.append(f'From the catalogue: {x["item"]} = {_fmt_value(x["value"], x["unit"])}: '
                      f'{x["basis"]} [{", ".join(x["sources"])}; {x["read_status"]}]')
