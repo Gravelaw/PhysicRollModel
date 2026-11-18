@@ -56,8 +56,17 @@ Integration choices (SPEC6 6.2 / 6.7; each is reported in the result):
   an open discrepancy (possible causes, none modelled: bite heat depending on the roll
   surface temperature, emulsion-level heat transfer, per-revolution effects).
 
+Phase 3 (SPEC9, battery foil): without a case-pass bite the section still runs (troughs, coil
+ridge build-up with the proportional-transfer estimate, positions, two-tone, grinding, the
+roll thermal state when ``bite_heat_per_width_w_m`` is supplied); the shape chain uses the
+optional ``width_model.shape_inputs`` (precedence over a derived bite) or is NOT_ASSESSABLE
+part by part (``shape_chain``); model-band rules then give NEUTRAL 'model not assessable'.
+Six optional foil observations and the rule-based ``foil_tension_lines`` hypothesis [V S27,
+S28]; extensions of the nozzle, roll-surface, trough and heat-streak rules (tagged in place).
+
 NOT modelled here: everything the wrapped modules do not model; lateral strip tracking; the
-second work roll's own header (``rolls_carrying_stripe`` says how many rolls carry a stripe).
+second work roll's own header (``rolls_carrying_stripe`` says how many rolls carry a stripe);
+closed-gap (roll-kissing) rolling; any physical model of foil tension lines.
 """
 import math
 
@@ -99,7 +108,7 @@ WIDTH_DEFAULTS = {
     'shape_disturbing_coefficient': None, 'heredity_coefficient': None, 'gap_crown_m': None,
     'entry_crown_m': None, 'incoming_ridges': [], 'coil': None, 'previous_strip_widths_m': [],
     'grinding': None, 'cooling_zone_pitch_m': None, 'deflector_roll_radius_m': None,
-    'lateral_compressive_stress_pa': None}
+    'lateral_compressive_stress_pa': None, 'shape_inputs': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -108,6 +117,16 @@ OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_rol
                'worse_at_higher_speed')
 OBS_V2_KEYS = ('lengthwise_continuity', 'intermittent_duration_s', 'band_width_m',
                'band_spacing_m', 'appearance') + OBS_V2_BOOL
+# SPEC9 9.3 (battery foil): OPTIONAL v2 observation fields (absent = null), so existing v2 case
+# files keep loading
+OBS_FOIL_BOOL = ('worse_at_lower_tension', 'changes_with_ironing_roll_pressure',
+                 'changes_with_exit_air_blowoff', 'changes_after_roll_wiper_cleaning',
+                 'tracks_speed_changes', 'appeared_after_narrower_coil')
+OBS_V2_OPTIONAL = OBS_FOIL_BOOL
+OBS_V2_ALL = OBS_V2_KEYS + OBS_V2_OPTIONAL
+SHAPE_INPUT_KEYS = ('strip_stiffness_per_width_pa', 'exit_tension_force_sensitivity_per_width_m',
+                    'bite_half_length_m', 'provenance')
+FOIL_GAUGE_M = 100e-6               # SPEC9 9.2: below this exit gauge the foil-regime block
 
 
 # ============================================================================= validation
@@ -128,11 +147,31 @@ def validate_observation_v2(ob):
                                   hi=10.0)
     out['band_spacing_m'] = opt_num('observation.band_spacing_m', ob['band_spacing_m'],
                                     positive=True, hi=10.0)
-    for k in OBS_V2_BOOL:
-        if ob[k] is not None and not isinstance(ob[k], bool):
+    for k in OBS_V2_BOOL + OBS_V2_OPTIONAL:
+        v = ob.get(k)
+        if v is not None and not isinstance(v, bool):
             raise ValueError(f'observation.{k} must be true, false or null')
-        out[k] = ob[k]
+        out[k] = v
     return out
+
+
+def validate_shape_inputs(si):
+    """SPEC9 9.1: supplied shape-chain inputs (e.g. from a plant foil model), or None."""
+    if si is None:
+        return None
+    keys('width_model.shape_inputs', si, SHAPE_INPUT_KEYS)
+    prov = si['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError('width_model.shape_inputs.provenance must be a nonempty string')
+    return {'strip_stiffness_per_width_pa': num(
+                'width_model.shape_inputs.strip_stiffness_per_width_pa',
+                si['strip_stiffness_per_width_pa'], positive=True),
+            'exit_tension_force_sensitivity_per_width_m': num(
+                'width_model.shape_inputs.exit_tension_force_sensitivity_per_width_m',
+                si['exit_tension_force_sensitivity_per_width_m'], nonnegative=True, hi=1.0),
+            'bite_half_length_m': num('width_model.shape_inputs.bite_half_length_m',
+                                      si['bite_half_length_m'], positive=True, hi=0.1),
+            'provenance': prov}
 
 
 def validate_width_model(w, pass_):
@@ -223,6 +262,7 @@ def validate_width_model(w, pass_):
                                                     hi=1.0)}
         if out['coil']['outer_radius_m'] <= out['coil']['inner_radius_m']:
             raise ValueError('width_model.coil.outer_radius_m must exceed inner_radius_m')
+    out['shape_inputs'] = validate_shape_inputs(w.get('shape_inputs'))
     out['previous_strip_widths_m'] = num_list('width_model.previous_strip_widths_m',
                                               w.get('previous_strip_widths_m', []),
                                               positive=True)
@@ -334,17 +374,51 @@ def _inside(z, centre, width):
     return [i for i, x in enumerate(z) if abs(x - centre) <= width / 2 * (1 + 1e-12)]
 
 
-def shape_params(case, bite, w, src=None):
-    """Pass parameters for the strip_shape chain (exit-tension feedback always on)."""
+def is_case_pass(case, src):
+    """True when ``src`` (a schedule row) has the case pass gauges (it is the case pass)."""
+    p = case['pass']
+    return (src is None or (abs(src['entry_thickness_m'] - p['entry_thickness_m'])
+                            <= 1e-9 * p['entry_thickness_m']
+                            and abs(src['exit_thickness_m'] - p['exit_thickness_m'])
+                            <= 1e-9 * p['exit_thickness_m']))
+
+
+def shape_params_or_none(case, bite, w, src=None):
+    """(shape params, basis) for the strip_shape chain of the case pass (``src`` None) or of a
+    schedule row, or (None, None) when neither a bite nor ``width_model.shape_inputs`` is
+    available. SPEC9 9.1: supplied shape inputs take precedence over a derived bite for the
+    case pass (they describe that pass only); other schedule passes use their own bite."""
+    si = w.get('shape_inputs')
+    if si is not None and is_case_pass(case, src):
+        return shape_params(case, bite, w, src, supplied=si), 'shape_inputs_supplied'
+    if bite is None:
+        return None, None
+    return shape_params(case, bite, w, src), 'derived_bite'
+
+
+def shape_params(case, bite, w, src=None, supplied=None):
+    """Pass parameters for the strip_shape chain (exit-tension feedback always on).
+
+    ``supplied``: validated ``width_model.shape_inputs``; its strip stiffness, exit-tension
+    force sensitivity and bite half-length replace the bite's. The entry force sensitivity
+    (incoming ridges only) is then the bite's when a bite exists, else None."""
     p = case['pass']
     s = p if src is None else src
     width = p['width_m']
     centre = w['strip_centre_m'] if w['strip_centre_m'] is not None else \
         w['roll']['barrel_length_m'] / 2
+    if supplied is not None:
+        q = supplied['strip_stiffness_per_width_pa']
+        a = supplied['bite_half_length_m']
+        nx = supplied['exit_tension_force_sensitivity_per_width_m']
+    else:
+        q = bite.strip_modulus_n_m / width
+        a = bite.contact_length_m / 2
+        nx = -bite.dforce_dexit_tension_m2 / width
     return {'exit_thickness_m': s['exit_thickness_m'],
             'entry_thickness_m': s['entry_thickness_m'],
-            'strip_stiffness_per_width_pa': bite.strip_modulus_n_m / width,
-            'bite_half_length_m': bite.contact_length_m / 2,
+            'strip_stiffness_per_width_pa': q,
+            'bite_half_length_m': a,
             'roll_radius_m': p['work_roll_radius_m'], 'strip_width_m': width,
             'mean_tension_pa': s['exit_tension_pa'], 'strip_centre_m': centre,
             'n_rolls': w['rolls_carrying_stripe'],
@@ -355,8 +429,9 @@ def shape_params(case, bite, w, src=None):
             'xi': w['shape_disturbing_coefficient'] if w['shape_disturbing_coefficient']
             is not None else DEFAULT_XI,
             'yield_stress_pa': case['material']['yield_stress_pa'],
-            'exit_tension_force_sensitivity_per_width_m': -bite.dforce_dexit_tension_m2 / width,
-            'entry_force_sensitivity_per_width_pa': bite.dforce_dentry_thickness_n_m / width}
+            'exit_tension_force_sensitivity_per_width_m': nx,
+            'entry_force_sensitivity_per_width_pa': (None if bite is None else
+                                                     bite.dforce_dentry_thickness_n_m / width)}
 
 
 def _tsf(z, dev, sp, feedback=True):
@@ -714,7 +789,7 @@ def _stripe_metrics(times, dev, sel, ts):
     return rt.history_metrics([times[i] - ts for i in sel], [dev[i] for i in sel])
 
 
-def _events_section(th, sp, actual, events):
+def _events_section(th, sp, actual, events, shape_reason=None):
     """One transient from the steady state through all events (overlaps combined).
 
     Per event: one monitor per connected group of adjacent switched nozzles (a stripe); the
@@ -846,6 +921,8 @@ def _events_section(th, sp, actual, events):
                'peak_snapshot_time_s': snap['time_s'] - ts,
                'stripe_peak_position_m': z[k_pk], 'stripe_peak_deviation_m': prof[k_pk]}
         try:
+            if sp is None:
+                raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
             shape = shape_levels(z, prof, sp)
             row['peak_shape'] = shape
             on = onsets(z, prof, sp)
@@ -989,6 +1066,10 @@ def _crown(case, w, healthy_crown):
         out['heredity_status'] = ('NOT_SUPPLIED: gap_crown_m, entry_crown_m and '
                                   'heredity_coefficient are all needed')
         return out
+    if healthy_crown is None:
+        out['heredity_status'] = ('NOT_ASSESSABLE: the gap crown used needs the healthy-header '
+                                  'thermal crown (no roll thermal solution)')
+        return out
     gap = w['gap_crown_m'] - 2 * healthy_crown
     her = ss.crown_heredity(gap, w['entry_crown_m'], h0, h1, w['heredity_coefficient'])
     cls = ss.classify_crown_change(w['entry_crown_m'], h0, her['exit_crown_m'], h1, width)
@@ -1008,8 +1089,44 @@ def _crown(case, w, healthy_crown):
     return out
 
 
-def _ridge(case, w, sp, ridge, z, coil):
+def _ridge_proportional(case, ridge, coil, reason):
+    """SPEC9 9.1, no bite: the exit ridge from the proportional-transfer limit dh = (h/H)*dH
+    (the dominant-tension-feedback limit of the transfer above; a no-bite ESTIMATE, not a
+    bound) wound into the coil; the in-pass flatness is not assessable."""
+    p = case['pass']
+    h, big_h = p['exit_thickness_m'], p['entry_thickness_m']
+    ratio = h / big_h
+    out = {'position_m': ridge['position_m'], 'entry_ridge_height_m': ridge['height_m'],
+           'ridge_width_m': ridge['width_m'], 'exit_to_entry_ridge_ratio': ratio,
+           'proportional_ratio_h_over_H': ratio, 'exit_ridge_height_m': ratio * ridge['height_m'],
+           'transfer_basis': 'PROPORTIONAL_TRANSFER_LIMIT_NO_BITE',
+           'flatness_status': 'NOT_ASSESSABLE', 'peak_i_units': None, 'state': 'NOT_ASSESSABLE',
+           'flatness_reason': reason,
+           'flags': ['RIDGE_EXIT_HEIGHT_FROM_PROPORTIONAL_LIMIT_NO_BITE'], 'coil': None}
+    if coil is not None:
+        out['coil'] = _coil_buildup(case, coil, ratio * ridge['height_m'], h)
+    return out
+
+
+def _coil_buildup(case, coil, exit_ridge, h):
+    cb = ss.coil_ridge_buildup(exit_ridge, h, coil['inner_radius_m'], coil['outer_radius_m'],
+                               case['material']['yield_stress_pa'], coil['winding_tension_pa'],
+                               case['material']['youngs_modulus_pa'],
+                               coil['compaction_factor'] or ss.DEFAULT_COMPACTION_FACTOR)
+    return {k: cb[k] for k in ('status', 'ridge_height_m', 'wraps_at_outer_radius',
+                               'radial_build_up_at_outer_radius_m',
+                               'hoop_strain_at_outer_radius', 'yield_margin_strain',
+                               'critical_ridge_height_at_outer_radius_m',
+                               'ridge_to_critical_ratio', 'yield_onset_radius_m',
+                               'affected_length_fraction', 'compaction_factor')}
+
+
+def _ridge(case, w, sp, ridge, z, coil, reason=None):
     """Flatness effect of an incoming ridge in this pass and its coil build-up [D]."""
+    if sp is None or sp.get('entry_force_sensitivity_per_width_pa') is None:
+        return _ridge_proportional(case, ridge, coil, reason or (
+            'the ridge transfer needs the entry-thickness force sensitivity of a derived bite '
+            '(not part of width_model.shape_inputs)'))
     h, big_h = sp['exit_thickness_m'], sp['entry_thickness_m']
     a = sp['bite_half_length_m']
     lam = min(max(2 * ridge['width_m'], ss.SHORT_WAVELENGTH_FACTOR * a), sp['roll_radius_m'])
@@ -1040,19 +1157,11 @@ def _ridge(case, w, sp, ridge, z, coil):
            'flatness_status': fl['status'],
            'peak_i_units': None if band is None else band['peak_i_units'],
            'state': 'BELOW_REPORTING_THRESHOLD' if band is None else band['state'],
+           'transfer_basis': 'DERIVED_TRANSFER',
            'flags': ['RIDGE_TRANSFER_DERIVED_IN_INTEGRATION_LAYER'],
            'coil': None}
     if coil is not None:
-        cb = ss.coil_ridge_buildup(ratio * ridge['height_m'], h, coil['inner_radius_m'],
-                                   coil['outer_radius_m'], case['material']['yield_stress_pa'],
-                                   coil['winding_tension_pa'], e,
-                                   coil['compaction_factor'] or ss.DEFAULT_COMPACTION_FACTOR)
-        out['coil'] = {k: cb[k] for k in ('status', 'ridge_height_m', 'wraps_at_outer_radius',
-                                          'radial_build_up_at_outer_radius_m',
-                                          'hoop_strain_at_outer_radius', 'yield_margin_strain',
-                                          'critical_ridge_height_at_outer_radius_m',
-                                          'ridge_to_critical_ratio', 'yield_onset_radius_m',
-                                          'affected_length_fraction', 'compaction_factor')}
+        out['coil'] = _coil_buildup(case, coil, ratio * ridge['height_m'], h)
     return out
 
 
@@ -1103,14 +1212,17 @@ def observed_gaps(obs):
     return None, spacing, None
 
 
-def _positions(case, w, obs, steady, events, ridges, troughs, two_tone, grinding_pitch):
+def _positions(case, w, obs, steady, events, ridges, troughs, two_tone, grinding_pitch, th):
+    """Observed against predicted positions and pitches. ``steady`` may be None (no roll
+    thermal solution, SPEC9 9.1): the blocked / low-level nozzles still come from the header
+    inputs (``th``), the steady stripes are then empty."""
     pos = obs['band_positions_across_width_m']
     pitch = w['spray_header']['nozzle_pitch_m']
     tol, basis = position_tolerance(obs, pitch)
-    th_pos = steady['nozzle_positions_m']
-    low = [th_pos[i] for i, lv in enumerate(steady['nozzle_levels']) if lv < 1.0]
+    th_pos = th.positions
+    low = [th_pos[i] for i, lv in enumerate(th.levels) if lv < 1.0]
     predicted = {
-        'steady_stripes': [s['peak_position_m'] for s in steady['stripes']],
+        'steady_stripes': [s['peak_position_m'] for s in steady['stripes']] if steady else [],
         'blocked_or_low_level_nozzles': low,
         'event_nozzles': sorted({x for e in events for x in e['nozzle_positions_m']}),
         'event_stripe_peaks': [e['stripe_peak_position_m'] for e in events],
@@ -1127,7 +1239,9 @@ def _positions(case, w, obs, steady, events, ridges, troughs, two_tone, grinding
            {k: spacing[k] for k in ('status', 'positions_m', 'gaps_m', 'mean_gap_m',
                                     'coefficient_of_variation', 'regular')},
            'observed_gaps_m': gaps, 'observed_gaps_basis': gap_basis,
-           'position_matches': {}, 'spacing_matches': {}}
+           'position_matches': {}, 'spacing_matches': {},
+           'steady_stripes_basis': ('roll thermal steady state' if steady else
+                                    'NOT_ASSESSABLE: no roll thermal solution')}
     if pos:
         for name, pred in predicted.items():
             m = ss.match_positions(pred, pos, tol)
@@ -1157,8 +1271,12 @@ def spacing_match(gaps, pitch):
             'gaps': m['gaps']}
 
 
-def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
-    th_z = steady['z_m'] if steady else None
+def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape_reason):
+    """Same stripe on every schedule pass. ``steady`` may be None (Gaussian reference stripe
+    on ``z_grid``). Per pass the shape parameters come from the pass's own bite; the case pass
+    uses ``width_model.shape_inputs`` when supplied (SPEC9 9.1) and is rejected with the bite
+    error when it has neither. ``op_bite``: the case-pass bite (or None)."""
+    th_z = steady['z_m'] if steady else z_grid
     rows_src = case['schedule'] or [dict(case['pass'], label='case pass')]
     if steady and steady['stripes']:
         big = max(steady['stripes'], key=lambda s: abs(s['peak_deviation_m']))
@@ -1166,7 +1284,7 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
         basis = (f'largest steady stripe (peak {big["peak_deviation_m"]:.3e} m at '
                  f'{big["peak_position_m"]:.4g} m), isolated; onsets by scaling its own shape')
     else:
-        shape = _reference_stripe(th_z, sp_op['strip_centre_m'])
+        shape = _reference_stripe(th_z, centre)
         basis = (f'{REFERENCE_STRIPE_HEIGHT_M:g} m Gaussian reference stripe (half-peak width '
                  f'{REFERENCE_HALF_PEAK_WIDTH_M:g} m) at the strip centre (no steady stripe)')
     zc, shape_c = coarse_grid(th_z, shape)
@@ -1181,8 +1299,14 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
                'friction_coefficient': src['friction_coefficient'],
                'mean_flow_stress_pa': src['mean_flow_stress_pa']}
         try:
-            bite = get_bite(src)
-            sp = shape_params(case, bite, w, src)
+            case_pass = is_case_pass(case, src)
+            if w.get('shape_inputs') is not None and case_pass:
+                bite = op_bite
+            elif case_pass and op_bite is None:
+                raise ValueError(f'shape chain NOT_ASSESSABLE: {shape_reason}')
+            else:
+                bite = get_bite(src)
+            sp, sp_basis = shape_params_or_none(case, bite, w, src)
             lv = shape_levels(zc, shape_c, sp)
             st = stripe_states(lv, peak_x)['with_feedback']
             win = ss.shohet_townsend_window(src['exit_thickness_m'], case['pass']['width_m'])
@@ -1192,7 +1316,13 @@ def _gauge_trend(case, w, get_bite, steady, sp_op, coil):
             def h(scale, height):
                 return None if scale is None else scale * height
             row.update(
-                bite_source=bite.source, bite_flags=list(bite.flags),
+                shape_inputs_basis=sp_basis,
+                bite_source=None if bite is None else bite.source,
+                bite_model=bite_model_name(bite),
+                bite_flags=[] if bite is None else list(bite.flags),
+                separating_force_per_width_n_m=(None if bite is None else
+                                                bite.separating_force_n
+                                                / case['pass']['width_m']),
                 strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
                 tension_feedback_stiffness_per_width_pa=lv[
                     'tension_feedback_stiffness_per_width_pa'],
@@ -1266,7 +1396,7 @@ def _trend_text(rows, peak):
     ok = [r for r in rows if 'rejected' not in r]
     if len(ok) < 2:
         return ('Fewer than two assessable passes: no gauge trend statement.' if ok or not rows
-                else 'No pass assessable.')
+                else 'No pass assessable.') + _rejected_text(rows)
     a, b = ok[0], ok[-1]
 
     def um(x, limited=False):
@@ -1308,7 +1438,14 @@ def _trend_text(rows, peak):
         if rm is not None and rr is not None:
             carriers.append((label, rm, rr))
     for label, rm, rr in carriers:
-        if max(rm, rr) < 1.5:
+        if max(rm, rr) < 1.5 and min(rm, rr) <= 1 / 1.5:
+            # SPEC9 finding: at foil gauge the onsets can RISE toward thin gauge (the ratio
+            # test above only looked for a fall and called this 'no change')
+            text += (f'For the {label} the onsets RISE toward the thin pass (thick/thin ratio '
+                     f'{rm:.2g} in the mill, {rr:.2g} after release): in this model the stripe '
+                     'is LESS likely to show at thinner gauge, so the model does not reproduce '
+                     '"worse at thinner gauge" for it. ')
+        elif max(rm, rr) < 1.5:
             text += f'For the {label} neither onset changes much with gauge. '
         else:
             which = 'after-release onset' if rr >= rm else 'in-mill onset'
@@ -1323,20 +1460,49 @@ def _trend_text(rows, peak):
     text += ('Flatness dead band half-width '
              f'{a["shohet_townsend_half_width_i_units"]:.3g} -> '
              f'{b["shohet_townsend_half_width_i_units"]:.3g} I-units.')
-    return text
+    return text + _rejected_text(rows)
+
+
+def _rejected_text(rows):
+    bad = [r for r in rows if 'rejected' in r]
+    if not bad:
+        return ''
+    return (' Not assessable (excluded from the trend): '
+            + '; '.join(f'{r["label"]} ({r["rejected"]})' for r in bad) + '.')
 
 
 # ============================================================================= section
-def width_section(case, bite, get_bite, heat_row, trib, flags):
+def bite_model_name(bite):
+    """'hitchcock', 'experimental_mattress', 'supplied' or None (no bite)."""
+    if bite is None:
+        return None
+    if MATTRESS_FLAG in bite.flags:
+        return 'experimental_mattress'
+    return 'supplied' if bite.source == 'supplied' else 'hitchcock'
+
+
+MATTRESS_FLAG = 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL'
+
+
+def not_assessable(reason):
+    return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
+
+
+def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
     """The ``width`` result section (SPEC6 6.2). ``get_bite(src)`` returns the bite of a
-    schedule pass (effective values) or raises ValueError."""
+    schedule pass (effective values) or raises ValueError.
+
+    SPEC9 9.1: without a case-pass bite the section still runs. Tension troughs, coil ridge
+    build-up (proportional-transfer estimate) and the critical ridge height, positions and
+    spacing, two-tone and grinding pitch need no bite; the roll thermal steady state and
+    events need ``bite_heat_per_width_w_m`` (supplied when there is no bite) and the roll heat
+    fraction. The shape chain (transfer, flatness, onsets, gauge trend of the case pass) uses
+    ``width_model.shape_inputs`` when supplied (they take precedence over a derived bite),
+    else the bite; with neither its parts are individually NOT_ASSESSABLE with the bite error
+    as the reason (``shape_chain``)."""
     w = case.get('width_model')
     if w is None:
         return not_supplied('width_model is null or absent')
-    if bite is None:
-        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
-                'reason': 'no bite response for the case pass (needed for the strip '
-                          'stiffness, contact length and exit-tension feedback)'}
     p = case['pass']
     out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
            'failures': [], 'flags': [], 'limitations': [
@@ -1346,11 +1512,37 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
                'Stripe detection by differencing against a healthy-header solution; the '
                'stripe threshold is an analyst choice.',
                'Not plant-validated.']}
+    sp, sp_basis = shape_params_or_none(case, bite, w)
+    shape_reason = None
+    if sp is None:
+        shape_reason = ('no bite response for the case pass'
+                        + (f' ({bite_error})' if bite_error else '')
+                        + ' and no width_model.shape_inputs: the strip stiffness, bite '
+                          'half-length and exit-tension feedback are unknown')
+        flags.append('WIDTH_SHAPE_CHAIN_NOT_ASSESSABLE_NO_BITE')
+        out['flags'].append('WIDTH_SHAPE_CHAIN_NOT_ASSESSABLE_NO_BITE')
+    elif sp_basis == 'shape_inputs_supplied':
+        flags.append('SHAPE_INPUTS_SUPPLIED')
+        out['flags'].append('SHAPE_INPUTS_SUPPLIED')
+    out['shape_chain'] = {
+        'status': 'EVALUATED' if sp is not None else 'NOT_ASSESSABLE',
+        'basis': sp_basis, 'reason': shape_reason,
+        'provenance': (w['shape_inputs']['provenance'] if sp_basis == 'shape_inputs_supplied'
+                       else None),
+        'parts_needing_it': ['shape.steady', 'shape.steady_stripe_table',
+                             'shape.nozzle_pattern_ripple', 'thermal_events peak shapes and '
+                             'thresholds', 'gauge_trend (case pass)',
+                             'incoming ridge flatness in the pass'],
+        'parts_without_it': ['thermal_steady', 'thermal_events (radius histories)',
+                             'troughs', 'coil ridge build-up and critical ridge height',
+                             'positions', 'two_tone', 'grinding_feed_pitch_m',
+                             'shape.crown (Shohet-Townsend window)']}
     if w['roll_heat_fraction_per_roll'] is not None:
         fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
     else:
         fraction = (1 - trib['strip_heat_fraction']) / 2
         fbasis = '(1 - tribology.strip_heat_fraction)/2'
+    thermal_reason = None
     if w['bite_heat_per_width_w_m'] is not None:
         heat, hbasis = w['bite_heat_per_width_w_m'], 'supplied'
     elif heat_row is not None and 'bite_heat_per_width_w_m' in heat_row:
@@ -1358,30 +1550,42 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
         hbasis = 'computed: plastic work + interface slip dissipation of the pass (' + \
             heat_row['friction_power_basis'] + ')'
     else:
-        return failed('width', 'bite heat per width not supplied and not computable')
+        heat, hbasis = None, None
+        thermal_reason = ('bite heat per width not supplied (width_model.bite_heat_per_width_w_m) '
+                          'and not computable' + (' without a bite' if bite is None else ''))
+        flags.append('WIDTH_THERMAL_NOT_ASSESSABLE_NO_BITE_HEAT')
     th = _Thermal(case, w, heat, fraction)
-    sp = shape_params(case, bite, w)
     out['barrel_length_m'] = th.length
     out['inputs_used'] = {
         'roll_heat_fraction_per_roll': fraction, 'roll_heat_fraction_basis': fbasis,
         'bite_heat_per_width_w_m': heat, 'bite_heat_basis': hbasis,
         'numerics': th.numerics, 'strip_centre_m': th.centre, 'strip_width_m': th.width,
-        'n_rolls': sp['n_rolls'], 'xi': sp['xi'], 'mean_tension_pa': sp['mean_tension_pa'],
-        'strip_stiffness_per_width_pa': sp['strip_stiffness_per_width_pa'],
-        'bite_half_length_m': sp['bite_half_length_m'],
+        'n_rolls': w['rolls_carrying_stripe'],
+        'xi': (w['shape_disturbing_coefficient'] if w['shape_disturbing_coefficient']
+               is not None else DEFAULT_XI),
+        'mean_tension_pa': p['exit_tension_pa'],
+        'strip_stiffness_per_width_pa': sp['strip_stiffness_per_width_pa'] if sp else None,
+        'bite_half_length_m': sp['bite_half_length_m'] if sp else None,
         'exit_tension_force_sensitivity_per_width_m':
-            sp['exit_tension_force_sensitivity_per_width_m'],
+            sp['exit_tension_force_sensitivity_per_width_m'] if sp else None,
+        'shape_inputs_basis': sp_basis,
         'exit_tension_feedback': 'always applied (SPEC6 6.7)'}
     steady = healthy = actual = None
-    try:
-        steady, healthy, actual, dev = _steady_section(th, sp)
-        out['thermal_steady'] = steady
-        out['flags'] += [f for f in steady['flags'] if f not in out['flags']]
-    except ValueError as exc:
-        out['thermal_steady'] = failed('thermal_steady', exc)
-        out['failures'].append(out['thermal_steady']['error'])
+    if thermal_reason is not None:
+        out['thermal_steady'] = not_assessable(thermal_reason)
+    else:
+        try:
+            steady, healthy, actual, dev = _steady_section(th, sp)
+            out['thermal_steady'] = steady
+            out['flags'] += [f for f in steady['flags'] if f not in out['flags']]
+        except ValueError as exc:
+            out['thermal_steady'] = failed('thermal_steady', exc)
+            out['failures'].append(out['thermal_steady']['error'])
     shape = {'steady': None, 'nozzle_pattern_ripple': None, 'crown': None, 'ridges': []}
-    if steady is not None:
+    if steady is not None and sp is None:
+        shape['steady'] = not_assessable(shape_reason)
+        shape['nozzle_pattern_ripple'] = not_assessable(shape_reason)
+    elif steady is not None:
         try:
             lv = shape_levels(steady['z_m'], steady['local_deviation_m'], sp)
             shape['steady'] = lv
@@ -1420,25 +1624,31 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
                     lv['levels']['with_feedback']['bands'])
         except ValueError as exc:
             shape['nozzle_pattern_ripple'] = failed('shape.nozzle_pattern_ripple', exc)
-        try:
-            shape['crown'] = _crown(case, w, steady['healthy_thermal_crown_m'])
-        except ValueError as exc:
-            shape['crown'] = failed('shape.crown', exc)
-            out['failures'].append(shape['crown']['error'])
+    elif sp is None:
+        shape['steady'] = not_assessable(shape_reason)
+    try:
+        shape['crown'] = _crown(case, w, steady['healthy_thermal_crown_m'] if steady else None)
+    except ValueError as exc:
+        shape['crown'] = failed('shape.crown', exc)
+        out['failures'].append(shape['crown']['error'])
     if w['events'] and actual is not None:
         try:
-            out['thermal_events'] = _events_section(th, sp, actual, w['events'])
+            out['thermal_events'] = _events_section(th, sp, actual, w['events'], shape_reason)
         except ValueError as exc:
             out['thermal_events'] = failed('thermal_events', exc)
             out['failures'].append(out['thermal_events']['error'])
+    elif w['events']:
+        out['thermal_events'] = not_assessable('steady roll thermal state not available'
+                                               + (f' ({thermal_reason})' if thermal_reason
+                                                  else ''))
     else:
-        out['thermal_events'] = not_supplied('no width_model.events' if not w['events'] else
-                                             'steady state not available')
-    z = steady['z_m'] if steady else [(i + 0.5) * 0.005 for i in
-                                      range(int(round(th.length / 0.005)))]
+        out['thermal_events'] = not_supplied('no width_model.events')
+    cell = th.numerics['axial_cell_m']
+    z = steady['z_m'] if steady else [(i + 0.5) * cell for i in
+                                      range(max(4, int(round(th.length / cell))))]
     for r in w['incoming_ridges']:
         try:
-            shape['ridges'].append(_ridge(case, w, sp, r, z, w['coil']))
+            shape['ridges'].append(_ridge(case, w, sp, r, z, w['coil'], shape_reason))
         except ValueError as exc:
             shape['ridges'].append({'position_m': r['position_m'], 'rejected': str(exc)})
     out['shape'] = shape
@@ -1457,21 +1667,19 @@ def width_section(case, bite, get_bite, heat_row, trib, flags):
     out['grinding_feed_pitch_m'] = grinding_pitch
     events = out['thermal_events'].get('events', []) if isinstance(
         out['thermal_events'], dict) else []
-    if steady is not None:
-        try:
-            out['positions'] = _positions(case, w, case['observation'], steady, events,
-                                          w['incoming_ridges'], out['troughs'], two_tone,
-                                          grinding_pitch)
-        except ValueError as exc:
-            out['positions'] = failed('positions', exc)
-            out['failures'].append(out['positions']['error'])
-        try:
-            out['gauge_trend'] = _gauge_trend(case, w, get_bite, steady, sp, w['coil'])
-        except ValueError as exc:
-            out['gauge_trend'] = failed('gauge_trend', exc)
-            out['failures'].append(out['gauge_trend']['error'])
-    else:
-        out['positions'] = out['gauge_trend'] = failed('width', 'no steady thermal solution')
+    try:
+        out['positions'] = _positions(case, w, case['observation'], steady, events,
+                                      w['incoming_ridges'], out['troughs'], two_tone,
+                                      grinding_pitch, th)
+    except ValueError as exc:
+        out['positions'] = failed('positions', exc)
+        out['failures'].append(out['positions']['error'])
+    try:
+        out['gauge_trend'] = _gauge_trend(case, w, get_bite, steady, th.centre, w['coil'], z,
+                                          bite, shape_reason)
+    except ValueError as exc:
+        out['gauge_trend'] = failed('gauge_trend', exc)
+        out['failures'].append(out['gauge_trend']['error'])
     if out['failures']:
         flags.append('WIDTH_SECTION_PARTIAL_FAILURE')
     if steady and any(s['sign'] == 'HOT_HIGH' for s in steady['stripes']):
@@ -1553,6 +1761,25 @@ class Facts:
         w = case.get('width_model')
         self.width_ok = isinstance(width, dict) and not width.get('not_supplied', True) \
             and 'thermal_steady' in width and 'z_m' in width.get('thermal_steady', {})
+        # SPEC9 9.1: the width section may run without the roll thermal solution or without
+        # the shape chain; model-band rules then say 'model not assessable' (never contradict)
+        self.width_ran = (isinstance(width, dict) and not width.get('not_supplied', True)
+                          and width.get('status') not in ('FAILED', 'NOT_ASSESSABLE'))
+        steady_shape = ((width.get('shape') or {}).get('steady')
+                        if isinstance(width, dict) else None)
+        self.shape_ok = (self.width_ok and isinstance(steady_shape, dict)
+                         and steady_shape.get('status') not in ('FAILED', 'NOT_ASSESSABLE'))
+        self.model_reason = None
+        if self.width_ran and not self.width_ok:
+            self.model_reason = ('no roll thermal solution: '
+                                 + str((width.get('thermal_steady') or {}).get(
+                                     'reason', (width.get('thermal_steady') or {}).get(
+                                         'error', 'not available'))))
+        elif self.width_ran and not self.shape_ok:
+            self.model_reason = ('shape chain: ' + str((steady_shape or {}).get(
+                'reason', (steady_shape or {}).get('error', 'not available'))))
+        self.exit_thickness = case['pass']['exit_thickness_m']
+        self.film_ratio, self.film_basis = None, None
         coolant = case['coolant']
         pitch = (w['spray_header']['nozzle_pitch_m'] if w is not None else
                  coolant['nozzle_pitch_m'] if coolant is not None else None)
@@ -1607,11 +1834,31 @@ class Facts:
             self.crown_class = ((crown.get('classification') or {}).get('status')
                                 if isinstance(crown, dict) else None)
             self.feed_pitch = width.get('grinding_feed_pitch_m')
+        elif self.width_ran and isinstance(width.get('positions'), dict) \
+                and 'predicted_positions_m' in width['positions']:
+            # no roll thermal solution: the blocked / low-level nozzles are still known
+            self.header_known = True
+            pred = width['positions']['predicted_positions_m']
+            self.l1_predicted = sorted(set(pred.get('blocked_or_low_level_nozzles') or []))
+            self.l1_source = 'blocked / low-level nozzles (no roll thermal solution)'
+            self.two_tone = (width.get('two_tone') or {}).get('band_positions_m', [])
+            self.ridges = [r for r in (width.get('shape') or {}).get('ridges', [])
+                           if 'rejected' not in r]
+            self.troughs = width.get('troughs')
+            self.feed_pitch = width.get('grinding_feed_pitch_m')
         elif screens is not None and screens.get('spray_coverage') is not None:
             self.header_known = True
             self.l1_predicted = [s['center_m'] for s in screens['band_risk_stripes'] or []]
             self.l1_source = 'phase-1 spray coverage band-risk stripes (no width model)'
         self.process = process
+        fr = (process or {}).get('friction') if isinstance(process, dict) else None
+        op = fr.get('operating') if isinstance(fr, dict) else None
+        if isinstance(op, dict) and isinstance(op.get('film_ratio'), (int, float)):
+            self.film_ratio = op['film_ratio']
+            self.film_basis = 'tribology inlet film at the operating point'
+        elif screens is not None and isinstance(screens.get('film_regime'), dict):
+            self.film_ratio = screens['film_regime']['film_ratio']
+            self.film_basis = 'lubrication-screen inlet film (Wilson & Walowit form)'
 
     def model_bands_at_positions(self):
         if not self.steady_bands:
@@ -1622,7 +1869,7 @@ class Facts:
         return list(self.steady_bands)
 
 
-def _tension_release_rules(facts, states, label):
+def _tension_release_rules(facts, states, label, not_assessable=None):
     """Tension-release rules (coordinator follow-up to SPEC6 6.7). ``states``: (in-mill state,
     state after tension release) of the model bands. Observation 'visible only after tension
     release' true: SUPPORTS moderate with a band LATENT in the mill and MANIFEST after release,
@@ -1638,6 +1885,9 @@ def _tension_release_rules(facts, states, label):
     txt_states = ', '.join(f'{m} / {r}' for m, r in states) or 'no band'
     if v is None:
         out.append(ev(crit, 'not observed', exp, 'NOT_OBSERVED'))
+    elif not states and not_assessable:
+        out.append(ev(crit, f'{str(v).lower()}; model not assessable ({not_assessable})', exp,
+                      'NEUTRAL', basis='model not assessable'))
     elif not states:
         out.append(ev(crit, f'{str(v).lower()}; model no band', exp, 'NEUTRAL'))
     elif v and any(m == 'LATENT_UNDER_TENSION' and r == 'MANIFEST_AFTER_TENSION_RELEASE'
@@ -1716,9 +1966,12 @@ def _h_nozzle(f):
                       'crease_or_flute': ('CONTRADICTS', 'weak')}))
     bands = f.model_bands_at_positions()
     crit = 'model band at an observed position above the reporting threshold'
-    if not f.width_ok:
+    if not f.width_ran and not f.width_ok:
         e.append(ev(crit, 'no width model', 'latent or manifest band', 'NOT_OBSERVED',
                     basis='input'))
+    elif not f.shape_ok:
+        e.append(ev(crit, f'model not assessable ({f.model_reason})', 'latent or manifest band',
+                    'NEUTRAL', basis='model not assessable'))
     elif not f.positions:
         e.append(ev(crit, 'positions not observed', 'latent or manifest band', 'NOT_OBSERVED'))
     else:
@@ -1730,9 +1983,17 @@ def _h_nozzle(f):
             e.append(ev(crit, 'no model stripe band at the observed positions',
                         'latent or manifest band', 'NEUTRAL', basis='model'))
     states = [(s, r) for _, s, r in bands if s != 'BELOW_REPORTING_THRESHOLD']
-    e += _tension_release_rules(f, states, 'steady model band')
+    e += _tension_release_rules(f, states, 'steady model band',
+                                None if f.shape_ok else f.model_reason)
     e.append(_worse_thin(o, 'weak', 'relative thickness error and buckling stress'))
     e.append(_choice(o, 'faces', 'faces', 'both', {'both': ('SUPPORTS', 'weak')}))
+    # SPEC9 9.4 extensions [D]: a thermal stripe follows heat input slowly (minutes), so speed
+    # tracking neither supports nor contradicts it; a band that goes with wiper cleaning points
+    # to wiper debris rather than to the spray
+    e.append(_rule(o, 'tracks_speed_changes', 'tracks speed changes',
+                   'n/a (a thermal stripe follows the heat input slowly)', None, None))
+    e.append(_rule(o, 'changes_after_roll_wiper_cleaning', 'changes after roll wiper cleaning',
+                   'false (a wiper-debris band would)', ('CONTRADICTS', 'weak'), None))
     pred = {'model_positions_m': f.l1_predicted, 'model_position_source': f.l1_source,
             'position_tolerance_m': f.tol, 'steady_model_bands': [
                 {'position_m': x, 'state': s, 'state_after_tension_release': r}
@@ -1754,8 +2015,13 @@ def _h_zone(f):
     bounds = [x['visible_time_lower_bound_s'] for x in f.events
               if x.get('visible_time_lower_bound_s') and not x.get('visible_time_s')]
     crit = 'intermittent duration vs model visible time'
+    no_shape = [x for x in f.events if x.get('shape_error')]
     if d is None:
         e.append(ev(crit, 'not observed', 'within 0.3-3 x model visible time', 'NOT_OBSERVED'))
+    elif f.events and not lives and not bounds and len(no_shape) == len(f.events):
+        e.append(ev(crit, f'{d:.4g} s; model visible time not assessable '
+                    f'({no_shape[0]["shape_error"]})', 'within 0.3-3 x model visible time',
+                    'NEUTRAL', basis='model not assessable'))
     elif not lives and bounds:
         e.append(ev(crit, f'{d:.4g} s; model visible time beyond the simulated recovery (> '
                     f'{", ".join(f"{b:.4g} s" for b in bounds)})',
@@ -1797,7 +2063,10 @@ def _h_zone(f):
     states = [(x['peak_state_with_feedback'], x['peak_state_after_tension_release'])
               for x in f.events
               if x.get('peak_state_with_feedback') not in (None, 'BELOW_REPORTING_THRESHOLD')]
-    e += _tension_release_rules(f, states, 'event peak band')
+    e += _tension_release_rules(f, states, 'event peak band',
+                                f'shape chain: {no_shape[0]["shape_error"]}'
+                                if f.events and len(no_shape) == len(f.events) else
+                                (f.model_reason if f.width_ran and not f.width_ok else None))
     pred = {'event_positions_m': f.event_positions,
             'events': [{k: x.get(k) for k in ('index', 'label', 'monitor_position_m',
                                               'peak_deviation_m',
@@ -1815,12 +2084,21 @@ def _h_roll_surface(f):
     e = [_orientation(o)]
     ch, dis = o['positions_change_after_work_roll_change'], o['disappears_after_work_roll_change']
     crit = 'positions change / band disappears after work-roll change'
+    # SPEC9 9.4: backup-roll lines are printed through the work roll onto the strip, so with a
+    # band that disappears after a BACKUP-roll change, persistence across a work-roll change
+    # is expected for this hypothesis and must not count as a strong contradiction
+    bur = o['disappears_after_backup_roll_change'] is True
+    why = ('; band disappeared after a backup-roll change (backup-roll lines printed through '
+           'the work roll persist across a work-roll change), so downgraded to weak'
+           if bur else '')
     if ch is not None:
-        e.append(ev(crit, f'positions change: {str(ch).lower()}', 'true',
-                    'SUPPORTS' if ch else 'CONTRADICTS', 'strong'))
+        e.append(ev(crit, f'positions change: {str(ch).lower()}' + ('' if ch else why), 'true',
+                    'SUPPORTS' if ch else 'CONTRADICTS',
+                    'strong' if ch or not bur else 'weak'))
     elif dis is not None:
-        e.append(ev(crit, f'disappears after work-roll change: {str(dis).lower()}', 'true',
-                    'SUPPORTS' if dis else 'CONTRADICTS', 'strong' if dis else 'moderate'))
+        e.append(ev(crit, f'disappears after work-roll change: {str(dis).lower()}'
+                    + ('' if dis else why), 'true', 'SUPPORTS' if dis else 'CONTRADICTS',
+                    'strong' if dis else ('weak' if bur else 'moderate')))
     else:
         e.append(ev(crit, 'not observed', 'true', 'NOT_OBSERVED'))
     crit = 'follows previous strip edges / two-tone position'
@@ -1850,6 +2128,15 @@ def _h_roll_surface(f):
     e.append(_choice(o, 'faces', 'faces', 'one', {'one': ('SUPPORTS', 'moderate')}))
     e.append(_rule(o, 'changes_with_coolant_zone_switching', 'changes with coolant zone switching',
                    'false', ('CONTRADICTS', 'moderate'), None))
+    # SPEC9 9.4 extensions [V S25, S17]: wiper debris, wide coil after narrow, backup-roll lines
+    e.append(_rule(o, 'changes_after_roll_wiper_cleaning', 'changes after roll wiper cleaning',
+                   'true (wiper debris)', ('SUPPORTS', 'strong'), ('CONTRADICTS', 'weak')))
+    e.append(_rule(o, 'appeared_after_narrower_coil', 'appeared after a narrower coil',
+                   'true (wide coil rolled after a narrow one)', ('SUPPORTS', 'strong'), None))
+    e.append(_rule(o, 'disappears_after_backup_roll_change',
+                   'disappears after backup-roll change',
+                   'true (backup-roll lines printed through the work roll)',
+                   ('SUPPORTS', 'moderate'), None))
     return e, {'two_tone_positions_m': f.two_tone,
                'note': 'settle by roll inspection and a work-roll change test'}
 
@@ -1920,12 +2207,20 @@ def _h_ridge(f):
                     'SUPPORTS' if hits else 'NEUTRAL', 'strong' if hits else None))
     coils = [r['coil'] for r in f.ridges if r.get('coil')]
     crit = 'model coil build-up of a supplied ridge'
+    # SPEC9 9.1: without a bite the exit ridge is the proportional-transfer estimate, so its
+    # coil result supports only weakly and never contradicts
+    estimate = any(r.get('transfer_basis') == 'PROPORTIONAL_TRANSFER_LIMIT_NO_BITE'
+                   for r in f.ridges if r.get('coil'))
+    note = ' (exit ridge from the proportional-transfer estimate, no bite)' if estimate else ''
     if not coils:
         e.append(ev(crit, 'no ridge with coil data', 'RIDGE_YIELDS_STRIP', 'NOT_OBSERVED',
                     basis='input'))
     elif any(c['status'] == 'RIDGE_YIELDS_STRIP' for c in coils):
-        e.append(ev(crit, ', '.join(c['status'] for c in coils), 'RIDGE_YIELDS_STRIP',
-                    'SUPPORTS', 'moderate', 'model'))
+        e.append(ev(crit, ', '.join(c['status'] for c in coils) + note, 'RIDGE_YIELDS_STRIP',
+                    'SUPPORTS', 'weak' if estimate else 'moderate', 'model'))
+    elif estimate:
+        e.append(ev(crit, ', '.join(c['status'] for c in coils) + note, 'RIDGE_YIELDS_STRIP',
+                    'NEUTRAL', basis='model not assessable'))
     else:
         e.append(ev(crit, ', '.join(c['status'] for c in coils), 'RIDGE_YIELDS_STRIP',
                     'CONTRADICTS', 'weak', 'model'))
@@ -1996,6 +2291,19 @@ def _h_troughs(f):
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'false',
                    ('CONTRADICTS', 'weak'), None))
+    # SPEC9 9.4 extensions [V S25]: creasing from ironing-roll pressure imbalance; creasing
+    # possible at any exit gauge below 50 um; troughs need tension (a crease from a local loose
+    # band is the exception, so the contradiction stays weak)
+    e.append(_rule(o, 'changes_with_ironing_roll_pressure',
+                   'changes with ironing-roll pressure', 'true', ('SUPPORTS', 'moderate'), None))
+    h = f.exit_thickness
+    gauge = ev('exit gauge (creasing possible below 50 um)', f'{h * 1e6:.4g} um',
+               '< 50 um', 'SUPPORTS' if h < 50e-6 else 'NEUTRAL',
+               'weak' if h < 50e-6 else None, 'input')
+    e.append(_rule(o, 'worse_at_lower_tension', 'worse at lower tension',
+                   'false (troughs need tension; a crease from a loose band is the exception)',
+                   ('CONTRADICTS', 'weak'), None))
+    e.append(_gate_gauge_support(e, gauge))
     return e, {'trough_wavelengths_m': {n: lam for n, lam in lams}, 'trough_status': sts}
 
 
@@ -2077,6 +2385,7 @@ def _h_heat_streak(f):
         op = ht['operating']
         if op.get('temperature_limit_k') is not None and 'exit_temperature_k' in op:
             hot = op['exit_temperature_k'] > op['temperature_limit_k']
+    k_regime = len(e)
     if regime is None and hot is None:
         e.append(ev(crit, 'no tribology', 'BOUNDARY or above the temperature limit',
                     'NOT_OBSERVED', basis='input'))
@@ -2089,7 +2398,116 @@ def _h_heat_streak(f):
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'false',
                    ('CONTRADICTS', 'weak'), None))
-    return e, {'regime_at_operating_point': regime, 'exit_temperature_above_limit': hot}
+    # SPEC9 9.4 extensions: a friction / oil-film band (no roll bump) tracks speed [V S17 for
+    # the roughness cause; mechanism D]; a film comparable to the roughness makes friction
+    # sensitive to local differences [V S11 for the film ratios; rule D]
+    e.append(_rule(o, 'tracks_speed_changes', 'tracks speed changes', 'true',
+                   ('SUPPORTS', 'strong'), ('CONTRADICTS', 'weak')))
+    crit = 'film ratio at the operating point (0.3-3: friction sensitive to local differences)'
+    lam = f.film_ratio
+    k_film = len(e)
+    if lam is None:
+        e.append(ev(crit, 'no lubrication or tribology data', '0.3-3', 'NOT_OBSERVED',
+                    basis='input'))
+    else:
+        ok = 0.3 <= lam <= 3
+        e.append(ev(crit, f'Lambda = {lam:.3g} ({f.film_basis})', '0.3-3',
+                    'SUPPORTS' if ok else 'NEUTRAL', 'weak' if ok else None, 'model'))
+    e.append(_rule(o, 'changes_with_exit_air_blowoff', 'changes with exit air blow-off',
+                   'n/a', None, None))
+    # SPEC9 rule change (same gate as the foil gauge items): the operating-point regime and
+    # film ratio describe the whole pass, not a band; at foil gauge they hold on practically
+    # every pass, so they count only with a band-specific supporting observation
+    for k in (k_regime, k_film):
+        e[k] = _gate_gauge_support(e, e[k])
+    return e, {'regime_at_operating_point': regime, 'exit_temperature_above_limit': hot,
+               'film_ratio_at_operating_point': lam, 'film_ratio_basis': f.film_basis}
+
+
+GAUGE_GATE_NOTE = ('; counted only with a band-specific supporting observation (rule change, '
+                   'SPEC9 review: this case-wide quantity is shared by every band of the pass, '
+                   'so on its own it made this hypothesis lead from the orientation alone)')
+
+
+def _gate_gauge_support(e, item):
+    """SPEC9 rule change: a SUPPORTS from a case-wide quantity (the exit gauge, basis 'input';
+    the operating-point film ratio / tribology regime, basis 'model') counts only when
+    the hypothesis also has a SUPPORTS from a plant observation other than the orientation
+    (shared by the whole lengthwise family); otherwise it is reported as NEUTRAL. Gauge
+    contradictions are kept."""
+    if item['verdict'] != 'SUPPORTS':
+        return item
+    specific = any(x['verdict'] == 'SUPPORTS' and x['basis'] == 'observation'
+                   and x['criterion'] != 'orientation' for x in e)
+    if specific:
+        return item
+    return ev(item['criterion'], item['observed'] + GAUGE_GATE_NOTE, item['expected'],
+              'NEUTRAL', basis=item['basis'])
+
+
+def _h_tension_lines(f):
+    """Foil tension lines (SPEC9 9.4) [V S27, S28; rule weights D]: rule-based only, the tool
+    has no physical model of them."""
+    o = f.obs
+    e = [_orientation(o)]
+    crit = 'band spacing 3-30 mm'
+    if f.gaps is None:
+        e.append(ev(crit, 'spacing not observed', '3-30 mm (> 60 mm contradicts)',
+                    'NOT_OBSERVED'))
+    else:
+        sp_ = (o['band_spacing_m'] if o['band_spacing_m'] is not None
+               else sum(f.gaps) / len(f.gaps))
+        txt = f'{sp_ * 1e3:.4g} mm ({f.gap_basis})'
+        if 0.003 <= sp_ <= 0.030:
+            e.append(ev(crit, txt, '3-30 mm', 'SUPPORTS', 'strong'))
+        elif sp_ > 0.060:
+            e.append(ev(crit, txt, '3-30 mm (> 60 mm contradicts)', 'CONTRADICTS', 'moderate'))
+        else:
+            e.append(ev(crit, txt, '3-30 mm', 'NEUTRAL'))
+    h = f.exit_thickness
+    crit = 'exit gauge (tension lines on thin foil)'
+    txt = f'{h * 1e6:.4g} um'
+    if h <= 30e-6:
+        gauge = ev(crit, txt, '<= 30 um (30-60 um weak, > 100 um contradicts)', 'SUPPORTS',
+                   'moderate', 'input')
+    elif h <= 60e-6:
+        gauge = ev(crit, txt, '<= 30 um (30-60 um weak)', 'SUPPORTS', 'weak', 'input')
+    elif h > 100e-6:
+        gauge = ev(crit, txt, '<= 60 um (> 100 um contradicts)', 'CONTRADICTS', 'moderate',
+                   'input')
+    else:
+        gauge = ev(crit, txt, '<= 60 um', 'NEUTRAL', basis='input')
+    k_gauge = len(e)
+    e.append(gauge)
+    e.append(_rule(o, 'worse_at_lower_tension', 'worse at lower tension', 'true',
+                   ('SUPPORTS', 'strong'), ('CONTRADICTS', 'strong')))
+    crit = 'changes with tension'
+    if o['worse_at_lower_tension'] is not None:
+        v = o['changes_with_tension']
+        e.append(ev(crit, 'not observed' if v is None else str(v).lower(),
+                    'true (only used when worse_at_lower_tension is not observed)',
+                    'NOT_OBSERVED' if v is None else 'NEUTRAL'))
+    else:
+        e.append(_rule(o, 'changes_with_tension', crit, 'true', ('SUPPORTS', 'moderate'), None))
+    e.append(_rule(o, 'changes_with_ironing_roll_pressure',
+                   'changes with ironing-roll pressure', 'true', ('SUPPORTS', 'moderate'), None))
+    e.append(_rule(o, 'changes_with_exit_air_blowoff', 'changes with exit air blow-off', 'true',
+                   ('SUPPORTS', 'moderate'), None))
+    e.append(_rule(o, 'positions_repeat_across_coils', 'positions repeat across coils',
+                   'false', None, ('SUPPORTS', 'weak')))
+    e.append(_choice(o, 'appearance', 'appearance', 'gloss_or_shade or crease_or_flute',
+                     {'gloss_or_shade': ('SUPPORTS', 'weak'),
+                      'crease_or_flute': ('SUPPORTS', 'weak'),
+                      'loose_or_buckle': ('CONTRADICTS', 'weak'),
+                      'stain': ('CONTRADICTS', 'weak')}))
+    e.append(_worse_thin(o, 'weak', 'onset below about 15-30 um reported'))
+    e[k_gauge] = _gate_gauge_support(e, e[k_gauge])
+    return e, {'model': 'NONE: rule-based hypothesis, the tool has no physical model of '
+                        'tension lines (5-20 mm pitch reported, vanishing above a threshold '
+                        'tension)',
+               'reported_pitch_m': [0.005, 0.020],
+               'reported_onset_exit_gauge_m': [15e-6, 30e-6],
+               'case_exit_thickness_m': h}
 
 
 def _h_stain(f):
@@ -2159,16 +2577,30 @@ LENGTHWISE_HYPOTHESES = (
      'smooth edge waves or a centre buckle rather than narrow stripes.',
      'Entry and exit profile measurements; shapemeter map; compare the relative crowns.',
      ('adjust roll bending / thermal crown', 'match the gap crown to the entry crown')),
-    ('heat_streak_or_film_variation', 'Heat streak / oil-film variation',
-     'Local oil-film variation from heat: milky bands that wander in width and position '
-     '(QCA-1).',
-     'Compare band appearance with oil temperature and speed; check whether the bands wander '
-     'between coils.',
-     ('lower the oil inlet temperature', 'increase coolant flow', 'reduce speed')),
+    ('heat_streak_or_film_variation',
+     'Heat streak / friction or oil-film band (no roll bump)',
+     'Local oil-film or friction variation across the width: milky heat streaks that wander in '
+     'width and position (QCA-1), or, in foil where the oil film is comparable to the '
+     'roughness, a cross-width difference in roughness or oil film that gives a flatness band '
+     'without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].',
+     'Compare band appearance with oil temperature and speed (does the band appear, move or '
+     'fade with a speed change?); check whether the bands wander between coils; measure the '
+     'work-roll roughness across the barrel.',
+     ('lower the oil inlet temperature', 'increase coolant flow', 'reduce speed',
+      'regrind for uniform roll roughness')),
     ('oil_carryover_drips_or_stain', 'Oil carry-over, drips or stain',
      'Coolant carried past the wipers, drips, or staining seen after annealing.',
      'Anneal a sample and look for stain; inspect wipers and drip shields.',
      ('repair wipers / air knives', 'check drip shields', 'adjust oil filtration')),
+    ('foil_tension_lines', 'Foil tension lines (fine lengthwise stripes, worse at low tension)',
+     'Fine parallel lengthwise stripes at 5-20 mm pitch on thin foil, wider and more visible '
+     'at low strip tension and vanishing above a threshold tension, worse at thinner gauge '
+     '[V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. '
+     'Rule-based: the tool has no physical model of them.',
+     'Raise the exit tension in steps and note the tension at which the lines vanish; vary the '
+     'ironing-roll pressure per side and the exit air blow-off one at a time.',
+     ('raise front (exit) tension (risks ridging)', 'adjust ironing-roll pressure per side',
+      'reduce or redirect the exit air blow-off', 'raise work-roll roughness')),
 )
 
 LENGTHWISE_BUILDERS = {
@@ -2181,6 +2613,7 @@ LENGTHWISE_BUILDERS = {
     'profile_flatness_mismatch': _h_profile,
     'heat_streak_or_film_variation': _h_heat_streak,
     'oil_carryover_drips_or_stain': _h_stain,
+    'foil_tension_lines': _h_tension_lines,
 }
 
 
@@ -2193,7 +2626,24 @@ def measurement_topic(line):
     return next((t for t in MEASUREMENT_TOPICS if t in line), None)
 
 
-def lengthwise_next_measurements(obs):
+FOIL_MEASUREMENTS = (
+    ('worse_at_lower_tension', 'Step the exit tension and note whether (and at which tension) '
+                               'the bands fade.'),
+    ('changes_with_ironing_roll_pressure', 'Change the ironing-roll pressure (per side) and, '
+                                           'separately, the exit air blow-off, one at a time.'),
+    ('changes_after_roll_wiper_cleaning', 'Clean the roll wipers and note whether the bands '
+                                          'change.'),
+    ('tracks_speed_changes', 'Note whether the bands appear, move or fade when the mill speed '
+                             'changes.'),
+    ('appeared_after_narrower_coil', 'Record whether the bands started when a wider coil '
+                                     'followed a narrower one.'),
+    (None, 'Compare the online shapemeter flatness with the offline sag of a sample laid flat '
+           '(front tension masks the true shape at foil gauge).'))
+
+
+def lengthwise_next_measurements(obs, exit_thickness_m=None):
+    """Lengthwise measurement lines; with an exit gauge below 100 um (SPEC9 9.4) also the
+    foil lines whose observation is still null (and the online/offline comparison)."""
     lines = []
     pos = obs['band_positions_across_width_m']
     if len(pos) < 3 or obs['positions_repeat_across_coils'] is None:
@@ -2212,4 +2662,10 @@ def lengthwise_next_measurements(obs):
         lines.append('Vary the span tension and note whether the bands change.')
     if obs['appearance'] in (None, 'stain'):
         lines.append('Anneal a sample to check for stain.')
+    if exit_thickness_m is not None and exit_thickness_m < FOIL_GAUGE_M:
+        for key, line in FOIL_MEASUREMENTS:
+            if key is None or obs.get(key) is None or (
+                    key == 'changes_with_ironing_roll_pressure'
+                    and obs.get('changes_with_exit_air_blowoff') is None):
+                lines.append(line)
     return lines

@@ -2,8 +2,8 @@
 
 Status: ``SCREENING_RESULT_NOT_PLANT_VALIDATED``. This module wires the linear chatter
 model (``physicroll.chatter``) and the kinematic / material / lubrication / spray screens
-(``physicroll.band_signatures``) to one case file, then tallies observations against nineteen
-candidate band mechanisms in two families: ten TRANSVERSE (marks across the strip) and nine
+(``physicroll.band_signatures``) to one case file, then tallies observations against twenty
+candidate band mechanisms in two families: ten TRANSVERSE (marks across the strip) and ten
 LENGTHWISE (bands along the strip at fixed width positions, ``physicroll.band_width``). It
 does NOT certify a cause and does NOT produce probabilities: each hypothesis gets an ordinal
 evidence tally (score = sum of supports 3/2/1 minus sum of contradictions 6/2/1 for
@@ -50,6 +50,16 @@ hypothesis 'leading' with every observation null; see ``rank_hypotheses``).
 Phase-2 fixes (SPEC6 6.0): lever directions are NOT_ASSESSABLE when the variant input equals
 the baseline (zero tension) or both ratios are within 1e-9 of 1; span / damping variants are
 built inside the handler, so a rejected variant is a rejected row, not an aborted diagnosis.
+
+Phase 3 (SPEC9, battery foil 25-60 um): the v2 observation schema gains six OPTIONAL fields
+(``bw.OBS_FOIL_BOOL``) and ``width_model.shape_inputs``; the width section runs without a bite
+(its bite-free parts; shape parts individually NOT_ASSESSABLE); an exit gauge below 100 um adds
+the flag ``CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED`` and the ``foil_regime`` block
+(closed-gap onset 50-200 um reported, sources disagree [V S8, S16, S17]; NO roll-kissing
+model; the lever table and gauge control assume an open gap; wrinkle rule of thumb
+I = 1e5 * exit tension / E [V S27; D]); the strip map handles a leading torsional hypothesis
+(pitch = u_op / matched computed torsional mode); a new rule-based lengthwise hypothesis
+``foil_tension_lines`` [V S27, S28].
 
 NOT modelled: anything band_signatures / chatter / the phase-2 modules do not model (limit
 cycles, strip break, roll bending, film dynamics beyond the placeholder closure, time-domain
@@ -354,11 +364,11 @@ def validate_case(case):
         case = {k: v for k, v in case.items() if k not in V2_SECTIONS}
         ob = case.get('observation')
         if isinstance(ob, dict):
-            extra = [k for k in bw.OBS_V2_KEYS if k in ob and ob[k] is not None]
+            extra = [k for k in bw.OBS_V2_ALL if k in ob and ob[k] is not None]
             if extra:
                 raise ValueError(f'observation fields {extra} need case_schema '
                                  f'{CASE_SCHEMA_V2!r}')
-            case['observation'] = {k: v for k, v in ob.items() if k not in bw.OBS_V2_KEYS}
+            case['observation'] = {k: v for k, v in ob.items() if k not in bw.OBS_V2_ALL}
     _keys('case', case, TOP_REQUIRED, TOP_OPTIONAL + (V2_SECTIONS if v2 else ()))
     out = {'case_schema': case['case_schema'], 'name': _text('name', case['name'])}
     if not isinstance(case['synthetic'], bool):
@@ -465,7 +475,8 @@ def validate_case(case):
         raise ValueError(f'model_options.bite_model must be one of {BITE_MODELS}')
 
     ob = case['observation']
-    _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()))
+    _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()),
+          bw.OBS_V2_OPTIONAL if v2 else ())
     if ob['orientation'] is not None and ob['orientation'] not in ORIENTATIONS:
         raise ValueError(f'observation.orientation must be one of {ORIENTATIONS} or null')
     if ob['faces'] is not None and ob['faces'] not in ('both', 'one'):
@@ -507,7 +518,7 @@ def validate_case(case):
     if v2:
         out['observation'].update(bw.validate_observation_v2(ob))
     else:
-        out['observation'].update({k: None for k in bw.OBS_V2_KEYS})
+        out['observation'].update({k: None for k in bw.OBS_V2_ALL})
 
     sched = case.get('schedule', [])
     labels = set()
@@ -597,6 +608,15 @@ def _bite_pass(case, row=None):
                     src['friction_coefficient'], src['entry_tension_pa'], src['exit_tension_pa'])
 
 
+# chatter.BitePass.validate requires 2e-5 m <= exit thickness; both roll-bite models (slab /
+# Hitchcock and the experimental mattress model) take a BitePass, so neither can represent a
+# thinner pass (SPEC9 addendum: 16-18 um collector-foil final passes). Not changed here.
+BITE_FLOOR_M = 2e-5
+BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
+BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 20 um floor of the roll-bite '
+                     'models: chatter.BitePass.validate requires 2e-5 m <= exit thickness)')
+
+
 class _BiteCache:
     """Caches bite derivations per (BitePass, options) within one diagnose call.
 
@@ -628,6 +648,9 @@ class _BiteCache:
                o['max_radius_ratio'], model)
         if key not in self.store:
             try:
+                if bite_pass.exit_thickness_m < BITE_FLOOR_M:
+                    raise ValueError(BITE_FLOOR_REASON.format(
+                        bite_pass.exit_thickness_m * 1e6))
                 bite_pass.validate()
                 self.derivations += 1
                 if model == 'mattress':
@@ -1108,6 +1131,8 @@ def _schedule_rows(case, cache, stand, spans, beta):
             ripple = resp['exit_thickness_per_unit_disturbance'] * RUNOUT_REFERENCE_M
             out.update(
                 separating_force_n=b.separating_force_n,
+                separating_force_per_width_n_m=b.separating_force_n / p['width_m'],
+                bite_model=bw.bite_model_name(b),
                 contact_radius_ratio=b.contact_radius_ratio,
                 forward_slip_fraction=b.forward_slip_fraction,
                 strip_modulus_n_m=b.strip_modulus_n_m,
@@ -1802,7 +1827,7 @@ def _hypotheses(ctx):
     return out, leading
 
 
-def _next_measurements(hyps, obs, law):
+def _next_measurements(hyps, obs, law, exit_thickness_m=None):
     lines = []
     for h in hyps[:3]:
         if h['confirming_test'] not in lines:
@@ -1827,7 +1852,7 @@ def _next_measurements(hyps, obs, law):
         lines.append('Record the mark orientation (transverse, diagonal, chevron, '
                      'longitudinal or irregular).')
     if obs['orientation'] in (None, 'longitudinal'):
-        for line in bw.lengthwise_next_measurements(obs):
+        for line in bw.lengthwise_next_measurements(obs, exit_thickness_m):
             topic = bw.measurement_topic(line)
             if topic is None or not any(topic in x for x in lines):
                 lines.append(line)
@@ -1867,6 +1892,18 @@ def _strip_map(hyps, ctx):
         elif lead['id'] == 'coil_or_mandrel_locked_marks' and pr['coil_pitches_m']:
             name = pr.get('matched_coil') or sorted(pr['coil_pitches_m'])[0]
             pitch, basis = pr['coil_pitches_m'][name], name
+        elif (lead['id'] == 'torsional_or_low_frequency_drive_vibration'
+              and pr.get('torsional_modes_hz')):
+            # SPEC9 9.5: the computed torsional mode matching the observed frequencies best
+            # (smallest worst relative mismatch), else the lowest mode; pitch = u_op / f
+            modes = pr['torsional_modes_hz']
+            if ctx.freqs:
+                f = min(modes, key=lambda m: (max(abs(fo - m) / m for _, fo in ctx.freqs), m))
+                how = 'best-matching computed torsional mode'
+            else:
+                f, how = min(modes), 'lowest computed torsional mode (no observed frequency)'
+            pitch = ctx.u_op / f
+            basis = f'u_op / {how} ({f:.4g} Hz)'
     observed = None
     if ctx.pitches:
         near = min(ctx.pitches, key=lambda p: (abs(p['exit_speed_m_s'] - ctx.u_op),
@@ -1915,6 +1952,199 @@ def _process_inputs(eff, cache, flags):
         except ValueError as exc:
             out['friction'] = bp.failed('process.friction', exc)
     return out
+
+
+FOIL_GAUGE_M = bw.FOIL_GAUGE_M
+CLOSED_GAP_FLAG = 'CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED'
+CLOSED_GAP_ONSET_RANGE_M = (50e-6, 200e-6)
+CLOSED_GAP_SOURCES = (
+    {'source': 'S8 Mysteel foil-rolling reference', 'tag': 'V',
+     'onset_exit_gauge_m': [100e-6, 200e-6], 'text': 'rolls touch outside the strip at 0.1-0.2 mm'},
+    {'source': 'S16 Publitec, The engineering design of rolling mill', 'tag': 'V',
+     'onset_exit_gauge_m': [50e-6, 100e-6], 'text': 'below 100 um, about 80 um; force '
+                                                     'ineffective for gauge below 50 um'},
+    {'source': 'S17 Jiangsu Huafeng foil flatness note', 'tag': 'V',
+     'onset_exit_gauge_m': [None, 50e-6], 'text': 'below 50 um'})
+FOIL_LOAD_RANGE_N_M = (0.9e6, 2.3e6)    # [V S3, S4; kN/mm conversion D]
+FOIL_SOURCES = (
+    '[S3] alfoilworld.com battery-foil rolling procedure (passes, tensions, speeds, load).',
+    '[S4] alfoilworld.com 1235D procedure (passes, roughness, oil, H18 UTS).',
+    '[S5] SMM / Shenhuo battery-foil quality note (tension lines, ridge marks, offline sag).',
+    '[S8] Mysteel foil-rolling reference (closed gap 0.1-0.2 mm, roll sizes).',
+    '[S11] Sutcliffe & Montmitonnet 2001, Rev. Metall. (film ratio 1.76 -> 0.22).',
+    '[S16] Publitec, The engineering design of rolling mill (closed gap ~80 um).',
+    '[S17] Jiangsu Huafeng foil flatness note (closed gap < 50 um, online vs offline).',
+    '[S25] foil defect compilation (hot spot, creasing, mill lines).',
+    '[S26] EAFA, Surface Characteristics of Aluminium Foil (2020).',
+    '[S27] CNFA foil rolling research note (wrinkle rule, tension lines).',
+    '[S28] patent text on battery-foil tension lines.')
+BITE_RELIABILITY = {
+    'hitchcock': 'Slab model with circular (Hitchcock) flattening: not valid toward foil gauge '
+                 '(flag THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN); force, slip and sensitivities '
+                 'are indicative only and assume an open roll gap.',
+    'experimental_mattress': 'EXPERIMENTAL elastic-foundation (mattress) foil model with a '
+                             'foundation modulus from a memory formula and no elastic strip '
+                             'zones (forward slip flagged implausible); not validated; it '
+                             'models the contact on the strip only, not the load the rolls '
+                             'carry outside the strip in closed gap.',
+    'supplied': 'Supplied bite sensitivities, not verified by the tool.',
+    None: 'No bite: chatter, levers, gauge control, forward slip and the derived shape chain '
+          'are not assessable.'}
+
+
+def _largest_model_band(width):
+    """(largest linear-feedback |I| of a model band, where) from the width section, or None."""
+    best = None
+    if not isinstance(width, dict):
+        return None
+    st = (width.get('shape') or {}).get('steady')
+    if isinstance(st, dict) and st.get('status') not in ('FAILED', 'NOT_ASSESSABLE'):
+        v = st.get('linear_feedback_peak_i_units', st.get('feedback_peak_i_units'))
+        if _is_num(v):
+            best = (abs(v), 'steady stripes (linear exit-tension feedback)')
+    te = width.get('thermal_events')
+    for e in (te.get('events') or []) if isinstance(te, dict) else []:
+        ps = e.get('peak_shape')
+        v = ps.get('linear_feedback_peak_i_units') if isinstance(ps, dict) else None
+        if _is_num(v) and (best is None or abs(v) > best[0]):
+            best = (abs(v), f'event {e.get("label")} at its peak (linear exit-tension feedback)')
+    return best
+
+
+def _foil_regime(eff, bite, bite_error, result, flags):
+    """SPEC9 9.2 foil-regime block for an exit gauge below 100 um (None otherwise).
+
+    Closed-gap rolling (work rolls touching outside the strip) is reported for exit gauges
+    between 50 and 200 um, sources disagree [V S8, S16, S17]; the tool has NO roll-kissing
+    model. Wrinkle rule of thumb [V S27] evaluated as I = 1e5 * exit tension / E_strip [D].
+    """
+    p, m = eff['pass'], eff['material']
+    h1 = p['exit_thickness_m']
+    below = [{'label': 'case pass', 'exit_thickness_m': h1}] if h1 < BITE_FLOOR_M else []
+    below += [{'label': r['label'], 'exit_thickness_m': r['exit_thickness_m']}
+              for r in eff['schedule'] if r['exit_thickness_m'] < BITE_FLOOR_M
+              and not bw.is_case_pass(eff, r)]
+    if below:
+        flags.append(BITE_FLOOR_FLAG)
+    if h1 >= FOIL_GAUGE_M:
+        return None
+    flags.append(CLOSED_GAP_FLAG)
+    lo, hi = CLOSED_GAP_ONSET_RANGE_M
+    if h1 < lo:
+        where, where_text = ('BELOW_EVERY_REPORTED_ONSET',
+                             f'{h1 * 1e6:.3g} um is below every reported closed-gap onset '
+                             '(50-200 um): the work rolls very likely touch outside the strip.')
+    else:
+        where, where_text = ('INSIDE_REPORTED_ONSET_RANGE',
+                             f'{h1 * 1e6:.3g} um lies inside the reported closed-gap onset '
+                             'range (50-200 um): the work rolls may touch outside the strip.')
+    model = bw.bite_model_name(bite)
+    fpw = bite.separating_force_n / p['width_m'] if bite is not None else None
+    bite_block = {'model': model, 'reliability': BITE_RELIABILITY[model],
+                  'flags': list(bite.flags) if bite is not None else [],
+                  'fallback_reason': result.get('bite_fallback_reason'),
+                  'bite_error': bite_error,
+                  'separating_force_n': bite.separating_force_n if bite is not None else None,
+                  'separating_force_per_width_n_m': fpw,
+                  'forward_slip_fraction': (bite.forward_slip_fraction if bite is not None
+                                            else None),
+                  'reported_battery_foil_load_per_width_n_m': list(FOIL_LOAD_RANGE_N_M),
+                  'reported_load_basis': '0.9-2.3 kN/mm of width for battery-foil passes '
+                                         '[V S3, S4; conversion D]',
+                  'force_per_width_within_reported_range': (
+                      None if fpw is None else FOIL_LOAD_RANGE_N_M[0] <= fpw
+                      <= FOIL_LOAD_RANGE_N_M[1])}
+    passes = []
+    sw = result.get('schedule_sweep') or {}
+    for row in sw.get('rows') or []:
+        passes.append({'label': row['label'], 'exit_thickness_m': row['exit_thickness_m'],
+                       'bite_model': row.get('bite_model'),
+                       'separating_force_per_width_n_m': row.get(
+                           'separating_force_per_width_n_m'),
+                       'rejected': row.get('rejected')})
+    e_strip = m['youngs_modulus_pa']
+    wrinkle = 1e5 * p['exit_tension_pa'] / e_strip
+    band = _largest_model_band(result.get('width'))
+    if band is None:
+        comp = 'MODEL_BAND_NOT_ASSESSABLE'
+        comp_text = ('No model band I-units available (no width model, or its shape chain is '
+                     'not assessable).')
+    elif band[0] >= wrinkle:
+        comp = 'MODEL_BAND_AT_OR_ABOVE_WRINKLE_ONSET'
+        comp_text = (f'The largest model band ({band[0]:.3g} I-units, {band[1]}) reaches the '
+                     f'rule-of-thumb wrinkle onset of {wrinkle:.3g} I-units at this tension.')
+    else:
+        comp = 'MODEL_BAND_BELOW_WRINKLE_ONSET'
+        comp_text = (f'The largest model band ({band[0]:.3g} I-units, {band[1]}) stays below '
+                     f'the rule-of-thumb wrinkle onset of {wrinkle:.3g} I-units at this '
+                     'tension.')
+    temper = m['temper']
+    return {
+        'status': STATUS, 'exit_thickness_m': h1,
+        'closed_gap_onset_range_m': [lo, hi],
+        'closed_gap_onset_sources': [dict(x) for x in CLOSED_GAP_SOURCES],
+        'closed_gap_note': 'Reported onsets of closed-gap rolling disagree (50-200 um exit '
+                           'gauge); the tool has no roll-kissing model.',
+        'case_position': where, 'case_position_text': where_text,
+        'implications': [
+            'In closed gap the load is no longer a gauge actuator: more screw-down only bends '
+            'the rolls and changes flatness; the gauge is set by tension, speed and '
+            'lubrication [V S8, S16, S17].',
+            'The lever table (critical chatter speed against friction, reduction, tensions, '
+            'span, damping) and the gauge-control section assume an OPEN roll gap; read them '
+            'as open-gap reasoning, not as foil-mill predictions.',
+            'The local transfer of a roll stripe to the strip is by roll / strip compliance, '
+            'which the shape chain models, but without the load shunted outside the strip '
+            'where the rolls touch; the transfer may be misestimated.',
+            'Online (shapemeter) and offline flatness diverge at foil gauge: front tension '
+            'masks the true shape [V S17, S8]; the in-mill and after-release states of the '
+            'shape chain are the tool\'s proxy for that difference.',
+            'Foil band defects with no physical model in the tool (tension lines, hot spots '
+            'from roll wipers, creasing from ironing rolls) are screened by rules only.'],
+        'bite': bite_block,
+        'schedule_bites': passes,
+        'below_bite_model_floor': {
+            'floor_exit_thickness_m': BITE_FLOOR_M,
+            'passes': below,
+            'case_pass_below_floor': h1 < BITE_FLOOR_M,
+            'text': (None if not below else
+                     'No roll-bite result exists for '
+                     + ', '.join(f'{x["label"]} ({x["exit_thickness_m"] * 1e6:.3g} um)'
+                                 for x in below)
+                     + ': the exit gauge is below the 20 um floor of both roll-bite models '
+                       '(chatter.BitePass.validate). For such a pass the chatter, lever, '
+                       'process-friction fixed point (and pass heating) and gauge-control '
+                       'sections are not assessable, and its strip-shape chain runs only with '
+                       'supplied width_model.shape_inputs (case pass). Collector foil of '
+                       '16-18 um may in practice be rolled as a DOUBLED (two-sheet) pass, which '
+                       'the tool does not model at all. Ask the plant: single-sheet or '
+                       'doubled?')},
+        'wrinkle_rule': {
+            'wrinkle_onset_i_units': wrinkle,
+            'formula': 'wrinkle_onset_i_units = 1e5 * exit_tension_pa / strip_youngs_modulus_pa '
+                       '[D]: residual compression E*I*1e-5 exceeding the tension',
+            'source_rule': 'At 20 MPa tension, flatness worse than 30 I-units necessarily '
+                           'wrinkles [V S27] (3e-4 x 70 GPa = 21 MPa, the same condition [D]).',
+            'exit_tension_pa': p['exit_tension_pa'], 'strip_youngs_modulus_pa': e_strip,
+            'model_largest_band_i_units': band[0] if band else None,
+            'model_largest_band_basis': band[1] if band else None,
+            'comparison': comp, 'comparison_text': comp_text},
+        'product_question': {
+            'case_temper': temper,
+            'text': 'Ask the plant which product this is: 25-60 um can be pouch-laminate '
+                    'barrier foil (8021 / 8079, annealed O temper, 35-50 um), thick collector '
+                    'foil (1235 / 1060 / 1070 / 1100-H18, 21-35 um), or an intermediate pass of '
+                    'thinner collector foil; a final pass of 16-18 um (plant statement) points '
+                    'to cathode current-collector foil in H18 with 25-60 um as intermediate '
+                    'passes. Ask also whether the last pass is single-sheet or doubled (doubling '
+                    'starts at about 18-32 um entry, or not at all for two-side-bright foil '
+                    '[V S3]). O against H18 changes buckling and winding behaviour; this case '
+                    f'uses temper {temper}.'},
+        'flags': [CLOSED_GAP_FLAG] + ([BITE_FLOOR_FLAG] if below else []),
+        'limitations': [
+            'No roll-kissing (closed-gap) model; the bite models see only the strip contact.',
+            'Foil facts are cited from a research pass (tags V / D / M), not plant-validated.'],
+        'sources': list(FOIL_SOURCES)}
 
 
 def _family_summary(obs, hyps, leading):
@@ -2158,7 +2388,8 @@ def diagnose(case):
     def get_bite(src):
         return cache.get(bp.bite_pass(eff, src))
     try:
-        result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags)
+        result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags,
+                                           bite_error)
     except ValueError as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
@@ -2167,7 +2398,17 @@ def diagnose(case):
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
     result['family_summary'] = _family_summary(obs, hyps, leading)
-    result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law)
+    result['foil_regime'] = _foil_regime(eff, bite, bite_error, result, flags)
+    if result['foil_regime'] is not None:
+        note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
+                'rolling (not modelled), where load is no longer a gauge actuator.')
+        for key in ('levers', 'gauge_control'):
+            sec = result.get(key)
+            if (isinstance(sec, dict) and not sec.get('not_supplied')
+                    and sec.get('status') not in ('NOT_ASSESSABLE', 'FAILED')):
+                sec['foil_regime_note'] = note
+    result['recommended_next_measurements'] = _next_measurements(hyps, obs, ctx.law,
+                                                                 h1)
     result['strip_map'] = _strip_map(hyps, ctx)
     result['bite_derivations'] = cache.derivations
     if bite is not None:

@@ -993,6 +993,15 @@ def _width_chart(r):
 
 def _stripe_table(w):
     rows_src = _get(w, 'shape', 'steady_stripe_table') or []
+    st = _get(w, 'shape', 'steady')
+    if not rows_src and isinstance(st, dict) and _bad(st):
+        # SPEC9 9.1: stripes exist (thermal) but the shape chain is not assessable
+        stripes = _get(w, 'thermal_steady', 'stripes') or []
+        listed = ', '.join(f'{_f(x.get("peak_position_m"), 1, 4)} m '
+                           f'({_um(x.get("peak_deviation_m"))})' for x in stripes)
+        return ('<p>Steady radius stripes: ' + (_e(listed) if listed else 'none') + '. Their '
+                'flatness, band states and onset heights are '
+                + _e(_bad(st)) + '.</p>')
     if not rows_src:
         return '<p>No steady stripe above the stripe threshold.</p>'
     has = lambda k: any(k in x for x in rows_src)  # noqa: E731
@@ -1210,8 +1219,10 @@ def _other_width_results(w):
                              f'<em>rejected: {_e(x["rejected"])}</em>', '', '', '', '', ''])
                 continue
             c = x.get('coil') or {}
+            est = (' (proportional estimate, no bite)'
+                   if x.get('transfer_basis') == 'PROPORTIONAL_TRANSFER_LIMIT_NO_BITE' else '')
             rows.append([_f(x.get('position_m'), 1, 4, 'm'), _um(x.get('entry_ridge_height_m')),
-                         _um(x.get('exit_ridge_height_m')),
+                         _um(x.get('exit_ridge_height_m')) + est,
                          _f(x.get('peak_i_units'), digits=3), _txt(x.get('state')),
                          _txt(c.get('status')) if c else 'no coil data',
                          _f(c.get('ridge_to_critical_ratio'), digits=3) if c else 'n/a'])
@@ -1247,8 +1258,19 @@ def _width_section(r):
     if _bad(w):
         return head + _state_p(_bad(w)) + '</section>'
     ts = w.get('thermal_steady')
+    sc = w.get('shape_chain')
+    pre = ''
+    if isinstance(sc, dict) and sc.get('status') == 'NOT_ASSESSABLE':
+        pre = ('<p class="warn">Strip-shape chain not assessable: '
+               + _e(sc.get('reason') or 'no reason given') + '. Thickness transfer, flatness, '
+               'band states, onset heights and the case-pass gauge trend are not computed; '
+               'troughs, coil ridges, positions and pitches below need no bite and are '
+               'evaluated.</p>')
+    elif isinstance(sc, dict) and sc.get('basis') == 'shape_inputs_supplied':
+        pre = ('<p class="note">Strip-shape chain from SUPPLIED shape inputs (not verified by '
+               'the tool): ' + _e(sc.get('provenance') or 'no provenance given') + '.</p>')
     if not isinstance(ts, dict) or _bad(ts) or not ts.get('z_m'):
-        body = _state_p('Steady roll thermal solution ' + (_bad(ts) or 'not available'))
+        body = pre + _state_p('Steady roll thermal solution ' + (_bad(ts) or 'not available'))
     else:
         st = _get(w, 'shape', 'steady')
         intro = ('<p>Upper panel: steady roll radius growth with the actual spray header and '
@@ -1267,7 +1289,7 @@ def _width_section(r):
                       f'compliance only, {_f(st.get("rigid_transfer_bound_i_units"), digits=4)} '
                       f'rigid); status {_txt(st.get("status"))}.')
         intro += '</p>'
-        body = intro + _wide(_width_chart(r))
+        body = pre + intro + _wide(_width_chart(r))
         if isinstance(st, dict) and _bad(st):
             body += _state_p('Flatness (shape chain) ' + _bad(st))
         if isinstance(st, dict) and not _bad(st):
@@ -1475,7 +1497,9 @@ def _event_table(events):
         cells = []
         for e in events:
             if 'shape_error' in e and label.startswith('state'):
-                cells.append(f'<em>shape failed: {_e(e["shape_error"])}</em>')
+                word = ('not assessable' if 'NOT_ASSESSABLE' in str(e['shape_error'])
+                        else 'shape failed')
+                cells.append(f'<em>{word}: {_e(e["shape_error"])}</em>')
             else:
                 cells.append(fn(e))
         body.append([_e(label)] + cells)
@@ -1873,6 +1897,8 @@ def _gc_block(gc):
     out = ['<h3>Gauge control (AGC)</h3>']
     if _bad(gc):
         return out[0] + _state_p(_bad(gc))
+    if gc.get('foil_regime_note'):
+        out.append(f'<p class="warn">{_e(gc["foil_regime_note"])}</p>')
     inp = gc.get('inputs') or {}
     ff = inp.get('force_filter_hz')
     out.append(f'<p>Loop: bandwidth {_f(inp.get("bandwidth_hz"), unit="Hz")}, compensation '
@@ -1981,6 +2007,74 @@ def _dynamics_section(r):
     return ('<section><h2>Gauge control, drive and incoming variation</h2>'
             + _gc_block(r.get('gauge_control')) + _drive_block(r.get('drive'))
             + _incoming_block(r.get('incoming_variation')) + '</section>')
+
+
+# ------------------------------------------------------------------------------ foil regime
+CSS3 = ('.foil{border:3px solid #b91c1c;background:#fef2f2;padding:.7rem 1rem;'
+        'border-radius:6px;margin:1rem 0}.foil h2{margin-top:.2rem;color:#7f1d1d}'
+        '.foil p{margin:.35rem 0}')
+BITE_MODEL_NAMES = {'hitchcock': 'slab + circular (Hitchcock) flattening',
+                    'experimental_mattress': 'EXPERIMENTAL mattress (elastic-foundation) model',
+                    'supplied': 'supplied sensitivities', None: 'no bite'}
+
+
+def _foil_block(r):
+    """SPEC9 9.2: the foil-regime warning, shown near the top of a foil case (exit < 100 um)."""
+    fr = r.get('foil_regime')
+    if not isinstance(fr, dict):
+        return ''
+    b = fr.get('bite') or {}
+    wr = fr.get('wrinkle_rule') or {}
+    pq = fr.get('product_question') or {}
+    srcs = []
+    for x in fr.get('closed_gap_onset_sources') or []:
+        g = (list(x.get('onset_exit_gauge_m') or []) + [None, None])[:2]
+        rng = (f'{_um(g[0])} to {_um(g[1])}' if _ok(g[0]) and _ok(g[1]) else
+               f'below {_um(g[1])}' if _ok(g[1]) else
+               f'from {_um(g[0])}' if _ok(g[0]) else 'n/a')
+        srcs.append(f'{_e(x.get("source"))}: {_e(x.get("text"))} [{_e(x.get("tag"))}] '
+                    f'({_e(rng)})')
+    lo, hi = (fr.get('closed_gap_onset_range_m') or [None, None])[:2]
+    fpw = b.get('separating_force_per_width_n_m')
+    rng = b.get('reported_battery_foil_load_per_width_n_m') or [None, None]
+    inside = b.get('force_per_width_within_reported_range')
+    rows = []
+    for x in fr.get('schedule_bites') or []:
+        rows.append([_e(x.get('label')), _um(x.get('exit_thickness_m')),
+                     _e(BITE_MODEL_NAMES.get(x.get('bite_model'), str(x.get('bite_model'))))
+                     if not x.get('rejected') else f'<em>rejected: {_e(x["rejected"])}</em>',
+                     _f(x.get('separating_force_per_width_n_m'), 1e-6, 3, 'kN/mm')])
+    sched = (_table(('pass', 'exit gauge', 'bite model', 'force per width'), rows)
+             if rows else '')
+    return ('<div class="foil"><h2>Foil gauge: closed-gap rolling likely — not modelled</h2>'
+            f'<p><strong>{_e(fr.get("case_position_text") or "")}</strong> Reported onsets of '
+            f'closed-gap rolling (work rolls touching outside the strip) range from '
+            f'{_um(lo)} to {_um(hi)}; the sources disagree:</p>' + _ul(srcs)
+            + '<p><strong>What this means for the results below.</strong></p>'
+            + _ul([_e(x) for x in fr.get('implications') or []])
+            + f'<p><strong>Bite model for the case pass:</strong> '
+            f'{_e(BITE_MODEL_NAMES.get(b.get("model"), str(b.get("model"))))}. '
+            f'{_e(b.get("reliability") or "")} Force per width {_f(fpw, 1e-6, 3, "kN/mm")} '
+            f'(battery-foil passes are reported at {_f(rng[0], 1e-6, 2)}–'
+            f'{_f(rng[1], 1e-6, 2, "kN/mm")} [V S3, S4]; '
+            + ('inside' if inside else 'outside' if inside is False else 'not assessed')
+            + ').'
+            + (f' Forward slip {_f(b.get("forward_slip_fraction"), digits=3)}.'
+               if _ok(b.get('forward_slip_fraction')) else '')
+            + (f' Hitchcock rejected the pass: {_e(b["fallback_reason"])}.'
+               if b.get('fallback_reason') else '')
+            + (f' Bite error: {_e(b["bite_error"])}.' if b.get('bite_error') else '')
+            + '</p>' + sched
+            + (f'<p class="warn"><strong>Below the roll-bite model floor.</strong> '
+               f'{_e(_get(fr, "below_bite_model_floor", "text"))}</p>'
+               if _get(fr, 'below_bite_model_floor', 'text') else '')
+            + f'<p><strong>Wrinkle rule of thumb.</strong> {_e(wr.get("source_rule") or "")} '
+            f'At this exit tension ({_mpa(wr.get("exit_tension_pa"))}) the onset is '
+            f'<strong>{_f(wr.get("wrinkle_onset_i_units"), digits=3)} I-units</strong>; '
+            f'{_e(wr.get("comparison_text") or "")}</p>'
+            f'<p><strong>Ask the plant.</strong> {_e(pq.get("text") or "")}</p>'
+            '<p class="note">Flags: ' + _e(', '.join(fr.get('flags') or [])) + '. '
+            + _e(' '.join(fr.get('limitations') or [])) + '</p></div>')
 
 
 # ------------------------------------------------------------------------------ family + layout
@@ -2258,7 +2352,9 @@ def _levers_blocks(r):
                              _n(x['ratio_to_baseline'], 3)])
         dirs = ''.join(f'<li>{_e(d["direction"])}</li>' for d in lv['directions'])
         s.append('<section><h2>Levers</h2>'
-                 f'<p>Baseline critical exit speed {_n(lv["baseline_critical_exit_speed_m_s"])} '
+                 + (f'<p class="warn">{_e(lv["foil_regime_note"])}</p>'
+                    if lv.get('foil_regime_note') else '')
+                 + f'<p>Baseline critical exit speed {_n(lv["baseline_critical_exit_speed_m_s"])} '
                  f'm/s (beta = {_n(lv["bite_damping_transit_fraction"])}), '
                  f'{_n(lv["baseline_critical_exit_speed_without_bite_damping_m_s"])} m/s with '
                  f'beta = 0. {_e(lv["note"])}</p>'
@@ -2340,6 +2436,10 @@ def render_band_report(result):
     v1 = r.get('case_schema', V1_SCHEMA) == V1_SCHEMA
     css = CSS
     s = _head_blocks(r)
+    foil = _foil_block(r)
+    if foil:
+        css += CSS3
+        s.insert(len(s) - 1, foil)       # before the (long) provenance paragraph
     if v1:
         s.append(_lead_block(r))
         s += _next_blocks(r)
@@ -2349,7 +2449,7 @@ def render_band_report(result):
         s += _levers_blocks(r)
         s.append(_hyp_section(r))
     else:
-        css = CSS + CSS2
+        css = css + CSS2
         fs = r.get('family_summary') or {}
         lengthwise = 'lengthwise' in (fs.get('observed_family'), fs.get('leading_family'))
         fam = fs.get('observed_family') or fs.get('leading_family')

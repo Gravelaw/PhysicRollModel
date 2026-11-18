@@ -762,7 +762,7 @@
   "family_summary": {
     "leading_family": "lengthwise",
     "not_contradicted_per_family": {
-      "lengthwise": 7,
+      "lengthwise": 8,
       "transverse": 1
     },
     "observed_family": "lengthwise",
@@ -778,6 +778,7 @@
     "SYNTHETIC_INPUTS",
     "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN"
   ],
+  "foil_regime": null,
   "forced_response": {
     "entry_thickness": {
       "roll_orders": [
@@ -2338,6 +2339,22 @@
           "observed": "not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "tracks speed changes",
+          "expected": "n/a (a thermal stripe follows the heat input slowly)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes after roll wiper cleaning",
+          "expected": "false (a wiper-debris band would)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
         }
       ],
       "family": "lengthwise",
@@ -2370,7 +2387,7 @@
         "contradiction_points": 0,
         "contradicts": 0,
         "neutral": 1,
-        "not_observed": 1,
+        "not_observed": 3,
         "observation_supports": 9,
         "strong_contradictions": 0,
         "support_points": 20,
@@ -2600,6 +2617,30 @@
           "observed": "false",
           "verdict": "NEUTRAL",
           "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with ironing-roll pressure",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at lower tension",
+          "expected": "false (troughs need tension; a crease from a loose band is the exception)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "input",
+          "criterion": "exit gauge (creasing possible below 50 um)",
+          "expected": "< 50 um",
+          "observed": "210 um",
+          "verdict": "NEUTRAL",
+          "weight": null
         }
       ],
       "family": "lengthwise",
@@ -2626,8 +2667,8 @@
       "tallies": {
         "contradiction_points": 0,
         "contradicts": 0,
-        "neutral": 2,
-        "not_observed": 2,
+        "neutral": 3,
+        "not_observed": 4,
         "observation_supports": 4,
         "strong_contradictions": 0,
         "support_points": 8,
@@ -2636,7 +2677,7 @@
       "title": "Tension troughs or creases"
     },
     {
-      "confirming_test": "Compare band appearance with oil temperature and speed; check whether the bands wander between coils.",
+      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
       "evidence": [
         {
           "basis": "observation",
@@ -2701,6 +2742,30 @@
           "observed": "false",
           "verdict": "NEUTRAL",
           "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "tracks speed changes",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
+          "expected": "0.3-3",
+          "observed": "Lambda = 0.18 (tribology inlet film at the operating point)",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with exit air blow-off",
+          "expected": "n/a",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
         }
       ],
       "family": "lengthwise",
@@ -2708,11 +2773,14 @@
       "levers": [
         "lower the oil inlet temperature",
         "increase coolant flow",
-        "reduce speed"
+        "reduce speed",
+        "regrind for uniform roll roughness"
       ],
-      "mechanism": "Local oil-film variation from heat: milky bands that wander in width and position (QCA-1).",
+      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
       "model_prediction": {
         "exit_temperature_above_limit": false,
+        "film_ratio_at_operating_point": 0.18011497000136134,
+        "film_ratio_basis": "tribology inlet film at the operating point",
         "regime_at_operating_point": "BOUNDARY"
       },
       "rank": 4,
@@ -2721,14 +2789,14 @@
       "tallies": {
         "contradiction_points": 1,
         "contradicts": 1,
-        "neutral": 2,
-        "not_observed": 2,
+        "neutral": 3,
+        "not_observed": 4,
         "observation_supports": 2,
         "strong_contradictions": 0,
         "support_points": 5,
         "supports": 3
       },
-      "title": "Heat streak / oil-film variation"
+      "title": "Heat streak / friction or oil-film band (no roll bump)"
     },
     {
       "confirming_test": "Entry and exit profile measurements; shapemeter map; compare the relative crowns.",
@@ -3052,6 +3120,126 @@
       "title": "Coil- or mandrel-locked marks"
     },
     {
+      "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "longitudinal",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "band spacing 3-30 mm",
+          "expected": "3-30 mm (> 60 mm contradicts)",
+          "observed": "368 mm (gaps between observed band positions)",
+          "verdict": "CONTRADICTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "input",
+          "criterion": "exit gauge (tension lines on thin foil)",
+          "expected": "<= 60 um (> 100 um contradicts)",
+          "observed": "210 um",
+          "verdict": "CONTRADICTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at lower tension",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with tension",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with ironing-roll pressure",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with exit air blow-off",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false",
+          "observed": "true",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade or crease_or_flute",
+          "observed": "loose_or_buckle",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at thinner gauge",
+          "expected": "true (onset below about 15-30 um reported)",
+          "observed": "true",
+          "verdict": "SUPPORTS",
+          "weight": "weak"
+        }
+      ],
+      "family": "lengthwise",
+      "id": "foil_tension_lines",
+      "levers": [
+        "raise front (exit) tension (risks ridging)",
+        "adjust ironing-roll pressure per side",
+        "reduce or redirect the exit air blow-off",
+        "raise work-roll roughness"
+      ],
+      "mechanism": "Fine parallel lengthwise stripes at 5-20 mm pitch on thin foil, wider and more visible at low strip tension and vanishing above a threshold tension, worse at thinner gauge [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. Rule-based: the tool has no physical model of them.",
+      "model_prediction": {
+        "case_exit_thickness_m": 0.00021,
+        "model": "NONE: rule-based hypothesis, the tool has no physical model of tension lines (5-20 mm pitch reported, vanishing above a threshold tension)",
+        "reported_onset_exit_gauge_m": [
+          1.5e-05,
+          3e-05
+        ],
+        "reported_pitch_m": [
+          0.005,
+          0.02
+        ]
+      },
+      "rank": 9,
+      "score": -2,
+      "standing": "WEAKENED",
+      "tallies": {
+        "contradiction_points": 5,
+        "contradicts": 3,
+        "neutral": 1,
+        "not_observed": 4,
+        "observation_supports": 2,
+        "strong_contradictions": 0,
+        "support_points": 3,
+        "supports": 2
+      },
+      "title": "Foil tension lines (fine lengthwise stripes, worse at low tension)"
+    },
+    {
       "confirming_test": "Inspect the work-roll surface at the band positions; work-roll change test; compare the positions with the edges of earlier narrower widths.",
       "evidence": [
         {
@@ -3117,6 +3305,30 @@
           "observed": "not observed",
           "verdict": "NOT_OBSERVED",
           "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes after roll wiper cleaning",
+          "expected": "true (wiper debris)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "appeared after a narrower coil",
+          "expected": "true (wide coil rolled after a narrow one)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "disappears after backup-roll change",
+          "expected": "true (backup-roll lines printed through the work roll)",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
         }
       ],
       "family": "lengthwise",
@@ -3131,14 +3343,14 @@
         "note": "settle by roll inspection and a work-roll change test",
         "two_tone_positions_m": []
       },
-      "rank": 9,
+      "rank": 10,
       "score": -3,
       "standing": "CONTRADICTED",
       "tallies": {
         "contradiction_points": 7,
         "contradicts": 2,
         "neutral": 1,
-        "not_observed": 3,
+        "not_observed": 6,
         "observation_supports": 2,
         "strong_contradictions": 1,
         "support_points": 4,
@@ -3250,7 +3462,7 @@
         "predicted_pitch_at_operating_speed_m": 0.06296820268085604,
         "speed_ratio": 0.8666794676141101
       },
-      "rank": 10,
+      "rank": 11,
       "score": -4,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3323,7 +3535,7 @@
         "reduction_fraction": 0.29999999999999993,
         "risk_level": "LOW"
       },
-      "rank": 11,
+      "rank": 12,
       "score": -5,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3403,7 +3615,7 @@
         "pitch_two_marks_m": 1.8994877654026905,
         "roll_diameter_m": 1.15
       },
-      "rank": 12,
+      "rank": 13,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3505,7 +3717,7 @@
           }
         ]
       },
-      "rank": 13,
+      "rank": 14,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3582,7 +3794,7 @@
       "model_prediction": {
         "grinding_feed_pitch_m": 0.008
       },
-      "rank": 14,
+      "rank": 15,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3690,7 +3902,7 @@
           }
         ]
       },
-      "rank": 15,
+      "rank": 16,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3758,7 +3970,7 @@
           37.562660420225384
         ]
       },
-      "rank": 16,
+      "rank": 17,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3831,7 +4043,7 @@
         "pitch_two_marks_m": 0.6606913966618054,
         "roll_diameter_m": 0.4
       },
-      "rank": 17,
+      "rank": 18,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3895,7 +4107,7 @@
         "forward_slip_fraction": 0.051523016370145,
         "forward_slip_status": "NORMAL"
       },
-      "rank": 18,
+      "rank": 19,
       "score": -8,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3991,7 +4203,7 @@
         "luders_susceptibility": "NOT_SUSCEPTIBLE_COLD_WORKED",
         "pass_reduction_vs_luders": "BITE_CANNOT_LEAVE_LUDERS_BANDS"
       },
-      "rank": 19,
+      "rank": 20,
       "score": -11,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -4159,6 +4371,7 @@
     ],
     "observation": {
       "appearance": "loose_or_buckle",
+      "appeared_after_narrower_coil": null,
       "band_positions_across_width_m": [
         0.357,
         0.667,
@@ -4166,7 +4379,10 @@
       ],
       "band_spacing_m": null,
       "band_width_m": null,
+      "changes_after_roll_wiper_cleaning": null,
       "changes_with_coolant_zone_switching": null,
+      "changes_with_exit_air_blowoff": null,
+      "changes_with_ironing_roll_pressure": null,
       "changes_with_tension": null,
       "disappears_after_backup_roll_change": null,
       "disappears_after_work_roll_change": null,
@@ -4183,8 +4399,10 @@
       "pitch_observations": [],
       "positions_change_after_work_roll_change": false,
       "positions_repeat_across_coils": true,
+      "tracks_speed_changes": null,
       "visible_only_after_tension_release": false,
       "worse_at_higher_speed": null,
+      "worse_at_lower_tension": null,
       "worse_at_thinner_gauge": true,
       "worse_toward_outer_wraps": null
     },
@@ -4388,6 +4606,7 @@
       "roll_heat_fraction_per_roll": null,
       "rolls_carrying_stripe": 1,
       "shape_disturbing_coefficient": null,
+      "shape_inputs": null,
       "spray_header": {
         "background_htc_w_m2k": 50.0,
         "nozzle_pitch_m": 0.052,
@@ -5153,6 +5372,7 @@
         "bite_flags": [
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.071734482443758,
         "critical_exit_speed_m_s": 10.930380198128585,
         "critical_exit_speed_without_bite_damping_m_s": 3.018870070634419,
@@ -5173,6 +5393,7 @@
         "reduction_fraction": 0.3636363636363637,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.0004275885971432057,
         "separating_force_n": 3900470.5951052625,
+        "separating_force_per_width_n_m": 2600313.730070175,
         "speed_ratio": 0.2744643777819949,
         "speed_ratio_without_bite_damping": 0.9937492935459613,
         "stable_at_operating_speed": true,
@@ -5192,6 +5413,7 @@
         "bite_flags": [
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.1423459863413128,
         "critical_exit_speed_m_s": 13.726725396976455,
         "critical_exit_speed_without_bite_damping_m_s": 3.6702872489812837,
@@ -5212,6 +5434,7 @@
         "reduction_fraction": 0.35714285714285715,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.00046741450096415274,
         "separating_force_n": 4837425.416830259,
+        "separating_force_per_width_n_m": 3224950.2778868396,
         "speed_ratio": 0.36425293399555697,
         "speed_ratio_without_bite_damping": 1.3622911943439273,
         "stable_at_operating_speed": true,
@@ -5231,6 +5454,7 @@
         "bite_flags": [
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.2266523083760932,
         "critical_exit_speed_m_s": 15.553523138143605,
         "critical_exit_speed_without_bite_damping_m_s": 4.635811628111625,
@@ -5251,6 +5475,7 @@
         "reduction_fraction": 0.33333333333333337,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.0005278154327826227,
         "separating_force_n": 4621473.349514284,
+        "separating_force_per_width_n_m": 3080982.233009523,
         "speed_ratio": 0.48220585994480764,
         "speed_ratio_without_bite_damping": 1.6178396797919694,
         "stable_at_operating_speed": true,
@@ -5270,6 +5495,7 @@
         "bite_flags": [
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.318197748953203,
         "critical_exit_speed_m_s": 16.16733930106215,
         "critical_exit_speed_without_bite_damping_m_s": 5.536347075336496,
@@ -5290,6 +5516,7 @@
         "reduction_fraction": 0.29999999999999993,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.0006133686062300942,
         "separating_force_n": 3892858.8736478915,
+        "separating_force_per_width_n_m": 2595239.2490985943,
         "speed_ratio": 0.6185309662761286,
         "speed_ratio_without_bite_damping": 1.8062451403287798,
         "stable_at_operating_speed": true,
@@ -5309,6 +5536,7 @@
         "bite_flags": [
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.4124243947530781,
         "critical_exit_speed_m_s": 15.837755749524554,
         "critical_exit_speed_without_bite_damping_m_s": 5.944415058315372,
@@ -5329,6 +5557,7 @@
         "reduction_fraction": 0.2857142857142858,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.0007032879675325432,
         "separating_force_n": 3363757.223215308,
+        "separating_force_per_width_n_m": 2242504.815476872,
         "speed_ratio": 0.820823366996947,
         "speed_ratio_without_bite_damping": 2.186926698837237,
         "stable_at_operating_speed": true,
@@ -5349,6 +5578,7 @@
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
           "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
         ],
+        "bite_model": "hitchcock",
         "contact_radius_ratio": 1.4860253458546073,
         "critical_exit_speed_m_s": 13.845949336996423,
         "critical_exit_speed_without_bite_damping_m_s": 5.159625839460436,
@@ -5369,6 +5599,7 @@
         "reduction_fraction": 0.29999999999999993,
         "relative_ripple_per_um_runout_at_work_roll_2x": 0.0008156058395132064,
         "separating_force_n": 2973038.128677693,
+        "separating_force_per_width_n_m": 1982025.4191184621,
         "speed_ratio": 0.8666794676141101,
         "speed_ratio_without_bite_damping": 2.325750039513503,
         "stable_at_operating_speed": true,
@@ -12610,6 +12841,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.0065444158866739465,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 0.11716446014224421,
           "compliance_only_i_units": 158.60503990933682,
@@ -12634,6 +12866,8 @@
           "reporting_onset_stripe_height_m": 1.636148876822073e-07,
           "rigid_i_units": 193.78470214704532,
           "saturated": false,
+          "separating_force_per_width_n_m": 2600313.730070175,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 13.880964863441896,
           "shohet_townsend_lower_i_units": -18.50795315125586,
           "shohet_townsend_upper_i_units": 9.25397657562793,
@@ -12652,6 +12886,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.005342567234816313,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 0.0,
           "compliance_only_i_units": 238.46937423991477,
@@ -12676,6 +12911,8 @@
           "reporting_onset_stripe_height_m": 1.5644481247597923e-07,
           "rigid_i_units": 301.44287000651497,
           "saturated": false,
+          "separating_force_per_width_n_m": 3224950.2778868396,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 6.102567279187436,
           "shohet_townsend_lower_i_units": -8.136756372249915,
           "shohet_townsend_upper_i_units": 4.068378186124957,
@@ -12694,6 +12931,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.0042888412917292005,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 0.004482521275548972,
           "compliance_only_i_units": 342.00443033775343,
@@ -12718,6 +12956,8 @@
           "reporting_onset_stripe_height_m": 1.4978890133007175e-07,
           "rigid_i_units": 452.1643050097725,
           "saturated": false,
+          "separating_force_per_width_n_m": 3080982.233009523,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 2.8706671149661354,
           "shohet_townsend_lower_i_units": -3.8275561532881803,
           "shohet_townsend_upper_i_units": 1.9137780766440902,
@@ -12736,6 +12976,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.003444089827600149,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 0.0,
           "compliance_only_i_units": 466.98383604890637,
@@ -12760,6 +13001,8 @@
           "reporting_onset_stripe_height_m": 1.3716646714699706e-07,
           "rigid_i_units": 645.9490071568177,
           "saturated": false,
+          "separating_force_per_width_n_m": 2595239.2490985943,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 1.4786493226790671,
           "shohet_townsend_lower_i_units": -1.9715324302387562,
           "shohet_townsend_upper_i_units": 0.9857662151193781,
@@ -12778,6 +13021,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.002910952828288097,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 0.054535615476107836,
           "compliance_only_i_units": 628.209343026267,
@@ -12802,6 +13046,8 @@
           "reporting_onset_stripe_height_m": 1.238741215105741e-07,
           "rigid_i_units": 904.328610019545,
           "saturated": false,
+          "separating_force_per_width_n_m": 2242504.815476872,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 0.7908006949899837,
           "shohet_townsend_lower_i_units": -1.0544009266533116,
           "shohet_townsend_upper_i_units": 0.5272004633266558,
@@ -12821,6 +13067,7 @@
             "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED"
           ],
           "bite_half_length_m": 0.002585847599211085,
+          "bite_model": "hitchcock",
           "bite_source": "derived_slab_hitchcock",
           "buckling_utilisation": 1377.3002055138595,
           "compliance_only_i_units": 879.1107180284788,
@@ -12845,6 +13092,8 @@
           "reporting_onset_stripe_height_m": 1.071057870240787e-07,
           "rigid_i_units": 1291.8980143136355,
           "saturated": true,
+          "separating_force_per_width_n_m": 1982025.4191184621,
+          "shape_inputs_basis": "derived_bite",
           "shohet_townsend_half_width_i_units": 0.4073328133118873,
           "shohet_townsend_lower_i_units": -0.5431104177491831,
           "shohet_townsend_upper_i_units": 0.27155520887459156,
@@ -12875,6 +13124,7 @@
       },
       "roll_heat_fraction_basis": "(1 - tribology.strip_heat_fraction)/2",
       "roll_heat_fraction_per_roll": 0.08000000000000002,
+      "shape_inputs_basis": "derived_bite",
       "strip_centre_m": 0.85,
       "strip_stiffness_per_width_pa": 11860809889.049934,
       "strip_width_m": 1.5,
@@ -13211,6 +13461,7 @@
           "status": "SOME_GAPS_MATCH"
         }
       },
+      "steady_stripes_basis": "roll thermal steady state",
       "tolerance_basis": "one quarter of the nozzle pitch",
       "tolerance_m": 0.013
     },
@@ -16357,6 +16608,30 @@
           }
         }
       ]
+    },
+    "shape_chain": {
+      "basis": "derived_bite",
+      "parts_needing_it": [
+        "shape.steady",
+        "shape.steady_stripe_table",
+        "shape.nozzle_pattern_ripple",
+        "thermal_events peak shapes and thresholds",
+        "gauge_trend (case pass)",
+        "incoming ridge flatness in the pass"
+      ],
+      "parts_without_it": [
+        "thermal_steady",
+        "thermal_events (radius histories)",
+        "troughs",
+        "coil ridge build-up and critical ridge height",
+        "positions",
+        "two_tone",
+        "grinding_feed_pitch_m",
+        "shape.crown (Shohet-Townsend window)"
+      ],
+      "provenance": null,
+      "reason": null,
+      "status": "EVALUATED"
     },
     "status": "SCREENING_RESULT_NOT_PLANT_VALIDATED",
     "thermal_events": {

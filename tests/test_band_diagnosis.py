@@ -217,8 +217,9 @@ class BandDiagnosisTests(unittest.TestCase):
             for e in h['evidence']:
                 if e['basis'] == 'observation':
                     self.assertEqual(e['verdict'], 'NOT_OBSERVED', (h['id'], e))
-        # SPEC6 6.3: ten transverse + nine lengthwise hypotheses (was 12 in phase 1)
-        self.assertEqual(len(self.empty['hypotheses']), 19)
+        # SPEC6 6.3: ten transverse + nine lengthwise hypotheses (was 12 in phase 1); SPEC9
+        # 9.4 adds the tenth lengthwise one (foil_tension_lines)
+        self.assertEqual(len(self.empty['hypotheses']), 20)
         self.assertEqual(sorted(h['id'] for h in self.empty['hypotheses']),
                          sorted(HYPOTHESIS_IDS))
         lines = ' '.join(self.empty['recommended_next_measurements'])
@@ -271,7 +272,7 @@ class BandDiagnosisTests(unittest.TestCase):
         margin = next(e for e in h['evidence'] if e['criterion'] == 'speed margin')
         self.assertEqual(margin['verdict'], 'NEUTRAL')
         self.assertIn('NOT_ASSESSABLE', margin['expected'])
-        self.assertEqual(len(r['hypotheses']), 19)
+        self.assertEqual(len(r['hypotheses']), 20)
         self.assertGreater(r['stand_modes']['natural_frequencies']['fifth_octave_candidate_hz'],
                            0)
 

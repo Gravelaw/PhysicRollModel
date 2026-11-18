@@ -33,7 +33,14 @@
     "observation.appearance: 'gloss_or_shade' (bright/dull stripe), 'loose_or_buckle' (wavy, loose band), 'tight' (tight stripe), 'stain' (oil/coolant stain, often after annealing), 'crease_or_flute' (sharp fold or flute).",
     "observation.visible_only_after_tension_release: true if the bands are invisible in the mill and show only on the coil or after slitting (latent tension stripes).",
     "observation.worse_toward_outer_wraps: true if the band is stronger toward the outside of the wound coil; changes_with_tension: true if changing the strip tension changes the bands.",
-    "observation.follows_previous_strip_edges: true if band edges line up with the edges of narrower strip rolled earlier on the same work rolls; worse_at_higher_speed: true if the bands get worse as the mill speeds up."
+    "observation.follows_previous_strip_edges: true if band edges line up with the edges of narrower strip rolled earlier on the same work rolls; worse_at_higher_speed: true if the bands get worse as the mill speeds up.",
+    "Battery foil (exit gauge below 100 um): the result then carries a foil_regime block and the flag CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED: the mill is in or near closed-gap rolling, which the tool does not model; the lever table and the gauge-control section assume an open gap.",
+    "observation.worse_at_lower_tension: true if the bands are more visible when the strip tension is lower and fade above some tension (step the exit tension and note at which tension they fade). Note: a band hidden under mill tension (a latent thermal stripe) is also worse at lower tension.",
+    "observation.changes_with_ironing_roll_pressure: true if the bands change when the ironing-roll pressure (per side) is changed; changes_with_exit_air_blowoff: true if they change when the exit air blow-off is reduced or redirected.",
+    "observation.changes_after_roll_wiper_cleaning: true if the bands change or go after the roll wipers are cleaned (wiper debris), false if they stay.",
+    "observation.tracks_speed_changes: true if the bands appear, move or fade when the mill speed changes, false if they ignore speed changes.",
+    "observation.appeared_after_narrower_coil: true if the bands started when a wider coil was rolled after a narrower one (without a backup-roll change).",
+    "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -143,7 +150,13 @@
     "worse_toward_outer_wraps": null,
     "changes_with_tension": null,
     "follows_previous_strip_edges": null,
-    "worse_at_higher_speed": null
+    "worse_at_higher_speed": null,
+    "worse_at_lower_tension": null,
+    "changes_with_ironing_roll_pressure": null,
+    "changes_with_exit_air_blowoff": null,
+    "changes_after_roll_wiper_cleaning": null,
+    "tracks_speed_changes": null,
+    "appeared_after_narrower_coil": null
   },
   "width_model": {
     "roll": {
@@ -182,7 +195,8 @@
     "grinding": null,
     "cooling_zone_pitch_m": null,
     "deflector_roll_radius_m": null,
-    "lateral_compressive_stress_pa": null
+    "lateral_compressive_stress_pa": null,
+    "shape_inputs": null
   },
   "tribology": {
     "lubricant": {
