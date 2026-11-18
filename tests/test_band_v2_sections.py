@@ -596,5 +596,59 @@ class ZeroFeedbackSensitivityTests(unittest.TestCase):
             validate_case(bad)
 
 
+def _coverage_case(positions, standoff=0.1, half_angle_tan=0.1):
+    """No width model, phase-1 coolant coverage: 1.7 m barrel, 0.1 m nozzle pitch, flat fans
+    of footprint 2*standoff*half_angle_tan (0.02 m by default)."""
+    import math
+    c = v2(orientation='longitudinal', band_positions_across_width_m=positions)
+    c['coolant'] = {'barrel_length_m': 1.7, 'nozzle_pitch_m': 0.1, 'standoff_m': standoff,
+                    'spray_angle_rad': 2 * math.atan(half_angle_tan), 'offset_angle_rad': 0.0,
+                    'blocked_nozzle_indices': [], 'roll_expansion_coefficient_per_k': 1.2e-5,
+                    'assumed_excess_temperature_k': 5.0}
+    r = diagnose(c)
+    h = _h(r)['nozzle_thermal_stripe']
+    e = next(x for x in h['evidence'] if x['criterion'].startswith('band positions vs model'))
+    return r, h, e
+
+
+class CoverageIntervalMatchTests(unittest.TestCase):
+    """Review finding: phase-1 band-risk stripes are intervals; the nozzle hypothesis matched
+    only their centres and contradicted a band the coverage screen had matched."""
+
+    def test_band_inside_an_uncovered_interval_matches_as_in_the_screen(self):
+        r, h, e = _coverage_case([0.065])      # inside the 0.06-0.14 m gap, 0.035 m off centre
+        self.assertEqual(r['screens']['band_position_match']['status'],
+                         'ALL_OBSERVED_POSITIONS_MATCHED')
+        self.assertEqual((e['verdict'], e['weight']), ('SUPPORTS', 'strong'))
+        self.assertIn('inside model intervals 0.06-0.14 m', e['observed'])
+        self.assertIn('inside an interval widened by 0.025 m', e['expected'])
+        pred = h['model_prediction']
+        self.assertAlmostEqual(pred['model_intervals_m'][0][0], 0.06)
+        self.assertAlmostEqual(pred['model_intervals_m'][0][1], 0.14)
+
+    def test_band_outside_every_interval_still_contradicts(self):
+        # footprint 0.09 m: gaps of 0.01 m around x.x0 m; 0.15 m is 0.045 m from the nearest
+        r, h, e = _coverage_case([0.15], half_angle_tan=0.45)
+        self.assertEqual(r['screens']['band_position_match']['status'],
+                         'NO_OBSERVED_POSITIONS_MATCHED')
+        self.assertEqual((e['verdict'], e['weight']), ('CONTRADICTS', 'weak'))
+        self.assertIn('no observed position inside or within 0.025 m', e['observed'])
+
+    def test_point_sources_still_match_by_centre(self):
+        def run(x):
+            c = v2(**LONG, band_positions_across_width_m=[x])
+            c['width_model'] = width_model(blocked_nozzle_indices=[12],
+                                           bite_heat_per_width_w_m=4e5)
+            h = _h(diagnose(c))['nozzle_thermal_stripe']
+            return h, next(x for x in h['evidence']
+                           if x['criterion'].startswith('band positions vs model'))
+        h, e = run(NOZZLES[12])
+        self.assertEqual(e['verdict'], 'SUPPORTS')
+        self.assertNotIn('model_intervals_m', h['model_prediction'])
+        h, e = run(NOZZLES[12] + 0.03)       # tolerance: a quarter of the 52 mm pitch
+        self.assertEqual((e['verdict'], e['weight']), ('CONTRADICTS', 'weak'))
+        self.assertIn('no observed position near', e['observed'])
+
+
 if __name__ == '__main__':
     unittest.main()

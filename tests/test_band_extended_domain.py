@@ -270,5 +270,32 @@ class CredibilityGateTests(unittest.TestCase):
                              for h in r['hypotheses'] for e in h['evidence']))
 
 
+class LargeForwardSlipTests(unittest.TestCase):
+    """Reviewer's case: a mattress bite with forward slip >= 0.5 crashed the roll-speed
+    kinematics; now the kinematics use zero slip with a flag (fixed in d993e21)."""
+
+    def test_slip_above_half_does_not_crash(self):
+        c = foil_case(friction=0.03, h0=30e-6, h1=12e-6, schedule=False, width=False,
+                      orientation='longitudinal')
+        c['pass'].update(width_m=1.2, work_roll_radius_m=0.14, mean_flow_stress_pa=175e6,
+                         entry_tension_pa=35e6, exit_tension_pa=40e6)
+        c['model_options']['bite_model'] = 'auto'
+        c['schedule'] = [dict(label='same pass', entry_thickness_m=30e-6,
+                              exit_thickness_m=12e-6, mean_flow_stress_pa=175e6,
+                              friction_coefficient=0.03, entry_tension_pa=35e6,
+                              exit_tension_pa=40e6, exit_speed_m_s=13.0)]
+        r = diagnose(c)
+        self.assertGreaterEqual(r['bite']['forward_slip_fraction'], 0.5)
+        for f in ('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES',
+                  'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'):
+            self.assertIn(f, r['flags'])
+        self.assertEqual(r['signatures']['forward_slip_fraction_used'], 0.0)
+        row = r['schedule_sweep']['rows'][0]
+        self.assertNotIn('rejected', row)
+        self.assertGreaterEqual(row['forward_slip_fraction'], 0.5)
+        json.dumps(r, allow_nan=False)
+        self.assertIn('Simulated', render_band_report(r))
+
+
 if __name__ == '__main__':
     unittest.main()

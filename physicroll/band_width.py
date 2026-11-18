@@ -1899,6 +1899,9 @@ class Facts:
         self.gaps, self.spacing, self.gap_basis = observed_gaps(obs)
         self.header_known = False
         self.l1_predicted, self.l1_source = [], None
+        # interval sources (phase-1 band-risk stripes) keep their bounds: a band anywhere
+        # inside an uncovered zone matches it (review finding), as in screens.band_position_match
+        self.l1_intervals = None
         self.steady_bands = []      # (position, with_feedback state) per steady stripe
         self.events = []
         self.event_positions = []
@@ -1959,6 +1962,7 @@ class Facts:
         elif screens is not None and screens.get('spray_coverage') is not None:
             self.header_known = True
             self.l1_predicted = [s['center_m'] for s in screens['band_risk_stripes'] or []]
+            self.l1_intervals = [dict(s) for s in screens['band_risk_stripes'] or []]
             self.l1_source = 'phase-1 spray coverage band-risk stripes (no width model)'
         self.process = process
         fr = (process or {}).get('friction') if isinstance(process, dict) else None
@@ -2041,6 +2045,38 @@ def _spacing_multiple(facts, pitch, criterion, weight, pitch_name):
               'NEUTRAL')
 
 
+def _fmt_intervals(stripes):
+    return ', '.join(f'{s["start_m"]:.4g}-{s["end_m"]:.4g} m' for s in stripes) or 'none'
+
+
+def _interval_hits(f):
+    """Observed positions inside a band-risk interval widened by the tolerance: the same
+    ``band_signatures.match_band_positions`` the coolant screen uses, so they cannot disagree."""
+    from .band_signatures import match_band_positions
+    m = match_band_positions(f.l1_intervals, f.positions, f.tol)
+    return [r['observed_position_m'] for r in m['matches'] if r['matched_stripes']]
+
+
+def _interval_match_ev(f, crit):
+    hits = _interval_hits(f)
+    model = f'model intervals {_fmt_intervals(f.l1_intervals)} ({f.l1_source})'
+    exp = f'inside an interval widened by {f.tol:.3g} m ({f.tol_basis})'
+    if hits:
+        return ev(crit, f'observed {_fmt_pos(hits)} inside {model}', exp, 'SUPPORTS', 'strong')
+    return ev(crit, f'no observed position inside or within {f.tol:.3g} m of {model}', exp,
+              'CONTRADICTS', 'weak')
+
+
+def _interval_pred(f):
+    # keys only where the interval matching was used, so results without observed positions
+    # (the v1 demos) keep their exact content
+    if not f.l1_intervals or not f.positions:
+        return {}
+    return {'model_intervals_m': [[s['start_m'], s['end_m']] for s in f.l1_intervals],
+            'position_match_basis': 'interval (band-risk stripe bounds widened by the '
+                                    'tolerance), as screens.band_position_match'}
+
+
 def _h_nozzle(f):
     o = f.obs
     e = [_orientation(o)]
@@ -2051,6 +2087,8 @@ def _h_nozzle(f):
     elif not f.positions:
         e.append(ev(crit, f'positions not observed (model: {_fmt_pos(f.l1_predicted)})',
                     'match', 'NOT_OBSERVED'))
+    elif f.l1_intervals:
+        e.append(_interval_match_ev(f, crit))
     else:
         hits = _match_any(f.l1_predicted, f.positions, f.tol)
         if hits:
@@ -2105,7 +2143,7 @@ def _h_nozzle(f):
     e.append(_rule(o, 'changes_after_roll_wiper_cleaning', 'changes after roll wiper cleaning',
                    'false (a wiper-debris band would)', ('CONTRADICTS', 'weak'), None))
     pred = {'model_positions_m': f.l1_predicted, 'model_position_source': f.l1_source,
-            'position_tolerance_m': f.tol, 'steady_model_bands': [
+            'position_tolerance_m': f.tol, **_interval_pred(f), 'steady_model_bands': [
                 {'position_m': x, 'state': s, 'state_after_tension_release': r}
                 for x, s, r in f.steady_bands]}
     return e, pred
