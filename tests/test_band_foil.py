@@ -404,6 +404,60 @@ class TensionLinesPlantedTruthTests(unittest.TestCase):
         self.assertEqual(diagnose(c)['leading_hypotheses'], [])
 
 
+class CasePassIdentityTests(unittest.TestCase):
+    """Review finding: a schedule row is the case pass only if every bite-defining parameter
+    matches (gauges, flow stress, friction, tensions), not just the gauges."""
+
+    def row(self, c, **kw):
+        p = c['pass']
+        r = {k: p[k] for k in ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
+                               'friction_coefficient', 'entry_tension_pa', 'exit_tension_pa',
+                               'exit_speed_m_s')}
+        r['label'] = 'row'
+        r.update(kw)
+        return r
+
+    def test_same_gauges_other_friction_gets_its_own_bite(self):
+        # 0.12 -> 0.084 mm, 285 MPa, max_radius_ratio 2: friction 0.03 fails (R'/R 2.56),
+        # the same gauges at friction 0.02 solve
+        c = v2(override=False, orientation='longitudinal')
+        c['pass'].update(entry_thickness_m=0.12e-3, exit_thickness_m=0.084e-3,
+                         mean_flow_stress_pa=285e6, friction_coefficient=0.03)
+        c['model_options']['max_radius_ratio'] = 2.0
+        c['schedule'] = [self.row(c, label='same gauges mu 0.02', friction_coefficient=0.02),
+                         self.row(c, label='identical to the case pass', exit_speed_m_s=8.0)]
+        c['width_model'] = width_model(bite_heat_per_width_w_m=3e5)
+        r = diagnose(c)
+        self.assertIsNotNone(r['bite_error'])
+        self.assertNotIn('rejected', r['schedule_sweep']['rows'][0])
+        rows = r['width']['gauge_trend']['rows']
+        self.assertNotIn('rejected', rows[0])
+        self.assertEqual(rows[0]['bite_model'], 'hitchcock')
+        self.assertEqual(rows[0]['shape_inputs_basis'], 'derived_bite')
+        self.assertGreater(rows[0]['linear_feedback_i_units'], 0)
+        # identical in every bite parameter (exit speed is not one): the case pass
+        self.assertIn('NOT_ASSESSABLE', rows[1]['rejected'])
+        self.assertIn('no bite response for the case pass', rows[1]['rejected'])
+
+    def test_shape_inputs_only_for_the_identical_row(self):
+        c = foil_case(schedule=False)
+        c['width_model']['shape_inputs'] = dict(SHAPE_INPUTS)
+        eff = validate_case(c)
+        self.assertTrue(bw.is_case_pass(eff, None))
+        self.assertTrue(bw.is_case_pass(eff, self.row(eff, exit_speed_m_s=5.0)))
+        w = eff['width_model']
+        same = self.row(eff)
+        sp, basis = bw.shape_params_or_none(eff, None, w, same)
+        self.assertEqual(basis, 'shape_inputs_supplied')
+        self.assertEqual(sp['strip_stiffness_per_width_pa'],
+                         SHAPE_INPUTS['strip_stiffness_per_width_pa'])
+        for k, v in (('exit_tension_pa', 30e6), ('entry_tension_pa', 30e6),
+                     ('mean_flow_stress_pa', 180e6), ('friction_coefficient', 0.04)):
+            other = self.row(eff, **{k: v})
+            self.assertFalse(bw.is_case_pass(eff, other), k)
+            self.assertEqual(bw.shape_params_or_none(eff, None, w, other), (None, None), k)
+
+
 class CollectorFoilBelowFloorTests(unittest.TestCase):
     """SPEC9 addendum: a 0.030 -> 0.017 mm case pass (below the 20 um roll-bite floor)."""
 

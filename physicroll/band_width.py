@@ -374,13 +374,24 @@ def _inside(z, centre, width):
     return [i for i, x in enumerate(z) if abs(x - centre) <= width / 2 * (1 + 1e-12)]
 
 
+CASE_PASS_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
+                  'friction_coefficient', 'entry_tension_pa', 'exit_tension_pa')
+CASE_PASS_REL_TOL = 1e-9
+
+
 def is_case_pass(case, src):
-    """True when ``src`` (a schedule row) has the case pass gauges (it is the case pass)."""
+    """True when ``src`` is None or a schedule row that IS the case pass: every bite-defining
+    parameter (gauges, mean flow stress, friction, tensions; width and roll radius are
+    case-wide) equals the case pass within a relative 1e-9. Exit speed does not define the
+    bite and is not compared. ``case`` must be the EFFECTIVE case (computed flow stress /
+    friction already applied to the pass and every row), so like is compared with like.
+    A row with the case gauges but another friction, flow stress or tension is a different
+    pass: it gets its own bite and never the case pass's ``shape_inputs`` (review finding)."""
+    if src is None:
+        return True
     p = case['pass']
-    return (src is None or (abs(src['entry_thickness_m'] - p['entry_thickness_m'])
-                            <= 1e-9 * p['entry_thickness_m']
-                            and abs(src['exit_thickness_m'] - p['exit_thickness_m'])
-                            <= 1e-9 * p['exit_thickness_m']))
+    return all(abs(src[k] - p[k]) <= CASE_PASS_REL_TOL * max(abs(src[k]), abs(p[k]))
+               for k in CASE_PASS_KEYS)
 
 
 def shape_params_or_none(case, bite, w, src=None):
