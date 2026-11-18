@@ -822,8 +822,9 @@ def _width_chart(r):
     if obs:
         key.append(('observed band position', C_OBS, '6 3', 'diamond'))
     if shape_ok:
-        key += [('flatness, rigid roll (upper bound)', C_RIGID, '2 3', 'line'),
-                ('compliance only (bound)', C_COMP, '9 3 2 3', 'line'),
+        if st.get('i_units_rigid') is not None:
+            key.append(('flatness, rigid roll (upper bound)', C_RIGID, '2 3', 'line'))
+        key += [('compliance only (bound)', C_COMP, '9 3 2 3', 'line'),
                 ('with exit-tension feedback' + (', linear (unsaturated)'
                                                   if _fb_profile_key(st) ==
                                                   'i_units_linear_feedback' else ''),
@@ -1287,7 +1288,9 @@ def _width_section(r):
                        'with feedback')
                       + f' (bounds: {_f(st.get("compliance_only_peak_i_units"), digits=4)} '
                       f'compliance only, {_f(st.get("rigid_transfer_bound_i_units"), digits=4)} '
-                      f'rigid); status {_txt(st.get("status"))}.')
+                      f'rigid); status {_txt(st.get("status"))}.'
+                      + (f' The rigid curve is omitted: {_e(st["rigid_level_reason"])}.'
+                         if st.get('rigid_level_reason') else ''))
         intro += '</p>'
         body = pre + intro + _wide(_width_chart(r))
         if isinstance(st, dict) and _bad(st):

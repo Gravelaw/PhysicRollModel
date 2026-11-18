@@ -307,5 +307,94 @@ class LargeForwardSlipTests(unittest.TestCase):
         self.assertIn('Simulated', render_band_report(r))
 
 
+def _bump_levels(height, q=1e12):
+    """Reviewer's unit case: 8 um pass, one striped roll, a Gaussian roll bump, supplied
+    shape inputs (strip stiffness q, bite half-length 1 mm, exit-tension sensitivity 0.01 m)."""
+    import math
+    from physicroll import band_width as bw
+    z = [i * 0.01 for i in range(171)]
+    dev = [height * math.exp(-0.5 * ((x - 0.85) / 0.04) ** 2) for x in z]
+    sp = {'exit_thickness_m': 8e-6, 'entry_thickness_m': 12e-6,
+          'strip_stiffness_per_width_pa': q, 'bite_half_length_m': 0.001,
+          'roll_radius_m': 0.135, 'strip_width_m': 1.2, 'mean_tension_pa': 40e6,
+          'strip_centre_m': 0.85, 'n_rolls': 1, 'roll_youngs_modulus_pa': 210e9,
+          'roll_poisson_ratio': 0.3, 'strip_youngs_modulus_pa': 70e9,
+          'strip_poisson_ratio': 0.33, 'xi': 1.0, 'yield_stress_pa': 180e6,
+          'exit_tension_force_sensitivity_per_width_m': 0.01,
+          'entry_force_sensitivity_per_width_pa': None}
+    return bw, z, dev, sp, bw.shape_levels(z, dev, sp)
+
+
+class UndefinedBoundLevelTests(unittest.TestCase):
+    """Review finding: a rigid (or compliance-only) thickness change that reaches the exit
+    gauge made shape_levels raise and discarded the compliant results."""
+
+    def test_rigid_bound_undefined_keeps_compliant_levels(self):
+        bw, z, dev, sp, lv = _bump_levels(9e-6)
+        self.assertIsNone(lv['i_units_rigid'])
+        self.assertIsNone(lv['rigid_transfer_bound_i_units'])
+        self.assertEqual(lv['levels']['rigid']['status'], 'RIGID_BOUND_NOT_DEFINED')
+        self.assertIn('reaches or exceeds the exit gauge 8e-06 m', lv['rigid_level_reason'])
+        self.assertIn('RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE', lv['flags'])
+        self.assertGreater(lv['compliance_only_peak_i_units'], 0)
+        self.assertGreater(lv['feedback_peak_i_units'], 0)
+        self.assertLess(abs(lv['peak_local_thickness_change_m']), 1e-6)
+        st = bw.stripe_states(lv, 0.85)
+        self.assertEqual(st['rigid']['state'], 'RIGID_BOUND_NOT_DEFINED')
+        self.assertIn(st['with_feedback']['state'], ('MANIFEST_BUCKLE', 'LATENT_UNDER_TENSION'))
+        json.dumps(lv, allow_nan=False)
+        # the compliance-only level of a very soft strip: undefined too, feedback level kept;
+        # the onset search treats it as before (beyond onset)
+        bw, z, dev, sp, soft = _bump_levels(9e-6, q=1e9)
+        self.assertIsNone(soft['compliance_only_peak_i_units'])
+        self.assertIsNone(soft['i_units_compliance_only'])
+        self.assertEqual(soft['levels']['compliance_only']['status'],
+                         'COMPLIANCE_ONLY_LEVEL_NOT_DEFINED')
+        self.assertIn('compliance_only_level_reason', soft)
+        self.assertGreater(soft['feedback_peak_i_units'], 0)
+        json.dumps(soft, allow_nan=False)
+
+    def test_normal_bump_keeps_the_rigid_bound(self):
+        from physicroll import strip_shape as ss
+        bw, z, dev, sp, lv = _bump_levels(2e-6)
+        self.assertNotIn('rigid_level_reason', lv)
+        self.assertNotIn('compliance_only_level_reason', lv)
+        idx = [i for i, x in enumerate(z) if abs(x - 0.85) <= 0.6 * (1 + 1e-12)]
+        el = ss.differential_elongation([z[i] for i in idx], [8e-6] * len(idx),
+                                        [8e-6 - dev[i] for i in idx])
+        rg = ss.flatness_from_elongation([z[i] for i in idx], el['elongation'],
+                                         youngs_modulus_pa=70e9, poisson_ratio=0.33,
+                                         thickness_m=8e-6, mean_tension_pa=40e6,
+                                         yield_stress_pa=180e6)
+        self.assertEqual(lv['i_units_rigid'], rg['i_units'])
+        self.assertAlmostEqual(lv['rigid_transfer_bound_i_units'], 2e-6 / 8e-6 / 1e-5)
+
+    def test_diagnose_keeps_steady_shape_and_trend_row(self):
+        c = foil_case(friction=0.03, h0=12e-6, h1=8e-6, schedule=False, width=True,
+                      orientation='longitudinal', band_positions_across_width_m=[0.62])
+        w = c['width_model']
+        w.update(rolls_carrying_stripe=1, bite_heat_per_width_w_m=4e6, events=[],
+                 incoming_ridges=[])
+        w['shape_inputs'] = {'strip_stiffness_per_width_pa': 1e12, 'bite_half_length_m': 1e-3,
+                             'exit_tension_force_sensitivity_per_width_m': 0.01,
+                             'provenance': 'review reproducer'}
+        r = diagnose(c)
+        st = r['width']['shape']['steady']
+        self.assertNotEqual(st.get('status'), 'FAILED')
+        self.assertIn('rigid_level_reason', st)
+        row = r['width']['gauge_trend']['rows'][0]
+        self.assertNotIn('rejected', row)
+        self.assertIsNone(row['rigid_i_units'])
+        from physicroll import band_width as bw
+        thick = dict(row, label='thick', exit_thickness_m=2 * row['exit_thickness_m'],
+                     rigid_i_units=10.0)
+        text = bw._trend_text([thick, row], r['width']['gauge_trend']['reference_stripe_peak_m'])
+        self.assertIn('rigid bound not defined on case pass', text)
+        json.dumps(r, allow_nan=False)
+        html = render_band_report(r)
+        self.assertIn('The rigid curve is omitted', html)
+        self.assertNotRegex(html, r'\b(nan|inf|NaN|Infinity)\b')
+
+
 if __name__ == '__main__':
     unittest.main()

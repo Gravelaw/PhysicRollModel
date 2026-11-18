@@ -488,22 +488,38 @@ def _linear_feedback_i_units(fb, sp):
     return [(v - m) / ss.I_UNIT for v in eps]
 
 
+RIGID_NOT_DEFINED = 'RIGID_BOUND_NOT_DEFINED'
+RIGID_NOT_DEFINED_FLAG = 'RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE'
+COMPLIANCE_NOT_DEFINED = 'COMPLIANCE_ONLY_LEVEL_NOT_DEFINED'
+COMPLIANCE_NOT_DEFINED_FLAG = 'COMPLIANCE_ONLY_LEVEL_NOT_DEFINED_CHANGE_REACHES_GAUGE'
+_NOT_DEFINED = (RIGID_NOT_DEFINED, COMPLIANCE_NOT_DEFINED)
+
+
 def shape_levels(z, dev, sp):
     """Rigid bound, compliance-only and exit-tension-feedback flatness of a radius profile."""
     fb = _tsf(z, dev, sp, True)
-    co = _tsf(z, dev, sp, False)
+    co = None if fb.get('compliance_only_level_reason') else _tsf(z, dev, sp, False)
     idx = _inside(z, sp['strip_centre_m'], sp['strip_width_m'])
     zs = [z[i] for i in idx]
     h = sp['exit_thickness_m']
     rigid_exit = [h - sp['n_rolls'] * dev[i] for i in idx]
-    el = ss.differential_elongation(zs, [h] * len(zs), rigid_exit, xi=sp['xi'])
-    rg = ss.flatness_from_elongation(
-        zs, el['elongation'], youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
-        poisson_ratio=sp['strip_poisson_ratio'], thickness_m=h,
-        mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+    rg, rigid_reason = None, None
+    if min(rigid_exit) <= 0:
+        # review finding: the rigid bound is not defined when the rigid thickness change
+        # reaches the gauge; the compliant levels are kept
+        bump = max(dev[i] for i in idx)
+        rigid_reason = (f'rigid bound not defined: the rigid thickness change n_rolls x peak '
+                        f'bump = {sp["n_rolls"]} x {bump:.3g} m = {sp["n_rolls"] * bump:.3g} m '
+                        f'reaches or exceeds the exit gauge {h:.3g} m')
+    else:
+        el = ss.differential_elongation(zs, [h] * len(zs), rigid_exit, xi=sp['xi'])
+        rg = ss.flatness_from_elongation(
+            zs, el['elongation'], youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+            poisson_ratio=sp['strip_poisson_ratio'], thickness_m=h,
+            mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
     peak_dr = max(fb['local_radius_deviation_m'], key=abs)
     peak_dh = fb['peak_local_thickness_change_m']
-    return {
+    out = {
         'status': fb['status'], 'released_status': fb['released_status'],
         'manifest_after_release_band_count': fb['manifest_after_release_band_count'],
         'released_global_status': fb['released_global_status'],
@@ -513,9 +529,10 @@ def shape_levels(z, dev, sp):
         'local_thickness_change_m': fb['local_thickness_change_m'],
         'i_units_with_feedback': fb['flatness']['i_units'],
         'i_units_linear_feedback': _linear_feedback_i_units(fb, sp),
-        'i_units_compliance_only': co['flatness']['i_units'],
-        'i_units_rigid': rg['i_units'],
-        'rigid_transfer_bound_i_units': fb['rigid_transfer_bound_i_units'],
+        'i_units_compliance_only': None if co is None else co['flatness']['i_units'],
+        'i_units_rigid': None if rg is None else rg['i_units'],
+        'rigid_transfer_bound_i_units': (None if rg is None
+                                         else fb['rigid_transfer_bound_i_units']),
         'compliance_only_peak_i_units': fb['compliance_only_peak_i_units'],
         'feedback_peak_i_units': fb['feedback_peak_i_units'],
         'linear_feedback_peak_i_units': fb['linear_feedback_peak_i_units'],
@@ -524,7 +541,7 @@ def shape_levels(z, dev, sp):
                                               if peak_dr else None),
         'compliance_only_peak_transfer_ratio': (
             fb['compliance_only_peak_local_thickness_change_m'] / (-sp['n_rolls'] * peak_dr)
-            if peak_dr else None),
+            if peak_dr and co is not None else None),
         'effective_strip_stiffness_per_width_pa': fb['effective_strip_stiffness_per_width_pa'],
         'tension_feedback_stiffness_per_width_pa':
             fb['tension_feedback_stiffness_per_width_pa'],
@@ -533,20 +550,35 @@ def shape_levels(z, dev, sp):
         'reporting_threshold_i_units': fb['flatness']['reporting_threshold_i_units'],
         'mean_tension_pa': sp['mean_tension_pa'],
         'levels': {
-            'rigid': {'status': rg['status'], 'released_status': rg['released_status'],
-                      'peak_abs_i_units':
-                      max(abs(rg['max_i_units']), abs(rg['min_i_units'])),
-                      'bands': _bands(rg['bands'])},
-            'compliance_only': {'status': co['status'],
-                                'released_status': co['released_status'],
-                                'peak_abs_i_units': co['compliance_only_peak_i_units'],
-                                'bands': _bands(co['bands'])},
+            'rigid': ({'status': RIGID_NOT_DEFINED, 'released_status': None,
+                       'peak_abs_i_units': None, 'bands': [], 'reason': rigid_reason}
+                      if rg is None else
+                      {'status': rg['status'], 'released_status': rg['released_status'],
+                       'peak_abs_i_units':
+                       max(abs(rg['max_i_units']), abs(rg['min_i_units'])),
+                       'bands': _bands(rg['bands'])}),
+            'compliance_only': ({'status': COMPLIANCE_NOT_DEFINED, 'released_status': None,
+                                 'peak_abs_i_units': None, 'bands': [],
+                                 'reason': fb['compliance_only_level_reason']}
+                                if co is None else
+                                {'status': co['status'],
+                                 'released_status': co['released_status'],
+                                 'peak_abs_i_units': co['compliance_only_peak_i_units'],
+                                 'bands': _bands(co['bands'])}),
             'with_feedback': {'status': fb['status'],
                               'released_status': fb['released_status'],
                               'peak_abs_i_units': fb['feedback_peak_i_units'],
                               'bands': _bands(fb['bands']),
                               'saturated_bands': fb['saturated_bands']}},
         'flags': fb['flags']}
+    if rg is None:
+        # keys only when the rigid bound is undefined, so other results keep their content
+        out['rigid_level_reason'] = rigid_reason
+        out['flags'] = sorted(set(out['flags']) | {RIGID_NOT_DEFINED_FLAG})
+    if co is None:
+        out['compliance_only_level_reason'] = fb['compliance_only_level_reason']
+        out['flags'] = sorted(set(out['flags']) | {COMPLIANCE_NOT_DEFINED_FLAG})
+    return out
 
 
 def _band_at(bands, x):
@@ -558,6 +590,13 @@ def stripe_states(levels, x):
     """Per level: the band containing position x (peak I-units and state) or below threshold."""
     out = {}
     for name in ('rigid', 'compliance_only', 'with_feedback'):
+        st = levels['levels'][name]['status']
+        if st in _NOT_DEFINED:
+            out[name] = {'peak_i_units': None, 'state': st,
+                         'state_after_tension_release': st,
+                         'buckling_utilisation': None, 'released_buckling_utilisation': None,
+                         'reason': levels['levels'][name]['reason']}
+            continue
         b = _band_at(levels['levels'][name]['bands'], x)
         out[name] = ({'peak_i_units': b['peak_i_units'], 'state': b['state'],
                       'state_after_tension_release': b['state_after_tension_release'],
@@ -601,9 +640,12 @@ def onset_scale(z, shape, sp, kind='mill', hi=None, lo=None):
 
     def manifest(sc):
         try:
-            return _tsf(z, [sc * v for v in shape], sp)[key] == value
+            r = _tsf(z, [sc * v for v in shape], sp)
         except ValueError:
             return True        # thickness change exceeds the gauge: far beyond onset
+        if r.get('compliance_only_level_reason'):
+            return True        # as before: the compliance-only change reaches the gauge
+        return r[key] == value
     if not manifest(s_hi):
         return None
     s_lo = s_hi * 1e-4 if lo is None or lo >= s_hi else lo
@@ -1513,7 +1555,11 @@ def _trend_text(rows, peak):
     la, lb = a['linear_feedback_i_units'], b['linear_feedback_i_units']
     text = (f'Same {abs(peak) * 1e6:.3g} um roll stripe on every pass, {ga:.3g} mm -> '
             f'{gb:.3g} mm: linear-feedback I-units {la:.3g} -> {lb:.3g} (x{lb / la:.2f}; '
-            f'rigid bound x{b["rigid_i_units"] / a["rigid_i_units"]:.2f}). ')
+            + (f'rigid bound x{b["rigid_i_units"] / a["rigid_i_units"]:.2f}). '
+               if a['rigid_i_units'] and b['rigid_i_units'] else
+               'rigid bound not defined on ' + ', '.join(
+                   r['label'] for r in (a, b) if not r['rigid_i_units'])
+               + ': the rigid thickness change reaches the gauge). '))
     states = [(r['label'], r['state'], r['state_after_tension_release']) for r in ok]
     mill = sum(1 for _, m, _ in states if m == 'MANIFEST_BUCKLE')
     rel = sum(1 for _, _, x in states if x == 'MANIFEST_AFTER_TENSION_RELEASE')

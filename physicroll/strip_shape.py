@@ -1088,13 +1088,22 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
 
     tr_c = transfer_radius_profile(zs, drs, **common)
     feedback = exit_tension_force_sensitivity_per_width_m is not None
+    co_reason = None
     if not feedback:
         tr = tr_c
         dh = tr['local_thickness_change_m']
         exit_profile, el, fl = chain(dh)
         fl_c, fl_lin, saturated = fl, None, []
     else:
-        _, _, fl_c = chain(tr_c['local_thickness_change_m'])
+        try:
+            _, _, fl_c = chain(tr_c['local_thickness_change_m'])
+        except ValueError:
+            # the compliance-only bound is not defined (its thickness change reaches the
+            # gauge on a very soft strip); the level with the feedback is still computed
+            fl_c = None
+            co_reason = ('compliance-only level not defined: its peak thickness change '
+                         f'{abs(_signed_peak(tr_c["local_thickness_change_m"])):.3g} m reaches '
+                         f'or exceeds the exit gauge {h:.3g} m')
         tr = transfer_radius_profile(
             zs, drs, **common,
             exit_tension_force_sensitivity_per_width_m=exit_tension_force_sensitivity_per_width_m,
@@ -1145,10 +1154,11 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     rel_dh = peak_dh / h
     flags = sorted(set(tr['flags'] + el['flags'] + fl['flags']
                        + (['TENSION_FEEDBACK_SATURATED_BAND_SLACK'] if saturated else [])))
-    comp_i = _peak_abs(fl_c['i_units'])
+    comp_i = None if fl_c is None else _peak_abs(fl_c['i_units'])
     reasons = [f'Peak local thickness change {peak_dh:.3e} m = {rel_dh:.3e} of the {h:.3e} m '
                f'gauge; flatness peak {peak_abs_i:.1f} I-units vs compliance-only '
-               f'{comp_i:.1f} and rigid-transfer bound {rigid_i:.1f} I-units.',
+               + ('not defined' if comp_i is None else f'{comp_i:.1f}')
+               + f' and rigid-transfer bound {rigid_i:.1f} I-units.',
                'The same roll stripe is a larger relative thickness error on thinner strip, '
                'and the band buckling stress falls as thickness squared.']
     if feedback and not tr['exit_tension_force_sensitivity_per_width_m']:
@@ -1181,11 +1191,11 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
         'rigid_transfer_bound_i_units': rigid_i,
         'compliance_only_peak_i_units': comp_i,
         'compliance_only_peak_local_thickness_change_m':
-            tr_c['peak_local_thickness_change_m'],
-        'compliance_only_status': fl_c['status'],
+            None if fl_c is None else tr_c['peak_local_thickness_change_m'],
+        'compliance_only_status': None if fl_c is None else fl_c['status'],
         'released_status': fl['released_status'],
         'manifest_after_release_band_count': fl['manifest_after_release_band_count'],
-        'compliance_only_released_status': fl_c['released_status'],
+        'compliance_only_released_status': None if fl_c is None else fl_c['released_status'],
         'released_global_status': fl['released_global_status'],
         'released_global_max_utilisation': fl['released_global_max_utilisation'],
         'linear_feedback_peak_i_units': None if fl_lin is None else _peak_abs(fl_lin['i_units']),
@@ -1205,7 +1215,9 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                                                 'saturation': '[D] planner, approximate'},
         'threshold_basis': fl['threshold_basis'] + ' ' + tr['threshold_basis'],
         'reasons': reasons, 'flags': flags, 'limitations': limitations,
-        'sources': tr['sources'] + el['sources'] + fl['sources']})
+        'sources': tr['sources'] + el['sources'] + fl['sources'],
+        # key only when the bound is undefined, so other results keep their content
+        **({'compliance_only_level_reason': co_reason} if co_reason else {})})
 
 
 # --------------------------------------------------------------------------- W2.3
