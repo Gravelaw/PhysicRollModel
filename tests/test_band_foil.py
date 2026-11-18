@@ -554,6 +554,47 @@ class FoilDemoTests(unittest.TestCase):
         self.assertIn('Below the roll-bite model floor', html)
         json.dumps(r, allow_nan=False)
 
+    def test_foil_gauge_trend_direction_runs_against_thinner_is_worse(self):
+        # Pinned on purpose: this is the model's answer to the plant's "worse at thinner
+        # gauge" at foil gauge, and for this one mechanism (the demo's cooling stripe buckling
+        # in the mill) it runs AGAINST the plant observation: the exit-tension feedback grows
+        # as gauge falls, so the same roll stripe needs a taller height to buckle on the
+        # thinner pass. Only the direction is pinned, not the numbers. The whole schedule
+        # (P1-P3 assessable, P4 below the bite floor) is run with coarse thermal numerics and
+        # cells 64 (the mattress bite uses its own minimum) and without AGC / drive, to keep
+        # the module fast; the published demo result uses the scenario's own numerics.
+        demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
+        demo['width_model']['numerics'] = dict(COARSE)
+        demo['model_options']['cells'] = 64
+        demo['gauge_control'] = demo['drive'] = None
+        r = diagnose(demo)
+        rows = r['width']['gauge_trend']['rows']
+        self.assertEqual(len(rows), 4)
+        ok = [x for x in rows if 'rejected' not in x]
+        self.assertEqual([x['label'][:2] for x in ok], ['P1', 'P2', 'P3'])
+        self.assertTrue(all(a['exit_thickness_m'] > b['exit_thickness_m']
+                            for a, b in zip(ok, ok[1:])))
+
+        # thick -> thin: +1 increases on every step, -1 decreases on every step
+        for key, sign in (('manifest_onset_stripe_height_m', +1),
+                          ('linear_feedback_i_units', -1),
+                          ('rigid_i_units', +1),
+                          ('critical_ridge_height_m', -1),
+                          ('trough_critical_lateral_stress_pa', -1)):   # magnitude
+            vals = [abs(x[key]) for x in ok]
+            self.assertTrue(all(sign * (b - a) > 0 for a, b in zip(vals, vals[1:])),
+                            (key, vals))
+        last = rows[-1]
+        self.assertTrue(last['label'].startswith('P4'))
+        self.assertAlmostEqual(last['exit_thickness_m'], 18e-6)
+        self.assertIn('20 um floor', last['rejected'])
+        # the report's neutral heading and generated direction sentence say the same
+        html = render_band_report(r)
+        self.assertIn('<h2>How the result changes with gauge</h2>', html)
+        self.assertIn('thinner is less sensitive for this mechanism in the model', html)
+        self.assertIn('Not assessable (excluded from the direction): P4', html)
+        self.assertNotIn('Why thin gauge is worse', html)
+
 
 if __name__ == '__main__':
     unittest.main()

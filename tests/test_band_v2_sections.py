@@ -231,7 +231,7 @@ class LengthwiseIntegrationTests(unittest.TestCase):
 NAN_RE = re.compile(r'\b(nan|inf|infinity)\b', re.IGNORECASE)
 H2_RE = re.compile(r'<h2[^>]*>([^<]*)</h2>')
 NEW_HEADINGS = ('Which family of causes', 'Across the width: predicted against observed bands',
-                'Short-lived bands', 'Why thin gauge is worse',
+                'Short-lived bands', 'How the result changes with gauge',
                 'Process: friction, flow stress, pass heating',
                 'Gauge control, drive and incoming variation',
                 'Transverse-band (chatter) screening: supporting detail for this case')
@@ -332,8 +332,8 @@ class LengthwiseReportTests(unittest.TestCase):
             self.assertTrue(any(x.startswith(h) for x in heads), h)
         order = [heads.index(x) for x in heads if x.startswith(
             ('Which family', 'Leading hypotheses', 'Next measurements', 'Across the width',
-             'Short-lived', 'Why thin', 'Hypotheses', 'Transverse-band', 'Chatter stability',
-             'Process:', 'Gauge control', 'Limitations'))]
+             'Short-lived', 'How the result changes', 'Hypotheses', 'Transverse-band',
+             'Chatter stability', 'Process:', 'Gauge control', 'Limitations'))]
         self.assertEqual(order, sorted(order))
         self.assertEqual(len(order), 12)
         self.assertIsNone(NAN_RE.search(self.html))
@@ -351,6 +351,37 @@ class LengthwiseReportTests(unittest.TestCase):
             self.assertIn({'nozzle_pitch_m': 'nozzle pitch',
                            'cooling_zone_pitch_m': 'cooling-zone pitch'}[k], width)
 
+    def test_gauge_section_neutral_heading_and_direction_sentence(self):
+        # the heading asserts no direction; the sentence under it is generated from the rows
+        sec = _section(self.html, 'How the result changes with gauge')
+        self.assertNotIn('Why thin gauge is worse', self.html)
+        lead = re.search(r'<p class="lead">([^<]*)</p>', sec).group(1)
+        self.assertTrue(lead.startswith('Direction for this case (model stripe, thick to thin, '
+                                        'P1 2.20-&gt;1.40 mm to P6 0.30-&gt;0.21 mm)'), lead)
+        self.assertIn('in-mill onset stripe height falls from 3.61 µm to 2.44 µm', lead)
+        self.assertIn('overall, not on every pass', lead)
+        self.assertIn('after-release onset falls from 0.626 µm to ≤ 0.108 µm', lead)
+        self.assertIn('thinner is worse for this mechanism in the model', lead)
+        self.assertNotIn('Not assessable', lead)
+        # synthetic rows: rising, mixed, and a rejected pass named
+        g = copy.deepcopy(self.demo['width']['gauge_trend'])
+        rows = g['rows']
+        for i, x in enumerate(rows):
+            x['manifest_onset_stripe_height_m'] = 1e-6 * (i + 1)
+            x['released_onset_stripe_height_m'] = 1e-7 * (i + 1)
+        rows[2] = {'label': rows[2]['label'], 'exit_thickness_m': rows[2]['exit_thickness_m'],
+                   'rejected': 'unit test'}
+        r = copy.deepcopy(self.demo)
+        r['width']['gauge_trend'] = g
+        sec = _section(self.render(r), 'How the result changes with gauge')
+        self.assertIn('thinner is less sensitive for this mechanism in the model', sec)
+        self.assertIn('Not assessable (excluded from the direction): P3 0.90-&gt;0.60 mm.', sec)
+        for i, x in enumerate(rows):
+            if 'rejected' not in x:
+                x['released_onset_stripe_height_m'] = 1e-7 / (i + 1)
+        sec = _section(self.render(r), 'How the result changes with gauge')
+        self.assertIn('the direction is mixed for this mechanism in the model', sec)
+
     def test_transverse_v2_appends_new_sections_after_chatter(self):
         r = copy.deepcopy(self.demo)
         r['family_summary'].update(observed_family='transverse', leading_family='transverse')
@@ -363,7 +394,7 @@ class LengthwiseReportTests(unittest.TestCase):
                         heads.index('Hypotheses'))
 
     def test_each_new_section_state_renders_a_line_and_no_chart(self):
-        cases = [('width', ('Across the width', 'Short-lived bands', 'Why thin gauge')),
+        cases = [('width', ('Across the width', 'Short-lived bands', 'How the result changes')),
                  ('process', ('Process:',)),
                  ('gauge_control', ('Gauge control, drive',)),
                  ('drive', ('Gauge control, drive',)),
@@ -405,7 +436,7 @@ class LengthwiseReportTests(unittest.TestCase):
                       width)
         self.assertIn('not compared: the smallest gap is', width)
         # utilisations above 1 are capped, never printed as magnitudes
-        thin = _section(html, 'Why thin')
+        thin = _section(html, 'How the result changes')
         self.assertIn('≥ 1', thin)
         cells = re.findall(r'<td>([^<]*) / ([^<]*)</td>', thin)
         self.assertEqual(len(cells), len(self.demo['width']['gauge_trend']['rows']))
@@ -480,7 +511,7 @@ class LengthwiseReportTests(unittest.TestCase):
         c['width_model'] = w(previous_strip_widths_m=[1.2], incoming_ridges=[
             {'position_m': 0.85, 'height_m': 4e-6, 'width_m': 0.03}])
         html = self.render(diagnose(c))
-        for h in ('Across the width', 'Why thin gauge is worse'):
+        for h in ('Across the width', 'How the result changes with gauge'):
             self.assertIn(h, html)
         self.assertIn('Two-tone', html)
         self.assertIn('Incoming ridges and coil build-up', html)

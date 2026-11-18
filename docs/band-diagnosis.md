@@ -1589,7 +1589,7 @@ case". Sections of the lengthwise demo report
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
 | Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines |
 | Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 7.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
-| Why thin gauge is worse | the gauge-trend text, two charts and the table of 7.3 |
+| How the result changes with gauge | a generated direction sentence, then the gauge-trend text, two charts and the table of 7.3 |
 | Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
 | Transverse-band (chatter) screening: supporting detail | Key model numbers, What the model predicts on the strip, Chatter stability, Pass-schedule sweep, Frequency-speed map, Forced response and time trace, Levers (with coolant spray coverage and other screens) |
 | Process: friction, flow stress, pass heating | section 8: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed |
@@ -1612,10 +1612,22 @@ assessable: <reason>" and lists what is still evaluated; with supplied shape inp
 "Strip-shape chain from SUPPLIED shape inputs (not verified by the tool)" with the
 provenance; an incoming ridge without a bite is marked "(proportional estimate, no bite)".
 
-The gauge-trend section keeps its heading "Why thin gauge is worse" in a foil case, although
-its text then says the opposite for the model stripe ("the onsets RISE toward the thin pass
-... the model does not reproduce 'worse at thinner gauge'"). Read the text, not the heading
-(section 3.5).
+The gauge-trend section is headed "How the result changes with gauge", which asserts no
+direction. Directly under the heading one sentence, generated from the `width.gauge_trend`
+rows of the model stripe (first against last assessable pass, a ratio within 1/1.1-1.1
+counting as roughly unchanged), states the direction of the in-mill onset and of the
+after-release onset separately, says whether each changes on every pass or only overall and
+whether the after-release values are reporting-threshold upper bounds, gives the verdict
+(both falling toward the thin pass: "thinner is worse for this mechanism in the model"; both
+rising: "thinner is less sensitive for this mechanism in the model"; otherwise mixed) and
+names any pass that was not assessable. The gauge-trend text follows unchanged. In the sheet
+demo: "... the in-mill onset stripe height falls from 3.61 µm to 2.44 µm (x0.68, overall, not
+on every pass), and the after-release onset falls from 0.626 µm to ≤ 0.108 µm (x0.17, on every
+pass; reporting-threshold upper bounds); thinner is worse for this mechanism in the model." In
+the foil demo: "... the in-mill onset stripe height rises from 1.19 µm to 6.51 µm (x5.5, on
+every pass), and the after-release onset rises from ≤ 0.046 µm to ≤ 0.23 µm (x5, on every
+pass; reporting-threshold upper bounds); thinner is less sensitive for this mechanism in the
+model. Not assessable (excluded from the direction): P4 0.035->0.018 mm." (section 3.5).
 
 **Key model numbers show the values actually used.** The rows "mean flow stress used" and
 "friction coefficient used" give the value every section used; when it differs from the
@@ -1767,8 +1779,6 @@ At battery-foil gauge, in addition (each checked against the code and
 - **Foil facts** come from a research pass over trade, association, patent and journal
   sources (section 15), some not peer-reviewed; product ranges given there without a source
   are tagged [M]. None is plant-validated.
-- **Report heading**: the gauge-trend section is headed "Why thin gauge is worse" even when its
-  text states the opposite (section 12).
 
 ## 15. Sources and disagreements
 

@@ -6,7 +6,7 @@ labels, units, a key, and dash patterns as well as colours. All text is escaped.
 
 A ``physicroll.band_case.v1`` result renders the phase-1 (transverse-band) page unchanged. A
 v2 result adds the family statement, the lengthwise sections (across the width, short-lived
-bands, why thin gauge is worse), process and dynamics sections and a family column in the
+bands, how the result changes with gauge), process and dynamics sections and a family column in the
 hypothesis table; when the observed or leading family is lengthwise those lead the page and
 the chatter sections follow as supporting detail. Sections in a NOT_SUPPLIED / FAILED /
 NOT_ASSESSABLE state render one line instead of charts. Optional result keys (the
@@ -1644,8 +1644,66 @@ def _pass_labels(c, rows):
                        f'{_e(text)}</text>')
 
 
+GAUGE_HEADING = 'How the result changes with gauge'
+GAUGE_TREND_TOL = 1.1   # thin/thick onset ratio within 1/1.1 .. 1.1: "roughly unchanged"
+
+
+def _onset_direction(ok, key, limited_key):
+    """(phrase, sign) for one onset column across the assessable passes, thick -> thin.
+    sign: -1 falls toward the thin pass, +1 rises, 0 roughly unchanged, None not stated."""
+    vals = [x.get(key) for x in ok]
+    if not all(_ok(v) and v > 0 for v in vals):
+        return 'is not stated (not reached on every assessable pass)', None
+    a, b = vals[0], vals[-1]
+    lim = [bool(limited_key and x.get(limited_key)) for x in ok]
+    ua = ('≤ ' if lim[0] else '') + _um(a)
+    ub = ('≤ ' if lim[-1] else '') + _um(b)
+    q = b / a
+    steps = [y / x for x, y in zip(vals, vals[1:])]
+    if q < 1 / GAUGE_TREND_TOL:
+        sign, verb = -1, 'falls'
+        every = all(t < 1 for t in steps)
+    elif q > GAUGE_TREND_TOL:
+        sign, verb = 1, 'rises'
+        every = all(t > 1 for t in steps)
+    else:
+        return f'is roughly unchanged ({ua} to {ub}, x{_f(q, digits=2)})', 0
+    note = ('on every pass' if every else 'overall, not on every pass') if len(vals) > 2 else ''
+    if any(lim):
+        note += ('; ' if note else '') + 'reporting-threshold upper bounds'
+    return f'{verb} from {ua} to {ub} (x{_f(q, digits=2)}{", " + note if note else ""})', sign
+
+
+def _gauge_direction(g):
+    """One sentence on the direction of the gauge trend for this case, from the rows."""
+    rows = [x for x in g.get('rows') or [] if isinstance(x, dict)]
+    ok = [x for x in rows if 'rejected' not in x and _ok(x.get('exit_thickness_m'))]
+    bad = [str(x.get('label', '')) for x in rows if x not in ok]
+    tail = (' Not assessable (excluded from the direction): ' + ', '.join(bad) + '.') if bad else ''
+    if len(ok) < 2:
+        return 'Fewer than two assessable passes: no gauge direction stated.' + tail
+    mill, sm = _onset_direction(ok, 'manifest_onset_stripe_height_m', None)
+    rel, sr = _onset_direction(ok, 'released_onset_stripe_height_m',
+                               'released_onset_limited_by_reporting_threshold')
+    signs = {sm, sr}
+    if signs == {-1}:
+        verdict = 'thinner is worse for this mechanism in the model'
+    elif signs == {1}:
+        verdict = 'thinner is less sensitive for this mechanism in the model'
+    elif signs == {0}:
+        verdict = 'gauge makes little difference for this mechanism in the model'
+    elif None in signs:
+        verdict = 'the direction is not fully determined'
+    else:
+        verdict = 'the direction is mixed for this mechanism in the model'
+    a, b = ok[0], ok[-1]
+    return (f'Direction for this case (model stripe, thick to thin, {a.get("label", "")} to '
+            f'{b.get("label", "")}): the in-mill onset stripe height {mill}, and the '
+            f'after-release onset {rel}; {verdict}.' + tail)
+
+
 def _gauge_section(r):
-    head = '<section><h2>Why thin gauge is worse</h2>'
+    head = f'<section><h2>{GAUGE_HEADING}</h2>'
     w = r.get('width')
     if _bad(w):
         return head + _state_p(_bad(w)) + '</section>'
@@ -1654,7 +1712,8 @@ def _gauge_section(r):
         return head + _state_p(_bad(g) or 'not available') + '</section>'
     rows = g.get('rows') or []
     ref_desc = g.get('reference_stripe_description') or g.get('onset_50mm_reference_basis')
-    out = [f'<p class="lead">{_e(g.get("text") or "")}</p>',
+    out = [f'<p class="lead">{_e(_gauge_direction(g))}</p>',
+           f'<p>{_e(g.get("text") or "")}</p>',
            f'<p class="note">Model stripe: {_e(g.get("reference_stripe_basis") or "n/a")} '
            f'(peak {_um(g.get("reference_stripe_peak_m"))} at '
            f'{_f(g.get("reference_stripe_position_m"), 1, 4)} m). Reference stripe: '
