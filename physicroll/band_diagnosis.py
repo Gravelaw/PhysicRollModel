@@ -3275,16 +3275,30 @@ def diagnose(case):
     # ---- v2 process sections
     s_ = eff['stand']
     heat_row = None
-    if bite is not None and (trib is not None or eff['width_model'] is not None):
+    if trib is not None:
+        # review of cc3fa5f: per-pass heating whatever the operating bite; each schedule pass
+        # uses its own bite and only the operating row is rejected without one. heat_row (the
+        # operating row the width section uses) stays None when that row is rejected
         try:
-            if trib is not None:
-                process['heating'] = bp.heating_section(
-                    eff, trib, cache, bite, eff['model_options']['cells'],
-                    s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
-                heat_row = process['heating']['operating']
-            else:
-                heat_row = bp.heating_row(eff, p, bite, None, eff['model_options']['cells'],
-                                          s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+            process['heating'] = bp.heating_section(
+                eff, trib, cache, bite, eff['model_options']['cells'],
+                s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+            op = process['heating']['operating']
+            if bite is None:
+                op['rejected'] = f'no roll bite for the case pass: {bite_error}'
+                ok = [x['label'] for x in process['heating']['schedule']
+                      if not x.get('rejected')]
+                process['heating']['operating_pass_note'] = (
+                    f'The operating pass has no roll bite ({bite_error}), so it has no pass '
+                    'heating; schedule passes assessed with their own bites: '
+                    + (', '.join(ok) if ok else 'none') + '.')
+            heat_row = None if op.get('rejected') else op
+        except ValueError as exc:
+            process['heating'] = bp.failed('process.heating', exc)
+    elif bite is not None and eff['width_model'] is not None:
+        try:
+            heat_row = bp.heating_row(eff, p, bite, None, eff['model_options']['cells'],
+                                      s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
         except ValueError as exc:
             process['heating'] = bp.failed('process.heating', exc)
     if trib is not None and bite is not None:

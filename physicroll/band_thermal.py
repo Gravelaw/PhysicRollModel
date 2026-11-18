@@ -836,6 +836,13 @@ def thermal_check(result, case):
         temps.append(f)
     risk = [f for f in temps if collector and f['verdict'] == 'ABOVE_PUBLISHED_LIMIT'
             and (f['is_final_pass'] or not finals)]
+    op_note = None
+    if isinstance(heat, dict) and isinstance(heat.get('operating'), dict) and \
+            heat['operating'].get('rejected'):
+        ok = [f['label'] for f in temps if f['value'] is not None]
+        op_note = (f'The operating pass has no strip exit temperature '
+                   f'({heat["operating"]["rejected"]}); schedule passes still assessed: '
+                   + (', '.join(ok) if ok else 'none') + '.')
     property_risk = None
     if risk:
         flags.append(PROPERTY_RISK_FLAG)
@@ -917,6 +924,7 @@ def thermal_check(result, case):
             'battery_coil_limits_apply': collector,
             'inputs': inputs, 'strip_exit_temperatures': temps,
             'strip_exit_temperature_rule': STRIP_EXIT_RULE,
+            **({'operating_pass_note': op_note} if op_note else {}),
             'coil_limits_c': {'entering_final_pass': bp.COIL_IN_FINAL_LIMIT.high,
                               'leaving_final_pass': bp.COIL_OUT_FINAL_LIMIT.high,
                               'elongation_decay_above': bp.COIL_OUT_FINAL_LIMIT_LOOSE.high},

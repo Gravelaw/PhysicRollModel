@@ -1978,9 +1978,17 @@ def _process_section(r):
             out.append(_state_p(_bad(he)))
         else:
             out.append(f'<p>{_e(he.get("note") or "")}</p>')
+            if he.get('operating_pass_note'):
+                out.append(f'<p class="warn">{_e(he["operating_pass_note"])}</p>')
             rows = []
             for x in [he.get('operating')] + list(he.get('schedule') or []):
                 if not isinstance(x, dict):
+                    continue
+                if x.get('rejected'):
+                    rows.append([_e(x.get('label', '')), _mm2(x.get('exit_thickness_m')),
+                                 _f(x.get('exit_speed_m_s'), unit='m/s'),
+                                 f'<em>not assessable: {_e(x["rejected"])}</em>', '', '', '',
+                                 '', '', ''])
                     continue
                 t = x.get('exit_temperature_k')
                 lim = x.get('temperature_limit_k')
@@ -2416,6 +2424,8 @@ def _thermal_block(r):
                    f'above {_f(lim.get("elongation_decay_above"))} °C elongation decays for '
                    'weeks.</p>')
     temps = tc.get('strip_exit_temperatures') or []
+    if tc.get('operating_pass_note'):
+        out.append(f'<p class="warn">{_e(tc["operating_pass_note"])}</p>')
     if temps:
         for f in temps:
             f.setdefault('label', f.get('item'))
