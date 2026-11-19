@@ -387,11 +387,12 @@
       "forward_slip_fraction_held": 0.051523016370145,
       "friction_law": "mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at the closure mu_v: the placeholder closure supplies the slope, the friction used at the operating point the level",
       "friction_used_at_operating_speed": 0.03,
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "lowest_assessable_exit_speed_m_s": {
         "with_bite_damping": 19.905358527674867,
         "without_bite_damping": 19.905358527674867
       },
-      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the contact radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
+      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the inlet-angle radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
       "placeholder_closure_friction_at_operating_speed": 0.07648428324495296,
       "relative_tolerance": 0.01,
       "scan": [
@@ -2618,128 +2619,6 @@
       "title": "Tension troughs or creases"
     },
     {
-      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
-      "evidence": [
-        {
-          "basis": "observation",
-          "criterion": "orientation",
-          "expected": "longitudinal",
-          "observed": "longitudinal",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "appearance",
-          "expected": "gloss_or_shade",
-          "observed": "loose_or_buckle",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "gauge variation",
-          "expected": "not detected",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions repeat across coils",
-          "expected": "false",
-          "observed": "true",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "continuity",
-          "expected": "intermittent or both",
-          "observed": "both",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "worse at higher speed",
-          "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "model",
-          "criterion": "tribology regime / exit strip temperature at the operating point",
-          "expected": "BOUNDARY or above the temperature limit",
-          "observed": "regime BOUNDARY; exit temperature above limit: False",
-          "verdict": "SUPPORTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions change after work-roll change",
-          "expected": "false",
-          "observed": "false",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "tracks speed changes",
-          "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "model",
-          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
-          "expected": "0.3-3",
-          "observed": "Lambda = 0.18 (tribology inlet film at the operating point)",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "changes with exit air blow-off",
-          "expected": "n/a",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        }
-      ],
-      "family": "lengthwise",
-      "id": "heat_streak_or_film_variation",
-      "levers": [
-        "lower the oil inlet temperature",
-        "increase coolant flow",
-        "reduce speed",
-        "regrind for uniform roll roughness"
-      ],
-      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
-      "model_prediction": {
-        "exit_temperature_above_limit": false,
-        "film_ratio_at_operating_point": 0.18011497000136134,
-        "film_ratio_basis": "tribology inlet film at the operating point",
-        "regime_at_operating_point": "BOUNDARY"
-      },
-      "rank": 4,
-      "score": 4,
-      "standing": "CONSISTENT",
-      "tallies": {
-        "contradiction_points": 1,
-        "contradicts": 1,
-        "neutral": 3,
-        "not_observed": 4,
-        "observation_supports": 2,
-        "strong_contradictions": 0,
-        "support_points": 5,
-        "supports": 3
-      },
-      "title": "Heat streak / friction or oil-film band (no roll bump)"
-    },
-    {
       "confirming_test": "Entry and exit profile measurements; shapemeter map; compare the relative crowns.",
       "evidence": [
         {
@@ -2809,7 +2688,7 @@
       "model_prediction": {
         "crown_classification": null
       },
-      "rank": 5,
+      "rank": 4,
       "score": 4,
       "standing": "CONSISTENT",
       "tallies": {
@@ -2823,6 +2702,128 @@
         "supports": 3
       },
       "title": "Profile / flatness mismatch (edge wave, centre buckle)"
+    },
+    {
+      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "longitudinal",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "loose_or_buckle",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "gauge variation",
+          "expected": "not detected",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false",
+          "observed": "true",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "both",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at higher speed",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "tribology regime / exit strip temperature at the operating point",
+          "expected": "above the temperature limit (a film ratio below 1 is normal mixed-regime operation and no longer counts [BT-S3 EX, BT-S9 EX])",
+          "observed": "regime MIXED_SUBSTANTIAL_CONTACT; exit temperature above limit: False",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "false",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "tracks speed changes",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
+          "expected": "0.3-3",
+          "observed": "Lambda = 0.18 (tribology inlet film at the operating point)",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with exit air blow-off",
+          "expected": "n/a",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "heat_streak_or_film_variation",
+      "levers": [
+        "lower the oil inlet temperature",
+        "increase coolant flow",
+        "reduce speed",
+        "regrind for uniform roll roughness"
+      ],
+      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
+      "model_prediction": {
+        "exit_temperature_above_limit": false,
+        "film_ratio_at_operating_point": 0.18011497000136134,
+        "film_ratio_basis": "tribology inlet film at the operating point",
+        "regime_at_operating_point": "MIXED_SUBSTANTIAL_CONTACT"
+      },
+      "rank": 5,
+      "score": 3,
+      "standing": "CONSISTENT",
+      "tallies": {
+        "contradiction_points": 1,
+        "contradicts": 1,
+        "neutral": 4,
+        "not_observed": 4,
+        "observation_supports": 2,
+        "strong_contradictions": 0,
+        "support_points": 4,
+        "supports": 2
+      },
+      "title": "Heat streak / friction or oil-film band (no roll bump)"
     },
     {
       "confirming_test": "Entry profile scan of the incoming coil and an outside-profile scan of the wound coil; check whether the band is worse toward the outer wraps and follows the mother coil.",
@@ -3457,8 +3458,8 @@
         {
           "basis": "model",
           "criterion": "film regime",
-          "expected": "boundary (Lambda < 1)",
-          "observed": "Lambda = 0.529 (BOUNDARY)",
+          "expected": "substantial asperity contact (Lambda < 1)",
+          "observed": "Lambda = 0.529 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "SUPPORTS",
           "weight": "weak"
         }
@@ -4015,7 +4016,7 @@
           "basis": "model",
           "criterion": "film regime",
           "expected": "hydrodynamic (Lambda > 3)",
-          "observed": "Lambda = 0.529 (BOUNDARY)",
+          "observed": "Lambda = 0.529 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "NEUTRAL",
           "weight": null
         },
@@ -4839,7 +4840,7 @@
       "flags": [
         "PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED"
       ],
-      "note": "PLACEHOLDER friction closure (not fitted): with ground-roll roughness it stays near the boundary regime; read the absolute friction as a placeholder and the slope with speed (dmu/du) as the useful output. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
+      "note": "PLACEHOLDER friction closure (not fitted): its end values 0.09 and 0.008 match the one abstract on aluminium [BT-S6 AB], but it keeps friction near 0.09 over most of the common industrial film-ratio window (0.01-0.5), so neither its level nor its slope with speed (dmu/du) is supported. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
       "operating": {
         "bite_source": "derived_slab_hitchcock",
         "computed_friction_coefficient": 0.07648428324495296,
@@ -4848,13 +4849,16 @@
         "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
         "dmu_droll_speed_per_m_s": -0.001080881944069587,
         "exit_speed_m_s": 12.0,
+        "film_inlet_radius_ratio": 1.4860253458546073,
         "film_ratio": 0.18011497000136134,
         "film_thickness_m": 7.033714430395345e-08,
         "forward_slip_fraction": 0.051523016370145,
+        "in_common_industrial_window": true,
+        "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
         "iterations": [],
         "label": "case pass",
         "method": "single evaluation at the contact radius of the supplied-friction bite",
-        "regime": "BOUNDARY",
+        "regime": "MIXED_SUBSTANTIAL_CONTACT",
         "supplied_friction_coefficient": 0.03,
         "used_friction_coefficient": 0.03
       },
@@ -4867,13 +4871,16 @@
           "dmu_dexit_speed_per_m_s": -0.00037535217374077645,
           "dmu_droll_speed_per_m_s": -0.0003947674417063135,
           "exit_speed_m_s": 3.0,
+          "film_inlet_radius_ratio": 1.071734482443758,
           "film_ratio": 0.013924957223301492,
           "film_thickness_m": 5.437869632015224e-09,
           "forward_slip_fraction": 0.051725470967820986,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P1 2.20->1.40 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.08,
           "used_friction_coefficient": 0.08
         },
@@ -4885,13 +4892,16 @@
           "dmu_dexit_speed_per_m_s": -0.000442538367478873,
           "dmu_droll_speed_per_m_s": -0.0004681919609806093,
           "exit_speed_m_s": 5.0,
+          "film_inlet_radius_ratio": 1.1423459863413128,
           "film_ratio": 0.02774315054674,
           "film_thickness_m": 1.083404662831528e-08,
           "forward_slip_fraction": 0.05796919631598052,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P2 1.40->0.90 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.07,
           "used_friction_coefficient": 0.07
         },
@@ -4903,13 +4913,16 @@
           "dmu_dexit_speed_per_m_s": -0.0005719142952738862,
           "dmu_droll_speed_per_m_s": -0.0006061250648220883,
           "exit_speed_m_s": 7.5,
+          "film_inlet_radius_ratio": 1.2266523083760932,
           "film_ratio": 0.055282442490909994,
           "film_thickness_m": 2.15884839273979e-08,
           "forward_slip_fraction": 0.05981800040829355,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P3 0.90->0.60 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.06,
           "used_friction_coefficient": 0.06
         },
@@ -4921,13 +4934,16 @@
           "dmu_dexit_speed_per_m_s": -0.0007444430662334467,
           "dmu_droll_speed_per_m_s": -0.0007859552559525033,
           "exit_speed_m_s": 10.0,
+          "film_inlet_radius_ratio": 1.318197748953203,
           "film_ratio": 0.10037098901141879,
           "film_thickness_m": 3.9196124219843195e-08,
           "forward_slip_fraction": 0.055762746141340136,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P4 0.60->0.42 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.05,
           "used_friction_coefficient": 0.05
         },
@@ -4939,13 +4955,16 @@
           "dmu_dexit_speed_per_m_s": -0.0008890440672217378,
           "dmu_droll_speed_per_m_s": -0.0009360188001255639,
           "exit_speed_m_s": 13.0,
+          "film_inlet_radius_ratio": 1.4124243947530781,
           "film_ratio": 0.1664763513122636,
           "film_thickness_m": 6.501109344413645e-08,
           "forward_slip_fraction": 0.05283735040336324,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P5 0.42->0.30 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.04,
           "used_friction_coefficient": 0.04
         },
@@ -4957,13 +4976,16 @@
           "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
           "dmu_droll_speed_per_m_s": -0.001080881944069587,
           "exit_speed_m_s": 12.0,
+          "film_inlet_radius_ratio": 1.4860253458546073,
           "film_ratio": 0.18011497000136134,
           "film_thickness_m": 7.033714430395345e-08,
           "forward_slip_fraction": 0.051523016370145,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P6 0.30->0.21 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         }
@@ -4980,6 +5002,7 @@
         "OIL_CONDUCTIVITY_DEFAULT_FROM_MEMORY"
       ],
       "forward_slip_fraction": 0.051523016370145,
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "mean_slope_per_m_s": -0.0010100341442443974,
       "mean_slope_speeds_m_s": [
         2.0,
@@ -4995,7 +5018,7 @@
           "film_ratio": 0.015009580833446777,
           "film_thickness_m": 5.861428691996121e-09,
           "friction_coefficient": 0.08877840511929816,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0012073868245714423,
@@ -5003,7 +5026,7 @@
           "film_ratio": 0.01919431259950867,
           "film_thickness_m": 7.49561868797818e-09,
           "friction_coefficient": 0.08844107547070734,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001200942809895194,
@@ -5011,7 +5034,7 @@
           "film_ratio": 0.02454576448575303,
           "film_thickness_m": 9.585427455986683e-09,
           "friction_coefficient": 0.08801174871098633,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011943875290881811,
@@ -5019,7 +5042,7 @@
           "film_ratio": 0.030019161666893553,
           "film_thickness_m": 1.1722857383992241e-08,
           "friction_coefficient": 0.08757500894655432,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001192752265627536,
@@ -5027,7 +5050,7 @@
           "film_ratio": 0.03138922277453568,
           "film_thickness_m": 1.2257883350088951e-08,
           "friction_coefficient": 0.08746606097139004,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011823595054365574,
@@ -5035,7 +5058,7 @@
           "film_ratio": 0.04014066487769457,
           "film_thickness_m": 1.567543074258458e-08,
           "friction_coefficient": 0.08677365254492148,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001169201039494776,
@@ -5043,7 +5066,7 @@
           "film_ratio": 0.05133204438978712,
           "film_thickness_m": 2.004580415294804e-08,
           "friction_coefficient": 0.08589698143331087,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011525870932671454,
@@ -5051,7 +5074,7 @@
           "film_ratio": 0.0656436257163066,
           "film_thickness_m": 2.563465532380606e-08,
           "friction_coefficient": 0.08479009201025503,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011316846395641959,
@@ -5059,7 +5082,7 @@
           "film_ratio": 0.0839453337268576,
           "film_thickness_m": 3.278170077670327e-08,
           "friction_coefficient": 0.08339748458662996,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001105505897366605,
@@ -5067,7 +5090,7 @@
           "film_ratio": 0.10734963185866478,
           "film_thickness_m": 4.192137137164176e-08,
           "friction_coefficient": 0.08165334912554625,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010729088860477337,
@@ -5075,7 +5098,7 @@
           "film_ratio": 0.1372791428489356,
           "film_thickness_m": 5.3609219047232126e-08,
           "friction_coefficient": 0.07948160217954561,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010326203134046585,
@@ -5083,7 +5106,7 @@
           "film_ratio": 0.17555312240055293,
           "film_thickness_m": 6.855568586666598e-08,
           "friction_coefficient": 0.07679741178748353,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
@@ -5091,7 +5114,7 @@
           "film_ratio": 0.18011497000136134,
           "film_thickness_m": 7.033714430395345e-08,
           "friction_coefficient": 0.07648428324495296,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.000983295735384646,
@@ -5099,7 +5122,7 @@
           "film_ratio": 0.2244980420550642,
           "film_thickness_m": 8.766928801011217e-08,
           "friction_coefficient": 0.07351120555660118,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0009236368397566129,
@@ -5107,7 +5130,7 @@
           "film_ratio": 0.28708900301734913,
           "film_thickness_m": 1.1211183963863078e-07,
           "friction_coefficient": 0.06953648458809517,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0008525888189645875,
@@ -5115,7 +5138,7 @@
           "film_ratio": 0.3671305767258305,
           "film_thickness_m": 1.4336907339441702e-07,
           "friction_coefficient": 0.06480297326309957,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0008457031792558077,
@@ -5123,7 +5146,7 @@
           "film_ratio": 0.3752395208361695,
           "film_thickness_m": 1.4653571729990304e-07,
           "friction_coefficient": 0.06434422362893318,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0007696377137963717,
@@ -5131,7 +5154,7 @@
           "film_ratio": 0.4694880645041485,
           "film_thickness_m": 1.8334095018177838e-07,
           "friction_coefficient": 0.05927642950548148,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0006752106619534876,
@@ -5139,7 +5162,7 @@
           "film_ratio": 0.6003832333378712,
           "film_thickness_m": 2.3445714767984487e-07,
           "friction_coefficient": 0.052985310984957554,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         }
       ],
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
@@ -6046,6 +6069,7 @@
       ],
       "formula": "h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))",
       "formula_attribution": "Wilson & Walowit (1972) as named in the project spec; quoted from memory, not in the verified source list",
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "inlet_angle_rad": 0.017401758948267957,
       "limitations": [
         "Smooth surfaces, isothermal Barus-viscosity inlet, no starvation, no inlet shear heating (which thins the film at high speed).",
@@ -6063,24 +6087,29 @@
       "film_ratio": 0.5287353969348801,
       "film_thickness_m": 2.0647777312755117e-07,
       "flags": [],
+      "in_common_industrial_window": false,
       "limitations": [
         "Rq-based ratio ignores roughness lay/orientation and asperity flattening in the bite."
       ],
       "reasons": [
-        "Film ratio 0.529: boundary lubrication.",
+        "Film ratio 0.529: mixed lubrication with substantial asperity contact (the normal condition for a roll imprint).",
         "Film thickness rises with speed and viscosity, lowering friction; lower friction shrinks the chatter margin."
       ],
-      "regime": "BOUNDARY",
+      "regime": "MIXED_SUBSTANTIAL_CONTACT",
       "regime_boundaries": {
-        "boundary_below": 1.0,
-        "hydrodynamic_above": 3.0
+        "common_industrial_window": [
+          0.01,
+          0.5
+        ],
+        "hydrodynamic_above": 3.0,
+        "substantial_contact_below": 1.0
       },
       "sources": [
         "Sutcliffe (2002) in Lenard (ed.) Metal Forming Science and Practice, doi:10.1016/b978-008044024-8/50004-7 (film ratio regimes)",
         "Reid & Schey (1978) ASLE Trans. 21(3), doi:10.1080/05698197808982874 (full-film lubrication, negative forward slip, matte surface)"
       ],
-      "status": "BOUNDARY_LUBRICATION",
-      "threshold_basis": "Conventional regime boundaries (Sutcliffe 2002); transitions are gradual, not sharp."
+      "status": "MIXED_SUBSTANTIAL_CONTACT_LUBRICATION",
+      "threshold_basis": "Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 substantial asperity contact inside the mixed regime, the normal condition for a roll imprint; common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions are gradual, not sharp."
     },
     "forward_slip": {
       "flags": [],

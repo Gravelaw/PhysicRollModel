@@ -39,8 +39,10 @@ Lubrication screens: forward-slip screen (Reid & Schey 1978 for full-film negati
 herringbone (Komori 1996; Szucs et al. 2020; Alcoa US 5,508,119 citing Schey); inlet film
 ``h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))`` attributed in the project
 spec to Wilson & Walowit (1972) and QUOTED FROM MEMORY (not in the verified source list;
-flagged in every result); film ratio ``Lambda = h_s/sqrt(Rq_r^2+Rq_s^2)`` with boundary
-< 1 <= mixed <= 3 < hydrodynamic (Sutcliffe 2002).
+flagged in every result); film ratio ``Lambda = h_s/sqrt(Rq_r^2+Rq_s^2)`` labelled as in
+``bite_tribology``: mixed with substantial asperity contact below 1 (the normal condition for
+a roll imprint), mixed with first contact 1-3, hydrodynamic above 3 (Sutcliffe 2002; BT-S9
+EX); common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX). No boundary-regime threshold.
 
 Coolant sprays (Lloyd, Lechler 2010; Tucker, Lechler 2006): flat-fan footprint
 ``W = 2*s*tan(angle/2)``; along-header width ``W_eff = W*cos(offset)``; overlap
@@ -57,6 +59,9 @@ from dataclasses import dataclass
 import json
 import math
 import re
+
+from .bite_tribology import (REGIME_BOUNDARIES, _REGIME_WORDS, _regime,
+                             in_common_industrial_window)
 
 SOURCES = {
     'kim_2012': 'Kim, Kim, Park et al. (2012) ISIJ Int. 52:2042, '
@@ -806,7 +811,12 @@ def inlet_film_thickness_wilson_walowit(viscosity_pa_s, pressure_viscosity_coeff
 
 
 def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_m):
-    """Film ratio ``Lambda = h/sqrt(Rq_r^2+Rq_s^2)``: < 1 boundary, 1-3 mixed, > 3 hydrodynamic."""
+    """Film ratio ``Lambda = h/sqrt(Rq_r^2+Rq_s^2)`` and its label.
+
+    ``< 1`` MIXED_SUBSTANTIAL_CONTACT (normal for a roll imprint), ``1-3`` MIXED_FIRST_CONTACT,
+    ``> 3`` HYDRODYNAMIC [Sutcliffe 2002; BT-S9 EX]; ``in_common_industrial_window`` for
+    0.01-0.5 [BT-S3 EX, BT-S9 EX]. No boundary-regime label: no source read gives a threshold.
+    """
     h = _num('film_thickness_m', film_thickness_m, nonnegative=True, hi=1e-3)
     rr = _num('roll_roughness_rq_m', roll_roughness_rq_m, nonnegative=True, hi=1e-4)
     rs = _num('strip_roughness_rq_m', strip_roughness_rq_m, nonnegative=True, hi=1e-4)
@@ -814,13 +824,8 @@ def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_
     if rq <= 0:
         raise ValueError('composite roughness must be > 0')
     lam = h / rq
-    if lam < 1:
-        regime = 'BOUNDARY'
-    elif lam <= 3:
-        regime = 'MIXED'
-    else:
-        regime = 'HYDRODYNAMIC'
-    reasons = [f'Film ratio {lam:.3f}: {regime.lower()} lubrication.',
+    regime = _regime(lam)
+    reasons = [f'Film ratio {lam:.3f}: {_REGIME_WORDS[regime]}.',
                'Film thickness rises with speed and viscosity, lowering friction; lower '
                'friction shrinks the chatter margin.']
     flags = []
@@ -831,9 +836,13 @@ def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_
     return _checked({
         'status': f'{regime}_LUBRICATION', 'regime': regime, 'film_ratio': lam,
         'composite_roughness_rq_m': rq, 'film_thickness_m': h,
-        'regime_boundaries': {'boundary_below': 1.0, 'hydrodynamic_above': 3.0},
-        'threshold_basis': 'Conventional regime boundaries (Sutcliffe 2002); transitions are '
-                           'gradual, not sharp.',
+        'in_common_industrial_window': in_common_industrial_window(lam),
+        'regime_boundaries': dict(REGIME_BOUNDARIES),
+        'threshold_basis': 'Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 '
+                           'substantial asperity contact inside the mixed regime, the normal '
+                           'condition for a roll imprint; common industrial window 0.01-0.5 '
+                           '(BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions '
+                           'are gradual, not sharp.',
         'reasons': reasons, 'flags': flags,
         'limitations': ['Rq-based ratio ignores roughness lay/orientation and asperity '
                         'flattening in the bite.'],

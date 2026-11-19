@@ -81,7 +81,8 @@ from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_s
 from .chatter import BITE_MIN_EXIT_THICKNESS_M as chatter_BITE_MIN_EXIT_THICKNESS_M
 from .chatter import REDUCTION_EXTENDED_FLAG
 from .foil_bite import (EXTENDED_GAUGE_FLAG, EXTENDED_GAUGE_LIMITATION,
-                        EXTENDED_REDUCTION_LIMITATION, derive_bite_response_mattress)
+                        EXTENDED_REDUCTION_LIMITATION, LARGE_SLIP_EXPLANATION,
+                        derive_bite_response_mattress)
 
 CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
 CASE_SCHEMA_V2 = 'physicroll.band_case.v2'
@@ -653,10 +654,10 @@ def _bite_pass(case, row=None):
 SLIP_KINEMATICS_LIMIT = 0.5   # band_signatures accepts |forward slip| < 0.5
 SLIP_KINEMATICS_FLAG = 'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'
 SLIP_KINEMATICS_LIMITATION = (
-    'The bite\'s forward slip is 0.5 or more (experimental mattress model without elastic '
-    'strip zones): zero slip is used in the roll-borne pitch kinematics only (source '
-    'catalogue, roll-mark and order-locked pitches); the forward-slip screen is not '
-    'assessable and every other result uses the bite\'s actual slip.')
+    'The bite\'s forward slip is 0.5 or more (experimental mattress model): zero slip is used '
+    'in the roll-borne pitch kinematics only (source catalogue, roll-mark and order-locked '
+    'pitches); the forward-slip screen is not assessable and every other result uses the '
+    'bite\'s actual slip. ' + LARGE_SLIP_EXPLANATION)
 BITE_FLOOR_M = chatter_BITE_MIN_EXIT_THICKNESS_M
 BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
 BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 8 um floor of the roll-bite '
@@ -1023,22 +1024,23 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
     elif abs(slip) < SLIP_KINEMATICS_LIMIT:
         scr['forward_slip'] = bs.forward_slip_screen(slip)
     else:
-        # band_signatures accepts |slip| < 0.5; a larger (implausible, flagged) model slip is
+        # band_signatures accepts |slip| < 0.5; a larger (flagged) model slip is
         # not skidding: the screen is not assessable, never 'SKIDDING'
         scr['forward_slip'] = {
             'status': 'NOT_ASSESSABLE', 'forward_slip_fraction': slip,
             'reason': (f'forward slip {slip:.4g} is outside the screen domain (|f| < 0.5): '
-                       'strongly positive, not skidding; an experimental mattress bite reports '
-                       'such values because it has no elastic strip zones'),
+                       'strongly positive, not skidding. ' + LARGE_SLIP_EXPLANATION),
             'flags': [], 'limitations': [], 'sources': []}
     lub = case['lubrication']
     if lub is not None and bite is not None:
         vr = p['exit_speed_m_s'] / (1 + slip)
+        # contact_radius_ratio here is bp.film_radius_ratio(bite): 1.0 for a mattress bite
         theta = bs.inlet_angle_rad(h0, h1, p['work_roll_radius_m'] * contact_radius_ratio)
         film = bs.inlet_film_thickness_wilson_walowit(
             lub['viscosity_pa_s'], lub['pressure_viscosity_coefficient_per_pa'], vr,
             p['exit_speed_m_s'] * h1 / h0, theta, 2 / math.sqrt(3) * p['mean_flow_stress_pa'])
         film['inlet_angle_rad'] = theta
+        film['inlet_angle_basis'] = bp.inlet_angle_basis(bite)
         scr['film'] = film
         scr['film_regime'] = bs.film_ratio_regime(film['film_thickness_m'],
                                                   lub['roll_roughness_rq_m'],
@@ -1973,13 +1975,15 @@ def _h_herringbone(ctx):
                   None if (g is None or g) else 'weak'))
     reg = scr['film_regime']
     if reg is None:
-        ev.append(_ev('film regime', 'no lubrication data', 'boundary (Lambda < 1)',
-                      'NOT_OBSERVED', basis='input'))
+        ev.append(_ev('film regime', 'no lubrication data',
+                      'substantial asperity contact (Lambda < 1)', 'NOT_OBSERVED',
+                      basis='input'))
     else:
         lam = reg['film_ratio']
         ev.append(_ev('film regime', f'Lambda = {lam:.3g} ({reg["regime"]})',
-                      'boundary (Lambda < 1)', 'SUPPORTS' if lam < 1 else 'NEUTRAL',
-                      'weak' if lam < 1 else None, 'model'))
+                      'substantial asperity contact (Lambda < 1)',
+                      'SUPPORTS' if lam < 1 else 'NEUTRAL', 'weak' if lam < 1 else None,
+                      'model'))
     pred = {'contact_length_m': lc, 'reduction_fraction': red,
             'risk_level': scr['herringbone']['risk_level'],
             'contact_length_basis': scr['herringbone']['contact_length_basis']}
@@ -3170,8 +3174,8 @@ def diagnose(case):
     # two values (review finding): ctx.slip is the bite's actual forward slip, used by the
     # evidence and the screens; ctx.kin_slip is the value of the roll-borne pitch kinematics,
     # whose helpers (band_signatures) accept |slip| < 0.5 only. An experimental mattress bite
-    # can report an implausible slip of 0.5 or more (no elastic strip zones): then only the
-    # kinematics use zero.
+    # can report a slip of 0.5 or more (constant Coulomb friction with a no-slip zone; elastic
+    # strip zones are not the cause, SPEC17 X20): then only the kinematics use zero.
     if bite is not None:
         ctx.slip = bite.forward_slip_fraction
         ctx.kin_slip = ctx.slip if abs(ctx.slip) < SLIP_KINEMATICS_LIMIT else 0.0
@@ -3262,7 +3266,7 @@ def diagnose(case):
         ctx.freqs.append(('measured vibration', obs['measured_vibration_hz']))
 
     contact = bite.contact_length_m if bite is not None else None
-    ratio = bite.contact_radius_ratio if bite is not None else 1.0
+    ratio = bp.film_radius_ratio(bite) if bite is not None else 1.0
     try:
         result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
     except ValueError as exc:

@@ -57,6 +57,8 @@ STATUS = 'SOFTWARE_COMPARISON_WITH_PUBLISHED_VALUES_NOT_PHYSICAL_VALIDATION'
 AGREEMENT_BAND = (0.9, 1.1)   # ratio project / reference [D, analyst choice, SPEC17]
 VERDICTS = ('RECORDED_DISCREPANCY', 'WITHIN_AGREEMENT_BAND', 'INDICATIVE_ASSUMED_INPUTS',
             'REFERENCE_READ_BY_EYE', 'REFERENCE_ONLY_INPUTS_NOT_RECORDED', 'CONSISTENT_REGIME')
+# Row-level verdict of a quantity with no published value: project value recorded only.
+NO_REFERENCE_VALUE = 'NO_REFERENCE_VALUE'
 REFERENCE_KINDS = ('MODEL_OUTPUT', 'MEASUREMENT', 'PUBLISHED_FORMULA', 'FIGURE_READ_BY_EYE')
 CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29',
             'SS-V2', 'SS-V3', 'TM-LC7')
@@ -192,6 +194,8 @@ def _band_verdict(ratio):
 
 def _case(case_id, title, source, source_id, read_status, kind, inputs, input_notes,
           quantities, verdict, note, flags):
+    for q in quantities:   # row verdict: the case verdict, or NO_REFERENCE_VALUE
+        q['row_verdict'] = NO_REFERENCE_VALUE if q['reference_value'] is None else verdict
     return {'id': case_id, 'title': title, 'source': source, 'source_id': source_id,
             'read_status': read_status, 'reference_kind': kind, 'inputs': inputs,
             'input_notes': input_notes, 'quantities': quantities, 'verdict': verdict,
@@ -427,7 +431,11 @@ def run_all() -> dict:
 
 
 def table_rows(result=None) -> list:
-    """Rows for the guide: id, quantity, project, reference, ratio, verdict."""
+    """Rows for the guide: id, quantity, project, reference, ratio, verdict.
+
+    ``verdict`` is the row verdict: ``NO_REFERENCE_VALUE`` for a quantity without a published
+    value (project value recorded only), else the case verdict (also in ``case_verdict``).
+    """
     result = run_all() if result is None else result
     rows = []
     for case in result['cases']:
@@ -435,7 +443,8 @@ def table_rows(result=None) -> list:
             rows.append({'id': case['id'], 'quantity': q['name'], 'unit': q['unit'],
                          'project': q['project_value'], 'reference': q['reference_value'],
                          'reference_label': q['reference_label'],
-                         'ratio': q['ratio_project_to_reference'], 'verdict': case['verdict']})
+                         'ratio': q['ratio_project_to_reference'], 'verdict': q['row_verdict'],
+                         'case_verdict': case['verdict']})
     return rows
 
 

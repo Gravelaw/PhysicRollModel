@@ -2927,15 +2927,21 @@ def _h_heat_streak(f):
         if op.get('temperature_limit_k') is not None and 'exit_temperature_k' in op:
             hot = op['exit_temperature_k'] > op['temperature_limit_k']
     k_regime = len(e)
+    # SPEC17 (BT-G8, X21): the film-ratio label no longer supports. A film ratio below 1 is
+    # normal mixed-regime operation (substantial asperity contact, a good roll imprint)
+    # [BT-S3 EX, BT-S9 EX]; only an exit temperature above the supplied limit supports. The
+    # film-collapse test of the gap study (film against additive length or contact
+    # temperature) is NOT built: it needs BT-G3 / BT-G11.
+    expected = ('above the temperature limit (a film ratio below 1 is normal mixed-regime '
+                'operation and no longer counts [BT-S3 EX, BT-S9 EX])')
     if regime is None and hot is None:
-        e.append(ev(crit, 'no tribology', 'BOUNDARY or above the temperature limit',
-                    'NOT_OBSERVED', basis='input'))
-    elif regime == 'BOUNDARY' or hot:
-        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}',
-                    'BOUNDARY or above the temperature limit', 'SUPPORTS', 'weak', 'model'))
+        e.append(ev(crit, 'no tribology', expected, 'NOT_OBSERVED', basis='input'))
+    elif hot:
+        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}', expected,
+                    'SUPPORTS', 'weak', 'model'))
     else:
-        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}',
-                    'BOUNDARY or above the temperature limit', 'NEUTRAL', basis='model'))
+        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}', expected,
+                    'NEUTRAL', basis='model'))
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'false',
                    ('CONTRADICTS', 'weak'), None))

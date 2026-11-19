@@ -2180,9 +2180,11 @@ FLAGS = {
     'FOUNDATION_MODULUS_FROM_MEMORY_FORMULA': (
         'A stiffness inside the foil roll-gap model comes from an unchecked formula.',
         'Read the roll-gap numbers as rough.'),
-    'FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES': (
-        'The foil roll-gap model gives an implausibly large forward slip.',
-        'Do not use the forward slip; the roll-mark spacing uses zero slip instead.'),
+    'FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL': (
+        'The foil roll-gap model gives a large forward slip, as a model with one constant '
+        'friction value does; mill trials found less.',
+        'Do not use the forward slip; the roll-mark spacing uses zero slip when it is very '
+        'large.'),
     'FORWARD_SLIP_UNKNOWN_ZERO_USED_IN_KINEMATICS': (
         'No roll-gap result: the forward slip is unknown and zero is used for roll-mark '
         'spacings.', 'Mark spacings tied to roll turns are slightly approximate.'),

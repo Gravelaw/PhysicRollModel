@@ -23,7 +23,11 @@ Sutcliffe 2000/2001 [V], original not read)
 --------------------------------------------------------------------------------------------
 ``h_s = 6*eta0*alpha*U_mean / (theta0*(1 - exp(-alpha*(Y_ps - sigma_back))))``,
 ``U_mean = (u_roll + u_strip_entry)/2``, ``theta0 = sqrt((h_entry - h_exit)/R_contact)``
-[D for the arc], ``Y_ps = 2*Y/sqrt(3)``. The exponent uses the bite-entry pressure
+[D for the arc], ``Y_ps = 2*Y/sqrt(3)``. ``R_contact`` (argument ``contact_radius_m``) is the
+radius of the inlet angle: the integration layer (``band_process.film_radius_ratio``) passes the
+deformed arc R' of a Hitchcock bite and the undeformed roll radius R of an experimental
+mattress bite, whose ``contact_radius_ratio`` L^2/(R*draft) is not a radius [BT-S3 EX: the
+undeformed-roll slope is used; D, re-derived in SPEC17]. The exponent uses the bite-entry pressure
 ``Y_ps - sigma_back`` [D: yield condition p + sigma = Y_ps]; Sutcliffe / Le write Y_ps alone,
 Yarita (1984) writes the entry pressure -- the disagreement is recorded, and the Y_ps-only
 value is reported alongside. Optional thermal thinning ``phi_T = 3.94/(3.94 + L^0.62)``,
@@ -33,7 +37,10 @@ Murch & Wilson factor form is [M]); off by default, its value always reported.
 Friction closure (W3.3) -- PLACEHOLDER, NOT FITTED
 --------------------------------------------------
 ``Lambda = h_s/sqrt(Rq_roll^2 + Rq_strip^2)``; first asperity contact below ~3, substantial
-contact below ~1 [V: Sutcliffe 2002]; regimes BOUNDARY (< 1), MIXED (1-3), HYDRODYNAMIC (> 3).
+contact below ~1 [V: Sutcliffe 2002]; labels MIXED_SUBSTANTIAL_CONTACT (< 1), MIXED_FIRST_CONTACT
+(1-3), HYDRODYNAMIC (> 3) [BT-S9 EX]. Below about 1 is the condition for a good roll imprint
+inside the mixed regime, and 0.01-0.5 is the common industrial window [BT-S3 EX, BT-S9 EX]; no
+source read gives a film-ratio threshold for boundary lubrication, so none is labelled.
 Mixed-film ``mu = A*mu_c + (1-A)*mu_v`` with boundary mu_c ~ 0.1 [V]. On aluminium strip mu ~
 0.09 at lowest speeds falling below 0.01 at highest speeds; Lambda and reduction dominate,
 oil temperature 40-60 C secondary [V abstract: Tabary, Sutcliffe et al. 1996, J. Tribol.
@@ -92,8 +99,18 @@ FOIL_OIL_PRESSURE_VISCOSITY_PER_PA = 1.2e-8          # [V] Sutcliffe & Montmiton
 KEROSENE_BETA_20_70C_PER_K = 0.015                   # [D] from 3.0/1.4 cSt at 20/70 C
 KEROSENE_BETA_70_130C_PER_K = 0.012                  # [D] from 1.4/0.7 cSt at 70/130 C
 ALUMINIUM_VOLUMETRIC_HEAT_CAPACITY_J_M3K = 2.43e6    # [D] rho*c
-REGIME_BOUNDARY_BELOW = 1.0                          # [V] Sutcliffe 2002
-REGIME_HYDRODYNAMIC_ABOVE = 3.0                      # [V] Sutcliffe 2002
+# [V] below about 1: substantial asperity contact, good roll imprint (BT-S9 EX)
+REGIME_SUBSTANTIAL_CONTACT_BELOW = 1.0
+REGIME_HYDRODYNAMIC_ABOVE = 3.0          # [V] first asperity contact below about 3 (BT-S9 EX)
+COMMON_INDUSTRIAL_FILM_RATIO_WINDOW = (0.01, 0.5)   # [V] BT-S3 EX, BT-S9 EX
+REGIME_BOUNDARIES = {'substantial_contact_below': REGIME_SUBSTANTIAL_CONTACT_BELOW,
+                     'hydrodynamic_above': REGIME_HYDRODYNAMIC_ABOVE,
+                     'common_industrial_window': list(COMMON_INDUSTRIAL_FILM_RATIO_WINDOW)}
+_REGIME_WORDS = {
+    'MIXED_SUBSTANTIAL_CONTACT': 'mixed lubrication with substantial asperity contact (the '
+                                 'normal condition for a roll imprint)',
+    'MIXED_FIRST_CONTACT': 'mixed lubrication with first asperity contact',
+    'HYDRODYNAMIC': 'thick film, hydrodynamic'}
 TYPICAL_PASS_EXIT_TEMPERATURE_K = 373.15             # [V] Achenbach basics, ~100 C per pass
 VISCOSITY_EXTRAPOLATION_WARN_K = 60.0                # [D] analyst choice
 SPEED_DERIVATIVE_RELATIVE_STEP = 1e-4                # [D] numerical choice
@@ -293,11 +310,17 @@ class FrictionClosure:
 
 
 def _regime(film_ratio):
-    if film_ratio < REGIME_BOUNDARY_BELOW:
-        return 'BOUNDARY'
+    if film_ratio < REGIME_SUBSTANTIAL_CONTACT_BELOW:
+        return 'MIXED_SUBSTANTIAL_CONTACT'
     if film_ratio <= REGIME_HYDRODYNAMIC_ABOVE:
-        return 'MIXED'
+        return 'MIXED_FIRST_CONTACT'
     return 'HYDRODYNAMIC'
+
+
+def in_common_industrial_window(film_ratio):
+    """True when 0.01 <= Lambda <= 0.5, the common industrial window [BT-S3 EX, BT-S9 EX]."""
+    lo, hi = COMMON_INDUSTRIAL_FILM_RATIO_WINDOW
+    return lo <= film_ratio <= hi
 
 
 # --------------------------------------------------------------------------- W3.2 film
@@ -344,7 +367,9 @@ def inlet_film_thickness(lubricant, *, roll_surface_speed_m_s, strip_entry_speed
                          thermal_correction=False):
     """Smooth-surface inlet film thickness (Wilson & Walowit form, entry-pressure exponent).
 
-    ``contact_radius_m`` is the (possibly flattened) roll radius used for the inlet angle.
+    ``contact_radius_m`` is the radius of the inlet angle ``theta0 = sqrt(draft/R_c)``: the
+    deformed arc R' of a Hitchcock bite, the undeformed roll radius of a mattress bite (what
+    ``band_process`` passes; module docstring).
     """
     args = _film_inputs(lubricant, roll_surface_speed_m_s, strip_entry_speed_m_s,
                         entry_thickness_m, exit_thickness_m, contact_radius_m,
@@ -425,12 +450,14 @@ def friction_coefficient(film_ratio, closure=None):
     return _checked({
         'status': STATUS_FRICTION, 'friction_coefficient': mu,
         'dmu_dlambda': slope, 'film_ratio': lam, 'regime': regime,
+        'in_common_industrial_window': in_common_industrial_window(lam),
         'closure': asdict(closure),
         'formula': 'mu = mu_v + (mu_b - mu_v)*exp(-Lambda/lambda0)',
-        'regime_boundaries': {'boundary_below': REGIME_BOUNDARY_BELOW,
-                              'hydrodynamic_above': REGIME_HYDRODYNAMIC_ABOVE},
-        'basis': dict(closure.basis(), regime_boundaries='[V] Sutcliffe 2002'),
-        'reasons': [f'Film ratio {lam:.3f} ({regime.lower()}): placeholder mu = {mu:.4f}.'],
+        'regime_boundaries': dict(REGIME_BOUNDARIES),
+        'basis': dict(closure.basis(), regime_boundaries='[V] Sutcliffe 2002; BT-S9 EX; window '
+                                                         'BT-S3 EX, BT-S9 EX'),
+        'reasons': [f'Film ratio {lam:.3f}: {_REGIME_WORDS[regime]}; placeholder mu = '
+                    f'{mu:.4f}.'],
         'flags': [PLACEHOLDER_FLAG],
         'limitations': [
             'The closure is an analyst placeholder, not fitted to any data.',
@@ -505,6 +532,7 @@ def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
         'inlet_temperature_k': film['inlet_temperature_k'],
         'composite_roughness_rq_m': rq,
         'film_ratio': lam, 'regime': regime,
+        'in_common_industrial_window': fric['in_common_industrial_window'],
         'friction_coefficient': fric['friction_coefficient'],
         'dmu_dlambda': fric['dmu_dlambda'],
         'dmu_dspeed_per_m_s': dmu_dspeed,
@@ -551,7 +579,9 @@ def friction_speed_curve(lubricant, finish, closure, *, exit_speeds_m_s, entry_t
             'exit_speed_m_s': ux, 'roll_surface_speed_m_s': r['roll_surface_speed_m_s'],
             'strip_entry_speed_m_s': r['strip_entry_speed_m_s'],
             'film_thickness_m': r['film_thickness_m'], 'film_ratio': r['film_ratio'],
-            'regime': r['regime'], 'friction_coefficient': r['friction_coefficient'],
+            'regime': r['regime'],
+            'in_common_industrial_window': r['in_common_industrial_window'],
+            'friction_coefficient': r['friction_coefficient'],
             'dmu_dspeed_per_m_s': r['dmu_dspeed_per_m_s'],
             'dmu_dexit_speed_per_m_s': r['dmu_dspeed_per_m_s'] / (1 + f),
             'thermal_reduction_factor': r['thermal_reduction_factor']})

@@ -1918,8 +1918,8 @@
         {
           "basis": "model",
           "criterion": "film regime",
-          "expected": "boundary (Lambda < 1)",
-          "observed": "Lambda = 0.142 (BOUNDARY)",
+          "expected": "substantial asperity contact (Lambda < 1)",
+          "observed": "Lambda = 0.142 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "SUPPORTS",
           "weight": "weak"
         }
@@ -2026,7 +2026,7 @@
           "basis": "model",
           "criterion": "film regime",
           "expected": "hydrodynamic (Lambda > 3)",
-          "observed": "Lambda = 0.142 (BOUNDARY)",
+          "observed": "Lambda = 0.142 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "NEUTRAL",
           "weight": null
         },
@@ -2360,7 +2360,7 @@
         {
           "basis": "input",
           "criterion": "tribology regime / exit strip temperature at the operating point",
-          "expected": "BOUNDARY or above the temperature limit",
+          "expected": "above the temperature limit (a film ratio below 1 is normal mixed-regime operation and no longer counts [BT-S3 EX, BT-S9 EX])",
           "observed": "no tribology",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -4482,6 +4482,7 @@
       ],
       "formula": "h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))",
       "formula_attribution": "Wilson & Walowit (1972) as named in the project spec; quoted from memory, not in the verified source list",
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "inlet_angle_rad": 0.042880209304524804,
       "limitations": [
         "Smooth surfaces, isothermal Barus-viscosity inlet, no starvation, no inlet shear heating (which thins the film at high speed).",
@@ -4499,24 +4500,29 @@
       "film_ratio": 0.14236831514136594,
       "film_thickness_m": 5.559660435961149e-08,
       "flags": [],
+      "in_common_industrial_window": true,
       "limitations": [
         "Rq-based ratio ignores roughness lay/orientation and asperity flattening in the bite."
       ],
       "reasons": [
-        "Film ratio 0.142: boundary lubrication.",
+        "Film ratio 0.142: mixed lubrication with substantial asperity contact (the normal condition for a roll imprint).",
         "Film thickness rises with speed and viscosity, lowering friction; lower friction shrinks the chatter margin."
       ],
-      "regime": "BOUNDARY",
+      "regime": "MIXED_SUBSTANTIAL_CONTACT",
       "regime_boundaries": {
-        "boundary_below": 1.0,
-        "hydrodynamic_above": 3.0
+        "common_industrial_window": [
+          0.01,
+          0.5
+        ],
+        "hydrodynamic_above": 3.0,
+        "substantial_contact_below": 1.0
       },
       "sources": [
         "Sutcliffe (2002) in Lenard (ed.) Metal Forming Science and Practice, doi:10.1016/b978-008044024-8/50004-7 (film ratio regimes)",
         "Reid & Schey (1978) ASLE Trans. 21(3), doi:10.1080/05698197808982874 (full-film lubrication, negative forward slip, matte surface)"
       ],
-      "status": "BOUNDARY_LUBRICATION",
-      "threshold_basis": "Conventional regime boundaries (Sutcliffe 2002); transitions are gradual, not sharp."
+      "status": "MIXED_SUBSTANTIAL_CONTACT_LUBRICATION",
+      "threshold_basis": "Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 substantial asperity contact inside the mixed regime, the normal condition for a roll imprint; common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions are gradual, not sharp."
     },
     "forward_slip": {
       "flags": [],

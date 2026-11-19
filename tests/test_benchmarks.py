@@ -177,6 +177,15 @@ class BenchmarkTests(unittest.TestCase):
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
         rows = bm.table_rows(self.result)
         self.assertEqual(len(rows), sum(len(c['quantities']) for c in self.result['cases']))
+        for case in self.result['cases']:   # row verdict: no reference -> NO_REFERENCE_VALUE
+            for q in case['quantities']:
+                self.assertEqual(q['row_verdict'], bm.NO_REFERENCE_VALUE
+                                 if q['reference_value'] is None else case['verdict'])
+        for r in rows:
+            self.assertEqual(r['verdict'] == bm.NO_REFERENCE_VALUE, r['reference'] is None)
+        slip = [r for r in rows if r['id'] == 'BT-V1' and r['quantity'] == 'forward_slip_fraction']
+        self.assertEqual([(r['verdict'], r['case_verdict']) for r in slip],
+                         [('NO_REFERENCE_VALUE', 'RECORDED_DISCREPANCY')])
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.assertEqual(bm.main(['--json']), 0)

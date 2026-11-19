@@ -18,11 +18,13 @@ Couplings made here (integration choices, documented in the result):
 - friction fixed point on the contact radius, friction -> bite -> R' -> friction, at most
   ``FRICTION_FIXED_POINT_ITERATIONS`` passes; the friction kept is the last one whose bite was
   derived, so friction, bite and R' are mutually consistent to ``FRICTION_FIXED_POINT_TOL``;
-- inputs to ``friction_at_speed``: contact radius ``R*bite.contact_radius_ratio``,
+- inputs to ``friction_at_speed``: radius of the film's inlet angle ``R*film_radius_ratio(bite)``
+  (``R'`` of a Hitchcock bite, the undeformed ``R`` of a mattress bite [BT-S3 EX; SPEC17]),
   plane-strain yield ``2Y/sqrt(3)``, back tension = entry tension, roll surface speed
   ``u_exit/(1+f)``, strip entry speed ``u_exit*h_exit/h_entry`` (SPEC6 6.7);
-- the placeholder closure stays in the boundary regime for ground rolls: absolute friction
-  values are placeholders; the SLOPE with speed is the useful output (SPEC6 6.7);
+- the placeholder closure keeps friction near 0.09 over most of the common industrial
+  film-ratio window: its end values match the one abstract on aluminium [BT-S6 AB], but
+  neither its level nor its slope with speed is supported (SPEC6 6.7; SPEC17 X22);
 - speed-consistent critical speed: the exit speed ``u`` with ``u = u_crit(mu(u))``, scanned
   and bisected in log speed with the contact radius held at the operating value;
 - AGC: the supplied loop and, when no force filter is supplied, the same loop with a 25 Hz
@@ -288,6 +290,26 @@ def is_mattress(bite):
     return MATTRESS_FLAG in bite.flags
 
 
+# Inlet angle of the film [D, re-derived in SPEC17]: for a bite h(x) = h1 + x^2/R_c the inlet is
+# at x_i = -sqrt(R_c*draft) and each roll surface's slope there is |x_i|/R_c = sqrt(draft/R_c).
+# Hitchcock bite: R_c = R' (the deformed arc). Mattress bite: the roll is not an arc and its
+# contact_radius_ratio L^2/(R*draft) is not a radius (it would give draft/L, the mean slope of
+# the whole bite); the undeformed roll is used, R_c = R [BT-S3 EX]. The local slope of the
+# mattress solution at the plastic entry is not used: its entry zone holds a rigid strip.
+INLET_ANGLE_BASIS_MATTRESS = ('undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; '
+                              'the mattress contact_radius_ratio L^2/(R*draft) is not a radius')
+INLET_ANGLE_BASIS_ARC = "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]"
+
+
+def film_radius_ratio(bite):
+    """Radius ratio R_c/R of the film's inlet angle (1.0 for a mattress bite)."""
+    return 1.0 if is_mattress(bite) else bite.contact_radius_ratio
+
+
+def inlet_angle_basis(bite):
+    return INLET_ANGLE_BASIS_MATTRESS if is_mattress(bite) else INLET_ANGLE_BASIS_ARC
+
+
 def _mu_inputs(trib, src, radius, ratio, slip, exit_speed):
     h0, h1 = src['entry_thickness_m'], src['exit_thickness_m']
     return dict(roll_surface_speed_m_s=exit_speed / (1 + slip),
@@ -427,16 +449,21 @@ def friction_single(case, src, trib, cache, op_bite=None):
         bite = (case_pass_bite(case, src, op_bite)
                 or cache.get(bite_pass(case, src)))
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
+        film_ratio, basis = film_radius_ratio(bite), inlet_angle_basis(bite)
         out['bite_source'] = 'experimental_mattress' if is_mattress(bite) else bite.source
     except ValueError as exc:
         ratio, slip = 1.0, 0.0
+        film_ratio, basis = 1.0, INLET_ANGLE_BASIS_MATTRESS + ' (no bite)'
         out['bite_error'] = str(exc)
         out['method'] += ' (bite rejected: undeformed roll radius used)'
-    res = friction_at(trib, src, radius, ratio, slip, u)
+    res = friction_at(trib, src, radius, film_ratio, slip, u)
     out.update(computed_friction_coefficient=res['friction_coefficient'], converged=None,
                iterations=[], contact_radius_ratio=ratio, forward_slip_fraction=slip,
+               film_inlet_radius_ratio=film_ratio, inlet_angle_basis=basis,
                film_thickness_m=res['film_thickness_m'], film_ratio=res['film_ratio'],
-               regime=res['regime'], dmu_droll_speed_per_m_s=res['dmu_dspeed_per_m_s'],
+               regime=res['regime'],
+               in_common_industrial_window=res['in_common_industrial_window'],
+               dmu_droll_speed_per_m_s=res['dmu_dspeed_per_m_s'],
                dmu_dexit_speed_per_m_s=res['dmu_dspeed_per_m_s'] / (1 + slip))
     return out
 
@@ -446,7 +473,8 @@ def friction_fixed_point(case, src, trib, cache):
     radius = case['pass']['work_roll_radius_m']
     u = src['exit_speed_m_s']
     ratio, slip = 1.0, 0.0
-    first = friction_at(trib, src, radius, ratio, slip, u)
+    film_ratio, basis = 1.0, INLET_ANGLE_BASIS_MATTRESS + ' (no bite)'
+    first = friction_at(trib, src, radius, film_ratio, slip, u)
     mu = first['friction_coefficient']
     history = [{'iteration': 0, 'contact_radius_ratio': ratio, 'forward_slip_fraction': slip,
                 'friction_coefficient': mu}]
@@ -460,7 +488,8 @@ def friction_fixed_point(case, src, trib, cache):
             bite = None
             break
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
-        res = friction_at(trib, src, radius, ratio, slip, u)
+        film_ratio, basis = film_radius_ratio(bite), inlet_angle_basis(bite)
+        res = friction_at(trib, src, radius, film_ratio, slip, u)
         new = res['friction_coefficient']
         history.append({'iteration': k, 'contact_radius_ratio': ratio,
                         'forward_slip_fraction': slip, 'friction_coefficient': new,
@@ -475,8 +504,11 @@ def friction_fixed_point(case, src, trib, cache):
            'computed_friction_coefficient': mu, 'converged': converged,
            'iterations': history, 'tolerance': FRICTION_FIXED_POINT_TOL,
            'contact_radius_ratio': ratio, 'forward_slip_fraction': slip,
+           'film_inlet_radius_ratio': film_ratio, 'inlet_angle_basis': basis,
            'film_thickness_m': last['film_thickness_m'], 'film_ratio': last['film_ratio'],
-           'regime': last['regime'], 'dmu_droll_speed_per_m_s': last['dmu_dspeed_per_m_s'],
+           'regime': last['regime'],
+           'in_common_industrial_window': last['in_common_industrial_window'],
+           'dmu_droll_speed_per_m_s': last['dmu_dspeed_per_m_s'],
            'dmu_dexit_speed_per_m_s': last['dmu_dspeed_per_m_s'] / f,
            'bite_source': None if bite is None else
            ('experimental_mattress' if is_mattress(bite) else bite.source),
@@ -505,9 +537,10 @@ def friction_section(case, trib, cache, op_bite=None):
     return {'status': bt.STATUS_FRICTION, 'use_computed_friction': trib['use_computed_friction'],
             'operating': rows[0], 'schedule': rows[1:],
             'flags': [bt.PLACEHOLDER_FLAG],
-            'note': ('PLACEHOLDER friction closure (not fitted): with ground-roll roughness it '
-                     'stays near the boundary regime; read the absolute friction as a '
-                     'placeholder and the slope with speed (dmu/du) as the useful output. '
+            'note': ('PLACEHOLDER friction closure (not fitted): its end values 0.09 and 0.008 '
+                     'match the one abstract on aluminium [BT-S6 AB], but it keeps friction '
+                     'near 0.09 over most of the common industrial film-ratio window (0.01-0.5), '
+                     'so neither its level nor its slope with speed (dmu/du) is supported. '
                      'With use_computed_friction the friction is a fixed point friction -> '
                      f'bite -> R\' -> friction (at most {FRICTION_FIXED_POINT_ITERATIONS} passes, '
                      f'tolerance {FRICTION_FIXED_POINT_TOL:g}); otherwise it is evaluated once '
@@ -524,7 +557,7 @@ def apply_friction(case, section):
 
 def friction_curve(case, trib, bite):
     p = case['pass']
-    radius = p['work_roll_radius_m'] * bite.contact_radius_ratio
+    radius = p['work_roll_radius_m'] * film_radius_ratio(bite)
     speeds = sorted(set(_logspace(*CURVE_SPEEDS_M_S, CURVE_POINTS)
                         + [p['exit_speed_m_s']] + list(SLOPE_REFERENCE_SPEEDS_M_S)))
     lub, fin, clo = tribology_objects(trib)
@@ -548,6 +581,7 @@ def friction_curve(case, trib, bite):
             'operating_friction_coefficient': op['friction_coefficient'],
             'supplied_friction_coefficient': p['friction_coefficient'],
             'contact_radius_m': radius, 'forward_slip_fraction': bite.forward_slip_fraction,
+            'inlet_angle_basis': inlet_angle_basis(bite),
             'mean_slope_per_m_s': mean_slope, 'mean_slope_speeds_m_s': [a, b],
             'flags': curve['flags'],
             'note': 'Contact radius and forward slip held at the operating bite; the absolute '
@@ -630,7 +664,7 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
     """Exit speed u with u = u_crit(mu(u)) (friction falls with speed), both beta and 0."""
     p = case['pass']
     radius = p['work_roll_radius_m']
-    ratio, slip = op_bite.contact_radius_ratio, op_bite.forward_slip_fraction
+    ratio, slip = film_radius_ratio(op_bite), op_bite.forward_slip_fraction
     memo = {}
     _, _, closure = tribology_objects(trib)
     anchor = friction_at(trib, p, radius, ratio, slip, p['exit_speed_m_s'])[
@@ -698,6 +732,7 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
             'status_without_bite_damping': roots[
                 'critical_exit_speed_without_bite_damping_m_s'][1],
             'bite_damping_transit_fraction': beta, 'contact_radius_ratio_held': ratio,
+            'inlet_angle_basis': inlet_angle_basis(op_bite),
             'friction_used_at_operating_speed': mu_used,
             'placeholder_closure_friction_at_operating_speed': anchor,
             'friction_law': ('mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at '
@@ -707,8 +742,8 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
             'relative_tolerance': SPEED_CONSISTENT_REL_TOL,
             'note': 'Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in '
                     'log speed (bracket below 1 % or 6 iterations); mu(u) from the '
-                    'placeholder closure with the contact radius and forward slip held at the '
-                    'operating bite. Friction falling with speed lowers the critical speed.'}
+                    'placeholder closure with the inlet-angle radius and forward slip held at '
+                    'the operating bite. Friction falling with speed lowers the critical speed.'}
 
 
 def _illinois(fun, a, fa, b, fb):
@@ -835,9 +870,9 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
             sens = friction_force_sensitivity(get_bite, bite_pass(case, p))
             radius = p['work_roll_radius_m']
             lo_u = 0.5 * u
-            mu_hi = friction_at(trib, p, radius, bite.contact_radius_ratio,
+            mu_hi = friction_at(trib, p, radius, film_radius_ratio(bite),
                                 bite.forward_slip_fraction, u)['friction_coefficient']
-            mu_lo = friction_at(trib, p, radius, bite.contact_radius_ratio,
+            mu_lo = friction_at(trib, p, radius, film_radius_ratio(bite),
                                 bite.forward_slip_fraction, lo_u)['friction_coefficient']
             shift = md.speed_change_gauge_shift(sens['dforce_dfriction_n'], mu_hi - mu_lo,
                                                 stand.mill_modulus_n_m, bite.strip_modulus_n_m,

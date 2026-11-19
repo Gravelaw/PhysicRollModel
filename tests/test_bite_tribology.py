@@ -125,10 +125,35 @@ class FrictionTests(unittest.TestCase):
         fd = (friction_coefficient(1 + d)['friction_coefficient']
               - friction_coefficient(1 - d)['friction_coefficient']) / (2 * d)
         self.assertAlmostEqual(r['dmu_dlambda'], fd, places=7)
-        self.assertEqual(friction_coefficient(0.5)['regime'], 'BOUNDARY')
-        self.assertEqual(friction_coefficient(2.0)['regime'], 'MIXED')
+        self.assertEqual(friction_coefficient(0.5)['regime'], 'MIXED_SUBSTANTIAL_CONTACT')
+        self.assertEqual(friction_coefficient(2.0)['regime'], 'MIXED_FIRST_CONTACT')
         self.assertEqual(friction_coefficient(4.0)['regime'], 'HYDRODYNAMIC')
         self.assertIn(PLACEHOLDER_FLAG, r['flags'])
+
+    def test_regime_labels_and_window(self):
+        """SPEC17 BT-G8: a film ratio below 1 is mixed lubrication with substantial asperity
+        contact (BT-S9 EX); 0.01-0.5 is the common industrial window (BT-S3 EX, BT-S9 EX); no
+        boundary label is produced anywhere."""
+        for lam, window in ((0.005, False), (0.01, True), (0.5, True), (0.99, False)):
+            r = friction_coefficient(lam)
+            self.assertEqual(r['regime'], 'MIXED_SUBSTANTIAL_CONTACT')
+            self.assertIs(r['in_common_industrial_window'], window)
+        for lam in (1.0, 3.0):
+            self.assertEqual(friction_coefficient(lam)['regime'], 'MIXED_FIRST_CONTACT')
+        self.assertEqual(friction_coefficient(3.01)['regime'], 'HYDRODYNAMIC')
+        self.assertEqual(friction_coefficient(0.3)['regime_boundaries'],
+                         {'substantial_contact_below': 1.0, 'hydrodynamic_above': 3.0,
+                          'common_industrial_window': [0.01, 0.5]})
+        results = [friction_coefficient(x) for x in (0.0, 0.005, 0.3, 0.99, 1.0, 2.0, 3.0, 10.0)]
+        results.append(friction_at_speed(kerosene(), FINISH, None, **case()))
+        results.append(friction_speed_curve(
+            kerosene(), FINISH, FrictionClosure(), exit_speeds_m_s=[0.01, 2, 16, 150],
+            entry_thickness_m=0.30e-3, exit_thickness_m=0.21e-3, contact_radius_m=0.29,
+            plane_strain_yield_pa=2 * 270e6 / math.sqrt(3), back_tension_pa=25e6,
+            inlet_temperature_k=C0 + 50))
+        for r in results:
+            self.assertNotIn('BOUNDARY', json.dumps(r))
+        self.assertIn('substantial asperity contact', results[2]['reasons'][0])
 
     def test_friction_falls_monotonically_with_speed(self):
         curve = friction_speed_curve(

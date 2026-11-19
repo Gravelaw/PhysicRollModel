@@ -166,7 +166,7 @@ class LengthwisePlantedTruthTests(unittest.TestCase):
         c['width_model'] = width_model(gap_crown_m=40e-6, entry_crown_m=3e-6,
                                        heredity_coefficient=0.3)
         cls.r['profile'] = diagnose(c)
-        # 8 heat streak: gloss bands that wander, worse at speed, boundary-regime tribology
+        # 8 heat streak: gloss bands that wander, worse at speed, tribology supplied
         c = v2(**LONG, appearance='gloss_or_shade', gauge_variation_detected=False,
                positions_repeat_across_coils=False, lengthwise_continuity='intermittent',
                worse_at_higher_speed=True)
@@ -254,7 +254,32 @@ class LengthwisePlantedTruthTests(unittest.TestCase):
     def test_heat_streak_leads(self):
         self._leads('heat', 'heat_streak_or_film_variation')
         self.assertEqual(self.r['heat']['process']['friction']['operating']['regime'],
-                         'BOUNDARY')
+                         'MIXED_SUBSTANTIAL_CONTACT')
+
+    def test_heat_streak_regime_item(self):
+        """SPEC17 BT-G8: the film-ratio label no longer supports the heat-streak hypothesis;
+        only an exit temperature above the supplied limit does (weak)."""
+        crit = 'tribology regime / exit strip temperature at the operating point'
+
+        def item(result):
+            h = _h(result)['heat_streak_or_film_variation']
+            return next(e for e in h['evidence'] if e['criterion'] == crit)
+
+        e = item(self.r['heat'])                        # tribology, no temperature limit
+        self.assertEqual(e['verdict'], 'NEUTRAL')
+        self.assertEqual(e['basis'], 'model')
+        self.assertIn('no longer counts', e['expected'])
+        self.assertIn('MIXED_SUBSTANTIAL_CONTACT', e['observed'])
+        exit_k = self.r['heat']['process']['heating']['operating']['exit_temperature_k']
+        c = v2(**LONG, appearance='gloss_or_shade', gauge_variation_detected=False,
+               positions_repeat_across_coils=False, lengthwise_continuity='intermittent',
+               worse_at_higher_speed=True)
+        c['tribology'] = dict(TRIBOLOGY, temperature_limit_k=exit_k - 1.0)
+        hot = diagnose(c)
+        e = item(hot)
+        self.assertEqual((e['verdict'], e['weight'], e['basis']), ('SUPPORTS', 'weak', 'model'))
+        self.assertIn('exit temperature above limit: True', e['observed'])
+        self.assertEqual(hot['leading_hypotheses'][:1], ['heat_streak_or_film_variation'])
 
     def test_stain_leads(self):
         self._leads('stain', 'oil_carryover_drips_or_stain')

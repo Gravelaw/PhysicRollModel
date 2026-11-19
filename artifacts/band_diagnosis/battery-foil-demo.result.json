@@ -19,7 +19,7 @@
       "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
       "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
       "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-      "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+      "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
       "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
     ],
     "forward_slip_fraction": 0.1896489804627004,
@@ -27,7 +27,7 @@
     "source": "supplied",
     "strip_modulus_n_m": 88665051318.04382
   },
-  "bite_derivations": 27,
+  "bite_derivations": 32,
   "bite_error": null,
   "bite_fallback_reason": "Hitchcock contact radius ratio 2.481 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed",
   "case_name": "battery_foil_demo",
@@ -46,7 +46,7 @@
         "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
         "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
         "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
         "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
       ],
       "limitations": [
@@ -81,7 +81,7 @@
       "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
       "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
       "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-      "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+      "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
       "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
     ],
     "growth_curve": [
@@ -399,98 +399,137 @@
     "span_wave_limit_hz": 848.6251286955259,
     "speed_consistent": {
       "bite_damping_transit_fraction": 0.5,
-      "contact_radius_ratio_held": 2.1054592442148357,
+      "contact_radius_ratio_held": 1.0,
       "fixed_friction_coefficient": 0.03,
       "fixed_friction_critical_exit_speed_m_s": null,
       "fixed_friction_critical_exit_speed_without_bite_damping_m_s": 6.363055272576105,
       "forward_slip_fraction_held": 0.1896489804627004,
       "friction_law": "mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at the closure mu_v: the placeholder closure supplies the slope, the friction used at the operating point the level",
       "friction_used_at_operating_speed": 0.03,
-      "lowest_assessable_exit_speed_m_s": {
-        "without_bite_damping": 7.924465962305566
-      },
-      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the contact radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
-      "placeholder_closure_friction_at_operating_speed": 0.055239319435180456,
+      "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
+      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the inlet-angle radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
+      "placeholder_closure_friction_at_operating_speed": 0.06407257644819582,
       "relative_tolerance": 0.01,
       "scan": [
         {
           "exit_speed_m_s": 0.5,
-          "friction_coefficient": 0.06303967442856281,
-          "placeholder_closure_friction_coefficient": 0.08827899386374327,
-          "rejected": "Coulomb shear mu*p reaches 1.52 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
+          "friction_coefficient": 0.054737452503148806,
+          "placeholder_closure_friction_coefficient": 0.08881002895134463,
+          "rejected": "Coulomb shear mu*p reaches 1.14 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
         },
         {
           "exit_speed_m_s": 1.25594321575479,
-          "friction_coefficient": 0.06050604909079055,
-          "placeholder_closure_friction_coefficient": 0.085745368525971,
-          "rejected": "Coulomb shear mu*p reaches 1.41 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
-        },
-        {
-          "exit_speed_m_s": 3.1547867224009667,
-          "friction_coefficient": 0.054488973263485646,
-          "placeholder_closure_friction_coefficient": 0.0797282926986661,
-          "rejected": "Coulomb shear mu*p reaches 1.13 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
+          "friction_coefficient": 0.05297106058808708,
+          "placeholder_closure_friction_coefficient": 0.0870436370362829,
+          "rejected": "Coulomb shear mu*p reaches 1.07 x the material shear yield K/2 in a slip zone; sticking/shear-friction model required (outside this model's domain)"
         },
         {
           "critical_exit_speed_m_s": null,
-          "critical_exit_speed_without_bite_damping_m_s": 5.428258459693518,
+          "critical_exit_speed_without_bite_damping_m_s": 4.78872901143114,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 3.1547867224009667,
+          "friction_coefficient": 0.04870251577655775,
+          "placeholder_closure_friction_coefficient": 0.08277509222475357
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.061372906704388,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 4.630091452145762,
+          "friction_coefficient": 0.04554584551564948,
+          "placeholder_closure_friction_coefficient": 0.0796184219638453
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.136093981637883,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 5.041914262561282,
+          "friction_coefficient": 0.04468871641251178,
+          "placeholder_closure_friction_coefficient": 0.0787612928607076
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.156687298429954,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 5.156106316871262,
+          "friction_coefficient": 0.044452869684705756,
+          "placeholder_closure_friction_coefficient": 0.07852544613290158
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.156909749570792,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 5.157342771664162,
+          "friction_coefficient": 0.04445032027754352,
+          "placeholder_closure_friction_coefficient": 0.07852289672573934
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.167878235514689,
+          "critical_status": "STABLE_OVER_SCANNED_RANGE",
+          "exit_speed_m_s": 5.218293674879572,
+          "friction_coefficient": 0.044324761707697266,
+          "placeholder_closure_friction_coefficient": 0.07839733815589309
+        },
+        {
+          "critical_exit_speed_m_s": null,
+          "critical_exit_speed_without_bite_damping_m_s": 5.635838195856678,
           "critical_status": "STABLE_OVER_SCANNED_RANGE",
           "exit_speed_m_s": 7.924465962305566,
-          "friction_coefficient": 0.04134947698152719,
-          "placeholder_closure_friction_coefficient": 0.06658879641670765
+          "friction_coefficient": 0.03896966230426381,
+          "placeholder_closure_friction_coefficient": 0.07304223875245963
         },
         {
-          "critical_exit_speed_m_s": 23.135306738443298,
-          "critical_exit_speed_without_bite_damping_m_s": 6.534593087897976,
+          "critical_exit_speed_m_s": 22.214569731373196,
+          "critical_exit_speed_without_bite_damping_m_s": 6.549325893709913,
           "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 14.485123145521259,
-          "friction_coefficient": 0.02711561347802055,
-          "placeholder_closure_friction_coefficient": 0.052354932913201015
+          "exit_speed_m_s": 15.014517209021466,
+          "friction_coefficient": 0.026792860240696534,
+          "placeholder_closure_friction_coefficient": 0.060865436688892355
         },
         {
-          "critical_exit_speed_m_s": 16.40587178096117,
-          "critical_exit_speed_without_bite_damping_m_s": 6.6162508405969,
+          "critical_exit_speed_m_s": 16.825863008248717,
+          "critical_exit_speed_without_bite_damping_m_s": 6.616033390309103,
           "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 16.24245041637226,
-          "friction_coefficient": 0.023929192525453002,
-          "placeholder_closure_friction_coefficient": 0.04916851196063345
+          "exit_speed_m_s": 16.741294242324496,
+          "friction_coefficient": 0.024190217398904507,
+          "placeholder_closure_friction_coefficient": 0.05826279384710033
         },
         {
-          "critical_exit_speed_m_s": 16.08875590363406,
-          "critical_exit_speed_without_bite_damping_m_s": 6.6154127902538455,
+          "critical_exit_speed_m_s": 16.68335569993857,
+          "critical_exit_speed_without_bite_damping_m_s": 6.616264431477186,
           "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 16.359134863489867,
-          "friction_coefficient": 0.02372590998335357,
-          "placeholder_closure_friction_coefficient": 0.048965229418534026
+          "exit_speed_m_s": 16.800911276948018,
+          "friction_coefficient": 0.024102686470875406,
+          "placeholder_closure_friction_coefficient": 0.05817526291907123
         },
         {
-          "critical_exit_speed_m_s": 15.15931084693101,
-          "critical_exit_speed_without_bite_damping_m_s": 6.606879785541518,
+          "critical_exit_speed_m_s": 16.112480490801968,
+          "critical_exit_speed_without_bite_damping_m_s": 6.615507914951593,
           "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
-          "exit_speed_m_s": 16.722882486877207,
-          "friction_coefficient": 0.023098624217344377,
-          "placeholder_closure_friction_coefficient": 0.04833794365252483
+          "exit_speed_m_s": 17.048154484630714,
+          "friction_coefficient": 0.02374130299324216,
+          "placeholder_closure_friction_coefficient": 0.057813879441437975
         },
         {
-          "critical_exit_speed_m_s": 9.415309822207243,
-          "critical_exit_speed_without_bite_damping_m_s": 5.212178686688494,
+          "critical_exit_speed_m_s": 11.122584987625846,
+          "critical_exit_speed_without_bite_damping_m_s": 6.404896681829309,
           "critical_status": "UNSTABLE_ABOVE_CRITICAL_SPEED",
           "exit_speed_m_s": 19.905358527674867,
-          "friction_coefficient": 0.018004279637909862,
-          "placeholder_closure_friction_coefficient": 0.04324359907309032
+          "friction_coefficient": 0.019749200947878326,
+          "placeholder_closure_friction_coefficient": 0.05382177739607415
         },
         {
           "exit_speed_m_s": 50.0,
           "friction_coefficient": 0.008,
-          "placeholder_closure_friction_coefficient": 0.01783152069880997,
+          "placeholder_closure_friction_coefficient": 0.027008806500432844,
           "rejected": "the entry slip branch already reaches the no-slip state at h_n = 2.994e-05 m <= exit thickness 3.000e-05 m: the reduction would need a sticking exit (zero forward slip), a structure this experimental model does not represent (foil regime beyond its limit)"
         }
       ],
-      "scan_note": "speeds below the lowest assessable one have no roll bite with the operating bite's model (see scan[].rejected)",
-      "speed_consistent_critical_exit_speed_m_s": 16.286309779030212,
-      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": null,
+      "speed_consistent_critical_exit_speed_m_s": 16.766212209754492,
+      "speed_consistent_critical_exit_speed_without_bite_damping_m_s": 5.156814717332525,
       "status": "CROSSING_FOUND",
-      "status_without_bite_damping": "UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED"
+      "status_without_bite_damping": "CROSSING_FOUND"
     },
     "stability": {
       "bite_damping_transit_fraction": 0.5,
@@ -506,7 +545,7 @@
         "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
         "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
         "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
         "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
       ],
       "limitations": [
@@ -628,7 +667,7 @@
         "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
         "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
         "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
         "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
       ],
       "responses": [
@@ -700,7 +739,7 @@
     "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
     "DERIVED_BY_EXPERIMENTAL_MATTRESS_MODEL",
     "EXPERIMENTAL_MATTRESS_FOIL_MODEL",
-    "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+    "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
     "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
     "LUDERS_STRAIN_NOT_SUPPLIED_ZERO_USED_IN_WINDOWS",
     "MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN",
@@ -726,7 +765,7 @@
         "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
         "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
         "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-        "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+        "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
         "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
       ],
       "force_per_width_within_reported_range": true,
@@ -2215,7 +2254,7 @@
           "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
           "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
         "max_growth_rate_per_s": -1.915242574748106,
@@ -2244,7 +2283,7 @@
           "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
           "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL",
           "ANALYST_FORCE_FILTER_OPTION_NOT_FROM_CITED_SOURCE"
         ],
@@ -2371,17 +2410,17 @@
       ]
     },
     "speed_change_gauge_shift": {
-      "cylinder_stroke_change_m": 7.451767324811578e-05,
-      "delta_friction": -0.01499912683145442,
+      "cylinder_stroke_change_m": 5.8304125048927616e-05,
+      "delta_friction": -0.011735618253861088,
       "dforce_dfriction_n": 61683234.628191575,
-      "exit_thickness_change_m": -8.27974147201286e-06,
-      "exit_thickness_change_without_agc_m": -1.0170020411485862e-05,
-      "friction_at_low_speed": 0.07023844626663488,
-      "friction_at_operating_speed": 0.055239319435180456,
+      "exit_thickness_change_m": -6.478236116547506e-06,
+      "exit_thickness_change_without_agc_m": -7.957228345644981e-06,
+      "friction_at_low_speed": 0.07580819470205691,
+      "friction_at_operating_speed": 0.06407257644819582,
       "from_exit_speed_m_s": 6.5,
       "label": "static formulas with tension coupling OFF (tensions held by the reel regulators); with coupling on the constant-speed spans drive the DC gauge response to the mass-flow limit (mill_dynamics docstring)",
       "sensitivity_bite_model": "experimental_mattress",
-      "separating_force_change_n": -191070.9570464507,
+      "separating_force_change_n": -149497.75653571181,
       "to_exit_speed_m_s": 13.0
     },
     "static_formulas_label": "static formulas with tension coupling OFF (tensions held by the reel regulators); with coupling on the constant-speed spans drive the DC gauge response to the mass-flow limit (mill_dynamics docstring)",
@@ -2770,128 +2809,6 @@
       "title": "Profile / flatness mismatch (edge wave, centre buckle)"
     },
     {
-      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
-      "evidence": [
-        {
-          "basis": "observation",
-          "criterion": "orientation",
-          "expected": "longitudinal",
-          "observed": "longitudinal",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "appearance",
-          "expected": "gloss_or_shade",
-          "observed": "loose_or_buckle",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "gauge variation",
-          "expected": "not detected",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions repeat across coils",
-          "expected": "false",
-          "observed": "true",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "continuity",
-          "expected": "intermittent or both",
-          "observed": "both",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "worse at higher speed",
-          "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "model",
-          "criterion": "tribology regime / exit strip temperature at the operating point",
-          "expected": "BOUNDARY or above the temperature limit",
-          "observed": "regime BOUNDARY; exit temperature above limit: False",
-          "verdict": "SUPPORTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions change after work-roll change",
-          "expected": "false",
-          "observed": "false",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "tracks speed changes",
-          "expected": "true",
-          "observed": "false",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "model",
-          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
-          "expected": "0.3-3",
-          "observed": "Lambda = 0.551 (tribology inlet film at the operating point)",
-          "verdict": "SUPPORTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "changes with exit air blow-off",
-          "expected": "n/a",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        }
-      ],
-      "family": "lengthwise",
-      "id": "heat_streak_or_film_variation",
-      "levers": [
-        "lower the oil inlet temperature",
-        "increase coolant flow",
-        "reduce speed",
-        "regrind for uniform roll roughness"
-      ],
-      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
-      "model_prediction": {
-        "exit_temperature_above_limit": false,
-        "film_ratio_at_operating_point": 0.5514926625761135,
-        "film_ratio_basis": "tribology inlet film at the operating point",
-        "regime_at_operating_point": "BOUNDARY"
-      },
-      "rank": 4,
-      "score": 4,
-      "standing": "CONSISTENT",
-      "tallies": {
-        "contradiction_points": 2,
-        "contradicts": 2,
-        "neutral": 2,
-        "not_observed": 3,
-        "observation_supports": 2,
-        "strong_contradictions": 0,
-        "support_points": 6,
-        "supports": 4
-      },
-      "title": "Heat streak / friction or oil-film band (no roll bump)"
-    },
-    {
       "confirming_test": "Vary the span tension and watch the bands; check roll alignment and crown of the deflector / idler rolls; measure the trough spacing.",
       "evidence": [
         {
@@ -3001,7 +2918,7 @@
           "exit_span": 0.12028425328457691
         }
       },
-      "rank": 5,
+      "rank": 4,
       "score": 4,
       "standing": "CONSISTENT",
       "tallies": {
@@ -3015,6 +2932,128 @@
         "supports": 3
       },
       "title": "Tension troughs or creases"
+    },
+    {
+      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "longitudinal",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "loose_or_buckle",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "gauge variation",
+          "expected": "not detected",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false",
+          "observed": "true",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "both",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at higher speed",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "tribology regime / exit strip temperature at the operating point",
+          "expected": "above the temperature limit (a film ratio below 1 is normal mixed-regime operation and no longer counts [BT-S3 EX, BT-S9 EX])",
+          "observed": "regime MIXED_SUBSTANTIAL_CONTACT; exit temperature above limit: False",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "false",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "tracks speed changes",
+          "expected": "true",
+          "observed": "false",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "model",
+          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
+          "expected": "0.3-3",
+          "observed": "Lambda = 0.38 (tribology inlet film at the operating point)",
+          "verdict": "SUPPORTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with exit air blow-off",
+          "expected": "n/a",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "heat_streak_or_film_variation",
+      "levers": [
+        "lower the oil inlet temperature",
+        "increase coolant flow",
+        "reduce speed",
+        "regrind for uniform roll roughness"
+      ],
+      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
+      "model_prediction": {
+        "exit_temperature_above_limit": false,
+        "film_ratio_at_operating_point": 0.38007238761907647,
+        "film_ratio_basis": "tribology inlet film at the operating point",
+        "regime_at_operating_point": "MIXED_SUBSTANTIAL_CONTACT"
+      },
+      "rank": 5,
+      "score": 3,
+      "standing": "CONSISTENT",
+      "tallies": {
+        "contradiction_points": 2,
+        "contradicts": 2,
+        "neutral": 3,
+        "not_observed": 3,
+        "observation_supports": 2,
+        "strong_contradictions": 0,
+        "support_points": 5,
+        "supports": 3
+      },
+      "title": "Heat streak / friction or oil-film band (no roll bump)"
     },
     {
       "confirming_test": "Entry profile scan of the incoming coil and an outside-profile scan of the wound coil; check whether the band is worse toward the outer wraps and follows the mother coil.",
@@ -3411,8 +3450,8 @@
         {
           "basis": "model",
           "criterion": "film regime",
-          "expected": "boundary (Lambda < 1)",
-          "observed": "Lambda = 0.564 (BOUNDARY)",
+          "expected": "substantial asperity contact (Lambda < 1)",
+          "observed": "Lambda = 0.389 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "SUPPORTS",
           "weight": "weak"
         }
@@ -4212,7 +4251,7 @@
           "basis": "model",
           "criterion": "film regime",
           "expected": "hydrodynamic (Lambda > 3)",
-          "observed": "Lambda = 0.564 (BOUNDARY)",
+          "observed": "Lambda = 0.389 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "NEUTRAL",
           "weight": null
         },
@@ -4242,7 +4281,7 @@
       ],
       "mechanism": "With a thick film, low friction or high speed the neutral point moves to the exit and the rolls skid on the strip, giving irregular skid marks and a matte surface.",
       "model_prediction": {
-        "film_ratio": 0.5643234277654124,
+        "film_ratio": 0.38891497046994716,
         "forward_slip_fraction": 0.1896489804627004,
         "forward_slip_status": "NORMAL"
       },
@@ -6125,22 +6164,25 @@
       "flags": [
         "PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED"
       ],
-      "note": "PLACEHOLDER friction closure (not fitted): with ground-roll roughness it stays near the boundary regime; read the absolute friction as a placeholder and the slope with speed (dmu/du) as the useful output. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
+      "note": "PLACEHOLDER friction closure (not fitted): its end values 0.09 and 0.008 match the one abstract on aluminium [BT-S6 AB], but it keeps friction near 0.09 over most of the common industrial film-ratio window (0.01-0.5), so neither its level nor its slope with speed (dmu/du) is supported. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
       "operating": {
         "bite_source": "experimental_mattress",
-        "computed_friction_coefficient": 0.055239319435180456,
+        "computed_friction_coefficient": 0.06407257644819582,
         "contact_radius_ratio": 2.1054592442148357,
         "converged": null,
-        "dmu_dexit_speed_per_m_s": -0.0020040106205230527,
-        "dmu_droll_speed_per_m_s": -0.002384069191541673,
+        "dmu_dexit_speed_per_m_s": -0.0016393567704453124,
+        "dmu_droll_speed_per_m_s": -0.001950259110574891,
         "exit_speed_m_s": 13.0,
-        "film_ratio": 0.5514926625761135,
-        "film_thickness_m": 1.3787316564402837e-07,
+        "film_inlet_radius_ratio": 1.0,
+        "film_ratio": 0.38007238761907647,
+        "film_thickness_m": 9.501809690476911e-08,
         "forward_slip_fraction": 0.1896489804627004,
+        "in_common_industrial_window": true,
+        "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
         "iterations": [],
         "label": "case pass",
         "method": "single evaluation at the contact radius of the supplied-friction bite",
-        "regime": "BOUNDARY",
+        "regime": "MIXED_SUBSTANTIAL_CONTACT",
         "supplied_friction_coefficient": 0.03,
         "used_friction_coefficient": 0.03
       },
@@ -6153,13 +6195,16 @@
           "dmu_dexit_speed_per_m_s": -0.0009675433900121897,
           "dmu_droll_speed_per_m_s": -0.0010113299770538955,
           "exit_speed_m_s": 9.5,
+          "film_inlet_radius_ratio": 1.1252295871572449,
           "film_ratio": 0.1273125917298805,
           "film_thickness_m": 3.182814793247012e-08,
           "forward_slip_fraction": 0.04525542471139632,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "S1 0.260->0.135 mm (assumed stock route)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
@@ -6171,13 +6216,16 @@
           "dmu_dexit_speed_per_m_s": -0.0014986716880853524,
           "dmu_droll_speed_per_m_s": -0.0015981406415049525,
           "exit_speed_m_s": 10.5,
+          "film_inlet_radius_ratio": 1.2702517983254416,
           "film_ratio": 0.245237771158884,
           "film_thickness_m": 6.1309442789721e-08,
           "forward_slip_fraction": 0.06637141023640614,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "S2 0.135->0.085 mm (assumed stock route)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
@@ -6189,85 +6237,100 @@
           "dmu_dexit_speed_per_m_s": -0.0016755450194817355,
           "dmu_droll_speed_per_m_s": -0.0018320428468887988,
           "exit_speed_m_s": 11.5,
+          "film_inlet_radius_ratio": 1.4643701709094854,
           "film_ratio": 0.3253355513408799,
           "film_thickness_m": 8.133388783521997e-08,
           "forward_slip_fraction": 0.0934011474400549,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "S3 0.085->0.050 mm (assumed stock route)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.055239319435180456,
+          "computed_friction_coefficient": 0.06407257644819582,
           "contact_radius_ratio": 2.1054592442148357,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0020040106205230527,
-          "dmu_droll_speed_per_m_s": -0.002384069191541673,
+          "dmu_dexit_speed_per_m_s": -0.0016393567704453124,
+          "dmu_droll_speed_per_m_s": -0.001950259110574891,
           "exit_speed_m_s": 13.0,
-          "film_ratio": 0.5514926625761135,
-          "film_thickness_m": 1.3787316564402837e-07,
+          "film_inlet_radius_ratio": 1.0,
+          "film_ratio": 0.38007238761907647,
+          "film_thickness_m": 9.501809690476911e-08,
           "forward_slip_fraction": 0.1896489804627004,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
           "iterations": [],
           "label": "F1 0.050->0.030 mm (plant pass 1; 30 um assumed)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.05091515998364124,
+          "computed_friction_coefficient": 0.06545483577752337,
           "contact_radius_ratio": 3.3132552239190787,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.002778731308886867,
-          "dmu_droll_speed_per_m_s": -0.0036342098134478497,
+          "dmu_dexit_speed_per_m_s": -0.002043783837203661,
+          "dmu_droll_speed_per_m_s": -0.0026729965772426725,
           "exit_speed_m_s": 10.0,
-          "film_ratio": 0.64749410418208,
-          "film_thickness_m": 1.6187352604551999e-07,
+          "film_inlet_radius_ratio": 1.0,
+          "film_ratio": 0.3557200728387276,
+          "film_thickness_m": 8.89300182096819e-08,
           "forward_slip_fraction": 0.3078665799118516,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
           "iterations": [],
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.06060112809047145,
+          "computed_friction_coefficient": 0.06901562078077536,
           "contact_radius_ratio": 2.256070020119829,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.0017964567144899005,
-          "dmu_droll_speed_per_m_s": -0.0023620540219893363,
+          "dmu_dexit_speed_per_m_s": -0.0013873513020292631,
+          "dmu_droll_speed_per_m_s": -0.0018241456620906444,
           "exit_speed_m_s": 13.0,
-          "film_ratio": 0.44398168116365394,
-          "film_thickness_m": 1.1099542029091348e-07,
+          "film_inlet_radius_ratio": 1.0,
+          "film_ratio": 0.2955893375000452,
+          "film_thickness_m": 7.389733437501129e-08,
           "forward_slip_fraction": 0.31484048735348225,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
           "iterations": [],
           "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         },
         {
           "bite_source": "experimental_mattress",
-          "computed_friction_coefficient": 0.03879203944752744,
+          "computed_friction_coefficient": 0.06914830523123867,
           "contact_radius_ratio": 11.143080602579031,
           "converged": null,
-          "dmu_dexit_speed_per_m_s": -0.003015966492696947,
-          "dmu_droll_speed_per_m_s": -0.004288268304372669,
+          "dmu_dexit_speed_per_m_s": -0.0017941958421405224,
+          "dmu_droll_speed_per_m_s": -0.0025510870828038554,
           "exit_speed_m_s": 10.0,
-          "film_ratio": 0.9794630501869983,
-          "film_thickness_m": 2.448657625467496e-07,
+          "film_inlet_radius_ratio": 1.0,
+          "film_ratio": 0.2934171004580867,
+          "film_thickness_m": 7.335427511452167e-08,
           "forward_slip_fraction": 0.42185542006403387,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
           "iterations": [],
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         }
@@ -6276,7 +6339,7 @@
       "use_computed_friction": false
     },
     "friction_speed_curve": {
-      "contact_radius_m": 0.2842369979690028,
+      "contact_radius_m": 0.135,
       "flags": [
         "PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED",
         "EXPONENT_USES_ENTRY_PRESSURE_SOURCES_DISAGREE",
@@ -6284,166 +6347,167 @@
         "OIL_CONDUCTIVITY_DEFAULT_FROM_MEMORY"
       ],
       "forward_slip_fraction": 0.1896489804627004,
-      "mean_slope_per_m_s": -0.0020407082105827813,
+      "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
+      "mean_slope_per_m_s": -0.001646177125987076,
       "mean_slope_speeds_m_s": [
         2.0,
         25.0
       ],
       "note": "Contact radius and forward slip held at the operating bite; the absolute values are placeholders, the slope is the useful output.",
       "operating_exit_speed_m_s": 13.0,
-      "operating_friction_coefficient": 0.055239319435180456,
+      "operating_friction_coefficient": 0.06407257644819582,
       "points": [
         {
-          "dmu_dexit_speed_per_m_s": -0.0033341595294389403,
+          "dmu_dexit_speed_per_m_s": -0.0023283037579868715,
           "exit_speed_m_s": 1.0,
-          "film_ratio": 0.04242251250585488,
-          "film_thickness_m": 1.060562812646372e-08,
-          "friction_coefficient": 0.08659410799725525,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.029236337509159726,
+          "film_thickness_m": 7.3090843772899316e-09,
+          "friction_coefficient": 0.0876373265745995,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.003294956824661847,
+          "dmu_dexit_speed_per_m_s": -0.0023094024066224843,
           "exit_speed_m_s": 1.2788040393997409,
-          "film_ratio": 0.05425008035397326,
-          "film_thickness_m": 1.3562520088493313e-08,
-          "friction_coefficient": 0.08567000656146276,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.037387546503967625,
+          "film_thickness_m": 9.346886625991905e-09,
+          "friction_coefficient": 0.08699082454805038,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0032454951368003676,
+          "dmu_dexit_speed_per_m_s": -0.0022854546901579604,
           "exit_speed_m_s": 1.635339771185094,
-          "film_ratio": 0.06937522189442154,
-          "film_thickness_m": 1.7343805473605384e-08,
-          "friction_coefficient": 0.08450407637570953,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.04781134549251946,
+          "film_thickness_m": 1.1952836373129865e-08,
+          "friction_coefficient": 0.08617171659605005,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.003195674318709485,
+          "dmu_dexit_speed_per_m_s": -0.0022612181310721624,
           "exit_speed_m_s": 2.0,
-          "film_ratio": 0.08484502501170976,
-          "film_thickness_m": 2.121125625292744e-08,
-          "friction_coefficient": 0.08332968063273441,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.05847267501831945,
+          "film_thickness_m": 1.4618168754579863e-08,
+          "friction_coefficient": 0.0853427290725538,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0031833236723798264,
+          "dmu_dexit_speed_per_m_s": -0.002255191738211742,
           "exit_speed_m_s": 2.0912791051825463,
-          "film_ratio": 0.0887173139928396,
-          "film_thickness_m": 2.21793284982099e-08,
-          "friction_coefficient": 0.08303854638223063,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.06114134174497048,
+          "film_thickness_m": 1.528533543624262e-08,
+          "friction_coefficient": 0.08513660226913286,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0031055507829691833,
+          "dmu_dexit_speed_per_m_s": -0.0022170745228308935,
           "exit_speed_m_s": 2.674336167219716,
-          "film_ratio": 0.11345205949873843,
-          "film_thickness_m": 2.8363014874684608e-08,
-          "friction_coefficient": 0.08120525351814364,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.07818779479778824,
+          "film_thickness_m": 1.954694869944706e-08,
+          "friction_coefficient": 0.08383284062632129,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.003008856761044213,
+          "dmu_dexit_speed_per_m_s": -0.0021692673229309,
           "exit_speed_m_s": 3.4199518933533937,
-          "film_ratio": 0.14508295196520646,
-          "film_thickness_m": 3.627073799130161e-08,
-          "friction_coefficient": 0.0789259443445848,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.09998686781916966,
+          "film_thickness_m": 2.4996716954792414e-08,
+          "friction_coefficient": 0.08219764264941132,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.002889578026791041,
+          "dmu_dexit_speed_per_m_s": -0.0021096303207836543,
           "exit_speed_m_s": 4.3734482957731124,
-          "film_ratio": 0.1855326650211446,
-          "film_thickness_m": 4.638316625528615e-08,
-          "friction_coefficient": 0.07611425952756845,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.12786361045408215,
+          "film_thickness_m": 3.1965902613520534e-08,
+          "friction_coefficient": 0.0801578179907777,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0027439081151198258,
+          "dmu_dexit_speed_per_m_s": -0.0020357490559737724,
           "exit_speed_m_s": 5.592783346740569,
-          "film_ratio": 0.23725992146963878,
-          "film_thickness_m": 5.931498036740969e-08,
-          "friction_coefficient": 0.07268047158914279,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.1635125015409152,
+          "film_thickness_m": 4.08781253852288e-08,
+          "friction_coefficient": 0.07763078242061322,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.002568274311212284,
+          "dmu_dexit_speed_per_m_s": -0.0019450270642212787,
           "exit_speed_m_s": 7.152073935299441,
-          "film_ratio": 0.30340894596303936,
-          "film_thickness_m": 7.585223649075983e-08,
-          "friction_coefficient": 0.06854036310230949,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.2091004474628787,
+          "film_thickness_m": 5.2275111865719674e-08,
+          "friction_coefficient": 0.07452772644579375,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.002359955019932033,
+          "dmu_dexit_speed_per_m_s": -0.001834877721309663,
           "exit_speed_m_s": 9.146101038546526,
-          "film_ratio": 0.38800058568755236,
-          "film_thickness_m": 9.700014642188809e-08,
-          "friction_coefficient": 0.06362977956597755,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.26739849685582256,
+          "film_thickness_m": 6.684962421395564e-08,
+          "friction_coefficient": 0.07076017714308624,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0021179876773048775,
+          "dmu_dexit_speed_per_m_s": -0.0017030590265583946,
           "exit_speed_m_s": 11.696070952851462,
-          "film_ratio": 0.49617671626670723,
-          "film_thickness_m": 1.240441790666768e-07,
-          "friction_coefficient": 0.057926031046552556,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.34195027790864485,
+          "film_thickness_m": 8.54875694771612e-08,
+          "friction_coefficient": 0.06625144909802022,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0020040106205230527,
+          "dmu_dexit_speed_per_m_s": -0.0016393567704453124,
           "exit_speed_m_s": 13.0,
-          "film_ratio": 0.5514926625761135,
-          "film_thickness_m": 1.3787316564402837e-07,
-          "friction_coefficient": 0.055239319435180456,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.38007238761907647,
+          "film_thickness_m": 9.501809690476911e-08,
+          "friction_coefficient": 0.06407257644819582,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0018443563532381069,
+          "dmu_dexit_speed_per_m_s": -0.0015481937716023497,
           "exit_speed_m_s": 14.956982779612426,
-          "film_ratio": 0.6345127890179643,
-          "film_thickness_m": 1.5862819725449106e-07,
-          "friction_coefficient": 0.051475886812352906,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.4372873966634389,
+          "film_thickness_m": 1.0932184916585972e-07,
+          "friction_coefficient": 0.060954436260231594,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0015453116858091896,
+          "dmu_dexit_speed_per_m_s": -0.0013704942626384853,
           "exit_speed_m_s": 19.127049995800743,
-          "film_ratio": 0.8114175176469688,
-          "film_thickness_m": 2.0285437941174218e-07,
-          "friction_coefficient": 0.0444266893409228,
-          "regime": "BOUNDARY"
+          "film_ratio": 0.5592048892318028,
+          "film_thickness_m": 1.398012223079507e-07,
+          "friction_coefficient": 0.05487640035256719,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0012324439479086632,
+          "dmu_dexit_speed_per_m_s": -0.00117264615824014,
           "exit_speed_m_s": 24.459748796430787,
-          "film_ratio": 1.0376439992066544,
-          "film_thickness_m": 2.594109998016636e-07,
-          "friction_coefficient": 0.03705164906307255,
-          "regime": "MIXED"
+          "film_ratio": 0.7151134712017142,
+          "film_thickness_m": 1.7877836780042853e-07,
+          "friction_coefficient": 0.04810920166975885,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.001204519020522876,
+          "dmu_dexit_speed_per_m_s": -0.0011542697608016292,
           "exit_speed_m_s": 25.0,
-          "film_ratio": 1.0605628126463724,
-          "film_thickness_m": 2.651407031615931e-07,
-          "friction_coefficient": 0.036393391789330445,
-          "regime": "MIXED"
+          "film_ratio": 0.7309084377289934,
+          "film_thickness_m": 1.8272710943224834e-07,
+          "friction_coefficient": 0.047480655174851054,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0009228392778920137,
+          "dmu_dexit_speed_per_m_s": -0.0009606802467623741,
           "exit_speed_m_s": 31.27922556357864,
-          "film_ratio": 1.326943337644371,
-          "film_thickness_m": 3.3173583441109273e-07,
-          "friction_coefficient": 0.029753527093807942,
-          "regime": "MIXED"
+          "film_ratio": 0.9144899956019222,
+          "film_thickness_m": 2.2862249890048054e-07,
+          "friction_coefficient": 0.04085911736114275,
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
-          "dmu_dexit_speed_per_m_s": -0.0006374640788135189,
+          "dmu_dexit_speed_per_m_s": -0.0007444741424028621,
           "exit_speed_m_s": 40.0,
-          "film_ratio": 1.6969005002341955,
-          "film_thickness_m": 4.2422512505854886e-07,
-          "friction_coefficient": 0.023026551660913015,
-          "regime": "MIXED"
+          "film_ratio": 1.1694535003663893,
+          "film_thickness_m": 2.923633750915973e-07,
+          "friction_coefficient": 0.03346400144936183,
+          "regime": "MIXED_FIRST_CONTACT"
         }
       ],
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
@@ -8328,7 +8392,7 @@
           "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
           "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
         "bite_model": "experimental_mattress",
@@ -8378,7 +8442,7 @@
           "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
           "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
         "bite_force_ratio_to_reported_range": null,
@@ -8429,7 +8493,7 @@
           "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
           "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
         "bite_model": "experimental_mattress",
@@ -8480,7 +8544,7 @@
           "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
           "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
           "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
-          "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+          "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
           "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
         ],
         "bite_force_ratio_to_reported_range": 2.690327579643028,
@@ -8966,14 +9030,15 @@
     "film": {
       "alpha_times_yield": 2.4248711305964283,
       "entrainment_speed_sum_m_s": 18.727593108131607,
-      "film_thickness_m": 1.410808569413531e-07,
+      "film_thickness_m": 9.722874261748679e-08,
       "flags": [
         "FORMULA_QUOTED_FROM_MEMORY_VERIFY_BEFORE_USE",
         "SMOOTH_ISOTHERMAL_INLET_ASSUMED"
       ],
       "formula": "h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))",
       "formula_attribution": "Wilson & Walowit (1972) as named in the project spec; quoted from memory, not in the verified source list",
-      "inlet_angle_rad": 0.008388314289175336,
+      "inlet_angle_basis": "undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; the mattress contact_radius_ratio L^2/(R*draft) is not a radius",
+      "inlet_angle_rad": 0.012171612389003692,
       "limitations": [
         "Smooth surfaces, isothermal Barus-viscosity inlet, no starvation, no inlet shear heating (which thins the film at high speed).",
         "Some textbook forms subtract the entry tension from Y in the exponent; verify the exact form before quantitative use."
@@ -8987,27 +9052,32 @@
     },
     "film_regime": {
       "composite_roughness_rq_m": 2.5e-07,
-      "film_ratio": 0.5643234277654124,
-      "film_thickness_m": 1.410808569413531e-07,
+      "film_ratio": 0.38891497046994716,
+      "film_thickness_m": 9.722874261748679e-08,
       "flags": [],
+      "in_common_industrial_window": true,
       "limitations": [
         "Rq-based ratio ignores roughness lay/orientation and asperity flattening in the bite."
       ],
       "reasons": [
-        "Film ratio 0.564: boundary lubrication.",
+        "Film ratio 0.389: mixed lubrication with substantial asperity contact (the normal condition for a roll imprint).",
         "Film thickness rises with speed and viscosity, lowering friction; lower friction shrinks the chatter margin."
       ],
-      "regime": "BOUNDARY",
+      "regime": "MIXED_SUBSTANTIAL_CONTACT",
       "regime_boundaries": {
-        "boundary_below": 1.0,
-        "hydrodynamic_above": 3.0
+        "common_industrial_window": [
+          0.01,
+          0.5
+        ],
+        "hydrodynamic_above": 3.0,
+        "substantial_contact_below": 1.0
       },
       "sources": [
         "Sutcliffe (2002) in Lenard (ed.) Metal Forming Science and Practice, doi:10.1016/b978-008044024-8/50004-7 (film ratio regimes)",
         "Reid & Schey (1978) ASLE Trans. 21(3), doi:10.1080/05698197808982874 (full-film lubrication, negative forward slip, matte surface)"
       ],
-      "status": "BOUNDARY_LUBRICATION",
-      "threshold_basis": "Conventional regime boundaries (Sutcliffe 2002); transitions are gradual, not sharp."
+      "status": "MIXED_SUBSTANTIAL_CONTACT_LUBRICATION",
+      "threshold_basis": "Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 substantial asperity contact inside the mixed regime, the normal condition for a roll imprint; common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions are gradual, not sharp."
     },
     "forward_slip": {
       "flags": [],
@@ -13633,7 +13703,7 @@
       "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
       "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
       "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-      "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+      "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
       "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
     ],
     "growth_rate_per_s": -24.679416967248578,
@@ -16215,7 +16285,7 @@
             "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
             "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
             "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
           "bite_half_length_m": 0.0011921346357878435,
@@ -16274,7 +16344,7 @@
             "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
             "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
             "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
-            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
           "bite_force_ratio_to_reported_range": null,
@@ -16331,7 +16401,7 @@
             "FOUNDATION_MODULUS_FROM_MEMORY_FORMULA",
             "CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS",
             "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
-            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
           "bite_half_length_m": 0.0013796952850090147,
@@ -16391,7 +16461,7 @@
             "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
             "REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN",
             "EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN",
-            "FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES",
+            "FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL",
             "BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL"
           ],
           "bite_force_ratio_to_reported_range": 2.690327579643028,

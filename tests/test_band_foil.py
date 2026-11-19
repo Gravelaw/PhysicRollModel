@@ -371,6 +371,22 @@ class FoilRulesTests(unittest.TestCase):
                           (0.1, ('NEUTRAL', None))):
             f.film_ratio, f.film_basis = lam, 'unit test'
             self.assertEqual(self.vw(self.ev(HS, fr, facts=f)), want, lam)
+        # SPEC17 BT-G8: the tribology regime item; the film-ratio label never supports
+        rc = 'tribology regime / exit strip temperature at the operating point'
+        f = self.facts(tracks_speed_changes=True)
+        self.assertEqual(self.ev(HS, rc, facts=f)['verdict'], 'NOT_OBSERVED')
+        for regime, heat, want in (
+                ('MIXED_SUBSTANTIAL_CONTACT', None, ('NEUTRAL', None)),
+                ('MIXED_SUBSTANTIAL_CONTACT', {'exit_temperature_k': 400.0,
+                                               'temperature_limit_k': 410.0},
+                 ('NEUTRAL', None)),
+                ('HYDRODYNAMIC', {'exit_temperature_k': 400.0, 'temperature_limit_k': 390.0},
+                 ('SUPPORTS', 'weak'))):
+            f.process = {'friction': {'operating': {'regime': regime}},
+                         'heating': None if heat is None else {'operating': heat}}
+            x = self.ev(HS, rc, facts=f)
+            self.assertEqual(self.vw(x), want, (regime, heat))
+            self.assertIn('no longer counts', x['expected'])
 
     def test_next_measurements_for_foil(self):
         lines = bw.lengthwise_next_measurements(dict(V2_NULL_OBS, **{

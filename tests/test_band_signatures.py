@@ -327,11 +327,16 @@ class LubricationTests(unittest.TestCase):
     def test_film_ratio(self):
         mixed = film_ratio_regime(0.5e-6, 0.3e-6, 0.4e-6)
         self.assertAlmostEqual(mixed['film_ratio'], 1.0)
-        self.assertEqual(mixed['regime'], 'MIXED')
-        self.assertEqual(film_ratio_regime(0.4e-6, 0.3e-6, 0.4e-6)['status'],
-                         'BOUNDARY_LUBRICATION')
+        self.assertEqual(mixed['regime'], 'MIXED_FIRST_CONTACT')
+        self.assertEqual(mixed['status'], 'MIXED_FIRST_CONTACT_LUBRICATION')
+        low = film_ratio_regime(0.4e-6, 0.3e-6, 0.4e-6)
+        self.assertEqual(low['status'], 'MIXED_SUBSTANTIAL_CONTACT_LUBRICATION')
+        self.assertFalse(low['in_common_industrial_window'])          # Lambda 0.8
+        self.assertTrue(film_ratio_regime(0.2e-6, 0.3e-6, 0.4e-6)['in_common_industrial_window'])
+        self.assertNotIn('BOUNDARY', json.dumps(low))
         hydro = film_ratio_regime(2e-6, 0.3e-6, 0.4e-6)
         self.assertEqual(hydro['regime'], 'HYDRODYNAMIC')
+        self.assertEqual(hydro['status'], 'HYDRODYNAMIC_LUBRICATION')
         self.assertIn('THICK_FILM_SKIDDING_MATTE_RISK', hydro['flags'])
         with self.assertRaises(ValueError):
             film_ratio_regime(1e-6, 0, 0)

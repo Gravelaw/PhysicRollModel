@@ -14,6 +14,7 @@ import tempfile
 import unittest
 
 from physicroll import mill_dynamics as md
+from physicroll import band_process as bp
 from physicroll.band_diagnosis import (CASE_SCHEMA_V2, HYPOTHESIS_IDS, MATTRESS_MIN_CELLS,
                                        diagnose, load_case, result_json, validate_case)
 from physicroll.band_report import render_band_report
@@ -43,6 +44,15 @@ class LengthwiseIntegrationTests(unittest.TestCase):
         p['tribology'] = dict(TRIBOLOGY)
         p['hardening'] = dict(HARDENING)
         cls.plain = diagnose(p)
+
+    def test_hitchcock_film_uses_the_deformed_arc(self):
+        # SPEC17 BT-G7 (InletAngleTests): a Hitchcock bite keeps R' for the film's inlet angle
+        self.assertEqual(self.full['process']['friction']['operating']['bite_source'],
+                         'derived_slab_hitchcock')
+        for row in [self.full['process']['friction']['operating'],    # derived Hitchcock
+                    self.plain['process']['friction']['operating']]:   # supplied bite
+            self.assertEqual(row['film_inlet_radius_ratio'], row['contact_radius_ratio'])
+            self.assertEqual(row['inlet_angle_basis'], bp.INLET_ANGLE_BASIS_ARC)
 
     def test_computed_values_replace_only_when_flagged(self):
         plain, full = self.plain, self.full
@@ -246,6 +256,45 @@ def _section(html, heading):
     """HTML of the <section> whose h2 starts with ``heading``."""
     i = html.index('<h2>' + heading)
     return html[html.rindex('<section', 0, i):html.index('</section>', i)]
+
+
+class InletAngleTests(unittest.TestCase):
+    """SPEC17 BT-G7: the film's inlet angle uses the undeformed roll for a mattress bite (its
+    contact_radius_ratio L^2/(R*draft) is not a radius) and the deformed arc R' for a
+    Hitchcock bite (unchanged)."""
+
+    def test_mattress_bite_uses_undeformed_roll(self):
+        c = v2(override=False, **LONG)
+        c['pass'].update(entry_thickness_m=0.12e-3, exit_thickness_m=0.084e-3,
+                         mean_flow_stress_pa=285e6, friction_coefficient=0.03)
+        c['model_options']['bite_model'] = 'mattress'
+        c['tribology'] = dict(TRIBOLOGY)
+        r = diagnose(c)
+        self.assertIn('BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL', r['bite']['flags'])
+        op = r['process']['friction']['operating']
+        self.assertEqual(op['film_inlet_radius_ratio'], 1.0)
+        self.assertEqual(op['inlet_angle_basis'], bp.INLET_ANGLE_BASIS_MATTRESS)
+        ratio = op['contact_radius_ratio']
+        self.assertGreater(ratio, 1.0)
+        vc = validate_case(c)
+        old = bp.friction_at(vc['tribology'], vc['pass'], c['pass']['work_roll_radius_m'],
+                             ratio, op['forward_slip_fraction'], op['exit_speed_m_s'])
+        new = op['film_ratio'] * ratio ** 0.5
+        self.assertLessEqual(abs(new - old['film_ratio']), 1e-9 * old['film_ratio'])
+
+    def test_hitchcock_bite_keeps_the_deformed_arc(self):
+        # the Hitchcock operating bite of a diagnose run: LengthwiseIntegrationTests
+        # (test_hitchcock_film_uses_the_deformed_arc); here the same call as before the change,
+        # pinned from the lengthwise demo artifact
+        art = json.loads((ROOT / 'artifacts' / 'band_diagnosis' /
+                          'lengthwise-bands-demo.result.json').read_text())
+        aop = art['process']['friction']['operating']
+        case = validate_case(load_case(SCEN / 'band_diagnosis_lengthwise_bands.json'))
+        res = bp.friction_at(case['tribology'], art['effective_inputs']['pass'],
+                             case['pass']['work_roll_radius_m'], aop['contact_radius_ratio'],
+                             aop['forward_slip_fraction'], aop['exit_speed_m_s'])
+        self.assertAlmostEqual(res['film_ratio'], 0.180115, places=6)
+        self.assertAlmostEqual(aop['film_ratio'], 0.180115, places=6)
 
 
 class ReviewFindingTests(unittest.TestCase):
