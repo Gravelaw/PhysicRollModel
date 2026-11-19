@@ -31,6 +31,7 @@ Routes (all JSON unless stated):
   GET  /api/runs/<id>/{answers.json,case.json,result.json,report.html}
   POST /api/runs/<id>/variant    a what-if: the base run's case with a few changed answers
   POST /api/runs/<id>/cancel     cancel a queued run
+  POST /api/runs/<id>/rerun      the same inputs again (e.g. in detail after a quick run)
 
 Status: every result is ``SCREENING_RESULT_NOT_PLANT_VALIDATED``; the page says so on every
 screen that shows a ranking. Nothing here adds physics.
@@ -44,6 +45,7 @@ from pathlib import Path
 import queue
 import re
 import secrets
+import signal
 import sys
 import threading
 import time
@@ -370,17 +372,24 @@ def _products():
         items[0]['id']].split(':')[0], 'products': items} for fam, items in groups.items()]
 
 
+def _geometry(case):
+    """Strip and header geometry of a case for the page's drawings (engine conventions)."""
+    w = case.get('width_model')
+    try:
+        nozzles = bpl.nozzle_layout(case)
+    except ValueError:
+        nozzles = []
+    return {'strip_edge_m': bpl.strip_edge_m(case), 'strip_width_m': case['pass']['width_m'],
+            'barrel_length_m': (w['roll']['barrel_length_m'] if w else
+                                (case.get('coolant') or {}).get('barrel_length_m')),
+            'nozzle_positions_m': nozzles}
+
+
 def _preset_info(p):
     case = p['case']
-    w = case.get('width_model')
     return {'id': p['id'], 'label': p['label'], 'description': p['description'],
             'kind': p['kind'], 'generated_by_model': p['generated_by_model'],
-            'answers': bpl.answers_from_case(case),
-            'geometry': {'strip_edge_m': bpl.strip_edge_m(case),
-                         'strip_width_m': case['pass']['width_m'],
-                         'barrel_length_m': (w['roll']['barrel_length_m'] if w else
-                                             (case['coolant'] or {}).get('barrel_length_m')),
-                         'nozzle_positions_m': bpl.nozzle_layout(case)}}
+            'answers': bpl.answers_from_case(case), 'geometry': _geometry(case)}
 
 
 def page_meta(store):
@@ -394,6 +403,7 @@ def page_meta(store):
             'causes': {k: {'name': v[0], 'description': v[1], 'pictogram': v[2]}
                        for k, v in bpl.CAUSES.items()},
             'glossary': bpl.GLOSSARY, 'standing_words': bpl.STANDING_WORDS,
+            'sections': list(bpl.SECTIONS),
             'weak_nozzle_level': bpl.WEAK_NOZZLE_LEVEL,
             'trust_rule': bpl.TRUST_RULE, 'limitations': list(bpl.STANDING_LIMITATIONS),
             'status_words': 'Screening result from a model that has not been compared with '
@@ -555,7 +565,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                     preset = store.preset(body)
                     case = store.build_case(body.get('answers'), preset)
                     self._json(200, {'ok': True, 'case': case,
-                                     'origins': bpl.value_origins(case)})
+                                     'origins': bpl.value_origins(case),
+                                     'geometry': _geometry(case)})
                 elif parts == ['api', 'case', 'open']:
                     preset = store.preset(dict(body, preset='case_file'))
                     self._json(200, {'ok': True, 'answers': bpl.answers_from_case(
@@ -572,6 +583,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                     self._json(202, {'id': self._variant(parts[2], body)})
                 elif len(parts) == 4 and parts[1] == 'runs' and parts[3] == 'cancel':
                     self._json(200, {'run': store.cancel(parts[2])})
+                elif len(parts) == 4 and parts[1] == 'runs' and parts[3] == 'rerun':
+                    self._json(202, {'id': self._rerun(parts[2], body)})
                 else:
                     raise RequestError(404, 'Unknown request.')
             except RequestError as exc:
@@ -598,6 +611,19 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
             except (ValueError, TypeError, KeyError) as exc:
                 raise RequestError(400, 'No literature values for this product and gauge: '
                                         + bpl.words(str(exc)), 'exit_gauge', 'rolling')
+
+        def _rerun(self, run_id, body):
+            meta = store.get(run_id)
+            profile = body.get('profile', 'detailed')
+            case = store.read_json(run_id, 'case.json')
+            stored = store.read_json(run_id, 'answers.json')
+            preset = {'id': meta.get('preset') or 'run', 'label': meta.get('preset_label') or
+                      'earlier run', 'kind': 'run', 'generated_by_model': False, 'case': case}
+            label = (bpl.PROFILES[profile]['label'] + ' run' if profile in bpl.PROFILES
+                     else 'run again')
+            base = run_id if meta['status'] == 'done' else None
+            return store.submit(case, stored.get('answers'), preset, profile, base_run_id=base,
+                                changes=[f'{label} of the same inputs'] if base else [])
 
         def _variant(self, base_id, body):
             meta = store.get(base_id)
@@ -657,6 +683,12 @@ def main(argv=None):
             webbrowser.open(url)
         except Exception:                               # no browser: the address is printed
             pass
+    def _stop(signum, frame):                        # a closed window / kill: stop cleanly too
+        raise KeyboardInterrupt
+    try:
+        signal.signal(signal.SIGTERM, _stop)
+    except (ValueError, OSError):                      # not in the main thread
+        pass
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -195,6 +195,7 @@ class GuardTest(ServerCase):
                                                            'entry_gauge': 30.0}}})
         self.assertEqual(st, 200)
         self.assertEqual(out['case']['pass']['exit_thickness_m'], 1.8e-05)
+        self.assertEqual(len(out['geometry']['nozzle_positions_m']), 28)
         st, out = self.client.json('POST', '/api/case/check', {'preset': '../../etc'})
         self.assertEqual(st, 400)
         self.assertEqual(out['error']['question'], 'preset')
@@ -241,12 +242,17 @@ class GuardTest(ServerCase):
         self.assertIn('compared_with_base', var['summary'])
         case = self.client.json('GET', f'/api/runs/{out["id"]}/case.json')[1]
         self.assertEqual(case['pass']['exit_speed_m_s'], 400.0 / 60)
+        st, out2 = self.client.json('POST', f'/api/runs/{ids[0]}/rerun', {'profile': 'detailed'})
+        self.assertEqual(st, 202)
+        rerun, _ = self.wait(out2['id'])
+        self.assertEqual(rerun['run']['profile'], 'detailed')
+        self.assertEqual(rerun['run']['base_run_id'], ids[0])
         self.stop()
         self.start()                                  # a new session on the same folder
         st, listing = self.client.json('GET', '/api/runs')
         self.assertEqual(st, 200)
         got = {r['id']: r for r in listing['runs']}
-        self.assertEqual(set(got), set(ids) | {out['id']})
+        self.assertEqual(set(got), set(ids) | {out['id'], out2['id']})
         self.assertEqual(got[out['id']]['base_run_id'], ids[0])
 
 
@@ -277,6 +283,7 @@ class FailingEngineTest(ServerCase):
         self.assertEqual(out['run']['status'], 'failed')
         self.assertEqual(out['run']['error']['question'], 'exit_gauge')
         self.assertIn('could not be run', out['run']['error']['text'])
+        self.assertNotIn('pass.exit_thickness_m', out['run']['error']['text'])   # plain words
         out, _ = self.wait(c)
         self.assertEqual(out['run']['status'], 'done')
 
