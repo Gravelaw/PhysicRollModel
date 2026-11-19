@@ -1,21 +1,163 @@
 # PhysicRollModel
 
-A runnable **generic, synthetic four-high aluminium cold rolling demonstrator**: an independent
-Python process model, disconnected sensor/equipment bookkeeping, parametric Blender equipment,
-an editable scene and portable USD geometry.
-This is an initial digital-twin prototype, **not a plant replica or validated production model**.
-No actual material/plant data, live connections or production setpoints are included.
+This repository (Python package `physicroll`) has two parts:
+
+- **The core rolling demonstrator and its checked workflows.** A generic, synthetic four-high
+  aluminium cold rolling demonstrator: an independent Python process model for the steady roll
+  bite, disconnected sensor/equipment bookkeeping, parametric Blender equipment, an editable
+  scene and portable USD geometry, plus checked workflows, saved runs, a guided editor and
+  bounded transient transport/reel mechanics.
+  Status: an initial digital-twin prototype, **not a plant replica or validated production
+  model**. The core includes no actual material/plant data, live connections or production
+  setpoints.
+- **The band screening tool for thin-gauge aluminium (strip and foil)**, including EV battery
+  collector foil. It takes a JSON case (what the bands look like, the pass, the mill),
+  simulates candidate mechanisms, ranks twenty candidate causes in two families (lengthwise
+  bands at fixed width positions; transverse marks) and writes an HTML report and a JSON
+  result. It comes with a literature catalogue of thin-gauge products, a product survey, a
+  process-temperature check and a literature gap study.
+  Status: a screening tool on synthetic, uncalibrated models; **nothing in it has been
+  validated against plant data**.
 
 The **9 November 2026 development checkpoint** brings the checked workflows,
 saved runs, guided editor and bounded transient transport/reel mechanics onto
 `main`. Full v1 remains in development; the
 [checkpoint decision](docs/v1-scope-amendment-2026-10-10.md) and
 [integration critical path](docs/v1-integration-critical-path.md) record the
-remaining physics, animation and release gates.
+remaining physics, animation and release gates. The band screening work was merged
+to `main` on 19 November 2026.
 
 ![Generic mill and analytical roll bite](artifacts/preview.png)
 
-## Start here — no dependencies or Blender needed
+## Which part do I need?
+
+| I want to ... | Go to |
+|---|---|
+| find likely causes for bands or marks I have on strip or foil | [Band screening: quick start](#band-screening-quick-start) |
+| look up product, alloy and temper data for thin-gauge aluminium | [Product, alloy and temper lookups](#product-alloy-and-temper-lookups) and [thin-gauge products](docs/thin-gauge-products.md) |
+| use the steady process model, saved runs, the editor or the Blender scene | [Core demonstrator: start here](#core-demonstrator-start-here--no-dependencies-or-blender-needed) |
+| know what the simulation does not cover yet | [Simulation coverage gaps](docs/simulation-coverage-gaps.md) and [Status and limits](#status-and-limits) |
+
+## Band screening: quick start
+
+### Requirements
+
+Python 3.10+ and the standard library only; nothing to install. Run the commands from this
+directory.
+
+### Run a demo
+
+```bash
+python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out my_demo
+```
+
+This is the battery-foil demo (synthetic). It takes about a minute and prints the ranked
+standings. It writes two files into the `--out` directory, named after the case:
+`<name>.result.json` (here `battery-foil-demo.result.json`) and `<name>.report.html`
+(`battery-foil-demo.report.html`). The same files, already generated, are in
+`artifacts/band_diagnosis/`. The other three demos are listed under [Demos](#demos).
+
+### Use it on your own case
+
+1. Copy the template:
+
+   ```bash
+   cp scenarios/band_diagnosis_template.json my_case.json
+   ```
+
+2. Fill in the observations under `observation`: what was actually seen on the strip (for
+   example `orientation`, `band_positions_across_width_m`, `lengthwise_continuity`,
+   `appearance`). Leave `null` what nobody has looked at. A `null` never counts against a
+   cause. The `notes` in the template explain every field.
+3. Put in the pass (`pass`, and `schedule` for the other passes) and the mill values (`stand`,
+   `spans`, `kinematics`, `coolant`, `width_model` and the other sections). Use SI units; most
+   key names end in their unit, for example `exit_thickness_m` or `exit_tension_pa`. The
+   values in the template are the synthetic demo mill, not your mill. Which keys are the
+   machine, the product and the observations is listed in section 5.3 of
+   [band diagnosis](docs/band-diagnosis.md).
+4. Run it:
+
+   ```bash
+   python -m physicroll.band_cli my_case.json --out my_output
+   ```
+
+5. Open `my_output/<name>.report.html` in a browser.
+
+### How to read the report
+
+- Start with three sections: "Leading hypotheses" (the candidate causes the observations
+  support, with what supports and contradicts each), "Next measurements" (the tests that
+  would separate the remaining candidates) and "Limitations and sources".
+- The score is an **ordinal evidence tally, not a probability**. A higher score means more
+  weighted agreement with the observations as entered, not a stated likelihood.
+- Flags say how far to trust a number. For example: `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL`
+  (the roll bite comes from the experimental foil model, an order of magnitude only),
+  `CHATTER_NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT` (the model chatter frequency lies above the
+  span-wave limit, so the chatter speed margin is not used as evidence) and
+  `USER_SUPPLIED_INPUTS_NOT_VERIFIED` (a case with `synthetic: false`: the tool has not
+  checked your inputs).
+- Every result carries the status `SCREENING_RESULT_NOT_PLANT_VALIDATED`.
+
+Section 12 of [band diagnosis](docs/band-diagnosis.md) describes every part of the report.
+
+### Product, alloy and temper lookups
+
+```bash
+python -m physicroll.band_products --list
+python -m physicroll.band_products --grades battery_collector_foil --gauge-um 18
+python -m physicroll.band_products --temperatures
+```
+
+- `--list` prints the 27 catalogue product ids with their group and name.
+- `--grades battery_collector_foil --gauge-um 18` prints the alloy and temper options for that
+  gauge band with their evidence ratings, and a standard and a high-strength proposal (a
+  literature proposal to confirm with the plant).
+- `--temperatures` prints the literature map of process temperatures in foil rolling, with
+  limits and source ids.
+
+The full catalogue is in [thin-gauge products](docs/thin-gauge-products.md).
+
+### Screening several products, also on your own mill
+
+The product survey screens one synthetic final pass per catalogue product. Without options it
+uses the two demo mills; `my_mill.json` below is a v2 case file of your mill (a copy of the
+template with your machine values, a `width_model` and `model_options.bite_response_override`
+set to `null`). Only its machine keys are used.
+
+```bash
+python -m physicroll.band_survey --out my_survey
+python -m physicroll.band_survey --out my_survey --mill my_mill.json
+python -m physicroll.band_survey --out my_survey --foil-mill scenarios/band_diagnosis_battery_foil.json --sheet-mill my_mill.json
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,household_foil,litho_sheet
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,household_foil --overrides scenarios/band_survey_overrides_example.json
+python -m physicroll.band_survey --out my_survey --mill my_mill.json --products battery_collector_foil,litho_sheet --write-cases my_cases
+python -m physicroll.band_cli my_cases/litho_sheet.case.json --out my_output
+```
+
+- `--mill` uses one file for both gauge classes; `--foil-mill` (exit gauge below 0.2 mm) and
+  `--sheet-mill` (0.2 mm and above) supply them separately.
+- `--products` takes catalogue ids from `--list`.
+- `--overrides` replaces survey-pass values per product with your own
+  (`{"product_id": {"key": value}}`).
+- `--write-cases` writes one ready-to-edit case file per product (every observation `null`).
+- `python -m physicroll.band_cli --product-survey --out my_survey` runs the same survey and
+  passes these options on.
+
+Section 5.3 of [band diagnosis](docs/band-diagnosis.md) explains each option and which keys
+are taken from your file.
+
+### Where to read more
+
+| Path | What it is |
+|---|---|
+| [`docs/band-diagnosis.md`](docs/band-diagnosis.md) | The guide: battery foil first (section 3), how to run (4), filling in the template and using your own mill (5, 5.3), evidence rules (6), equations with source tags (7-11), how to read the report (12), limitations (14) |
+| [`docs/thin-gauge-products.md`](docs/thin-gauge-products.md) | Product reference, generated from the catalogue |
+| [`docs/simulation-coverage-gaps.md`](docs/simulation-coverage-gaps.md) | What the simulation does not cover yet, from a literature review |
+| [`docs/research/band-screening-2026-11/`](docs/research/band-screening-2026-11/README.md) | The nine research reports behind the tool |
+| [`artifacts/band_diagnosis/`](artifacts/band_diagnosis/) | Committed demo and product-survey results and reports |
+| `scenarios/band_diagnosis_*.json` | The four demos and the template |
+
+## Core demonstrator: start here — no dependencies or Blender needed
 
 Use Python 3.10+ (tested with 3.12.14), from this directory:
 
@@ -131,6 +273,11 @@ on another build can have a different hierarchy and requires corresponding verif
 | `docs/model.md` | Equations, SI conventions, rejection domain and unsupported physics |
 | `docs/research.md`, `docs/sensors.md`, `docs/traceability.md`, `docs/capabilities.md`, `docs/next_modules.md` | Sources, sensors, equations, capability boundary and next research modules |
 | `docs/verification.md` | Actual commands/results, dependency versions and transfer checks |
+| `physicroll/band_*.py` | Band screening: case engine, CLI, report, product catalogue, product survey; uses the physics modules `chatter.py`, `band_signatures.py`, `roll_thermal.py`, `strip_shape.py`, `bite_tribology.py`, `mill_dynamics.py` and `foil_bite.py` |
+| `scenarios/band_diagnosis_*.json`, `scenarios/band_survey_overrides_example.json` | Band screening: four synthetic demos, the case template and a synthetic survey overrides example |
+| `artifacts/band_diagnosis/` | Band screening: committed demo and product-survey results and HTML reports |
+| `docs/band-diagnosis.md`, `docs/thin-gauge-products.md`, `docs/simulation-coverage-gaps.md` | Band screening guide, generated thin-gauge product reference, literature gap study |
+| `docs/research/` | Research record, including the November 2026 band screening reports (`docs/research/band-screening-2026-11/`) |
 
 For a second computer, unpack the supplied archive, run `python scripts/smoke.py`, then
 the unit tests. The included `.blend` and preview need no regeneration. On a machine with
@@ -139,6 +286,10 @@ the bundled artifacts. The source archive excludes Git metadata, credentials, de
 and temporary files. See `docs/verification.md` for detailed rebuild/transfer instructions.
 
 ## Scope and limitations
+
+This section describes the core steady process model and the core demonstrator. The band
+screening tool has its own models for foil gauge, roll temperature, strip shape and
+vibration, with their own limits; see [Band screening: what it covers](#band-screening-what-it-covers).
 
 This version enforces mass and energy balance, conservative bite/traction screening, and
 finite/physical input bounds. The added stand/reel snapshot uses synthetic stiffness, coil radii
@@ -150,15 +301,15 @@ are illustrative**. Torque is an energy-equivalent estimate, not a signed-tracti
 No published accuracy or plant calibration is claimed.
 
 The [capability matrix](docs/capabilities.md) maps current calculations and future friction,
-mass-flow, thermal, metallurgy and fracture research. Foil is excluded (exit gauge below 300 µm is rejected). Roll flattening/bending, mill stretch,
+mass-flow, thermal, metallurgy and fracture research. In the core model, foil is excluded (exit gauge below 300 µm is rejected). Roll flattening/bending, mill stretch,
 shape/flatness, residual stress, thermal effects, alloy hardening/metallurgy and control
 transients are not solved by the steady model. Exit gauge is prescribed, not predicted from a screw gap.
 Zero draft is unloaded transport, not temper rolling. Friction needs joint force/torque/slip
 identification; geometry and passing unit tests do not validate rolling accuracy.
 
-Apache-2.0; original `LICENSE` retained unchanged. The development branch
-`prototype/blender-cold-mill` is pushed to the private repository. No pull request, merge
-or deployment is performed.
+Apache-2.0; original `LICENSE` retained unchanged. Work is merged to `main` through pull
+requests (the band screening work on 19 November 2026). No release or deployment is
+performed.
 
 ## v0.3 computational foundations candidate
 
@@ -188,8 +339,9 @@ The published `development/aa5052-mechanics-review` branch corrects numerical an
 unit-contract defects and runs an explicitly conditional AA5052 comparison and
 two-intermediate-gauge search. See [the specialist audit](docs/mechanics-audit.md)
 and [actual run, source citations and reproducible commands](docs/aa5052-study.md).
-44 tests pass, including unit factors, independent pressure integration,
-mechanical work, thermal exchange and constrained-search rechecks. The source
+At that review 44 tests passed, including unit factors, independent pressure integration,
+mechanical work, thermal exchange and constrained-search rechecks (the current suite
+collects 740 tests). The source
 force/slip mismatch and unresolved material/speed conventions are retained.
 No physical aluminium accuracy, product temper or safe schedule is certified.
 The prior candidate and v0.2.1 are preserved; reviewed commit `09d0d5b2` is published.
@@ -231,69 +383,109 @@ histories and reports per-model readiness with explicit missing-data reasons.
 Readiness permits only a separate domain check; replay computes no predictions,
 advances no material state and implements no dynamic physics or control.
 
-## Band / chatter-mark root-cause screening
+## Band screening: what it covers
 
-Opt-in, standard-library-only screening for strip bands of both families. For **lengthwise
-bands** (stripes along the rolling direction at fixed width positions, continuous or
-short-lived) it solves a work-roll temperature and thermal-radius field for the spray header,
-carries the resulting roll stripes through a strip-shape chain to flatness and to the band
-state in the mill and after tension release, simulates cooling-zone switching events, and
-follows one stripe through the pass schedule to show how thin gauge changes it. For
-**transverse marks** (repeating across the strip) it uses a linear third-octave chatter model
-and pitch-law, roll, bearing, gear and coil signatures, with levers and a pass-schedule sweep.
+Opt-in, standard-library-only screening for strip bands of both families. How to run it is in
+[Band screening: quick start](#band-screening-quick-start); the full guide is
+[band diagnosis](docs/band-diagnosis.md).
+
+### Two families of bands
+
+**Lengthwise bands** are stripes along the rolling direction at fixed width positions,
+continuous or short-lived. For them the tool solves a work-roll temperature and thermal-radius
+field for the spray header. It carries the resulting roll stripes through a strip-shape chain
+to flatness and to the band state in the mill and after tension release. It simulates
+cooling-zone switching events and follows one stripe through the pass schedule to show how
+thin gauge changes it. The ten lengthwise hypotheses: nozzle thermal stripe, cooling-zone
+switching, roll-surface band, grinding feed marks, incoming ridges building up in the coil,
+tension troughs or creases, profile / flatness mismatch, heat streak or film variation, oil
+carry-over drips or stain, and foil tension lines.
+
+**Transverse marks** repeat across the strip. For them the tool uses a linear third-octave
+chatter model and pitch-law, roll, bearing, gear and coil signatures, with levers and a
+pass-schedule sweep. The ten transverse hypotheses: third-octave self-excited chatter,
+fifth-octave roll-stack resonance, work-roll-borne marks, backup-roll-borne marks, order-locked
+drive or bearing excitation, torsional or low-frequency drive vibration, coil- or
+mandrel-locked marks, yield-point bending marks, herringbone lubricant-film breakdown, and
+skidding (loss of forward slip).
+
 Optional process and dynamics sections add lubricant film and placeholder friction, pass
 heating, work hardening, gaugemeter AGC, drive torsional modes and incoming hardness
-variation. Twenty hypotheses are ranked by an ordinal evidence tally against the plant
+variation. The twenty hypotheses are ranked by an ordinal evidence tally against the plant
 observations, not by probability.
 
-**Battery foil** (exit gauge below 100 um): the tool runs at foil gauge and says what it
-cannot assess there. It warns that the mill is in or near closed-gap rolling, which it does
-not model, and it has no model of a doubled pass. Below about 60 um the roll bite comes from an
-experimental model (order of magnitude only); below 20 um exit gauge (down to 8 um) and above
-50 % reduction (up to 65 %) that model runs in a flagged, unvalidated extended domain, and a
-bite there whose force lies outside the 0.9-2.3 kN/mm reported for battery-foil passes is
-marked not credible and kept out of every trend statement. It adds six foil observations, a
-tension-line hypothesis built on the published description (no physical model), and, with
-`material.product`, an evidence-neutral check of every pass against a literature survey of
-published product ranges and schedules
-([thin-gauge products](docs/thin-gauge-products.md)). For a battery product it also proposes
-alloy and temper for the final gauge from a literature grade table (`material_selection`: the
-gauge band, its options with evidence ratings, a standard and a high-strength proposal, and
-the case compared with them; a proposal for the plant to confirm, never a change to the case or
-the scores). With a width model or tribology, `thermal_check` compares the case's process
-temperatures, heat partition and spray coefficient with a literature temperature map and
-shows, in `width.thermal_sensitivity`, how the cooling-stripe result moves across the measured
-heat partition and the published spray coefficients (no roll-wear or surface-finish model).
-The foil demo follows the plant's route
-(50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates assumed;
-alloy and temper the literature proposal 1235-H18; measured heat partition 0.22, simulated
-spray 3.4 kW/m2K): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
-alternative. The 18 um final pass gets an extended-domain bite with its force inside the
-reported range (still unvalidated); the 12 um bite is not credible. In the demo a cooling
-stripe becomes harder, not easier, to see in the mill as the gauge thins (at the measured heat
-partition it shows in the mill on the thick stock passes and stays hidden on the foil passes); see
-section 3 of the doc. Four synthetic demos:
+### Battery foil
 
-```
+For battery foil (exit gauge below 100 µm) the tool runs at foil gauge and says what it cannot
+assess there:
+
+- It warns that the mill is in or near closed-gap rolling, which it does not model, and it has
+  no model of a doubled pass.
+- Below about 60 µm the roll bite comes from an experimental model (order of magnitude only).
+  Below 20 µm exit gauge (down to 8 µm) and above 50 % reduction (up to 65 %) that model runs
+  in a flagged, unvalidated extended domain. A bite there whose force lies outside the
+  0.9-2.3 kN/mm reported for battery-foil passes is marked not credible and kept out of every
+  trend statement.
+- It adds six foil observations and a tension-line hypothesis built on the published
+  description (no physical model).
+- With `material.product` it makes an evidence-neutral check of every pass against a
+  literature survey of published product ranges and schedules
+  ([thin-gauge products](docs/thin-gauge-products.md)).
+- For a battery product it also proposes alloy and temper for the final gauge from a
+  literature grade table (`material_selection`: the gauge band, its options with evidence
+  ratings, a standard and a high-strength proposal, and the case compared with them). This is
+  a proposal for the plant to confirm, never a change to the case or the scores.
+- With a width model or tribology, `thermal_check` compares the case's process temperatures,
+  heat partition and spray coefficient with a literature temperature map. It shows, in
+  `width.thermal_sensitivity`, how the cooling-stripe result moves across the measured heat
+  partition and the published spray coefficients (no roll-wear or surface-finish model).
+
+The foil demo follows the plant's route (50 µm input, two single-sheet passes, final
+17-19 µm, down to 12 µm; intermediates assumed; alloy and temper the literature proposal
+1235-H18; measured heat partition 0.22, simulated spray 3.4 kW/(m² K)): 50 -> 30 -> 18 µm,
+plus the thinnest product's 50 -> 25 -> 12 µm as an alternative. The 18 µm final pass gets an
+extended-domain bite with its force inside the reported range (still unvalidated); the 12 µm
+bite is not credible. In the demo a cooling stripe becomes harder, not easier, to see in the
+mill as the gauge thins (at the measured heat partition it shows in the mill on the thick
+stock passes and stays hidden on the foil passes); see section 3 of the doc.
+
+### Demos
+
+Four synthetic demos; their committed outputs are in `artifacts/band_diagnosis/`:
+
+```bash
 python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 ```
 
+Start a real case from `scenarios/band_diagnosis_template.json` (schema
+`physicroll.band_case.v2`; leave an observation `null` when nobody has looked); the steps are
+in [Use it on your own case](#use-it-on-your-own-case).
+
+### Product survey
+
 `python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis` screens one
 synthetic final pass per catalogue product (literature inputs, one synthetic mill per gauge
 class, unvalidated) and ranks the products per mechanism, with a battery-foil block by gauge
-(20 to 10 um) and grade (standard and high-strength proposals); see sections 3.10 and 3.11 of
-the doc.
-To use your own machine instead of the demo mills (`--mill my_mill.json`, also
-`--products`, `--overrides`, `--write-cases`), and for which case-file keys are the machine,
-the product and the observations, see "Using your own mill" (section 5.3 of the doc).
+(20 to 10 µm) and grade (standard and high-strength proposals); see section 3.10 of the doc.
+To use your own machine instead of the demo mills (`--mill my_mill.json`, also `--products`,
+`--overrides`, `--write-cases`), see
+[Screening several products, also on your own mill](#screening-several-products-also-on-your-own-mill)
+and "Using your own mill" (section 5.3 of the doc), which also says which case-file keys are
+the machine, the product and the observations.
 
-Start a real case from `scenarios/band_diagnosis_template.json` (schema
-`physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see
-[band diagnosis](docs/band-diagnosis.md) for what the tool can and cannot say at foil gauge,
-which observations matter most, the evidence rules, the equations with their source tags,
-how to read the report and the limitations.
-Status: a screening tool on synthetic, uncalibrated models; nothing in it has been validated
-against plant data, and the demo observations were generated from the model itself.
+### Status and limits
+
+- A screening tool on synthetic, uncalibrated models. Nothing in it has been validated against
+  plant data.
+- It models one stand of a four-high mill. Tandem coupling, six-high layouts and roll bending
+  are not modelled.
+- At foil gauge there is no closed-gap load path and no doubled pass, and the roll bite comes
+  from an experimental model.
+- The demo observations were generated from the model itself, so the demos test the screening
+  logic, not the physics.
+
+The full list is in section 14 of [band diagnosis](docs/band-diagnosis.md); what is missing
+compared with the literature is in the [gap study](docs/simulation-coverage-gaps.md).
