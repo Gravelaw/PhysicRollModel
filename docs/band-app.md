@@ -145,6 +145,17 @@ and a backup-roll change did; and whether the marks are on one face or both.
 If an answer is not accepted (for example an exit gauge above the entry gauge), the question is
 marked in red with a plain explanation, and pressing Run takes you there.
 
+**Answers that depend on other answers.** The nozzle marks (the drawing, the blocked-nozzle
+numbers and the valve events) belong to one spray header: when you change the barrel length or the
+distance between nozzles and the number of nozzles changes, the marks are reset to "Don't know"
+(never moved to other nozzles), the header is redrawn and a notice says so ("The spray header now
+has 25 nozzles instead of 28, so the nozzle marks were reset. Mark them again if you know them.").
+A run is not started until the page has shown that notice: pressing Run with stale marks shows the
+redrawn header instead, and the next press runs. Band positions, the band width and incoming ridges
+that lie outside the strip, or a strip that does not fit on the roll where it is placed, get a
+notice on the question without being changed. Choosing another product after filling in its
+typical values says that those values were for the previous product.
+
 **Changing the answers of an earlier run.** "Change the answers" (on a result, or on a run opened
 from "Previous runs") brings back that run's answers on that run's own starting point. A run
 started from a typical mill or a worked example reopens on that starting point. A what-if, an

@@ -1408,6 +1408,114 @@ def plain_error(message):
                     'values you changed last.'}
 
 
+# ============================================================================= dependent answers
+NOZZLE_DEPENDENT = ('nozzle_levels', 'blocked_nozzles', 'valve_events', 'coverage_blocked_nozzles')
+
+
+def _coverage_nozzle_count(case):
+    """Nozzles of the simple coverage header (``band_signatures.spray_coverage`` layout)."""
+    c = case.get('coolant')
+    if c is None:
+        return None
+    cov = bsig.spray_coverage(c['barrel_length_m'], c['nozzle_pitch_m'], c['standoff_m'],
+                              c['spray_angle_rad'], c['offset_angle_rad'])
+    return len(cov['nozzle_positions_m'])
+
+
+def _numbers_of(value):
+    return [x for x in value if isinstance(x, (int, float)) and not isinstance(x, bool)] \
+        if isinstance(value, list) else []
+
+
+def reconcile_answers(answers, preset):
+    """Answers that depend on other answers, checked BEFORE the case is validated.
+
+    Returns (answers, notices). Nozzle marks that no longer fit the spray header (nozzle levels,
+    blocked nozzles, valve events, coverage-check blocked nozzles: their nozzle count depends on
+    the barrel length and the nozzle pitch) are reset to "Don't know" — never re-mapped — with a
+    notice of kind 'reset'. Values that are still accepted by the engine but now lie outside the
+    strip or the roll (band positions, band width, incoming ridges, strip centre) are left as
+    entered with a notice of kind 'check'. Nothing is changed silently: the caller shows every
+    notice, and a run is not started while a 'reset' notice is pending."""
+    _norm_answers(answers)                         # the same checks as case_from_answers
+    answers = answers or {}
+    notices = []
+    probe = copy.deepcopy(answers)
+    probe.setdefault('values', {})
+    for qid in NOZZLE_DEPENDENT + ('band_positions', 'incoming_ridges'):
+        probe['values'][qid] = None                # geometry first, then what depends on it
+    try:
+        case = case_from_answers(probe, preset)
+    except (ValueError, TypeError, KeyError):
+        return answers, []                         # validation reports the real problem
+    out = copy.deepcopy(answers)
+    vals = out.setdefault('values', {})
+    try:
+        n_header = len(nozzle_layout(case)) if case.get('width_model') else None
+        n_cover = _coverage_nozzle_count(case)
+    except ValueError:
+        return answers, []
+    levels = vals.get('nozzle_levels')
+    if n_header is not None and isinstance(levels, list) and len(levels) != n_header:
+        vals['nozzle_levels'] = None
+        notices.append({'question': 'nozzle_levels', 'kind': 'reset',
+                        'text': f'The spray header now has {n_header} nozzles instead of '
+                                f'{len(levels)}, so the nozzle marks were reset. Mark them again '
+                                'if you know them.'})
+    for qid, count, what in (('blocked_nozzles', n_header, 'spray header'),
+                             ('coverage_blocked_nozzles', n_cover, 'simple coverage header')):
+        nums = _numbers_of(vals.get(qid))
+        if count is not None and nums and max(nums) > count:
+            vals[qid] = None
+            notices.append({'question': qid, 'kind': 'reset',
+                            'text': f'The {what} now has {count} nozzles, so the blocked nozzle '
+                                    f'numbers (up to {int(max(nums))}) were reset. Enter them '
+                                    'again if you know them.'})
+    events = vals.get('valve_events')
+    if n_header is not None and isinstance(events, list):
+        used = [x for e in events if isinstance(e, dict)
+                for x in _numbers_of(e.get('nozzle_indices'))]
+        if used and max(used) > n_header:
+            vals['valve_events'] = None
+            notices.append({'question': 'valve_events', 'kind': 'reset',
+                            'text': f'The spray header now has {n_header} nozzles, so the valve '
+                                    f'events (which name nozzle {int(max(used))}) were reset. '
+                                    'Enter them again if you know them.'})
+    width_mm = case['pass']['width_m'] * 1000
+    pos = _numbers_of(vals.get('band_positions'))
+    outside = [x for x in pos if x < 0 or x > width_mm]
+    if outside:
+        notices.append({'question': 'band_positions', 'kind': 'check',
+                        'text': f'{len(outside)} band position(s) lie outside the '
+                                f'{width_mm:.0f} mm wide strip. Check the positions or the strip '
+                                'width.'})
+    bw_mm = vals.get('band_width')
+    if isinstance(bw_mm, (int, float)) and not isinstance(bw_mm, bool) and bw_mm > width_mm:
+        notices.append({'question': 'band_width', 'kind': 'check',
+                        'text': f'The band width ({bw_mm:g} mm) is larger than the strip width '
+                                f'({width_mm:.0f} mm). Check one of them.'})
+    ridges = vals.get('incoming_ridges')
+    if isinstance(ridges, list):
+        bad = [r for r in ridges if isinstance(r, dict) and isinstance(r.get('position_m'),
+                                                                        (int, float))
+               and not 0 <= r['position_m'] <= width_mm]
+        if bad:
+            notices.append({'question': 'incoming_ridges', 'kind': 'check',
+                            'text': f'{len(bad)} ridge position(s) lie outside the strip. Check '
+                                    'them or the strip width.'})
+    w = case.get('width_model')
+    if w is not None:
+        edge = strip_edge_m(case)
+        barrel = w['roll']['barrel_length_m']
+        if edge < -1e-9 or edge + case['pass']['width_m'] > barrel + 1e-9:
+            notices.append({'question': 'strip_centre' if w.get('strip_centre_m') is not None
+                            else 'strip_width', 'kind': 'check',
+                            'text': f'The strip ({width_mm:.0f} mm) does not fit on the roll '
+                                    f'barrel ({barrel * 1000:.0f} mm) where it is placed. Check '
+                                    'the strip width, the barrel length or the strip centre.'})
+    return out, notices
+
+
 # ============================================================================= run profiles
 QUICK_NUMERICS = {'axial_cell_m': 0.02, 'radial_cells': 6, 'time_step_s': 5.0}  # tests' COARSE
 QUICK_CELLS = 128
@@ -1909,7 +2017,7 @@ def clean(text):
         return text
     out = text
     for a, b in _REWRITE:
-        out = re.sub(re.escape(a), b, out, flags=re.IGNORECASE)
+        out = re.sub(r'\b' + re.escape(a) + r'\b', b, out, flags=re.IGNORECASE)
     return out
 
 
@@ -1957,20 +2065,68 @@ _SNAKE = re.compile(r'\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b')
 _UNIT_SUFFIX = re.compile(r'_(m|pa|n|m_s|hz|rad|kg|n_m|k|s|w_m|w_m2k|per_k|per_pa)$')
 
 
-_M_RE = re.compile(r'(?<![\w.])(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?\s?m\b(?![/\w])')
+# A complete number: sign, digits, decimal part, exponent in either case. Matched whole, never
+# in part: not inside a longer token, not as the tail of another number.
+_NUM = r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?'
+# "<number> m" or "<number>-<number> m" with a bare metre: not m/s, m/min, m2, m^2, mm, MPa
+# (upper case), mN, ... and not followed by a digit or letter.
+_M_RE = re.compile(r'(?<![\w.])(' + _NUM + r')(?:\s*-\s*(' + _NUM + r'))?\s?m(?![\w/²³^·*])')
+MM_MAX_M = 20.0          # a length of 20 m or more stays in metres (spans, coil lengths)
+MM_MIN_MM = 1e-3         # below 0.001 mm the original text is left untouched (no exponent shown)
+MM_MAX_SIG = 6           # at most six significant figures (repr-formatted engine numbers)
 
 
-def _mm_text(v):
-    x = float(v) * 1000
-    return f'{x:.0f}' if x >= 10 else f'{x:.2g}'
+def _sig_digits(token):
+    """Significant digits written in a number token (exponent and sign ignored)."""
+    mant = re.split(r'[eE]', token.lstrip('+-'))[0]
+    digits = mant.replace('.', '').lstrip('0')
+    if not digits:
+        return 1
+    if '.' not in mant:
+        digits = digits.rstrip('0') or digits[:1]
+    return max(1, len(digits))
+
+
+def _fixed(x, sig):
+    """x with ``sig`` significant figures in plain fixed notation (no exponent), trailing
+    zeros after the decimal point removed."""
+    if x == 0:
+        return '0'
+    d = sig - 1 - math.floor(math.log10(abs(x)))
+    if d <= 0:
+        return f'{round(x, d):.0f}'
+    text = f'{x:.{d}f}'
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
+def _mm_of(token):
+    """A metre token as millimetres, or None when it must stay as written."""
+    try:
+        v = float(token)
+    except ValueError:
+        return None
+    if not math.isfinite(v) or abs(v) >= MM_MAX_M:
+        return None
+    x = v * 1000.0
+    if x != 0 and abs(x) < MM_MIN_MM:
+        return None
+    return _fixed(x, min(_sig_digits(token), MM_MAX_SIG))
 
 
 def _to_mm(m):
-    """'0.667 m' -> '667 mm': across-the-width values are millimetres on screen."""
+    """'0.667 m' -> '667 mm', '5e-05 m' -> '0.05 mm', '0.1-3 m' -> '100-3000 mm': lengths in
+    millimetres on screen. Left unchanged when a value cannot be read, is 20 m or more, or is
+    below 0.001 mm, or when the number continues a token before it ('x-0.5 m')."""
     a, b = m.group(1), m.group(2)
-    if float(a) >= 20 or (b and float(b) >= 20):
+    start = m.start(1)
+    text = m.string
+    if a[0] not in '+-' and start >= 2 and text[start - 1] in '+-' and text[start - 2].isalnum():
         return m.group(0)
-    return _mm_text(a) + ('-' + _mm_text(b) if b else '') + ' mm'
+    ma = _mm_of(a)
+    mb = _mm_of(b) if b else None
+    if ma is None or (b and mb is None):
+        return m.group(0)
+    return ma + ('-' + mb if b else '') + ' mm'
 
 
 def _token(tok, choice_words=None):
@@ -2016,7 +2172,7 @@ def words(text, question_ids=()):
         'barrel coordinate', 'position along the roll')
     for v, lab in local.items():
         if '_' not in v and len(v) > 2:
-            t = re.sub(rf'^{v}(?=[;,]|$)', lab, t)
+            t = re.sub(rf'^{re.escape(v)}(?=[;,]|$)', lambda m, lab=lab: lab, t)
     return clean(t)
 
 
@@ -2088,10 +2244,9 @@ def evidence_sentences(e, qids=()):
         text = words(model, qids).replace(' / ', ' and ')
         parts = []
         for part in text.split(', '):          # one entry per state, not one per band
-            if part not in parts:
+            if part not in parts or re.search(r'\d', part):
                 parts.append(part)
         text = ', '.join(parts)
-        text = re.sub(r'(\b\d+ mm)(, \1\b)+', r'\1', text)
         if crit in LOOSE_CRITERIA:
             text = {'visible': 'a band that buckles in the mill',
                     'hidden under tension': 'a band hidden under tension in the mill'}.get(
@@ -2452,13 +2607,19 @@ SECTION_WORDS = {'chatter': 'Chatter (roll-stack vibration) checks',
                  'pass heating', 'width': 'Across-the-width model'}
 
 
-BITE_FAILURE_PATTERNS = (
+BITE_FAILURE_PATTERNS = (     # specific phrases of the engine's roll-gap messages, first match
     ('contact radius ratio', 'the rolls would flatten more than the sheet roll-gap model allows '
                              '(thin, hard strip)'),
+    ('flattening fixed point', 'the sheet roll-gap model does not converge for this pass'),
     ('floor of the roll-bite', 'the exit gauge is below the 8 µm that the roll-gap models cover'),
     ('below the 8 um floor', 'the exit gauge is below the 8 µm that the roll-gap models cover'),
-    ('reduction', 'the pass reduction is outside the range the roll-gap model accepts'),
-    ('friction', 'the roll-gap model does not converge at this friction'),
+    ('bite domain requires exit thickness', 'the exit gauge is below what the sheet roll-gap '
+                                            'model covers'),
+    ('bite domain requires reduction', 'the pass reduction is outside the range the roll-gap '
+                                       'model accepts'),
+    ('friction coefficient <=', 'the friction is outside the range the roll-gap model accepts'),
+    ('h0/R <= 0.05', 'the strip is too thick for the roll or too narrow for the roll-gap model'),
+    ('tensions must stay below', 'the strip tensions are not below the flow stress'),
 )
 
 

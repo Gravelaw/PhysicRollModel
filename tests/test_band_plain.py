@@ -227,6 +227,78 @@ def engine_token_problems(found):
     return bad
 
 
+class MetreRewriteTest(unittest.TestCase):
+    """Metres in engine text shown as millimetres: the whole number is read and converted,
+    never a part of it; text that is not a bare metre value is left alone."""
+
+    def test_reviewer_examples(self):
+        self.assertEqual(bpl.words('within 5e-05 m'), 'within 0.05 mm')
+        self.assertEqual(bpl.words('within 1.3e-2 m (x)'), 'within 13 mm (x)')
+        self.assertEqual(bpl.words('1E-4 m'), '0.1 mm')
+        self.assertEqual(bpl.words('2.5e+01 m'), '2.5e+01 m')        # 25 m stays in metres
+        self.assertEqual(bpl.words('observed 0.667 m on model 0.6675 m, 0.668 m'),
+                         'observed 667 mm on model 667.5 mm, 668 mm')
+        self.assertEqual(bpl.words('0.1-3 m'), '100-3000 mm')
+        for keep in ('12 m/s', '600 m/min', '5 mm', '3 MPa', '2 m2', '2 m^2', '3 mN',
+                     'x-0.5 m', '1e-9 m', 'max 3 m3', 'a m b', 'model 3 mode'):
+            self.assertEqual(bpl.words(keep), keep, keep)
+
+    def test_property_values_read_back(self):
+        import random
+        rnd = random.Random(16)
+        sentences = ('within {} m (one quarter of the nozzle pitch)',
+                     'observed {} m on model 0.5 m (model steady stripes)',
+                     'gaps {} m (gaps between observed band positions); nozzle pitch 0.052 m',
+                     'spacing {} m; entry span: 2.27 x wavelength', '{} m', 'pitch {} m.')
+        formats = ('{:.3g}', '{:.4g}', '{:.6g}', '{!r}', '{:.3f}', '{:.4f}', '{:+.3g}')
+        values = [10 ** rnd.uniform(-7, 2) * rnd.choice((1, -1) if i % 5 == 0 else (1,))
+                  for i in range(300)]
+        checked = 0
+        for v in values:
+            for fmt in formats:
+                tok = fmt.format(v)
+                sentence = rnd.choice(sentences)
+                text = sentence.format(tok)
+                out = bpl.words(text)
+                head, tail = sentence.split('{}')
+                tail = tail.replace(' m', ' mm', 1) if tail.startswith(' m') else tail
+                if out.startswith(head + tok + ' m'):    # left as written: only by the rule
+                    x = abs(float(tok)) * 1000
+                    self.assertTrue(x >= bpl.MM_MAX_M * 1000 or (0 < x < bpl.MM_MIN_MM),
+                                    (text, out))
+                    continue
+                self.assertTrue(out.startswith(head), (text, out))
+                rest = out[len(head):]
+                num, sep, after = rest.partition(' mm')
+                self.assertEqual(sep, ' mm', (text, out))
+                # the surrounding text is unchanged (other metre values in it are converted)
+                self.assertEqual(after.strip(), bpl.words(tail[3:]), (text, out))
+                x = float(num)
+                want = float(tok) * 1000
+                sig = min(bpl._sig_digits(tok), bpl.MM_MAX_SIG)
+                tol = 0.5 * 10 ** (math.floor(math.log10(abs(want))) - sig + 1) if want else 0
+                self.assertLessEqual(abs(x - want), tol * 1.000001 + 1e-12, (text, out))
+                self.assertNotRegex(num, r'[eE]')
+                checked += 1
+        self.assertGreater(checked, 1500)
+
+    def test_other_rewrites_keep_numbers_and_words(self):
+        # the plain-word rewrites match whole words only
+        self.assertEqual(bpl.clean('the causes of the cause'), 'the causes of a cause')
+        self.assertEqual(bpl.clean('unconfirmed'), 'unconfirmed')
+        # a deflector roll index is shown counted from 1
+        self.assertEqual(bpl.words('deflector_roll:0: ELASTIC_NO_YIELD'),
+                         'deflector roll 1: bends without yielding')
+        # repeated positions are kept: two model positions are two numbers
+        e = {'criterion': 'band positions vs model stripes / blocked or low-level nozzles',
+             'observed': 'observed 1.5 m on model 1.5 m, 1.5 m (x)', 'expected': 'within 0.01 m',
+             'verdict': 'SUPPORTS', 'weight': 'strong', 'basis': 'observation'}
+        out = bpl.evidence_sentences(e)
+        self.assertIn('1500 mm, 1500 mm', out['model_words'])
+        e2 = dict(e, observed='observed 0.0015 m on model 0.005 m, 0.0015 m (x)')
+        self.assertIn('5 mm, 1.5 mm', bpl.evidence_sentences(e2)['model_words'])
+
+
 class QuestionTableTest(unittest.TestCase):
     def test_every_observation_key_has_a_question(self):
         t = json.loads((ROOT / 'scenarios' / 'band_diagnosis_template.json').read_text())
@@ -552,7 +624,8 @@ class SummaryTest(unittest.TestCase):
         out = bpl.evidence_sentences(e, ['band_positions'])
         self.assertEqual(out['verdict_words'], 'Matches')
         self.assertEqual(out['seen_words'], 'You saw: Bands at 667 mm.')
-        self.assertTrue(out['model_words'].startswith('The model computed: Positions at 668 mm'))
+        self.assertTrue(out['model_words'].startswith('The model computed: Positions at '
+                                                      '667.5 mm, 668 mm'), out)
         self.assertIn('13 mm', out['expects_words'])
         self.assertNotRegex(json.dumps(out), r'\d m\b')
         # 2. the source is named by the basis

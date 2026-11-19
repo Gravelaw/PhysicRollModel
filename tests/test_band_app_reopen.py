@@ -165,5 +165,94 @@ class SummaryErrorTest(ServerCase):
         self.assertEqual(res['status'], bd.STATUS)
 
 
+class DependentAnswersTest(ServerCase):
+    """Answers that depend on other answers (SPEC16 review, finding 5): reconciled before the
+    engine validates the case, with a plain notice; a run is never started from answers the
+    person has not seen."""
+    engine = staticmethod(fake_engine)
+
+    def check(self, values, preset='foil_mill'):
+        return self.client.json('POST', '/api/case/check',
+                                {'preset': preset, 'answers': {'values': values}})
+
+    def levels(self, marks):
+        lv = [1.0] * 28
+        for i, x in marks.items():
+            lv[i] = x
+        return lv
+
+    def test_nozzle_pitch_52_to_60_mm_resets_the_marks(self):
+        values = {'nozzle_levels': self.levels({5: 0.5, 11: 0.0}), 'nozzle_pitch': 60.0}
+        st, out = self.check(values)
+        self.assertEqual(st, 200, out)
+        notice = out['reconciled'][0]
+        self.assertEqual(notice['question'], 'nozzle_levels')
+        self.assertEqual(notice['kind'], 'reset')
+        self.assertIn('25 nozzles instead of 28', notice['text'])
+        self.assertEqual(out['answers_patch'], {'nozzle_levels': None})
+        self.assertIsNone(out['case']['width_model']['nozzle_levels'])
+        self.assertEqual(len(out['geometry']['nozzle_positions_m']), 25)
+        # a run with the stale marks is refused with the same notice ...
+        st, out = self.client.json('POST', '/api/runs', {'preset': 'foil_mill',
+                                                         'answers': {'values': values}})
+        self.assertEqual(st, 409)
+        self.assertIn('25 nozzles instead of 28', out['error']['text'])
+        self.assertEqual(out['error']['question'], 'nozzle_levels')
+        self.assertEqual(out['answers_patch'], {'nozzle_levels': None})
+        # ... and accepted once the page has applied it (and the person marked one nozzle)
+        values.update(out['answers_patch'])
+        lv = [1.0] * 25
+        lv[3] = 0.0
+        values['nozzle_levels'] = lv
+        st, out = self.client.json('POST', '/api/runs', {'preset': 'foil_mill',
+                                                         'answers': {'values': values}})
+        self.assertEqual(st, 202, out)
+
+    def test_other_nozzle_numbers_are_reset_with_a_notice(self):
+        events = [{'start_s': 0.0, 'duration_s': 20.0, 'nozzle_indices': [26, 27],
+                   'level': 0.0, 'label': None}]
+        st, out = self.check({'nozzle_pitch': 60.0, 'blocked_nozzles': [27],
+                              'coverage_blocked_nozzles': [28], 'valve_events': events})
+        self.assertEqual(st, 200, out)
+        got = {n['question']: n for n in out['reconciled']}
+        for q in ('blocked_nozzles', 'coverage_blocked_nozzles', 'valve_events'):
+            self.assertEqual(got[q]['kind'], 'reset', q)
+            self.assertIn('nozzles', got[q]['text'])
+            self.assertIsNone(out['answers_patch'][q])
+        self.assertEqual(out['case']['width_model']['events'], [])
+        # the same numbers on the unchanged header are kept
+        st, out = self.check({'blocked_nozzles': [27], 'valve_events': events})
+        self.assertEqual(st, 200)
+        self.assertEqual(out['reconciled'], [])
+        self.assertEqual(out['case']['width_model']['blocked_nozzle_indices'], [26])
+
+    def test_values_outside_the_strip_or_roll_get_a_check_notice(self):
+        st, out = self.check({'band_positions': [100.0, 1300.0], 'band_width': 1500.0,
+                              'incoming_ridges': [{'position_m': 1250.0, 'height_m': 1.0,
+                                                   'width_m': 20.0}]})
+        self.assertEqual(st, 200, out)
+        got = {n['question']: n for n in out['reconciled']}
+        for q in ('band_positions', 'band_width', 'incoming_ridges'):
+            self.assertEqual(got[q]['kind'], 'check', q)
+        self.assertEqual(out['answers_patch'], {})
+        self.assertIn('outside the 1200 mm wide strip', got['band_positions']['text'])
+        # a strip that no longer fits on the barrel: the engine refuses the band positions, and
+        # the notice on the strip centre says why
+        st, out = self.check({'band_positions': [100.0], 'strip_centre': 200.0})
+        self.assertEqual(st, 400)
+        self.assertEqual(out['error']['question'], 'band_positions')
+        got = {n['question']: n for n in out['reconciled']}
+        self.assertIn('does not fit on the roll barrel', got['strip_centre']['text'])
+        st, out = self.client.json('POST', '/api/runs', {'preset': 'foil_mill', 'answers': {
+            'values': {'band_positions': [100.0, 1300.0]}}})
+        self.assertEqual(st, 202)            # a 'check' notice does not block the run
+
+    def test_gauge_order_points_to_the_question(self):
+        st, out = self.check({'exit_gauge': 60.0})          # entry gauge of the foil mill: 50
+        self.assertEqual(st, 400)
+        self.assertEqual(out['error']['question'], 'exit_gauge')
+        self.assertIn('must be below', out['error']['text'])
+
+
 if __name__ == '__main__':
     unittest.main()

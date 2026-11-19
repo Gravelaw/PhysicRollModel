@@ -345,6 +345,8 @@ svg .spray{opacity:.11}
 .trust{font-size:8.5pt}.headline .text{font-size:11pt}}
 @media print{.fig{max-width:52%}.checklist>li{padding:0;border:0}.card{margin-bottom:4px}
 .wrap>p.printonly{margin:0 0 4px}.screening-note{font-size:8.5pt}}
+.notice{border-left:4px solid var(--amber);background:var(--paper);padding:.35rem .6rem;margin:.4rem 0;font-size:.92rem}
+.notice.reset{border-left-color:var(--blue);font-weight:600}
 '''
 
 APP_JS = r''''use strict';
@@ -380,6 +382,8 @@ APP_JS = r''''use strict';
     return v.toLocaleString('en-GB', {maximumFractionDigits: Math.min(d, 10)});
   }
   function um(m) { return isNum(m) ? sig(m * 1e6, 3) + ' µm' : '–'; }
+  // a small length (a tolerance, a band width) in mm without rounding it away: 0.05 mm, 13 mm
+  function mmSmall(m) { if (!isNum(m)) { return '–'; } var x = m * 1000; return (Math.abs(x) >= 10 ? Math.round(x).toLocaleString('en-GB') : sig(x, 2)) + ' mm'; }
   function mmInt(m) { return isNum(m) ? Math.round(m * 1000).toLocaleString('en-GB') + ' mm' : '–'; }
   function gauge(m) {
     if (!isNum(m)) { return '–'; }
@@ -516,14 +520,12 @@ APP_JS = r''''use strict';
     api('POST', '/api/case/check', body()).then(function (r) {
       if (seq !== S.checkSeq) { return; }
       S.errors = {}; S.generalError = null;
+      // dependent answers the server reconciled (never silently): apply its patch, show notices
+      var changed = applyReconciled(r.data);
       if (r.status === 200) {
         var oldN = geometry().nozzle_positions_m.length;
         S.check = r.data;
-        if (S.check.geometry.nozzle_positions_m.length !== oldN && Array.isArray(val('nozzle_levels'))) {
-          S.answers.values.nozzle_levels = null;
-          S.banner = 'The spray header changed, so the nozzle marks were reset to "Don\'t know".';
-          if (S.view === 'input') { render(); return; }
-        }
+        if ((changed || S.check.geometry.nozzle_positions_m.length !== oldN) && S.view === 'input') { render(); return; }
       } else {
         S.check = null;
         var e = (r.data && r.data.error) || {text: 'The inputs could not be checked.'};
@@ -532,6 +534,16 @@ APP_JS = r''''use strict';
       markErrors();
       updateSide();
     });
+  }
+  function applyReconciled(data) {
+    var notes = (data && data.reconciled) || [], patch = (data && data.answers_patch) || {};
+    S.notices = {};
+    notes.forEach(function (n) { S.notices[n.question] = {text: n.text, kind: n.kind}; });
+    var changed = false;
+    Object.keys(patch).forEach(function (q) {
+      if (!same(S.answers.values[q], patch[q])) { S.answers.values[q] = patch[q]; changed = true; }
+    });
+    return changed;
   }
   function markErrors() {
     var nodes = app.querySelectorAll('.q');
@@ -676,6 +688,7 @@ APP_JS = r''''use strict';
       '<label class="w" for="' + ctx.prefix + '-in-' + q.id + '">' + esc(q.wording) +
       (q.ask_first ? '' : '') + '</label>' +
       '<p class="help" id="' + ctx.prefix + '-h-' + q.id + '">' + esc(q.help) + '</p>' +
+      (ctx.prefix === 'f' && S.notices && S.notices[q.id] ? '<div class="notice ' + S.notices[q.id].kind + '" role="status">' + esc(S.notices[q.id].text) + '</div>' : '') +
       widget(q, ctx) + typicalLine(q, ctx) + originMark(q, ctx) +
       '<div class="err" role="alert">' + esc(S.errors[q.id] || '') + '</div></div>';
   }
@@ -797,7 +810,7 @@ APP_JS = r''''use strict';
           var key = l.observed_m.toFixed(4);
           if (drawn[key]) { return; }
           drawn[key] = 1;
-          var words = 'Your band at ' + mmInt(l.observed_m - o.edge) + ' lies within ' + mmInt(res.tolerance_m) +
+          var words = 'Your band at ' + mmInt(l.observed_m - o.edge) + ' lies within ' + mmSmall(res.tolerance_m) +
             ' of: ' + m.label.toLowerCase() + ' at ' + mmInt(l.predicted_m - o.edge);
           s += '<g class="mark" tabindex="0" aria-label="' + esc(words) + '" data-tip="' + esc(words) + '">' +
             '<rect class="tol" x="' + X(l.observed_m - res.tolerance_m) + '" y="' + (yBot + 1) + '" width="' + (2 * res.tolerance_m * sx) + '" height="7"/>' +
@@ -1392,7 +1405,7 @@ APP_JS = r''''use strict';
           'score ' + c.score_before + ' → ' + c.score_after + ', place ' + c.rank_before + ' → ' + c.rank_after + '</li>';
       }).join('') + '</ul>' : '<p>No cause changed its standing or score.</p>') +
       (moved ? '<p class="small">' + moved + ' other cause' + (moved > 1 ? 's' : '') + ' moved place only because of the change above.</p>' : '') +
-      (cmp.trust ? '<p>' + esc(cmp.trust.replace(/LOW/g, 'low').replace(/MODERATE/g, 'moderate').replace(/FAIR/g, 'fair')) + '</p>' : '') +
+      (cmp.trust ? '<p>' + esc(cmp.trust.replace(/\bLOW\b/g, 'low').replace(/\bMODERATE\b/g, 'moderate').replace(/\bFAIR\b/g, 'fair')) + '</p>' : '') +
       '<button type="button" class="btn noprint" data-open-run="' + cmp.base_run_id + '">Back to the earlier result</button> <span class="small soft">In the bars, the thin grey line is the earlier score.</span></div>';
   }
   function standingWordsOf(s) { return M.standing_words[s] || s; }
@@ -1413,12 +1426,12 @@ APP_JS = r''''use strict';
     }
     if (sv.thermal_profile) { items.push({icon: '<path d="M2 12q8 0 13-8q5 8 13 8" fill="none" stroke="var(--orange)" stroke-width="2"/>', text: 'Roll growth across the barrel (bumps are hot stripes)'}); }
     if (sv.matches.some(function (m) { return m.links.some(function (l) { return l.matched; }); })) {
-      items.push({icon: '<line x1="4" y1="14" x2="26" y2="2" stroke="var(--green)" stroke-width="2" stroke-dasharray="3 2"/>', text: 'Your band matches a predicted position (within ' + mmInt(sv.tolerance_m) + ')'});
+      items.push({icon: '<line x1="4" y1="14" x2="26" y2="2" stroke="var(--green)" stroke-width="2" stroke-dasharray="3 2"/>', text: 'Your band matches a predicted position (within ' + mmSmall(sv.tolerance_m) + ')'});
     }
     var listRows = sv.observed_positions_m.map(function (x, i) {
       var hits = [];
       sv.matches.forEach(function (m) { m.links.forEach(function (l) { if (l.matched && Math.abs(l.observed_m - x) < 1e-9) { hits.push(m.label.toLowerCase() + ' at ' + mmInt(l.predicted_m - sv.strip_start_m)); } }); });
-      return '<li>Band ' + (i + 1) + ' at ' + mmInt(x - sv.strip_start_m) + ': ' + (hits.length ? 'matches ' + esc(hits.join('; ')) : 'no predicted position within ' + mmInt(sv.tolerance_m)) + '</li>';
+      return '<li>Band ' + (i + 1) + ' at ' + mmInt(x - sv.strip_start_m) + ': ' + (hits.length ? 'matches ' + esc(hits.join('; ')) : 'no predicted position within ' + mmSmall(sv.tolerance_m)) + '</li>';
     }).join('');
     return '<div class="fig">' + svg + '</div>' + legend(items) + '<details><summary>The same as a list</summary><ul class="small">' + (listRows || '<li>No band positions entered.</li>') + '</ul></details>';
   }
@@ -1640,6 +1653,12 @@ APP_JS = r''''use strict';
       if (r.status === 202) { openRun(r.data.id); return; }
       if (btn) { btn.disabled = false; }
       var e = r.data.error || {text: 'The run could not be started.'};
+      if (applyReconciled(r.data) || (r.data.reconciled || []).length) {
+        // a run is never started from answers the person has not seen: show the redrawn header
+        S.check = null; scheduleCheck();
+        goStep(Q[e.question] ? Q[e.question].step : S.step, e.question);
+        return;
+      }
       if (e.question) { S.errors[e.question] = e.text; goStep(Q[e.question] ? Q[e.question].step : S.step, e.question); markErrors(); }
       else { S.generalError = e.text; updateSide(); }
     });
@@ -1802,7 +1821,12 @@ APP_JS = r''''use strict';
   document.addEventListener('change', function (e) {
     var t = e.target, d = t.dataset;
     if (d.chip) { var v = JSON.parse(d.v); if (d.chip === 'orientation' && ctxOf(t) === 'f') { S.touched.orientation = true; } store(d.chip, v, t); if (ctxOf(t) === 'f') { render(); } }
-    else if (d.select) { store(d.select, JSON.parse(t.value), t); if (ctxOf(t) === 'f') { render(); } }
+    else if (d.select) {
+      if (d.select === 'product' && Object.keys(S.suggested).length) {
+        S.productInfo = 'You chose another product. The typical values filled in before were for the previous product: fill them in again for this one, or keep and check them.';
+      }
+      store(d.select, JSON.parse(t.value), t); if (ctxOf(t) === 'f') { render(); }
+    }
     else if (d.origin) { S.answers.origins[d.origin] = t.value; if (t.value === 'preset') { S.answers.values[d.origin] = clone(pv(d.origin)); } S.touched[d.origin] = true; scheduleCheck(); render(); }
     else if (d.preset) { setPreset(d.preset); render(); }
     else if (d.profile) { S.profile = d.profile; }

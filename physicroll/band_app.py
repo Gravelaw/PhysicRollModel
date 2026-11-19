@@ -125,12 +125,14 @@ def load_worked_examples(directory=SCENARIOS_DIR):
 class RequestError(Exception):
     """An error with an HTTP status and a plain message for the page."""
 
-    def __init__(self, status, text, question=None, step=None):
+    def __init__(self, status, text, question=None, step=None, extra=None):
         super().__init__(text)
         self.status, self.text, self.question, self.step = status, text, question, step
+        self.extra = extra or {}
 
     def body(self):
-        return {'error': {'text': self.text, 'question': self.question, 'step': self.step}}
+        return dict({'error': {'text': self.text, 'question': self.question,
+                               'step': self.step}}, **self.extra)
 
 
 class RunStore:
@@ -246,12 +248,35 @@ class RunStore:
         return self.presets[pid]
 
     @staticmethod
-    def build_case(answers, preset):
+    def reconcile(answers, preset):
+        """(answers, notices, patch): dependent answers checked before validation
+        (``band_plain.reconcile_answers``); ``patch`` = {question id: new value} of the answers
+        that were reset, for the page to apply."""
         try:
-            return bpl.case_from_answers(answers, preset)
+            fixed, notices = bpl.reconcile_answers(answers, preset)
+        except (ValueError, TypeError, KeyError):
+            return answers, [], {}
+        patch = {n['question']: fixed['values'].get(n['question']) for n in notices
+                 if n['kind'] == 'reset'}
+        return fixed, notices, patch
+
+    @classmethod
+    def build_case(cls, answers, preset, for_run=False):
+        """(case, notices, patch). For a run, a pending reset is refused (409) with the
+        notices, so a run never starts from answers the person has not seen."""
+        fixed, notices, patch = cls.reconcile(answers, preset)
+        if for_run and patch:
+            first = next(n for n in notices if n['kind'] == 'reset')
+            raise RequestError(409, first['text'] + ' Check the redrawn spray header, then '
+                                    'run again.', first['question'],
+                               bpl.QUESTION_BY_ID[first['question']].step,
+                               extra={'reconciled': notices, 'answers_patch': patch})
+        try:
+            return bpl.case_from_answers(fixed, preset), notices, patch
         except (ValueError, TypeError, KeyError) as exc:
             err = bpl.plain_error(exc)
-            raise RequestError(400, err['text'], err['question'], err['step'])
+            raise RequestError(400, err['text'], err['question'], err['step'],
+                               extra={'reconciled': notices, 'answers_patch': patch})
 
     # ------------------------------------------------------------------ runs
     def submit(self, case, answers, preset, profile, base_run_id=None, changes=None):
@@ -673,10 +698,11 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                 body = self._body(raw)
                 if parts == ['api', 'case', 'check']:
                     preset = store.preset(body)
-                    case = store.build_case(body.get('answers'), preset)
+                    case, notices, patch = store.build_case(body.get('answers'), preset)
                     self._json(200, {'ok': True, 'case': case,
                                      'origins': bpl.value_origins(case),
-                                     'geometry': _geometry(case)})
+                                     'geometry': _geometry(case), 'reconciled': notices,
+                                     'answers_patch': patch})
                 elif parts == ['api', 'case', 'open']:
                     preset = store.preset(dict(body, preset='case_file'))
                     self._json(200, {'ok': True, 'answers': bpl.answers_from_case(
@@ -686,7 +712,7 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                 elif parts == ['api', 'runs']:
                     preset = store.preset(body)
                     answers = body.get('answers')
-                    case = store.build_case(answers, preset)
+                    case, _, _ = store.build_case(answers, preset, for_run=True)
                     run_id = store.submit(case, answers, preset, body.get('profile', 'quick'))
                     self._json(202, {'id': run_id})
                 elif len(parts) == 4 and parts[1] == 'runs' and parts[3] == 'variant':
@@ -774,7 +800,7 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
             answers['name'] = (label if isinstance(label, str) and label.strip()
                                else f'{base_case["name"]} (what-if)')[:200]
             preset = base_preset
-            case = store.build_case(answers, preset)
+            case, _, _ = store.build_case(answers, preset, for_run=True)
             words = [bpl.QUESTION_BY_ID[q].wording for q in changes if q in bpl.QUESTION_BY_ID]
             return store.submit(case, answers, preset, body.get('profile', meta['profile']),
                                 base_run_id=base_id, changes=words)
