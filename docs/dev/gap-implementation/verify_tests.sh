@@ -1,0 +1,18 @@
+#!/bin/bash
+# Run the band test modules in four parallel groups plus the smoke script; print one line each.
+# Usage (from the repository root): verify_tests.sh [extra test modules...]
+S=/tmp/claude-0/-home-user-PhysicRollModel/2f99237c-57ca-5a74-a3d6-b1fb23e86cf7/scratchpad/vt
+mkdir -p "$S"
+python -m unittest tests.test_band_v2_sections tests.test_benchmarks tests.test_bite_tribology \
+  tests.test_band_signatures tests.test_chatter tests.test_foil_bite tests.test_strip_shape \
+  tests.test_roll_thermal > "$S/a.txt" 2>&1 &
+python -m unittest tests.test_band_foil tests.test_band_plain tests.test_band_plain_partial \
+  tests.test_band_thermal_check tests.test_band_process_temperatures > "$S/b.txt" 2>&1 &
+python -m unittest tests.test_band_lengthwise tests.test_band_diagnosis \
+  tests.test_package_resources tests.test_band_products tests.test_band_extended_domain \
+  tests.test_band_robustness > "$S/c.txt" 2>&1 &
+python -m unittest tests.test_band_survey tests.test_band_app tests.test_band_app_drawing \
+  tests.test_band_app_reopen "$@" > "$S/d.txt" 2>&1 &
+wait
+for f in a b c d; do echo "group $f: $(tail -n 3 "$S/$f.txt" | tr '\n' ' ')"; done
+python scripts/smoke.py > "$S/smoke.txt" 2>&1; echo "smoke exit $?"

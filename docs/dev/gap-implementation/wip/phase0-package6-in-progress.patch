@@ -1,0 +1,603 @@
+diff --git a/physicroll/band_plain.py b/physicroll/band_plain.py
+index 6b25e0e..16d15c7 100644
+--- a/physicroll/band_plain.py
++++ b/physicroll/band_plain.py
+@@ -2235,6 +2235,25 @@ FLAGS = {
+     'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
+         'Part of each zone reading is shared with its neighbours, as you set it.',
+         'Set the spreading to zero unless your vendor states it.'),
++    'STRIP_TEMPERATURE_TERM_SUPPLIED_PROFILE': (
++        'The strip temperature scan you gave is used to show flatness as measured hot and '
++        'after cooling; the scan is your input, not worked out by the tool.',
++        'Check where and when the scan was taken.'),
++    'STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT': (
++        'The heat expansion of aluminium is a textbook value, not checked against your alloy.',
++        'Give the value from your alloy data if you have it.'),
++    'STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP': (
++        'The temperature scan does not reach the whole strip width; the end values are carried '
++        'to the edges.', 'Scan the full strip width.'),
++    'STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE': (
++        'There is no modelled flatness for this pass, so only the temperature part is shown.',
++        'Read it as the temperature effect alone.'),
++    'STRIP_TEMPERATURE_CHANGES_A_BAND_STATE': (
++        'The strip temperature changes whether a band shows in the mill or after release.',
++        'Compare the hot reading with a cold sample of the same coil.'),
++    'SHAPEMETER_TEMPERATURE_COMPENSATED': (
++        'Your shapemeter corrects for strip temperature, so it would show the flatness without '
++        'the temperature part.', 'No action.'),
+     'GAUGE_TRANSFER_APPLIED': (
+         'The page shows about how much of each mark the thickness gauge you described keeps '
+         '(spot size and response time only).',
+diff --git a/physicroll/band_report.py b/physicroll/band_report.py
+index 2e8473e..a1c387f 100644
+--- a/physicroll/band_report.py
++++ b/physicroll/band_report.py
+@@ -1318,9 +1318,92 @@ def _width_section(r):
+     else:
+         body += _state_p('Position match ' + (_bad(pos) or 'not available'))
+     body += _other_width_results(w)
++    body += _strip_temperature_block(r, w)
+     return head + body + '</section>'
+ 
+ 
++def _strip_temperature_block(r, w):
++    """SPEC17 package 6: flatness measured hot against after cooling (supplied scan)."""
++    s = w.get('strip_temperature')
++    if not isinstance(s, dict):
++        return ''
++    head = '<h3>Strip temperature and flatness</h3>'
++    if s.get('status') == 'FAILED':
++        return head + _state_p('FAILED: ' + str(s.get('error')))
++    if s.get('not_supplied'):
++        from .strip_shape import ALUMINIUM_EXPANSION_PER_K
++        return (head + '<p>No strip temperature scan: a 1 K hotter fibre reads about '
++                f'{_f(ALUMINIUM_EXPANSION_PER_K * 1e5, digits=2)} I-units loose at the '
++                'shapemeter (textbook expansion coefficient of aluminium, 23.6e-6 /K, from '
++                'memory in the reports).</p>')
++    z, temps = s['z_m'], s['temperature_k']
++    prof = s['profiles']
++    mech, hot = prof['mechanical'], prof['as_measured_hot']
++    th = s['thermal_i_units']
++    k = max(range(len(th)), key=lambda i: abs(th[i]))
++    key = [('mechanical (model today; also after cooling)', C_FB, '', 'thick'),
++           ('as measured hot (no temperature compensation)', C_ACT, '', 'line'),
++           ('thermal term alone', C_EVENT, '7 4', 'line')]
++    key_parts, rows = _key2(key)
++    top = 14 + 15 * rows + 10
++    bot = top + 200
++    height = bot + MB
++    sx = _Axis(z[0], z[-1], ML, W - MR)
++    vals = [v for v in mech['i_units'] + hot['i_units'] + th if _ok(v)] + [0.0]
++    lo, hi = min(vals), max(vals)
++    pad = 0.08 * (hi - lo or 1.0)
++    sy = _Axis(lo - pad, hi + pad, bot, top)
++    c = [f'<svg viewBox="0 0 {W} {height}" role="img" xmlns="http://www.w3.org/2000/svg" '
++         'class="chart" aria-label="flatness measured hot and after cooling"><title>Flatness '
++         'as measured hot and the mechanical flatness</title>',
++         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
++         'fill="#fbfcfe" stroke="#9aa5b8"/>']
++    for v in sy.ticks():
++        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
++                 'stroke="#d8dee8"/>')
++        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
++                 f'{_e(_tick_label(v))}</text>')
++    for v in sx.ticks():
++        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
++                 f'{_e(_tick_label(v))}</text>')
++    for ys, col, dash, wd in ((mech['i_units'], C_FB, '', 3.0), (hot['i_units'], C_ACT, '', 2.0),
++                              (th, C_EVENT, '7 4', 1.6)):
++        c.append(f'<polyline points="{_pts(z, ys, sx, sy)}" fill="none" stroke="{col}" '
++                 f'stroke-width="{wd}" stroke-dasharray="{dash}"/>')
++    cy = (top + bot) / 2
++    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
++             f'{cy:.1f})" class="axis">flatness [I-units]</text>')
++    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
++             'class="axis">position on the barrel [m]</text>')
++    c += key_parts
++    c.append('</svg>')
++    rows_t = []
++    for name in ('mechanical', 'as_measured_hot', 'after_cooling',
++                 'after_cooling_if_hot_reading_held_flat'):
++        pr = prof[name]
++        big = max(pr['bands'], key=lambda b: abs(b['peak_i_units']), default=None)
++        rows_t.append([_e(name.replace('_', ' ')), _e(pr['meaning']),
++                       _f(big['peak_i_units'], 1, 4) if big else 'below the threshold',
++                       _txt(big['state']) if big else '–',
++                       _txt(big['state_after_tension_release']) if big else '–'])
++    sc = _get(r, 'inputs', 'width_model', 'strip_temperature') or {}
++    scan = ('; '.join(f'{_f(x, 1, 3)} m {_f(v - 273.15, 1, 5)} °C'
++                      for x, v in zip(sc.get('positions_m') or [], sc.get('temperature_k') or [])))
++    scan = f' Scan: {_e(scan)}.' if scan else ''
++    return (head + f'<p>Supplied scan ({_e(s["provenance"])}): mean '
++            f'{_f(s["mean_temperature_k"] - 273.15, 1, 4)} °C, largest deviation '
++            f'{_f(s["max_temperature_deviation_k"], 1, 3)} K; expansion coefficient '
++            f'{_f(s["expansion_coefficient_per_k"], 1e6, 3)}e-6 /K '
++            f'({_e(s["expansion_coefficient_basis"])}), '
++            f'{_f(s["i_units_per_kelvin"], digits=3)} I-units per kelvin.{scan}</p>'
++            + _wide(''.join(c))
++            + _table(['profile', 'meaning', 'largest band peak [I]', 'in the mill',
++                      'after tension release'], rows_t, 'wrapall')
++            + '<p class="warn">The temperature profile was supplied, not computed. Flatness '
++              'measured hot and flatness after the coil has cooled differ by the thermal term: '
++              f'{_f(th[k], 1, 3)} I-units at {_f(z[k], 1e3, 4)} mm.</p>')
++
++
+ # ------------------------------------------------------------------------------ short-lived bands
+ def _visible(e):
+     """(threshold [m], start, end, colour, visible time) of the visible band, or None."""
+diff --git a/physicroll/band_sensors.py b/physicroll/band_sensors.py
+index 8151f00..e4be1ff 100644
+--- a/physicroll/band_sensors.py
++++ b/physicroll/band_sensors.py
+@@ -47,14 +47,19 @@ MEASUREMENT_KEYS = ('shapemeter', 'thickness_gauge')
+ SHAPEMETER_REQUIRED = ('zone_width_m', 'zone_count', 'provenance')
+ SHAPEMETER_DEFAULTS = {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
+                        'centre_m': None, 'neighbour_spreading_fraction': 0.0,
+-                       'resolution_i_units': None}
++                       'resolution_i_units': None, 'temperature_compensated': None}
+ DILUTION_BAND_WIDTHS_M = (0.010, 0.020, 0.040, 0.080, 0.160)
+ EDGE_TOL_M = 1e-9
+ FLAG_APPLIED = 'SHAPEMETER_OPERATOR_APPLIED'
+ FLAG_BELOW = 'MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD'
+ FLAG_UNCOVERED = 'SHAPEMETER_DOES_NOT_COVER_STRIP'
+ FLAG_SPREAD = 'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED'
+-FLAGS = (FLAG_APPLIED, FLAG_BELOW, FLAG_UNCOVERED, FLAG_SPREAD)
++FLAG_COMPENSATED = 'SHAPEMETER_TEMPERATURE_COMPENSATED'
++FLAGS = (FLAG_APPLIED, FLAG_BELOW, FLAG_UNCOVERED, FLAG_SPREAD, FLAG_COMPENSATED)
++HOT_LABEL_COMPENSATED = ("steady profile as measured hot: before the shapemeter's own "
++                         'temperature compensation; a compensated system shows the mechanical '
++                         'profile')
++HOT_LABEL = 'steady profile as measured hot: what the shapemeter shows'
+ NO_CONTROLLER = ('NO flatness controller: the tool does not predict what the control would have '
+                  'done with these readings (gap G5, Phase 2).')
+ LIMITATIONS = (
+@@ -136,6 +141,10 @@ def validate_shapemeter(s):
+             raise ValueError(f'{w}.resolution_i_units must be in (0, 100] or null')
+         res = float(res)
+     out['resolution_i_units'] = res
++    tc = s.get('temperature_compensated')
++    if tc is not None and not isinstance(tc, bool):
++        raise ValueError(f'{w}.temperature_compensated must be true, false or null')
++    out['temperature_compensated'] = tc
+     pv = s['provenance']
+     if not isinstance(pv, str) or not pv.strip():
+         raise ValueError(f'{w}.provenance must be a nonempty string')
+@@ -437,7 +446,7 @@ def dilution_table(zone_width_m):
+             'rows': [dilution(b, zone_width_m) for b in DILUTION_BAND_WIDTHS_M]}
+ 
+ 
+-def shapemeter_profiles(width):
++def shapemeter_profiles(width, temperature_compensated=None):
+     """Modelled flatness profiles the operator reads (later packages append to this list)."""
+     out = []
+     if not isinstance(width, dict):
+@@ -474,6 +483,17 @@ def shapemeter_profiles(width):
+                     'healthy header', 'z_m': st['z_m'], 'i_units': rip['i_units_with_feedback'],
+                     'bands': [], 'reporting_threshold_i_units':
+                         st.get('reporting_threshold_i_units')})
++    # SPEC17 package 6: the steady profile as measured hot (mechanical + thermal term)
++    stt = width.get('strip_temperature')
++    hot = ((stt.get('profiles') or {}).get('as_measured_hot')
++           if isinstance(stt, dict) and not stt.get('not_supplied') else None)
++    if isinstance(hot, dict) and isinstance(hot.get('i_units'), list) \
++            and len(hot['i_units']) == len(stt.get('z_m') or []) and len(hot['i_units']) > 1:
++        out.append({'name': 'steady_as_measured_hot',
++                    'label': HOT_LABEL_COMPENSATED if temperature_compensated else HOT_LABEL,
++                    'z_m': stt['z_m'], 'i_units': hot['i_units'], 'bands': hot['bands'],
++                    'reporting_threshold_i_units': (st or {}).get(
++                        'reporting_threshold_i_units') if isinstance(st, dict) else None})
+     return out
+ 
+ 
+@@ -579,7 +599,8 @@ def shapemeter_section(case, result):
+            'nozzle_map': nmap if nmap is not None else bp.not_supplied(
+                'no width_model: no spray header to map'),
+            'basis': dict(BASIS), 'limitations': list(LIMITATIONS)}
+-    profiles = shapemeter_profiles(result.get('width')) if reason is None else []
++    profiles = (shapemeter_profiles(result.get('width'), s['temperature_compensated'])
++                if reason is None else [])
+     if not profiles:
+         out.update(status='NOT_ASSESSABLE', reason=reason or 'no modelled flatness profile in '
+                    'the width section', profiles=[], threshold_i_units=None,
+@@ -601,6 +622,9 @@ def shapemeter_section(case, result):
+         flags.append(FLAG_UNCOVERED)
+     if s['neighbour_spreading_fraction'] > 0:
+         flags.append(FLAG_SPREAD)
++    if s['temperature_compensated'] and any(p['name'] == 'steady_as_measured_hot'
++                                            for p in read):
++        flags.append(FLAG_COMPENSATED)
+     out.update(threshold_i_units=thr, threshold_basis=basis, profiles=read, flags=flags)
+     return out
+ 
+diff --git a/physicroll/band_width.py b/physicroll/band_width.py
+index 5305495..39fbf3a 100644
+--- a/physicroll/band_width.py
++++ b/physicroll/band_width.py
+@@ -114,7 +114,9 @@ WIDTH_DEFAULTS = {
+     # SPEC17 A5 / X3: arc of the circumference the spray wets [rad]; used only to express the
+     # circumferential-mean spray coefficient on a jet-zone basis in thermal_check, never in the
+     # roll thermal model
+-    'spray_wetted_arc_rad': None}
++    'spray_wetted_arc_rad': None,
++    # SPEC17 A1 / G6: a supplied strip temperature scan across the width (not computed)
++    'strip_temperature': None}
+ CONTINUITY = ('continuous', 'intermittent', 'both')
+ APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
+ OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
+@@ -209,6 +211,8 @@ def validate_width_model(w, pass_):
+         if not 0 < arc <= 2 * math.pi:
+             raise ValueError('width_model.spray_wetted_arc_rad must be in (0, 2*pi]')
+     out['spray_wetted_arc_rad'] = arc
++    out['strip_temperature'] = _validate_strip_temperature(w.get('strip_temperature'),
++                                                           roll['barrel_length_m'])
+     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
+                                              w.get('blocked_nozzle_indices', []))
+     if w.get('nozzle_levels') is not None:
+@@ -1499,6 +1503,181 @@ WIDE_FOIL_TROUGH_NOTE = (
+     '[SS-S55 EX]: at foil gauge this threshold is conservative.')
+ 
+ 
++def _validate_strip_temperature(s, barrel):
++    if s is None:
++        return None
++    where = 'width_model.strip_temperature'
++    keys(where, s, ('positions_m', 'temperature_k', 'provenance'),
++         ('expansion_coefficient_per_k',))
++    pos = s['positions_m']
++    msg = f'{where}.positions_m must be >= 3 strictly increasing positions on the barrel'
++    if not isinstance(pos, list) or len(pos) < 3:
++        raise ValueError(msg)
++    try:
++        pos = [num(f'{where}.positions_m[{i}]', v) for i, v in enumerate(pos)]
++    except ValueError:
++        raise ValueError(msg) from None
++    if any(b <= a for a, b in zip(pos, pos[1:])) or pos[0] < 0 or pos[-1] > barrel:
++        raise ValueError(msg)
++    temps = s['temperature_k']
++    tmsg = f'{where}.temperature_k needs one value in [250, 700] K per position'
++    if not isinstance(temps, list) or len(temps) != len(pos):
++        raise ValueError(tmsg)
++    try:
++        temps = [num(f'{where}.temperature_k[{i}]', v, lo=250.0, hi=700.0)
++                 for i, v in enumerate(temps)]
++    except ValueError:
++        raise ValueError(tmsg) from None
++    a = s.get('expansion_coefficient_per_k')
++    if a is not None:
++        if isinstance(a, bool) or not isinstance(a, (int, float)) or not math.isfinite(a) \
++                or not 1e-6 < a < 1e-4:
++            raise ValueError(f'{where}.expansion_coefficient_per_k must be in (1e-6, 1e-4) or '
++                             'null')
++        a = float(a)
++    pv = s['provenance']
++    if not isinstance(pv, str) or not pv.strip():
++        raise ValueError(f'{where}.provenance must be a nonempty string')
++    return {'positions_m': pos, 'temperature_k': temps, 'expansion_coefficient_per_k': a,
++            'provenance': pv}
++
++
++def _interp_held(xs, ys, x):
++    """Linear interpolation; outside the scan the end value is held."""
++    if x <= xs[0]:
++        return ys[0]
++    if x >= xs[-1]:
++        return ys[-1]
++    lo, hi = 0, len(xs) - 1
++    while hi - lo > 1:
++        m = (lo + hi) // 2
++        if xs[m] <= x:
++            lo = m
++        else:
++            hi = m
++    f = (x - xs[lo]) / (xs[hi] - xs[lo])
++    return ys[lo] + f * (ys[hi] - ys[lo])
++
++
++ST_FLAG_SUPPLIED = 'STRIP_TEMPERATURE_TERM_SUPPLIED_PROFILE'
++ST_FLAG_COVER = 'STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP'
++ST_FLAG_NO_MECH = 'STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE'
++ST_FLAG_STATE = 'STRIP_TEMPERATURE_CHANGES_A_BAND_STATE'
++ST_MEANINGS = {
++    'mechanical': "the model's flatness as it is today (width.shape.steady, with feedback)",
++    'as_measured_hot': 'what a shapemeter without temperature compensation senses; also the '
++                       'state of the strip in the mill and of a sample released while hot',
++    'after_cooling': 'equal to mechanical (no flatness controller in the model); stated so '
++                     'that the reader sees it',
++    'after_cooling_if_hot_reading_held_flat': (
++        'BOUNDING CASE: if a flatness control had removed everything the hot shapemeter '
++        'showed, the cold strip would carry the negative of the thermal term (a hot fibre '
++        'becomes tight); needs the controller of G5 to be more than a bound')}
++ST_LIMITATIONS = (
++    'The temperature profile is an input, not computed (no per-width heat balance, gap A3).',
++    'The thermal strain is not fed back into the bite or the exit-tension feedback.',
++    'Where the mechanical profile was saturation-scaled (slack band) the sum is indicative.',
++    'The temperature at the shapemeter is assumed equal to the scan.',
++    'The after-cooling profile assumes no creep or set in the coil (gap A8).',
++    'No flatness controller: the bounding case is a bound, not a prediction.')
++
++
++def strip_temperature_section(case, w, shape_steady, z_strip, strip_start, strip_end):
++    """SPEC17 A1 / G6: flatness measured hot against after cooling, from a SUPPLIED scan.
++
++    [D, re-derived in SPEC17] With eps_m the model's mechanical elongation (referred to a
++    uniform temperature) the stress a shapemeter senses in the hot strip follows
++    eps_m + eps_T; after the coil has cooled only eps_m is left. Without a flatness controller
++    'after_cooling' equals 'mechanical'; the held-flat case is a bound. The term is reported
++    beside the width section's verdicts and never folded into them or into any evidence.
++    """
++    s = w.get('strip_temperature')
++    if s is None:
++        return not_supplied('width_model.strip_temperature is null or absent')
++    flags = [ST_FLAG_SUPPLIED]
++    mech_ok = (isinstance(shape_steady, dict) and isinstance(shape_steady.get('z_m'), list)
++               and isinstance(shape_steady.get('i_units_with_feedback'), list)
++               and len(shape_steady['z_m']) > 2)
++    z = list(shape_steady['z_m']) if mech_ok else list(z_strip)
++    if len(z) < 3:
++        raise ValueError('fewer than 3 strip samples for the strip temperature term')
++    xs, ys = s['positions_m'], s['temperature_k']
++    temps = [_interp_held(xs, ys, x) for x in z]
++    dz = z[1] - z[0]
++    a0, a1 = strip_start, strip_end
++    extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
++    if extrap > dz:
++        flags.append(ST_FLAG_COVER)
++    alpha = s['expansion_coefficient_per_k']
++    th = (ss.thermal_flatness_term(z, temps) if alpha is None
++          else ss.thermal_flatness_term(z, temps, expansion_coefficient_per_k=alpha))
++    flags += th['flags']
++    m = case['material']
++    kw = dict(youngs_modulus_pa=m['youngs_modulus_pa'], poisson_ratio=STRIP_POISSON_RATIO,
++              thickness_m=case['pass']['exit_thickness_m'],
++              mean_tension_pa=case['pass']['exit_tension_pa'], yield_stress_pa=m['yield_stress_pa'])
++
++    def prof(name, iu, available=True):
++        f = ss.flatness_from_elongation(z, [v * 1e-5 for v in iu], **kw)
++        return {'name': name, 'meaning': ST_MEANINGS[name], 'available': available,
++                'i_units': f['i_units'], 'status': f['status'],
++                'released_status': f['released_status'], 'max_i_units': f['max_i_units'],
++                'min_i_units': f['min_i_units'], 'bands': f['bands']}
++    zero = [0.0] * len(z)
++    mech_iu = list(shape_steady['i_units_with_feedback']) if mech_ok else zero
++    if not mech_ok:
++        flags.append(ST_FLAG_NO_MECH)
++    profiles = {
++        'mechanical': prof('mechanical', mech_iu, mech_ok),
++        'as_measured_hot': prof('as_measured_hot', [a + b for a, b in
++                                                    zip(mech_iu, th['i_units'])]),
++        'after_cooling': prof('after_cooling', mech_iu, mech_ok),
++        'after_cooling_if_hot_reading_held_flat': prof(
++            'after_cooling_if_hot_reading_held_flat', [-b for b in th['i_units']])}
++    changes = []
++    for src, other in (('mechanical', 'as_measured_hot'), ('as_measured_hot', 'mechanical')):
++        for b in profiles[src]['bands']:
++            o = _band_at(profiles[other]['bands'], b['peak_position_m'])
++            differs = (o is None or o['state'] != b['state']
++                       or o['state_after_tension_release'] != b['state_after_tension_release'])
++            changes.append({
++                'profile': src, 'peak_position_m': b['peak_position_m'],
++                'peak_i_units': b['peak_i_units'], 'state': b['state'],
++                'state_after_tension_release': b['state_after_tension_release'],
++                'other_profile': other,
++                'other_state': None if o is None else o['state'],
++                'other_state_after_tension_release': (None if o is None else
++                                                      o['state_after_tension_release']),
++                'other_peak_i_units': None if o is None else o['peak_i_units'],
++                'state_differs': differs})
++    if any(c['state_differs'] for c in changes):
++        flags.append(ST_FLAG_STATE)
++    dev = th['temperature_deviation_k']
++    return {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
++            'provenance': s['provenance'],
++            'expansion_coefficient_per_k': th['expansion_coefficient_per_k'],
++            'expansion_coefficient_basis': (
++                '[M] 23.6e-6 /K, textbook value used by the gap reports, not verified there '
++                '(default)' if alpha is None else 'supplied'),
++            'i_units_per_kelvin': th['i_units_per_kelvin'],
++            'z_m': z, 'temperature_k': temps, 'mean_temperature_k': th['mean_temperature_k'],
++            'max_temperature_deviation_k': max(abs(d) for d in dev),
++            'scan_coverage': {'scan_start_m': xs[0], 'scan_end_m': xs[-1],
++                              'strip_start_m': a0, 'strip_end_m': a1,
++                              'extrapolated_width_m': extrap,
++                              'rule': 'linear between scan points; end values held outside'},
++            'thermal_i_units': th['i_units'], 'profiles': profiles, 'state_changes': changes,
++            'basis': {'thermal_term': th['formula_basis'],
++                      'profiles': '[D, re-derived in SPEC17] hot = mechanical + thermal; after '
++                                  'cooling = mechanical (no controller); held-flat = -thermal '
++                                  '(bounding case)',
++                      'literature': 'a hotter fibre reads loose in the mill and the difference '
++                                    'disappears when the coil cools [TM-LA13 EX]; steel: '
++                                    '1 C = 1.2 I-units [TM-LA30 EX]; about 2.4 I-units per K '
++                                    'for aluminium [computed]'},
++            'flags': flags, 'limitations': list(ST_LIMITATIONS)}
++
++
+ def _troughs(case, w, obs):
+     p, spans = case['pass'], case['spans']
+     out = {}
+@@ -2135,6 +2314,16 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
+         except ValueError as exc:
+             shape['ridges'].append({'position_m': r['position_m'], 'rejected': str(exc)})
+     out['shape'] = shape
++    try:
++        a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
++        out['strip_temperature'] = strip_temperature_section(
++            case, w, shape['steady'], [x for x in z if a0 <= x <= a1], a0, a1)
++    except ValueError as exc:
++        out['strip_temperature'] = failed('strip_temperature', exc)
++        out['failures'].append(out['strip_temperature']['error'])
++    st_flags = (out['strip_temperature'].get('flags') or []) if isinstance(
++        out['strip_temperature'], dict) else []
++    flags += [f for f in st_flags if f not in flags]
+     out['troughs'] = _troughs(case, w, case['observation'])
+     two_tone = (ss.two_tone_positions_m(w['previous_strip_widths_m'], th.centre, th.width)
+                 if w['previous_strip_widths_m'] else None)
+diff --git a/physicroll/strip_shape.py b/physicroll/strip_shape.py
+index a72161f..f0213bd 100644
+--- a/physicroll/strip_shape.py
++++ b/physicroll/strip_shape.py
+@@ -1018,6 +1018,45 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
+                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
+ 
+ 
++# SPEC17 A1 / G6: the strip-temperature term of measured flatness
++# [M] textbook value used by the gap reports, not verified there
++ALUMINIUM_EXPANSION_PER_K = 23.6e-6
++EXPANSION_FROM_MEMORY_FLAG = 'STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT'
++
++
++def thermal_flatness_term(z_m, temperature_k, *,
++                          expansion_coefficient_per_k=ALUMINIUM_EXPANSION_PER_K):
++    """Thermal elongation across the width ``eps_T(z) = alpha*(T(z) - mean(T))``, I-units
++    ``1e5*eps_T`` [TM report gap A1; the mean is the arithmetic mean over the samples, as in
++    ``flatness_from_elongation``]. About 2.4 I-units per kelvin for aluminium [computed].
++
++    A hotter fibre is longer while hot and reads loose at a shapemeter without temperature
++    compensation; the difference disappears when the coil cools [TM-LA13 EX]. The temperature
++    profile is an input (supplied, not computed: no per-width heat balance, gap A3).
++    """
++    z = _grid(z_m, min_len=3)
++    t = _list('temperature_k', temperature_k, min_len=3, lo=1.0, hi=5000.0)
++    if len(t) != len(z):
++        raise ValueError('temperature_k must have one value per position')
++    a = _num('expansion_coefficient_per_k', expansion_coefficient_per_k, positive=True,
++             hi=1e-3)
++    mean = math.fsum(t) / len(t)
++    dev = [v - mean for v in t]
++    eps = [a * d for d in dev]
++    flags = [EXPANSION_FROM_MEMORY_FLAG] if expansion_coefficient_per_k == \
++        ALUMINIUM_EXPANSION_PER_K else []
++    return _checked({
++        'i_units': [e / I_UNIT for e in eps], 'elongation': eps, 'mean_temperature_k': mean,
++        'temperature_deviation_k': dev, 'i_units_per_kelvin': a / I_UNIT,
++        'expansion_coefficient_per_k': a,
++        'formula_basis': ('eps_T = alpha*(T - mean T), I = 1e5*eps_T [TM report gap A1]; '
++                          'alpha ' + ('23.6e-6 /K [M, textbook value used by the gap reports, '
++                                      'not verified there]' if flags else 'supplied')),
++        'flags': flags,
++        'limitations': ['The temperature profile is supplied, not computed.',
++                        'Linear thermal expansion only; no thermal stress in the bite.']})
++
++
+ def _peak_abs(values):
+     return max(abs(v) for v in values)
+ 
+diff --git a/scenarios/band_diagnosis_battery_foil.json b/scenarios/band_diagnosis_battery_foil.json
+index 1129092..d06bc9a 100644
+--- a/scenarios/band_diagnosis_battery_foil.json
++++ b/scenarios/band_diagnosis_battery_foil.json
+@@ -10,7 +10,8 @@
+     "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
+     "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
+     "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check.",
+-    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record."
++    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record.",
++    "width_model.strip_temperature (SPEC17, synthetic): +3 K at the partly blocked nozzle, an assumption, not a model output; it shows how the strip-temperature term changes the flatness a shapemeter measures hot."
+   ],
+   "pass": {
+     "entry_thickness_m": 5e-05,
+@@ -292,7 +293,65 @@
+     "cooling_zone_pitch_m": 0.104,
+     "deflector_roll_radius_m": 0.125,
+     "lateral_compressive_stress_pa": null,
+-    "shape_inputs": null
++    "shape_inputs": null,
++    "strip_temperature": {
++      "positions_m": [
++        0.15,
++        0.2,
++        0.25,
++        0.3,
++        0.35,
++        0.4,
++        0.45,
++        0.5,
++        0.55,
++        0.6,
++        0.65,
++        0.7,
++        0.75,
++        0.8,
++        0.85,
++        0.9,
++        0.95,
++        1.0,
++        1.05,
++        1.1,
++        1.15,
++        1.2,
++        1.25,
++        1.3,
++        1.35
++      ],
++      "temperature_k": [
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.151,
++        353.197,
++        353.849,
++        355.757,
++        355.583,
++        353.717,
++        353.183,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15,
++        353.15
++      ],
++      "expansion_coefficient_per_k": null,
++      "provenance": "synthetic: +3 K at the partly blocked nozzle, an assumption, not a model output (Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at 50 mm pitch)"
++    }
+   },
+   "tribology": {
+     "lubricant": {
+diff --git a/scenarios/band_diagnosis_template.json b/scenarios/band_diagnosis_template.json
+index fdc53f3..47d34c3 100644
+--- a/scenarios/band_diagnosis_template.json
++++ b/scenarios/band_diagnosis_template.json
+@@ -45,7 +45,8 @@
+     "material.product (optional, v2): a product id from the thin-gauge catalogue (physicroll/band_products.py, docs/thin-gauge-products.md): battery_collector_foil, battery_pouch_laminate_foil, capacitor_anode_foil_high_voltage, capacitor_anode_foil_low_voltage, capacitor_cathode_foil, pharma_blister_lidding, pharma_cold_form_foil, pharma_strip_pack_foil, household_foil, household_foil_heavy_duty, converter_foil, cigarette_liner_foil, dairy_lidding_foil, container_foil_wrinkle_wall, container_foil_smooth_wall, container_foil_retortable, brazed_fin_stock, brazing_sheet_tube, hvac_fin_stock, litho_sheet, can_body_stock, can_end_stock, closure_sheet, transformer_strip. With it the result carries a product_check: every pass against the published envelope of that product (final gauge, per-pass and final-pass reduction, final-pass entry gauge, speed, rolled mode, alloy, temper, flow stress as an indicator) and the nearest published passes. It is a literature check and never changes the hypothesis scores; an unknown id is rejected with the list of valid ids. material.alloy may carry a prefix (AA1235, EN AW-1235): the check uses the bare designation.",
+     "width_model.spray_wetted_arc_rad (optional, null = not given): the arc of the roll circumference [rad, in (0, 2*pi]] that the coolant spray wets. The model's spray_mean_htc_w_m2k is a mean around the roll; with the arc, thermal_check also shows the equivalent coefficient inside the jet zone, h_bg + spray_mean_htc * 2*pi/arc. It does not enter the roll thermal model.",
+     "tribology.oil_flash_point_k and tribology.oil_supply_temperature_cap_k (optional, null = not given, 250-700 K): the flash point of your rolling oil (data sheet) and a site or insurer cap on the oil supply temperature. thermal_check.fire_limits compares the oil temperatures and the modelled strip exit temperatures with them (a rule check; a modelled exit temperature is not a coil temperature); there is no default limit.",
+-    "measurement (optional, v2; null = not supplied): {\"shapemeter\": {zone_width_m, zone_count, edge_zone_width_m, edge_zone_count_per_side, centre_m, neighbour_spreading_fraction, resolution_i_units, provenance}, \"thickness_gauge\": null}. The shapemeter block gives what each zone of a flatness roll with that zone width would read for every modelled band (zone means of the model profile; no flatness controller is modelled). Zone width, count and edge zones come from the shapemeter data sheet or the level-2 configuration; leave neighbour_spreading_fraction at 0 unless the vendor states it, and resolution_i_units null unless the vendor gives one."
++    "measurement (optional, v2; null = not supplied): {\"shapemeter\": {zone_width_m, zone_count, edge_zone_width_m, edge_zone_count_per_side, centre_m, neighbour_spreading_fraction, resolution_i_units, provenance}, \"thickness_gauge\": null}. The shapemeter block gives what each zone of a flatness roll with that zone width would read for every modelled band (zone means of the model profile; no flatness controller is modelled). Zone width, count and edge zones come from the shapemeter data sheet or the level-2 configuration; leave neighbour_spreading_fraction at 0 unless the vendor states it, and resolution_i_units null unless the vendor gives one.",
++    "width_model.strip_temperature (optional, null = not supplied): a measured or assumed strip temperature scan across the width, {positions_m (>= 3, increasing, on the barrel), temperature_k (one per position, 250-700 K), expansion_coefficient_per_k (null = 23.6e-6 /K, a textbook value), provenance}. It is not computed by the tool. The result then shows flatness as a shapemeter measures it hot (model flatness plus about 2.4 I-units per kelvin) beside the flatness after the coil has cooled."
+   ],
+   "pass": {
+     "entry_thickness_m": 0.0003,
+@@ -204,7 +205,8 @@
+     "deflector_roll_radius_m": null,
+     "lateral_compressive_stress_pa": null,
+     "shape_inputs": null,
+-    "spray_wetted_arc_rad": null
++    "spray_wetted_arc_rad": null,
++    "strip_temperature": null
+   },
+   "tribology": {
+     "lubricant": {
+diff --git a/tests/test_band_absent_inputs.py b/tests/test_band_absent_inputs.py
+index 60e5169..37ae85d 100644
+--- a/tests/test_band_absent_inputs.py
++++ b/tests/test_band_absent_inputs.py
+@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
+ # (section, key) of every optional key a SPEC17 package added to the template
+ SPEC17_OPTIONAL_KEYS = (('tribology', 'oil_flash_point_k'),
+                         ('tribology', 'oil_supply_temperature_cap_k'),
+-                        ('width_model', 'spray_wetted_arc_rad'))
++                        ('width_model', 'spray_wetted_arc_rad'),
++                        ('width_model', 'strip_temperature'))
+ 
+ 
+ class AbsentEqualsNullTests(unittest.TestCase):
