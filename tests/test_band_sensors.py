@@ -236,7 +236,7 @@ class ValidationAndDiagnoseTests(unittest.TestCase):
             bs.validate_measurement({'shapemeter': dict(SM, colour='red')})
         with self.assertRaises(ValueError):
             bs.validate_measurement({'shapemeter': SM, 'gauge': None})
-        with self.assertRaisesRegex(ValueError, 'thickness_gauge'):     # until package 5
+        with self.assertRaisesRegex(ValueError, 'thickness_gauge'):     # validated (package 5)
             bs.validate_measurement({'shapemeter': None, 'thickness_gauge': {}})
         c = v1case()
         c['measurement'] = {'shapemeter': dict(SM)}

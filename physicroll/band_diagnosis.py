@@ -599,6 +599,11 @@ def _validate_v2_sections(case, out):
                           else bw.validate_width_model(sec['width_model'], out['pass']))
     res['measurement'] = (None if sec['measurement'] is None
                           else band_sensors.validate_measurement(sec['measurement']))
+    tg = (res['measurement'] or {}).get('thickness_gauge')
+    if (tg is not None and tg['position_m'] is not None and res['width_model'] is not None
+            and tg['position_m'] > res['width_model']['roll']['barrel_length_m']):
+        raise ValueError('measurement.thickness_gauge.position_m must be on the barrel '
+                         '(in [0, 10] m and not beyond the barrel length) or null')
     w = res['width_model']
     if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
         raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
@@ -3400,6 +3405,7 @@ def diagnose(case):
     hyps, leading = _hypotheses(ctx)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
+    band_sensors.name_gauge_hypotheses(result)      # text only; the tally is unchanged
     if ctx.hypothesis_failures:          # keys only then
         result['hypothesis_evaluation_failures'] = ctx.hypothesis_failures
         flags.append(HYPOTHESIS_FAILED_FLAG)

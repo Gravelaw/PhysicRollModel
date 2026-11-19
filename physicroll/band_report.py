@@ -2600,7 +2600,7 @@ def _measurement_section(r):
         return (head + '<p>No shapemeter was described. Add measurement.shapemeter (zone width '
                 'and count) to see what each zone would read; a band narrower than a zone is '
                 f'diluted (a 20 mm band reads {100 * d:.0f} % of its peak as the mean of a '
-                '52 mm zone).</p></section>')
+                '52 mm zone).</p>' + _gauge_html(m) + '</section>')
     lay = sm.get('zone_layout') or {}
     zw = sm['zones'][0]['width_m'] if sm.get('zones') else None
     out = [head, f'<p>{_f(lay.get("zone_count"))} zones of {_mm2(zw, 3)} '
@@ -2661,7 +2661,45 @@ def _measurement_section(r):
     out.append(f'<p class="warn">{_e(NO_CONTROLLER)} The readings are zone means of a modelled '
                'stress, not a forecast of the operator\'s screen: a band below the threshold '
                'would probably not show, and it can still be on the strip.</p>')
+    out.append(_gauge_html(m))
     out.append('</section>')
+    return ''.join(out)
+
+
+def _gauge_html(m):
+    """SPEC17 package 5: what the thickness gauge keeps of each mark pitch ('' without one)."""
+    tg = m.get('thickness_gauge') if isinstance(m, dict) else None
+    if not isinstance(tg, dict) or tg.get('not_supplied'):
+        return ''
+    if tg.get('status') == 'FAILED':
+        return _state_p('Thickness gauge: FAILED: ' + str(tg.get('error')))
+    rows = [[_e(x['source']), _mm2(x['pitch_m'], 4), _f(x['exit_speed_m_s'], 1, 4),
+             _f(x['frequency_hz'], 1, 4), _f(x['spot_gain'], 1, 3),
+             _f(x['time_constant_gain'], 1, 3), _f(x['combined_gain'], 1, 3),
+             'n/a' if x['aliased'] is None else ('yes' if x['aliased'] else 'no'),
+             'yes' if x['resolvable'] else 'no (keeps less than half)'] for x in tg['rows']]
+    out = ['<h3>What the thickness gauge keeps</h3>',
+           f'<p>Spot {_mm2(tg["spot_length_m"], 3)} along the strip, first-order time constant '
+           f'{_f(tg["time_constant_s"], 1e3, 3)} ms (averaging length '
+           f'{_mm2(tg["averaging_length_time_constant_m"], 3)} at the operating speed). Source: '
+           f'{_e(tg["provenance"])}. The gauge keeps about the fraction below of a mark of '
+           'that pitch (a spot average and a first-order lag only; real gauges have other '
+           'filters).</p>']
+    if rows:
+        out.append(_table(['source', 'pitch', 'exit speed [m/s]', 'frequency [Hz]', 'spot',
+                           'time constant', 'kept (combined)', 'aliased', 'resolvable'], rows))
+    sp = tg.get('shortest_resolvable_pitch_m')
+    out.append('<p>' + (f'Shortest pitch it keeps at least half of at the operating speed: '
+                        f'{_mm2(sp, 3)}.' if _ok(sp) else
+                        'No pitch up to 10 m is kept at half its amplitude at the operating '
+                        'speed.') + '</p>')
+    if tg.get('not_detected_note'):
+        out.append(f'<p class="warn">{_e(tg["not_detected_note"])}</p>')
+    if tg.get('bands_under_gauge') is not None:
+        out.append('<p>Modelled lengthwise bands under the gauge: '
+                   + (_e(', '.join(f'{_f(b["start_m"], 1, 4)}-{_f(b["end_m"], 1, 4)} m'
+                                   for b in tg['bands_under_gauge']))
+                      or 'none') + '.</p>')
     return ''.join(out)
 
 

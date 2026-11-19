@@ -2235,6 +2235,20 @@ FLAGS = {
     'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
         'Part of each zone reading is shared with its neighbours, as you set it.',
         'Set the spreading to zero unless your vendor states it.'),
+    'GAUGE_TRANSFER_APPLIED': (
+        'The page shows about how much of each mark the thickness gauge you described keeps '
+        '(spot size and response time only).',
+        'Real gauges have other filters; use it as a guide.'),
+    'GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK': (
+        'The thickness gauge keeps less than half of at least one mark spacing you saw.',
+        'A small gauge reading does not mean a small mark; measure the strip itself.'),
+    'GAUGE_NOT_DETECTED_BUT_MARK_NOT_RESOLVABLE': (
+        'You saw no gauge variation, but the gauge could not show these marks anyway, so that '
+        'answer tells little; the scores were not changed.',
+        'Measure the strip thickness along a mark with a hand micrometer or offline gauge.'),
+    'LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE': (
+        'None of the modelled lengthwise bands passes under the thickness gauge.',
+        'Do not expect the gauge to show these bands.'),
     'MEASUREMENT_SECTION_FAILED': (
         'The shapemeter part of the page could not be worked out.',
         'Check the measurement inputs; the rest of the page is unaffected.'),

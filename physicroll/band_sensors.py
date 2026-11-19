@@ -146,11 +146,199 @@ def validate_shapemeter(s):
 def validate_measurement(m):
     """Strict keys; ``shapemeter`` and ``thickness_gauge`` optional (null = not supplied)."""
     bp.keys('measurement', m, (), MEASUREMENT_KEYS)
-    if m.get('thickness_gauge') is not None:
-        raise ValueError('measurement.thickness_gauge is not available yet: it must be null')
-    sm = m.get('shapemeter')
+    sm, tg = m.get('shapemeter'), m.get('thickness_gauge')
     return {'shapemeter': None if sm is None else validate_shapemeter(sm),
-            'thickness_gauge': None}
+            'thickness_gauge': None if tg is None else validate_thickness_gauge(tg)}
+
+
+GAUGE_REQUIRED = ('spot_length_m', 'time_constant_s', 'provenance')
+GAUGE_DEFAULTS = {'sample_interval_s': None, 'position_m': None, 'spot_width_m': None}
+
+
+def _rng(where, value, lo, hi, lo_open, text, allow_none=False):
+    if value is None and allow_none:
+        return None
+    ok = (not isinstance(value, bool) and isinstance(value, (int, float))
+          and math.isfinite(value) and (value > lo if lo_open else value >= lo) and value <= hi)
+    if not ok:
+        raise ValueError(f'measurement.thickness_gauge.{where} must be {text}')
+    return float(value)
+
+
+def validate_thickness_gauge(g):
+    bp.keys('measurement.thickness_gauge', g, GAUGE_REQUIRED, tuple(GAUGE_DEFAULTS))
+    out = {'spot_length_m': _rng('spot_length_m', g['spot_length_m'], 0, 1, True, 'in (0, 1] m'),
+           'time_constant_s': _rng('time_constant_s', g['time_constant_s'], 0, 10, False,
+                                   'in [0, 10] s'),
+           'sample_interval_s': _rng('sample_interval_s', g.get('sample_interval_s'), 0, 10,
+                                     True, 'in (0, 10] s or null', True),
+           'position_m': _rng('position_m', g.get('position_m'), 0, 10, False,
+                              'on the barrel (in [0, 10] m and not beyond the barrel length) '
+                              'or null', True),
+           'spot_width_m': _rng('spot_width_m', g.get('spot_width_m'), 0, 1, True,
+                                'in (0, 1] m or null', True)}
+    pv = g['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError('measurement.thickness_gauge.provenance must be a nonempty string')
+    out['provenance'] = pv
+    return out
+
+
+# ----------------------------------------------------------------------------- gauge transfer
+# [D, re-derived in SPEC17; the gap row C7 names the effects without a source] A mark
+# A*cos(2*pi*x/p) of pitch p passing at exit speed u has frequency f = u/p. Spot averaging over
+# a length L keeps G_spot = |sin(pi*L/p)/(pi*L/p)|; a first-order response with time constant
+# tau keeps G_tau = 1/sqrt(1 + (2*pi*f*tau)^2) (equivalent averaging length u*tau); sampling at
+# dt aliases when f > 1/(2*dt). G = G_spot*G_tau.
+GAUGE_RESOLVABLE_GAIN = 0.5    # [D, analyst choice] the gauge keeps less than half
+GAUGE_FLAG_APPLIED = 'GAUGE_TRANSFER_APPLIED'
+GAUGE_FLAG_LESS_THAN_HALF = 'GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK'
+GAUGE_FLAG_NOT_DETECTED = 'GAUGE_NOT_DETECTED_BUT_MARK_NOT_RESOLVABLE'
+GAUGE_FLAG_BANDS = 'LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE'
+GAUGE_FLAGS = (GAUGE_FLAG_APPLIED, GAUGE_FLAG_LESS_THAN_HALF, GAUGE_FLAG_NOT_DETECTED,
+               GAUGE_FLAG_BANDS)
+GAUGE_LIMITATIONS = (
+    'The gauge keeps about the stated fraction of a mark: a spot average and a first-order lag '
+    'only; real gauges have other filters (scanning frames, digital filters, noise), which are '
+    'not modelled.',
+    'No gauge noise, calibration or scanning-frame model.',
+    'Accelerometer position and detection lead time (the third item of gap C7) have no formula '
+    'in the reports and are not built.',
+    'The evidence is not changed: "gauge variation not detected" counts in the tally exactly as '
+    'without a gauge description (SPEC17 open decision 2).')
+
+
+def spot_gain(spot_length_m, pitch_m):
+    x = math.pi * spot_length_m / pitch_m
+    return 1.0 if x == 0 else abs(math.sin(x) / x)
+
+
+def time_constant_gain(time_constant_s, frequency_hz):
+    return 1.0 / math.sqrt(1.0 + (2 * math.pi * frequency_hz * time_constant_s) ** 2)
+
+
+def gauge_row(source, pitch_m, exit_speed_m_s, g):
+    f = exit_speed_m_s / pitch_m
+    gs, gt = spot_gain(g['spot_length_m'], pitch_m), time_constant_gain(g['time_constant_s'], f)
+    dt = g['sample_interval_s']
+    aliased = None if dt is None else f > 1 / (2 * dt)
+    combined = gs * gt
+    return {'source': source, 'pitch_m': pitch_m, 'exit_speed_m_s': exit_speed_m_s,
+            'frequency_hz': f, 'spot_gain': gs, 'time_constant_gain': gt,
+            'combined_gain': combined, 'aliased': aliased,
+            'resolvable': combined >= GAUGE_RESOLVABLE_GAIN and not aliased}
+
+
+def shortest_resolvable_pitch_m(g, exit_speed_m_s, lo=1e-4, hi=10.0):
+    """Largest root of G(p) = 0.5 in [lo, hi] (pitches above it are resolvable); None when
+    G(hi) < 0.5 or G never falls below 0.5 in the range."""
+    def gain(p):
+        return spot_gain(g['spot_length_m'], p) * time_constant_gain(g['time_constant_s'],
+                                                                     exit_speed_m_s / p)
+    if gain(hi) < GAUGE_RESOLVABLE_GAIN:
+        return None
+    n = 4000
+    prev = hi
+    for k in range(1, n + 1):
+        p = hi * (lo / hi) ** (k / n)
+        if gain(p) < GAUGE_RESOLVABLE_GAIN:
+            a, b = p, prev               # gain(a) < 0.5 <= gain(b)
+            for _ in range(200):
+                m = 0.5 * (a + b)
+                if gain(m) < GAUGE_RESOLVABLE_GAIN:
+                    a = m
+                else:
+                    b = m
+            return 0.5 * (a + b)
+        prev = p
+    return None
+
+
+def thickness_gauge_section(case, result):
+    g = case['measurement']['thickness_gauge']
+    obs, u_op = case['observation'], case['pass']['exit_speed_m_s']
+    rows = []
+    for i, q in enumerate(obs.get('pitch_observations') or []):
+        rows.append(gauge_row(f'pitch_observations[{i}]', q['pitch_m'], q['exit_speed_m_s'], g))
+    n_obs = len(rows)
+    fv = obs.get('measured_vibration_hz')
+    if fv:
+        rows.append(gauge_row('measured_vibration_hz', u_op / fv, u_op, g))
+    ch = (result.get('chatter') or {}).get('with_bite_damping') if isinstance(
+        result.get('chatter'), dict) else None
+    fo = ch.get('onset_frequency_hz') if isinstance(ch, dict) else None
+    if isinstance(fo, (int, float)) and not isinstance(fo, bool) and math.isfinite(fo) and fo > 0:
+        rows.append(gauge_row('chatter.with_bite_damping.onset_frequency_hz', u_op / fo, u_op,
+                              g))
+    amp = obs.get('gauge_variation_amplitude_m')
+    if amp is not None:
+        for r in rows:
+            if r['combined_gain'] > 0:
+                r['amplitude_before_gauge_m'] = amp / r['combined_gain']
+                r['amplitude_note'] = ('lower bound of the true amplitude if the mark has this '
+                                       'pitch')
+    flags = [GAUGE_FLAG_APPLIED]
+    obs_rows = rows[:n_obs]
+    if any(not r['resolvable'] for r in obs_rows):
+        flags.append(GAUGE_FLAG_LESS_THAN_HALF)
+    not_detected = (obs.get('gauge_variation_detected') is False and obs_rows
+                    and not any(r['resolvable'] for r in obs_rows))
+    if not_detected:
+        flags.append(GAUGE_FLAG_NOT_DETECTED)
+    # across the width
+    pos, under, bands_exist = g['position_m'], None, False
+    try:
+        lay = spray_layout(case) if case.get('width_model') is not None else None
+    except ValueError:
+        lay = None
+    if pos is None:
+        pos = lay['strip_centre_m'] if lay else case['pass']['width_m'] / 2
+    prof = next((p for p in shapemeter_profiles(result.get('width')) if p['name'] == 'steady'),
+                None)
+    if prof is not None and prof['bands']:
+        bands_exist = True
+        half = (g['spot_width_m'] or 0.0) / 2
+        under = [{'start_m': b['start_m'], 'end_m': b['end_m'],
+                  'peak_position_m': b['peak_position_m'], 'peak_i_units': b['peak_i_units']}
+                 for b in prof['bands'] if b['start_m'] <= pos + half and b['end_m'] >= pos - half]
+        if not under:
+            flags.append(GAUGE_FLAG_BANDS)
+    out = {'status': STATUS, 'not_supplied': False, 'provenance': g['provenance'],
+           'spot_length_m': g['spot_length_m'], 'time_constant_s': g['time_constant_s'],
+           'sample_interval_s': g['sample_interval_s'], 'position_m': pos,
+           'spot_width_m': g['spot_width_m'], 'resolvable_gain': GAUGE_RESOLVABLE_GAIN,
+           'resolvable_gain_basis': '[D, analyst choice] the gauge keeps less than half of the '
+                                    'amplitude below it',
+           'operating_exit_speed_m_s': u_op,
+           'averaging_length_time_constant_m': u_op * g['time_constant_s'],
+           'shortest_resolvable_pitch_m': shortest_resolvable_pitch_m(g, u_op),
+           'rows': rows,
+           'bands_under_gauge': under if bands_exist else None,
+           'basis': {'transfer': '[D, re-derived in SPEC17] spot average |sin(pi*L/p)/(pi*L/p)| '
+                                 'times first-order lag 1/sqrt(1 + (2*pi*f*tau)^2); aliased '
+                                 'when f > 1/(2*dt)',
+                     'response': 'foil gauge response under 10 ms [TM-LC24 VP]'},
+           'flags': flags, 'limitations': list(GAUGE_LIMITATIONS)}
+    if not_detected:
+        out['not_detected_note'] = (
+            '"Gauge variation not detected" carries no information here: the gauge keeps less '
+            'than half of every observed mark pitch. The tally is NOT changed (the item counts '
+            'as without a gauge description).')
+    return out
+
+
+def name_gauge_hypotheses(result):
+    """After the hypotheses exist: name those whose evidence uses the gauge observation in
+    the not-detected note (the tally itself is never changed)."""
+    tg = (result.get('measurement') or {}).get('thickness_gauge')
+    if not isinstance(tg, dict) or 'not_detected_note' not in tg:
+        return
+    ids = [h['id'] for h in result.get('hypotheses') or []
+           if any(str(e.get('criterion', '')).startswith('gauge variation')
+                  for e in h.get('evidence') or [])]
+    tg['hypotheses_using_the_observation'] = ids
+    tg['not_detected_note'] += (' Hypotheses whose evidence uses that observation: '
+                                + (', '.join(ids) if ids else 'none') + '.')
 
 
 # ----------------------------------------------------------------------------- operator
@@ -424,7 +612,8 @@ def measurement_section(case, result):
         return bp.not_supplied('measurement is null or absent')
     sm = (bp.not_supplied('measurement.shapemeter is null or absent')
           if m.get('shapemeter') is None else shapemeter_section(case, result))
-    flags = list(sm.get('flags') or [])
-    return {'status': STATUS, 'not_supplied': False, 'shapemeter': sm,
-            'thickness_gauge': bp.not_supplied('measurement.thickness_gauge is null or absent'),
+    tg = (bp.not_supplied('measurement.thickness_gauge is null or absent')
+          if m.get('thickness_gauge') is None else thickness_gauge_section(case, result))
+    flags = list(sm.get('flags') or []) + list(tg.get('flags') or [])
+    return {'status': STATUS, 'not_supplied': False, 'shapemeter': sm, 'thickness_gauge': tg,
             'flags': flags, 'limitations': list(LIMITATIONS)}

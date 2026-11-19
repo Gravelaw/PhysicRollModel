@@ -1363,7 +1363,10 @@ sheet or the level-2 configuration, optional narrower `edge_zone_width_m` with
 `edge_zone_count_per_side`, `centre_m` (null = the strip centre of the width section),
 `neighbour_spreading_fraction` (0-0.25, keep 0 unless the vendor states it),
 `resolution_i_units` (null unless the vendor gives one; then the tool's 2 I-unit band
-threshold is used) and `provenance`; `thickness_gauge` must be null for now. Section 7.6.
+threshold is used) and `provenance`. `thickness_gauge` (SPEC17 package 5, section 11.6):
+`spot_length_m` along the strip (0-1 m) and `time_constant_s` of the first-order response
+(0-10 s) from the gauge data sheet, optional `sample_interval_s`, `position_m` on the barrel
+(null = strip centre), `spot_width_m` across the width, and `provenance`. Section 7.6.
 
 Optional keys added in SPEC17 package 3 (absent and `null` give the same result; the template
 lists them with `null`): `width_model.spray_wetted_arc_rad` (arc of the circumference the spray
@@ -2089,6 +2092,9 @@ Not modelled: roll wrap, measurement noise, calibration, temperature compensatio
 dynamics and filters, the stress evolution between bite and shapemeter [SS-S22 EX], the stress
 relief of a buckled band, vendor edge rules, any controller.
 
+The thickness gauge of the same `measurement` section (the transverse side: what a gauge keeps
+of a mark pitch) is described in section 11.6.
+
 ## 8. Process models
 
 Integration code: `physicroll/band_process.py`; equations: `physicroll/bite_tribology.py`.
@@ -2600,6 +2606,37 @@ tension effects (section 15). Coolant acts on chatter through friction and film 
 with a `tribology` section the friction-speed slope enters the speed-consistent critical speed
 (8.4). It acts on lengthwise bands through the roll temperature field (section 7).
 
+### 11.6 What the thickness gauge keeps of a mark (`measurement.thickness_gauge`)
+
+SPEC17 package 5 (gap C7, gauge part; `physicroll/band_sensors.py`). A gauge with a
+few-millisecond response at 10 m/s averages over centimetres, so 10-40 mm marks are invisible
+to it (gap study C7; foil gauge response under 10 ms [TM-LC24 VP]). With
+`measurement.thickness_gauge` the result gives, for every pitch observation at its own speed,
+the measured vibration frequency and the modelled chatter onset frequency at the operating
+speed, about how much of a mark of that pitch the gauge keeps [D, re-derived in SPEC17]: a mark
+`A*cos(2*pi*x/p)` passing at `u` has frequency `f = u/p`; a spot of length `L` keeps
+`|sin(pi*L/p)/(pi*L/p)|`, a first-order response with time constant `tau` keeps
+`1/sqrt(1 + (2*pi*f*tau)^2)` (an averaging length `u*tau`); sampling at `dt` aliases when
+`f > 1/(2*dt)`. A pitch is resolvable when the product is at least 0.5 (analyst choice [D])
+and it is not aliased; the shortest resolvable pitch at the operating speed is given. With
+`gauge_variation_amplitude_m` each row gives the amplitude before the gauge, a lower bound of
+the true amplitude if the mark has that pitch. This is a spot average and a first-order lag
+only; real gauges have other filters (scanning frames, digital filters, noise), which are not
+modelled. Worked numbers (spot 10 mm, 5 ms, 1 ms sampling; `tests/test_band_sensors_gauge.py`):
+the thin-gauge demo's 84.08 mm pitch at 16 m/s (190.3 Hz) is kept at 0.161 (spot 0.977, time
+constant 0.165), 76.47 mm at 14.5 m/s at 0.161, the bearing demo's 24.92 mm at 7.83 m/s
+(314.3 Hz) at 0.076; `u*tau` at 10 m/s is 50 mm.
+
+Flags: `GAUGE_TRANSFER_APPLIED`; `GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK`;
+`GAUGE_NOT_DETECTED_BUT_MARK_NOT_RESOLVABLE` when `gauge_variation_detected` is false and no
+observed pitch is resolvable: "not detected" then carries no information, the note names the
+hypotheses whose evidence uses that observation, and **the tally is not changed** (SPEC17 open
+decision 2: flag only; the item "gauge variation not detected" counts as before); and
+`LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE` when modelled lengthwise bands exist and none passes
+under the gauge (`bands_under_gauge`, from the steady profile of section 7.6). No demo carries
+a gauge description. Not built: accelerometer position and detection lead time (no formula in
+the reports), gauge noise, calibration, scanning frames.
+
 ## 12. The report
 
 `<slug>.report.html` is a self-contained page (inline SVG, no scripts), produced by
@@ -2669,7 +2706,11 @@ the threshold (dashed) and the nozzles (ticks), a table per profile (band positi
 half-peak width, zone, zone reading, reading / peak, "would show" or "would probably not
 show"), the dilution table, the nozzle map sentence and the "no flatness controller" warning.
 Without a shapemeter the section is one paragraph ("No shapemeter was described ...", with the
-38 % of a 20 mm band in a 52 mm zone computed by the top-hat formula). The v1 report is
+38 % of a 20 mm band in a 52 mm zone computed by the top-hat formula). With a thickness gauge
+the section adds a table "What the thickness gauge keeps" (source, pitch, speed, frequency,
+spot, time-constant and combined fraction kept, aliased, resolvable), the shortest resolvable
+pitch, the not-detected note (the tally is not changed) and the bands under the gauge
+(section 11.6). The v1 report is
 unchanged. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
@@ -2770,6 +2811,7 @@ real mill.
 | extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Coil, trough spacing, perturbed bites** (now in `tests/test_band_robustness.py`): one coil for all pitches (`CoilSingleSourceTests`: the reviewer's pitches 1 m at 2 m/s and 1.4 m at 20 m/s on coils of 1 m and 1.4 m pitch no longer give two exact matches; the coil hypothesis contradicts weakly and does not lead; two pitches on one coil still support; a single pitch as before); trough spacing (`TroughSpacingEstablishedTests`: one gap weak and never contradicting, irregular gaps weak, regular or stated spacing strong, a stated spacing outside a factor 4 still contradicts); perturbed bites (`PerturbedBiteModelTests`: an `auto` case with a mattress operating bite has every lever row equal to a direct mattress derivation; a Hitchcock operating bite reports the friction x1.3 variant Hitchcock rejects as a rejected row). **Onset search** (`OnsetSearchDomainTests`): the reviewer's soft-strip case (1e9 Pa, 9 um bump) no longer reports the old 4.28 um in-mill onset: the reported onset is manifest with feedback and the scale just below is not; a stubbed feedback calculation that leaves its domain before buckling gives the domain-limit outcome with its height, one that buckles first gives the onset, one that stays latent gives not-reached; a sheet-gauge case gives exactly the onset of the old search. **Undefined bound levels** (`UndefinedBoundLevelTests`, the reviewer's 8 um pass, one striped roll, 9 um bump, shape inputs 1e12 Pa / 1 mm / 0.01 m): `shape_levels` keeps both compliant levels with the rigid bound not defined and its reason, a very soft strip (1e9 Pa) keeps the feedback level with the compliance-only level not defined, a normal bump reports the rigid bound exactly as the direct calculation; through `diagnose` the steady shape and the gauge-trend row are assessed, the trend text names the pass without a rigid bound, the report omits the rigid curve with a note and has no nan / inf. **Large forward slip** (`LargeForwardSlipTests`, the reviewer's 30 -> 12 um pass on a 0.14 m roll): the mattress slip is at least 0.5, `diagnose` returns, both slip flags are set, the signatures use slip 0, the schedule row keeps its slip; the forward-slip screen is not assessable with the actual slip, the skid evidence does not support. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
 | `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI; alloy-group and anisotropy tables (`AlloyAndAnisotropyTests`, SPEC17): the nine `TM-` sources with the read tags of the gap study and never an upgraded read status, ten alloy-group rows, the Hill 1948 plane-strain factor 1.154701 / 1.014185 / 1.046734 / 1.169130 for (1, 1), (0.2, 0.2), (0.2, 1.1), (1.075, 1.075) and `ValueError` for r <= 0, both sections in the generated document |
 | `band_sensors.py` / `tests/test_band_sensors.py` | zone edges and coverage (body and edge zones, centre default, end zones 54 % covered); a 20 mm top-hat of 25 reads 9.6154 as the mean of a 52 mm zone; a 20 mm band of 3.1 I-units reads 1.19; a uniform profile reads zero; the roll mean of a mean-free, fully covered profile is zero; spreading conserves the sum and s = 0 is the identity; the dilution closed forms against the numbers of SPEC17 and a sampled Gaussian; on the committed battery-foil profile the zone readings 6.5973 / 20.4506 / 24.4912 / 20.4517 / 6.5979, the tight edges, the half-peak width 0.160 m, spreading 23.4812, the event 19.3326, the ripple 0.5296 and 23 zones 23.5348; one nozzle per zone (zone j holds nozzle j + 2 at its centre) from `band_width.spray_layout` and the boundary rule; every validation message, v1 and a non-null thickness gauge rejected; a small case with and without a shapemeter differs only in `measurement`, `inputs` and the new flags, hypotheses identical, the report escapes the provenance; no width model is not assessable with the dilution table |
+| `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
 
@@ -2832,6 +2874,9 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **After-release onsets** limited by the reporting threshold are upper bounds.
 - **Gauge trend** carries one stripe shape through all passes; it does not re-solve the roll
   temperature for each pass.
+- **Thickness gauge transfer** keeps about a fraction of a mark: a spot average and a
+  first-order lag only; real gauges have other filters; the evidence is not changed when the
+  gauge cannot resolve the observed pitch (flag only); no accelerometer model (section 11.6).
 - **Shapemeter readings are zone means of a model**: no flatness controller (the tool does not
   predict what the control would have done), no shapemeter dynamics, filter, noise,
   calibration or temperature compensation; neighbour spreading is an interpretation of one
