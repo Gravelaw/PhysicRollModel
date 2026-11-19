@@ -30,8 +30,17 @@ class Client:
         self.host = host or f'127.0.0.1:{self.port}'
 
     def request(self, method, path, body=None, *, token=True, headers=None, raw=None,
-                ctype='application/json'):
+                ctype='application/json', pause_s=0.0):
+        """One request on a fresh connection, always closed (also when it fails), so no
+        socket is left for the garbage collector. ``pause_s`` waits between the headers and
+        the body (a slow client: the server must not answer before reading the body)."""
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=120)
+        try:
+            return self._request(conn, method, path, body, token, headers, raw, ctype, pause_s)
+        finally:
+            conn.close()
+
+    def _request(self, conn, method, path, body, token, headers, raw, ctype, pause_s):
         h = {'Host': self.host}
         if token:
             h[band_app.TOKEN_HEADER] = self.token if token is True else token
@@ -45,10 +54,15 @@ class Client:
         conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
         for k, v in h.items():
             conn.putheader(k, v)
-        conn.endheaders(data)
+        if pause_s:
+            conn.endheaders()
+            time.sleep(pause_s)
+            if data is not None:
+                conn.send(data)
+        else:
+            conn.endheaders(data)
         resp = conn.getresponse()
         payload = resp.read()
-        conn.close()
         return resp, payload
 
     def json(self, method, path, body=None, **kw):
@@ -161,9 +175,27 @@ class GuardTest(ServerCase):
             self.assertIn('token', out['error']['text'])
 
     def test_body_limits_and_json_only(self):
+        # (i) just over the limit: always a clean 413 with the plain message, also when the
+        # client sends the body only after a pause (the server reads it before answering)
         big = b'{"a": "' + b'x' * (band_app.MAX_BODY_BYTES + 10) + b'"}'
-        resp, _ = self.client.request('POST', '/api/case/check', raw=big)
-        self.assertEqual(resp.status, 413)
+        for pause in (0.0, 0.3):
+            resp, payload = self.client.request('POST', '/api/case/check', raw=big,
+                                                pause_s=pause)
+            self.assertEqual(resp.status, 413)
+            self.assertIn('too large', json.loads(payload)['error']['text'])
+            self.assertEqual(resp.getheader('Connection'), 'close')
+        # (ii) far over the drain bound: a 413 or a closed connection are both accepted, and
+        # the server keeps serving
+        huge = b'x' * (band_app.DRAIN_LIMIT_BYTES * 2)
+        try:
+            resp, _ = self.client.request('POST', '/api/case/check', raw=huge)
+            self.assertEqual(resp.status, 413)
+        except OSError:                               # reset or broken pipe: accepted here
+            pass
+        self.assertEqual(self.client.request('GET', '/app.css', token=False)[0].status, 200)
+        resp, _ = self.client.request('POST', '/api/case/check', raw=b'preset=foil_mill',
+                                      ctype='application/x-www-form-urlencoded')
+        self.assertEqual(resp.status, 415)
         resp, _ = self.client.request('POST', '/api/case/check', raw=b'preset=foil_mill',
                                       ctype='application/x-www-form-urlencoded')
         self.assertEqual(resp.status, 415)
@@ -172,6 +204,31 @@ class GuardTest(ServerCase):
         self.assertIn('not valid JSON', body.decode())
         resp, _ = self.client.request('POST', '/api/case/check', raw=b'[1, 2]')
         self.assertEqual(resp.status, 400)
+
+    def test_early_refusals_read_the_body_first(self):
+        # a refused request (wrong host, no token, unknown route) with a body sent after a
+        # pause gets its refusal, never a reset connection
+        body = {'preset': 'foil_mill', 'pad': 'x' * 200000}
+        for client, kw, status in ((Client(self.server, host='evil.example:80'), {}, 403),
+                                   (self.client, {'token': False}, 403),
+                                   (self.client, {}, 404)):
+            path = '/api/nothing-here' if status == 404 else '/api/case/check'
+            resp, _ = client.request('POST', path, body, pause_s=0.2, **kw)
+            self.assertEqual(resp.status, status)
+
+    def test_body_shorter_than_declared_does_not_block_the_server(self):
+        import socket
+        # (iii) a client declares a length, sends nothing and closes; another sends half
+        for sent in (b'', b'{"preset": '):
+            s_ = socket.create_connection(('127.0.0.1', self.server.server_port), timeout=5)
+            try:
+                s_.sendall(b'POST /api/case/check HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n'
+                           b'Content-Type: application/json\r\nContent-Length: 5000\r\n\r\n'
+                           % self.server.server_port + sent)
+            finally:
+                s_.close()
+        st, meta = self.client.json('GET', '/api/meta')
+        self.assertEqual(st, 200)
 
     def test_bad_and_path_like_run_ids(self):
         for rid in ('abc', '0' * 31, 'G' * 32, '..%2F..%2Fetc', '%2e%2e', '0' * 32,

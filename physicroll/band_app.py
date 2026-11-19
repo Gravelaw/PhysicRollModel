@@ -29,6 +29,8 @@ Routes (all JSON unless stated):
   GET  /api/runs                 the list for the "previous runs" drawer
   GET  /api/runs/<id>            status, elapsed seconds, and the plain summary when done
   GET  /api/runs/<id>/{answers.json,case.json,result.json,report.html}
+  GET  /api/runs/<id>/reopen     starting point and answers to change this run's inputs
+                                 (a named starting point, or {"run": id}: the run's own case)
   POST /api/runs/<id>/variant    a what-if: the base run's case with a few changed answers
   POST /api/runs/<id>/cancel     cancel a queued run
   POST /api/runs/<id>/rerun      the same inputs again (e.g. in detail after a quick run)
@@ -64,6 +66,9 @@ from .band_report import render_band_report
 RUN_ID = re.compile(r'[0-9a-f]{32}\Z')
 MAX_BODY_BYTES = 1024 * 1024
 WRITE_RETRIES = 6
+DRAIN_LIMIT_BYTES = 4 * MAX_BODY_BYTES   # an oversized body up to this size is read and dropped
+DRAIN_CHUNK_BYTES = 64 * 1024
+SOCKET_TIMEOUT_S = 30                    # no request can hang a handler thread for longer
 TOKEN_HEADER = 'X-Band-App-Token'
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; "
        "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -73,9 +78,15 @@ RUN_FILES = {'answers.json': 'application/json', 'case.json': 'application/json'
              'result.json': 'application/json', 'report.html': 'text/html'}
 STATUSES = ('queued', 'running', 'done', 'failed', 'cancelled', 'interrupted')
 SCENARIOS_DIR = Path(__file__).resolve().parent.parent / 'scenarios'
+RUN_UNREADABLE_TEXT = ('The earlier run this one was built on can no longer be read (its '
+                       'folder is missing or damaged). Choose another starting point.')
 INTERNAL_ERROR_TEXT = ('The screening stopped with an internal error. Your answers are kept; '
                        'try the quick profile, or check the values you changed last. The '
                        'details are in the window where the app was started.')
+SUMMARY_ERROR_TEXT = ('The screening ran, but the visual summary could not be built. The '
+                      'engine result and the full engineering report are saved: open the report '
+                      'or download the result below. The details are in the window where the '
+                      'app was started.')
 STAGES = ('Checking the inputs', 'Roll gap and stand vibration (chatter)',
           'Roll temperature across the width and strip flatness', 'Scoring the twenty causes',
           'Writing the report')
@@ -125,8 +136,9 @@ class RequestError(Exception):
 class RunStore:
     """Runs on disk plus the one-worker queue that executes them."""
 
-    def __init__(self, root, worked_examples=None, engine=None, quiet=False):
+    def __init__(self, root, worked_examples=None, engine=None, quiet=False, summarise=None):
         self.quiet = quiet
+        self.summarise = summarise or bpl.plain_summary
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = threading.Lock()
@@ -192,8 +204,31 @@ class RunStore:
         self._write(meta['id'], 'meta.json', _dump(meta))
 
     # ------------------------------------------------------------------ inputs
+    def run_preset(self, run_id):
+        """An earlier run's stored case as a starting point (variants, updates, reruns and
+        runs from an opened case file are reopened on their own case, never on another mill)."""
+        if not isinstance(run_id, str) or RUN_ID.fullmatch(run_id) is None:
+            raise RequestError(400, RUN_UNREADABLE_TEXT, 'preset', 'mill')
+        with self.lock:
+            meta = copy.deepcopy(self.runs.get(run_id))
+        try:
+            case = json.loads((self._folder(run_id) / 'case.json').read_text(encoding='utf-8'))
+            bd.validate_case(case)
+        except (OSError, ValueError, TypeError, KeyError, RequestError):
+            raise RequestError(409, RUN_UNREADABLE_TEXT, 'preset', 'mill')
+        from_file = bool(meta) and meta.get('preset') == 'case_file'
+        name = case.get('name') or 'unnamed'
+        label = (f'the case file you opened ("{name}")' if from_file
+                 else f'the earlier run "{name}"')
+        return {'id': f'run_{run_id}', 'ref': {'run': run_id}, 'label': label,
+                'description': ('The case of an earlier run, as it was run. Values you do not '
+                                'change stay as they were in that run.'),
+                'kind': 'run', 'generated_by_model': False, 'case': case}
+
     def preset(self, body):
         pid = body.get('preset')
+        if isinstance(pid, dict):
+            return self.run_preset(pid.get('run'))
         if pid == 'case_file':
             case = body.get('case_file')
             if not isinstance(case, dict):
@@ -234,7 +269,9 @@ class RunStore:
                 'synthetic': case['synthetic'], 'changes': changes or [],
                 'leaders': [], 'trust': None, 'error': None}
         (self.root / run_id).mkdir()
-        self._write(run_id, 'answers.json', _dump({'preset': preset['id'], 'profile': profile,
+        self._write(run_id, 'answers.json', _dump({'preset': preset['id'],
+                                                   'preset_ref': preset.get('ref'),
+                                                   'profile': profile,
                                                    'answers': answers,
                                                    'base_run_id': base_run_id,
                                                    'changes': changes or []}))
@@ -340,31 +377,48 @@ class RunStore:
                                         + err['text'], 'question': err['question'],
                                 'step': err['step']})
             return
-        report = render_band_report(result)
-        summary = bpl.plain_summary(result, case, bpl.value_origins(case),
-                                    own_mill=not case['synthetic'])
-        summary['profile'] = {'id': meta['profile'], 'label': meta['profile_label'],
-                              'left_out': left_out,
-                              'description': bpl.PROFILES[meta['profile']]['description']}
-        base = meta.get('base_run_id')
-        if base:
-            try:
-                old = self.read_json(base, 'summary.json')
-                summary['compared_with_base'] = dict(bpl.compare_summaries(old, summary),
-                                                     base_run_id=base)
-            except RequestError:
-                summary['compared_with_base'] = None
+        # the engine result and the engineering report are kept whatever happens next
         self._write(run_id, 'result.json', bd.result_json(result))
-        self._write(run_id, 'report.html', report)
-        self._write(run_id, 'summary.json', _dump(summary))
+        report_ok = True
+        try:
+            self._write(run_id, 'report.html', render_band_report(result))
+        except Exception:                             # keep the result; say so on the page
+            self.log_exception()
+            report_ok = False
+        summary, summary_error = None, None
+        try:
+            summary = self.summarise(result, case, bpl.value_origins(case),
+                                     own_mill=not case['synthetic'])
+            summary['profile'] = {'id': meta['profile'], 'label': meta['profile_label'],
+                                  'left_out': left_out,
+                                  'description': bpl.PROFILES[meta['profile']]['description']}
+            base = meta.get('base_run_id')
+            if base:
+                try:
+                    old = self.read_json(base, 'summary.json')
+                    summary['compared_with_base'] = dict(bpl.compare_summaries(old, summary),
+                                                         base_run_id=base)
+                except RequestError:
+                    summary['compared_with_base'] = None
+            self._write(run_id, 'summary.json', _dump(summary))
+        except Exception:                             # traceback to the console only
+            self.log_exception()
+            summary = None
+            summary_error = SUMMARY_ERROR_TEXT
         with self.lock:
             meta['elapsed_s'] = round(time.monotonic() - meta.pop('started_monotonic'), 1)
             meta['status'] = 'done'
             meta['finished'] = _now()
-            meta['leaders'] = [{'id': c['id'], 'name': c['name']} for c in summary['causes']
-                               if c['leading']]
-            meta['trust'] = summary['trust']['level']
-            meta['headline'] = summary['headline']['text']
+            meta['summary_error'] = summary_error
+            meta['report_available'] = report_ok
+            if summary is not None:
+                meta['leaders'] = [{'id': c['id'], 'name': c['name']}
+                                   for c in summary['causes'] if c['leading']]
+                meta['trust'] = summary['trust']['level']
+                meta['headline'] = summary['headline']['text']
+            else:
+                meta['leaders'] = [{'id': h, 'name': bpl.CAUSES.get(h, (h,))[0]}
+                                   for h in result.get('leading_hypotheses') or []]
             self._save_meta(meta)
 
     def stop(self):
@@ -421,15 +475,17 @@ def page_meta(store):
 
 
 # ============================================================================= server
-def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False):
+def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False,
+                summarise=None):
     """Create the server (bound to 127.0.0.1). The caller owns serve_forever / shutdown /
     server_close; ``server.store.stop()`` stops the worker."""
-    store = RunStore(runs_dir, worked_examples, engine, quiet)
+    store = RunStore(runs_dir, worked_examples, engine, quiet, summarise)
     token = secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = 'band-app'
         sys_version = ''
+        timeout = SOCKET_TIMEOUT_S         # socket timeout for every read (StreamRequestHandler)
 
         def log_message(self, fmt, *args):            # quiet console; errors still print
             pass
@@ -463,6 +519,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                 self.send_header('Cache-Control', 'no-store')
                 self.send_header('Referrer-Policy', 'no-referrer')
                 self.send_header('X-Frame-Options', 'DENY')
+                if self.close_connection:
+                    self.send_header('Connection', 'close')
                 for k, v in (extra or {}).items():
                     self.send_header(k, v)
                 self.end_headers()
@@ -477,20 +535,57 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
         def _error(self, exc):
             self._json(exc.status, exc.body())
 
-        def _body(self):
+        def _read_body(self):
+            """Read the request body BEFORE any check that may refuse the request, so the
+            client is never answered while it is still sending (which it would see as a reset
+            connection instead of the message). Returns (raw bytes, None) or (None, error).
+            An oversized body up to DRAIN_LIMIT_BYTES is read and dropped; a larger one, a body
+            without a length or one shorter than declared ends the connection after the reply
+            (the socket timeout bounds the wait)."""
             if self.headers.get('Transfer-Encoding'):
-                raise RequestError(411, 'Send the request with a length.')
+                self.close_connection = True
+                return None, RequestError(411, 'Send the request with a length.')
+            text = self.headers.get('Content-Length')
+            if text is None:
+                return b'', None                      # no body (a GET-like POST)
             try:
-                length = int(self.headers.get('Content-Length', ''))
+                length = int(text)
             except ValueError:
-                raise RequestError(411, 'Send the request with a length.')
-            if length < 0 or length > MAX_BODY_BYTES:
-                raise RequestError(413, 'The request is too large (more than 1 MiB). A case '
-                                        'file is normally far smaller.')
+                self.close_connection = True
+                return None, RequestError(411, 'Send the request with a length.')
+            if length < 0:
+                self.close_connection = True
+                return None, RequestError(411, 'Send the request with a length.')
+            too_large = RequestError(413, 'The request is too large (more than 1 MiB). A case '
+                                          'file is normally far smaller: check that you chose '
+                                          'a band case file.')
+            if length > MAX_BODY_BYTES:
+                self.close_connection = True
+                if length <= DRAIN_LIMIT_BYTES:
+                    left = length
+                    try:
+                        while left > 0:
+                            chunk = self.rfile.read(min(DRAIN_CHUNK_BYTES, left))
+                            if not chunk:
+                                break
+                            left -= len(chunk)
+                    except OSError:                   # timeout or reset: reply anyway
+                        pass
+                return None, too_large
+            try:
+                raw = self.rfile.read(length)
+            except OSError:
+                self.close_connection = True
+                return None, RequestError(400, 'The request arrived incomplete. Try again.')
+            if len(raw) < length:
+                self.close_connection = True
+                return None, RequestError(400, 'The request arrived incomplete. Try again.')
+            return raw, None
+
+        def _body(self, raw):
             ctype = self.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
             if ctype != 'application/json':
                 raise RequestError(415, 'The app only accepts JSON.')
-            raw = self.rfile.read(length)
             try:
                 data = json.loads(raw.decode('utf-8'))
             except (UnicodeDecodeError, ValueError):
@@ -530,6 +625,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                     self._json(200, {'runs': store.list(), 'skipped_unreadable': store.skipped})
                 elif len(parts) == 3 and parts[1] == 'runs':
                     self._json(200, self._status(parts[2]))
+                elif len(parts) == 4 and parts[1] == 'runs' and parts[3] == 'reopen':
+                    self._json(200, self._reopen(parts[2]))
                 elif len(parts) == 4 and parts[1] == 'runs' and parts[3] in RUN_FILES:
                     folder = store._folder(parts[2])
                     try:
@@ -554,23 +651,26 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
         def _status(self, run_id):
             meta = store.get(run_id)
             out = {'run': meta, 'queue_position': store.queue_position(run_id)}
-            if meta['status'] == 'done':
+            if meta['status'] == 'done' and not meta.get('summary_error'):
                 out['summary'] = store.read_json(run_id, 'summary.json')
             return out
 
         # -------------------------------------------------------------- POST
         def do_POST(self):
+            raw, early = self._read_body()            # first, so no refusal races the client
             if not self._authority_ok():
                 self._json(403, {'error': {'text': 'Request refused: wrong host or origin.'}})
                 return
             parts = self._route()
             try:
+                if early is not None:
+                    raise early
                 if not self._token_ok():
                     raise RequestError(403, 'Request refused: missing or wrong session token. '
                                             'Reload the page.')
                 if len(parts) < 2 or parts[0] != 'api':
                     raise RequestError(404, 'Unknown request.')
-                body = self._body()
+                body = self._body(raw)
                 if parts == ['api', 'case', 'check']:
                     preset = store.preset(body)
                     case = store.build_case(body.get('answers'), preset)
@@ -622,13 +722,30 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                 raise RequestError(400, 'No literature values for this product and gauge: '
                                         + bpl.words(str(exc)), 'exit_gauge', 'rolling')
 
+        def _reopen(self, run_id):
+            """What "Change the answers" needs for run R: R's own starting point (a named one
+            with R's answers, or else R's stored case with answers that reproduce it)."""
+            meta = store.get(run_id)
+            pid = meta.get('preset')
+            if pid in store.presets:
+                stored = store.read_json(run_id, 'answers.json')
+                return {'preset': pid, 'preset_info': None, 'answers': stored.get('answers'),
+                        'profile': meta.get('profile')}
+            preset = store.run_preset(run_id)
+            info = _preset_info(preset)
+            info['ref'] = preset['ref']
+            return {'preset': preset['ref'], 'preset_info': info,
+                    'answers': bpl.answers_from_case(preset['case']),
+                    'profile': meta.get('profile')}
+
         def _rerun(self, run_id, body):
             meta = store.get(run_id)
             profile = body.get('profile', 'detailed')
-            case = store.read_json(run_id, 'case.json')
+            preset = store.run_preset(run_id)
+            case = preset['case']
             stored = store.read_json(run_id, 'answers.json')
-            preset = {'id': meta.get('preset') or 'run', 'label': meta.get('preset_label') or
-                      'earlier run', 'kind': 'run', 'generated_by_model': False, 'case': case}
+            preset = dict(preset, id=meta.get('preset') or preset['id'],
+                          label=meta.get('preset_label') or preset['label'])
             label = (bpl.PROFILES[profile]['label'] + ' run' if profile in bpl.PROFILES
                      else 'run again')
             base = run_id if meta['status'] == 'done' else None
@@ -643,7 +760,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
             if not isinstance(changes, dict) or not changes:
                 raise RequestError(400, 'Change at least one answer for the what-if.')
             origins = body.get('origins') or {}
-            base_case = store.read_json(base_id, 'case.json')
+            base_preset = store.run_preset(base_id)
+            base_case = base_preset['case']
             answers = bpl.answers_from_case(base_case)
             answers['values'].update(changes)
             if not isinstance(origins, dict):
@@ -655,9 +773,7 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
             label = body.get('label')
             answers['name'] = (label if isinstance(label, str) and label.strip()
                                else f'{base_case["name"]} (what-if)')[:200]
-            preset = {'id': f'run_{base_id}', 'label': f'earlier run {base_id[:8]}',
-                      'description': 'An earlier run of this app.', 'kind': 'run',
-                      'generated_by_model': False, 'case': base_case}
+            preset = base_preset
             case = store.build_case(answers, preset)
             words = [bpl.QUESTION_BY_ID[q].wording for q in changes if q in bpl.QUESTION_BY_ID]
             return store.submit(case, answers, preset, body.get('profile', meta['profile']),

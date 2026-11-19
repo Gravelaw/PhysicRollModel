@@ -44,7 +44,7 @@ Trust level (``trust`` in a summary) — a RULE, not a statistic:
   - LOW when fewer than half of the "ask first" observations for the observed kind of band
     are answered, or when no orientation is recorded;
   - LOW when nothing leads (no ``CONSISTENT_LEADING`` hypothesis);
-  - LOW when the case-pass roll bite is not credible
+  - LOW when the case pass has no roll bite (``bite_error``) or its bite is not credible
     (``CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE``) or any part of the
     screening failed (a flag ending in ``_FAILED``);
   - MODERATE when 50-79 % of the "ask first" observations are answered;
@@ -266,12 +266,12 @@ CONSTRAINT_WORDS = {'axially_free': 'Free to expand along the barrel',
 HARDENING_WORDS = {'power': 'Power law', 'voce': 'Voce law'}
 
 
-def _choices(values, words):
-    missing = [v for v in values if v not in words]
-    if missing or set(words) - set(values):
+def _choices(values, labels):
+    missing = [v for v in values if v not in labels]
+    if missing or set(labels) - set(values):
         raise ValueError(f'plain words do not match the engine list: {values} vs '
-                         f'{sorted(words)}')
-    return tuple((v, words[v]) for v in values)
+                         f'{sorted(labels)}')
+    return tuple((v, labels[v]) for v in values)
 
 
 def _product_choices():
@@ -1989,13 +1989,14 @@ def _token(tok, choice_words=None):
     return _UNIT_SUFFIX.sub('', tok).replace('_', ' ')
 
 
-def words(text, questions=()):
+def words(text, question_ids=()):
     """Engine text in plain words: enum values, keys, statuses and formula symbols replaced,
-    true / false as yes / no. Numbers are left exactly as the engine wrote them. ``questions``:
-    ids whose answer words take precedence (e.g. 'both' of the faces question)."""
+    true / false as yes / no. Numbers are left exactly as the engine wrote them.
+    ``question_ids``: questions whose answer words take precedence (e.g. 'both' of the faces
+    question)."""
     if not isinstance(text, str):
         return text
-    local = dict(CHOICE_WORDS, **_choice_words([QUESTION_BY_ID[q] for q in questions
+    local = dict(CHOICE_WORDS, **_choice_words([QUESTION_BY_ID[q] for q in question_ids
                                                 if q in QUESTION_BY_ID]))
     t = text.strip()
     if t in local:
@@ -2181,6 +2182,10 @@ def _headline(result, causes, missing_first):
         text += (f' Answer more of the "ask first" questions ({missing_first} still unknown) '
                  'to narrow the shortlist.')
         kind = 'nothing_leads'
+    if result.get('bite_error'):
+        text += (' The roll-gap model could not compute the pass where the bands show, so the '
+                 'parts of the screening that need it are missing (see "What could not be '
+                 'assessed").')
     return {'text': text, 'kind': kind, 'leaders': [c['id'] for c in leaders]}
 
 
@@ -2189,8 +2194,9 @@ TRUST_RULE = (
     'Rule, not a statistic: start at FAIR and take the lowest of these caps. LOW if the inputs '
     'are synthetic, if any "ask first" mill value is left at the typical value or the mill '
     'values are not marked as your own, if fewer than half of the "ask first" observations '
-    'are answered or no orientation is given, if nothing leads, if the roll-gap result of the '
-    'pass is not credible, or if a part of the screening failed. MODERATE if 50-79 % of the '
+    'are answered or no orientation is given, if nothing leads, if the roll-gap model could '
+    'not compute the pass or its result is not credible, or if a part of the screening '
+    'failed. MODERATE if 50-79 % of the '
     '"ask first" observations are answered, if causes tie for the lead or the leader is less '
     'than 3 points ahead of the next cause of the same kind, or if the experimental foil '
     'roll-gap model, an extended roll-gap range, closed-gap rolling or a literature alloy '
@@ -2249,6 +2255,9 @@ def _trust(result, causes, origins, own_mill, asked, answered):
             if gap < 3:
                 cap('MODERATE', f'The leader is only {gap} point{"s" if gap != 1 else ""} '
                                 'ahead of the next cause of the same kind.')
+    if result.get('bite_error'):
+        cap('LOW', 'The roll-gap model could not compute the pass where the bands show, so the '
+                   'model parts that need it are missing.')
     if 'CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE' in flags:
         cap('LOW', 'The roll-gap result of this pass is not credible, so its model evidence is '
                    'left out.')
@@ -2443,28 +2452,64 @@ SECTION_WORDS = {'chatter': 'Chatter (roll-stack vibration) checks',
                  'pass heating', 'width': 'Across-the-width model'}
 
 
+BITE_FAILURE_PATTERNS = (
+    ('contact radius ratio', 'the rolls would flatten more than the sheet roll-gap model allows '
+                             '(thin, hard strip)'),
+    ('floor of the roll-bite', 'the exit gauge is below the 8 µm that the roll-gap models cover'),
+    ('below the 8 um floor', 'the exit gauge is below the 8 µm that the roll-gap models cover'),
+    ('reduction', 'the pass reduction is outside the range the roll-gap model accepts'),
+    ('friction', 'the roll-gap model does not converge at this friction'),
+)
+
+
+def bite_failure_words(text):
+    """A roll-gap (bite) failure in plain words: what happened, then the engine's detail."""
+    t = str(text)
+    why = next((w for key, w in BITE_FAILURE_PATTERNS if key in t), None)
+    lead = 'The roll-gap model could not solve this pass' + (f': {why}' if why else '') + '.'
+    return lead + ' Details: ' + words(t)
+
+
 def _not_assessable(result, causes):
     out = []
-    if result.get('bite_error'):
-        out.append({'what': 'Roll-gap model of the pass',
-                    'why': words(str(result['bite_error'])), 'kind': 'not_assessable'})
-    for k, words in SECTION_WORDS.items():
+    bite_error = result.get('bite_error')
+    if bite_error:
+        out.append({'what': 'Roll-gap model of the pass where the bands show',
+                    'why': bite_failure_words(bite_error), 'kind': 'not_assessable'})
+    for k, section_name in SECTION_WORDS.items():
         sec = result.get(k)
         if isinstance(sec, dict) and sec.get('status') in ('NOT_ASSESSABLE', 'FAILED'):
-            out.append({'what': words, 'why': words(str(sec.get('reason') or sec.get('error')
-                                                        or 'not computed')),
-                        'kind': sec['status'].lower()})
+            reason = str(sec.get('reason') or sec.get('error') or 'not computed')
+            if bite_error and reason == str(bite_error):
+                why = 'needs the roll-gap result of this pass, which could not be computed'
+            elif k == 'time_simulation':
+                why = ('the vibration time trace was not computed: it would need more time '
+                       'steps than the tool allows at this stiffness (the engineering report '
+                       'has the detail)')
+            else:
+                why = engine_message_words(reason)
+            out.append({'what': section_name, 'why': why, 'kind': sec['status'].lower()})
         elif isinstance(sec, dict) and sec.get('not_supplied'):
-            out.append({'what': words, 'why': 'not supplied for this case',
+            out.append({'what': section_name, 'why': 'not supplied for this case',
                         'kind': 'not_supplied'})
+    sweep = result.get('schedule_sweep')
+    for row in (sweep.get('rows') or []) if isinstance(sweep, dict) else []:
+        if isinstance(row, dict) and row.get('rejected'):
+            out.append({'what': f'Pass {row.get("label", "")} of the route',
+                        'why': bite_failure_words(row['rejected']), 'kind': 'not_assessable'})
     w = result.get('width')
     if _good(w):
+        ts = w.get('thermal_steady')
+        if isinstance(ts, dict) and ts.get('status') in ('NOT_ASSESSABLE', 'FAILED'):
+            out.append({'what': 'Roll temperature across the width',
+                        'why': engine_message_words(ts.get('reason') or ts.get('error')),
+                        'kind': ts['status'].lower()})
         sc = w.get('shape_chain') or {}
         if sc.get('status') not in (None, 'EVALUATED'):
             out.append({'what': 'Strip-shape part of the width model',
-                        'why': words(str(sc.get('reason'))), 'kind': 'not_assessable'})
+                        'why': engine_message_words(sc.get('reason')), 'kind': 'not_assessable'})
         for f in w.get('failures') or []:
-            out.append({'what': 'Part of the width model', 'why': words(str(f)),
+            out.append({'what': 'Part of the width model', 'why': engine_message_words(f),
                         'kind': 'failed'})
     for c in causes:
         if c['standing'] == 'NOT_ASSESSABLE':
@@ -2543,6 +2588,7 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
         'gauge_view': _gauge_view(result),
         'temperature_view': _temperature_view(result),
         'not_assessable': _not_assessable(result, causes),
+        'roll_gap_failed': bool(result.get('bite_error')),
         'limitations': list(STANDING_LIMITATIONS),
         'engine_limitations': [clean(x) for x in result.get('limitations') or []],
         'pass': {k: result['inputs']['pass'][k] for k in ('entry_thickness_m',

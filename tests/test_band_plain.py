@@ -187,6 +187,46 @@ def numbers_in(obj, out=None):
     return out
 
 
+SNAKE = re.compile(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b')
+SCREAM = re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b')
+READER_KEYS = ('text', 'label', 'why', 'what', 'how_to_check', 'name', 'description', 'prompts',
+               'direction_text', 'caveat')
+
+
+def reader_texts(summary, path='summary'):
+    """(where, text) of every field of a summary that a person reads."""
+    out = []
+
+    def walk(obj, where):
+        if isinstance(obj, dict):
+            if obj.get('described') is False:          # an unknown flag keeps its raw name
+                return
+            for k, v in obj.items():
+                if k in READER_KEYS or k.endswith('_words'):
+                    for t in (v if isinstance(v, list) else [v]):
+                        if isinstance(t, str):
+                            out.append((f'{where}.{k}', t))
+                else:
+                    walk(v, f'{where}.{k}')
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                walk(v, f'{where}[{i}]')
+    walk(summary, path)
+    return out
+
+
+def engine_token_problems(found):
+    """Reader-facing texts that carry a snake_case key, a SCREAMING_CASE token, a bare engine
+    enum value or a bare true / false."""
+    enums = {v for q in bpl.QUESTIONS for v, _ in q.choices if isinstance(v, str)}
+    bad = []
+    for where, t in found:
+        if (SNAKE.search(t) or SCREAM.search(t) or t.strip() in enums
+                or t.strip().lower() in ('true', 'false')):
+            bad.append((where, t))
+    return bad
+
+
 class QuestionTableTest(unittest.TestCase):
     def test_every_observation_key_has_a_question(self):
         t = json.loads((ROOT / 'scenarios' / 'band_diagnosis_template.json').read_text())
@@ -497,36 +537,10 @@ class SummaryTest(unittest.TestCase):
                 self.assertEqual(len(s['flags_plain']), len(r['flags']))
 
     def test_reader_facing_text_has_no_engine_tokens(self):
-        snake = re.compile(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b')
-        scream = re.compile(r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b')
-        enums = {v for q in bpl.QUESTIONS for v, _ in q.choices if isinstance(v, str)}
-        enums |= {'true', 'false'}
-        keys = ('text', 'label', 'why', 'what', 'how_to_check', 'name', 'description',
-                'prompts', 'direction_text', 'caveat')
-
-        def walk(obj, path, out):
-            if isinstance(obj, dict):
-                if obj.get('described') is False:      # an unknown flag keeps its raw name
-                    return
-                for k, v in obj.items():
-                    if k in keys or k.endswith('_words'):
-                        for t in (v if isinstance(v, list) else [v]):
-                            if isinstance(t, str):
-                                out.append((f'{path}.{k}', t))
-                    else:
-                        walk(v, f'{path}.{k}', out)
-            elif isinstance(obj, list):
-                for i, v in enumerate(obj):
-                    walk(v, f'{path}[{i}]', out)
         for name, r in all_results().items():
-            found = []
-            walk(bpl.plain_summary(r), name, found)
+            found = reader_texts(bpl.plain_summary(r), name)
             self.assertGreater(len(found), 200)
-            for where, t in found:
-                self.assertIsNone(snake.search(t), f'{where}: {t}')
-                self.assertIsNone(scream.search(t), f'{where}: {t}')
-                self.assertNotIn(t.strip(), enums, where)
-                self.assertNotIn(t.strip().lower(), ('true', 'false'), where)
+            self.assertEqual(engine_token_problems(found), [], name)
 
     def test_evidence_sentences_three_shapes(self):
         # 1. positions in metres -> millimetres, split into what was seen and what was computed

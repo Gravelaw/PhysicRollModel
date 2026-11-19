@@ -145,6 +145,16 @@ and a backup-roll change did; and whether the marks are on one face or both.
 If an answer is not accepted (for example an exit gauge above the entry gauge), the question is
 marked in red with a plain explanation, and pressing Run takes you there.
 
+**Changing the answers of an earlier run.** "Change the answers" (on a result, or on a run opened
+from "Previous runs") brings back that run's answers on that run's own starting point. A run
+started from a typical mill or a worked example reopens on that starting point. A what-if, an
+updated result, a run in detail of one of those, and a run from an opened case file reopen on the
+case of that run as it was run: step 3 then shows "Starting point: the earlier run '<name>'" (or
+"the case file you opened"), and every value you do not change stays as it was in that run. This
+also works after the app was restarted or the page reloaded, because the app reads the run's
+stored case from the runs folder. If that folder can no longer be read, the page says so ("the
+earlier run this one was built on can no longer be read") instead of using another mill.
+
 ## 3. Running
 
 The running view shows the elapsed time, the kind of run (quick or detailed), what quick leaves
@@ -152,6 +162,15 @@ out, and the steps the tool works through. Runs are done one at a time on this c
 that is still waiting can be cancelled. If a run fails, the page says what happened and which
 answer to look at ("Go to this question"); it never shows a program error trace. A run cut short
 because the app was closed shows as "interrupted" and can be started again with the same inputs.
+
+If the screening ran but the picture page could not be built from its result, the page says "The
+screening ran, but the visual summary could not be built" and offers the full engineering report
+and the result and case files to download: the engine result and the report are saved before the
+picture page is built, so they are never lost.
+
+When the roll-gap model could not compute the pass where the bands show, the result page opens with
+a "What could not be assessed" block right under the headline, the headline says so, and the trust
+level stays low.
 
 ## 4. The result, block by block
 
@@ -249,8 +268,8 @@ limits:
 - **Low** when the inputs are synthetic or typical values, when any key mill value is left at the
   typical value or the mill values are not marked as your own, when fewer than half of the
   "ask first" observations are answered or the direction of the marks is not given, when no cause
-  leads, when the roll-gap result of the pass is not credible, or when part of the screening
-  could not be computed.
+  leads, when the roll-gap model could not compute the pass or its result is not credible, or
+  when part of the screening could not be computed.
 - **Moderate** when half to four fifths of the "ask first" observations are answered, when causes
   tie for the lead or the leader is less than 3 points ahead of the next cause of the same kind,
   or when the experimental foil roll-gap model, an extended roll-gap range, closed-gap rolling or
@@ -271,7 +290,7 @@ random 32-character id:
 | `case.json` | the band case the answers make (`physicroll.band_case.v2`); it opens with `python -m physicroll.band_cli case.json --out DIR` or in the app |
 | `result.json` | the engine's full result |
 | `report.html` | the full engineering report |
-| `summary.json` | the plain-language summary the page draws from |
+| `summary.json` | the plain-language summary the page draws from (missing when it could not be built; `meta.json` then says why) |
 | `meta.json` | when it was made, its status, the kind of run, the run it came from (for updates and what-ifs), the engine version and the time it took |
 
 When the app starts it lists the runs already in the folder and skips any it cannot read. A run
@@ -288,7 +307,7 @@ by deleting its folder while the app is stopped.
   nothing anywhere else and is served with a strict content security policy.
 - **Nothing the browser sends is used as a file path.** Runs are addressed by ids the app makes
   itself; an opened case file is read as JSON, checked by the engine's own validation and never
-  written under a name from the browser. Request bodies are limited to 1 MiB and must be JSON.
+  written under a name from the browser. Request bodies are limited to 1 MiB and must be JSON; a larger file gets a plain "too large" message (the page itself refuses a case file above 900 KiB before sending it).
 - The engineering report is served under a stricter policy (no scripts at all).
 
 ## 9. What it cannot tell you
