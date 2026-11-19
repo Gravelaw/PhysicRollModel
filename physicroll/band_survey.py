@@ -1761,6 +1761,28 @@ def starter_case(row, mill):
     return bd.validate_case(json.loads(json.dumps(c)))
 
 
+def product_starter_case(product_id, exit_thickness_m=None, entry_thickness_m=None,
+                         foil_mill=None, sheet_mill=None, override_source='overrides file'):
+    """(starter case, survey row) for ONE catalogue product, optionally at a given final pass
+    (``exit_thickness_m`` / ``entry_thickness_m`` as survey overrides) and on given mill files
+    (as ``survey_with_mills``). The light entry point of the band app (SPEC16): it builds only
+    this product's row, not the full survey or the battery grade matrix, and returns exactly
+    what ``starter_case`` returns for this product in a survey with the same options."""
+    (index, p), = select_products([product_id])
+    over = {}
+    if exit_thickness_m is not None:
+        over['exit_thickness_m'] = exit_thickness_m
+    if entry_thickness_m is not None:
+        over['entry_thickness_m'] = entry_thickness_m
+    override = validate_overrides({product_id: over})[product_id] if over else None
+    mills = {'foil': _Mill('foil', None if foil_mill is None else
+                           load_mill_file(foil_mill, 'foil')),
+             'sheet': _Mill('sheet', None if sheet_mill is None else
+                            load_mill_file(sheet_mill, 'sheet'))}
+    row = survey_row(p, mills, index, override, override_source)
+    return starter_case(row, mills[row['mill']]), row
+
+
 def write_cases(result, mills, out_dir):
     """Write one starter case per surveyed product; returns the written paths."""
     from .__main__ import _save_complete

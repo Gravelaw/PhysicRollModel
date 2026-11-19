@@ -1713,6 +1713,12 @@ def _onset_direction(ok, key, limited_key):
     return f'{verb} from {ua} to {ub} (x{_f(q, digits=2)}{", " + note if note else ""})', sign
 
 
+def gauge_direction(g):
+    """Public name (SPEC16) of the gauge-direction sentence: one sentence on the direction of
+    the gauge trend for this case, from the ``width.gauge_trend`` rows ``g``."""
+    return _gauge_direction(g)
+
+
 def _gauge_direction(g):
     """One sentence on the direction of the gauge trend for this case, from the rows."""
     rows = [x for x in g.get('rows') or [] if isinstance(x, dict)]
