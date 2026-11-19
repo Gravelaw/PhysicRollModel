@@ -372,7 +372,8 @@ APP_JS = r''''use strict';
     otherOpen: false,
     // what is drawn comes ONLY from the server's drawing model of the built case
     model: null, modelKey: null, modelStale: false, drawnKey: null,
-    focusSel: null, editChain: null, busy: false
+    focusSel: null, editChain: null, busy: false,
+    rev: 0, ctx: 0, nav: 0, appliedRev: -1, defaultsReq: 0, openReq: 0
   };
   var app = document.getElementById('app');
 
@@ -472,6 +473,7 @@ APP_JS = r''''use strict';
       S.answers.values.alloy_stated = true;
       S.answers.origins.alloy_stated = 'estimated';
     }
+    touch();
     scheduleCheck();
   }
   function family() {
@@ -511,34 +513,74 @@ APP_JS = r''''use strict';
     return b;
   }
 
+  // ------------------------------------------------------------------ replies and the inputs
+  // THE RULE: a reply from the server may write into the page state (answers patch, model,
+  // notices, errors, S.check, the starting point, the result view) only if it was computed from
+  // the inputs the page holds when it arrives.
+  //  - S.rev counts local changes of the inputs (every answer, its origin, the name, "my mill",
+  //    the starting point, the opened case file): touch() advances it, synchronously, at the
+  //    change. Every request records the revision it was built from; accept() drops a reply from
+  //    an older revision whole and sends a fresh check. Applying the patch of an accepted reply
+  //    is not a local change (it does not invalidate the reply carrying it), but it advances the
+  //    revision so that other replies, computed without it, are dropped.
+  //  - S.ctx counts starting points (typical mill, worked example, case file, reopened run, new
+  //    screening). A nozzle edit whose reply comes back after another answer changed is not
+  //    lost: its nozzle marks are applied to the current answers (the same as the edit first,
+  //    then that change) and a check follows; after a change of starting point it is dropped.
+  //  - S.nav counts navigation (a run opened, back to the answers, new screening): replies that
+  //    change the view or the result state are dropped once the person has moved on.
+  // Nothing here depends on the debounce timer or on timing.
+  function touch() { S.rev += 1; }
   var checkTimer = null;
   function scheduleCheck() {
     if (checkTimer) { clearTimeout(checkTimer); }
     checkTimer = setTimeout(runCheck, 450);
     updateSide();
   }
+  // the one gate for /api/case/check and /api/case/edit replies: true = apply it
+  function accept(rev) { return rev === S.rev; }
   function runCheck() {
     if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
-    var seq = ++S.checkSeq;
+    var rev = S.rev;
     return api('POST', '/api/case/check', body()).then(function (r) {
-      if (seq !== S.checkSeq) { return; }
+      if (!accept(rev)) { return runCheck(); }          // older inputs: dropped whole, check again
       takeCheck(r);
     });
   }
   function checkNow() { updateSide(); return runCheck(); }
+  // the page is settled when the last reply applied was computed from the current inputs
+  function settle() {
+    return (S.editChain || Promise.resolve()).then(function () {
+      return S.appliedRev === S.rev && !checkTimer ? null : runCheck().then(settle);
+    });
+  }
+  var NOZZLE_KEYS = ['nozzle_levels', 'blocked_nozzles', 'coverage_blocked_nozzles'];
   // one nozzle edit: the server applies the rule and answers with the new answers and model;
   // edits are sent one after another, each from the answers the previous one left
   function sendEdit(edit, focusSel, after) {
     if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
+    var ctx = S.ctx;
     S.editChain = (S.editChain || Promise.resolve()).then(function () {
-      var seq = ++S.checkSeq, b = body();
+      if (ctx !== S.ctx) { return null; }                 // starting point switched: dropped
+      var rev = S.rev, b = body();
       b.edit = edit; S.busy = true; markBusy();
       return api('POST', '/api/case/edit', b).then(function (r) {
         S.busy = false; markBusy();
-        if (r.status === 200) { S.touched.nozzle_levels = true; S.focusSel = focusSel || null; }
-        if (seq !== S.checkSeq) { applyReconciled(r.data); runCheck(); return; }
-        takeCheck(r);
-        if (r.status === 200 && after) { after(); }
+        if (ctx !== S.ctx) { return null; }               // starting point switched: dropped
+        if (accept(rev)) {
+          if (r.status === 200) { S.touched.nozzle_levels = true; S.focusSel = focusSel || null; }
+          takeCheck(r);
+          if (r.status === 200 && after) { after(); }
+          return null;
+        }
+        // another answer changed while the edit was on its way: keep the edit (its nozzle
+        // marks only), then check the current answers
+        if (r.status === 200) {
+          var p = r.data.answers_patch || {}, hit = false;
+          NOZZLE_KEYS.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(p, k)) { S.answers.values[k] = p[k]; hit = true; } });
+          if (hit) { S.touched.nozzle_levels = true; touch(); }
+        }
+        return runCheck();
       });
     });
     return S.editChain;
@@ -552,6 +594,8 @@ APP_JS = r''''use strict';
     var hold = !!S.typingField && ((r.data && r.data.reconciled) || []).some(function (n) { return n.kind === 'reset'; });
     S.heldReset = hold;
     var changed = hold ? applyReconciled({reconciled: r.data.reconciled}) : applyReconciled(r.data);
+    if (changed) { touch(); }       // replies computed without this patch are now older
+    S.appliedRev = S.rev;
     if (r.status === 200) {
       S.check = r.data; S.model = r.data.model; S.modelKey = r.data.model_key; S.modelStale = false;
     } else {
@@ -1727,7 +1771,8 @@ APP_JS = r''''use strict';
     } else { window.scrollTo(0, 0); }
   }
 
-  function stopPoll() { if (S.poll) { clearTimeout(S.poll); S.poll = null; } }
+  // leaving the current view: replies that would change the view or the result are dropped
+  function stopPoll() { S.nav += 1; if (S.poll) { clearTimeout(S.poll); S.poll = null; } }
   function openRun(id, opts) {
     stopPoll();
     S.drawer = false; renderDrawer();
@@ -1736,7 +1781,9 @@ APP_JS = r''''use strict';
     poll(id, true);
   }
   function poll(id, first) {
+    var nav = S.nav;
     api('GET', '/api/runs/' + id).then(function (r) {
+      if (nav !== S.nav) { return; }                      // another run or view opened since
       if (r.status !== 200) { app.innerHTML = '<div class="wrap"><div class="card errorbox" role="alert"><p>' + esc((r.data.error || {}).text || 'This run cannot be opened.') + '</p><button type="button" class="btn" data-back-input="1">Back to the answers</button></div></div>'; return; }
       var st = r.data, run = st.run;
       S.run = run;
@@ -1748,11 +1795,12 @@ APP_JS = r''''use strict';
       }
       if (run.status === 'done' && run.summary_error) { renderSummaryError(st); return; }
       if (run.status !== 'done') {
-        api('GET', '/api/runs/' + id + '/answers.json').then(function (a) { S.runAnswers = a.status === 200 ? a.data.answers : null; renderFailed(st); });
+        api('GET', '/api/runs/' + id + '/answers.json').then(function (a) { if (nav !== S.nav) { return; } S.runAnswers = a.status === 200 ? a.data.answers : null; renderFailed(st); });
         return;
       }
       Promise.all([api('GET', '/api/runs/' + id + '/answers.json'),
         run.base_run_id ? api('GET', '/api/runs/' + run.base_run_id) : Promise.resolve(null)]).then(function (res) {
+        if (nav !== S.nav) { return; }
         S.runAnswers = res[0].status === 200 ? res[0].data.answers : null;
         S.baseSummary = res[1] && res[1].status === 200 && res[1].data.summary ? res[1].data.summary : null;
         renderResult(st);
@@ -1770,9 +1818,8 @@ APP_JS = r''''use strict';
   }
 
   function startRun() {
-    // first let a pending edit or check finish, so the run starts from what is drawn
-    var pending = !!checkTimer;
-    (S.editChain || Promise.resolve()).then(function () { return pending || checkTimer ? runCheck() : null; }).then(startRunNow);
+    // first let pending edits and checks settle, so the run starts from what is drawn
+    settle().then(startRunNow);
   }
   function startRunNow() {
     if (S.generalError || Object.keys(S.errors).length) {
@@ -1780,13 +1827,17 @@ APP_JS = r''''use strict';
       if (first && Q[first]) { goStep(Q[first].step, first); }
       return;
     }
-    var b = body(); b.profile = S.profile;
+    var b = body(), rev = S.rev, nav = S.nav; b.profile = S.profile;
     var btn = document.getElementById('runbtn'); if (btn) { btn.disabled = true; }
     api('POST', '/api/runs', b).then(function (r) {
-      if (r.status === 202) { openRun(r.data.id); return; }
+      // the run is what was pressed; it is opened unless the person went elsewhere meanwhile
+      if (r.status === 202) { if (nav === S.nav) { openRun(r.data.id); } return; }
       if (btn) { btn.disabled = false; }
+      if (!accept(rev)) { runCheck(); return; }          // refused for inputs no longer held
       var e = r.data.error || {text: 'The run could not be started.'};
-      if (applyReconciled(r.data) || (r.data.reconciled || []).length) {
+      var patched = applyReconciled(r.data);
+      if (patched) { touch(); }
+      if (patched || (r.data.reconciled || []).length) {
         // a run is never started from answers the person has not seen: show the redrawn header
         S.check = null; runCheck();
         goStep(Q[e.question] ? Q[e.question].step : S.step, e.question);
@@ -1799,6 +1850,7 @@ APP_JS = r''''use strict';
 
   function setPreset(id, info) {
     var keepSteps = ['see', 'rolling'];
+    touch(); S.ctx += 1;
     S.presetId = id;
     var p = preset();
     var keepVals = {}, keepOr = {};
@@ -1867,14 +1919,16 @@ APP_JS = r''''use strict';
     else if (d.answer) { var k = 'nl-' + S.openCause + '-' + d.answer; S.openChecks[k] = !S.openChecks[k]; rerenderResult(); }
     else if (d.check) { S.openChecks[d.check] = !S.openChecks[d.check]; rerenderResult(); }
     else if (d.update) {
+      var navU = S.nav;
       api('POST', '/api/runs/' + S.run.id + '/variant', {changes: S.pending, profile: S.run.profile, label: String(S.run.name || '').replace(/ \((updated|what-if)\)$/, '') + ' (updated)'}).then(function (r) {
+        if (navU !== S.nav) { return; }
         if (r.status === 202) { openRun(r.data.id); } else { alertBox((r.data.error || {}).text || 'The update could not be started.'); }
       });
     }
     else if (d.discard) { S.pending = {}; S.openChecks = {}; rerenderResult(); }
     else if (d.openRun) { openRun(d.openRun); }
-    else if (d.rerun) { api('POST', '/api/runs/' + d.rerun + '/rerun', {profile: d.profile || 'detailed'}).then(function (r) { if (r.status === 202) { openRun(r.data.id); } else { alertBox((r.data.error || {}).text); } }); }
-    else if (d.cancel) { api('POST', '/api/runs/' + d.cancel + '/cancel', {}).then(function () { poll(d.cancel, true); }); }
+    else if (d.rerun) { var navR = S.nav; api('POST', '/api/runs/' + d.rerun + '/rerun', {profile: d.profile || 'detailed'}).then(function (r) { if (navR !== S.nav) { return; } if (r.status === 202) { openRun(r.data.id); } else { alertBox((r.data.error || {}).text); } }); }
+    else if (d.cancel) { var navC = S.nav; api('POST', '/api/runs/' + d.cancel + '/cancel', {}).then(function () { if (navC === S.nav) { stopPoll(); poll(d.cancel, true); } }); }
     else if (d.backInput) { if (S.run && S.view !== 'input') { reopenRun(S.run.id, null); } else { goStep(S.step); } }
     else if (d.goto) { if (S.view !== 'input' && S.run) { reopenRun(S.run.id, d.goto); } else { goStep(Q[d.goto].step, d.goto); } }
     else if (d.report) { apiBlob('/api/runs/' + d.report + '/report.html').then(function (b) { window.open(URL.createObjectURL(new Blob([b], {type: 'text/html'})), '_blank', 'noopener'); }, function () { alertBox('The report is not available.'); }); }
@@ -1924,8 +1978,11 @@ APP_JS = r''''use strict';
   function reopenRun(runId, gotoQ) {
     // "Change the answers": the server gives the run's own starting point (a named one, or the
     // run's stored case) and answers that rebuild exactly that run's case
+    var nav = S.nav, rev = S.rev;
     api('GET', '/api/runs/' + runId + '/reopen').then(function (r) {
+      if (nav !== S.nav || rev !== S.rev) { return; }      // the person moved on meanwhile
       if (r.status !== 200) { alertBox((r.data.error || {}).text || 'This run cannot be reopened.'); return; }
+      touch(); S.ctx += 1;
       var ro = r.data, a = ro.answers || {};
       S.presetsExtra = S.presetsExtra.filter(function (p) { return p.kind !== 'run'; });
       if (ro.preset_info) {
@@ -1961,11 +2018,11 @@ APP_JS = r''''use strict';
       }
       store(d.select, JSON.parse(t.value), t); if (ctxOf(t) === 'f') { render(); }
     }
-    else if (d.origin) { S.answers.origins[d.origin] = t.value; if (t.value === 'preset') { S.answers.values[d.origin] = clone(pv(d.origin)); } S.touched[d.origin] = true; scheduleCheck(); render(); }
+    else if (d.origin) { S.answers.origins[d.origin] = t.value; if (t.value === 'preset') { S.answers.values[d.origin] = clone(pv(d.origin)); } S.touched[d.origin] = true; touch(); scheduleCheck(); render(); }
     else if (d.preset) { setPreset(d.preset); render(); }
     else if (d.profile) { S.profile = d.profile; }
-    else if (t.id === 'ownmill') { S.answers.own_mill = t.checked; scheduleCheck(); }
-    else if (t.id === 'casename') { S.answers.name = t.value; scheduleCheck(); }
+    else if (t.id === 'ownmill') { S.answers.own_mill = t.checked; touch(); scheduleCheck(); }
+    else if (t.id === 'casename') { S.answers.name = t.value; touch(); scheduleCheck(); }
     else if (t.id === 'casefile') { openCaseFile(t.files[0]); }
     else if (d.num && ctxOf(t) === 'f') { S.typingField = null; if (S.heldReset) { checkNow(); } }   // drawings follow the model
     else if (d.bandpos !== undefined) { checkNow(); }
@@ -2066,7 +2123,10 @@ APP_JS = r''''use strict';
     reader.onload = function () {
       var c;
       try { c = JSON.parse(reader.result); } catch (err) { alertBox('This file is not a JSON case file. Choose a band case file (.json).'); return; }
+      var req = ++S.openReq, rev = S.rev;
       api('POST', '/api/case/open', {case_file: c}).then(function (r) {
+        if (req !== S.openReq) { return; }                // a later file was chosen
+        if (rev !== S.rev) { S.banner = 'The case file was not opened: the answers changed while it was being checked. Open it again if you still want it.'; if (S.view === 'input') { render(); } return; }
         if (r.status !== 200) { alertBox((r.data.error || {}).text || 'The case file is not accepted.'); return; }
         S.caseFile = c;
         var info = r.data.preset; info.id = 'case_file';
@@ -2083,7 +2143,10 @@ APP_JS = r''''use strict';
     if (isNum(val('exit_gauge')) && S.touched.exit_gauge) { b.exit_thickness_m = val('exit_gauge') / 1e6; }
     if (isNum(val('entry_gauge')) && S.touched.entry_gauge) { b.entry_thickness_m = val('entry_gauge') / 1e6; }
     S.productInfo = 'Looking up typical values…'; render();
+    var req = ++S.defaultsReq, rev = S.rev;
     api('POST', '/api/product-defaults', b).then(function (r) {
+      if (req !== S.defaultsReq) { return; }             // a later lookup was asked for
+      if (rev !== S.rev) { S.productInfo = 'The answers changed while the typical values were looked up, so they were not filled in. Press the button again.'; if (S.view === 'input') { render(); } return; }
       if (r.status !== 200) { S.productInfo = esc((r.data.error || {}).text || 'No typical values found.'); render(); return; }
       var v = r.data.values;
       Object.keys(v).forEach(function (k) {
@@ -2094,6 +2157,7 @@ APP_JS = r''''use strict';
         S.suggested[k] = true; S.touched[k] = true;
       });
       delete S.suggested.alloy_stated;
+      touch();
       var kind = r.data.mill_kind, cur = preset();
       S.productInfo = 'Filled in ' + esc(r.data.label) + '. They are marked "suggested — confirm" until you change or confirm them.' +
         (cur.kind === 'mill' && cur.id !== kind + '_mill' ? ' This product is usually rolled on a ' + kind + ' mill: you may want the typical ' + kind + ' mill in step 3.' : '');
@@ -2123,19 +2187,21 @@ APP_JS = r''''use strict';
       return k === 'nozzle_levels' ? 'nozzle ' + (Number(nozSel.value) + 1) + ' ' + document.getElementById('wi-nozstate').value :
         Q[k].wording + ' ' + fmtVal(Q[k], a[k]) + ' → ' + fmtVal(Q[k], ch[k]);
     });
-    var before = S.summary, baseRun = S.run;
+    var before = S.summary, baseRun = S.run, nav = S.nav;
     api('POST', '/api/runs/' + S.run.id + '/variant', {changes: ch, profile: S.run.profile, label: (S.run.name || '') + ' (what-if)'}).then(function (r) {
+      if (nav !== S.nav) { return; }                     // another run or view opened since
       if (r.status !== 202) { S.whatifError = (r.data.error || {}).text; rerenderResult(); return; }
       var id = r.data.id;
       var sec = app.querySelector('[data-trywhatif]'); if (sec) { sec.disabled = true; sec.textContent = 'Running the what-if…'; }
       (function wait() {
         api('GET', '/api/runs/' + id).then(function (s) {
+          if (nav !== S.nav) { return; }                 // the what-if stays in "Previous runs"
           var st = s.data.run.status;
           if (st === 'queued' || st === 'running') { setTimeout(wait, 700); if (sec) { sec.textContent = 'Running the what-if… ' + Math.round(s.data.run.elapsed_s || 0) + ' s'; } return; }
           if (st !== 'done') { S.whatifError = (s.data.run.error || {}).text || 'The what-if did not finish.'; rerenderResult(); return; }
           var after = s.data.summary;
           S.compare = {before: before, after: after, afterId: id, changes: words, diff: after.compared_with_base ? after.compared_with_base.text : ''};
-          if (S.run.id === baseRun.id) { rerenderResult(); var c = app.querySelector('.compare'); if (c) { c.scrollIntoView({block: 'start'}); } }
+          rerenderResult(); var c = app.querySelector('.compare'); if (c) { c.scrollIntoView({block: 'start'}); }
         });
       })();
     });
