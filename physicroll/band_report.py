@@ -1208,6 +1208,10 @@ def _other_width_results(w):
                    + _table(('span', 'status', 'wrinkle wavelength', 'expected troughs across '
                              'the width', 'trough onset lateral stress', 'roller wrinkle lateral '
                              'stress', 'observed spacing / wavelength'), rows))
+        notes = {t.get('wide_foil_note') for t in tr.values()
+                 if isinstance(t, dict) and t.get('wide_foil_note')}
+        for n in sorted(notes):      # SPEC17 X12
+            out.append(f'<p class="note">{_e(n)}</p>')
     tt = w.get('two_tone')
     if isinstance(tt, dict):
         out.append(f'<p><strong>Two-tone (previous strip edges):</strong> {_txt(tt.get("status"))}'
@@ -2422,6 +2426,20 @@ def _thermal_block(r):
     out = [head, f'<p>{_e(tc.get("note"))} ' + _e(' '.join(tc.get('texts') or [])) + '</p>',
            '<h3>Case inputs against the literature</h3>',
            _table(cols, _tc_rows(tc.get('inputs') or []), 'wrapall')]
+    sp = next((f for f in tc.get('inputs') or []
+               if f.get('item') == 'spray_heat_transfer_coefficient'
+               and f.get('basis_comparable')), None)
+    if sp is not None:
+        # SPEC17 A5 / X3: the bases of the model and published coefficients
+        line = ('The model\'s spray coefficient is an average around the roll. The published '
+                '2.5-4.3 kW/m²K is read as a value inside the jet zone. The two are not on the '
+                'same basis')
+        if _ok(sp.get('footprint_equivalent_w_m2k')):
+            line += (f'; with a wetted arc of {_f(math.degrees(sp["spray_wetted_arc_rad"]))} '
+                     f'degrees the model value corresponds to '
+                     f'{_f(sp["footprint_equivalent_w_m2k"], 1e-3, 4)} kW/m²K inside the jet '
+                     'zone')
+        out.append(f'<p class="note">{_e(line)}.</p>')
     lim = tc.get('coil_limits_c') or {}
     out.append('<h3>Modelled outputs against the literature</h3>')
     if tc.get('battery_coil_limits_apply'):
@@ -2450,6 +2468,19 @@ def _thermal_block(r):
     q = tc.get('quarter_barrel_note')
     if q:
         out.append(f'<p class="note">{_e(q["text"])}</p>')
+    fl = tc.get('fire_limits')
+    if isinstance(fl, dict):
+        # SPEC17 A10: rule check against the user's limits only
+        if fl.get('rows'):
+            rows = [[_e(x.get('label') or x['item']), _f(x['value_k'] - 273.15, 1, 4),
+                     _f(x['limit_k'] - 273.15, 1, 4), _f(x['margin_k'], 1, 3),
+                     _txt(x['verdict']), _e(x['limit_basis'])] for x in fl['rows']]
+            out.append('<h3>Fire limits</h3>'
+                       + _table(['item', 'value [°C]', 'limit [°C]', 'margin [K]', 'verdict',
+                                 'limit'], rows, 'wrapall')
+                       + f'<p class="note">{_e(fl.get("note"))}</p>')
+        else:
+            out.append('<p class="note">Fire limits not checked: no flash point given.</p>')
     ts = _get(r, 'width', 'thermal_sensitivity')
     if isinstance(ts, dict) and ts.get('status') == 'EVALUATED':
         rows = []

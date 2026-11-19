@@ -658,6 +658,120 @@ def _k_to_c(k):
     return None if k is None else k - 273.15
 
 
+# --------------------------------------------------------------------------- SPEC17 A5 / X3
+SPRAY_BASIS_FLAG = 'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED'
+SPRAY_VALUE_BASIS = ('circumferential mean under a healthy header (model definition, '
+                     'roll_thermal.py)')
+SPRAY_PUBLISHED_BASIS = ("jet zone, as the project's note of PT-T18 reads it (full text from a "
+                         'garbled mirror; not re-read)')
+
+
+def footprint_equivalent_htc(spray_mean_htc_w_m2k, background_htc_w_m2k, wetted_arc_rad):
+    """Coefficient inside the wetted arc that gives the model's circumferential mean.
+
+    [D, re-derived in SPEC17] The roll boundary condition uses the circumferential mean
+    ``h_mean(z) = (1/2pi) * integral h(theta, z) dtheta``. A spray wetting an arc ``phi`` with
+    ``h_fp`` and leaving the rest at ``h_bg`` gives ``h_mean = h_bg + (h_fp - h_bg)*phi/(2pi)``.
+    The model writes ``h_mean = h_bg + spray_mean_htc*weight``; for a healthy header
+    (weight 1): ``h_fp = h_bg + spray_mean_htc * 2pi/phi``.
+    """
+    return background_htc_w_m2k + spray_mean_htc_w_m2k * 2 * math.pi / wetted_arc_rad
+
+
+def spray_basis(w, prod):
+    """Basis keys of the spray-coefficient finding; the verdict itself is not changed."""
+    h = w['spray_header']
+    out = {'value_basis': SPRAY_VALUE_BASIS, 'published_basis': SPRAY_PUBLISHED_BASIS,
+           'basis_comparable': 'NOT_ESTABLISHED'}
+    arc = w.get('spray_wetted_arc_rad')
+    if arc is not None:
+        h_fp = footprint_equivalent_htc(h['spray_mean_htc_w_m2k'], h['background_htc_w_m2k'],
+                                        arc)
+        out.update(spray_wetted_arc_rad=arc, footprint_equivalent_w_m2k=h_fp,
+                   footprint_equivalent_verdict=bp.check_thermal(
+                       prod, spray_htc_w_m2k=h_fp)[0]['verdict'],
+                   footprint_equivalent_formula=(
+                       'h_fp = background_htc + spray_mean_htc * 2*pi/arc [D, SPEC17]'))
+    return out
+
+
+# --------------------------------------------------------------------------- SPEC17 A10
+FIRE_FLAG_STRIP = 'STRIP_EXIT_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT'
+FIRE_FLAG_OIL = 'OIL_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT'
+FIRE_FLAG_CAP = 'OIL_SUPPLY_TEMPERATURE_ABOVE_SITE_CAP'
+FIRE_NOTE = ('A modelled strip exit temperature is an indicator (EXIT_IS_NOT_COIL); no oil-mist '
+             "or vapour model; limits are the user's.")
+FIRE_LEVERS = (
+    {'lever': 'higher pass reduction', 'effect': 'more plastic work per pass',
+     'basis': 'pass-heating formula [D]'},
+    {'lever': 'higher friction', 'effect': 'more slip dissipation', 'basis': '[D]'},
+    {'lever': 'a closed or weak coolant zone, a lower coolant flow',
+     'effect': 'less heat taken from the rolls', 'basis': 'roll thermal model [D]'},
+    {'lever': 'a higher oil supply temperature', 'effect': 'hotter oil at the bite',
+     'basis': 'direct'},
+    {'lever': 'higher speed', 'effect': 'more heat per unit time into the rolls; the model\'s '
+     'strip temperature rise per pass does not depend on speed [D]; plant reports give 77 C '
+     'at 550 m/min and 98-100 C at 600 m/min [PT-T1, PT-T2 EX]', 'basis': '[D]; PT-T1, PT-T2'})
+
+
+def _fire_context():
+    out = []
+    for s in bp.OIL_WHAT_GOES_WRONG + bp.OIL_PROPERTIES:
+        if s.topic in ('flash_point', 'fire'):
+            out.append({'topic': s.topic, 'text': s.text, 'sources': list(s.sources),
+                        'read_status': s.effective_read_status()})
+    return out
+
+
+def fire_limits(case, temps):
+    """SPEC17 A10: oil and strip temperatures against the user's flash point and site cap.
+
+    Rule check only (evidence-neutral); no default limit, the catalogue statements are
+    context. Returns (block, flags)."""
+    trib, w = case.get('tribology') or {}, case.get('width_model') or {}
+    flash, cap = trib.get('oil_flash_point_k'), trib.get('oil_supply_temperature_cap_k')
+    out = {'context': _fire_context(), 'levers_that_raise_temperature': [dict(x) for x in
+                                                                           FIRE_LEVERS],
+           'note': FIRE_NOTE}
+    if flash is None and cap is None:
+        out.update(status='NOT_SUPPLIED', not_supplied=True, rows=[],
+                   reason='no oil flash point and no oil supply temperature cap given '
+                          '(tribology.oil_flash_point_k, tribology.oil_supply_temperature_cap_k)')
+        return out, []
+    rows, flags = [], []
+
+    def row(item, value, limit, basis, label=None):
+        r = {'item': item, 'value_k': value, 'limit_k': limit, 'margin_k': limit - value,
+             'verdict': 'BELOW_LIMIT' if value < limit else 'AT_OR_ABOVE_LIMIT',
+             'limit_basis': basis}
+        if label is not None:
+            r['label'] = label
+        rows.append(r)
+        return r['verdict'] == 'AT_OR_ABOVE_LIMIT'
+    oils = []
+    if trib.get('inlet_temperature_k') is not None:
+        oils.append(('oil_inlet_temperature', trib['inlet_temperature_k']))
+    if w.get('coolant_temperature_k') is not None:
+        oils.append(('coolant_temperature_as_oil_supply', w['coolant_temperature_k']))
+    for item, value in oils:
+        if flash is not None and row(item, value, flash, 'oil flash point (user, '
+                                     'tribology.oil_flash_point_k)'):
+            flags.append(FIRE_FLAG_OIL)
+        if cap is not None and row(item, value, cap, 'oil supply temperature cap (user, '
+                                   'tribology.oil_supply_temperature_cap_k)'):
+            flags.append(FIRE_FLAG_CAP)
+    if flash is not None:
+        for f in temps:
+            if f.get('value') is None:
+                continue
+            if row('strip_exit_temperature', f['value'] + 273.15, flash,
+                   'oil flash point (user, tribology.oil_flash_point_k)', f.get('label')):
+                flags.append(FIRE_FLAG_STRIP)
+    flags = list(dict.fromkeys(flags))
+    out.update(status='CHECKED', not_supplied=False, rows=rows)
+    return out, flags
+
+
 def thermal_check(result, case):
     """SPEC14 Part 2: the case's thermal inputs and the modelled thermal outputs against the
     process-temperature literature (``band_products.check_thermal``). Evidence-neutral: it
@@ -684,6 +798,7 @@ def thermal_check(result, case):
                            'only (verdict against the foil range kept beside)')
         return f
     flags, inputs, outputs, texts = [], [], [], []
+    spray_flag = False
     width = result.get('width') if isinstance(result.get('width'), dict) else {}
     ts = width.get('thermal_sensitivity') if isinstance(width, dict) else None
     # ---- inputs
@@ -706,7 +821,10 @@ def thermal_check(result, case):
         htc = w['spray_header']['spray_mean_htc_w_m2k']
         if htc > 0:
             # simulated on an aluminium cold mill [PT-T18]: not foil-only, no sheet caveat
-            inputs.append(bp.check_thermal(prod, spray_htc_w_m2k=htc)[0])
+            f = bp.check_thermal(prod, spray_htc_w_m2k=htc)[0]
+            f.update(spray_basis(w, prod))
+            spray_flag = True
+            inputs.append(f)
         t_c = _k_to_c(w.get('coolant_temperature_k'))
         if t_c is not None:
             f = lit(bp.check_thermal(prod, oil_supply_temperature_c=t_c, stand='finishing')[0])
@@ -913,10 +1031,15 @@ def thermal_check(result, case):
                            + (f'Observed bands in those zones: {", ".join(f"{x:.3g}" for x in hits)} m.'
                               if hits else 'No observed band lies in those zones.')),
                   'sources': ['PT-T38']}
+    fire, fire_flags = fire_limits(case, temps)
     incons = heat_partition_consistency(case)
     if incons:
         flags.append(HEAT_PARTITION_FLAG)
         texts.append(incons['text'])
+    # SPEC17 flags appended last, so the existing flags keep their positions
+    if spray_flag:
+        flags.append(SPRAY_BASIS_FLAG)
+    flags.extend(fire_flags)
     if collector:
         texts.append(EXIT_IS_NOT_COIL)
     texts.append(NO_PROPERTY_MODEL)
@@ -930,6 +1053,7 @@ def thermal_check(result, case):
                               'elongation_decay_above': bp.COIL_OUT_FINAL_LIMIT_LOOSE.high},
             'outputs': outputs, 'growth': growth, 'property_risk': property_risk,
             'quarter_barrel_note': note_q, 'heat_partition_inputs': incons,
+            'fire_limits': fire,
             'texts': texts, 'flags': flags,
             'note': 'Evidence-neutral literature comparison: it never changes a number or a '
                     'score.'}

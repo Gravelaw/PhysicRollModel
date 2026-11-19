@@ -400,6 +400,28 @@ class FoilRulesTests(unittest.TestCase):
         self.assertNotIn('Step the exit tension', sheet)
 
 
+class WideFoilTroughNoteTests(unittest.TestCase):
+    """SPEC17 X12: the isolated-span trough thresholds carry the wide-foil note below 100 um;
+    no number changes."""
+
+    def test_note_below_foil_gauge_only(self):
+        from pathlib import Path
+        art = Path(__file__).resolve().parents[1] / 'artifacts' / 'band_diagnosis'
+        foil = json.loads((art / 'battery-foil-demo.result.json').read_text())
+        sheet = json.loads((art / 'lengthwise-bands-demo.result.json').read_text())
+        for span in ('entry_span', 'exit_span'):
+            self.assertEqual(foil['width']['troughs'][span]['wide_foil_note'],
+                             bw.WIDE_FOIL_TROUGH_NOTE)
+            self.assertNotIn('wide_foil_note', sheet['width']['troughs'][span])
+        self.assertIn('15 times', bw.WIDE_FOIL_TROUGH_NOTE)
+        # the screen itself, recomputed from the demo case: the same numbers plus the note
+        case = validate_case(load_case(SCEN / 'band_diagnosis_battery_foil.json'))
+        tr = bw._troughs(case, case['width_model'], case['observation'])
+        for span in ('entry_span', 'exit_span'):
+            want = dict(foil['width']['troughs'][span])
+            self.assertEqual(json.loads(json.dumps(tr[span])), want)
+
+
 class TensionLinesPlantedTruthTests(unittest.TestCase):
     def test_tension_lines_lead(self):
         # 50 -> 25 um battery foil, regular 10 mm lines, worse at low tension, react to the

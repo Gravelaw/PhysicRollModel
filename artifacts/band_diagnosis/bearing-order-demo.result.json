@@ -4036,7 +4036,8 @@
     "Friction is an input unless tribology.use_computed_friction is set; the friction-speed closure of bite_tribology is an unfitted placeholder whose slope, not level, is used.",
     "Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated in time; the antisymmetric mode frequency is an undamped lumped estimate.",
     "Spray coverage is a geometric footprint count; the phase-1 thermal growth is a free-expansion upper bound with no axial conduction (the v2 width_model solves the roll temperature field instead).",
-    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation."
+    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation.",
+    "The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um 1235-H18 foil would move it by -12 % to +1 % under Hill's 1948 criterion (table in docs/thin-gauge-products.md)."
   ],
   "process": {
     "not_supplied": true,

@@ -132,13 +132,25 @@ LUBRICANT_KEYS = ('viscosity_ref_pa_s', 'reference_temperature_k',
 TRIBOLOGY_KEYS = ('lubricant', 'surface_finish', 'inlet_temperature_k',
                   'strip_entry_temperature_k', 'strip_heat_fraction', 'thermal_correction',
                   'use_computed_friction')
-TRIBOLOGY_OPTIONAL = ('friction_closure', 'temperature_limit_k')
+TRIBOLOGY_OPTIONAL = ('friction_closure', 'temperature_limit_k', 'oil_flash_point_k',
+                      'oil_supply_temperature_cap_k')   # SPEC17 A10: user limits, no default
 HARDENING_COMMON = ('law', 'provenance', 'prior_equivalent_strain', 'reference_thickness_m',
                     'use_computed_flow_stress')
 HARDENING_LAW_KEYS = {
     'power': ('yield_stress_pa', 'strength_coefficient_pa', 'exponent'),
     'voce': ('initial_stress_pa', 'saturation_stress_pa', 'characteristic_strain',
              'stage_iv_slope_pa')}
+
+
+def _fire_limit(t, key):
+    """SPEC17 A10: an optional user limit in kelvin, 250-700 K; never defaulted."""
+    v = t.get(key)
+    if v is None:
+        return None
+    v = num(f'tribology.{key}', v)
+    if not 250.0 <= v <= 700.0:
+        raise ValueError(f'tribology.{key} must be in [250, 700] K')
+    return v
 
 
 def validate_tribology(t):
@@ -168,6 +180,8 @@ def validate_tribology(t):
                                       lo=0.0, hi=1.0),
            'temperature_limit_k': opt_num('tribology.temperature_limit_k',
                                           t.get('temperature_limit_k')),
+           'oil_flash_point_k': _fire_limit(t, 'oil_flash_point_k'),
+           'oil_supply_temperature_cap_k': _fire_limit(t, 'oil_supply_temperature_cap_k'),
            'thermal_correction': boolean('tribology.thermal_correction', t['thermal_correction']),
            'use_computed_friction': boolean('tribology.use_computed_friction',
                                             t['use_computed_friction'])}

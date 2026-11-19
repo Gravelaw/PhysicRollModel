@@ -58,7 +58,7 @@ class IntegrityTests(unittest.TestCase):
     def test_sources_have_urls_and_valid_status(self):
         for sid, s in sources().items():
             self.assertEqual(sid, s.id)
-            self.assertRegex(sid, r'^((BF|PK|HX)-S\d+b?|BG-G\d+|PT-T\d+)$')
+            self.assertRegex(sid, r'^((BF|PK|HX)-S\d+b?|BG-G\d+|PT-T\d+|TM-LB\d+)$')   # TM-: SPEC17
             self.assertTrue(s.urls)
             for u in s.urls:
                 self.assertRegex(u, r'^https?://\S+$')
@@ -149,6 +149,59 @@ class IntegrityTests(unittest.TestCase):
         self.assertEqual(p.rolled_mode, 'either')
         self.assertAlmostEqual(p.single_sheet_gauge_m.low, 9e-6)
         self.assertEqual(len([s for s in p.schedules if s.doubled_from_index is None]), 10)
+
+
+class AlloyAndAnisotropyTests(unittest.TestCase):
+    """SPEC17 B3, B4: tables only; nothing enters a bite or a hardening law."""
+
+    # read tags of the new sources as section 9 of the gap study gives them
+    TAGS = {'TM-LB1': 'EX', 'TM-LB2': 'EX', 'TM-LB3': 'AB', 'TM-LB6': 'EX', 'TM-LB10': 'EX',
+            'TM-LB12': 'EX', 'TM-LB13': 'EX', 'TM-LB15': 'EX', 'TM-LB18': 'EX'}
+    STATUS = {'EX': 'excerpt', 'AB': 'abstract_or_snippet'}
+
+    def test_sources_and_rows(self):
+        src = bp.sources()
+        for sid, tag in self.TAGS.items():
+            self.assertEqual(src[sid].report_tag, tag, sid)
+            self.assertEqual(src[sid].read_status, self.STATUS[tag], sid)
+            self.assertTrue(src[sid].urls[0].startswith('http'))
+        a = bp.alloy_group_reference()
+        json.dumps(a, allow_nan=False)
+        self.assertEqual(len(a['rows']), 10)
+        for r in a['rows']:
+            self.assertTrue(r['sources'] and r['value'] and r['quantity'] and r['read_tag'])
+            weakest = max((src[s].read_status for s in r['sources']),
+                          key=lambda s: bp._RANK[s])
+            self.assertEqual(r['read_status'], weakest)       # never upgraded
+        self.assertIn('figure values partly unreadable',
+                      next(r for r in a['rows'] if r['sources'] == ['TM-LB6'])['read_tag'])
+        self.assertEqual(next(r for r in a['rows'] if r['quantity'].startswith('1100-H18'))[
+            'sources'], ['PT-T31', 'PT-T39'])
+        self.assertIn('wrong in sign', ' '.join(a['limitations']))
+
+    def test_plane_strain_factor(self):
+        f = bp.plane_strain_factor_hill48
+        for args, want in (((1, 1), 1.154701), ((0.2, 0.2), 1.014185), ((0.2, 1.1), 1.046734),
+                           ((1.075, 1.075), 1.169130)):
+            self.assertAlmostEqual(f(*args), want, delta=1e-6)
+        self.assertAlmostEqual(f(1, 1), 2 / math.sqrt(3), places=15)
+        for bad in ((0, 1), (1, 0), (-0.1, 1), (1, True)):
+            with self.assertRaises(ValueError):
+                f(*bad)
+        n = bp.anisotropy_reference()
+        rel = {x['id']: x['relative_to_isotropic'] for x in n['factors']}
+        self.assertEqual(rel['isotropic'], 0.0)
+        self.assertAlmostEqual(rel['normal_r_0_2'], -0.12, delta=0.005)
+        self.assertAlmostEqual(rel['hill48_r0_r90'], -0.094, delta=0.0005)
+        self.assertAlmostEqual(rel['mean_normal'], 0.012, delta=0.0005)
+        self.assertIn('poor for aluminium', n['caveat'])
+        self.assertIn('from memory', n['caveat'])
+        self.assertIn('assumption', n['r_values']['note'])
+        doc = (Path(__file__).resolve().parents[1] / 'docs' / 'thin-gauge-products.md'
+               ).read_text(encoding='utf-8')
+        for heading in ('## Alloy groups: hardening and softening data found',
+                        '## Anisotropy and the plane-strain factor'):
+            self.assertIn(heading, doc)
 
 
 class ReductionTests(unittest.TestCase):

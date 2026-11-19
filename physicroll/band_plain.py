@@ -775,6 +775,12 @@ MILL_QUESTIONS = (
     _m('temperature_limit', 'tribology.temperature_limit_k', 'number',
        'Strip temperature limit to check against', 'For example a coil limit.', unit='degc',
        group='Rolling oil'),
+    _m('oil_flash_point', 'tribology.oil_flash_point_k', 'number',
+       'Flash point of the rolling oil', 'From the oil data sheet.', unit='degc',
+       group='Rolling oil'),
+    _m('oil_supply_temperature_cap', 'tribology.oil_supply_temperature_cap_k', 'number',
+       'Highest oil supply temperature your site allows',
+       'A site or insurer limit, if there is one.', unit='degc', group='Rolling oil'),
     _m('thermal_correction', 'tribology.thermal_correction', 'yesno',
        'Correct the oil film for inlet heating?', YESNO_HELP.strip(), group='Rolling oil'),
     _m('use_computed_friction', 'tribology.use_computed_friction', 'yesno',
@@ -2215,6 +2221,19 @@ FLAGS = {
     'AGC_CHATTER_INTERACTION_DEPENDS_ON_LOOP_ROLL_OFF': (
         'The effect of gauge control on chatter depends on a simple control-loop model.',
         'No action; it is a standing limit.'),
+    'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED': (
+        'The spray cooling value is an average around the roll; the published values may be '
+        'for the spray zone only, so the two are not compared like for like.',
+        'Read the spray comparison as rough until the basis of the published value is known.'),
+    'STRIP_EXIT_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT': (
+        'A modelled strip exit temperature reaches the flash point of the oil you gave.',
+        'Check the real strip and coil temperature; the modelled value is an indicator.'),
+    'OIL_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT': (
+        'An oil temperature you gave reaches the flash point of the oil.',
+        'Check the oil temperature and the flash point you entered.'),
+    'OIL_SUPPLY_TEMPERATURE_ABOVE_SITE_CAP': (
+        'An oil temperature you gave reaches the site limit you gave.',
+        'Check the oil supply temperature against your site limit.'),
     'HEAT_PARTITION_INPUTS_INCONSISTENT': (
         'Two inputs for how the roll-gap heat is shared disagree.',
         'Give only the strip share, or make both agree.'),

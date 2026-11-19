@@ -181,6 +181,10 @@ LIMITATIONS = (
     'roll temperature field instead).',
     'The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on '
     'planner-derived and memory formulas flagged in each result; no plant validation.',
+    # SPEC17 B4 [D, re-derived in SPEC17; r-values TM-LB1 EX]
+    'The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um '
+    '1235-H18 foil would move it by -12 % to +1 % under Hill\'s 1948 criterion (table in '
+    'docs/thin-gauge-products.md).',
 )
 
 # confirming tests and levers per hypothesis (drawn from mill practice; plain words)

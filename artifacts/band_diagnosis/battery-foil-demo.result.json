@@ -745,6 +745,7 @@
     "MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN",
     "MATTRESS_REGIME_FOIL",
     "MODEL_STEADY_THERMAL_STRIPES_PRESENT",
+    "SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED",
     "SYNTHETIC_INPUTS",
     "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN"
   ],
@@ -4641,6 +4642,8 @@
         "temperature_viscosity_coefficient_per_k": 0.015,
         "viscosity_ref_pa_s": 0.0016
       },
+      "oil_flash_point_k": null,
+      "oil_supply_temperature_cap_k": null,
       "strip_entry_temperature_k": 313.15,
       "strip_heat_fraction": 0.22,
       "surface_finish": {
@@ -4734,6 +4737,7 @@
         "spray_mean_htc_w_m2k": 3400.0,
         "standoff_m": 0.2
       },
+      "spray_wetted_arc_rad": null,
       "strip_centre_m": null
     }
   },
@@ -4924,6 +4928,7 @@
     "Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated in time; the antisymmetric mode frequency is an undamped lumped estimate.",
     "Spray coverage is a geometric footprint count; the phase-1 thermal growth is a free-expansion upper bound with no axial conduction (the v2 width_model solves the roll temperature field instead).",
     "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation.",
+    "The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um 1235-H18 foil would move it by -12 % to +1 % under Hill's 1948 criterion (table in docs/thin-gauge-products.md).",
     "Exit gauge below 20 um (extended domain): the same experimental model and the same missing closed-gap load path as at 30 um; no source validates it at this gauge; order of magnitude only.",
     "Reduction above 50 % (extended domain, up to 65 %): converged and continuous across 50 % in probes; published foil passes reach 64 %; not validated."
   ],
@@ -9808,7 +9813,64 @@
       "entering_final_pass": 75.0,
       "leaving_final_pass": 80.0
     },
-    "flags": [],
+    "fire_limits": {
+      "context": [
+        {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "PT-T15",
+            "PT-T14"
+          ],
+          "text": "Fire: the chance rises sharply once strip reaches the flash point; ignition comes from strip breaks, static, hot bearings and electrics.",
+          "topic": "fire"
+        },
+        {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "PT-T9",
+            "PT-T10",
+            "PT-T11"
+          ],
+          "text": "Flash point: \u226574 \u00b0C (Somentor 29); 105\u2013110 \u00b0C open cup (grades 80, 110); 80\u2013111 \u00b0C for additive concentrates.",
+          "topic": "flash_point"
+        }
+      ],
+      "levers_that_raise_temperature": [
+        {
+          "basis": "pass-heating formula [D]",
+          "effect": "more plastic work per pass",
+          "lever": "higher pass reduction"
+        },
+        {
+          "basis": "[D]",
+          "effect": "more slip dissipation",
+          "lever": "higher friction"
+        },
+        {
+          "basis": "roll thermal model [D]",
+          "effect": "less heat taken from the rolls",
+          "lever": "a closed or weak coolant zone, a lower coolant flow"
+        },
+        {
+          "basis": "direct",
+          "effect": "hotter oil at the bite",
+          "lever": "a higher oil supply temperature"
+        },
+        {
+          "basis": "[D]; PT-T1, PT-T2",
+          "effect": "more heat per unit time into the rolls; the model's strip temperature rise per pass does not depend on speed [D]; plant reports give 77 C at 550 m/min and 98-100 C at 600 m/min [PT-T1, PT-T2 EX]",
+          "lever": "higher speed"
+        }
+      ],
+      "not_supplied": true,
+      "note": "A modelled strip exit temperature is an indicator (EXIT_IS_NOT_COIL); no oil-mist or vapour model; limits are the user's.",
+      "reason": "no oil flash point and no oil supply temperature cap given (tribology.oil_flash_point_k, tribology.oil_supply_temperature_cap_k)",
+      "rows": [],
+      "status": "NOT_SUPPLIED"
+    },
+    "flags": [
+      "SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED"
+    ],
     "growth": {
       "axial_decay_time_constant_s": 22.8310400474,
       "event_time_to_half_peak_s": [
@@ -9853,8 +9915,10 @@
       },
       {
         "basis": "kerosene spray on a work roll, SIMULATED 2.5\u20134.3 kW/m\u00b2K [PT-T18]; no measured value on a roll was found",
+        "basis_comparable": "NOT_ESTABLISHED",
         "item": "spray_heat_transfer_coefficient",
         "note": "wider published values: 4.65\u20135.5 kW/m\u00b2K in a cold-mill model example (coolant not named) [PT-T20]; about 5\u201313 kW/m\u00b2K computed from a plate test [PT-T19]",
+        "published_basis": "jet zone, as the project's note of PT-T18 reads it (full text from a garbled mirror; not re-read)",
         "published_high": 4300.0,
         "published_low": 2500.0,
         "read_status": "excerpt",
@@ -9863,6 +9927,7 @@
         ],
         "unit": "W/m^2K",
         "value": 3400.0,
+        "value_basis": "circumferential mean under a healthy header (model definition, roll_thermal.py)",
         "verdict": "WITHIN_PUBLISHED_RANGE"
       },
       {
@@ -26392,6 +26457,7 @@
         "tension_stress_pa": 35000000.0,
         "thickness_m": 5e-05,
         "trough_critical_lateral_stress_pa": -50125.395844136474,
+        "wide_foil_note": "Screening value from an isolated-span formula. For aluminium and copper foil below 25 um and wider than 0.6-1 m, wrinkles needed about 15 times the predicted roller misalignment [SS-S55 EX]: at foil gauge this threshold is conservative.",
         "wrinkle_amplitude_m": 0.000928406634409785,
         "wrinkle_wavelength_m": 0.16055769992608857
       },
@@ -26410,6 +26476,7 @@
         "tension_stress_pa": 40000000.0,
         "thickness_m": 3e-05,
         "trough_critical_lateral_stress_pa": -32151.7813071739,
+        "wide_foil_note": "Screening value from an isolated-span formula. For aluminium and copper foil below 25 um and wider than 0.6-1 m, wrinkles needed about 15 times the predicted roller misalignment [SS-S55 EX]: at foil gauge this threshold is conservative.",
         "wrinkle_amplitude_m": 0.0007435528579004906,
         "wrinkle_wavelength_m": 0.12028425328457691
       }

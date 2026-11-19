@@ -110,7 +110,11 @@ WIDTH_DEFAULTS = {
     'shape_disturbing_coefficient': None, 'heredity_coefficient': None, 'gap_crown_m': None,
     'entry_crown_m': None, 'incoming_ridges': [], 'coil': None, 'previous_strip_widths_m': [],
     'grinding': None, 'cooling_zone_pitch_m': None, 'deflector_roll_radius_m': None,
-    'lateral_compressive_stress_pa': None, 'shape_inputs': None}
+    'lateral_compressive_stress_pa': None, 'shape_inputs': None,
+    # SPEC17 A5 / X3: arc of the circumference the spray wets [rad]; used only to express the
+    # circumferential-mean spray coefficient on a jet-zone basis in thermal_check, never in the
+    # roll thermal model
+    'spray_wetted_arc_rad': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -199,6 +203,12 @@ def validate_width_model(w, pass_):
               'entry_crown_m', 'cooling_zone_pitch_m', 'deflector_roll_radius_m',
               'lateral_compressive_stress_pa'):
         out[k] = opt_num(f'width_model.{k}', w.get(k))
+    arc = w.get('spray_wetted_arc_rad')
+    if arc is not None:
+        arc = num('width_model.spray_wetted_arc_rad', arc)
+        if not 0 < arc <= 2 * math.pi:
+            raise ValueError('width_model.spray_wetted_arc_rad must be in (0, 2*pi]')
+    out['spray_wetted_arc_rad'] = arc
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -1482,6 +1492,13 @@ def _ridge(case, w, sp, ridge, z, coil, reason=None):
     return out
 
 
+# SPEC17 X12 [SS-S55 EX]: the isolated-span thresholds are conservative for wide foil
+WIDE_FOIL_TROUGH_NOTE = (
+    'Screening value from an isolated-span formula. For aluminium and copper foil below 25 um '
+    'and wider than 0.6-1 m, wrinkles needed about 15 times the predicted roller misalignment '
+    '[SS-S55 EX]: at foil gauge this threshold is conservative.')
+
+
 def _troughs(case, w, obs):
     p, spans = case['pass'], case['spans']
     out = {}
@@ -1504,6 +1521,8 @@ def _troughs(case, w, obs):
                 'roller_radius_m', 'roller_wrinkle_critical_lateral_stress_pa',
                 'lateral_compressive_stress_pa', 'observed_spacing_to_wavelength_ratio',
                 'observed_spacing_consistent', 'flags')}
+            if h < FOIL_GAUGE_M:
+                out[name]['wide_foil_note'] = WIDE_FOIL_TROUGH_NOTE
         except ValueError as exc:
             out[name] = {'status': 'REJECTED', 'error': str(exc)}
     return out
