@@ -18,6 +18,12 @@ The full research report, revised 2 October 2026, is available in [editable Word
 
 The [2 October status addendum](report-update-2026-10-02.md) is retained as a historical bridge from the original 30 September, 49-page report. Its page references refer to that earlier edition; use section references in the revised full report.
 
+The [band screening research reports (November 2026)](band-screening-2026-11/README.md) are the nine
+literature reports behind the band screening tool: thin-gauge products, battery-foil alloy and
+temper by gauge, process temperatures, and four gap studies. They are kept as delivered; the
+maintained versions are [thin-gauge-products.md](../thin-gauge-products.md) and
+[simulation-coverage-gaps.md](../simulation-coverage-gaps.md).
+
 ## Reading order
 
 | Question | Document or evidence |
