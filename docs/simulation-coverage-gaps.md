@@ -1,6 +1,8 @@
 # Simulation coverage gaps for thin-gauge aluminium rolling
 
-A literature gap study, dated 2026-11-18. **Nothing in this document is implemented or validated.**
+A literature gap study, dated 2026-11-18. **Nothing in this document was implemented or
+validated when it was written.** Section 11 lists what has been implemented since; none of it is
+validated on a mill.
 It lists what the published literature, open datasets and open codes contain that `physicroll` does
 not, and which physical effects would have to be coupled to cover thin-gauge aluminium rolling.
 
@@ -432,7 +434,7 @@ The appendix gives the full tables with all values. The most useful ones:
 **This is a proposal. Nothing in it has been started.** The order follows two rules: cheap and
 decisive first; a prerequisite before what depends on it. Efforts are the reports' rough ratings.
 
-**Phase 0. Corrections and checks that need no new solver (days each).**
+**Phase 0. Corrections and checks that need no new solver (days each).** (status: section 11)
 
 - BT-G17, G16: encode the published benchmark cases as tests. First the foil bite case BT-V1 and
   the steel chatter onset (X18, X31). This shows how far off the present models are before anything
@@ -868,6 +870,18 @@ extracts: `link.springer.com`, `www.lechler.com`, `doi.org`, `ieee-dataport.org`
 `orbi.uliege.be`. Two repositories refused direct downloads. The GitHub API was closed for
 third-party repositories; README and licence files were read as raw files. Nothing large was
 downloaded: of D1 only the first 3 kB were read.
+
+## 11. Implementation status
+
+What has been implemented since this study was written. Status words: `BENCHMARK_ENCODED`,
+`CORRECTED`, `SCREENING_VERSION` (supplied-input or screening form of the row's model; the row's
+full model is not built), `RULE_CHECK`, `TABLE_ADDED`, `TEXT_CORRECTED`. Nothing listed here is
+validated on a mill.
+
+| gap | status | what exists now | where | still open |
+|---|---|---|---|---|
+| BT-G17 | `BENCHMARK_ENCODED` | Encoded cases: BT-V1 (recorded discrepancy, the mattress bite is 0.42 of the half-space load [run]), BT-V2 at an assumed roll radius of 89 and 135 mm (indicative), BT-V3 Fig. 1 at 140 um (reference read by eye) and eq. 29 (regime consistent), TM-LC7 as a reference record with a chatter harness (no mill parameter recorded, not run). Each project value is pinned to a recorded literal; the verdict against the published value is separate. Not encoded, with the reason in `NOT_ENCODED`: BT-V4 (needs the friction closure BT-G3; figures to digitise), BT-V9 (needs a friction value per row, BT-G6), the other BT-V rows (a later model or data not in the repository). | `physicroll/benchmarks.py`, `tests/test_benchmarks.py`, `python -m physicroll.benchmarks`; band-diagnosis 10.2, 13 | BT-V4 and BT-V9; the TM-LC7 inputs from the paper's tables; the half-space bite (BT-G1) that the BT-V1 discrepancy calls for. |
+| G16 | `BENCHMARK_ENCODED` | SS-V2 and SS-V3 only: the project's buckling stress (k = 4) and half-wave (= buckle width) beside the published local buckles; SS-V2 indicative (steel modulus and Poisson ratio assumed), SS-V3 a recorded discrepancy of the mode shape (2.8 times the measured half-wave). SS-V11 stays in `physicroll/literature.py`. | `physicroll/benchmarks.py`, `tests/test_benchmarks.py` | SS-V1, SS-V4 (need the buckling model of G4), SS-V5 (needs the paper's profiles), the other SS-V rows; an uncertainty statement for the chain. |
 
 ## Appendix A. Benchmark values quoted by the reports
 

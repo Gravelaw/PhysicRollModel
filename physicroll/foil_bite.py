@@ -5,7 +5,9 @@ reduction [D] in the spirit of Fleck & Johnson (1987, Int. J. Mech. Sci. 29:507;
 through a poor OCR copy) and of the MISG report "A simple model for the cold rolling of metal
 foil" [V, non-dimensional form (h - G2)p' + mu*p = x]. It is NOT the Fleck-Johnson hybrid
 model: the strip is rigid-perfectly-plastic (no elastic strip zones), the roll is a local
-Winkler foundation, and no benchmark with fully known inputs was found. Software-verified
+Winkler foundation. On the one published foil-bite case with every input stated (Fleck et al.
+1992, Fig. 9, BT-V1 [FT]) it returns 0.42 of the half-space reference load [run]: a recorded
+discrepancy, see ``physicroll/benchmarks.py``. Software-verified
 for internal consistency only (rigid limit, junction continuity, Coulomb limits, energy
 identity, grid convergence, trends); no plant or literature validation is claimed.
 
