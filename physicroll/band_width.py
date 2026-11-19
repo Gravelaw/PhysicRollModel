@@ -890,6 +890,25 @@ class _Thermal:
         return rt.steady_state(self.roll, self.header, self.segment(levels), **self.kw)
 
 
+def spray_layout(case):
+    """The spray header and strip of a v2 case as the width section reads them (``_Thermal``,
+    the same code path): nozzle positions on the barrel [m], the EFFECTIVE flow level of each
+    nozzle (``nozzle_levels``, else 1.0, with every ``blocked_nozzle_indices`` entry at 0.0),
+    the nozzle pitch and effective footprint width [m], the barrel length [m], and the strip
+    centre, start and end on the barrel [m]. Raises ``ValueError`` for a case without a width
+    model or with an invalid one (the width model's own validation messages)."""
+    w = case.get('width_model')
+    if w is None:
+        raise ValueError('width_model is required for the spray layout')
+    th = _Thermal(case, validate_width_model(w, case['pass']), 0.0, 0.0)
+    return {'nozzle_positions_m': list(th.positions), 'nozzle_levels': list(th.levels),
+            'nozzle_pitch_m': th.header.nozzle_pitch_m,
+            'effective_footprint_width_m': th.header.effective_footprint_width_m,
+            'barrel_length_m': th.length, 'strip_centre_m': th.centre,
+            'strip_width_m': th.width, 'strip_start_m': th.centre - th.width / 2,
+            'strip_end_m': th.centre + th.width / 2}
+
+
 def _steady_section(th, sp):
     healthy = th.steady([1.0] * th.count)
     actual = healthy if all(v == 1.0 for v in th.levels) else th.steady(th.levels)
