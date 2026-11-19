@@ -75,6 +75,7 @@ from . import band_products
 from . import band_signatures as bs
 from . import band_thermal
 from . import band_width as bw
+from . import band_sensors
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
@@ -353,7 +354,7 @@ TOP_REQUIRED = ('case_schema', 'name', 'synthetic', 'provenance', 'pass', 'mater
                 'spans', 'kinematics', 'lubrication', 'coolant', 'model_options', 'observation')
 TOP_OPTIONAL = ('notes', 'schedule')
 V2_SECTIONS = ('width_model', 'tribology', 'hardening', 'gauge_control', 'drive',
-               'incoming_variation')
+               'incoming_variation', 'measurement')
 
 
 def _speed_value(where, value):
@@ -596,6 +597,8 @@ def _validate_v2_sections(case, out):
                                  else bp.validate_incoming_variation(sec['incoming_variation']))
     res['width_model'] = (None if sec['width_model'] is None
                           else bw.validate_width_model(sec['width_model'], out['pass']))
+    res['measurement'] = (None if sec['measurement'] is None
+                          else band_sensors.validate_measurement(sec['measurement']))
     w = res['width_model']
     if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
         raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
@@ -3382,6 +3385,13 @@ def diagnose(case):
             ts['per_pass'] = None
             ts['per_pass_note'] = f'per-pass extension failed: {exc}'
         flags.append('THERMAL_SENSITIVITY_PER_PASS_FAILED')
+    # SPEC17 package 4: what a shapemeter would show (evidence-neutral, read by no hypothesis)
+    try:
+        result['measurement'] = band_sensors.measurement_section(eff, result)
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        result['measurement'] = bp.failed('measurement', exc)
+        flags.append('MEASUREMENT_SECTION_FAILED')
+    flags.extend(result['measurement'].get('flags') or [])
 
     if bite is not None:
         fpw_case = bite.separating_force_n / eff['pass']['width_m']

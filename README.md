@@ -116,6 +116,11 @@ values are entered. See [the band app guide](docs/band-app.md).
 
 Section 12 of [band diagnosis](docs/band-diagnosis.md) describes every part of the report.
 
+If the case describes the mill's shapemeter (`measurement.shapemeter`: zone width and count),
+the report also shows what each zone would read for every modelled band, with a table of how
+much a band narrower than a zone is diluted. These are zone means of the model, not a forecast
+of the shapemeter screen: no flatness controller is modelled (section 7.6 of the guide).
+
 ### Product, alloy and temper lookups
 
 ```bash

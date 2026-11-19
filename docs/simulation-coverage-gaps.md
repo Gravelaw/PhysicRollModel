@@ -890,6 +890,9 @@ validated on a mill.
 | B3 | `TABLE_ADDED` | The ten rows of Appendix A.1 part B with read status and sources, in the generated products guide. | `band_products.alloy_group_reference`; `docs/thin-gauge-products.md` | Parameter sets by alloy group in a hardening law (B2, B3). |
 | B4 | `TABLE_ADDED` | r-values 0.2 / 1.5 / 1.1 of one 16 um foil and the Hill 1948 plane-strain factor they imply (-12 % to +1 % against isotropic); the factor is not applied in any bite. | `band_products.anisotropy_reference`, `plane_strain_factor_hill48`; `docs/thin-gauge-products.md` | An anisotropic yield law in the bite; a criterion better suited to aluminium. |
 | X3, X7, X12 | `TEXT_CORRECTED` | X3 by A5 above; X7 a note in band-diagnosis 9 (foil gauge is controlled by speed and tension [TM-LC18 VP]); X12 the wide-foil note on the trough thresholds (`width.troughs.*.wide_foil_note`). | band-diagnosis 3.5, 3.12, 7.2, 9; `band_width._troughs` | The models behind them (A5, C1, G11). |
+| C7 | `SCREENING_VERSION` | Zone part: the zone mean of the modelled flatness for a supplied shapemeter (zone width and count, edge zones, optional spreading), per band "would show" / "would probably not show", the dilution table and the nozzle map. | `physicroll/band_sensors.py`, `measurement.shapemeter`; `tests/test_band_sensors.py`; band-diagnosis 7.6 | The gauge part (package 5); accelerometer positions. |
+| G5 | `SCREENING_VERSION` | Measurement operator only (what a shapemeter would show); the readings never enter the evidence. | as C7 | The flatness controller, the edge rules of a specific vendor, temperature compensation, shapemeter dynamics. |
+| X9 | `TEXT_CORRECTED` | Band-diagnosis 7.2: a latent band is a stress stripe a shapemeter can see when the band is at least about one zone wide (section 7.6). | band-diagnosis 7.2, 7.6 | - |
 
 ## Appendix A. Benchmark values quoted by the reports
 

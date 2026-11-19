@@ -739,6 +739,11 @@ and its gauge support is gated (section 6.1). `roll_surface_band` is contradicte
 "positions do not change after a work-roll change". Adding the alternative route and the
 product did not change any other score.
 
+**Shapemeter** (`measurement.shapemeter`, section 7.6; 24 synthetic zones of 52 mm): the
+loose band would show 24.49 of its 25.09 I-units in zone 9 (97.6 %), the tight edges almost all
+of theirs; the event's two tight side bands would probably not show (1.83 of 3.51 I-units); the
+nozzle-pattern ripple reads at most 0.53. No flatness controller is modelled.
+
 **Product check** (`product_check`, section 3.1): alloy designation used `1235`, temper H18;
 no flag. The final passes are F2 (the last pass of the plant's route) and ALT2 (the thinnest);
 both are inside every published span checked (final gauge, per-pass and final-pass reduction,
@@ -1352,6 +1357,14 @@ every case. What the code shows the results depend on most:
   gauge, the coil radii, the yield stress minus the winding tension and the compaction factor
   (section 7.2), and the dead band with gauge over width.
 
+Optional section added in SPEC17 package 4: `measurement` (v2 only; `null` = not supplied)
+with `shapemeter`: `zone_width_m` (0-0.5 m) and `zone_count` (1-400) from the shapemeter data
+sheet or the level-2 configuration, optional narrower `edge_zone_width_m` with
+`edge_zone_count_per_side`, `centre_m` (null = the strip centre of the width section),
+`neighbour_spreading_fraction` (0-0.25, keep 0 unless the vendor states it),
+`resolution_i_units` (null unless the vendor gives one; then the tool's 2 I-unit band
+threshold is used) and `provenance`; `thickness_gauge` must be null for now. Section 7.6.
+
 Optional keys added in SPEC17 package 3 (absent and `null` give the same result; the template
 lists them with `null`): `width_model.spray_wetted_arc_rad` (arc of the circumference the spray
 wets, in (0, 2*pi]; only expresses the spray coefficient on a jet-zone basis, section 3.12; it
@@ -1751,7 +1764,7 @@ sigma_cr(b) = k*pi^2*E/(12*(1-nu^2))*(t/b)^2,  k = 4                            
 
 The band's utilisation `U` is the maximum of `q_w/sigma_cr(b)` over intervals overlapping
 it; `U >= 1` is `MANIFEST_BUCKLE`, else `LATENT_UNDER_TENSION` (a latent band is a stress
-stripe a shapemeter can see). Tension enters with its sign, so a compressed zone flanked by
+stripe a shapemeter can see when the band is at least about one zone wide (section 7.6)). Tension enters with its sign, so a compressed zone flanked by
 tension is held flat. Latent / manifest description [V: Abdelkhalek et al. 2008; Lloyd
 2010].
 
@@ -2006,6 +2019,75 @@ compressive stress is not supplied, so the trough model gives thresholds only. T
 of the three positions (0.667 m), the zone hypothesis the other two; the "least favourable"
 rule (6.4) is not applied to position matching, so each coolant hypothesis is supported by
 the positions it explains.
+
+### 7.6 What a shapemeter would show
+
+`physicroll/band_sensors.py` (SPEC17 package 4; gap rows C7 zone part, G5 sensor part, X9).
+With the optional case section `measurement.shapemeter` the result gains
+`measurement.shapemeter`: what each zone of a flatness roll with that zone width **would show**
+for every modelled band. It is a measurement operator only: **no flatness controller** is
+modelled (no actuator fitting, no valve logic; G5, Phase 2), so the tool does not predict what
+the control would have done with these readings, and the readings are not a forecast of the
+operator's screen. No hypothesis reads the section.
+
+What the literature says about shapemeters [SS-S29, SS-S30 VP; SS-S31, SS-S32 EX]: zones of 26
+or 52 mm on rolls, 25-100 mm on rotors, with force spreading to the neighbouring zones; a band
+narrower than a zone is diluted, and a tight edge beside a loose pocket in one zone is missed.
+Vendor accuracy is quoted as 0.5 I-units typical [SS-S29 VP]; it is never used as a default.
+This qualifies the sentence of section 7.2 that a latent band is a stripe a shapemeter can
+see: that holds when the band is at least about one zone wide.
+
+The operator [D, re-derived in SPEC17]: a stress-measuring roll senses the radial force per
+zone, i.e. the mean tension over the zone, and shows its deviation from the mean over the
+zones. Zone edges `e_0 = centre - sum(widths)/2`, `e_{j+1} = e_j + w_j` (optional narrower edge
+zones; the centre defaults to the width section's strip centre). Each sample of the modelled
+profile is constant over its cell, clipped to the strip; the zone mean is
+`m_j = sum_i(I_i*o_ij)/sum_i(o_ij)` with `o_ij` the overlap of cell, zone and strip; coverage
+`c_j` = fraction of the zone over the strip (an uncovered zone reads null); roll mean
+`m_bar = sum(c_j*w_j*m_j)/sum(c_j*w_j)`; reading `u_j = m_j - m_bar`. Neighbour spreading
+`r_j = (1 - 2s)*u_j + s*(u_{j-1} + u_{j+1})` is an interpretation of the vendor sentence
+"max. 2 x 12.5 % force spreading to adjacent measurement zones" [SS-S29 VP; the vendor
+algorithm was not read], **off by default** (`neighbour_spreading_fraction` 0). Each band of
+`levels.with_feedback` is read in the zone holding its peak; it "would show" when the reading
+reaches the threshold (`resolution_i_units` if supplied, else the tool's own 2 I-unit band
+threshold) and "would probably not show" otherwise; a band below the threshold can still be on the
+strip. Profiles read: the steady stripe profile, each cooling-zone event at its peak,
+and the healthy header's nozzle-pattern ripple. The compliance-only and rigid levels are not
+read.
+
+**Dilution table** (always printed; zone mean of a band of peak 1): a top-hat of width `b`
+reads `min(b, w)/w` centred in a zone and `min(b/2, w)/w` on a zone boundary; a Gaussian of
+half-peak width `b` reads `(b/w)*k*erf(sqrt(ln 2)*w/b)` centred and
+`(b/(2w))*k*erf(2*sqrt(ln 2)*w/b)` on a boundary, `k = sqrt(pi/(4 ln 2))`. For a 52 mm zone:
+a 20 mm top-hat reads 0.3846 centred and 0.1923 on a boundary (25 I-units read 9.6 and 4.8; the
+report's "about 10" [D]); a 20 mm Gaussian 0.4085 / 0.2047, 40 mm 0.7158 / 0.4085, 80 mm
+0.9104 / 0.7158; a 26 mm zone reads a 20 mm Gaussian at 0.7158 / 0.4085. A narrow source matters:
+a 20 mm band of 3.1 I-units centred in a 52 mm zone reads 1.2 (pinned by
+`test_narrow_band_reads_a_fraction_of_its_peak`).
+
+**Nozzle map.** From the width section's own geometry (`band_width.spray_layout`): the nozzles
+inside each zone with their effective levels, nozzles per zone, zones without a nozzle and the
+ratio of `width_model.cooling_zone_pitch_m` to the zone width. Cooling zones are built at the
+shapemeter pitch and each spray is driven by its zone [SS-S31 EX, SS-S33 EX, SS-S34 EX]; the
+tool has one header row and no controller.
+
+**Battery-foil demo** (`measurement.shapemeter`: 24 synthetic zones of 52 mm on the mill
+centre line, edges 0.126-1.374 m over the 0.15-1.35 m strip, the two end zones 54 % covered;
+each zone holds exactly one nozzle at its centre, zone j nozzle j + 2). Steady profile: the
+loose band of 25.09 I-units at 0.6225 m (half-peak width 160 mm) reads 24.49 in zone 9, 97.6 %
+of its peak, so the demo's thermal stripe is wide enough for a 52 mm shapemeter; zones 7-11
+read 6.60, 20.45, 24.49, 20.45, 6.60; the tight edges -5.18 and -5.22 read -5.18 and -5.21. With
+spreading 0.125 zone 9 would read 23.48 (93.6 %). The 20 s valve event at its peak: 21.01
+I-units read 19.33 in zone 16; its two tight side bands (-3.51) read -1.83, below the 2 I-unit
+threshold, so the result carries `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD`. The nozzle-pattern
+ripple of the healthy header (3.14 I-units peak) reads at most 0.53: a pattern at the nozzle
+pitch is averaged out by zones of the same pitch. The 98 % of the demo stripe must not be read
+as "dilution never matters": it matters for narrow sources (ground marks, friction stripes),
+see the dilution table.
+
+Not modelled: roll wrap, measurement noise, calibration, temperature compensation, shapemeter
+dynamics and filters, the stress evolution between bite and shapemeter [SS-S22 EX], the stress
+relief of a buckled band, vendor edge rules, any controller.
 
 ## 8. Process models
 
@@ -2580,7 +2662,15 @@ the quarter-barrel note and the heat-partition / spray sensitivity table; since 
 under the inputs table on the basis of the spray coefficient ("The two are not on the same
 basis", with the jet-zone equivalent when `spray_wetted_arc_rad` is given) and a "Fire limits"
 table (or "Fire limits not checked: no flash point given"). The width section prints the
-wide-foil note under the tension-trough table below 100 um. Further down, the
+wide-foil note under the tension-trough table below 100 um. A v2 report has a section **"What a
+shapemeter would show"** right after the width section (section 7.6): the set-up sentence, a
+chart of the zone readings of the steady profile (bars) over the fine model profile (line) with
+the threshold (dashed) and the nozzles (ticks), a table per profile (band position, model peak,
+half-peak width, zone, zone reading, reading / peak, "would show" or "would probably not
+show"), the dilution table, the nozzle map sentence and the "no flatness controller" warning.
+Without a shapemeter the section is one paragraph ("No shapemeter was described ...", with the
+38 % of a 20 mm band in a 52 mm zone computed by the top-hat formula). The v1 report is
+unchanged. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
 assessable: <reason>" and lists what is still evaluated; with supplied shape inputs it says
@@ -2632,7 +2722,8 @@ the `bite_model` fields (`experimental_mattress`) are the ones to read.
 
 **Reading in-mill against after-release.** Every band state comes in pairs, written in plain
 words in the tables. *In the mill*: "hidden under mill tension" (`LATENT_UNDER_TENSION`: flat,
-a stress stripe a shapemeter can see) or "buckled in the mill" (`MANIFEST_BUCKLE`; "(feedback
+a stress stripe a shapemeter can see when the band is at least about one zone wide, section
+7.6) or "buckled in the mill" (`MANIFEST_BUCKLE`; "(feedback
 saturated)" is added when the saturation step of 6.2 applied). *After tension release*:
 "visible after tension release" (`MANIFEST_AFTER_TENSION_RELEASE`) or "flat after tension
 release" (`FLAT_AFTER_TENSION_RELEASE`), from the local mode. A band hidden in the mill and
@@ -2678,6 +2769,7 @@ real mill.
 | robustness / `tests/test_band_robustness.py` | the reviewer's duplicate positions on the lengthwise demo case (`[0.6, 0.6, 0.7]`, which raised `gaps_m[0] must be > 0`): returns, flag set, merged list `[0.6, 0.7]` used and recorded, nozzle spacing evidence on the 0.1 m gap; the merge rule; a planted `ValueError` in one lengthwise and one transverse hypothesis leaves the others intact and shows the escaped reason in the result and the report; a sweep of accepted degenerate observations on a small v1 and a small v2 case (duplicate, identical, single, unsorted, edge and out-of-strip positions; tiny spacing and spacing at the 10 m limit; band width larger than the strip; duplicate pitch observations, two pitches at one speed, a pitch larger than a coil circumference; a huge intermittent duration; duplicated and barrel-end blocked nozzles in the coolant screen and the width model; all observations null, every boolean true, every boolean false): `diagnose` returns and the report renders; the inputs rejected at validation are rejected with their message. Also the coil single-source, trough-spacing and perturbed-bite-model tests, moved here from `tests/test_band_v2_sections.py` |
 | extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Coil, trough spacing, perturbed bites** (now in `tests/test_band_robustness.py`): one coil for all pitches (`CoilSingleSourceTests`: the reviewer's pitches 1 m at 2 m/s and 1.4 m at 20 m/s on coils of 1 m and 1.4 m pitch no longer give two exact matches; the coil hypothesis contradicts weakly and does not lead; two pitches on one coil still support; a single pitch as before); trough spacing (`TroughSpacingEstablishedTests`: one gap weak and never contradicting, irregular gaps weak, regular or stated spacing strong, a stated spacing outside a factor 4 still contradicts); perturbed bites (`PerturbedBiteModelTests`: an `auto` case with a mattress operating bite has every lever row equal to a direct mattress derivation; a Hitchcock operating bite reports the friction x1.3 variant Hitchcock rejects as a rejected row). **Onset search** (`OnsetSearchDomainTests`): the reviewer's soft-strip case (1e9 Pa, 9 um bump) no longer reports the old 4.28 um in-mill onset: the reported onset is manifest with feedback and the scale just below is not; a stubbed feedback calculation that leaves its domain before buckling gives the domain-limit outcome with its height, one that buckles first gives the onset, one that stays latent gives not-reached; a sheet-gauge case gives exactly the onset of the old search. **Undefined bound levels** (`UndefinedBoundLevelTests`, the reviewer's 8 um pass, one striped roll, 9 um bump, shape inputs 1e12 Pa / 1 mm / 0.01 m): `shape_levels` keeps both compliant levels with the rigid bound not defined and its reason, a very soft strip (1e9 Pa) keeps the feedback level with the compliance-only level not defined, a normal bump reports the rigid bound exactly as the direct calculation; through `diagnose` the steady shape and the gauge-trend row are assessed, the trend text names the pass without a rigid bound, the report omits the rigid curve with a note and has no nan / inf. **Large forward slip** (`LargeForwardSlipTests`, the reviewer's 30 -> 12 um pass on a 0.14 m roll): the mattress slip is at least 0.5, `diagnose` returns, both slip flags are set, the signatures use slip 0, the schedule row keeps its slip; the forward-slip screen is not assessable with the actual slip, the skid evidence does not support. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
 | `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI; alloy-group and anisotropy tables (`AlloyAndAnisotropyTests`, SPEC17): the nine `TM-` sources with the read tags of the gap study and never an upgraded read status, ten alloy-group rows, the Hill 1948 plane-strain factor 1.154701 / 1.014185 / 1.046734 / 1.169130 for (1, 1), (0.2, 0.2), (0.2, 1.1), (1.075, 1.075) and `ValueError` for r <= 0, both sections in the generated document |
+| `band_sensors.py` / `tests/test_band_sensors.py` | zone edges and coverage (body and edge zones, centre default, end zones 54 % covered); a 20 mm top-hat of 25 reads 9.6154 as the mean of a 52 mm zone; a 20 mm band of 3.1 I-units reads 1.19; a uniform profile reads zero; the roll mean of a mean-free, fully covered profile is zero; spreading conserves the sum and s = 0 is the identity; the dilution closed forms against the numbers of SPEC17 and a sampled Gaussian; on the committed battery-foil profile the zone readings 6.5973 / 20.4506 / 24.4912 / 20.4517 / 6.5979, the tight edges, the half-peak width 0.160 m, spreading 23.4812, the event 19.3326, the ripple 0.5296 and 23 zones 23.5348; one nozzle per zone (zone j holds nozzle j + 2 at its centre) from `band_width.spray_layout` and the boundary rule; every validation message, v1 and a non-null thickness gauge rejected; a small case with and without a shapemeter differs only in `measurement`, `inputs` and the new flags, hypotheses identical, the report escapes the provenance; no width model is not assessable with the dilution table |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
 
@@ -2740,6 +2832,10 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **After-release onsets** limited by the reporting threshold are upper bounds.
 - **Gauge trend** carries one stripe shape through all passes; it does not re-solve the roll
   temperature for each pass.
+- **Shapemeter readings are zone means of a model**: no flatness controller (the tool does not
+  predict what the control would have done), no shapemeter dynamics, filter, noise,
+  calibration or temperature compensation; neighbour spreading is an interpretation of one
+  vendor sentence and off by default (section 7.6).
 - **Spray-coefficient basis not established**: the model's coefficient is a circumferential
   mean, the published 2.5-4.3 kW/m2K is read as a jet-zone value; until PT-T18 is re-read the
   `thermal_check` verdict compares two possibly different bases (flag

@@ -337,5 +337,6 @@
   "incoming_variation": {
     "flow_stress_variation_fraction": 0.02,
     "coil_synchronous": true
-  }
+  },
+  "measurement": null
 }

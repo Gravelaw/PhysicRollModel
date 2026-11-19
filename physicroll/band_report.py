@@ -2513,6 +2513,158 @@ def _thermal_block(r):
     return ''.join(out)
 
 
+# ------------------------------------------------------------------------------ shapemeter
+def _shapemeter_chart(sm, prof, model):
+    """Zone readings as bars, the fine model profile as a line, the threshold dashed."""
+    zones = sm['zones']
+    lay = sm['zone_layout']
+    x0 = min(zones[0]['start_m'], lay['strip_start_m'])
+    x1 = max(zones[-1]['end_m'], lay['strip_end_m'])
+    thr = sm.get('threshold_i_units')
+    vals = [v for v in prof['readings_i_units'] if _ok(v)] + [v for v in model['i_units']
+                                                              if _ok(v)]
+    if _ok(thr):
+        vals += [thr, -thr]
+    lo, hi = min(vals + [0.0]), max(vals + [0.0])
+    pad = 0.08 * (hi - lo or 1.0)
+    key = [('zone reading (would show)', '#93c5fd', '', 'square'),
+           ('model profile (fine grid)', C_FB, '', 'thick')]
+    if _ok(thr):
+        key.append((f'threshold ±{_f(thr)} I', C_THR, '4 2', 'line'))
+    key.append(('spray nozzle', '#6b7280', '', 'line'))
+    key_parts, rows = _key2(key)
+    top = 14 + 15 * rows + 10
+    bot = top + 220
+    height = bot + MB
+    sx = _Axis(x0, x1, ML, W - MR)
+    sy = _Axis(lo - pad, hi + pad, bot, top)
+    p = [f'<svg viewBox="0 0 {W} {height}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="shapemeter zone readings"><title>What a shapemeter would '
+         'show: zone readings of the steady model profile</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" fill="#fbfcfe" '
+         'stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        p.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        p.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        p.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    y0 = sy(0.0)
+    for z, rd in zip(zones, prof['readings_i_units']):
+        if not _ok(rd):
+            continue
+        ya, yb = sorted((sy(rd), y0))
+        p.append(f'<rect x="{sx(z["start_m"]) + 0.5:.1f}" y="{ya:.1f}" '
+                 f'width="{max(sx(z["end_m"]) - sx(z["start_m"]) - 1, 0.5):.1f}" '
+                 f'height="{max(yb - ya, 0.5):.1f}" fill="#93c5fd" stroke="#3b82f6" '
+                 'stroke-width="0.6"/>')
+    p.append(f'<polyline points="{_pts(model["z_m"], model["i_units"], sx, sy)}" fill="none" '
+             f'stroke="{C_FB}" stroke-width="2.2"/>')
+    if _ok(thr):
+        for v in (thr, -thr):
+            p.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                     f'stroke="{C_THR}" stroke-dasharray="4 2"/>')
+    for x in sm.get('_nozzle_positions_m') or []:
+        p.append(f'<line x1="{sx(x):.1f}" y1="{bot}" x2="{sx(x):.1f}" y2="{bot - 6}" '
+                 'stroke="#6b7280"/>')
+    cy = (top + bot) / 2
+    p.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">flatness [I-units]</text>')
+    p.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">position on the barrel [m]</text>')
+    p += key_parts
+    p.append('</svg>')
+    return ''.join(p)
+
+
+def _dilution_rows(dt):
+    return [[_mm2(x['band_width_m'], 3), _f(x['tophat_centred'], 1, 4),
+             _f(x['tophat_on_boundary'], 1, 4), _f(x['gaussian_centred'], 1, 4),
+             _f(x['gaussian_on_boundary'], 1, 4)] for x in dt.get('rows') or []]
+
+
+def _measurement_section(r):
+    """SPEC17 package 4: what a shapemeter would show (zone means of the model profile)."""
+    m = r.get('measurement')
+    if not isinstance(m, dict):
+        return ''
+    head = '<section><h2>What a shapemeter would show</h2>'
+    if m.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(m.get('error'))) + '</section>'
+    sm = m.get('shapemeter') if not m.get('not_supplied') else None
+    if not isinstance(sm, dict) or sm.get('not_supplied'):
+        from .band_sensors import dilution
+        d = dilution(0.020, 0.052)['tophat_centred']
+        return (head + '<p>No shapemeter was described. Add measurement.shapemeter (zone width '
+                'and count) to see what each zone would read; a band narrower than a zone is '
+                f'diluted (a 20 mm band reads {100 * d:.0f} % of its peak as the mean of a '
+                '52 mm zone).</p></section>')
+    lay = sm.get('zone_layout') or {}
+    zw = sm['zones'][0]['width_m'] if sm.get('zones') else None
+    out = [head, f'<p>{_f(lay.get("zone_count"))} zones of {_mm2(zw, 3)} '
+           f'({_f(lay.get("first_edge_m"), 1, 4)}-{_f(lay.get("last_edge_m"), 1, 4)} m on the '
+           f'barrel; {_f(lay.get("covered_zone_count"))} zones over the strip). Source: '
+           f'{_e(sm.get("provenance"))}. Each reading is the mean of the modelled flatness over '
+           'the zone minus the mean over the zones; neighbour spreading '
+           f'{_f(sm.get("neighbour_spreading_fraction"), 1, 3)} '
+           f'({_e(sm.get("neighbour_spreading_basis"))}).</p>']
+    if sm.get('status') == 'NOT_ASSESSABLE':
+        out.append(_state_p('Not assessable: ' + str(sm.get('reason'))))
+    profs = sm.get('profiles') or []
+    steady = next((x for x in profs if x['name'] == 'steady'), None)
+    model = _get(r, 'width', 'shape', 'steady')
+    if steady is not None and isinstance(model, dict):
+        lay_noz = []
+        nm = sm.get('nozzle_map') or {}
+        tsn = _get(r, 'width', 'thermal_steady', 'nozzle_positions_m') or []
+        for z in nm.get('zones') or []:
+            lay_noz += [tsn[i] for i in z['nozzle_indices'] if i < len(tsn)]
+        view = dict(sm, _nozzle_positions_m=lay_noz)
+        out.append(_shapemeter_chart(view, steady, {'z_m': model['z_m'],
+                                                    'i_units': model['i_units_with_feedback']}))
+    thr = sm.get('threshold_i_units')
+    if profs:
+        out.append(f'<p class="note">Threshold {_f(thr)} I-units: '
+                   f'{_e(sm.get("threshold_basis"))}.</p>')
+    for pr in profs:
+        if pr['bands']:
+            rows = [[_f(b['peak_position_m'], 1, 4) + ' m', _f(b['peak_i_units'], 1, 4),
+                     _mm2(b['half_peak_width_m'], 3), _f(b['zone_index']),
+                     _f(b['zone_reading_i_units'], 1, 4), _f(b['reading_to_peak_ratio'], 1, 3),
+                     _e(b['shows'] or 'n/a')] for b in pr['bands']]
+            out.append(f'<h3>{_e(pr["label"])}</h3>'
+                       + _table(['band (peak position)', 'model peak [I]', 'half-peak width',
+                                 'zone', 'zone reading [I]', 'reading / peak', 'shapemeter'],
+                                rows))
+        else:
+            out.append(f'<p><strong>{_e(pr["label"])}:</strong> profile peak '
+                       f'{_f(pr["profile_max_abs_i_units"], 1, 4)} I-units; the largest zone '
+                       f'reading is {_f(pr["max_abs_reading_i_units"], 1, 4)} I-units (zone '
+                       f'{_f(pr["max_abs_zone_index"])}).</p>')
+    dt = sm.get('dilution_table') or {}
+    out.append('<h3>Dilution: zone reading of a band of peak 1 in a '
+               f'{_mm2(dt.get("zone_width_m"), 3)} zone</h3>'
+               + _table(['band width', 'top-hat, centred in a zone',
+                                      'top-hat, on a zone boundary', 'Gaussian, centred',
+                                      'Gaussian, on a boundary'], _dilution_rows(dt)))
+    nm = sm.get('nozzle_map') or {}
+    if nm and not nm.get('not_supplied'):
+        out.append(f'<p>Nozzles per zone: {_f(nm.get("nozzles_per_zone_min"))} to '
+                   f'{_f(nm.get("nozzles_per_zone_max"))}'
+                   + (f'; zones without a nozzle: '
+                      f'{_e(", ".join(str(j) for j in nm["zones_without_nozzle"]))}'
+                      if nm.get('zones_without_nozzle') else '')
+                   + f'. {_e(nm.get("statement"))}</p>')
+    from .band_sensors import NO_CONTROLLER
+    out.append(f'<p class="warn">{_e(NO_CONTROLLER)} The readings are zone means of a modelled '
+               'stress, not a forecast of the operator\'s screen: a band below the threshold '
+               'would probably not show, and it can still be on the strip.</p>')
+    out.append('</section>')
+    return ''.join(out)
+
+
 # ------------------------------------------------------------------------------ family + layout
 def _family_block(r):
     fs = r.get('family_summary') or {}
@@ -2908,7 +3060,8 @@ def render_band_report(result):
         transverse = [_key_numbers(r), _strip_section(r), _chatter_section(r),
                       _schedule_section(r), _freq_section(r), _forced_section(r)]
         transverse += _levers_blocks(r)
-        new = [_width_section(r), _events_section(r), _gauge_section(r)]
+        new = [_width_section(r), _measurement_section(r), _events_section(r),
+               _gauge_section(r)]
         tail = [_process_section(r), _thermal_block(r), _dynamics_section(r)]
         if lengthwise:
             s += new

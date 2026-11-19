@@ -3779,6 +3779,7 @@
       "yield_stress_pa": 285000000.0,
       "youngs_modulus_pa": 70000000000.0
     },
+    "measurement": null,
     "model_options": {
       "bite_damping_transit_fraction": 0.5,
       "bite_model": "hitchcock",
@@ -4097,6 +4098,11 @@
     "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation.",
     "The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um 1235-H18 foil would move it by -12 % to +1 % under Hill's 1948 criterion (table in docs/thin-gauge-products.md)."
   ],
+  "measurement": {
+    "not_supplied": true,
+    "reason": "measurement is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "process": {
     "not_supplied": true,
     "reason": "tribology and hardening are null or absent",

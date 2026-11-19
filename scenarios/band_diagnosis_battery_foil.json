@@ -9,7 +9,8 @@
     "At 30 um the mill is in or near closed-gap rolling, which the tool does not model: see the foil-regime block. The lever table and the gauge-control section assume an open gap.",
     "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
     "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
-    "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check."
+    "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check.",
+    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record."
   ],
   "pass": {
     "entry_thickness_m": 5e-05,
@@ -331,5 +332,18 @@
       600000.0
     ]
   },
-  "incoming_variation": null
+  "incoming_variation": null,
+  "measurement": {
+    "shapemeter": {
+      "zone_width_m": 0.052,
+      "zone_count": 24,
+      "edge_zone_width_m": null,
+      "edge_zone_count_per_side": 0,
+      "centre_m": null,
+      "neighbour_spreading_fraction": 0.0,
+      "resolution_i_units": null,
+      "provenance": "synthetic: 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone"
+    },
+    "thickness_gauge": null
+  }
 }

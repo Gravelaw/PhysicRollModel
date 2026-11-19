@@ -2221,6 +2221,23 @@ FLAGS = {
     'AGC_CHATTER_INTERACTION_DEPENDS_ON_LOOP_ROLL_OFF': (
         'The effect of gauge control on chatter depends on a simple control-loop model.',
         'No action; it is a standing limit.'),
+    'SHAPEMETER_OPERATOR_APPLIED': (
+        'The page shows what each zone of the shapemeter you described would show for the '
+        'modelled bands: zone averages of a model, not a forecast of the screen.',
+        'Compare with your shapemeter record; there is no flatness control in the model.'),
+    'MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD': (
+        'A modelled band is narrower or weaker than a zone can show: the shapemeter would '
+        'probably not show it.',
+        'Look for it offline (sag test of a sample), not only on the shapemeter.'),
+    'SHAPEMETER_DOES_NOT_COVER_STRIP': (
+        'The shapemeter zones you described do not cover the whole strip width.',
+        'Check the zone count, width and centre.'),
+    'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
+        'Part of each zone reading is shared with its neighbours, as you set it.',
+        'Set the spreading to zero unless your vendor states it.'),
+    'MEASUREMENT_SECTION_FAILED': (
+        'The shapemeter part of the page could not be worked out.',
+        'Check the measurement inputs; the rest of the page is unaffected.'),
     'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED': (
         'The spray cooling value is an average around the roll; the published values may be '
         'for the spray zone only, so the two are not compared like for like.',
