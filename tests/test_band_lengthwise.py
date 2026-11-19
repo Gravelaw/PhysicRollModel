@@ -478,5 +478,45 @@ class LengthwiseScenarioTests(unittest.TestCase):
         # (the two phase-1 demos are run in tests.test_band_diagnosis)
 
 
+class SprayLayoutTests(unittest.TestCase):
+    """band_width.spray_layout: the header and strip as the width section reads them."""
+
+    def assert_matches(self, layout, ts):
+        self.assertEqual(layout['nozzle_positions_m'], ts['nozzle_positions_m'])
+        self.assertEqual(layout['nozzle_levels'], ts['nozzle_levels'])
+        self.assertEqual(layout['effective_footprint_width_m'],
+                         ts['effective_footprint_width_m'])
+        for k in ('strip_start_m', 'strip_end_m', 'strip_centre_m'):
+            self.assertEqual(layout[k], ts[k], k)
+
+    def test_lengthwise_demo_without_blocked_indices(self):
+        import json
+        r = json.loads((ROOT / 'artifacts' / 'band_diagnosis'
+                        / 'lengthwise-bands-demo.result.json').read_text())
+        self.assertEqual(r['inputs']['width_model']['blocked_nozzle_indices'], [])
+        self.assert_matches(bw.spray_layout(r['inputs']), r['width']['thermal_steady'])
+
+    def test_lengthwise_demo_with_blocked_indices(self):
+        demo = load_case(SCEN / 'band_diagnosis_lengthwise_bands.json')
+        demo['model_options']['cells'] = 64
+        demo['width_model']['numerics'] = dict(COARSE)
+        demo['schedule'] = demo['schedule'][-1:]
+        demo['width_model']['blocked_nozzle_indices'] = [3, 12]      # 12 is also weak (0.45)
+        layout = bw.spray_layout(demo)
+        self.assertEqual([layout['nozzle_levels'][i] for i in (3, 12)], [0.0, 0.0])
+        self.assert_matches(layout, diagnose(demo)['width']['thermal_steady'])
+
+    def test_invalid_cases_raise_the_width_model_errors(self):
+        demo = load_case(SCEN / 'band_diagnosis_lengthwise_bands.json')
+        bad = copy.deepcopy(demo)
+        bad['width_model']['blocked_nozzle_indices'] = [99]
+        with self.assertRaisesRegex(ValueError, 'nozzle index 99 out of range'):
+            bw.spray_layout(bad)
+        bad = copy.deepcopy(demo)
+        bad['width_model'] = None
+        with self.assertRaises(ValueError):
+            bw.spray_layout(bad)
+
+
 if __name__ == '__main__':
     unittest.main()

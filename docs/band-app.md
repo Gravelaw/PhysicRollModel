@@ -117,7 +117,10 @@ and a backup-roll change did; and whether the marks are on one face or both.
   (m/min); under "More details" flow stress and tensions (MPa).
 - **The route**: the other passes, as a list you can add to and remove from; "Use as the pass"
   copies a route pass into the pass where the bands show. The route feeds the "thinner or
-  thicker" pictures.
+  thicker" pictures. A line under the route says which route pass is the pass where the bands
+  show, by the engine's own test (same gauges, flow stress, friction and tensions), or that none
+  is; when the run computes flow stress or friction itself it says that the run compares them
+  again with the computed values.
 - Under "More details": the rest of the material (yield stress, modulus, yield-point strain,
   magnesium, grain size, doubled final pass), a hardening law, incoming-coil hardness variation,
   case-specific width inputs (crowns, incoming ridges, earlier narrower widths) and inputs from a
@@ -138,16 +141,44 @@ and a backup-roll change did; and whether the marks are on one face or both.
 - **The spray header**: the same strip drawing with the row of nozzles above it. Click a nozzle
   (or press Enter or Space on it) to cycle healthy, weak (flow level 0.5) and blocked. The nozzle
   list under the drawing takes any flow level from 0 to 1. Until you mark a nozzle the state is
-  "Don't know".
+  "Don't know" (the model then uses full flow for every nozzle). Nozzles of a known valve event
+  have a dotted ring.
 - Under "More details": everything else of section 5.3 of the guide (stand masses and stiffnesses,
   spans, bearings and gears, rolling oil, gauge control, drive, coil, grinder, model settings).
 
 If an answer is not accepted (for example an exit gauge above the entry gauge), the question is
 marked in red with a plain explanation, and pressing Run takes you there.
 
+**What the drawings show.** Every drawing and every statement about the case on the input pages
+(the strip and band drawing with its ruler, the band list, the spray header with its nozzle
+states, the nozzle counts and list, the blocked-nozzle numbers, the coverage line, the route line
+and the side panel "What the tool has so far") is drawn from the case the engine will be given:
+after each change the app builds that case and sends back what to draw, computed from it the way
+the engine reads it (for example the flow level of each nozzle after the blocked nozzles are
+applied). The page redraws whenever that differs from what is on the screen. While an answer is
+not accepted, the drawings stay at the last accepted inputs, greyed, with the note "Not updated".
+Pressing Run first waits for the last change to be checked.
+
+**One set of nozzle marks.** The nozzle state is kept in one place: the flow level of each nozzle
+(the drawing and its nozzle list). "Blocked nozzles (by number)" shows the nozzles at level 0 and
+edits them: a number typed there is marked blocked on the drawing, a number removed there is
+marked healthy again. An opened case file or an earlier answer set with blocked numbers gets
+them as blocked nozzles on the drawing (the engine simulates the same thing), with a notice.
+"Don't know" stays "Don't know" until you mark a nozzle (an empty blocked-number list leaves it).
+The simple spray coverage check uses the same physical header whenever its barrel length and
+nozzle distance give the same nozzles (always so when you change them here): it then uses the
+drawing, counting every nozzle marked weak or blocked as not spraying, because it only knows on
+and off (the worked examples are built that way), and the page shows its nozzles as a line, not as
+a second field. If an opened case marks nozzles blocked only for the coverage check, they are
+marked blocked on the drawing with a notice, and the run waits until that notice has been shown.
+Only a case whose coverage header is different (or which has no spray header model) has its own
+coverage numbers, and the page says why.
+
 **Answers that depend on other answers.** The nozzle marks (the drawing, the blocked-nozzle
-numbers and the valve events) belong to one spray header: when you change the barrel length or the
-distance between nozzles and the number of nozzles changes, the marks are reset to "Don't know"
+numbers and the valve events) belong to one spray header. When the distance between nozzles
+changes and the number of nozzles stays the same, the marks stay on their nozzles and the header
+is redrawn at the new positions; when you change the barrel length or the distance between
+nozzles and the number of nozzles changes, the marks are reset to "Don't know"
 (never moved to other nozzles), the header is redrawn and a notice says so ("The spray header now
 has 25 nozzles instead of 28, so the nozzle marks were reset. Mark them again if you know them.").
 A run is not started until the page has shown that notice: pressing Run with stale marks shows the

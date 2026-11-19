@@ -22,7 +22,9 @@ is marked as interrupted.
 Routes (all JSON unless stated):
   GET  /                         the page (HTML)            GET /app.js, /app.css
   GET  /api/meta                 questions, starting points, products, units, profiles, engine
-  POST /api/case/check           answers -> case and plain validation messages
+  POST /api/case/check           answers -> case, the drawing model and plain validation messages
+  POST /api/case/edit            one nozzle edit (answers + edit) -> the check answer for the
+                                 edited answers, with the new nozzle marks as the answers patch
   POST /api/case/open            an opened case file -> answers (validated by the engine)
   POST /api/product-defaults     literature starter values for one product and gauge
   POST /api/runs                 start a run -> {id}
@@ -41,6 +43,7 @@ screen that shows a ranking. Nothing here adds physics.
 import argparse
 import copy
 from datetime import datetime, timezone
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -256,16 +259,33 @@ class RunStore:
             fixed, notices = bpl.reconcile_answers(answers, preset)
         except (ValueError, TypeError, KeyError):
             return answers, [], {}
-        patch = {n['question']: fixed['values'].get(n['question']) for n in notices
-                 if n['kind'] == 'reset'}
-        return fixed, notices, patch
+        return fixed, notices, _answers_patch(answers, fixed)
+
+    @classmethod
+    def check(cls, answers, preset, edit=None):
+        """The /api/case/check and /api/case/edit answer: the built case, the drawing model
+        computed from it (``band_plain.drawing_model``) with its key, the reconciliation
+        notices and the answers patch the page applies (an edit's new nozzle marks included)."""
+        new = answers
+        if edit is not None:
+            fixed, _, _ = cls.reconcile(answers, preset)
+            try:
+                new = bpl.apply_nozzle_edit(fixed, preset, edit)
+            except (ValueError, TypeError, KeyError) as exc:
+                err = bpl.plain_error(exc)
+                raise RequestError(400, err['text'], err['question'], err['step'])
+        case, notices, patch = cls.build_case(new, preset)
+        model, key = _drawing(case, preset)
+        return {'ok': True, 'case': case, 'origins': bpl.value_origins(case), 'model': model,
+                'model_key': key, 'reconciled': notices,
+                'answers_patch': _answers_patch(answers, _patched(new, patch))}
 
     @classmethod
     def build_case(cls, answers, preset, for_run=False):
         """(case, notices, patch). For a run, a pending reset is refused (409) with the
         notices, so a run never starts from answers the person has not seen."""
         fixed, notices, patch = cls.reconcile(answers, preset)
-        if for_run and patch:
+        if for_run and any(n['kind'] == 'reset' for n in notices):
             first = next(n for n in notices if n['kind'] == 'reset')
             raise RequestError(409, first['text'] + ' Check the redrawn spray header, then '
                                     'run again.', first['question'],
@@ -461,24 +481,34 @@ def _products():
         items[0]['id']].split(':')[0], 'products': items} for fam, items in groups.items()]
 
 
-def _geometry(case):
-    """Strip and header geometry of a case for the page's drawings (engine conventions)."""
-    w = case.get('width_model')
-    try:
-        nozzles = bpl.nozzle_layout(case)
-    except ValueError:
-        nozzles = []
-    return {'strip_edge_m': bpl.strip_edge_m(case), 'strip_width_m': case['pass']['width_m'],
-            'barrel_length_m': (w['roll']['barrel_length_m'] if w else
-                                (case.get('coolant') or {}).get('barrel_length_m')),
-            'nozzle_positions_m': nozzles}
+def _drawing(case, preset):
+    """(drawing model, key): what the page draws for a built case and a short key of its
+    canonical JSON, so the page can redraw whenever the model differs from the one drawn."""
+    model = bpl.drawing_model(case, preset.get('label'))
+    canon = json.dumps(model, sort_keys=True, separators=(',', ':'), allow_nan=False)
+    return model, hashlib.sha256(canon.encode()).hexdigest()[:20]
+
+
+def _answers_patch(before, after):
+    """{question id: new value} for every answer that differs between two answer sets."""
+    a = (before or {}).get('values') or {} if isinstance(before, dict) else {}
+    b = (after or {}).get('values') or {} if isinstance(after, dict) else {}
+    return {k: b.get(k) for k in sorted(set(a) | set(b)) if a.get(k) != b.get(k)}
+
+
+def _patched(answers, patch):
+    out = copy.deepcopy(answers) if isinstance(answers, dict) else {}
+    out.setdefault('values', {}).update(patch)
+    return out
 
 
 def _preset_info(p):
     case = p['case']
-    return {'id': p['id'], 'label': p['label'], 'description': p['description'],
-            'kind': p['kind'], 'generated_by_model': p['generated_by_model'],
-            'answers': bpl.answers_from_case(case), 'geometry': _geometry(case)}
+    out = {'id': p['id'], 'label': p['label'], 'description': p['description'],
+           'kind': p['kind'], 'generated_by_model': p['generated_by_model'],
+           'answers': bpl.answers_from_case(case)}
+    out['model'], out['model_key'] = _drawing(case, p)
+    return out
 
 
 def page_meta(store):
@@ -697,12 +727,13 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                     raise RequestError(404, 'Unknown request.')
                 body = self._body(raw)
                 if parts == ['api', 'case', 'check']:
-                    preset = store.preset(body)
-                    case, notices, patch = store.build_case(body.get('answers'), preset)
-                    self._json(200, {'ok': True, 'case': case,
-                                     'origins': bpl.value_origins(case),
-                                     'geometry': _geometry(case), 'reconciled': notices,
-                                     'answers_patch': patch})
+                    self._json(200, store.check(body.get('answers'), store.preset(body)))
+                elif parts == ['api', 'case', 'edit']:
+                    edit = body.get('edit')
+                    if not isinstance(edit, dict):
+                        raise RequestError(400, 'Unknown nozzle change.', 'nozzle_levels',
+                                           'mill')
+                    self._json(200, store.check(body.get('answers'), store.preset(body), edit))
                 elif parts == ['api', 'case', 'open']:
                     preset = store.preset(dict(body, preset='case_file'))
                     self._json(200, {'ok': True, 'answers': bpl.answers_from_case(
@@ -712,8 +743,9 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
                 elif parts == ['api', 'runs']:
                     preset = store.preset(body)
                     answers = body.get('answers')
-                    case, _, _ = store.build_case(answers, preset, for_run=True)
-                    run_id = store.submit(case, answers, preset, body.get('profile', 'quick'))
+                    case, _, patch = store.build_case(answers, preset, for_run=True)
+                    run_id = store.submit(case, _patched(answers, patch), preset,
+                                          body.get('profile', 'quick'))
                     self._json(202, {'id': run_id})
                 elif len(parts) == 4 and parts[1] == 'runs' and parts[3] == 'variant':
                     self._json(202, {'id': self._variant(parts[2], body)})
@@ -800,7 +832,8 @@ def make_server(runs_dir, port=0, worked_examples=None, engine=None, quiet=False
             answers['name'] = (label if isinstance(label, str) and label.strip()
                                else f'{base_case["name"]} (what-if)')[:200]
             preset = base_preset
-            case, _, _ = store.build_case(answers, preset, for_run=True)
+            case, _, patch = store.build_case(answers, preset, for_run=True)
+            answers = _patched(answers, patch)
             words = [bpl.QUESTION_BY_ID[q].wording for q in changes if q in bpl.QUESTION_BY_ID]
             return store.submit(case, answers, preset, body.get('profile', meta['profile']),
                                 base_run_id=base_id, changes=words)

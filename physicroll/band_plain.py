@@ -558,15 +558,20 @@ FAULT_QUESTIONS = (
     _q('nozzle_levels', 'mill', 'Spray header', 'width_model.nozzle_levels', 'nozzles',
        'Which nozzles are weak or blocked?',
        'Click a nozzle on the drawing to cycle healthy, weak and blocked, or type each flow '
-       'level (1 = full flow, 0 = blocked). Leave it at "Don\'t know" if nobody has checked.',
+       'level (1 = full flow, 0 = blocked). Leave it at "Don\'t know" if nobody has checked. '
+       'The drawing shows the nozzle state the model will use.',
        unit='ratio', ask_first=True, unknown='null'),
     _q('blocked_nozzles', 'mill', 'Spray header', 'width_model.blocked_nozzle_indices',
        'numbers', 'Blocked nozzles (by number)', 'Nozzle numbers counted from the first nozzle '
-       '(1 = first nozzle). The flow levels above are the finer way to say the same.',
+       '(1 = first nozzle). The same nozzles as the blocked ones on the drawing: a number typed '
+       'here is marked blocked there, and a number removed here is marked healthy again.',
        unit='nozzle_no', unknown='empty'),
     _q('coverage_blocked_nozzles', 'mill', 'Spray header', 'coolant.blocked_nozzle_indices',
        'numbers', 'Blocked nozzles for the simple coverage check (by number)',
-       'Used by the spray coverage screen; 1 = first nozzle.', unit='nozzle_no',
+       'The simple coverage check only knows on and off. When its header is the spray header '
+       'drawn above, it uses the drawing: every nozzle marked weak or blocked there counts as '
+       'not spraying. Only a case whose coverage header differs needs its own numbers here; '
+       '1 = first nozzle.', unit='nozzle_no',
        unknown='empty'),
     _q('valve_events', 'mill', 'Spray header', 'width_model.events', 'list',
        'Cooling valve switching events you know of',
@@ -930,6 +935,61 @@ def nozzle_layout(case):
                             spray_mean_htc_w_m2k=h['spray_mean_htc_w_m2k'],
                             background_htc_w_m2k=h['background_htc_w_m2k'])
     return list(header.nozzle_positions(w['roll']['barrel_length_m']))
+
+
+def coverage_layout(case):
+    """Nozzle positions [m] of the simple coverage check's header (``band_signatures.
+    spray_coverage``, the engine's layout), or [] without a coolant section."""
+    c = case.get('coolant')
+    if c is None:
+        return []
+    return list(bsig.spray_coverage(c['barrel_length_m'], c['nozzle_pitch_m'], c['standoff_m'],
+                                    c['spray_angle_rad'], c['offset_angle_rad'])
+                ['nozzle_positions_m'])
+
+
+def same_spray_header(case):
+    """True when the width model's spray header and the coverage check's header have the same
+    nozzles (count, and positions within 1 µm). Then they are one physical header and the band
+    app keeps ONE set of nozzle marks for both (``canonical_nozzles``)."""
+    try:
+        a, b = nozzle_layout(case), coverage_layout(case)
+    except ValueError:
+        return False
+    return bool(a) and len(a) == len(b) and all(abs(x - y) <= 1e-6 for x, y in zip(a, b))
+
+
+def effective_nozzle_levels(case):
+    """The flow level of every nozzle that the width model simulates for this case, resolved
+    by the engine itself (``band_width.spray_layout``: ``nozzle_levels``, else full flow, with
+    every ``blocked_nozzle_indices`` entry at 0), or None without a width model."""
+    if case.get('width_model') is None:
+        return None
+    return [float(x) for x in bw.spray_layout(case)['nozzle_levels']]
+
+
+def coverage_blocked_from_levels(levels):
+    """Coverage-check blocked nozzle indices for header levels: the check only knows on and
+    off, so every nozzle below full flow (weak or blocked) counts as not spraying (the rule
+    the worked examples follow)."""
+    return [i for i, lv in enumerate(levels or []) if lv < 1.0]
+
+
+def canonical_nozzles(case):
+    """One set of nozzle marks (in place). A width model that marks nozzles at all keeps them
+    as ``nozzle_levels`` = the engine's effective levels and no separate blocked list; when the
+    coverage check has the same header, its blocked list is derived from those levels. The
+    engine simulates exactly the same nozzle state before and after."""
+    w = case.get('width_model')
+    if w is None:
+        return case
+    if w.get('nozzle_levels') is not None or w.get('blocked_nozzle_indices'):
+        w['nozzle_levels'] = effective_nozzle_levels(case)
+        w['blocked_nozzle_indices'] = []
+    if case.get('coolant') is not None and same_spray_header(case):
+        case['coolant']['blocked_nozzle_indices'] = coverage_blocked_from_levels(
+            w.get('nozzle_levels'))
+    return case
 
 
 def _num_si(q, label, value, unit, origin):
@@ -1313,6 +1373,8 @@ def case_from_answers(answers, preset):
     case['notes'] = notes
     case = json.loads(json.dumps(case, allow_nan=False))
     bd.validate_case(case)
+    canonical_nozzles(case)                      # one set of nozzle marks, as the engine reads
+    bd.validate_case(case)
     return case
 
 
@@ -1342,8 +1404,33 @@ def answers_from_case(case):
         values[q.id] = v
         if q.origin_tracked and v is not None:
             origins[q.id] = noted.get(q.key, 'preset')
+    _fold_nozzle_answers(case, values, origin)
     return {'name': case.get('name'), 'own_mill': not case.get('synthetic', True),
             'values': values, 'origins': origins}
+
+
+def _fold_nozzle_answers(case, values, origin):
+    """The answers keep one set of nozzle marks: blocked nozzle numbers of the case are folded
+    into the levels (the engine's effective levels); the coverage check's numbers are left out
+    when they are what the drawing gives, and kept (for ``reconcile_answers`` to show) when an
+    opened case disagrees."""
+    w = case.get('width_model')
+    if w is None:
+        return
+    try:
+        eff = (effective_nozzle_levels(case) if w.get('nozzle_levels') is not None
+               or w.get('blocked_nozzle_indices') else None)
+    except (ValueError, TypeError, KeyError, IndexError):
+        return                                     # an invalid case: validation reports it
+    values['nozzle_levels'] = answer_from_si(QUESTION_BY_ID['nozzle_levels'], eff, origin)
+    values['blocked_nozzles'] = None
+    c = case.get('coolant')
+    if c is not None and same_spray_header(case) and \
+            sorted(set(c.get('blocked_nozzle_indices') or [])) == coverage_blocked_from_levels(eff):
+        values['coverage_blocked_nozzles'] = None
+    elif c is not None and same_spray_header(case):
+        values['coverage_blocked_nozzles'] = [i + 1 for i in sorted(
+            set(c.get('blocked_nozzle_indices') or []))]
 
 
 class AnswerError(ValueError):
@@ -1414,17 +1501,138 @@ NOZZLE_DEPENDENT = ('nozzle_levels', 'blocked_nozzles', 'valve_events', 'coverag
 
 def _coverage_nozzle_count(case):
     """Nozzles of the simple coverage header (``band_signatures.spray_coverage`` layout)."""
-    c = case.get('coolant')
-    if c is None:
-        return None
-    cov = bsig.spray_coverage(c['barrel_length_m'], c['nozzle_pitch_m'], c['standoff_m'],
-                              c['spray_angle_rad'], c['offset_angle_rad'])
-    return len(cov['nozzle_positions_m'])
+    return len(coverage_layout(case)) if case.get('coolant') is not None else None
 
 
 def _numbers_of(value):
     return [x for x in value if isinstance(x, (int, float)) and not isinstance(x, bool)] \
         if isinstance(value, list) else []
+
+
+def _nozzle_numbers(value, count):
+    """Indices of a list of nozzle numbers (1 = first), or None when it is not a clean list of
+    whole numbers 1..count (validation then reports it)."""
+    nums = _numbers_of(value)
+    if not isinstance(value, list) or len(nums) != len(value) or \
+            any(x != int(x) or not 1 <= x <= count for x in nums):
+        return None
+    return sorted({int(x) - 1 for x in nums})
+
+
+def _numbers_words(indices):
+    return ', '.join(str(i + 1) for i in indices)
+
+
+def _fold_marks(vals, n, same, notices):
+    """Blocked-nozzle numbers (and, for the same header, the coverage check's numbers) become
+    marks in the one stored answer ``nozzle_levels``; every change comes with a notice."""
+    if n is None:
+        return
+    levels = vals.get('nozzle_levels')
+    cur = list(levels) if isinstance(levels, list) and len(levels) == n else None
+    blocked = _nozzle_numbers(vals.get('blocked_nozzles'), n)
+    if blocked:
+        new = cur or [1.0] * n
+        for i in blocked:
+            new[i] = 0.0
+        vals['nozzle_levels'], vals['blocked_nozzles'], cur = new, None, new
+        notices.append({'question': 'nozzle_levels', 'kind': 'moved',
+                        'text': f'Blocked nozzle number(s) {_numbers_words(blocked)} are now '
+                                'marked blocked on the drawing: the drawing and its nozzle list '
+                                'are the one place the nozzle state is kept.'})
+    elif vals.get('blocked_nozzles') == []:
+        vals['blocked_nozzles'] = None
+    if not same:
+        return
+    cov = vals.get('coverage_blocked_nozzles')
+    idx = _nozzle_numbers(cov, n) if isinstance(cov, list) else None
+    if idx is None:
+        return
+    reduced = coverage_blocked_from_levels(cur)
+    extra = [i for i in idx if i not in reduced]
+    missing = [i for i in reduced if i not in idx]
+    vals['coverage_blocked_nozzles'] = None
+    if extra:
+        new = cur or [1.0] * n
+        for i in extra:
+            new[i] = 0.0
+        vals['nozzle_levels'] = new
+        notices.append({'question': 'nozzle_levels', 'kind': 'reset',
+                        'text': f'Nozzle(s) {_numbers_words(extra)} were marked blocked only for '
+                                'the simple coverage check. It is the same spray header, so they '
+                                'are now marked blocked on the drawing, and both checks use the '
+                                'drawing.'})
+    elif missing:
+        notices.append({'question': 'coverage_blocked_nozzles', 'kind': 'moved',
+                        'text': 'The simple coverage check now also counts nozzle(s) '
+                                f'{_numbers_words(missing)} as not spraying, as they are marked '
+                                'weak or blocked on the drawing (same spray header).'})
+
+
+NOZZLE_EDITS = ('cycle', 'set_level', 'set_blocked', 'all_healthy', 'clear')
+
+
+def apply_nozzle_edit(answers, preset, edit):
+    """New answers after one nozzle edit from the page (the rule lives here, not in the page).
+
+    ``edit``: {'op': 'cycle', 'index': i} (healthy -> weak -> blocked -> healthy), {'op':
+    'set_level', 'index': i, 'level': x} (0..1), {'op': 'set_blocked', 'numbers': [...]}
+    (exactly these nozzles blocked; a nozzle no longer listed is healthy again), {'op':
+    'all_healthy'} or {'op': 'clear'} ("Don't know"). The edit starts from the nozzle state the
+    engine would simulate for ``answers`` and stores the result as the one answer
+    ``nozzle_levels`` (blocked numbers and, for the same header, the coverage numbers are views
+    of it). "Don't know" stays "Don't know" until a nozzle is marked."""
+    if not isinstance(edit, dict) or edit.get('op') not in NOZZLE_EDITS:
+        raise AnswerError('Unknown nozzle change.', 'nozzle_levels')
+    case = case_from_answers(answers, preset)
+    n = len(nozzle_layout(case))
+    if not n:
+        raise AnswerError('This starting point has no spray header model, so nozzles cannot be '
+                          'marked here.', 'nozzle_levels')
+    cur = case['width_model']['nozzle_levels']
+    cur = list(cur) if cur is not None else None
+    op = edit['op']
+    if op == 'clear':
+        new = None
+    elif op == 'all_healthy':
+        new = [1.0] * n
+    elif op in ('cycle', 'set_level'):
+        i = edit.get('index')
+        if isinstance(i, bool) or not isinstance(i, int) or not 0 <= i < n:
+            raise AnswerError(f'There is no nozzle {i if not isinstance(i, int) else i + 1} on '
+                              f'this header (it has {n}).', 'nozzle_levels')
+        new = cur or [1.0] * n
+        if op == 'cycle':
+            new[i] = WEAK_NOZZLE_LEVEL if new[i] >= 1 else 0.0 if new[i] > 0 else 1.0
+        else:
+            x = edit.get('level')
+            if isinstance(x, bool) or not isinstance(x, (int, float)) or not 0 <= x <= 1:
+                raise AnswerError('A nozzle flow level is a number from 0 (blocked) to 1 (full '
+                                  'flow).', 'nozzle_levels')
+            new[i] = float(x)
+    else:
+        nums = edit.get('numbers')
+        nums = [] if nums is None else nums
+        idx = _nozzle_numbers(nums, n)
+        if idx is None:
+            raise AnswerError(f'Blocked nozzles are whole nozzle numbers from 1 to {n}.',
+                              'blocked_nozzles')
+        if not idx and cur is None:
+            new = None
+        else:
+            new = cur or [1.0] * n
+            for i in range(n):
+                if i in idx:
+                    new[i] = 0.0
+                elif new[i] <= 0:
+                    new[i] = 1.0
+    out = copy.deepcopy(answers)
+    vals = out.setdefault('values', {})
+    vals['nozzle_levels'] = new
+    vals['blocked_nozzles'] = None
+    if case.get('coolant') is not None and same_spray_header(case):
+        vals['coverage_blocked_nozzles'] = None
+    return out
 
 
 def reconcile_answers(answers, preset):
@@ -1471,6 +1679,8 @@ def reconcile_answers(answers, preset):
                             'text': f'The {what} now has {count} nozzles, so the blocked nozzle '
                                     f'numbers (up to {int(max(nums))}) were reset. Enter them '
                                     'again if you know them.'})
+    same = case.get('coolant') is not None and same_spray_header(case)
+    _fold_marks(vals, n_header, same, notices)
     events = vals.get('valve_events')
     if n_header is not None and isinstance(events, list):
         used = [x for e in events if isinstance(e, dict)
@@ -1514,6 +1724,97 @@ def reconcile_answers(answers, preset):
                                     f'barrel ({barrel * 1000:.0f} mm) where it is placed. Check '
                                     'the strip width, the barrel length or the strip centre.'})
     return out, notices
+
+
+# ============================================================================= drawing model
+def _nozzle_state(level):
+    return 'blocked' if level <= 0 else 'healthy' if level >= 1 else 'weak'
+
+
+def _route_model(case):
+    """Which route passes ARE the pass where the bands show (``band_width.is_case_pass``, the
+    engine's own test), as entered."""
+    rows = []
+    for r in case.get('schedule') or []:
+        try:
+            same = bool(bw.is_case_pass(case, r))
+        except (TypeError, KeyError):
+            same = None
+        rows.append({'label': r.get('label'), 'is_pass': same})
+    hard, trib = case.get('hardening') or {}, case.get('tribology') or {}
+    return {'rows': rows, 'computed_replaces': bool(hard.get('use_computed_flow_stress'))
+            or bool(trib.get('use_computed_friction'))}
+
+
+SIDE_QUESTIONS = ('orientation', 'continuity', 'exit_gauge', 'exit_speed', 'product')
+
+
+def _side_model(case, edge, starting_point):
+    counts = {o: 0 for o in ORIGINS[:2]}
+    for o in value_origins(case).values():
+        if o in counts:
+            counts[o] += 1
+    vals = {q: answer_from_si(QUESTION_BY_ID[q], _get(case, QUESTION_BY_ID[q].key), edge)
+            if _has_path(case, QUESTION_BY_ID[q].key) else None for q in SIDE_QUESTIONS}
+    return dict(vals, band_count=len(case['observation'].get('band_positions_across_width_m')
+                                     or []),
+                starting_point=starting_point, own_mill=not case.get('synthetic', True),
+                measured=counts['measured'], estimated=counts['estimated'])
+
+
+def drawing_model(case, starting_point=None):
+    """Everything the page draws or states about a case, computed from the BUILT case the way
+    the engine reads it: the spray header (positions, footprint, EFFECTIVE level per nozzle from
+    ``effective_nozzle_levels``, valve events), the coverage check's header, the strip edges on
+    the barrel (``band_width.spray_layout`` / ``strip_edge_m``), the bands in barrel and strip
+    coordinates, which route passes are the pass, and the side panel. The page draws only from
+    this and redraws whenever it differs from what is on screen."""
+    w, co = case.get('width_model'), case.get('coolant')
+    width = case['pass']['width_m']
+    out = {'header': None, 'coverage': None, 'valve_events': []}
+    if w is not None:
+        lay = bw.spray_layout(case)                # the engine's own reading of the header
+        wn = bw.validate_width_model(w, case['pass'])
+        edge, barrel = lay['strip_start_m'], lay['barrel_length_m']
+        by = {}
+        for k, e in enumerate(wn['events']):
+            for j in e['nozzle_indices']:
+                by.setdefault(j, []).append(k)
+        levels = [float(x) for x in lay['nozzle_levels']]
+        out['header'] = {
+            'pitch_m': lay['nozzle_pitch_m'],
+            'footprint_width_m': lay['effective_footprint_width_m'],
+            'levels_known': w.get('nozzle_levels') is not None
+            or bool(w.get('blocked_nozzle_indices')),
+            'nozzles': [{'index': i, 'number': i + 1, 'position_m': x, 'level': lv,
+                         'state': _nozzle_state(lv), 'valve_events': by.get(i, [])}
+                        for i, (x, lv) in enumerate(zip(lay['nozzle_positions_m'], levels))],
+            'weak': sum(1 for lv in levels if 0 < lv < 1),
+            'blocked': sum(1 for lv in levels if lv <= 0)}
+        out['valve_events'] = [{'start_s': e['start_s'], 'duration_s': e['duration_s'],
+                                'level': e['level'], 'label': e.get('label'),
+                                'numbers': [j + 1 for j in e['nozzle_indices']]}
+                               for e in wn['events']]
+    else:
+        edge = strip_edge_m(case)
+        barrel = co['barrel_length_m'] if co is not None else None
+    if co is not None:
+        out['coverage'] = {'count': len(coverage_layout(case)),
+                           'barrel_length_m': co['barrel_length_m'],
+                           'pitch_m': co['nozzle_pitch_m'],
+                           'blocked_numbers': [i + 1 for i in
+                                               sorted(set(co['blocked_nozzle_indices']))],
+                           'same_header': w is not None and same_spray_header(case)}
+    obs = case['observation']
+    bands = list(obs.get('band_positions_across_width_m') or [])
+    out['strip'] = {'edge_m': edge, 'width_m': width, 'end_m': edge + width,
+                    'barrel_length_m': barrel}
+    out['bands'] = {'positions_m': bands,
+                    'from_edge_mm': [round((x - edge) * 1000, 6) for x in bands],
+                    'band_width_m': obs.get('band_width_m')}
+    out['route'] = _route_model(case)
+    out['side'] = _side_model(case, edge, starting_point)
+    return out
 
 
 # ============================================================================= run profiles

@@ -253,7 +253,7 @@ class GuardTest(ServerCase):
                                                            'entry_gauge': 30.0}}})
         self.assertEqual(st, 200)
         self.assertEqual(out['case']['pass']['exit_thickness_m'], 1.8e-05)
-        self.assertEqual(len(out['geometry']['nozzle_positions_m']), 28)
+        self.assertEqual(len(out['model']['header']['nozzles']), 28)
         st, out = self.client.json('POST', '/api/case/check', {'preset': '../../etc'})
         self.assertEqual(st, 400)
         self.assertEqual(out['error']['question'], 'preset')

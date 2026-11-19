@@ -347,6 +347,12 @@ svg .spray{opacity:.11}
 .wrap>p.printonly{margin:0 0 4px}.screening-note{font-size:8.5pt}}
 .notice{border-left:4px solid var(--amber);background:var(--paper);padding:.35rem .6rem;margin:.4rem 0;font-size:.92rem}
 .notice.reset{border-left-color:var(--blue);font-weight:600}
+.stale svg,.stale .legend{opacity:.45}
+.stale-note{border-left:4px solid var(--amber);padding:.3rem .6rem;margin:.3rem 0;font-size:.92rem}
+[data-view="nozzles"].busy svg{cursor:progress}
+.noz .valve{fill:none;stroke:var(--blue);stroke-width:1.5;stroke-dasharray:2 2}
+.notice.moved{border-left-color:var(--blue)}
+.notice-slot:empty{display:none}
 '''
 
 APP_JS = r''''use strict';
@@ -363,7 +369,10 @@ APP_JS = r''''use strict';
     checkSeq: 0, run: null, runAnswers: null, summary: null, baseSummary: null,
     openCause: null, pending: {}, pendingOrigins: {}, openChecks: {}, whatif: null,
     compare: null, drawer: false, runs: [], poll: null, banner: null, productInfo: null,
-    otherOpen: false
+    otherOpen: false,
+    // what is drawn comes ONLY from the server's drawing model of the built case
+    model: null, modelKey: null, modelStale: false, drawnKey: null,
+    focusSel: null, editChain: null, busy: false
   };
   var app = document.getElementById('app');
 
@@ -491,17 +500,10 @@ APP_JS = r''''use strict';
     });
     return {unknown: n, total: total};
   }
-  function originCounts() {
-    var c = {measured: 0, estimated: 0};
-    M.questions.forEach(function (q) {
-      var o = S.answers.origins[q.id];
-      if (q.origin_tracked && (o === 'measured' || o === 'estimated') && S.touched[q.id]) { c[o] += 1; }
-    });
-    return c;
-  }
-  function geometry() {
-    return (S.check && S.check.geometry) || preset().geometry;
-  }
+  // the drawing model: the last one the server computed from the built case (or the starting
+  // point's own, before the first check); never computed here
+  function model() { return S.model || preset().model; }
+  function modelKey() { return S.model ? S.modelKey : preset().model_key; }
   function body() {
     var p = preset();
     var b = {preset: p.ref || S.presetId, answers: S.answers};
@@ -516,24 +518,99 @@ APP_JS = r''''use strict';
     updateSide();
   }
   function runCheck() {
+    if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
     var seq = ++S.checkSeq;
-    api('POST', '/api/case/check', body()).then(function (r) {
+    return api('POST', '/api/case/check', body()).then(function (r) {
       if (seq !== S.checkSeq) { return; }
-      S.errors = {}; S.generalError = null;
-      // dependent answers the server reconciled (never silently): apply its patch, show notices
-      var changed = applyReconciled(r.data);
-      if (r.status === 200) {
-        var oldN = geometry().nozzle_positions_m.length;
-        S.check = r.data;
-        if ((changed || S.check.geometry.nozzle_positions_m.length !== oldN) && S.view === 'input') { render(); return; }
-      } else {
-        S.check = null;
-        var e = (r.data && r.data.error) || {text: 'The inputs could not be checked.'};
-        if (e.question) { S.errors[e.question] = e.text; } else { S.generalError = e.text; }
-      }
-      markErrors();
-      updateSide();
+      takeCheck(r);
     });
+  }
+  function checkNow() { updateSide(); return runCheck(); }
+  // one nozzle edit: the server applies the rule and answers with the new answers and model;
+  // edits are sent one after another, each from the answers the previous one left
+  function sendEdit(edit, focusSel, after) {
+    if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; }
+    S.editChain = (S.editChain || Promise.resolve()).then(function () {
+      var seq = ++S.checkSeq, b = body();
+      b.edit = edit; S.busy = true; markBusy();
+      return api('POST', '/api/case/edit', b).then(function (r) {
+        S.busy = false; markBusy();
+        if (r.status === 200) { S.touched.nozzle_levels = true; S.focusSel = focusSel || null; }
+        if (seq !== S.checkSeq) { applyReconciled(r.data); runCheck(); return; }
+        takeCheck(r);
+        if (r.status === 200 && after) { after(); }
+      });
+    });
+    return S.editChain;
+  }
+  function takeCheck(r) {
+    S.errors = {}; S.generalError = null;
+    // dependent answers the server reconciled (never silently): apply its patch, show notices.
+    // A reset is held while a number is still being typed (an intermediate "5" of "53" mm must
+    // not wipe the marks): the notice and the server's drawing show it, the answers keep the
+    // marks, and leaving the field checks again (a run is refused while a reset is pending)
+    var hold = !!S.typingField && ((r.data && r.data.reconciled) || []).some(function (n) { return n.kind === 'reset'; });
+    S.heldReset = hold;
+    var changed = hold ? applyReconciled({reconciled: r.data.reconciled}) : applyReconciled(r.data);
+    if (r.status === 200) {
+      S.check = r.data; S.model = r.data.model; S.modelKey = r.data.model_key; S.modelStale = false;
+    } else {
+      S.check = null; S.modelStale = true;
+      var e = (r.data && r.data.error) || {text: 'The inputs could not be checked.'};
+      if (e.question) { S.errors[e.question] = e.text; } else { S.generalError = e.text; }
+    }
+    if (S.view === 'input') { if (changed) { render(); } else { refreshViews(); refreshNotices(); } }
+    markErrors();
+    updateSide();
+  }
+  function markBusy() {
+    var n = app.querySelectorAll('[data-view="nozzles"]');
+    for (var i = 0; i < n.length; i++) { n[i].classList.toggle('busy', S.busy); n[i].setAttribute('aria-busy', S.busy ? 'true' : 'false'); }
+  }
+  // redraw every part of the page that shows the drawing model whenever the model on screen
+  // differs from the server's (the whole model, by its key), never on a hand-picked field
+  function drawnState() { return modelKey() + (S.modelStale ? ':stale' : ''); }
+  function refreshViews(force) {
+    if (!force && S.drawnKey === drawnState()) { return; }
+    // every view is redrawn; the focused field gets its focus back and keeps what the person is
+    // still typing in it (sent when they leave the field)
+    var act = document.activeElement, keep = null;
+    if (act && act.id && app.contains(act) && act.closest('[data-view]')) {
+      keep = {id: act.id, value: act.value, typing: act.tagName === 'INPUT' && act.type !== 'checkbox' && act.type !== 'radio'};
+      try { keep.s = act.selectionStart; keep.e = act.selectionEnd; } catch (err) { keep.s = null; }
+    }
+    var nodes = app.querySelectorAll('[data-view]');
+    for (var i = 0; i < nodes.length; i++) { nodes[i].innerHTML = VIEWS[nodes[i].getAttribute('data-view')](); }
+    S.drawnKey = drawnState();
+    if (keep) {
+      var n = document.getElementById(keep.id);
+      if (n) {
+        if (keep.typing && n.value !== keep.value) { n.value = keep.value; }
+        n.focus({preventScroll: true});
+        try { if (keep.s !== null && keep.s !== undefined) { n.setSelectionRange(keep.s, keep.e); } } catch (err) { /* number fields */ }
+      }
+    }
+    restoreFocus();
+    markBusy();
+  }
+  function restoreFocus() {
+    if (!S.focusSel) { return; }
+    var f = app.querySelector(S.focusSel); S.focusSel = null;
+    if (f) { f.focus({preventScroll: true}); }
+  }
+  // notices of the last check, under their question (refreshed with every check)
+  function noticeHtml(qid) {
+    var n = S.notices && S.notices[qid];
+    if (!n) { return ''; }
+    return '<div class="notice ' + n.kind + '" role="status">' + esc(n.text) +
+      (n.kind === 'reset' && S.heldReset ? ' (Not applied while you are still typing: it applies when you leave the field.)' : '') + '</div>';
+  }
+  function refreshNotices() {
+    var slots = app.querySelectorAll('[data-notice]');
+    for (var i = 0; i < slots.length; i++) { slots[i].innerHTML = noticeHtml(slots[i].getAttribute('data-notice')); }
+  }
+  function staleNote() {
+    return S.modelStale ? '<p class="stale-note" role="status">Not updated: an answer is not accepted (marked in red). This shows the last accepted inputs.</p>' : '';
   }
   function applyReconciled(data) {
     var notes = (data && data.reconciled) || [], patch = (data && data.answers_patch) || {};
@@ -541,6 +618,7 @@ APP_JS = r''''use strict';
     notes.forEach(function (n) { S.notices[n.question] = {text: n.text, kind: n.kind}; });
     var changed = false;
     Object.keys(patch).forEach(function (q) {
+      if (!Q[q]) { return; }
       if (!same(S.answers.values[q], patch[q])) { S.answers.values[q] = patch[q]; changed = true; }
     });
     return changed;
@@ -612,6 +690,10 @@ APP_JS = r''''use strict';
   function widget(q, ctx) {
     var v = ctx.get(q.id), id = ctx.prefix + '-in-' + q.id;
     var unk = q.unknown === 'preset' ? null : "Don't know / not checked";
+    // nozzle marks: views of the drawing model (one stored answer, see apply_nozzle_edit)
+    if (q.id === 'blocked_nozzles' && ctx.prefix === 'f') { return '<div data-view="blocked">' + blockedView() + '</div>'; }
+    if (q.id === 'coverage_blocked_nozzles' && ctx.prefix === 'f' && coverageView() !== null) { return '<div data-view="coverage">' + coverageView() + '</div>'; }
+    var note = q.id === 'coverage_blocked_nozzles' && ctx.prefix === 'f' ? '<div data-view="covnote">' + coverageNote() + '</div>' : '';
     if (q.kind === 'yesno') {
       return chipGroup(q, ctx, [{value: true, label: 'Yes'}, {value: false, label: 'No'}], v, unk);
     }
@@ -637,7 +719,7 @@ APP_JS = r''''use strict';
         '" value="' + esc(v === null ? '' : v) + '" aria-describedby="' + ctx.prefix + '-h-' + q.id + '"></div>';
     }
     if (q.kind === 'numbers') {
-      return '<div class="numrow"><input type="text" class="wide" id="' + id + '" data-nums="' + q.id +
+      return note + '<div class="numrow"><input type="text" class="wide" id="' + id + '" data-nums="' + q.id +
         '" value="' + esc(Array.isArray(v) ? v.join(', ') : '') + '" placeholder="' +
         (q.unknown === 'preset' ? 'none' : "Don't know") + '" aria-describedby="' + ctx.prefix + '-h-' + q.id +
         '">' + unitText(q) + '<span class="small soft">separate with commas</span></div>';
@@ -688,7 +770,7 @@ APP_JS = r''''use strict';
       '<label class="w" for="' + ctx.prefix + '-in-' + q.id + '">' + esc(q.wording) +
       (q.ask_first ? '' : '') + '</label>' +
       '<p class="help" id="' + ctx.prefix + '-h-' + q.id + '">' + esc(q.help) + '</p>' +
-      (ctx.prefix === 'f' && S.notices && S.notices[q.id] ? '<div class="notice ' + S.notices[q.id].kind + '" role="status">' + esc(S.notices[q.id].text) + '</div>' : '') +
+      (ctx.prefix === 'f' ? '<div class="notice-slot" data-notice="' + q.id + '">' + noticeHtml(q.id) + '</div>' : '') +
       widget(q, ctx) + typicalLine(q, ctx) + originMark(q, ctx) +
       '<div class="err" role="alert">' + esc(S.errors[q.id] || '') + '</div></div>';
   }
@@ -742,13 +824,14 @@ APP_JS = r''''use strict';
     });
     noz.forEach(function (n) {
       var st = n.level === null || n.level === undefined ? 'healthy' : n.level <= 0 ? 'blocked' : n.level >= 1 ? 'healthy' : 'weak';
-      var words = 'Nozzle ' + n.number + ': ' + (st === 'healthy' ? 'healthy' : st === 'weak' ? 'weak (flow ' + sig(n.level, 2) + ')' : 'blocked') +
-        ', at ' + mmInt(n.pos - o.edge) + ' from the strip edge';
+      var words = 'Nozzle ' + n.number + ': ' + (n.unknown ? 'not checked (the model uses full flow)' : st === 'healthy' ? 'healthy' : st === 'weak' ? 'weak (flow ' + sig(n.level, 2) + ')' : 'blocked') +
+        ', at ' + mmInt(n.pos - o.edge) + ' from the strip edge' + (n.events ? '; ' + n.events : '');
       var focus = o.interactive === 'nozzles' ? ' tabindex="0" role="button" data-noz="' + n.index + '"' : ' tabindex="0" class="mark"';
       s += '<g class="noz ' + st + (o.interactive === 'nozzles' ? '' : ' mark') + '"' + focus + ' aria-label="' + esc(words) + '" data-tip="' + esc(words) + '">' +
         '<circle cx="' + X(n.pos) + '" cy="' + yN + '" r="' + r + '"/>' +
         (st === 'blocked' ? '<path d="M' + (X(n.pos) - r * .6) + ' ' + (yN - r * .6) + 'L' + (X(n.pos) + r * .6) + ' ' + (yN + r * .6) +
           'M' + (X(n.pos) + r * .6) + ' ' + (yN - r * .6) + 'L' + (X(n.pos) - r * .6) + ' ' + (yN + r * .6) + '" stroke="var(--card)" stroke-width="2"/>' : '') +
+        (n.events ? '<circle class="valve" cx="' + X(n.pos) + '" cy="' + yN + '" r="' + (r + 3) + '"/>' : '') +
         '</g>';
       if (noz.length <= 40 && (n.number === 1 || n.number % 5 === 0)) {
         s += '<text x="' + X(n.pos) + '" y="' + (yN + r + 15) + '" font-size="13" font-weight="600" text-anchor="middle">' + n.number + '</text>';
@@ -845,64 +928,106 @@ APP_JS = r''''use strict';
       '<text x="15" y="12" font-size="10" font-weight="700" text-anchor="middle">' + st.letter + '</text>', text: st.letter + ': ' + label};
   }
 
-  function bandsList() {
-    var pos = Array.isArray(val('band_positions')) ? val('band_positions') : [];
-    return pos;
-  }
-  function nozzlesFor(levels) {
-    var g = geometry();
-    return g.nozzle_positions_m.map(function (p, i) {
-      return {pos: p, index: i, number: i + 1, level: Array.isArray(levels) ? levels[i] : 1};
+  // nozzles and bands exactly as the server's drawing model has them (effective levels)
+  function nozzlesOf(m) {
+    var h = m.header;
+    if (!h) { return []; }
+    return h.nozzles.map(function (n) {
+      var ev = n.valve_events.map(function (k) { var e = m.valve_events[k]; return 'valve event: flow ' + sig(e.level, 2) + ' for ' + sig(e.duration_s, 3) + ' s from ' + sig(e.start_s, 3) + ' s'; });
+      return {pos: n.position_m, index: n.index, number: n.number, level: n.level, unknown: !h.levels_known, events: ev.join('; ')};
     });
   }
+  function bandsOf(m, withWidth) {
+    var bw = m.bands.band_width_m;
+    return m.bands.positions_m.map(function (x) { return {x: x, w: withWidth && isNum(bw) ? bw : null}; });
+  }
+  function stripArgs(m) { return {barrel: m.strip.barrel_length_m, edge: m.strip.edge_m, width: m.strip.width_m}; }
 
-  function bandsInput(q, ctx) {
-    var g = geometry();
-    var pos = bandsList();
-    var bw = val('band_width');
-    var bands = pos.map(function (mm) { return {x: g.strip_edge_m + mm / 1000, w: isNum(bw) ? bw / 1000 : null}; });
+  function bandsInput(q, ctx) { return '<div data-view="bands">' + VIEWS.bands() + '</div>'; }
+  function bandsView() {
+    var m = model();
+    var pos = m.bands.from_edge_mm;
+    var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-input', label: 'Top view of the strip. Click or tap on the strip to add a band; drag a band to move it; with the keyboard use the arrow keys on a band, Delete removes it.',
-      barrel: g.barrel_length_m, edge: g.strip_edge_m, width: g.strip_width_m,
-      nozzles: nozzlesFor(val('nozzle_levels')), bands: bands, interactive: 'bands'});
+      barrel: a.barrel, edge: a.edge, width: a.width,
+      nozzles: nozzlesOf(m), bands: bandsOf(m, true), interactive: 'bands'});
     var list = '<ol class="poslist" aria-label="Band positions">' + pos.map(function (mm, i) {
       return '<li><label for="bp-' + i + '">Band ' + (i + 1) + '</label><input type="number" step="1" id="bp-' + i + '" data-bandpos="' + i +
         '" value="' + esc(mm) + '"><span class="unit">mm</span><button type="button" class="btn" data-band-del="' + i +
         '" aria-label="Delete band ' + (i + 1) + '">Delete</button></li>';
     }).join('') + '</ol>';
-    return '<div class="drawing"><div>' + svg + legend([LEG_BAND, {icon: '<circle cx="15" cy="8" r="6" fill="var(--card)" stroke="var(--ink)"/>', text: 'Coolant nozzle (for orientation)'}]) +
+    return staleNote() + '<div class="drawing' + (S.modelStale ? ' stale' : '') + '"><div>' + svg + legend([LEG_BAND, {icon: '<circle cx="15" cy="8" r="6" fill="var(--card)" stroke="var(--ink)"/>', text: 'Coolant nozzle (for orientation)'}]) +
       '</div><div class="side">' + (pos.length ? list : '<p class="empty">No bands placed yet. Click on the strip, or add one here.</p>') +
       '<div class="numrow"><label class="sr" for="bp-new">New band position in mm</label><input type="number" step="1" id="bp-new" placeholder="mm from edge">' +
       '<button type="button" class="btn" data-band-add="1">Add band</button></div>' +
-      '<p class="small soft">Strip ' + mmInt(g.strip_width_m) + ' wide. ' + (pos.length ? '<button type="button" class="btn link" data-band-clear="1">Clear all ("Don\'t know")</button>' : '') + '</p></div></div>';
+      '<p class="small soft">Strip ' + mmInt(m.strip.width_m) + ' wide. ' + (pos.length ? '<button type="button" class="btn link" data-band-clear="1">Clear all ("Don\'t know")</button>' : '') + '</p></div></div>';
   }
 
-  function nozzleInput(q, ctx) {
-    var g = geometry();
-    if (!g.nozzle_positions_m.length) {
+  function nozzleInput(q, ctx) { return '<div data-view="nozzles">' + VIEWS.nozzles() + '</div>'; }
+  function nozzlesView() {
+    var m = model(), h = m.header;
+    if (!h) {
       return '<p class="empty">This starting point has no spray header model, so nozzles cannot be marked here.</p>';
     }
-    var levels = val('nozzle_levels');
+    var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-nozzles', label: 'Spray header over the strip. Click a nozzle to cycle healthy, weak and blocked; with the keyboard press Enter or Space on a nozzle.',
-      barrel: g.barrel_length_m, edge: g.strip_edge_m, width: g.strip_width_m,
-      nozzles: nozzlesFor(levels), bands: bandsList().map(function (mm) { return {x: g.strip_edge_m + mm / 1000}; }),
-      interactive: 'nozzles'});
-    var lst = '';
-    if (Array.isArray(levels)) {
-      lst = '<details class="more"><summary>Nozzle list (flow level of each nozzle, 1 = full, 0 = blocked)</summary><div class="nozlist">' +
-        levels.map(function (lv, i) {
-          return '<label for="nz-' + i + '">Nozzle ' + (i + 1) + '<input type="number" min="0" max="1" step="0.05" id="nz-' + i + '" data-nozlevel="' + i + '" value="' + esc(lv) + '"></label>';
+      barrel: a.barrel, edge: a.edge, width: a.width,
+      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles'});
+    var known = h.levels_known, lst = '';
+    if (known) {
+      lst = '<details class="more"' + (S.nozListOpen ? ' open' : '') + ' data-nozlist="1"><summary>Nozzle list (flow level of each nozzle, 1 = full, 0 = blocked)</summary><div class="nozlist">' +
+        h.nozzles.map(function (n) {
+          return '<label for="nz-' + n.index + '">Nozzle ' + n.number + '<input type="number" min="0" max="1" step="0.05" id="nz-' + n.index + '" data-nozlevel="' + n.index + '" value="' + esc(n.level) + '"></label>';
         }).join('') + '</div></details>';
     }
-    var weak = Array.isArray(levels) ? levels.filter(function (x) { return x > 0 && x < 1; }).length : 0;
-    var blocked = Array.isArray(levels) ? levels.filter(function (x) { return x <= 0; }).length : 0;
-    return '<div>' + svg + legend([{icon: '<circle cx="15" cy="8" r="6" fill="var(--card)" stroke="var(--ink)" stroke-width="1.5"/>', text: 'Healthy'},
+    var ev = m.valve_events.length ? '<p class="small">Valve events (dotted ring on the drawing): ' + esc(m.valve_events.map(function (e) {
+      return 'nozzle' + (e.numbers.length > 1 ? 's ' : ' ') + e.numbers.join(', ') + ' at flow ' + sig(e.level, 2) + ' for ' + sig(e.duration_s, 3) + ' s';
+    }).join('; ')) + '.</p>' : '';
+    return staleNote() + '<div class="' + (S.modelStale ? 'stale' : '') + '">' + svg + legend([{icon: '<circle cx="15" cy="8" r="6" fill="var(--card)" stroke="var(--ink)" stroke-width="1.5"/>', text: 'Healthy'},
       {icon: '<circle cx="15" cy="8" r="6" fill="url(#half)" stroke="var(--ink)" stroke-width="1.5"/>', text: 'Weak (flow ' + M.weak_nozzle_level + ')'},
-      {icon: '<circle cx="15" cy="8" r="6" fill="var(--ink)" stroke="var(--ink)"/>', text: 'Blocked'}, LEG_BAND]) +
-      '<p class="small" aria-live="polite">' + (Array.isArray(levels) ? (weak + ' weak, ' + blocked + ' blocked of ' + levels.length +
+      {icon: '<circle cx="15" cy="8" r="6" fill="var(--ink)" stroke="var(--ink)"/>', text: 'Blocked'}, LEG_BAND].concat(m.valve_events.length ? [{icon: '<circle cx="15" cy="8" r="6" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="2 2"/>', text: 'Valve event'}] : [])) +
+      '<p class="small" aria-live="polite" data-nozstatus="1">' + (known ? (h.weak + ' weak, ' + h.blocked + ' blocked of ' + h.nozzles.length +
       ' nozzles. <button type="button" class="btn link" data-noz-reset="1">Set back to "Don\'t know"</button>') :
-      'Nozzle state: "Don\'t know" (nobody has checked). Click a nozzle to mark it; the others then count as healthy.') + '</p>' +
-      (Array.isArray(levels) ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + lst + '</div>';
+      'Nozzle state: "Don\'t know" (nobody has checked; the model uses full flow). Click a nozzle to mark it; the others then count as healthy.') + '</p>' +
+      (known ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + ev + lst + '</div>';
   }
+
+  // "Blocked nozzles (by number)": a view of the level-0 nozzles of the drawing that edits them
+  function blockedView() {
+    var m = model(), h = m.header;
+    if (!h) { return '<p class="empty">This starting point has no spray header model.</p>'; }
+    var nums = h.levels_known ? h.nozzles.filter(function (n) { return n.level <= 0; }).map(function (n) { return n.number; }) : [];
+    return '<div class="numrow"><input type="text" class="wide" id="f-in-blocked_nozzles" data-nozedit="blocked" value="' + esc(nums.join(', ')) +
+      '" placeholder="' + (h.levels_known ? 'none' : "Don't know") + '" aria-describedby="f-h-blocked_nozzles"><span class="small soft">separate with commas</span></div>';
+  }
+  // the coverage check's blocked nozzles: the drawing's marks when it is the same header
+  function coverageView() {
+    var m = model(), c = m.coverage;
+    if (!c) { return '<p class="empty">This starting point has no simple coverage check.</p>'; }
+    if (c.same_header) {
+      return '<p class="small">Same spray header as the drawing above, so the coverage check uses its marks (weak and blocked count as not spraying). Now: ' +
+        (c.blocked_numbers.length ? 'nozzle' + (c.blocked_numbers.length > 1 ? 's ' : ' ') + esc(c.blocked_numbers.join(', ')) : 'none') + '.</p>';
+    }
+    return null;
+  }
+  // why the coverage check has its own numbers when its header is not the one drawn
+  function coverageNote() {
+    var m = model(), c = m.coverage;
+    if (!c || c.same_header) { return ''; }
+    return '<p class="small">' + (m.header ? 'The simple coverage check in this case uses its own header' : 'This starting point has no spray header model; the simple coverage check uses a header') +
+      ' of ' + c.count + ' nozzles (barrel ' + mmInt(c.barrel_length_m) + ', pitch ' + mmSmall(c.pitch_m) + ')' + (m.header ? ', not the header drawn above, so its blocked nozzles are entered here.' : '. Its blocked nozzles are entered here.') +
+      ' Now: ' + (c.blocked_numbers.length ? esc(c.blocked_numbers.join(', ')) : 'none') + '.</p>';
+  }
+  function routeView() {
+    var r = model().route;
+    if (!r.rows.length) { return '<p class="small soft">No other passes entered.</p>'; }
+    var hits = r.rows.filter(function (x) { return x.is_pass; }).map(function (x) { return '"' + (x.label || 'unnamed') + '"'; });
+    return '<p class="small" role="status">' + (hits.length ? 'The pass where the bands show is the same as route pass ' + esc(hits.join(', ')) + '.' :
+      'The pass where the bands show is not one of the route passes: the tool treats it as one more pass.') +
+      (r.computed_replaces ? ' The run replaces flow stress or friction with computed values and compares the passes again.' : '') + '</p>';
+  }
+  var VIEWS = {bands: bandsView, nozzles: nozzlesView, blocked: blockedView, route: routeView,
+    coverage: function () { return coverageView() || ''; }, covnote: coverageNote};
 
   // ------------------------------------------------------------------ tooltips
   var tipEl = null;
@@ -1165,7 +1290,7 @@ APP_JS = r''''use strict';
     h += '<h3>The pass where the bands show</h3>';
     h += ['entry_gauge', 'exit_gauge', 'strip_width', 'exit_speed'].filter(function (id) { return shown(Q[id]); }).map(function (id) { return renderQ(Q[id]); }).join('');
     h += '<h3>Alloy and temper</h3>' + ['alloy', 'temper'].map(function (id) { return renderQ(Q[id]); }).join('');
-    h += '<h3>The route</h3>' + renderQ(Q.route);
+    h += '<h3>The route</h3>' + renderQ(Q.route) + '<div data-view="route">' + routeView() + '</div>';
     var rest = M.questions.filter(function (q) {
       return q.step === 'rolling' && !q.ask_first && ['product', 'alloy', 'temper', 'route'].indexOf(q.id) < 0 && shown(q);
     });
@@ -1201,11 +1326,12 @@ APP_JS = r''''use strict';
     return h;
   }
 
+  // the side panel states what the tool has, from the built case (the drawing model)
   function sideText() {
-    var f = family(), parts = [];
-    var o = val('orientation');
+    var sd = model().side, parts = [];
+    var o = sd.orientation, f = o === 'longitudinal' ? 'lengthwise' : o ? 'transverse' : null;
     if (f === 'lengthwise') {
-      var n = bandsList().length, c = val('continuity');
+      var n = sd.band_count, c = sd.continuity;
       var cw = {continuous: 'always there', intermittent: 'come and go', both: 'some always there, some come and go'}[c];
       parts.push('Lengthwise bands' + (n ? ' at ' + n + ' position' + (n > 1 ? 's' : '') : '') + (cw ? ', ' + cw : '') + '.');
     } else if (f === 'transverse') {
@@ -1214,13 +1340,13 @@ APP_JS = r''''use strict';
     } else {
       parts.push('Direction of the marks: not given yet.');
     }
-    var g = val('exit_gauge'), sp = val('exit_speed'), prod = val('product');
+    var g = sd.exit_gauge, sp = sd.exit_speed, prod = sd.product;
     var pname = '';
     if (prod) { M.products.forEach(function (gr) { gr.products.forEach(function (p) { if (p.id === prod) { pname = p.name.toLowerCase(); } }); }); }
     parts.push((isNum(g) ? (g < 1000 ? sig(g, 3) + ' µm' : sig(g / 1000, 3) + ' mm') + ' ' : '') + (pname || 'strip') + (isNum(sp) ? ' at ' + sig(sp, 3) + ' m/min' : '') + '.');
-    var oc = originCounts();
-    parts.push(preset().label + (oc.measured || oc.estimated ? ', ' + oc.measured + ' value' + (oc.measured === 1 ? '' : 's') + ' measured, ' + oc.estimated + ' estimated' : ', no values of your own yet') +
-      (S.answers.own_mill ? ' (marked as your mill)' : '') + '.');
+    var oc = {measured: sd.measured, estimated: sd.estimated};
+    parts.push((sd.starting_point || preset().label) + (oc.measured || oc.estimated ? ', ' + oc.measured + ' value' + (oc.measured === 1 ? '' : 's') + ' measured, ' + oc.estimated + ' estimated' : ', no values of your own yet') +
+      (sd.own_mill ? ' (marked as your mill)' : '') + '.');
     return parts;
   }
 
@@ -1231,7 +1357,7 @@ APP_JS = r''''use strict';
     var st = S.generalError ? '<p class="err" role="alert">' + esc(S.generalError) + '</p>' :
       Object.keys(S.errors).length ? '<p class="err" role="alert">One answer needs a look: ' + esc(Object.keys(S.errors).map(function (k) { return Q[k] ? Q[k].wording : k; }).join(', ')) + '</p>' :
       S.check ? '<p class="small">The tool accepts these inputs.</p>' : '<p class="small soft">Checking the inputs…</p>';
-    box.innerHTML = '<h2>What the tool has so far</h2><ul>' + sideText().map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' +
+    box.innerHTML = '<h2>What the tool has so far</h2>' + (S.modelStale ? '<p class="small soft">As last accepted:</p>' : '') + '<ul>' + sideText().map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' +
       '<p><strong class="num">' + a.unknown + '</strong> of ' + a.total + ' "ask first" questions still unknown.</p>' + st;
     var rb = document.getElementById('runmsg');
     if (rb) {
@@ -1580,15 +1706,17 @@ APP_JS = r''''use strict';
   function render() {
     var active = document.activeElement && document.activeElement.id;
     var y = window.scrollY;
-    if (S.view === 'input') { renderInput(); }
+    if (S.view === 'input') { renderInput(); S.drawnKey = drawnState(); }
     renderDrawer();
     if (active) { var a = document.getElementById(active); if (a) { a.focus({preventScroll: true}); } }
+    restoreFocus();
+    markBusy();
     window.scrollTo(0, y);
   }
   function goStep(step, qid) {
     S.view = 'input'; S.step = step;
     stopPoll();
-    renderInput(); renderDrawer();
+    renderInput(); renderDrawer(); S.drawnKey = drawnState();
     if (qid) {
       var node = document.getElementById('f-q-' + qid);
       if (node) {
@@ -1642,6 +1770,11 @@ APP_JS = r''''use strict';
   }
 
   function startRun() {
+    // first let a pending edit or check finish, so the run starts from what is drawn
+    var pending = !!checkTimer;
+    (S.editChain || Promise.resolve()).then(function () { return pending || checkTimer ? runCheck() : null; }).then(startRunNow);
+  }
+  function startRunNow() {
     if (S.generalError || Object.keys(S.errors).length) {
       var first = Object.keys(S.errors)[0];
       if (first && Q[first]) { goStep(Q[first].step, first); }
@@ -1655,7 +1788,7 @@ APP_JS = r''''use strict';
       var e = r.data.error || {text: 'The run could not be started.'};
       if (applyReconciled(r.data) || (r.data.reconciled || []).length) {
         // a run is never started from answers the person has not seen: show the redrawn header
-        S.check = null; scheduleCheck();
+        S.check = null; runCheck();
         goStep(Q[e.question] ? Q[e.question].step : S.step, e.question);
         return;
       }
@@ -1680,21 +1813,18 @@ APP_JS = r''''use strict';
       var t = {}; Object.keys(keepVals).forEach(function (k) { t[k] = true; }); S.touched = t;
     }
     S.suggested = {}; S.check = null; S.errors = {}; S.generalError = null; S.productInfo = null;
+    S.model = null; S.modelKey = null; S.modelStale = false; S.notices = {};
     S.banner = p.kind === 'example' ? 'Loaded "' + p.label + '". Its observations were generated by the model, not seen on a plant.' :
       p.kind === 'file' ? 'Opened the case file. Its values are shown as your answers.' : null;
     scheduleCheck();
   }
 
   function cycleNozzle(i) {
-    var lv = val('nozzle_levels');
-    var n = geometry().nozzle_positions_m.length;
-    lv = Array.isArray(lv) && lv.length === n ? lv.slice() : Array.apply(null, Array(n)).map(function () { return 1; });
-    var w = M.weak_nozzle_level;
-    lv[i] = lv[i] >= 1 ? w : lv[i] > 0 ? 0 : 1;
-    setVal('nozzle_levels', lv);
-    render();
-    var node = app.querySelector('[data-noz="' + i + '"]'); if (node) { node.focus({preventScroll: true}); }
-    announce('Nozzle ' + (i + 1) + ': ' + (lv[i] >= 1 ? 'healthy' : lv[i] > 0 ? 'weak' : 'blocked'));
+    // the server applies the rule; the drawing shows the state it then reports
+    sendEdit({op: 'cycle', index: i}, '[data-noz="' + i + '"]', function () {
+      var h = model().header, n = h && h.nozzles[i];
+      if (n) { announce('Nozzle ' + n.number + ': ' + n.state); }
+    });
   }
   var live = null;
   function announce(t) {
@@ -1703,12 +1833,15 @@ APP_JS = r''''use strict';
   }
 
   function setBands(list, focusIndex) {
-    var g = geometry(), wmm = Math.round(g.strip_width_m * 1000);
+    var wmm = Math.round(model().strip.width_m * 1000);
     list = list.map(function (x) { return Math.max(0, Math.min(wmm, Math.round(x))); });
     setVal('band_positions', list.length ? list : null);
-    render();
-    if (focusIndex !== undefined) { var b = app.querySelector('[data-band="' + focusIndex + '"]'); if (b) { b.focus({preventScroll: true}); } }
+    // drawn when the server's model of the new case arrives (redrawn on any difference)
+    S.focusSel = focusIndex !== undefined ? '[data-band="' + focusIndex + '"]' : null;
+    checkNow();
   }
+  // edits compose on the stored answer (what was typed); what is drawn is the model
+  function bandsList() { var v = val('band_positions'); return Array.isArray(v) ? v.slice() : []; }
   function svgMm(svg, evt) {
     var pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
     var p = pt.matrixTransform(svg.getScreenCTM().inverse());
@@ -1773,15 +1906,15 @@ APP_JS = r''''use strict';
       if (r0) {
         [['entry_gauge', 'entry_thickness_m'], ['exit_gauge', 'exit_thickness_m'], ['flow_stress', 'mean_flow_stress_pa'], ['friction', 'friction_coefficient'],
           ['entry_tension', 'entry_tension_pa'], ['exit_tension', 'exit_tension_pa'], ['exit_speed', 'exit_speed_m_s']].forEach(function (p) { if (isNum(r0[p[1]])) { setVal(p[0], r0[p[1]]); } });
-        S.banner = 'Pass "' + (r0.label || '') + '" is now the pass where the bands show.'; render();
+        render(); checkNow();
       }
     }
-    else if (d.bandAdd) { var nv = Number(document.getElementById('bp-new').value); if (document.getElementById('bp-new').value !== '' && isFinite(nv)) { setBands(bandsList().concat([nv]), bandsList().length); } }
+    else if (d.bandAdd) { var nb = document.getElementById('bp-new'), nv = Number(nb.value); if (nb.value !== '' && isFinite(nv)) { nb.value = ''; setBands(bandsList().concat([nv]), bandsList().length); } }
     else if (d.bandDel !== undefined) { var bl = bandsList().slice(); bl.splice(Number(d.bandDel), 1); setBands(bl); }
     else if (d.bandClear) { setBands([]); }
     else if (d.noz !== undefined && !t.closest('svg').dataset.dragging) { cycleNozzle(Number(d.noz)); }
-    else if (d.nozReset) { setVal('nozzle_levels', null); render(); }
-    else if (d.nozInit) { setVal('nozzle_levels', geometry().nozzle_positions_m.map(function () { return 1; })); render(); }
+    else if (d.nozReset) { sendEdit({op: 'clear'}); }
+    else if (d.nozInit) { sendEdit({op: 'all_healthy'}); }
     else if (d.defaults) { productDefaults(); }
     else if (d.new) { newScreening(); }
   });
@@ -1802,6 +1935,7 @@ APP_JS = r''''use strict';
       S.answers = clone({values: a.values || {}, origins: a.origins || {}, own_mill: !!a.own_mill, name: a.name || ''});
       S.touched = {}; Object.keys(S.answers.values).forEach(function (k) { S.touched[k] = true; });
       S.suggested = {}; S.check = null; S.errors = {}; S.generalError = null;
+      S.model = null; S.modelKey = null; S.modelStale = false; S.notices = {};
       if (ro.profile) { S.profile = ro.profile; }
       S.banner = 'These are the answers of the run "' + (a.name || '') + '". Change what you need and run again.';
       scheduleCheck();
@@ -1833,8 +1967,18 @@ APP_JS = r''''use strict';
     else if (t.id === 'ownmill') { S.answers.own_mill = t.checked; scheduleCheck(); }
     else if (t.id === 'casename') { S.answers.name = t.value; scheduleCheck(); }
     else if (t.id === 'casefile') { openCaseFile(t.files[0]); }
-    else if (d.num && ctxOf(t) === 'f' && ['exit_gauge', 'band_width', 'strip_width', 'entry_gauge'].indexOf(d.num) >= 0) { render(); }
-    else if (d.bandpos !== undefined) { render(); }
+    else if (d.num && ctxOf(t) === 'f') { S.typingField = null; if (S.heldReset) { checkNow(); } }   // drawings follow the model
+    else if (d.bandpos !== undefined) { checkNow(); }
+    else if (d.nozlevel !== undefined) {
+      var x = Number(t.value);
+      if (t.value !== '' && isFinite(x)) { sendEdit({op: 'set_level', index: Number(d.nozlevel), level: x}, '#nz-' + d.nozlevel); }
+      else { refreshViews(true); }
+    }
+    else if (d.nozedit === 'blocked') {
+      var pn = parseNums(t.value);
+      if (pn === undefined) { S.errors.blocked_nozzles = 'Type whole nozzle numbers separated by commas, for example 4, 12.'; markErrors(); updateSide(); }
+      else { sendEdit({op: 'set_blocked', numbers: pn || []}, '#f-in-blocked_nozzles'); }
+    }
     else if (d.wi) { S.whatif = S.whatif || {}; S.whatif[d.wi] = t.tagName === 'SELECT' ? t.value : Number(t.value); }
     else if (t.closest('[data-more]')) { /* details toggle handled below */ }
   });
@@ -1843,11 +1987,12 @@ APP_JS = r''''use strict';
     if (t.dataset && t.dataset.more) { S.openMore = S.openMore || {}; S.openMore[t.dataset.more] = t.open; }
     if (t.dataset && t.dataset.other) { S.otherOpen = t.open; }
     if (t.dataset && t.dataset.trust) { S.trustOpen = t.open; }
+    if (t.dataset && t.dataset.nozlist) { S.nozListOpen = t.open; }
   }, true);
   document.addEventListener('input', function (e) {
     var t = e.target, d = t.dataset;
     if (t.id === 'prod-filter') { S.prodFilter = t.value; var pos = t.selectionStart; render(); var f = document.getElementById('prod-filter'); f.focus(); f.setSelectionRange(pos, pos); return; }
-    if (d.num) { storeQuiet(d.num, t.value === '' ? null : Number(t.value), t); }
+    if (d.num) { if (ctxOf(t) === 'f') { S.typingField = d.num; } storeQuiet(d.num, t.value === '' ? null : Number(t.value), t); }
     else if (d.text) { storeQuiet(d.text, t.value.trim() === '' ? null : t.value, t); }
     else if (d.nums) { var p = parseNums(t.value); if (p !== undefined) { storeQuiet(d.nums, p, t); } }
     else if (d.list) {
@@ -1855,28 +2000,11 @@ APP_JS = r''''use strict';
       var fk = d.fkind, v = t.tagName === 'SELECT' ? t.value : fk === 'numbers' ? (parseNums(t.value) || []) : fk === 'text' ? t.value : (t.value === '' ? null : Number(t.value));
       row[d.field] = v; storeQuiet(q.id, cur, t);
     }
-    else if (d.bandpos !== undefined) { var bl = bandsList().slice(); if (t.value !== '') { bl[Number(d.bandpos)] = Number(t.value); setVal('band_positions', bl); refreshStrip(); } }
-    else if (d.nozlevel !== undefined) {
-      var lv = (val('nozzle_levels') || []).slice(), x = Number(t.value);
-      if (t.value !== '' && x >= 0 && x <= 1) { lv[Number(d.nozlevel)] = x; setVal('nozzle_levels', lv); refreshStrip(); }
-    }
+    else if (d.bandpos !== undefined) { var bl = bandsList(); if (t.value !== '') { bl[Number(d.bandpos)] = Number(t.value); setVal('band_positions', bl); } }
   });
   function storeQuiet(id, v, node) {
     if (ctxOf(node) === 'p') { S.pending[id] = v; var pb = app.querySelectorAll('.pending'); if (!pb.length) { rerenderResult(); } else { var html = pendingBar(); for (var i = 0; i < pb.length; i++) { pb[i].outerHTML = html; } } return; }
     setVal(id, v);
-  }
-  function refreshStrip() {
-    var a = document.getElementById('strip-input'), b = document.getElementById('strip-nozzles');
-    var host = (a || b) && (a || b).parentNode;
-    if (a) { var g = geometry(); var tmp = document.createElement('div'); var bw = val('band_width');
-      tmp.innerHTML = drawStrip({id: 'strip-input', label: a.getAttribute('aria-label'), barrel: g.barrel_length_m, edge: g.strip_edge_m, width: g.strip_width_m,
-        nozzles: nozzlesFor(val('nozzle_levels')), bands: bandsList().map(function (mm) { return {x: g.strip_edge_m + mm / 1000, w: isNum(bw) ? bw / 1000 : null}; }), interactive: 'bands'});
-      a.replaceWith(tmp.firstChild); }
-    if (b) { var g2 = geometry(); var tmp2 = document.createElement('div');
-      tmp2.innerHTML = drawStrip({id: 'strip-nozzles', label: b.getAttribute('aria-label'), barrel: g2.barrel_length_m, edge: g2.strip_edge_m, width: g2.strip_width_m,
-        nozzles: nozzlesFor(val('nozzle_levels')), bands: bandsList().map(function (mm) { return {x: g2.strip_edge_m + mm / 1000}; }), interactive: 'nozzles'});
-      b.replaceWith(tmp2.firstChild); }
-    return host;
   }
 
   // keyboard on drawing marks
@@ -1890,7 +2018,7 @@ APP_JS = r''''use strict';
     } else if (t.dataset && t.dataset.noz !== undefined && (e.key === 'Enter' || e.key === ' ')) {
       cycleNozzle(Number(t.dataset.noz)); e.preventDefault();
     } else if (t.id === 'bp-new' && e.key === 'Enter') {
-      var nv = Number(t.value); if (t.value !== '' && isFinite(nv)) { setBands(bandsList().concat([nv])); var f = document.getElementById('bp-new'); if (f) { f.focus(); } }
+      var nv = Number(t.value); if (t.value !== '' && isFinite(nv)) { t.value = ''; setBands(bandsList().concat([nv])); S.focusSel = '#bp-new'; }
       e.preventDefault();
     } else if (e.key === 'Escape') { hideTip(); if (S.drawer) { S.drawer = false; renderDrawer(); } }
   });

@@ -191,7 +191,7 @@ class DependentAnswersTest(ServerCase):
         self.assertIn('25 nozzles instead of 28', notice['text'])
         self.assertEqual(out['answers_patch'], {'nozzle_levels': None})
         self.assertIsNone(out['case']['width_model']['nozzle_levels'])
-        self.assertEqual(len(out['geometry']['nozzle_positions_m']), 25)
+        self.assertEqual(len(out['model']['header']['nozzles']), 25)
         # a run with the stale marks is refused with the same notice ...
         st, out = self.client.json('POST', '/api/runs', {'preset': 'foil_mill',
                                                          'answers': {'values': values}})
@@ -220,11 +220,16 @@ class DependentAnswersTest(ServerCase):
             self.assertIn('nozzles', got[q]['text'])
             self.assertIsNone(out['answers_patch'][q])
         self.assertEqual(out['case']['width_model']['events'], [])
-        # the same numbers on the unchanged header are kept
+        # the same numbers on the unchanged header are kept: the blocked number becomes a mark
+        # in the one stored answer (nozzle_levels), with a notice; the valve event is unchanged
         st, out = self.check({'blocked_nozzles': [27], 'valve_events': events})
         self.assertEqual(st, 200)
-        self.assertEqual(out['reconciled'], [])
-        self.assertEqual(out['case']['width_model']['blocked_nozzle_indices'], [26])
+        self.assertEqual([(n['question'], n['kind']) for n in out['reconciled']],
+                         [('nozzle_levels', 'moved')])
+        self.assertEqual(out['case']['width_model']['blocked_nozzle_indices'], [])
+        self.assertEqual(out['case']['width_model']['nozzle_levels'][26], 0.0)
+        self.assertEqual(out['case']['width_model']['events'][0]['nozzle_indices'], [25, 26])
+        self.assertIsNone(out['answers_patch']['blocked_nozzles'])
 
     def test_values_outside_the_strip_or_roll_get_a_check_notice(self):
         st, out = self.check({'band_positions': [100.0, 1300.0], 'band_width': 1500.0,
