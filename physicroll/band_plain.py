@@ -283,11 +283,9 @@ def _product_choices():
 
 
 YESNO_HELP = ' Answer yes, no, or leave it at "Don\'t know / not checked".'
-EDGE_HELP = ('Measure across the strip, in millimetres from the strip edge on the side where '
-             'the coolant header starts (nozzle 1). The tool converts this to its barrel '
-             'coordinate (0 at the header start) assuming the strip runs centred on the barrel, '
-             'as the case template does; if your strip runs off centre, set "Strip centre on '
-             'the barrel" under Your mill.')
+EDGE_HELP = ('Measure across the strip, in millimetres, from the strip edge nearest the first '
+             'coolant nozzle (nozzle 1). If the strip does not run in the middle of the roll, set '
+             '"Strip centre on the barrel" under Your mill.')
 
 OBSERVATION_QUESTIONS = (
     _obs('orientation', 'orientation', 'choice', 'Which way do the marks run?',
@@ -563,7 +561,7 @@ FAULT_QUESTIONS = (
        'level (1 = full flow, 0 = blocked). Leave it at "Don\'t know" if nobody has checked.',
        unit='ratio', ask_first=True, unknown='null'),
     _q('blocked_nozzles', 'mill', 'Spray header', 'width_model.blocked_nozzle_indices',
-       'numbers', 'Blocked nozzles (by number)', 'Nozzle numbers counted from the header start '
+       'numbers', 'Blocked nozzles (by number)', 'Nozzle numbers counted from the first nozzle '
        '(1 = first nozzle). The flow levels above are the finer way to say the same.',
        unit='nozzle_no', unknown='empty'),
     _q('coverage_blocked_nozzles', 'mill', 'Spray header', 'coolant.blocked_nozzle_indices',
@@ -1959,6 +1957,22 @@ _SNAKE = re.compile(r'\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b')
 _UNIT_SUFFIX = re.compile(r'_(m|pa|n|m_s|hz|rad|kg|n_m|k|s|w_m|w_m2k|per_k|per_pa)$')
 
 
+_M_RE = re.compile(r'(?<![\w.])(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?\s?m\b(?![/\w])')
+
+
+def _mm_text(v):
+    x = float(v) * 1000
+    return f'{x:.0f}' if x >= 10 else f'{x:.2g}'
+
+
+def _to_mm(m):
+    """'0.667 m' -> '667 mm': across-the-width values are millimetres on screen."""
+    a, b = m.group(1), m.group(2)
+    if float(a) >= 20 or (b and float(b) >= 20):
+        return m.group(0)
+    return _mm_text(a) + ('-' + _mm_text(b) if b else '') + ' mm'
+
+
 def _token(tok, choice_words=None):
     if choice_words and tok in choice_words:
         return choice_words[tok]
@@ -1996,23 +2010,113 @@ def words(text, questions=()):
     t = re.sub(r'\b(LATENT|latent)\b', 'hidden under tension', t)
     t = re.sub(r'\b(MANIFEST|manifest)\b', 'visible', t)
     t = re.sub(r'\b([A-Z]{4,})\b', lambda m: m.group(1).lower(), t)
+    t = _M_RE.sub(_to_mm, t)
+    t = t.replace('on the barrel coordinate', 'along the roll').replace(
+        'barrel coordinate', 'position along the roll')
     for v, lab in local.items():
         if '_' not in v and len(v) > 2:
             t = re.sub(rf'^{v}(?=[;,]|$)', lab, t)
     return clean(t)
 
 
+VERDICT_WORDS = {('SUPPORTS', 'strong'): 'Matches', ('SUPPORTS', 'moderate'): 'Matches',
+                 ('SUPPORTS', 'weak'): 'Partly matches',
+                 ('CONTRADICTS', 'strong'): 'Does not match',
+                 ('CONTRADICTS', 'moderate'): 'Does not match',
+                 ('CONTRADICTS', 'weak'): 'Does not quite match'}
+OTHER_VERDICT_WORDS = {'NEUTRAL': 'Neither for nor against', 'NOT_OBSERVED': 'Not looked at yet'}
+SOURCE_WORDS = {'observation': 'You saw', 'model': 'The model computed',
+                'input': 'From your mill values',
+                'model not assessable': 'The model could not compute this',
+                'model not credible': 'The model computed (not credible here)'}
+RELEASE_CRITERIA = ('visible only after tension release vs steady model band',
+                    'visible only after tension release vs event peak band')
+LOOSE_CRITERIA = ('loose / buckle appearance vs MANIFEST steady model band',
+                  'loose / buckle appearance vs MANIFEST event peak band')
+MODEL_AT_POSITION = 'model band at an observed position above the reporting threshold'
+EXPECT_SENTENCES = {
+    RELEASE_CRITERIA[0]: 'If the bands show only after the coil is unwound, this cause expects '
+                         'the model band to be hidden under tension in the mill and visible after '
+                         'release; if they show in the mill, it expects a band that buckles in '
+                         'the mill.',
+    RELEASE_CRITERIA[1]: 'If the bands show only after the coil is unwound, this cause expects '
+                         'the short-lived model band to be hidden under tension in the mill and '
+                         'visible after release; if they show in the mill, it expects a band that '
+                         'buckles in the mill.',
+    LOOSE_CRITERIA[0]: 'This cause expects a loose, wavy band together with a model band that '
+                       'buckles in the mill.',
+    LOOSE_CRITERIA[1]: 'This cause expects a loose, wavy band together with a short-lived model '
+                       'band that buckles in the mill.',
+    MODEL_AT_POSITION: 'This cause expects the model to put a band (hidden under tension or '
+                       'buckled) where you saw one.'}
+RELEASE_SEEN = {'true': 'the bands show only after tension release (on the coil, at the slitter '
+                        'or on the table)',
+                'false': 'the bands are seen in the mill'}
+
+
+def _sentence(text):
+    text = str(text).strip().rstrip('.')
+    return text[:1].upper() + text[1:] + '.' if text else ''
+
+
+def evidence_sentences(e, qids=()):
+    """Plain sentences for one evidence item: a verdict, what the person saw, what the model
+    computed (or which mill value was used) and what the cause expects. Built from the engine's
+    own fields; numbers are kept, metres are shown as millimetres."""
+    basis = e.get('basis', 'observation')
+    crit, obs, exp = e['criterion'], str(e['observed']), str(e['expected'])
+    seen, model = obs, None
+    pos = re.match(r'observed (.+?) on (?:model|events) (.+?)(?: \((.+)\))?$', obs)
+    if '; model ' in obs:
+        seen, model = obs.split('; model ', 1)
+    elif pos:
+        seen = 'bands at ' + pos.group(1)
+        model = 'positions at ' + pos.group(2) + (f' ({pos.group(3)})' if pos.group(3) else '')
+    if crit == MODEL_AT_POSITION or basis != 'observation':
+        seen, model = None, obs
+    seen_w = model_w = None
+    if seen is not None:
+        if crit in RELEASE_CRITERIA:
+            seen_txt = RELEASE_SEEN.get(seen.strip().lower(), words(seen, qids))
+        else:
+            seen_txt = words(seen, qids)
+        seen_w = 'You saw: ' + _sentence(seen_txt)
+    if model is not None:
+        label = SOURCE_WORDS.get(basis, 'The model computed') if basis != 'observation' \
+            else 'The model computed'
+        text = words(model, qids).replace(' / ', ' and ')
+        parts = []
+        for part in text.split(', '):          # one entry per state, not one per band
+            if part not in parts:
+                parts.append(part)
+        text = ', '.join(parts)
+        text = re.sub(r'(\b\d+ mm)(, \1\b)+', r'\1', text)
+        if crit in LOOSE_CRITERIA:
+            text = {'visible': 'a band that buckles in the mill',
+                    'hidden under tension': 'a band hidden under tension in the mill'}.get(
+                        text.strip(), text)
+        text = re.sub(r'^(\d[\d.,]* mm): ', r'at \1, ', text)
+        model_w = label + ': ' + _sentence(text)
+    expects = EXPECT_SENTENCES.get(crit) or 'This cause expects: ' + _sentence(words(exp, qids))
+    verdict = VERDICT_WORDS.get((e['verdict'], e['weight'])) or \
+        OTHER_VERDICT_WORDS.get(e['verdict'], 'Counted')
+    return {'verdict_words': verdict, 'seen_words': seen_w, 'model_words': model_w,
+            'expects_words': expects}
+
+
 def _evidence_item(e):
     label, qids = CRITERIA.get(e['criterion'], (e['criterion'], []))
-    return {'criterion': e['criterion'], 'label': words(label),
-            'observed': e['observed'], 'expected': e['expected'],
-            'observed_words': words(e['observed'], qids),
-            'expected_words': words(e['expected'], qids),
-            'verdict': e['verdict'], 'weight': e['weight'],
-            'weight_words': WEIGHT_WORDS.get(e['weight'], ''),
-            'basis': e.get('basis', 'observation'),
-            'basis_words': BASIS_WORDS.get(e.get('basis', 'observation'), e.get('basis')),
-            'questions': [q for q in qids if q in QUESTION_BY_ID]}
+    out = {'criterion': e['criterion'], 'label': words(label),
+           'observed': e['observed'], 'expected': e['expected'],
+           'observed_words': words(e['observed'], qids),
+           'expected_words': words(e['expected'], qids),
+           'verdict': e['verdict'], 'weight': e['weight'],
+           'weight_words': WEIGHT_WORDS.get(e['weight'], ''),
+           'basis': e.get('basis', 'observation'),
+           'basis_words': BASIS_WORDS.get(e.get('basis', 'observation'), e.get('basis')),
+           'questions': [q for q in qids if q in QUESTION_BY_ID]}
+    out.update(evidence_sentences(e, qids))
+    return out
 
 
 def _cause(h):

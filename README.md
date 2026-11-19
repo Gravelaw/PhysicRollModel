@@ -33,7 +33,8 @@ to `main` on 19 November 2026.
 
 | I want to ... | Go to |
 |---|---|
-| find likely causes for bands or marks I have on strip or foil | [Band screening: quick start](#band-screening-quick-start) |
+| answer a few questions in the browser and see which causes fit, without editing a case file | [Guided app](#guided-app) |
+| find likely causes for bands or marks I have on strip or foil, from a case file | [Band screening: quick start](#band-screening-quick-start) |
 | look up product, alloy and temper data for thin-gauge aluminium | [Product, alloy and temper lookups](#product-alloy-and-temper-lookups) and [thin-gauge products](docs/thin-gauge-products.md) |
 | use the steady process model, saved runs, the editor or the Blender scene | [Core demonstrator: start here](#core-demonstrator-start-here--no-dependencies-or-blender-needed) |
 | know what the simulation does not cover yet | [Simulation coverage gaps](docs/simulation-coverage-gaps.md) and [Status and limits](#status-and-limits) |
@@ -56,6 +57,21 @@ standings. It writes two files into the `--out` directory, named after the case:
 `<name>.result.json` (here `battery-foil-demo.result.json`) and `<name>.report.html`
 (`battery-foil-demo.report.html`). The same files, already generated, are in
 `artifacts/band_diagnosis/`. The other three demos are listed under [Demos](#demos).
+
+### Guided app
+
+```bash
+python -m physicroll.band_app --runs-dir band-app-runs
+```
+
+Or double-click `start-band-app.bat` (Windows), `start-band-app.command` (macOS) or
+`start-band-app.sh` (Linux). A page opens in your browser, on this computer only. It asks three
+short sets of questions (what you see, what you are rolling, your mill), with "don't know" as
+the default answer, runs the screening, and shows the shortlist of causes that fit, where the
+bands sit against the coolant nozzles, and what to check next. Answering one of the checks
+updates the shortlist and shows what changed. The result is a screening shortlist from a model
+that has not been compared with plant data, and its trust level stays low until your own mill
+values are entered. See [the band app guide](docs/band-app.md).
 
 ### Use it on your own case
 
@@ -153,6 +169,7 @@ are taken from your file.
 | Path | What it is |
 |---|---|
 | [`docs/band-diagnosis.md`](docs/band-diagnosis.md) | The guide: battery foil first (section 3), how to run (4), filling in the template and using your own mill (5, 5.3), evidence rules (6), equations with source tags (7-11), how to read the report (12), limitations (14) |
+| [`docs/band-app.md`](docs/band-app.md) | The guided app: starting it, the three steps, how to read each picture, quick and detailed runs, the trust rule, where runs are kept, safeguards |
 | [`docs/thin-gauge-products.md`](docs/thin-gauge-products.md) | Product reference, generated from the catalogue |
 | [`docs/simulation-coverage-gaps.md`](docs/simulation-coverage-gaps.md) | What the simulation does not cover yet, from a literature review |
 | [`docs/research/band-screening-2026-11/`](docs/research/band-screening-2026-11/README.md) | The nine research reports behind the tool |
@@ -276,6 +293,7 @@ on another build can have a different hierarchy and requires corresponding verif
 | `docs/research.md`, `docs/sensors.md`, `docs/traceability.md`, `docs/capabilities.md`, `docs/next_modules.md` | Sources, sensors, equations, capability boundary and next research modules |
 | `docs/verification.md` | Actual commands/results, dependency versions and transfer checks |
 | `physicroll/band_*.py` | Band screening: case engine, CLI, report, product catalogue, product survey; uses the physics modules `chatter.py`, `band_signatures.py`, `roll_thermal.py`, `strip_shape.py`, `bite_tribology.py`, `mill_dynamics.py` and `foil_bite.py` |
+| `physicroll/band_plain.py`, `physicroll/band_app.py`, `physicroll/band_app_assets.py`, `start-band-app.*`, `docs/band-app.md` | Band screening: the guided local app (plain-language layer, loopback server, page), its launchers and its guide |
 | `scenarios/band_diagnosis_*.json`, `scenarios/band_survey_overrides_example.json` | Band screening: four synthetic demos, the case template and a synthetic survey overrides example |
 | `artifacts/band_diagnosis/` | Band screening: committed demo and product-survey results and HTML reports |
 | `docs/band-diagnosis.md`, `docs/thin-gauge-products.md`, `docs/simulation-coverage-gaps.md` | Band screening guide, generated thin-gauge product reference, literature gap study |

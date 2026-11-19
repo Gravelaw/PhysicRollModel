@@ -281,7 +281,14 @@ class UnitTest(unittest.TestCase):
         self.assertAlmostEqual(got[0], 0.25, places=12)
         self.assertAlmostEqual(got[1], 0.623, places=12)
         self.assertIn('strip edge', bpl.QUESTION_BY_ID['band_positions'].help)
-        self.assertIn('header start', bpl.QUESTION_BY_ID['band_positions'].help)
+        self.assertIn('first coolant nozzle', bpl.QUESTION_BY_ID['band_positions'].help)
+
+    def test_help_texts_have_no_engine_talk(self):
+        bad = re.compile(r'template|barrel coordinate|schema|\bv2\b|\bnull\b|case key|'
+                         r'header start|[a-z]+_[a-z]+', re.IGNORECASE)
+        for q in bpl.QUESTIONS:
+            for text in (q.wording, q.help) + tuple(lab for _, lab in q.choices):
+                self.assertIsNone(bad.search(text), f'{q.id}: {text}')
 
 
 class AnswersCaseTest(unittest.TestCase):
@@ -465,7 +472,7 @@ class SummaryTest(unittest.TestCase):
                     self.assertEqual(c['score'], h['score'])
                     self.assertEqual(c['standing'], h['standing'])
                     self.assertEqual(c['rank'], h['rank'])
-                    self.assertEqual(c['how_to_check'], bpl.clean(h['confirming_test']))
+                    self.assertEqual(c['how_to_check'], bpl.words(h['confirming_test']))
                     n_sup = sum(e['verdict'] == 'SUPPORTS' for e in h['evidence'])
                     self.assertEqual(len(c['fits_because']), n_sup)
                     for item in c['fits_because'] + c['speaks_against']:
@@ -520,6 +527,46 @@ class SummaryTest(unittest.TestCase):
                 self.assertIsNone(scream.search(t), f'{where}: {t}')
                 self.assertNotIn(t.strip(), enums, where)
                 self.assertNotIn(t.strip().lower(), ('true', 'false'), where)
+
+    def test_evidence_sentences_three_shapes(self):
+        # 1. positions in metres -> millimetres, split into what was seen and what was computed
+        e = {'criterion': 'band positions vs model stripes / blocked or low-level nozzles',
+             'observed': 'observed 0.667 m on model 0.6675 m, 0.668 m (model steady stripes and '
+                         'blocked / low-level nozzles)',
+             'expected': 'within 0.013 m (one quarter of the nozzle pitch)',
+             'verdict': 'SUPPORTS', 'weight': 'strong', 'basis': 'observation'}
+        out = bpl.evidence_sentences(e, ['band_positions'])
+        self.assertEqual(out['verdict_words'], 'Matches')
+        self.assertEqual(out['seen_words'], 'You saw: Bands at 667 mm.')
+        self.assertTrue(out['model_words'].startswith('The model computed: Positions at 668 mm'))
+        self.assertIn('13 mm', out['expects_words'])
+        self.assertNotRegex(json.dumps(out), r'\d m\b')
+        # 2. the source is named by the basis
+        for basis, start in (('model', 'The model computed: '),
+                             ('input', 'From your mill values: ')):
+            e2 = {'criterion': 'pass reduction', 'observed': '0.300', 'expected': '>= 0.40',
+                  'verdict': 'CONTRADICTS', 'weight': 'moderate', 'basis': basis}
+            o2 = bpl.evidence_sentences(e2)
+            self.assertIsNone(o2['seen_words'])
+            self.assertTrue(o2['model_words'].startswith(start), o2)
+            self.assertEqual(o2['verdict_words'], 'Does not match')
+        # 3. a compound item: what was seen and what the model computed, as two sentences,
+        #    and the expectation as a sentence
+        e3 = {'criterion': 'visible only after tension release vs steady model band',
+              'observed': 'false; model MANIFEST_BUCKLE / MANIFEST_AFTER_TENSION_RELEASE',
+              'expected': 'true: LATENT in mill and MANIFEST after release; false: MANIFEST in '
+                          'mill', 'verdict': 'SUPPORTS', 'weight': 'moderate',
+              'basis': 'observation'}
+        o3 = bpl.evidence_sentences(e3, ['only_after_release'])
+        self.assertEqual(o3['seen_words'], 'You saw: The bands are seen in the mill.')
+        self.assertEqual(o3['model_words'], 'The model computed: Buckled in the mill and '
+                                            'visible after tension release.')
+        self.assertTrue(o3['expects_words'].startswith('If the bands show only after the coil '
+                                                       'is unwound'))
+        for o in (out, o3):
+            for v in o.values():
+                if v:
+                    self.assertNotRegex(v, r'[A-Z]{2,}_[A-Z]|\b(true|false)\b|;\s*model')
 
     def test_views_follow_the_result(self):
         s = bpl.plain_summary(artifact('lengthwise-bands-demo'))

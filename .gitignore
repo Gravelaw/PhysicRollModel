@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 *.blend1
 artifacts/*.log
+band-app-runs/

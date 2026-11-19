@@ -317,6 +317,34 @@ svg .spray{opacity:.11}
 .runbar .msg{display:none}.runbar .msg.err{display:block}}
 .bar.changed{box-shadow:inset 5px 0 0 var(--orange);background:var(--paper)}
 @media (max-width:860px){.bar,.axis{grid-template-columns:34px minmax(0,1fr) 3.4rem}}
+.evid .vw{font-weight:700}.evid .vw.ok{color:var(--green)}.evid .vw.no{color:var(--red)}
+.evsub{margin:.2rem 0 0;padding-left:1.1rem}.evsub li{border:0;padding:.05rem 0}
+@page{size:A4;margin:11mm}
+@media print{body{font-size:9.5pt;line-height:1.35}.pr-hide,.howto,.profile details,.trust .meter+p{display:none!important}
+.card{padding:6px 8px;margin-bottom:6px}.card h2{font-size:11pt;margin-bottom:2px}
+.headline .text{font-size:12pt}.statusline{padding:2px 6px;margin-top:4px}
+.bar{padding:1px 2px;grid-template-columns:30px minmax(0,13rem) minmax(0,1fr) 2.2rem}
+.bar .pic svg{width:30px;height:20px}.axis{grid-template-columns:30px minmax(0,13rem) minmax(0,1fr) 2.2rem}
+.track{height:12px}.track .fill{top:1px;height:10px}
+.fig svg,#shortlist,.legend{break-inside:avoid;page-break-inside:avoid}
+.fig{max-width:82%}.legend{font-size:8pt}.checklist>li{padding:2px 0}
+.trust{padding:6px}.trust ul{margin:2px 0;padding-left:1rem}
+.screening-note{margin:2px 0}h3{font-size:10pt;margin:4px 0 2px}}
+@media print{.headline{display:grid!important;grid-template-columns:minmax(0,1fr) 190px!important}
+.bar,.axis{display:grid!important;grid-template-columns:30px minmax(0,12rem) minmax(0,1fr) 2.2rem!important;grid-template-areas:none!important}
+.bar .pic,.bar .nm,.bar .score,.bar .track{grid-area:auto!important}
+.bar .nm b{display:inline;font-size:9pt}.bar .stand{font-size:8pt;margin-left:.3rem}
+.trust details summary{display:none}.trust .small{font-size:8pt}}
+@media print{#shortlist details.more,.fig+.legend+details,.trust details details{display:none!important}
+.fig{max-width:68%}.legend{gap:0 .6rem}.headline p{margin:2px 0}.card>h2{margin:0}}
+@media print{.bar,.axis{grid-template-columns:24px minmax(0,19rem) minmax(0,1fr) 2rem!important;gap:6px!important}
+.bar .pic svg{width:24px;height:16px}.bar{padding:0 2px!important}.bars{gap:0}
+.statusline{font-size:8.5pt}.flags,.cols{display:none}}
+@media print{.fig{max-width:58%}.card ul.small{font-size:8pt;margin:0;padding-left:1rem}
+.card ul.small li{margin:0}.legend{font-size:7.5pt;margin:2px 0}.checklist{font-size:8.5pt}
+.trust{font-size:8.5pt}.headline .text{font-size:11pt}}
+@media print{.fig{max-width:52%}.checklist>li{padding:0;border:0}.card{margin-bottom:4px}
+.wrap>p.printonly{margin:0 0 4px}.screening-note{font-size:8.5pt}}
 '''
 
 APP_JS = r''''use strict';
@@ -676,7 +704,7 @@ APP_JS = r''''use strict';
     var sx = (W - ML - MR) / barrel;
     function X(m) { return ML + m * sx; }
     var res = o.result, hasTh = res && res.thermal_profile;
-    var yN = 22, yTop = hasTh ? 128 : 74, yBot = yTop + 84, yRul = yBot + 8, H = yRul + 44;
+    var yN = 38, yTop = hasTh ? 146 : 92, yBot = yTop + 84, yRul = yBot + 8, H = yRul + 44;
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="' + esc(o.label) + '"' +
       (o.id ? ' id="' + o.id + '"' : '') + ' data-barrel="' + barrel + '" data-edge="' + o.edge +
       '" data-width="' + o.width + '" data-ml="' + ML + '" data-sx="' + sx + '">';
@@ -686,7 +714,7 @@ APP_JS = r''''use strict';
       '<rect width="2" height="6" fill="var(--soft)"/></pattern></defs>';
     // roll barrel and spray header
     s += '<rect class="roll" x="' + X(0) + '" y="' + (yN - 14) + '" width="' + (barrel * sx) + '" height="' + (yBot - yN + 18) + '"/>';
-    s += '<text x="' + X(0) + '" y="' + (yN - 16 > 8 ? yN - 16 : 10) + '" font-size="12" class="softtext">roll barrel ' + mmInt(barrel) + '</text>';
+    s += '<text x="' + X(0) + '" y="13" font-size="12" class="softtext">Roll barrel ' + mmInt(barrel) + ', coolant nozzles numbered from nozzle 1</text>';
     var noz = o.nozzles || [];
     var pitch = noz.length > 1 ? (noz[1].pos - noz[0].pos) * sx : 30;
     var r = Math.max(4, Math.min(10, pitch * 0.32));
@@ -708,7 +736,7 @@ APP_JS = r''''use strict';
           'M' + (X(n.pos) + r * .6) + ' ' + (yN - r * .6) + 'L' + (X(n.pos) - r * .6) + ' ' + (yN + r * .6) + '" stroke="var(--card)" stroke-width="2"/>' : '') +
         '</g>';
       if (noz.length <= 40 && (n.number === 1 || n.number % 5 === 0)) {
-        s += '<text x="' + X(n.pos) + '" y="' + (yN + r + 13) + '" font-size="11" text-anchor="middle" class="softtext">' + n.number + '</text>';
+        s += '<text x="' + X(n.pos) + '" y="' + (yN + r + 15) + '" font-size="13" font-weight="600" text-anchor="middle">' + n.number + '</text>';
       }
     });
     // thermal profile of the roll (result only)
@@ -786,7 +814,7 @@ APP_JS = r''''use strict';
         s += '<text x="' + xx + '" y="' + (yRul + 19) + '" font-size="12" text-anchor="middle" class="softtext">' + t + '</text>';
       }
     }
-    s += '<text x="' + X(o.edge) + '" y="' + (yRul + 36) + '" font-size="12" class="softtext">' + (W < 600 ? 'mm from the strip edge (header-start side)' : 'mm across the strip, from the edge on the side where the header starts (nozzle 1)') + '</text>';
+    s += '<text x="' + X(o.edge) + '" y="' + (yRul + 36) + '" font-size="12" class="softtext">' + (W < 600 ? 'mm from the strip edge nearest nozzle 1' : 'mm across the strip, from the strip edge nearest nozzle 1') + '</text>';
     return s + '</svg>';
   }
 
@@ -1275,7 +1303,8 @@ APP_JS = r''''use strict';
       var end = pos(c.score);
       var oldMark = opts.old && old[id] && old[id].score !== c.score ? '<span class="old" style="left:' + pos(old[id].score).left + '%;width:' + pos(old[id].score).width + '%" title="before"></span>' : '';
       var label = c.name + ': ' + c.standing_words + ', score ' + c.score + (opts.old && old[id] && old[id].score !== c.score ? ' (before ' + old[id].score + ')' : '');
-      h += '<div role="listitem"><button type="button" class="bar' + (opts.old && old[id] && (old[id].score !== c.score || old[id].standing !== c.standing) ? ' changed' : '') + '" data-cause="' + id + '" aria-expanded="' + (S.openCause === id && !opts.compact ? 'true' : 'false') + '" aria-label="' + esc(label) + '"' + (opts.compact ? ' tabindex="-1"' : '') + '>' +
+      var prHide = (c.standing === 'CONTRADICTED' || c.standing === 'NOT_ASSESSABLE') ? ' class="pr-hide"' : '';
+      h += '<div role="listitem"' + prHide + '><button type="button" class="bar' + (opts.old && old[id] && (old[id].score !== c.score || old[id].standing !== c.standing) ? ' changed' : '') + '" data-cause="' + id + '" aria-expanded="' + (S.openCause === id && !opts.compact ? 'true' : 'false') + '" aria-label="' + esc(label) + '"' + (opts.compact ? ' tabindex="-1"' : '') + '>' +
         '<span class="pic">' + picto(c.pictogram) + '</span><span class="nm"><b>' + esc(c.name) + '</b>' + standWords(c) + '</span>' +
         '<span class="track"><span class="zero" style="left:' + z + '%"></span>' + oldMark +
         '<span class="fill ' + SCLASS[c.standing] + '" data-left="' + end.left + '" data-width="' + end.width + '" style="left:' + start.left + '%;width:' + start.width + '%"></span></span>' +
@@ -1289,8 +1318,11 @@ APP_JS = r''''use strict';
   function evidList(items, empty) {
     if (!items.length) { return '<p class="empty">' + esc(empty) + '</p>'; }
     return '<ul class="evid">' + items.map(function (e) {
-      return '<li><span class="lab">' + esc(e.label.charAt(0).toUpperCase() + e.label.slice(1)) + '</span> <span class="w">(' + esc(e.weight_words) + '; from ' + esc(e.basis_words) + ')</span><br>' +
-        '<span class="small">Seen or computed: ' + esc(e.observed_words) + '. This cause needs: ' + esc(e.expected_words) + '.</span></li>';
+      var good = e.verdict === 'SUPPORTS';
+      return '<li><span class="vw ' + (good ? 'ok' : 'no') + '"><span aria-hidden="true">' + (good ? '✓' : '✕') + '</span> ' + esc(e.verdict_words) +
+        '</span> <span class="w">(' + esc(e.weight_words) + ')</span>: <span class="lab">' + esc(e.label) + '</span>' +
+        '<ul class="evsub small">' + (e.seen_words ? '<li>' + esc(e.seen_words) + '</li>' : '') + (e.model_words ? '<li>' + esc(e.model_words) + '</li>' : '') +
+        '<li>' + esc(e.expects_words) + '</li></ul></li>';
     }).join('') + '</ul>';
   }
 
@@ -1302,8 +1334,8 @@ APP_JS = r''''use strict';
     }).join('') + '</ul>' : '<p class="empty">Everything this cause looks at has an answer.</p>';
     return '<div class="detail" id="detail-' + c.id + '"><div class="top"><div>' + picto(c.pictogram, true) + '</div><div><h3>' + esc(c.name) + '</h3>' +
       '<p>' + esc(c.description) + '</p><p>' + standWords(c) + ' <span class="num small">score ' + c.score + ', place ' + c.rank + ' of 20</span></p></div></div>' +
-      '<div class="cols"><div><h4>Fits because</h4>' + evidList(c.fits_because, 'Nothing entered speaks for it yet.') + '</div>' +
-      '<div><h4>Speaks against</h4>' + evidList(c.speaks_against, 'Nothing entered speaks against it.') + '</div></div>' +
+      '<div class="cols"><div><h4>What fits</h4>' + evidList(c.fits_because, 'Nothing entered speaks for it yet.') + '</div>' +
+      '<div><h4>What speaks against it</h4>' + evidList(c.speaks_against, 'Nothing entered speaks against it.') + '</div></div>' +
       '<h4>Not looked at yet</h4>' + nl + '<h4>How to check on the floor</h4><p>' + esc(c.how_to_check) + '</p></div>';
   }
 
@@ -1390,14 +1422,15 @@ APP_JS = r''''use strict';
 
   function nextChecks(sum) {
     if (!sum.next_checks.length) { return '<p class="empty">No further checks listed.</p>'; }
+    var more = sum.next_checks.length - 3;
     return '<ul class="checklist">' + sum.next_checks.map(function (c, i) {
       var qs = c.questions.filter(function (q) { return Q[q]; });
       var key = 'nc-' + i;
       var open = S.openChecks[key];
-      return '<li><div class="row"><span>' + esc(c.text) + '</span>' + (qs.length ? '<button type="button" class="btn noprint" data-check="' + key + '" data-qs="' + esc(qs.join(',')) +
+      return '<li' + (i >= 3 ? ' class="pr-hide"' : '') + '><div class="row"><span>' + esc(c.text) + '</span>' + (qs.length ? '<button type="button" class="btn noprint" data-check="' + key + '" data-qs="' + esc(qs.join(',')) +
         '" aria-expanded="' + (open ? 'true' : 'false') + '">' + (open ? 'Close' : 'I have checked this') + '</button>' : '<span class="small soft">(no question in the form for this)</span>') + '</div>' +
         (open ? inlineQs(qs) : '') + '</li>';
-    }).join('') + '</ul>';
+    }).join('') + '</ul>' + (more > 0 ? '<p class="printonly small">… and ' + more + ' more (see the app).</p>' : '');
   }
 
   function whatIfCard() {
@@ -1479,7 +1512,7 @@ APP_JS = r''''use strict';
     }
     h += '<section class="card"><h2>How far to trust this</h2><p class="howto">How to read this: what the tool noticed about this case, what it could not assess, and what it never does.</p>' +
       '<div class="noprint"><h3>Notes on this case</h3><ul class="flags">' + sum.flags_plain.map(function (f) { return '<li>' + esc(f.text) + (f.what_to_do ? '<br><span class="small soft">What to do: ' + esc(f.what_to_do) + '</span>' : '') + '</li>'; }).join('') + '</ul>' +
-      '<h3 class="noprint">Could not be assessed</h3><ul class="small">' + (sum.not_assessable.length ? sum.not_assessable.map(function (x) { return '<li>' + esc(x.what) + ': ' + esc(x.why) + '</li>'; }).join('') : '<li>Everything was assessed.</li>') + '</ul>' +
+      '<h3 class="noprint">Could not be assessed</h3><ul class="small noprint">' + (sum.not_assessable.length ? sum.not_assessable.map(function (x) { return '<li>' + esc(x.what) + ': ' + esc(x.why) + '</li>'; }).join('') : '<li>Everything was assessed.</li>') + '</ul>' +
       '</div><h3>Always true</h3><ul class="small">' + sum.limitations.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></section>';
     h += '<section class="card noprint"><h2>Take it with you</h2><div class="takeaway"><button type="button" class="btn" data-report="' + run.id + '">Open the full engineering report</button>' +
       '<button type="button" class="btn" data-download="case.json">Download the case file</button><button type="button" class="btn" data-download="result.json">Download the result</button>' +

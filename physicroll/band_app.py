@@ -63,6 +63,7 @@ from .band_report import render_band_report
 
 RUN_ID = re.compile(r'[0-9a-f]{32}\Z')
 MAX_BODY_BYTES = 1024 * 1024
+WRITE_RETRIES = 6
 TOKEN_HEADER = 'X-Band-App-Token'
 CSP = ("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; "
        "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -176,7 +177,16 @@ class RunStore:
             traceback.print_exc(file=sys.stderr)
 
     def _write(self, run_id, name, content):
-        _save_complete(self.root / run_id / name, content)
+        # On Windows a file being read at that moment (or held by a virus scanner) can make the
+        # atomic replace fail briefly with PermissionError: retry a few times.
+        for attempt in range(WRITE_RETRIES):
+            try:
+                _save_complete(self.root / run_id / name, content)
+                return
+            except PermissionError:
+                if attempt == WRITE_RETRIES - 1:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def _save_meta(self, meta):
         self._write(meta['id'], 'meta.json', _dump(meta))
@@ -675,6 +685,9 @@ def main(argv=None):
     try:
         server = make_server(args.runs_dir, args.port)
     except OSError as exc:
+        if args.port and getattr(exc, 'errno', None) in (48, 98, 10013, 10048):
+            parser.error(f'port {args.port} is already in use (another band app may be running). '
+                         'Start without --port to pick a free port, or choose another port.')
         parser.error(f'cannot start: {exc}')
     url = f'http://127.0.0.1:{server.server_port}/'
     print(f'Band app running at {url}  (this computer only; press Ctrl-C to stop)', flush=True)
@@ -683,12 +696,15 @@ def main(argv=None):
             webbrowser.open(url)
         except Exception:                               # no browser: the address is printed
             pass
+
     def _stop(signum, frame):                        # a closed window / kill: stop cleanly too
         raise KeyboardInterrupt
-    try:
-        signal.signal(signal.SIGTERM, _stop)
-    except (ValueError, OSError):                      # not in the main thread
-        pass
+    sigterm = getattr(signal, 'SIGTERM', None)
+    if sigterm is not None and threading.current_thread() is threading.main_thread():
+        try:
+            signal.signal(sigterm, _stop)
+        except (ValueError, OSError, RuntimeError):    # e.g. an embedded interpreter
+            pass
     try:
         server.serve_forever()
     except KeyboardInterrupt:
