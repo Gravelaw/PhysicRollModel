@@ -13,8 +13,9 @@ on the same date. The scope is aluminium cold rolling from about 1 mm down to fo
 the plant's product as the focus: battery collector foil, 50 um in, two single-sheet passes,
 12-19 um out.
 
-**How it was made.** Four separate literature reports were written and are merged here. Their
-source ids keep a prefix so that every statement can be traced:
+**How it was made.** Four separate literature reports were written and are merged here. The
+reports themselves are kept in [research/band-screening-2026-11](research/band-screening-2026-11/README.md).
+Their source ids keep a prefix so that every statement can be traced:
 
 | prefix | report | gap ids |
 |---|---|---|
