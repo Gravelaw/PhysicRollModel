@@ -1,0 +1,973 @@
+# Simulation coverage gaps for thin-gauge aluminium rolling
+
+A literature gap study, dated 2026-11-18. **Nothing in this document is implemented or validated.**
+It lists what the published literature, open datasets and open codes contain that `physicroll` does
+not, and which physical effects would have to be coupled to cover thin-gauge aluminium rolling.
+
+## 1. Purpose and how to read this
+
+**What was compared with what.** The project as it stood on 2026-11-18 (see
+[capabilities.md](capabilities.md) and [band-diagnosis.md](band-diagnosis.md), sections 1 and 14)
+was compared with published literature, open datasets and open-source codes found by web research
+on the same date. The scope is aluminium cold rolling from about 1 mm down to foil (6-60 um), with
+the plant's product as the focus: battery collector foil, 50 um in, two single-sheet passes,
+12-19 um out.
+
+**How it was made.** Four separate literature reports were written and are merged here. Their
+source ids keep a prefix so that every statement can be traced:
+
+| prefix | report | gap ids |
+|---|---|---|
+| `TM-` | thermal modelling and coolant, material behaviour, mill dynamics and gauge / tension control | A1-A10, B1-B7, C1-C8 |
+| `SS-` | strip shape, roll stack, web handling, winding, flatness control | G1-G16 |
+| `BT-` | roll bite, friction, lubrication, surface generation | BT-G1 to BT-G17 |
+| `OD-` | open datasets, open codes, published benchmark data, validation plan | none (datasets D1-D10, M1-M4) |
+
+All four reports were available and are included. Two id changes were needed. The bite report
+numbered its gaps G1-G17, which collides with the shape report's G1-G16, so the bite gaps are
+written `BT-G1` to `BT-G17` here. The contradiction lists of the reports are renumbered X1-X33 in
+section 6. `PT-T..` and `BG-G..` are source ids of earlier project research; they are listed in
+[thin-gauge-products.md](thin-gauge-products.md). "band-diagnosis 7.2" means section 7.2 of
+[band-diagnosis.md](band-diagnosis.md).
+
+**How sources were read.** Each source carries the read status its report gave it. A status is
+never upgraded here. Where two reports read the same paper to different depth, each id keeps its
+own status.
+
+| tag | meaning |
+|---|---|
+| FT | full text read (sometimes only the stated pages or sections) |
+| EX | excerpt read: part of the text, or a search-tool extract |
+| AB | abstract only |
+| SN | search snippet, title or bibliographic record only |
+| LP | landing page or repository metadata only |
+| CIT | seen only as a citation in another source |
+| VP | vendor or trade page |
+| [M], MEM, "from memory, not verified" | not found in a source during the research; treat as unverified |
+| [D], [derived], "computed here" | arithmetic or inference by a report from cited numbers; a check, not a literature value |
+| [run] | obtained by running the project's own solver read-only |
+| "model output, not measurement" | a number computed or simulated in the cited paper, not measured |
+
+**What this document is not.** It is a desk study. No model was added, no number was checked on a
+mill, and the project itself has no plant validation: every demo number quoted from the project
+comes from synthetic mills. Effort ratings are rough and the reports did not use one scale: the
+thermal and bite reports use S = up to about two days, M = one to two weeks, L = more than two
+weeks; the shape report uses S = days, M = weeks, L = months. Rankings are judgement.
+
+**Where to go.** A plant engineer can read sections 2, 4 and 7. A developer also needs sections 3,
+5 and 6. Sections 9, 10 and the appendix are reference material.
+
+## 2. The short answer
+
+The plant's problem is lengthwise bands at fixed width positions, continuous or short-lived, worse
+at thin gauge. The project computes such a band from two physical sources: a local change of
+work-roll radius (a thermal stripe from the spray header) and a ridge in the incoming strip. Other
+mechanisms are scored by rules. The literature adds several other sources and several places where
+a band is made visible or hidden. None of them is in the model yet.
+
+### 2.1 What matters most for the plant's band problem
+
+| # | What is missing | Why it matters | Effort | Gap ids |
+|---|---|---|---|---|
+| 1 | **Strip temperature across the width as a flatness term.** A strip fibre that leaves the bite hotter than its neighbours reads long at the shapemeter and turns tight when the coil cools. | About 2.4 I-units per kelvin for aluminium (computed here; the expansion coefficient is from memory in one report). That is above the tool's 2 I-unit reporting threshold, so it can shift both the in-mill and the after-release verdict. | S; M with a computed heat split | A1, G6 |
+| 2 | **A film or friction stripe at one width position.** The only band source today is a roll bump. A local change of oil film, friction or flow stress (hot roll surface, weak nozzle, local roughness or roll coating) is not a source. | Load depends on friction to a power of about 2 to 2.6 [derived]. This path is fast (the roll surface temperature moves in 8-25 s, computed here), it grows as gauge falls, and it works against the thermal-crown effect. The net sign is not known. | S as a screen; M in full | A2, BT-G4, BT-G12 |
+| 3 | **The coil: winding with air and ironing roll, coil temperature, creep.** The coil model is a linear stack with a constant compaction factor of 0.5. | The tool's own foil result is "hidden in the mill, visible after release or on the coil", and its critical ridge heights (0.06-0.15 um in the synthetic demos) hang on that one factor. Creep at coil temperature can make a ridge permanent. | M; L with stress and creep | G9, G10, A8 |
+| 4 | **Shapemeter and flatness-control loop.** There is no model of what the shapemeter zones read, or of the controller that switches the spray valves. | A 20 mm band of 25 I-units reads about 10 I-units as the mean of a 52 mm zone (computed here). The loop's valve switching is the "event" of the short-lived-band model, which today is typed in by hand. | M (S for the sensor part) | G5, C7 |
+| 5 | **Closed-gap (roll-kiss) load path.** Both plant passes lie inside every reported onset range of closed-gap rolling. The tool only flags it. | Part of the load bypasses the strip: 22 % in one computed aluminium foil case, 11-16 % in thin steel cases (model output and laboratory mill). The bender then acts on the barrel ends. Every foil flatness number rests on open-gap bite stiffness. | L | G2, BT-G2 (needs G1; kernel part of G3) |
+| 6 | **A foil bite and a friction value that can be defended.** The mattress bite returns 0.42 of the reference load on the one fully specified published case [run]. The friction closure is a placeholder. | Strip stiffness, tension sensitivity, bite length and friction heat all come from this bite. Two small faults can be fixed now: the inlet angle over-states the film 1.45-3.3 times [derived], and the "boundary regime" label fires on normal operation. | S for the fixes and benchmarks; M each for bite and friction | BT-G1, BT-G17, G16, BT-G3, BT-G5, BT-G6, BT-G7, BT-G8, A9 |
+| 7 | **The free thermal inputs.** Heat split between strip and rolls, and the spray coefficient, are supplied numbers. The roll surface temperature within one revolution is not resolved. | In the project's own sensitivity table the stripe height moves from 0.61 to 3.4 um over the heat-split range and from 4.67 to 0.85 um over the spray range. The surface time scale is the best lead on the open "20 s" question. | S to M | A3, A4, G8, A5, A6 |
+| 8 | **Tension lines and lateral stress in spans.** Tension lines are a rule set. Trough and wrinkle thresholds are computed, but the lateral stress that acts is a plant input. | A candidate model exists (air-entrainment corrugation in winding, pitch 5-13 mm [D], formula from memory) and can be tested with a ruler. For wide aluminium foil the span formulas over-predict wrinkling by about 15 times. | S to M | G12, G11 |
+| 9 | **Buckling with wavelength, amplitude and dead load.** One assumed mode, no amplitude. | After release the tool says "manifest" for almost any reportable band at foil gauge. Measured local buckles are 2.5-2.8 times shorter than the assumed mode [D]. | M | G4 |
+| 10 | **Roll-surface bands.** Grinding residuals, wear, roll coating and pick-up are scored by rules. | They sit at fixed positions, bending cannot remove them, and they stay until a roll change. A measured roll profile could go through the existing transfer function. | S (profile); M to L (imprint, coating) | G13, BT-G9, BT-G11 |
+
+Just below the list: foil gauge control by speed and tension with reel dynamics (C1, C2, BT-G13,
+C8), which bears on transverse and speed-change gauge bands rather than lengthwise ones; the flow
+stress law (B1, B2); roll ends and edges (G7, A7); slitting and separating (G14).
+
+### 2.2 What matters most for general coverage of thin-gauge aluminium rolling
+
+| # | What is missing | Why it matters | Effort | Gap ids |
+|---|---|---|---|---|
+| 1 | **Roll stack, with closed gap.** Deflection, work-roll / backup-roll contact, bending, tilt, shifting, and work-roll contact outside the strip. | It is the reference component of every flatness model. Today the gap crown is an input. | L (M for a symmetric 4-high) | G1, G2, BT-G2, G15 |
+| 2 | **Foil bite on elastic half-space rolls with a no-slip zone.** Plus a shear-stress cap and benchmarks. | The published successor of the mattress model. The mattress under-predicts load by up to a factor 2. | M | BT-G1, BT-G5, BT-G15, BT-G17, G16 |
+| 3 | **Flow stress as a function of strain, strain rate, temperature and alloy group.** | Every other model takes its output. Rate sensitivity is set to zero; a measurement on 16 um foil gives about 0.027. | S for the law; M for data | B1, B2, B3, B4, BT-G16 |
+| 4 | **Mixed-lubrication friction coupled to the bite, and friction identified from forward slip.** | Friction is the dominant unknown at foil gauge. | M (inlet only); L (through the bite) | BT-G3, BT-G6, BT-G7, BT-G8, A9 |
+| 5 | **Width-coupled strip model and post-buckling.** | Lateral flow, shear lag and the stress change after the bite decide what a narrow band does. | M to L | G3, G4 |
+| 6 | **Coupled roll-strip thermal model.** Computed heat split, surface layer, calibrated sprays, roll ends. | Removes the two largest supplied inputs of every thermal result. | M | A3, A4, G8, A5, A7, G7 |
+| 7 | **Measurement and control loops.** Shapemeter and flatness control; foil gauge control by speed and tension; tension regulators. | At closed gap the roll force no longer sets gauge. Without the loops the tool cannot say what the plant saw or did. | M; L when validated | G5, C7, C1, C2, BT-G13, C6 |
+| 8 | **Winding, air entrainment, coil temperature and creep.** | Sets coil stress, permanent bands and property change after rolling. | M to L | G9, G10, A8, B7 |
+| 9 | **Chatter beyond the linear screen.** Dynamic bite damping, film dynamics, wave spans, fifth-octave forced response. | The stability verdict rests on one heuristic damping factor at every pass. | M to L | C3, C4, C5, C8 |
+| 10 | **Surface generation.** Roughness transfer, coating and pick-up, oil pits, doubled rolling. | Surface is a product property of foil, and strip roughness is an input to the film ratio. | M to L | BT-G9, BT-G11, BT-G10, BT-G14, G13 |
+
+Just below the list: the width-resolved thermal effects (A1, G6, A2, BT-G4), which lead list 2.1;
+web handling (G11); downstream steps (G14); tension lines (G12).
+
+**How the lists were merged.** Each report ranked only its own gaps, twice: for the band problem
+and for general coverage. The four rankings were interleaved by rank position, and gaps that two
+reports describe from different sides were joined into one item (strip temperature as flatness;
+closed gap; film stripe; coil; roll surface time scales). For list 2.1, items that bear on
+lengthwise bands were placed above items that bear only on transverse marks, and cheap items with
+a decisive effect were placed above expensive ones of similar weight. The reports do not agree on
+which gap best explains "worse at thin gauge": the shape report points to the coil (item 3), the
+bite report to the friction stripe (item 2), and the thermal report says the net sign of the local
+thermal effects is unknown. The lists keep all three near the top and do not choose.
+
+## 3. Coverage map
+
+Module names are files in `physicroll/`. "Simplifies" means the effect is present with a stated
+shortcut. Nothing in the "models today" column has been compared with plant data.
+
+| Physics area | Models today (module) | Simplifies | Missing | Gap ids |
+|---|---|---|---|---|
+| Roll bite | Sheet gauge: projected slab with tensions and one neutral point (`slab.py`), circular Hitchcock roll radius (`contact.py`). Foil: experimental "mattress" bite on a local elastic foundation, exit gauge down to 8 um (`foil_bite.py`). Eight linear bite sensitivities (`chatter.py`). | Constant Coulomb friction; circular or local-foundation roll; rigid-plastic strip with constant flow stress in the foil bite; rejects when friction stress exceeds shear yield. | Half-space bite with a no-slip zone; shear cap and friction varying through the bite; elastic zones for light passes; doubled pass; benchmarks. | BT-G1, BT-G5, BT-G15, BT-G16, BT-G14, BT-G17 |
+| Friction and lubrication | Oil viscosity against temperature and pressure, smooth inlet film, film ratio, placeholder friction law, optional friction-bite fixed point (`bite_tribology.py`); declared friction (`lubrication.py`). | Isothermal smooth film; placeholder closure (only its slope with speed is used); mean bite slope as inlet angle. | Mixed-lubrication closure; friction from forward slip; oil supply and starvation; boundary film and additives; limiting shear stress; friction stripe across the width. | BT-G3, BT-G6, BT-G7, BT-G8, BT-G12, BT-G11, BT-G4, A9 |
+| Surface generation | Rules only: herringbone, skid, grinding feed pitch, film-ratio regime (`band_signatures.py`); hypotheses `roll_surface_band`, `heat_streak_or_film_variation`. | Strip roughness is supplied. | Roughness transfer and imprint; oil pits; roll coating, pick-up and fines; measured ground profile as a band source; pinhole screen; matt side. | BT-G9, BT-G10, BT-G11, G13, B5, BT-G14 |
+| Roll stack | Local half-space roll compliance to a line load (`strip_shape.py`); roll radius under load (`contact.py`); synthetic stand stiffness (`equipment.py`). | Gap crown is supplied; no bending, no backup-roll contact. | Roll stack with bending, tilt, shift and camber; closed-gap contact; edge drop; variable-crown rolls. | G1, G2, BT-G2, G15 |
+| Strip profile and flatness | Transfer of a roll bump to thickness at three levels, exit-tension feedback, elongation to I-units, crown heredity and dead band (`strip_shape.py`, `band_width.py`); diagnosis of supplied fields (`profile.py`). | Constant lateral-flow factor; uniform entry tension; point-wise feedback; one-step saturation; a roll bump is the only disturbance. | Width-coupled strip model; strip temperature as a flatness term; friction or film stripe as a source. | G3, A1, G6, BT-G4, A2 |
+| Buckling | Rayleigh quotient with one sine mode, in the mill and after tension release (`strip_shape.py`). | Half-wave equals band width, k = 4, simply supported; no amplitude. | Wavelength search under tension; post-buckling amplitude; dead load on a table; stress saturation. | G4 |
+| Roll thermal and coolant | Width-resolved work-roll temperature and thermal radius under a spray header, steady and switching (`roll_thermal.py`); sensitivity and check against a published temperature map (`band_thermal.py`); screens (`band_signatures.py`). | Heat split and spray coefficient supplied; circumferential mean; adiabatic barrel ends; constant properties; expansion factor 1 or 1 + nu. | Computed heat split; per-revolution surface layer; spray coefficient basis, flow scaling and calibration; roll ends, necks, hot-edge sprays; emulation of the plant's step test; fire and oil-mist limits. | A3, A4, G8, A5, A6, A7, G7, A10 |
+| Strip and coil temperature | Bulk strip exit temperature from plastic and friction heat (`bite_tribology.py`); enthalpy balance with supplied partitions (`energy_handoff.py`). | One number per pass; no width resolution; no feedback into force. | Strip temperature across the width; coil temperature after winding and coil cooling. | A1, G6, A8, A2 |
+| Material behaviour | Power and Voce hardening with a stage-IV slope, flow stress through the schedule (`materials.py`, `bite_tribology.py`); grade proposals (`band_products.py`). | Rate sensitivity zero; no temperature term; isotropic plane-strain factor; tensile fits; synthetic demo parameters. | Rate and temperature dependence; saturation and softening by alloy group; alloy table; anisotropy; recovery in the coil; particles and pinholes. | B1-B7, BT-G16 |
+| Web handling | Trough wavelength and amplitude, trough and roller-wrinkle thresholds (`strip_shape.py`). | Lateral stress is a plant input; isolated-span formulas used at foil gauge. | Sources of lateral stress (misalignment, taper, roller deflection); foil correction; air film and traction on rollers. | G11, G10 |
+| Winding and the coil | Ridge build-up linear in wrap count with a constant compaction factor, yield check (`strip_shape.py`); tension-line rule set. | Linear stack; no interlayer pressure. | Wound-roll stress with pressure-dependent radial stiffness; air and ironing roll; spool; creep; a tension-line model. | G9, G10, G12, A8 |
+| Measurement, flatness and gauge control | Gaugemeter gauge control with a first-order cylinder loop; hardness and friction sensitivities (`mill_dynamics.py`); sensor list and synthetic signals (`sensors.py`). | Open gap only; tension held constant; valve events supplied. | Shapemeter zones and flatness controller; foil gauge control by speed and tension; tension regulators; sensor transfer functions; eccentricity compensation. | G5, C7, C1, C2, C6, BT-G13 |
+| Mill dynamics and chatter | Linear third-octave model with heuristic bite damping, speed-consistent critical speed (`chatter.py`); torsional modes (`mill_dynamics.py`); pitch laws (`band_signatures.py`). | Linear; lumped spans; quasi-static friction; fifth octave by rules. | Dynamic bite damping; film dynamics; wave spans; fifth-octave forced response and mark growth; torsional self-excitation; regeneration from the previous pass. | C3, C4, C5, C8, C2 |
+| Downstream: slitting, separating, annealing | Not modelled. A doubled final pass is flagged only. | - | Rules first, later buckling per slit width and rewinding. Battery foil is normally delivered hard, so only an intermediate anneal of the stock applies. | G14, BT-G14 |
+| Product data | Product catalogue, evidence-neutral product check, product survey (`band_products.py`, `band_survey.py`). | Literature survey; finished tensile strength stands in for rolling flow stress; many assumed flow stresses. | Hardening parameters and softening temperatures per alloy group; the plant's own pass data. No open flow-stress database for these alloys was found. | B3, B2, B7 |
+
+## 4. Interactions the simulation needs
+
+The modules are chained mostly one way: bite to shape, roll temperature to shape, bite heat to roll
+temperature. The literature treats most of these as loops. The table lists each loop or chain, the
+modules and variables it would connect, and its state today.
+
+| # | Loop or chain | Modules and variables | Today | Gap ids |
+|---|---|---|---|---|
+| I1 | **Thermal-tribological loop.** Bite heat -> roll surface and strip temperature -> oil viscosity and flow stress -> film, friction and force -> bite heat. | `bite_tribology.pass_heating` (heat, strip share) -> `roll_thermal` (surface temperature) -> `bite_tribology` (viscosity, inlet film, friction) and hardening law (flow stress) -> `slab.py` / `foil_bite.py` (force, slip) -> `pass_heating`. | One-way. Heat goes to the roll with a supplied share. Roll temperature does not return to the bite. | A2, A3, A4, A9, B1, BT-G3 |
+| I2 | **The same loop across the width (fast band path).** Roll surface temperature, oil flow or roughness at one width position -> local viscosity, film, friction and flow stress -> local force -> local gap and exit tension -> thickness and flatness band. | `roll_thermal` (surface temperature per width station) -> `bite_tribology` (film ratio, friction per station) -> bite sensitivities `dF/dY`, `dF/dmu` (`mill_dynamics` bite cache) -> `strip_shape` (new source term beside the roll bump). | Absent. This is the item the project deferred. No published model was found to copy. | A2, BT-G4, BT-G12 |
+| I3 | **Strip temperature -> flatness.** Local reduction, friction and roll surface temperature -> strip exit temperature across the width -> thermal length difference -> apparent flatness at the shapemeter, gone after cooling. | `pass_heating` per width station and `roll_thermal` -> `strip_shape.flatness_from_elongation` (add `alpha*dT(z)`); three profiles: mechanical, as measured hot, after cooling. | Absent. | A1, G6 |
+| I4 | **Roll stack <-> closed gap <-> strip shape.** Force per width from the bite <-> roll bending and flattening, contact of the work rolls outside the strip <-> gap profile <-> elongation and tension across the width. | Bite response (`chatter.BiteResponse`) <-> new roll stack (kiss force and kiss length as unknowns) <-> `strip_shape` (gap crown becomes an output); `roll_thermal` thermal camber as roll profile; `mill_dynamics` mill modulus. | One-way. The bite hands stiffness and tension sensitivity to `strip_shape`. No stack. Closed gap is a flag. | G1, G2, BT-G2, G3, G15 |
+| I5 | **Shapemeter -> flatness controller -> spray valves -> roll temperature (closed loop).** Band -> zone readings -> least squares on actuator influence vectors -> valve states -> roll temperature -> band. | `strip_shape` / `band_width` -> new measurement operator (zone averaging, neighbour spreading, temperature compensation) -> new controller (bending, tilt, one column per spray zone, valve minimum times, target curve) -> `roll_thermal.SprayHeader`. | Open loop. Valve events are supplied by the user. Closing the loop turns supplied events into predicted ones, and shows whether the control made or removed a band. | G5, C7, A6 |
+| I6 | **Tension and speed -> gauge at closed gap.** Speed -> film -> friction -> gauge; entry tension -> gauge; exit gauge -> tension trim (fast) -> speed (slow), with transport delay. Coil run-out -> tension ripple -> gauge. | `mill_dynamics` (gauge loop), bite sensitivities to entry tension, `bite_tribology.friction_at_speed`, `foil_bite.py`; reel inertia and span spring in `chatter.StripSpans`. | Absent. Gauge control is gaugemeter control at open gap; spans end at constant-speed nodes. | C1, C2, BT-G13, C8 |
+| I7 | **Profile -> winding (air, ironing roll, radial stiffness) -> coil stress -> permanent bands.** Exit thickness profile -> pressure and tension per lane in the coil -> yielding or creep in the hard lane, slack neighbours -> length difference after unwinding. | `strip_shape` exit profile -> new winding model (replaces `coil_ridge_buildup`) with air layer and nip -> new elongation term in `flatness_from_elongation`; entry state of the next pass. | One-way and linear: a yield check on a linear ridge. Coil strain does not return to flatness. | G9, G10, A8, G12 |
+| I8 | **Coil temperature -> creep and property change.** Strip exit temperature -> coil temperature field -> creep of hoop stress; recovery of strength and elongation; uneven cooling -> hardness variation once per coil revolution in the next pass. | `pass_heating` -> new coil conduction model -> winding stress (I7); `band_thermal.thermal_check` (coil rows); `band_products`; `mill_dynamics.incoming_variation`. | Absent. The model gives a strip exit temperature; the published battery-foil limits are coil temperatures. | A8, B7 |
+| I9 | **Flow stress law -> everything that takes a flow stress.** Strain, strain rate, temperature and alloy group -> force, slip and heat; bite stiffness; a force term in phase with gap velocity (part of bite damping); gauge shift on speed change. | Hardening law -> `slab.py`, `foil_bite.py`, `chatter.derive_bite_response`, `mill_dynamics`, `strip_shape` (stiffness, yield checks), heat split. | One-way, with a law that has no rate or temperature term. | B1, B2, B3, B4, BT-G16 |
+| I10 | **Bite <-> friction.** Bite -> inlet slope and sliding speed -> film and contact area -> friction distribution -> bite. | `foil_bite.py` <-> `bite_tribology` (friction per position in the bite). | Optional fixed point with the placeholder closure and one friction value for the whole bite. | BT-G1, BT-G3, BT-G5, BT-G7 |
+| I11 | **One nozzle, two effects.** A weak nozzle lowers cooling and oil supply at the same width position. | `roll_thermal.SprayHeader` (flow per nozzle) -> `bite_tribology.inlet_film_thickness` (film limited by supply). | Cooling only. | BT-G12, A5 |
+| I12 | **Buckling -> stress saturation -> what the shapemeter reads.** | `strip_shape` buckling <-> far-field stress profile <-> measurement operator (I5). | The project feeds saturation back into the thickness transfer. The literature finds the bite hardly changed (X10). | G4, G3 |
+| I13 | **Flatness band and air film -> troughs and wrinkles in the span.** A baggy lane is itself a source of troughs; an air film lowers traction on rollers and changes the wrinkle regime. | `strip_shape` flatness -> `tension_trough_screen` (lateral stress computed); new air-film block -> traction limit. | Absent. Lateral stress is a plant input. | G11, G10, G4 |
+| I14 | **Pass to pass, coil to pass.** Gauge ripple, profile, flatness, roughness and hardness variation left by one pass enter the next. | `chatter.frequency_response` to entry gauge (exists) through the loop of I6; `strip_shape` incoming-ridge transfer (exists); strip roughness per pass computed instead of supplied. | Partly. Incoming ridge and strain hardening are chained. Ripple, roughness, entry flatness and coil effects are not. | C8, G3, BT-G9, A8 |
+| I15 | **Roll surface state -> strip.** Ground profile, lay, wear and coating -> thickness (through the transfer), film ratio and friction (through imprint), and marks (waviness as forcing of the stand). | Measured roll profile -> `strip_shape.transfer_radius_profile`; roll and strip roughness -> `bite_tribology`; `chatter.frequency_response`. | Rules only. | G13, BT-G9, BT-G11, C4 |
+| I16 | **Roll ends and stops.** Thermal fall-off beyond the strip edge -> edge tension -> strip breaks; thermal bow of the backup roll after a stop -> run-out. | `roll_thermal` end conditions and edge heat sources -> edge gap (I4) -> edge tension; `mill_dynamics` run-out transfer. | Absent. Barrel ends are adiabatic. | G7, A7, C6 |
+| I17 | **Chatter couplings.** Film and friction change inside the vibrating bite; rate sensitivity as damping; drive speed loop; waves in the spans. | `chatter` <-> `bite_tribology`, hardening law, `mill_dynamics.drive`. | One-way: a quasi-static friction slope and drive ripple enter the chatter model. | C3, C5, B1 |
+
+**Which module pairs are coupled today.** "->" is one-way, "<->" is two-way.
+
+| Module pair | Today | In the literature |
+|---|---|---|
+| bite (`slab.py`, `foil_bite.py`) -> `strip_shape.py` | one-way: stiffness, tension sensitivity, bite length | two-way, through the roll stack and the tension distribution |
+| `roll_thermal.py` -> `strip_shape.py` | one-way: thermal radius profile | loop closed by the flatness controller |
+| `bite_tribology.pass_heating` -> `roll_thermal.py` | one-way, supplied heat share | two-way, with contact conductance |
+| `roll_thermal.py` -> `bite_tribology.py` (viscosity, flow stress) | not coupled | coupled |
+| `bite_tribology.py` <-> bite | optional fixed point, placeholder friction | coupled mixed-lubrication model |
+| `bite_tribology.py` -> `chatter.py` | one-way: friction slope with speed | film dynamics inside the perturbed bite |
+| bite -> `mill_dynamics.py` | one-way: force sensitivities, open gap | speed and tension loops at closed gap |
+| `mill_dynamics.py` drive -> `chatter.py` | one-way: roll-speed ripple into tension | drive loop, reel inertia, regulators |
+| hardening law -> bite | one-way, strain only | strain, rate and temperature |
+| `strip_shape.py` -> coil ridge | one-way, linear | winding model; coil strain returns to flatness |
+| strip temperature -> `strip_shape.py` | not coupled | thermal flatness term |
+| `strip_shape.py` -> `sensors.py` | not coupled | measurement operator |
+| `strip_shape.py` -> spray valves in `roll_thermal.py` | not coupled | closed control loop |
+| `strip_shape.py` -> troughs | not coupled (lateral stress supplied) | baggy lanes cause troughs |
+| coil -> next pass | supplied variation only | coil temperature and creep set hardness and shape |
+| roll stack | absent | central to all of the above |
+
+## 5. Gap register
+
+One row per gap, 58 rows: A (thermal and coolant), B (material), C (dynamics and control) from the
+`TM-` report; G1-G16 from the `SS-` report; BT-G1 to BT-G17 from the `BT-` report. The text of each
+row is the report's own, with source ids prefixed. "Overlaps" names the rows in other reports that
+describe the same gap from another side. In the bite rows LW = lengthwise band, SL = short-lived
+band, TR = transverse mark. WR = work roll, BUR = backup roll. Numbers quoted from the project
+("in the demos", "band-diagnosis 3.12") are from synthetic mills. Effort scales differ by report
+(section 1).
+
+| id | gap | why it matters at thin gauge | bears on | couples to (module, variables) | model to add | plant inputs needed | effort | sources |
+|---|---|---|---|---|---|---|---|---|
+| **A1** | **Strip temperature across the width as a flatness term** (in the mill and after cooling). Not modelled at all. *(overlaps G6)* | 2.4 I-units per kelvin for aluminium (computed), against the tool's 2 I-unit reporting threshold. A hot fibre reads long at the shapemeter and becomes tight after cooling, so the in-mill and the after-release verdicts both shift. At foil gauge the strip follows the roll surface temperature (2.A-ii), so a hot roll stripe is also a hot strip stripe at the same width position. | lengthwise, short-lived | `strip_shape.py` (I-unit profile, latent / manifest states), `band_thermal.attach_per_pass`, `bite_tribology.pass_heating` (per width), `roll_thermal` surface temperature | Per width station: `T_x(z) = T_e(z) + f_s(z)*Q(z)/(rho*c*h1*u1)`; thermal length strain `eps_T(z) = alpha*(T_x(z) - mean)`, i.e. `1e5*eps_T` I-units; report three profiles: mechanical, as measured hot (mechanical plus thermal), and after cooling (mechanical alone); optional target-curve offset as in TM-LA30 | Exit strip temperature across the width (line-scan pyrometer or contact probe on the coil face), entry coil temperature, whether the shapemeter applies a temperature compensation | S for the term, M with A3 | TM-LA13 EX; TM-LA30 EX; PT-T23 |
+| **A2** | **Local flow stress and local oil film as functions of local temperature** (the deferred item). *(overlaps BT-G4, BT-G12)* | Three local effects of a hot stripe with different signs: roll growth closes the gap (thinner); softer metal, about -0.15 to -0.3 %/K (thinner); thinner film, about -1.5 %/K, so more friction and, in closed-gap rolling, thicker foil. The net sign is not known. The film and flow-stress terms follow the surface temperature, which moves in 8-25 s (computed), the roll radius in minutes. | lengthwise, short-lived | `roll_thermal` (needs bite-entry surface temperature, A4) -> `bite_tribology.Lubricant.eta0(T)`, `inlet_film_thickness`, `friction_coefficient`; `VoceHardening` -> `Y(z)`; `mill_dynamics` bite cache (`dF/dY`, `dF/dmu` per width) -> `strip_shape` local gap and exit-tension feedback | `Y(z) = Y_ref(eps)*(1 - c_T*(T_s(z) - T_ref))`; `eta0(z) = eta_ref*exp(-beta*(T_in(z) - T_ref))`; `h_s(z)`, `Lambda(z)`, `mu(z)`; local force per width `dp(z) = p_Y*dY + p_mu*dmu`; local gap change through the existing roll compliance; report the three contributions separately | `c_T` (tensile tests at 20-150 C on the plant's stock), viscosity at two temperatures, oil temperature at the bite (roll surface and strip entry), roll surface temperature profile | M | PT-T4; PT-T31; PT-T39; PT-T12; TM-LC25 AB; TM-LB4 EX; TM-LB7 AB |
+| **A3** | **Computed bite heat partition** by roll-strip coupling instead of a supplied share. | Stripe heights scale with the roll heat share (band-diagnosis 3.12: 0.61 to 3.4 um over the share range). The share depends on gauge, speed, contact length and film (2.A-ii), so one number per case cannot hold over a schedule. | lengthwise, short-lived; also strip exit temperature against the 80 C limit | `bite_tribology.pass_heating` (`strip_heat_fraction` becomes an output), `roll_thermal` (`roll_heat_fraction_per_roll`), `band_thermal.heat_partition_consistency`, `thermal.py` (two-capacity step can host it) | Tseng-type interface: strip as a thermally thin or 1-D slab, roll as a half-space over the contact time `t_c = l_d/u`; `q_roll = (T_strip - T_roll_s)/(1/h_c + sqrt(pi*t)/(2*e_roll))`, `e = sqrt(k*rho*c)`; `h_c = k_oil/h_s` in series with an asperity term; friction heat placed at the interface, plastic heat in the strip | Contact length (from the bite), film thickness (from 8.1), oil conductivity, one measured strip exit temperature and coolant return temperature for calibration | M | TM-LA1 to TM-LA4 AB; TM-LA19 AB; TM-LA21; TM-LA22 AB; TM-LA23 AB; PT-T34; PT-T4 |
+| **A4** | **Per-revolution surface cycle** on top of the circumferential mean. *(overlaps G8)* | Needed by A2 and A3 (the temperature the oil and the strip see at the bite is the surface value after the last spray, not the mean) and for the circumferential swing named for wear. Cyclic depth below 4 % of the radius. | lengthwise (through A2); roll surface | `roll_thermal` (bulk state supplies the inner boundary) -> new skin sub-model -> A2, A3 | 1-D periodic skin layer per axial station: Fourier series in the angle (Patula) or the "phase shift" method; inputs are the angular positions and arcs of bite, sprays, air and backup-roll contact | Angular layout of the headers and of the wipers, wetted arc, backup-roll contact | M | TM-LA6 AB; TM-LA7 EX; TM-LA26 AB; TM-LA27 AB; PT-T23 |
+| **A5** | **Spray coefficient: basis, parametrisation and calibration.** One number per case, applied as a circumferential mean. *(overlaps BT-G12)* | The stripe falls from 4.67 to 0.85 um between 2 and 13 kW/m2K (band-diagnosis 3.12). Published values are on three bases (jet zone, sprayed area, overall); a blocked or partly blocked nozzle changes flow, and the coefficient is about linear in flow and falls with roll surface temperature and viscosity. | lengthwise, short-lived | `roll_thermal.SprayHeader`, `band_thermal.thermal_check` (which basis the published range is on), `band_signatures.spray_coverage` | `h_mean(z) = (wetted arc/2*pi*R)*h_footprint(flow density, roll speed, T_s, viscosity)`, with the footprint value entered as measured or as `h_water/3..6`; tapered instead of top-hat fan profile; a calibration routine that fits `h` to a roll cool-down or to a measured thermal camber, as in TM-LA8 and TM-LA37 | Nozzle flow at pressure, footprint (pressure-film print, TM-LA15), wetted arc, roll temperature after a stop (contact probe along the barrel), camber after a pass | S (basis and flow scaling), M (calibration routine) | TM-LA15 EX; TM-LA16 AB; TM-LA17 AB; TM-LA18 AB; TM-LA19 AB; TM-LA8 EX; TM-LA29 FT; PT-T18; PT-T19 |
+| **A6** | **The 20 s discrepancy treated as an identification question.** *(overlaps G8)* | The model's own numbers span 9 s (event half-peak) to 551 s (steady build-up); the literature names three thermal scales [TM-LA9] and the surface scale is 8-25 s (computed). Whether the plant's first-order fit and the model agree depends on the test length, the zone width, the transport delay and on fast strip-side terms (A1, A2). | short-lived | `roll_thermal.simulate`, `band_width` event metrics, `strip_shape` | Emulate the plant test: one zone on / off for the plant's test duration, add transport delay `L/u` and the shapemeter filter, fit first order plus dead time to the modelled flatness, report the fitted constant beside the published one; repeat with A1 / A2 switched on | Test protocol of the plant identification (zone, duration, speed, gauge), shapemeter distance and filter | S (after A1) | TM-LA9 AB; TM-LA10 AB; TM-LA11 AB; TM-LA12 EX; TM-LA13 EX |
+| **A7** | Barrel ends, necks, backup-roll contact, axial mechanical coupling, expansion factor. *(overlaps G7)* | Decides the edge roll-off of the crown and so edge-near bands (the docs' quarter-barrel note); the factor 1 against (1+nu) is a 30 % scale on every number and one hot-mill thesis had to test both against measured cambers. | lengthwise (near the edges) | `roll_thermal` boundary conditions and `_expansion_factor` | Convective / conductive end conditions; backup-roll contact as a fifth surface region; axisymmetric thermo-elastic displacement instead of per-station integrals | Neck and chock temperatures, barrel-to-strip overhang, measured hot roll profile | M | TM-LA8 EX; TM-LA5 CIT; TM-LA26 AB; TM-LA37 EX |
+| **A8** | **Coil temperature after winding, coil cooling, creep in the coil.** *(overlaps G9, B7)* | The published battery-foil limits are coil temperatures (<= 80 C), the model gives strip exit temperatures. A profile ridge builds hoop stress in the coil and creep at coil temperature converts it into permanent length difference (80 to -20 MPa in five days at 140 C start, 0.28 mm). Uneven coil cooling also produces the once-per-revolution hardness variation of the next pass. | lengthwise (ridge bands, worse toward the outer wraps); transverse (coil-locked hardness) | `band_width` coil ridge model and compaction factor, `band_thermal.thermal_check` (coil rows), `mill_dynamics.incoming_variation`, B7 | Axisymmetric conduction `rho*c*dT/dt = (1/r)d/dr(r*k_r*dT/dr) + k_z*d2T/dz2` with `k_r << k_z` from winding pressure and gap; winding stress model (Hakiel-type, from memory); power-law creep `eps_cr' = A*sigma^n` with temperature | Coil dimensions, winding tension and taper, spool, coil surface and end-face temperatures against time, storage time before the next pass | M (temperature), L (stress and creep) | TM-LA31 EX; TM-LA32 EX; TM-LA33 EX; TM-LA34 AB; PT-T1; PT-T2; TM-LC18 EX |
+| **A9** | Viscosity law and thermal inlet effects beyond exponential plus Barus. *(overlaps BT-G3)* | Film thickness and its speed slope set the friction slope used for chatter and the foil "speed effect" on gauge. A limiting shear stress, not viscosity, controlled the chatter result in one study. | transverse; gauge | `bite_tribology.Lubricant`, `friction_at_speed`; `chatter` speed-consistent critical speed | Roelands or measured eta(T,p); inlet temperature from A4; limiting shear stress `tau_L(p)` cap on the film shear | Oil data sheet with eta at 20 / 40 / 100 C, pressure-viscosity coefficient, additive package | S | TM-LC6 EX; TM-LC25 AB; PT-T12; PT-T9 |
+| **A10** | Fire and oil-mist limits as constraints. | Cap oil supply temperature and strip temperature, and so the cooling and speed levers the tool proposes. Not a band mechanism. | general (a constraint, not a band mechanism) | `band_thermal.thermal_check`, lever tables | Rule check only: strip exit and oil temperatures against flash point and any site cap; flag levers that raise them | Oil flash point, site and legal caps, exhaust design | S | TM-LA35 EX; PT-T13; PT-T14; PT-T9 |
+| **B1** | **Flow stress as a function of strain rate and temperature.** Rate sensitivity is set to zero and there is no temperature term. *(overlaps BT-G16)* | Measured m about 0.027 on 16 um 1235-H18 foil; rolling rates are 1e3-1e4 /s; temperature takes 12 % off at 100 C. The two partly cancel, by an unknown amount, and the net sets force, forward slip, heat and the credibility of the foil bite (band-diagnosis 14: force 2.7 times the published range at 12 um). A rate-dependent flow stress also adds a real force term in phase with gap velocity, i.e. part of the bite damping now carried by the heuristic beta. | all band types through the bite; transverse through damping | `bite_tribology.VoceHardening` / `schedule_flow_stress` (new arguments rate, temperature), `slab.py`, `foil_bite.py`, `chatter.derive_bite_response` (`F_hdot`), `mill_dynamics` speed-change gauge shift | `sigma = sigma_ref(eps)*(epsdot/epsdot_ref)^m(T)*(1 - c_T*(T - T_ref))` as the minimum; or Kocks-Mecking with a temperature- and rate-dependent recovery constant; mean bite rate `epsdot = (u/l_d)*ln(h0/h1)`; bite temperature from A3 | Tensile or plane-strain tests on stock at 2-3 rates and 20-150 C; mill force and forward slip logs at two speeds for back-calculation | S (law), M (data and re-tuning of demos) | TM-LB1 EX; TM-LB10 EX; TM-LB4 EX; TM-LB11 AB; PT-T4; PT-T31; PT-T39; TM-LA23 AB |
+| **B2** | **Saturation, stage IV and work softening by alloy group.** One law form with a positive stage-IV slope and synthetic parameters. | At strains 3.5-5 (battery foil) the sign of the hardening rate differs by alloy: none-saturating for 1200-type and solute-bearing 1100 / 1C30, flat for 1050 above 80 %, negative for purified-matrix Al-Fe (8021 / 8079 type) and high-purity grades, and temperature-dependent. It sets the pass-to-pass flow stress the bite models take as input and the stiffness `Q_s` in chatter. | all band types through the bite | `VoceHardening`, `materials.PowerHardeningLaw`, `band_products` strengths, `mill_dynamics.incoming_variation` | Modified Voce with stage IV (Tome form) plus a recovery term `- d_sigma_rec(eps, T)` switched by alloy group; parameter sets fitted to as-rolled strength against gauge from the plant's own pass tensile data | As-rolled tensile strength after every pass, alloy composition (Fe, Si, Cu, Mn), last anneal gauge, coil temperatures | M | TM-LB2 EX; TM-LB3 AB; TM-LB4 EX; TM-LB5 EX; TM-LB6 EX; TM-LB7 AB; PT-T36; BG-G8; BG-G26 |
+| **B3** | Solute and alloy table (1235, 1100, 1060, 1070, 8011, 8079, 8021) as model input rather than a strength label. | The same gauge is rolled in alloys whose as-rolled strength at 50 um differs by tens of MPa and whose softening start differs by 40-60 K; Fe in solution is 405-469 ppm as rolled. Proposals use finished minimum strengths. | general | `band_products` catalogue, B2 parameter sets | Table of hardening parameters and softening temperatures per alloy group with read status; no new physics | Certificate chemistry and the plant's route (intermediate anneal or not) | S | TM-LB6 EX; TM-LB8 AB; TM-LB9 AB; TM-LB17 EX; BG-G2; BG-G7 |
+| **B4** | **Anisotropy in the plane-strain flow stress.** Isotropic `2/sqrt3`. | Measured Lankford ratios of 0.2 / 1.5 / 1.1 and a 10 % higher transverse stress on 16 um 1235-H18. With normal anisotropy R the plane-strain factor is `(1+R)/sqrt(1+2R)`: 1.155 at R = 1 and 1.014 at R = 0.2 (computed; planar anisotropy ignored, and Hill-type criteria are known to be poor for aluminium, from memory). Up to about 12 % on `Y_ps`, hence on force. | general (force level) | every bite model (`Y_ps`), `strip_shape` yield checks | Calibrated plane-strain factor from r-values (Hill48 as a first step, Yld2000-2d parameters where published) | r-values or tensile tests at 0 / 45 / 90 degrees on stock | S | TM-LB1 EX; TM-LB5 EX; TM-LB14 EX; TM-LB3 AB |
+| **B5** | Particles and pinholes. | Sets the gauge floor for a given stock and filtration, not a band mechanism. Rows of pinholes along the length can be read as bands. | general (rows of pinholes can be read as bands) | `band_products` product check | Screen only: particle or inclusion size against exit gauge; oil filtration grade | Inclusion counts, filter grade, pinhole maps | S | TM-LB15 EX; TM-LB16 AB; BG-G3 |
+| **B6** | Elastic data and yield for the strip's elastic zones. *(overlaps BT-G15)* | At foil gauge the elastic entry and exit zones are a large part of the contact (band-diagnosis 14: mattress model has none). Needs E, proof stress and their temperature dependence. | general | `foil_bite.py` (outside this study's parts), `chatter` span stiffness | Inputs only: E = 69.8 GPa measured for 1050 [TM-LB13]; proof stress from B1 / B2 | Proof stress of stock per pass | S | TM-LB13 EX; TM-LB1 EX |
+| **B7** | Post-rolling recovery in the coil. *(overlaps A8)* | Battery-foil elongation and strength decay over 16-60 days depending on coil temperature; needed to compare a rolled-condition strength with a tested one, and for hardness variation along the next pass. Not a band mechanism by itself. | general (not a band mechanism by itself) | A8 (temperature history), `band_products`, `mill_dynamics.incoming_variation` | Logarithmic recovery kinetics integrated over the coil cooling curve (model and constants of PT-T32) | Tensile tests at 0 h, 24 h, 7 d, 30 d; coil temperature history | S after A8 | PT-T1; PT-T2; PT-T32; BG-G26; TM-LB18 EX |
+| **C1** | **Foil gauge-control regime**: speed and entry tension as the gauge actuators, closed gap, transport delay. Only gaugemeter AGC at open gap exists. *(overlaps G2, BT-G2, BT-G13)* | At closed gap the roll force no longer sets gauge; gauge "depends very heavily on tension and rolling speed". A hunting tension or speed loop then writes directly into thickness: a periodic or short-lived transverse gauge band. Speed ramps shift gauge through the film. | transverse; short-lived gauge events | `mill_dynamics` gauge-control section, `chatter.BiteResponse` (`f_se`, `F_se`), `bite_tribology.friction_at_speed`, `foil_bite.py` | Quasi-static sensitivities `dh/du`, `dh/dsigma_e`, `dh/dF` from the foil bite with the film law; loop model: exit gauge -> entry-tension trim (fast, limited range) -> speed (slow, acceleration-limited), dead time `L_gauge/u`, gauge filter, Smith predictor option; closed-loop transfer from disturbances (entry gauge, hardness, coil run-out, oil temperature) to exit gauge | Controller structure and gains, tension trim limits, gauge position and time constant, logs of speed, tensions, load and gauge at 100 Hz or faster | M (sensitivities and loop), L (validated) | TM-LC18 VP; TM-LC19 AB; TM-LA36 EX; TM-LC20 VP; PT-T4 |
+| **C2** | **Tension dynamics of spans and reels**: regulators, coil eccentricity, coil-on-span resonance. Spans end at constant-speed nodes. | A once-per-revolution tension ripple that the regulator cannot remove goes straight into foil gauge (C1). The coil mass on the span spring is a resonance in the low-frequency range, and the far end is a reel with inertia, not a velocity node. | transverse (coil-locked pitch, changing with coil diameter) | `chatter.StripSpans` (far-end boundary), `mill_dynamics.drive` (reel inertia already reflected), `band_signatures` coil pitch laws | Reel inertia `J(R)`, span spring `E*A/L`, PI tension regulator (direct or indirect) with its bandwidth; run-out input `e_c*sin(theta)`; transfer to `sigma_e`, then to gauge through `f_se` and `F_se` | Coil run-out, regulator type and bandwidth, tensiometer signal, reel drive data | M | TM-LC21 EX; TM-LC22 EX; TM-LC23 AB; TM-LC28 EX; TM-LC18 EX |
+| **C3** | **Chatter model beyond the linear negative-damping screen**: (a) bite damping from a dynamic bite model instead of the beta heuristic; (b) film and friction dynamics inside the perturbed bite; (c) rate-sensitivity damping (B1); (d) wave-propagating spans; (e) horizontal and torsional coupling; (f) non-circular foil contact. | The verdict "stable or not" rests on beta at every pass (band-diagnosis 11.4), and at foil gauge the model is already flagged unreliable (onset 2133 Hz above the span-wave limit). The literature's "optimum friction" does not appear in the model, which gives a monotonic friction effect. | transverse | `chatter.derive_bite_response` (`F_hdot`, friction perturbation rows), `chatter.assemble_state_matrix` (extra states), `bite_tribology` film law, `mill_dynamics` | (a) Yun / Hu-Ehmann dynamic bite: mass-flow with `dh/dt`, moving entry, neutral and exit points; (b) `mu = mu(h_s(u, theta, eta))` perturbed with the gap, optional limiting shear stress; (d) span as a delay / wave element `sigma(t) = f(t - L/c)`; (e) add horizontal work-roll and torsional DOF | Stack masses and stiffnesses from a tap test or a speed-ramp order map, measured onset speed and frequency, friction-speed data | M for (a), (c), (d); L for (b), (e), (f) | TM-LC1 AB; TM-LC2 AB; TM-LC3 AB; TM-LC5 EX; TM-LC6 EX; TM-LC7 EX; TM-LC9 EX; TM-LC10 EX; TM-LC11 EX |
+| **C4** | **Fifth-octave and grinding-induced marks as a forced-response and wear problem.** Rules only. *(overlaps G13, BT-G9)* | No gauge change, so invisible to the gauge; marks grow on the backup roll over its life and print with 10-40 mm pitch; sub-micron grinding waviness is a source. Surface-critical foil shows them first. | transverse | `chatter.frequency_response`, `mill_dynamics` drive and bearing orders, `band_signatures` pitch laws | Stand model with both work rolls on Hertz contact springs (4-DOF per half or full 8-DOF) for the 500-1200 Hz modes; forced response to gear-mesh, bearing and roll-waviness inputs; grinding law `n_marks = f_grinder/n_roll_grinding`; simple wear-regeneration growth rate on the backup roll | Chock accelerometer spectra over a speed ramp, gear and bearing geometry, grinder vibration and work speed, roll roundness traces, roll life at onset | M | TM-LC14 FT; TM-LC13 EX; TM-LC16 AB; TM-LC12 EX; TM-LC9 EX |
+| **C5** | Torsional self-excitation and drive loops. | Torsional modes are computed but only as passive resonances; negative friction-slip slope, backlash and the speed controller are what make them marks at low speed and during ramps. | transverse (long pitch) | `mill_dynamics.drive`, `chatter` tension rows | Add the motor speed loop and a friction-torque slope `dM/domega`; stability of the first torsional mode | Drive data, speed-controller bandwidth, torque logs | M | TM-LC9 EX; TM-LC4 EX; band-diagnosis 9 sources |
+| **C6** | Eccentricity: compensation and thermally induced run-out; behaviour at closed gap. *(overlaps A7)* | Relative gauge ripple per micrometre of run-out doubles down the schedule (band-diagnosis 11.4). After a stop the backup roll is thermally bowed, a short-lived source. At closed gap run-out goes into force and edge contact rather than gauge. | transverse; short-lived | `mill_dynamics` run-out transfer; A7 | Add the compensated transfer (notch at roll frequency with phase error) and a thermal bow input decaying with the roll's time constant | Roll run-out records, whether compensation is active, stop history | S | TM-LC18 EX; TM-LC21 EX; TM-LC26 AB |
+| **C7** | **Measurement transfer functions.** *(overlaps G5)* | Decides what the plant can see: a gauge with a few-millisecond response at 10 m/s averages over centimetres, so 10-40 mm marks are invisible to it while third-octave variation is averaged; a shapemeter zone of 26-52 mm aliases narrow bands; accelerometer position decides detection lead time. | all band types (interpretation of observations) | `sensors.py`, observation rules in `band_diagnosis` | First-order gauge response and spot averaging `sinc(pi*w/p)`; zone averaging of the shapemeter across the width; flag observations that the sensor cannot resolve | Gauge type, time constant, spot size, sampling; shapemeter zone width and filter; accelerometer positions | S | TM-LC24 VP; TM-LC14 FT; TM-LC7 EX; TM-LA12 EX |
+| **C8** | Regeneration from the previous pass. | A single-stand foil mill has no inter-stand regeneration, but gauge or hardness ripple written by the previous pass or by the previous coil's reel returns as entry forcing at `u_e/p` and can meet a stand or tension-loop resonance. | transverse | `chatter.frequency_response` to `dh_in` (exists), C1, C2 | Chain the passes: exit ripple of pass n as entry ripple of pass n+1 at pitch `p*h_in/h_out`, through the closed-loop transfer of C1 | Gauge logs of consecutive passes with length tracking | S after C1 | TM-LC21 EX; TM-LC5 EX; TM-LC6 EX |
+| **G1** | **No roll stack** (deflection, WR-BUR contact, flattening distribution, bending, tilt, shifting / CVC, ground camber) *(overlaps BT-G2, G15)* | The gap crown is an input, so the low-order flatness on which a local band sits (edge tension, quarter buckles), the bending needed to hold it, and the barrel-position dependence of local transfer are all missing. Bending cannot remove a narrow band [SS-S3], but it sets where the strip is tight or loose. | lengthwise (indirect); short-lived (bending steps) | `strip_shape.crown_heredity` (`gap_crown_m` becomes an output); `transfer_radius_profile` (local `Q`, local force per width instead of a uniform one); `contact.py` / `slab.py` / `foil_bite.py` (force per width, `Q`); `roll_thermal` (thermal camber as roll profile) | Influence-function slit-beam model: Timoshenko beam deflection of WR and BUR, Foppl / Hertz WR-BUR approach, Boussinesq strip-side flattening, iterated contact with loss of contact; or SM-FEM (beam elements + Winkler foundations, `kf_eq = (1/kf1 + 1/kf2)^-1`). 4-high first, 6-high later. Outputs: gap profile, actuator influence functions | Roll diameters, barrel and bearing-centre lengths, neck diameters, ground cambers and tapers, BUR chamfer, bending force range and current value, tilt, shift position | L (M for a symmetric 4-high) | SS-S1, SS-S2, SS-S3, SS-S5, SS-S7, SS-S8 |
+| **G2** | **No closed-gap (roll-kiss) shape path** for foil *(overlaps BT-G2, C1)* | Below roughly 50-200 um the work rolls touch outside the strip; part of the load bypasses the strip (22 % in one computed case), the bender acts on the barrel ends and hardly on the strip, and the exit gauge is set by speed and tension, not by the gap. The project's `Q`, `N_x'` and hence every foil flatness number come from an open-gap mattress bite it calls experimental. | lengthwise, short-lived | `foil_bite.py` (pressure, flat zone, sensitivities); `strip_shape` (`Q`, `N_x'`, `a` via `shape_inputs`); G1 | Extend G1 with a third contact (WR-WR outside the strip) and a Fleck-Johnson type foil bite per width element; solve kiss length and kiss force; derive the local transfer of a roll bump with the kiss contact carrying the mean load | As G1 plus roll roughness, strip width relative to barrel, measured total force and bending, speed-tension-gauge operating curves | L | SS-S8, SS-S24, SS-S25, SS-S26, SS-S28 |
+| **G3** | **Width-coupled strip model missing** (constant `xi`, uniform entry tension, pointwise exit-tension feedback) | The feedback term dominates every thin-gauge result (76-386 x `Q` in the demos), yet it is pointwise and uses the far-field stress. The literature couples lateral displacement, exit velocity and tension across the width, shows flow only near the edges at thin gauge, and shows the stress profile still evolving after the bite. A narrow band has shear lag: its tension deficit is shared with its neighbours over a length of the order of its width. | lengthwise, short-lived | `transfer_radius_profile` (replace the per-wavenumber `Q_eff` by a wavenumber-dependent in-plane kernel), `differential_elongation` (`xi(z)`), `flatness_from_elongation` | Strip-element or variational lateral-flow model (Lian; Liu) with exit and entry tension distributions as unknowns, plus a plane-stress Airy solution for the span that maps the bite-exit velocity profile to the far-field stress (gives the wavenumber filter and the distance to stabilise) | Entry profile and entry flatness (previous pass), span lengths bite-to-shapemeter and bite-to-coil | M (kernel) to L (full) | SS-S4, SS-S21, SS-S22, SS-S23 |
+| **G4** | **Buckling: one assumed mode, no wavelength search under tension, no post-buckling, no stress saturation** | Under tension the critical stress rises and the waves shorten and localise; after release the amplitude decides whether a band is seen; dead load on a table hides weak bands. The project's after-release result says "manifest" for almost any reportable band at foil gauge and gives no amplitude. Stress saturation in a buckled band changes what the shapemeter reads. | lengthwise, short-lived | Replaces `_SineModeSearch`; feeds `band_width` states, onsets, `wrinkle_rule`; new outputs wavelength and amplitude for comparison with `observations` | 1D-in-width Ritz or Hermite FE, harmonic along the length, `sigma_res(z)` + tension, minimise over wavelength (Rammerstorfer; Kpogan); Koiter one-term post-buckling for amplitude; optional elastic foundation term for the table (dead load); Counhaye rule (clip stress at `-sigma_cr`) to produce the saturated profile | Band wavelength and height on a sample, sample support (table, hanging, on coil), tension at which it appears | M | SS-S12 to SS-S20 |
+| **G5** | **No shapemeter and no flatness-control model** *(overlaps C7)* | The plant sees bands through 26 / 52 mm zones (or 25-100 mm rotors) with cross-talk and edge-coverage rules; a band of a few centimetres is at or below one zone and is diluted. The control loop reacts to a hot stripe with more cooling in that zone, and its valve switching is itself the "event" of the short-lived-band model. Without the loop the tool cannot say what the operator's screen should have shown, nor whether the control made or removed a band. | lengthwise, short-lived | `band_width` (model bands -> predicted zone readings; events generated by the controller instead of supplied); `roll_thermal.SprayHeader` (levels become control outputs); observation fields | Measurement operator: zone averaging, stated neighbour spreading, edge-zone rule, temperature compensation on / off. Controller: least squares on actuator influence vectors (bending, tilt from G1; one column per spray zone from `roll_thermal`), dead bands, valve minimum on / off times, target curve (e.g. loose edges) | Shapemeter type, zone map, target curve, actuator list and limits, spray valve logic, logged zone readings and valve states | M | SS-S29 to SS-S34, SS-S39 |
+| **G6** | **Strip temperature across the width is not a flatness term** *(overlaps A1)* | A fibre 1 K hotter than its neighbours is longer by about 2.4 I-units for aluminium [D from alpha, M]; this is above the project's 2 I-unit reporting threshold. A hot roll stripe or a lubrication band also heats the strip locally; the shapemeter reads it loose, and it tightens when the coil cools. EAFA defines heat stripes by "temperature and/or flatness differences". | lengthwise, short-lived | `energy_handoff.py` / `band_thermal.py` (strip exit temperature per width position), `flatness_from_elongation` (add `alpha*dT(z)` to `eps` at the measuring point, remove it after cooling) | Per-width strip heat balance driven by the local reduction, friction and roll surface temperature; apparent flatness at the shapemeter and true flatness after equalisation | Strip temperature scan at exit (pyrometer or thermal camera), coolant carry-over pattern | S-M | SS-S10, SS-S32, SS-S40, SS-S41, SS-S66 |
+| **G7** | **Thermal camber at the strip edge and edge actuators** *(overlaps A7)* | Tight edges and strip breaks are the foil mill's main flatness risk; the cause is the thermal fall-off beyond the strip edge. The roll model has adiabatic ends and only a spray header: no hot-edge spray or inductor, no neck / chock loss, no coupling to edge tension. | lengthwise (at the edges); short-lived (on width change) | `roll_thermal` (extra surface heat flux or hot-oil zones outside the strip; end loss boundary); G1 (edge gap); G4 (edge tension -> break index) | Add heat-source segments and a convective end condition; report edge fall-off slope and the edge tension change through the transfer chain; break-risk indicator = edge tension against a notch-sensitive limit | Hot-edge system type, position relative to strip edge, power or oil temperature, edge trim practice, break statistics | S-M | SS-S31, SS-S32, SS-S36, SS-S73 |
+| **G8** | **Circumferential (per-revolution) and skin time scales of the roll** *(overlaps A4, A6)* | The open discrepancy (about 20 s plant response against minutes in the model) matches the literature's separation into short, medium and long thermal effects; local shape control uses the medium one. A two-regime (skin + bulk) model is what current on-line models use. | short-lived (mainly) | `roll_thermal` (optional skin layer with its own storage and the bite / spray sequence around the circumference) | Two-layer or angular-resolved surface model superposed on the existing bulk solution; identify the three time constants and report which one a given event excites | Roll speed, positions of headers around the roll, zone-step tests on the mill | M | SS-S35, SS-S71 |
+| **G9** | **Coil model is a linear stack with a constant compaction factor** *(overlaps A8)* | At foil gauge the project's own result is that bands show after tension release and in the coil; its critical ridge heights are 0.06-0.15 um, i.e. the answer hangs on `c = 0.5`. Winding models show the ridge radius growing less than the thickness, the pressure and the tension concentrating in the hard lane, the neighbours going slack (soft bands, zero stress after about ten wraps), and yielding there. Needed too: winding-tension taper, spool stiffness, V-buckle and telescoping margins. | lengthwise; short-lived (when a transient ridge is wound in) | Replaces the criterion in `coil_ridge_buildup`; takes the exit thickness profile from `thermal_stripe_flatness` / incoming-ridge transfer; returns per-lane in-coil tension, plastic strain -> a new elongation term for `flatness_from_elongation` after unwinding | Hakiel 1D model per width segment with `E_r(P)` from stack compression, relaxation-radius tension allocation (Cole & Hakiel), core boundary condition, elastic-plastic hoop strain per lane; later an axisymmetric version for axial stress | Coil build-up (inner / outer diameter), tension and ironing-roll pressure curves versus diameter, spool dimensions and material, stack compressibility of the oily foil (a simple press test), strip yield stress, oscillation if any | M (1D + segments) to L | SS-S42 to SS-S49, SS-S60 to SS-S65, SS-S76 |
+| **G10** | **Air entrainment and the ironing roll** | Illustration [D]: the foil-bearing formula with R = 0.125 m, 10 m/s and 720 N/m (40 MPa x 18 um) gives an air film of about 17 um on a deflector roll, about 40 um on a 0.3 m coil radius without a nip, against a foil roughness of tenths of a micrometre: at mill speed the foil floats unless roughness, grooves or a nip vent the air. This governs traction on rolls (tracking, wrinkle regime), coil density, telescoping and whether a ridge "prints". The project has an ironing-roll observation and no physics. | lengthwise; transverse (possibly, through slip) | New span / roller traction block used by `tension_trough_screen` (Regime II limit); G9 (equivalent `E_r` with air, wound-in tension `T_w + mu*N/h` with a nip) | Knox-Sweeney film with side-leakage and roughness (Ducotey & Good), effective friction versus `h/sigma`; nip film by line-contact EHL; Boyle-law air layer in the winding model | Line speed, roller radii and surface (roughness, grooves), wrap angles, ironing-roll diameter, cover and load, air blow-off arrangement | M | SS-S49, SS-S50, SS-S51, SS-S57, SS-S58 |
+| **G11** | **Lateral stress in spans is an input; no generator and no foil-specific correction** | The thresholds are computed but the acting lateral stress is not, so the trough / wrinkle hypothesis is "thresholds only" unless the plant supplies a stress it cannot measure. For wide foil the isolated-span theory over-predicts sensitivity by an order of magnitude. Residual-stress bands (baggy lanes) are themselves a source of troughs, which links G4 to this block. | lengthwise | `tension_trough_screen` (`lateral_compressive_stress_pa` computed), `band_width` troughs section | Closed forms for misalignment and taper (Good & Beisel), roller deflection (Shelton), moment-transfer and slack-edge limits (Shelton; Fu & Good; Walker et al.), plus buckling of a span with a slack lane | Roller alignment survey (mm/m), roller diameters, taper / crown, span lengths, wrap angles | M | SS-S54 to SS-S57, SS-S59 |
+| **G12** | **No physical model of foil tension lines** | The published remedies in the project's own catalogue (more tension, rougher rolls, ironing-roll pressure, less blow-off air) are the remedies for entrained-air MD corrugation in winding. The classical axisymmetric shell-buckling full wavelength `3.47*sqrt(R*t)` [M] gives 5 mm on a 0.125 m roller and 5-13 mm on coil radii 0.15-0.5 m for 12-30 um foil [D], inside the reported 5-20 mm pitch, and scales with sqrt(gauge) as observed for tin-canning. This is a candidate, not an established explanation. | lengthwise | `foil_tension_lines` hypothesis (adds a model pitch and an onset condition); G9 / G10 (axial stress in the outer laps, air film) | Axial (width-direction) compression of the outer lap from Poisson recovery between hard lanes and from radial compaction, compared with the shell buckling stress on a compliant, air-cushioned foundation; pitch from the shell wavelength | Pitch of the lines against coil radius and gauge, whether they are on the coil only, ironing-roll and blow-off settings | S-M | SS-S53, SS-S66, SS-S46 |
+| **G13** | **Roll ground-profile error and wear as band sources share no quantitative path** *(overlaps BT-G9, C4)* | Grinding residuals and local wear are high-fidelity diameter deviations that transfer like thermal stripes and that bending cannot remove; the project scores them by rules only. | lengthwise | `roll_surface_band`, `grinding_feed_marks` hypotheses; reuse `transfer_radius_profile` with a measured profile | Feed a measured roll profile (grinder report) through the existing transfer; add the Patel stiffness-ratio check and the barrel-position modulation from G1 | Grinder profile reports before and after a campaign | S | SS-S3, SS-S72 |
+| **G14** | **Downstream steps absent** (slitting, separating, annealing) | A band can first appear when the wide coil is slit: narrow slit strips release cross-width stress as camber or local waves, burr and belled edges build new ridges, and rewinding re-forms corrugations at the same positions. For annealed products, lap movement, sticking and oil-removal gradients add stripes; battery foil is normally delivered hard, so only an intermediate anneal of the stock applies. | lengthwise | New post-mill stage after `coil_ridge_buildup`; observation fields "seen first at slitter / after anneal" | Rule set first; later re-use G4 on each slit width and G9 for the rewound reel; thermal expansion mismatch and creep set-in of ridge strain for the anneal | Slit pattern, knife set-up, rewind tension, anneal cycle | S (rules) to M | SS-S53, SS-S65, SS-S66, SS-S67, SS-S74 |
+| **G15** | **Edge drop** *(overlaps G1)* | Not a band cause, but it sets the edge ridge or valley in the coil and the edge tension. | lengthwise (at the edges) | G1 (flattening recovery at the strip edge), G9 | Falls out of G1 with strip-side Boussinesq flattening | Edge profile scans | with G1 | SS-S5, SS-S25, SS-S40 |
+| **G16** | **No validation benchmark and no uncertainty statement for this chain** *(overlaps BT-G17)* | The review literature itself names "standardised validation benchmarks" as an open gap; several published cases could be coded as regression tests now. | general | `tests/`, band-diagnosis 13-14 | Encode the cases of Appendix A (SS-V1 to SS-V19) | none | S-M | SS-S4 |
+| **BT-G1** | **Half-space (influence-function) foil bite with a no-slip zone**, replacing the plain Winkler mattress | The present model is 0.42 of the reference load on the one fully specified published case and has a different pressure shape (no Hertzian hill, no exit peak). Every downstream number uses it: `Q`, `N_x'`, bite length (LW transfer of any stripe), `F_h`, `f_h` (TR), slip dissipation (heating). | lengthwise, transverse, general (every number that uses the foil bite) | `foil_bite.py` (new solver behind the same result dict), `chatter.BiteResponse` (8 sensitivities, `contact_length_m`), `band_process` (bite fixed point), `strip_shape` (`Q`, `N_x'`, `a`), `bite_tribology.pass_heating` (`P_friction`) | Fleck et al. eqs (1), (3a), (8), (9), (15), (16) with triangular pressure elements and coefficients (30)-(32); neutral-zone pressure from the sticking condition (Le & Sutcliffe); profile at most flat, under-relaxation 0.1-0.5; optional regularised stick/slip (Shigaki). Check against Fig. 9 (`W_bar` 118), Figs 1, 3-6, eq. 29. | None new: roll radius, modulus, flow stress, tensions, friction | M (L with elastic zones and tangential roll strain) | BT-S1 FT, BT-S2 FT, BT-S4 AB, BT-S14 FT, BT-S15 EX, BT-S18 AB |
+| **BT-G2** | **Closed-gap (roll kiss) load path across the width** *(overlaps G2, G1, C1)* | Below the kiss onset the force is shared with roll-to-roll contact; the transfer of a roll stripe to the strip, the edge zones, and the effect of width changes all change; roll force stops being a gauge actuator. Fixed-position LW bands near the edges and after width changes; TR through an extra stiffness in parallel with the strip. | lengthwise (near the edges, after width changes); transverse | `strip_shape.py` (replace or supplement local half-space compliance `C(lam)` with stack influence functions; new unknown kiss force `q_k(z)`), `mill_dynamics.py` (mill modulus, gauge actuator), `chatter.py` (`dF = F_h*dh + K_kiss*dh`) [coupling inferred], `foil_regime` block | Influence-function roll stack: work-roll bending as beam, flattening WR/BUR and WR/strip (half-space), WR/WR line contact (Foppl or Hertz), compatibility of gap and kiss (Jiang eq. 20; Ogawa eqs 9-12), active-set iteration on contact; strip force per width from BT-G1 | Barrel length, strip width, WR and BUR diameters and ground crowns, bending force, neck spacing, force or position mode, thermal crown (from `roll_thermal.py`) | L | BT-S24 FT, BT-S25 EX, BT-S26 EX, BT-S42 VP |
+| **BT-G3** | **Mixed-lubrication friction closure coupled to the bite** (replace the placeholder) *(overlaps A9)* | Friction is the dominant unknown at foil gauge; load and slip depend on it to a power of about 2 or more; speed effect, heat streaks, chatter slope all need `mu(speed, oil, roughness)`. LW (oil-film bands), SL (speed and temperature transients), TR (slope `dmu/du`). | lengthwise, short-lived, transverse | `bite_tribology.friction_coefficient`, `friction_at_speed`, `friction_speed_curve`; `band_process` fixed point; `chatter` speed-consistent critical speed (`dmu/du`); BT-G1 (friction distribution) | Inlet-only analysis (recommended by Sutcliffe & Montmitonnet): load sharing `p = A*p_a + (1-A)*p_l`; asperity crushing under bulk strain (Sutcliffe 1988 or Wilson & Sheu 1988; take the fitted functions from the originals); averaged Reynolds equation in the inlet (Patir-Cheng [M]); `mu = A*mu_c + (1-A)*mu_v`, `tau_v = tau_0*asinh(eta*u/(tau_0*h_v))`; `mu_c(h_s, r)` semi-empirical; two roughness wavelengths | `eta0(T)`, `alpha`, Eyring stress, roll and strip Rq and dominant wavelengths, lay, additive; or calibration from load and forward slip at two or more speeds | M (inlet only), L (through the bite) | BT-S3 EX, BT-S5 AB, BT-S6 AB, BT-S7 EX, BT-S9 EX, BT-S10 AB, BT-S14 FT, BT-S32 AB |
+| **BT-G4** | **Friction or film stripe as a band source across the width** (no roll bump) *(overlaps A2)* | With load exponent in friction about 2-2.6, a local friction difference acts like a roll bump: local roughness, roll coating, oil supply or oil temperature at one width position. Unlike a thermal crown stripe it grows as gauge falls and it follows speed. A roll surface that is locally hotter thins the film at once (`beta` about 0.015 /K gives about 15 % per 10 K [derived]) with the sign opposite to the thermal-crown effect. LW at fixed positions; SL on zone switching (a fast path, where the crown path needs minutes). | lengthwise; short-lived (zone switching) | `strip_shape.py` (new source term `dp' = -Q*dh - N_x'*dsigma + M_mu*dmu(z)`, `M_mu = d(F/w)/dmu` from the bite), `roll_thermal.py` (surface temperature across width -> `eta0`), `bite_tribology` (`dmu/dLambda`, `dLambda/dRq`, `dLambda/deta`), hypothesis `heat_streak_or_film_variation` | Linear sensitivity chain on top of BT-G1/BT-G3; screening version possible now with the existing models | Roll roughness across the barrel, oil temperature and flow per zone, roll-coating observations | S (screening), M (with BT-G1/BT-G3) | BT-S1 FT (master curve), BT-S3 EX; mechanism [derived] |
+| **BT-G5** | **Shear-stress cap and friction varying through the bite** | The solver rejects at friction 0.05-0.06 where the literature caps the shear at shear yield; constant friction over-predicts forward slip at foil gauge, which inflates friction power and exit temperature. | general (forward slip, heating) | `foil_bite.py`, `slab.py` (traction law), `pass_heating` | `tau = min(mu*p, k)` or `tau = m*k`; friction rising towards the exit with contact-area ratio; sticking zone friction proportional to roll slope | None (or `m` from calibration) | S-M | BT-S3 EX, BT-S5 AB, BT-S14 FT |
+| **BT-G6** | **Forward slip as a measurement: calibration routine and corrected flag** | Slip is the cheapest friction indicator on a mill; at foil gauge it also shows the bite shape (flat zone). Needed to set the friction level that every band mechanism depends on. | general (sets the friction level) | `lubrication.EffectiveFriction` (`fit_uses_force_torque_slip`), `band_process`, flag text in `foil_bite.py` | Inverse fit of friction (and its distribution parameter) to load, torque and slip; note that simple slip formulas are unreliable | Roll speed, exit strip speed, load, torque, tensions, at two or more speeds | S (with existing bite), M (with BT-G1) | BT-S3 EX, BT-S5 AB, BT-S37 SN, BT-S34 FT |
+| **BT-G7** | **Inlet angle for the film at foil gauge** | Film over-stated by 1.45-3.3 times on mattress bites, shifting every regime verdict | general (regime verdicts) | `band_process` (argument `contact_radius_m`), `bite_tribology._film_core` | Use the undeformed-roll slope at the inlet point, or the local slope `h'(x_i)/2` of the bite solution | None | S | BT-S3 EX |
+| **BT-G8** | **Regime labels and the heat-streak rule** | "Boundary" fires on normal mixed-regime operation, so the rule cannot discriminate | lengthwise (heat-streak rule) | `bite_tribology._regime`, `band_signatures.film_ratio_regime`, rule in `band_diagnosis.py` | Labels: about 3 first contact, below about 1 imprint, 0.01-0.5 common window; replace the boundary test by a film-collapse test (film against additive length or contact temperature) once BT-G3/BT-G11 exist | None | S | BT-S3 EX, BT-S6 AB, BT-S9 EX |
+| **BT-G9** | **Roughness transfer and asperity flattening (imprint, lay, grinding marks)** *(overlaps G13, C4)* | Strip roughness is an input to `Lambda`; it converges to the roll roughness in one pass; gloss bands and grinding feed marks are imprint phenomena | lengthwise (gloss bands, grinding feed marks) | `bite_tribology.SurfaceFinish` (strip Rq per pass computed, not supplied), `band_signatures` grinding rule, `roll_surface_band` | Contact-area evolution with bulk strain, two wavelengths; transfer ratio as a function of `Lambda` and reduction; grinding lay spectrum | Roll Ra/Rq and profile spectrum after grinding, incoming strip roughness, grinder feed | M | BT-S8 EX, BT-S9 EX, BT-S38 SN, BT-S43 SN, BT-S46 SN |
+| **BT-G10** | **Thick-film surface effects: oil pits, hydropitting, MPHL** | Dull or pitted bands where the film is locally thick (high speed, viscous or cold oil, rough roll); upper bound on film for brightness | lengthwise (dull or pitted bands) | `bite_tribology` (upper `Lambda` limit), `heat_streak_or_film_variation` | Screening rule first (`Lambda_s` near or above 1); later pit-volume and MPHL drainage model | Oil viscosity, speed, gloss measurements | S (rule), L (model) | BT-S9 EX, BT-S14 FT, BT-S33 FT, BT-S34 FT |
+| **BT-G11** | **Boundary film, additive, transfer layer, pick-up, fines** | Fixed-position bands that stay until a roll change (coating or pick-up bands), heat streaks, herringbone onset, smudge; contact friction depends on film, reduction and transfer layer | lengthwise (fixed until a roll change); transverse (herringbone onset) | `bite_tribology` (`mu_c`), `pass_heating` (interface temperature), `roll_surface_band`, `herringbone_screen`, `band_thermal` | Empirical `mu_c(h_s, r, T)`; contact temperature check against additive limit; roll coating as a state per barrel zone; debris proportional to slip length | Additive type and content, oil analysis, roll coating state, strip-drawing or mill calibration | M-L | BT-S7 EX, BT-S30 SN, BT-S31 AB, BT-S32 AB, BT-S39 SN, earlier project report |
+| **BT-G12** | **Oil supply and starvation at the inlet** *(overlaps A2, A5)* | A blocked or weak nozzle reduces oil as well as cooling at one width position: a film band at a fixed position | lengthwise (fixed position) | `roll_thermal.py` spray header (flow per nozzle), `bite_tribology.inlet_film_thickness` (`h = min(h_s, h_supplied)`), BT-G4 | Inlet meniscus position in the Reynolds integration (simplified starvation as in Metalub) | Oil flow per nozzle or zone, application geometry | S-M | BT-S14 FT, BT-S36 FT, BT-S11 AB |
+| **BT-G13** | **Speed effect on gauge and load in closed-gap operation** *(overlaps C1)* | Acceleration and deceleration change friction and with it gauge, forward slip and tension; candidates for SL bands and TR marks at speed changes | short-lived; transverse (at speed changes) | `mill_dynamics.py` (speed-change gauge shift), `band_process`, `chatter` | BT-G1 + BT-G3 evaluated at constant force and constant tension; check against the BT-S3 case | Speed ramps, load and gauge traces | S after BT-G1/BT-G3 | BT-S1 FT, BT-S2 FT, BT-S3 EX, BT-S36 FT |
+| **BT-G14** | **Doubled (pack) rolling** | General coverage of foil below about 12 um; matt-side roughness, pinholes; the plant rolls single sheet | general | `foil_bite.py` (pack as strip of doubled gauge with an inner interface), product catalogue | Bite: doubled thickness plus interface friction option [inferred; no published bite model found]. Matt side: grain-strength FE or a correlation of roughness with grain size and reduction | Grain size, doubling oil, pass data | M (bite), L (matt roughness) | BT-S28 EX, BT-S29 SN |
+| **BT-G15** | **Elastic strip zones, recovery, tangential roll displacement** *(overlaps B6)* | Negligible for foil reductions above 10 %; needed for light passes, temper rolling and exact no-slip kinematics | general | `foil_bite.py`, `slab.py`, `chatter` (`dh = 2*x_w`) | Fleck eqs (4), (10)-(14); Krimpelstaetter or Dbouk formulation | Strip modulus | M (with BT-G1) | BT-S1 FT, BT-S14 FT, BT-S16 AB, BT-S18 AB |
+| **BT-G16** | **Hardening, rate and temperature inside the foil bite** *(overlaps B1)* | Small in final foil passes (4 %); matters at sheet gauge and for the first foil pass from annealed stock | general | `foil_bite.py` (constant `K`), `materials.py` | Position-dependent `K(x)` as in `slab.py`; thermo-viscoplastic option | Flow curve | S-M | BT-S1 FT, BT-S14 FT |
+| **BT-G17** | **Benchmark and validation harness** *(overlaps G16)* | The project states that it has no benchmark; the literature provides several | general | `tests/`, `physicroll/literature.py` | Encode rows BT-V1 to BT-V4, BT-V9 of Appendix A as tests and comparison tables | None | S | BT-S1 FT, BT-S3 EX, BT-S34 FT |
+
+Notes the reports attach to single rows:
+
+- **G1, G3.** The project's "compliance only" level is the same idea as the stiffness ratio of
+  SS-S3, with a better (wavelength-dependent) roll compliance. The foil demo's values imply a roll
+  term of about 3.4e10 Pa, the same order as the 5.8-7.0e10 Pa roll flattening modulus in SS-S3 [D].
+  What the literature does not contain is the project's exit-tension feedback as a multiplier of
+  76-386 on the strip stiffness. Coupled 3D models contain the effect implicitly, but no paper found
+  isolates it for a narrow band. The shape report calls it the least supported and most influential
+  element of the chain.
+- **G10.** The air-film numbers are an upper-bound illustration: the formula assumes a smooth, wide,
+  impermeable web in air with no side leakage. Oil mist, roughness and edges reduce the film.
+- **BT-G1, BT-G3.** Bite and friction meet in one loop (I10). BT-S3 reports that convergence is the
+  hard part and advises solving the tribology in the inlet only.
+- **BT-G2.** The roll stack needs force per width as a function of local gauge, tension and
+  friction. That is the bite response the project already passes around.
+- **BT-G4.** Needs only derivatives of BT-G1 and BT-G3 and the existing width-resolved roll
+  temperature.
+
+## 6. Where the literature contradicts or qualifies the project's documents
+
+Section numbers refer to [band-diagnosis.md](band-diagnosis.md). The verdict is the report's own;
+where a report used other words they are quoted. Origin: TM = thermal report section 8, SS = shape
+report table 4.3, BT = bite report section 2.6, OD = open-data report.
+
+| # | Statement in the project | What the literature says | Verdict | Suggested action |
+|---|---|---|---|---|
+| X1 | Rate sensitivity "taken as zero" (8.3, tagged from memory). (TM) | A measurement on 16 um 1235-H18 foil gives m about 0.027 and a 25 % rise in stress over three decades of rate [TM-LB1 EX]. The statement that hardening is rate-insensitive below 100 C [TM-LB4 EX] covers the hardening rate, not this level effect. The measured range ends at 1e-2 /s; rolling rates are five decades higher. | Contradicted | B1: add a rate and temperature term; say that the value at rolling rates is an extrapolation. |
+| X2 | A positive stage-IV slope for every alloy (8.3). (TM) | Right for 1200-type and solute-bearing grades [TM-LB3 AB, BG-G8]. Wrong in sign for purified-matrix Al-Fe alloys and high-purity grades beyond 80 % reduction [TM-LB2 EX]; temperature-dependent in 8079 [TM-LB7 AB]. | Qualified (contradicted for some alloy groups) | B2, B3: parameter sets by alloy group. |
+| X3 | "No measured spray heat-transfer coefficient for kerosene-based coolant was found" (7.1). (TM) | Still true for absolute values [also OD]. Measured relative data exist [TM-LA15 EX, TM-LA16 AB]. Published values are on three different bases (jet zone, sprayed area, overall). An earlier project note describes the 2.5-4.3 kW/m2K as a jet-zone value, while `roll_thermal.py` applies its coefficient as a circumferential mean. If the note is right, `thermal_check` compares two bases. | Qualified | Re-read PT-T18 before anything is changed; then A5. |
+| X4 | "Thicker strip keeps much more [of the heat]"; the sheet demo's strip share 0.84 (8.2, tagged from memory). (TM) | No source was found for a sheet-gauge share. A perfect-contact estimate gives about half at 0.25 mm (computed here, rough). The foil value 0.22 is supported by the same estimate (about 0.87 to the rolls, computed here, inside the measured 0.67-0.89 [TM-LA19 AB]). | Qualified (0.84 unsupported; 0.22 supported) | A3: compute the split. |
+| X5 | The plant-identified 20 s flatness response against minutes in the model is "partly open" (7.1, 14). (TM, SS) | Three thermal effects with different time constants; the medium one serves local shape control [TM-LA9 AB = SS-S35 AB; TM-LA13 EX]. On-line models separate skin and bulk [SS-S71 AB]. Two candidate causes are not in the document: the strip-temperature term in measured flatness, and the surface time scale of 8-25 s (computed here). The document's third candidate, bite heat that depends on roll surface temperature, is small: of the order of 0.1-0.3 against 2.5-4.3 kW/m2K (computed here). | Supported; two causes to add | A6 after A1 and A2; A4 / G8. |
+| X6 | Lower friction lowers the chatter critical speed (11.4, 11.5; already listed as a known disagreement). (TM) | Newer sources explain an optimum friction through two competing effects [TM-LC3 AB, TM-LC5 EX]. Single-stand negative-damping models over-predict tandem critical speeds, by 42 % on average in one study [TM-LC6 EX]; for a single-stand foil mill that point does not apply. | Qualified | C3. |
+| X7 | Gaugemeter gauge control at foil gauge (9). (TM) | The document already restricts it to open-gap reasoning. Vendor literature is explicit that foil gauge is controlled by speed and tension [TM-LC18 VP]. | Qualified | Say that section 9 should not be read for the plant's passes; C1. |
+| X8 | Coil ridge build-up is linear in the wrap count with a constant compaction factor 0.5 (7.2). (SS) | The local strain at a high point stops rising in proportion to the wraps after the first few [SS-S60 EX, a source the project already cites]. The radius deviation is smaller than the thickness deviation because the thick lane compresses more, while pressure and tension concentrate there [SS-S45 EX, SS-S53 EX]. | Contradicted in form. The threshold itself could not be compared: the published 6-7 um limit is a ridge on the hot coil for 0.35 mm tinplate [SS-S61 EX]. | G9. |
+| X9 | "A latent band is a stress stripe a shapemeter can see" (7.2). (SS) | Zones are 26 / 52 mm (rolls) or 25-100 mm (rotors), with neighbour spreading; a tight edge and a loose pocket in one zone are missed [SS-S29 to SS-S32]. | Qualified: true only for bands at least one zone wide | G5, C7. |
+| X10 | When a band goes slack the feedback is capped and the thickness transfer rises (7.2, "saturation"; it raises the sheet demo's final pass from 50.7 to 148.3 I-units, synthetic mill). (SS) | In coupled rolling-buckling models, buckling transforms the far-field stress profile, but the in-bite fields, roll stack deformation and roll force profile are hardly changed; the influence grows only at very small reduction [SS-S8 EX, SS-S9 AB, SS-S10 AB]. | Qualified. The report's words: "in tension with the literature"; the step is not supported and may overstate manifest bands. | Review the saturation step with G3 and G4. |
+| X11 | Buckle half-wave equals the buckle width, k = 4, simply supported band edges (7.2). (SS) | Tension shortens and localises the waves [SS-S12 AB, SS-S13 AB]. Measured local buckles have a full wavelength of about 0.7-0.8 of the buckle width, 2.5-2.8 times shorter than the assumed mode [D from SS-S19 FT]. The edge restraint moved the critical value from 5.3 to 8.9 I-units in the published case [SS-S19 FT]. | Contradicted for the wavelength; the critical stress is uncertain by a factor of about 1.7 from the edge condition alone | G4. |
+| X12 | Trough and roller-wrinkle thresholds from isolated-span formulas are applied at foil gauge (3.5, 7.2). (SS) | For wide aluminium foil below 25 um, wrinkles needed about 15 times the predicted misalignment [SS-S55 EX]. | Qualified: the thresholds are conservative screening values for wide foil | Say so in the result; G11. |
+| X13 | "Any reported band buckles after release" at foil gauge (3.5, 14). (SS) | With dead load on a table a strip lies flat below a residual-stress limit, and the table index differs widely from the stress index [SS-S14 AB]. | Qualified | G4: add a dead-load term to the local released mode. |
+| X14 | Crown heredity and the dead band are evaluated for foil passes with a supplied gap crown. (SS) | In kiss rolling the bender changes the barrel ends, not the strip portion, and part of the load bypasses the strip [SS-S26 EX, model output]. | Qualified: a gap crown is not a sufficient description of a closed gap | G2, BT-G2. |
+| X15 | A given roll stripe is hidden more, not less, at thinner gauge in the mill (3.5). (SS) | Transfer falls as the strip becomes stiff relative to the roll [SS-S3 FT]; very thin foil is run with deliberately loose edges [SS-S31 EX]. | Supported in direction, by a different mechanism (strip stiffness, not tension feedback) | None. Note that BT-G4 describes a different band source that grows as gauge falls. |
+| X16 | Tension lines "have no physical model" (3.7, 14). (SS) | Entrained-air corrugation in winding has the same remedies, the same thin-gauge trend and a pitch of the right size [SS-S53 EX, SS-S66 EX; pitch D, formula M]. | Qualified: a candidate model exists | G12. |
+| X17 | The exit-tension feedback multiplies the strip stiffness by 76-386 in the demos (7.2). (SS) | No paper found isolates this effect for a narrow band. The compliance-only level agrees in order of magnitude with SS-S3 [D]. | Qualified: not contradicted, not supported | Independent check through G3 and G2. |
+| X18 | "No benchmark with fully known inputs was found" for the foil bite (10.2, 14; `foil_bite.py`). (BT, OD) | BT-S1 Fig. 9 is one: all inputs stated; dimensionless load 118 (half-space), 120 (perturbation), 62 (the authors' mattress). The project's solver returns 49.8 on that case [run]. The Fig. 1 / Fig. 4 series is another. OD adds a fully specified 50 to 25 um pass for a model-to-model check [OD-17 EX, model output]. | Contradicted | BT-G17: encode BT-V1 to BT-V4; correct the sentence. |
+| X19 | The mattress model is "in the spirit of Fleck & Johnson" (10.2). (BT) | Fleck & Johnson used a foundation only for the perturbation of a Hertzian pressure and rejected the plain mattress [BT-S2 FT]; Fleck et al. then abandoned it because it under-predicts load by up to a factor 2 and torque by up to a factor 10 [BT-S1 FT]. | Qualified: "order of magnitude only" is fair; the kinship is overstated | Reword; BT-G1. |
+| X20 | The flag `FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES` blames missing elastic strip zones. (BT) | Those zones are negligible for reductions above 10 % [BT-S1 FT]. A Coulomb model with a no-slip zone gives large forward slip; one model computes 5 % to 45 % and describes such values as met in practice [BT-S3 EX, model output]; mill trials show that constant friction over-estimates slip and that friction varying through the bite repairs it [BT-S5 AB]. | Contradicted (the cause named in the flag) | Change the flag text; BT-G5, BT-G6. |
+| X21 | Film ratio below 1 is labelled BOUNDARY; "every schedule pass is in the boundary regime" (8.1). (BT) | Below about 1 is the condition for a good roll imprint within the mixed regime; 0.01-0.5 is the common industrial window [BT-S9 EX, BT-S3 EX]. Measured friction on aluminium falls from about 0.09 to below 0.01 inside that window [BT-S6 AB, BT-S7 EX]. So the label describes normal operation, and the heat-streak rule fires on it. | Contradicted | BT-G8. |
+| X22 | Placeholder friction law with end values 0.09 and 0.008 and a film-ratio scale of 1.0; only its slope with speed is used (8.1). (BT, OD) | The end values match the one abstract on aluminium (about 0.09 at the slowest speeds, below 0.01 at the highest) [OD-17 AB, BT-S6 AB]. The law keeps friction near 0.09 over most of the industrial window, so neither its level nor its slope is supported. | Qualified | BT-G3; as a first step fit a curve through the published end points (OD). |
+| X23 | Inlet angle for the film taken as the mean slope of the whole bite (8.1). (BT) | The literature uses the undeformed-roll inlet slope [BT-S3 EX]. On the mattress demo passes the project's film is thicker by 1.45, 1.8 and 3.3 times [derived]. | Contradicted (method) | BT-G7. |
+| X24 | "The published high-friction foil case, 50 -> 25 um at friction 0.10" is rejected by the solver (10.2). (BT) | In that paper 0.1 is the friction on asperity contact areas, weighted by the contact-area ratio and capped at shear yield. It is not a nominal coefficient of 0.10 over the bite [BT-S3 EX]. | Contradicted: the rejection says nothing about that case | Correct the sentence. |
+| X25 | The bite is rejected when friction stress exceeds shear yield. (BT) | The literature caps the shear stress at shear yield or uses a friction factor [BT-S14 FT, BT-S3 EX]. | Qualified. The report's words: "a gap, not an error" | BT-G5. |
+| X26 | The Hitchcock path rejects the 50 -> 30 um pass and the mattress model is in its foil regime there (10.1, 10.2). (BT) | Eq. 29 of BT-S1 puts the onset of a neutral zone for the demo mill at 54-63 um entry gauge, and at about 118 um for friction 0.05 [derived]. | Supported | None. |
+| X27 | Constant flow stress in the final foil passes (10.2). (BT) | Hardening there is small, "typically 4 per cent through the penultimate stand" [BT-S1 FT]. | Supported (inside one bite; see X1 and X2 for the level from pass to pass) | None. |
+| X28 | Inlet film formula with the yield stress alone (8.1). (BT) | That is the form printed in BT-S9 [EX]. | Supported | None. |
+| X29 | Force rises steeply with friction (3.3). (BT) | The master curve gives a load exponent in friction of roughly 2 to 2.6 [derived, slope read by eye]; the project's probe gives 1.9 [derived]. | Supported | None. |
+| X30 | Closed-gap onset between 50 and 200 um (3.2), from trade sources. (BT) | No peer-reviewed aluminium-foil figure was found to confirm or correct it. | Qualified (unconfirmed) | Keep the range; say it is trade-level. |
+| X31 | A chatter paper is cited only for the span-wave disagreement (15). (OD) | The same paper gives a measured onset with mill parameters: 124.6 Hz and 5.8 m/s on a two-stand steel mill [OD-22 EX; TM-LC7 EX]. | Qualified: it can serve as a numeric benchmark | Run that mill through `chatter.py`, with and without bite damping. |
+| X32 | Band and tension-line vocabulary is a literature synthesis; flatness is reported in I-units (3.7). (OD) | No standard read defines "band" or "tension line" on foil with a measurement method. Flatness of foil is not specified in I-units in any standard read; EN 546 and GB/T 3198 use visual and lay-flat criteria [OD-26 SN]. | Supported (the synthesis stays a synthesis) | None. |
+| X33 | Elastic strip zones are named as a missing part of the foil bite (14). (TM, BT) | The two reports differ; see below. | Qualified | BT-G15 only for light passes. |
+
+**Where the four reports disagree with each other, or read one source differently.**
+
+- **Elastic entry and exit zones at foil gauge.** The thermal report (gap B6) says they are "a large
+  part of the contact" and takes that from the project's own section 14. The bite report read the
+  primary source in full and finds them "very short", negligible for load above 10 % reduction
+  [BT-S1 FT]. The bite report has the stronger source. What matters at foil gauge is the
+  longitudinal elastic strain in the no-slip condition, not the thickness recovery.
+- **Roll-kiss load share.** The bite report states that no peer-reviewed quantification for an
+  aluminium foil mill was found, and gives 11 % (computed) and 15-16 % (laboratory mill) for thin
+  steel [BT-S24 FT]. The shape report has one computed aluminium foil case with 22 % [SS-S26 EX,
+  model output, 1983]. Both agree that nothing measured on an aluminium foil mill was found.
+- **Hardening in foil passes.** The bite report rates hardening, rate and temperature inside the
+  foil bite as small (BT-G16, 4 % [BT-S1 FT]). The thermal report ranks the flow stress law first
+  for general coverage (B1, B2), because the level from pass to pass, the rate effect (possibly a
+  factor 1.5, an extrapolation, computed here) and softening by alloy group are open. The two
+  statements are about different things, but they pull the priority in different directions.
+- **What explains "worse at thin gauge".** See the last paragraph of section 2.
+- **One paper, three descriptions.** A 1997 paper on a Stribeck-type curve for foil rolling is
+  quoted by the thermal report without saying whether it is measured [TM-LC25 AB]. The open-data
+  report notes it is "a simulation study ... not a measurement paper" [OD-17 AB], and the bite
+  report says the curve comes from a model [BT-S13 AB]. Treat it as model output.
+- **One paper, two readings.** The open-data report lists a 1998 paper on load and strip profile in
+  thin strip rolling as a possible foil benchmark, material not verified [OD-17 LP]. The bite report
+  read the abstract: plasticine strip between elastomer rolls [BT-S22 AB]. It is a qualitative check
+  of the bite shape, not a foil-mill benchmark.
+- **Bibliographic differences.** The foil mixed-lubrication paper with mill trials is given as
+  J. Tribol. 123 (2001) by the open-data report and as J. Tribol. 124 (2002) 129-136 by the bite
+  report, with the same DOI. The aluminium tandem-mill chatter case study is dated 2022 and read as
+  an abstract by the thermal report [TM-LC15 AB], dated 2021 and read as a snippet by the open-data
+  report [OD-22 SN]. Neither was resolved here.
+- **Strip temperature and flatness for steel.** 1.2 I-units per kelvin in one source [TM-LA30 EX],
+  about 1.25 in another [SS-S40 VP]. Both reports compute 2.4 I-units per kelvin for aluminium.
+- **Effort scales** differ (section 1).
+
+## 7. Validation: what public evidence exists
+
+**Headline (open-data report).** There is no public dataset of an aluminium foil mill. No public
+dataset from any mill holds shapemeter channels, roll temperatures or coolant zone states. Two real
+process datasets from cold mills exist, both stripped of the context a physics model needs. The
+best documented open benchmarks for the roll bite are on steel. No open flat-strip cold-rolling
+simulator, foil bite solver, roll-stack code, chatter model or wound-roll model in Python was
+found, so there is no independent open code to check most of the project against. For most of the
+newer modules, plant data are the only route.
+
+### 7.1 Open datasets
+
+| Name and link | Licence | What it can test | Limits (read status) |
+|---|---|---|---|
+| D1. D4ASCR, aluminium strip cold rolling, <https://zenodo.org/records/10685675> | CC BY 4.0 | `mill_dynamics.py`: sign and size of force and exit-gauge response to entry gauge; tension interaction between two stands; eccentricity once the sampling interval is known. | 1.36 GB, 20 columns. No units, no time base, no gauge, no alloy: only ratios and correlations until the authors supply metadata. The two-stand reading is an inference from column names. (LP + CSV header) |
+| D2. Cold rolling mill dataset for a recommender system, <https://zenodo.org/records/8085933> | data CC BY 4.0; loader code GPL-3.0 | Possibly `mill_dynamics.py` and `slab.py`, if it holds force, gauges, tension and speed per window. | Variables and metal not stated; a Python pickle that must be opened in an isolated interpreter. (LP) |
+| D3. CRD cold rolling dataset, <https://github.com/DGlql/CRD> | no licence file | `slab.py` / `contact.py`: held-out force prediction down to 0.18 mm exit gauge. | Steel; roll radius, friction, flow curve and units not given. (README FT) |
+| D5. Chatter marks on a 20-high cold mill, DOI 10.25403/UPresearchdata.29877497.v1 | CC BY 4.0 | `chatter.py`, `band_signatures.py`: spectra against the third-octave band and pitch law. | A 20-high mill has different modes from a 4-high; channel list, sampling rate and metal not on the landing page. (LP) |
+| M1. Tensile tests of 9 um AA8079 foil, <https://zenodo.org/records/2646505> | "other-open" | Foil stiffness and early plasticity for `strip_shape.py`; catalogue entries for 8079. | Annealed converter foil, not as-rolled H18. The only open raw data on a foil-gauge product. (LP) |
+| M2. NPL TENSTAND tensile files, <https://www.npl.co.uk/products-services/advanced-materials/tensile-testing> | not stated in the part read | Room-temperature flow curves for AA1050 soft and AA5182 soft and hard, as starting points for `materials.py`. | Uniaxial, to necking only. (EX) |
+
+Also listed by the report: a small steel reversing-mill set without force (D4), two hot-mill sets
+(D7, D8), a bearing-vibration set (D9), finite-element roll-deflection results (D10), and one
+synthetic tandem-mill set (TCM, <https://zenodo.org/records/11469702>, CC BY 4.0) that allows a
+code-to-code check of force, torque and power but is not a measurement. What transfers from steel
+sets: the structure of the slab force balance, roll flattening, the gaugemeter relation, tension
+coupling and the chatter structure. What does not: flow stress level, emulsion against neat oil,
+the strip-to-roll modulus ratio, and gauge (the thinnest open steel data stop at 0.18 mm).
+
+### 7.2 Published benchmark measurements and model cases
+
+The appendix gives the full tables with all values. The most useful ones:
+
+| Benchmark | Source (read) | What it holds | Tests | Limits |
+|---|---|---|---|---|
+| Foil bite, fully specified theory case (BT-V1) | BT-S1 (FT) | Entry 20 um, 25 % reduction, all inputs; dimensionless load 118 / 120 / 62 for three models. Model output, not measurement. | `foil_bite.py`, BT-G1 | Theory against theory. Project value 49.8 [run]. |
+| Foil mill point, AA1100, 73 -> 31 um (BT-V2) | BT-S1 (FT) | Measured load and torque; inferred friction 0.026. | Foil bite load and torque | Roll radius, speed and width not stated. |
+| Foil pass 50 -> 25 um, 5-40 m/s (BT-V4) | BT-S3 = OD-17 (EX) | Load, forward slip (about 5 % to 45 %), film and contact ratio against speed. Model output, not measurement. | `foil_bite.py` with friction closure; speed effect | Figures must be digitised. |
+| Friction against film ratio on aluminium (BT-V6) | BT-S6 (AB), BT-S7 (EX) | About 0.09 at the smallest films, below 0.01 at the highest speed; film 5-500 nm. | Friction closure | Curve is in the paywalled paper. |
+| Forward slip at sheet gauge (BT-V9) | BT-S34 (FT, OCR of a scan) | Forward slip for four reductions, two oils, two speeds, two roll finishes. | `slab.py`, slip calibration | No load data; check digits against the PDF. |
+| Three-pass AA5052 force and slip (SS-V11) | SS-S70 = TM-LA25 (EX) | Force and forward slip for 4.1 -> 1.72 mm. | `slab.py` | Already used by the project. |
+| Work-roll edge contact, thin steel (BT-V11, BT-V12) | BT-S24 (FT, parts), BT-S26 (EX) | Kiss force 65.3 kN of 596 kN, kiss length 36 mm, crown with and without kiss; a second case at 0.05 -> 0.03 mm. | Closed-gap model (G2, BT-G2) | Steel, laboratory mills; partly model output. |
+| Aluminium foil kiss-rolling case (SS-V9) | SS-S26 (EX) | 30 um x 1100 mm; kiss force share 22 %. Model output, not measurement. | Closed-gap model | Computed case from 1983. |
+| Stress-meter profile, tinplate last stand (SS-V4) | SS-S8 (EX), SS-S9 (AB), OD-21 (EX) | Measured far-field stress across the width against models with and without buckling. | `strip_shape.py` latent or manifest verdict, saturation | Steel. |
+| Local interior buckles (SS-V2, SS-V3) | SS-S19 (FT, formulas garbled) | Steel 0.5 x 1000 mm: waves at 7.5-8 I-units, none below 6. Aluminium 0.4 -> 0.3 mm: buckle width 105 mm, wavelength about 75 mm. | Buckling mode and threshold (G4) | One steel plant case, one laboratory case. |
+| Wrinkling of a tensioned strip with heated bands (SS-V1) | SS-S18 (FT post-print) | Full-field shape and temperature while tension is released. | Buckling under tension and after release | Steel, 0.332 mm. |
+| Roll-profile transfer study (SS-V5) | SS-S3 (FT) | Measured roll profiles through a 3D stack model, stiffness table. Model output, not measurement. | Local transfer, G13 | Model to model. |
+| Wound roll with thickness variation (SS-V12) | SS-S46, SS-S47 (EX), SS-S44 (AB) | Core pressure per width segment and outer-lap radius for PET film. | Winding model (G9) | Film, not metal; no metal equivalent found. |
+| Foil wrinkling against roller misalignment (SS-V14) | SS-S55 (EX) | Critical misalignment for copper and aluminium foil below 25 um. | `tension_trough_screen`, G11 | Excerpt only. |
+| Chatter onset, two-stand steel mill | OD-22 (EX), TM-LC7 (EX) | Onset at 5.8 m/s and 124.6 Hz with mill parameters; the paper's own model gives 6.42 m/s. | `chatter.py` | Steel; a tandem mill. |
+| 16 um 1235-H18 foil, micro-tensile | TM-LB1 (EX) | Stress at 2 % strain 160 to 200 MPa over 1e-5 to 1e-2 /s; m about 0.027; r-values 0.2 / 1.5 / 1.1. | Flow stress law, anisotropy (B1, B4) | Rates five decades below rolling. |
+| Heat split on a foil mill | TM-LA19 (AB) | Strip 0.11-0.33, rolls 0.67-0.89. | Heat partition (A3) | Abstract only; gauge and speed not given. |
+| Coil creep, 0.28 mm aluminium | TM-LA31 (EX) | Hoop stress 80 to -20 MPa in five days after winding at 140 C. | Coil model (A8) | Sheet gauge, hot winding. |
+| Steel pilot-mill bite with all inputs | OD-16 (AB) | Roll force and forward slip against speed and reduction, with hardening, roughness and oil laws. | `slab.py`, `bite_tribology.py` | Steel; tables not located. |
+
+### 7.3 Open codes
+
+| Code and link | Licence | What it can serve as | Limits (read status) |
+|---|---|---|---|
+| PyRolL core, <https://github.com/pyroll-project/pyroll-core> | BSD-3-Clause | Reference for plugin architecture; its Hitchcock plugin as a code-to-code check of roll flattening. | Focus on groove rolling; would add dependencies. (README + LICENSE FT) |
+| EJM_A_input_files, <https://github.com/francisflanagan/EJM_A_input_files> | MIT | Independent finite-element cross-check of pressure and shear in the rigid-roll bite. | Abaqus decks (commercial solver); could be ported to CalculiX. (README + LICENSE FT) |
+| EHL-FBNS solver, <https://github.com/ErikHansenGit/EHL> | Unlicense | Cross-check of the inlet film in the hydrodynamic limit; pieces may be ported. | MATLAB; no plastic strip. (README + LICENSE EX) |
+| Hakiel wound-roll model, <https://library.wolfram.com/infocenter/Conferences/6950/> | not read | Reference for a standard-library winding model. | Mathematica; conference material. (SN) |
+| Metalub | not open source | Reference only: the thesis BT-S14 documents equations and validation data. | Closed. (AB) |
+
+### 7.4 By module
+
+| Module | Best public evidence | The test | What only plant data can settle | Plant measurement and resolution |
+|---|---|---|---|---|
+| Slab bite (`slab.py`, `contact.py`) | AA5052 three passes (already run); steel pilot-mill work [OD-16 AB]; Abaqus decks; D3; forward-slip tables BT-V9. | Rebuild two or three pilot-mill points with their hardening law and one calibrated friction; compare force and slip. Held-out force prediction on D3. | Force, torque and forward slip together on aluminium. | Per pass, steady windows of 5-10 s: force on both load cells, torque or motor power, roll speed and strip exit speed (forward slip to 0.1 % absolute), gauges, tensions as forces, width, roll diameter and roughness, alloy, temper, prior reduction. 10-100 Hz logging. |
+| Foil bite (`foil_bite.py`) | BT-V1 to BT-V4; thin-steel edge-contact cases BT-V11, BT-V12; computed foil kiss case SS-V9. | Reproduce BT-V1 (target 118) and the 50 -> 25 um pass at 5, 20 and 40 m/s; report load and slip beside the published curves. | Load and slip of a real foil pass; load share through the roll kiss; anything below 20 um. | Per foil pass: total force, bending force, roll-end contact indication, exit speed against roll speed, gauges, tensions, speed, oil viscosity and temperature, roll diameter, crown and roughness, strip width. One steady point per pass at two or three speeds separates friction from flow stress. |
+| Tribology and pass heating (`bite_tribology.py`) | Friction against film ratio on aluminium (BT-V6, BT-V7); foil oil rheology in an open thesis [OD-17 AB, BT-S12 AB]; heat split abstract [TM-LA19 AB]. | Replace the placeholder by a curve through the published end points; compare the viscosity-pressure law with the published oil data; apply BT-G7 and BT-G8. | Friction level and its change with speed; heat split; strip exit temperature. | Strip temperature before and after the bite (contact probe or calibrated pyrometer; aluminium emissivity is the difficulty); oil supply and return temperature and flow by zone at 1 Hz; oil viscosity at 40 C; additive content. |
+| Roll thermal (`roll_thermal.py`, `band_thermal.py`) | Relative spray performance of base oils, up to 25 % [TM-LA15 EX, OD-20 EX]; skin and bulk time scales [SS-S71 AB]; hot-mill cambers [SS-V10]. | Consistency checks only: a 25 % change of the spray coefficient moves the stripe by the amount the sensitivity reports; fast and slow time constants bracket those reported. | Roll temperature profile, thermal crown in micrometres, absolute spray coefficient, the 20 s question. | (1) Roll barrel temperature scan at 25-50 mm pitch within 60 s of roll-out, with the preceding 30 min of spray-zone states, flows and oil temperature. (2) Zone step test: close one zone valve for 20-60 s at steady speed; log the shapemeter channel under it and its neighbours at 1-10 Hz. (3) Nozzle footprint check with pressure-sensitive film. |
+| Strip shape and buckling (`strip_shape.py`, `band_width.py`) | Tinplate stress-meter case SS-V4; local buckles SS-V2, SS-V3; heated-band wrinkling SS-V1; computed thresholds at 0.28-0.66 mm [OD-21 EX]; shapemeter specifications SS-V19. | Feed the tinplate stress profile to the buckling check and compare the verdict; test k = 4 and the half-wave assumption on SS-V2 and SS-V3. | The relation between a known roll stripe and I-units; anything at foil gauge; whether "thinner is less sensitive in the mill" holds. | Shapemeter export of every zone (raw and target) at 1-10 Hz with bending, tilt, zone cooling states, tension, speed, gauge; lay-flat measurement of the same coil position after release (wave height and length); cross-width gauge profile at 5-10 mm pitch; strip temperature scan at exit. |
+| Coil ridge, troughs, tension lines (`strip_shape.py`) | PET winding with thickness variation SS-V12; steel coil ridges SS-V13; foil wrinkling SS-V14; polyester troughs SS-V15. | Implement a Hakiel-type winding model and compare with the linear ridge formula and the factor 0.5; pitch of tension lines against the square root of radius times gauge. | Interlayer pressure, stack stiffness and ridge height in a foil coil; air film; ironing-roll effect. | Coil outer-diameter profile across the width at 5 mm pitch at two or three diameters, with the strip profile of the same coil; coil hardness across the width; winding tension and taper; ironing-roll load; stack-compression test on 50-200 foil laps; roller alignment survey (mm/m); pitch of tension lines against coil radius and gauge. |
+| Chatter (`chatter.py`, `band_signatures.py`) | Two-stand steel mill onset [OD-22 EX]; stability charts [OD-22 AB]; D5; one aluminium case of a speed limit by chatter. | Run the steel mill through `chatter.py` with and without bite damping; report predicted against measured onset. | Any aluminium or foil chatter record with speed, frequency and mill parameters. | Accelerometers on both work-roll chocks or the housing top at 5 kHz or more during a speed ramp to onset, on at least three coils; speed, tensions and gauge at onset; hammer test of the stand; pitch of marks on the strip. |
+| Gauge control and drive (`mill_dynamics.py`) | D1, D2, D4; vendor descriptions of foil gauge control [TM-LC18 VP, TM-LC19 AB]. | On D1: regress exit deviation on entry deviation, force and position; look for a periodic component. Ask the authors for units and sampling rate. | Mill stretch, loop responses, speed and tension sensitivities of foil gauge. | Mill stretch curve (kiss-roll test), cylinder step responses, logs at 100 Hz or faster of gap, force, gauges, speeds and tensions through an acceleration and a speed change; drive torque or current; controller structure and gains; gauge position and time constant. |
+| Material (`materials.py`, `band_products.py`) | 16 um 1235-H18 foil [TM-LB1 EX]; hardness against reduction [TM-LB2 EX]; M1, M2; standards already used. | Refit the hardening law by alloy group; test the plane-strain factor with published r-values. | Flow stress at rolling rate and temperature; softening by alloy; property decay in the coil. | As-rolled tensile strength after every pass; tensile tests at 2-3 rates and 20-150 C; chemistry (Fe, Si, Cu, Mn); last anneal gauge; tensile tests at 0 h, 24 h, 7 d, 30 d with coil temperature history; the plant's pass cards and certificates. |
+
+## 8. A possible order of work
+
+**This is a proposal. Nothing in it has been started.** The order follows two rules: cheap and
+decisive first; a prerequisite before what depends on it. Efforts are the reports' rough ratings.
+
+**Phase 0. Corrections and checks that need no new solver (days each).**
+
+- BT-G17, G16: encode the published benchmark cases as tests. First the foil bite case BT-V1 and
+  the steel chatter onset (X18, X31). This shows how far off the present models are before anything
+  is built on them.
+- BT-G7, BT-G8: inlet angle and regime labels. They remove a wrong regime verdict now.
+- A1, G6: the strip-temperature flatness term, with a supplied temperature profile at first.
+- BT-G4 as a screen: friction stripe sensitivity from the existing bite derivatives.
+- C7: sensor transfer functions (gauge averaging, zone averaging). G13: feed a measured roll
+  profile through the existing transfer. G12: tension-line pitch check.
+- A5, the small part: settle on which basis the spray coefficient is defined (X3). A10, B3, B4:
+  rule check and tables.
+- Text corrections from section 6 (X18 to X24, X7, X12).
+
+**Phase 1. The foundations other models take their input from (weeks each).**
+
+- BT-G1 with BT-G5: half-space foil bite with a shear cap. Then BT-G3 (inlet-only friction closure)
+  and BT-G6 (friction from load and slip). Reason: stiffness, tension sensitivity, bite length and
+  friction heat for everything at foil gauge come from here.
+- B1, B2: flow stress with rate, temperature and alloy group. Reason: every bite takes it.
+- A3 with A4 (G8): computed heat split and the roll surface layer. A5: spray calibration routine.
+  A9. Reason: they remove the largest supplied inputs and are needed for the width-resolved work.
+
+**Phase 2. Width-resolved couplings and loops (weeks each; they build on phase 1).**
+
+- A2, BT-G4 in full, BT-G12: local film, friction and flow stress across the width (I2).
+- G5: shapemeter operator and flatness controller (I5); then A6, the emulation of the plant's step
+  test, which needs A1 and A2.
+- G4 and the kernel part of G3: buckling with wavelength and amplitude; width coupling.
+- G9 as a one-dimensional winding model per width segment, with G10 (air, ironing roll) and A8
+  (coil temperature). G11: lateral stress in spans.
+- C1, C2, BT-G13, then C8: foil gauge control by speed and tension, reel dynamics, pass chaining.
+
+**Phase 3. Large items that need a new solver or plant data to mean anything (months).**
+
+- G1, then G2 and BT-G2, G15: roll stack and closed gap. G3 in full. G7, A7: roll ends and edges.
+- A8 with stress and creep; B7. C3, C4, C5, C6: chatter extensions.
+- BT-G9, BT-G10, BT-G11: surface generation. BT-G14, BT-G15, BT-G16, B5, B6, G14.
+
+**Alongside all phases: plant measurements.** Section 7.4 lists them. The zone step test, the roll
+temperature scan after roll-out, the strip temperature scan at exit, forward slip at two speeds and
+the coil diameter profile would each decide more than one item above. Without them phases 2 and 3
+stay unvalidated models.
+
+## 9. Sources
+
+One merged list, grouped by report. Ids are the reports' own with a prefix. URL and read status are
+as the reports give them. `PT-T..` and `BG-G..` ids cited in this document belong to earlier project
+research and are listed in [thin-gauge-products.md](thin-gauge-products.md). Several papers appear
+in more than one report under different ids and with different read status (for example SS-S3 FT
+and BT-S43 SN; SS-S26 and BT-S24; TM-LA12 and SS-S31; TM-LA9 and SS-S35; BT-S3, OD-17 and TM-LC25);
+each status belongs to that report's reading.
+
+### Thermal, material and dynamics report (`TM-`)
+
+"Computed here" in this report means arithmetic with textbook constants (steel k = 43 W/mK, rho*c = 3.6e6 J/m3K, a = 1.2e-5 m2/s; aluminium k = 230 W/mK, rho*c = 2.43e6 J/m3K, alpha = 23.6e-6 /K, E = 70 GPa). These are checks, not literature values.
+
+Thermal and coolant:
+
+- **TM-LA1** Tseng, J. Heat Transfer 106 (1984) 512 [AB]: https://asmedigitalcollection.asme.org/heattransfer/article-abstract/106/3/512/413887/
+- **TM-LA2** Tseng, Tong, Maslen, Mills, J. Heat Transfer 112 (1990) 301 [AB]: https://www.osti.gov/biblio/6075543
+- **TM-LA3** Tseng, Numer. Heat Transfer A 35(2) (1999), Part 2 [AB]: https://www.tandfonline.com/doi/abs/10.1080/104077899275290
+- **TM-LA4** Tseng, Wang, ASME IMECE 1995 [AB]: https://doi.org/10.1115/imece1995-0982
+- **TM-LA5** Tseng, Tong, Chen, Materials & Design (1996), "Thermal expansion and crown evaluations in rolling processes" [CIT, title only]: https://www.sciencedirect.com/science/article/pii/S0261306996000611
+- **TM-LA6** Patula, J. Heat Transfer (1981) [AB]: https://doi.org/10.1115/1.3244425
+- **TM-LA7** Wankhede, UBC thesis [EX]: https://doi.org/10.14288/1.0078434 ; Ye, UBC thesis [EX]: https://doi.org/10.14288/1.0078582
+- **TM-LA8** Collins, PhD thesis, Dorset Institute / Davy McKee, 1989 [EX: first 60 000 characters of a poor OCR; hot aluminium rolling, water sprays]: https://eprints.bournemouth.ac.uk/318/1/Collins%2CDonovan_Ph.D._1989.pdf
+- **TM-LA9** Davies, Sivilotti, Tulett, Metals Technology 2 (1975) [AB]: https://doi.org/10.1179/030716975803277735
+- **TM-LA10** Dohmae, Okamura, Trans. SICE 48(4) (2012) 193 [AB]: https://www.jstage.jst.go.jp/article/sicetr/48/4/48_193/_article/-char/en
+- **TM-LA11** Okamura, Ichikawa, SICE 2002 [AB]: https://doi.org/10.1109/sice.2002.1195837
+- **TM-LA12** Tsuzuki, Kira, Misumi, IHI Engineering Review, "Flatness control system ... pneumatic bearing type shape roll" [EX]: https://www.ihi.co.jp/en/technology/techinfo/contents_no/__icsFiles/afieldfile/2023/06/18/e66183a7b7832fe902c826e949d1ff1b.pdf
+- **TM-LA13** Lloyd (Lechler), 2010 [EX; = PT-T23]: https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_walzenkuehlung_09-2010_fundamentals-of-roll-cooling-and-control-of-flatness-at-primary-cold-reduction_dlloyd_en.pdf
+- **TM-LA14** Tucker (Lechler), 2006 [EX; = PT-T22]: https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_walzenkuehlung_01-2006_flatness-and-profile-the-problems-that-can-exist-in-the-design-of-the-spray-actuators_dtucker_en.pdf
+- **TM-LA15** Hobbis (Novelis), STLE 2017 presentation [EX, slide text]: https://www.stle.org/images/pdf/STLE_ORG/AM2017%20Presentations/Nonferrous%20Metals/STLE2017_Nonferrous%20Metals%20II_Session%206L_A.%20Hobbis_Roll%20Cooling%20in%20Novelis%20Aluminum%20Hot%20and%20Cold%20Rolling%20Mills.pdf ; report of the talk [EX; = PT-T37]: https://www.lubesngreases.com/magazine/23_9/milling-over-rolling-oils/
+- **TM-LA16** Pattemore, Heenan, Januszkiewicz, Ind. Lubr. Tribol. (2015) [AB]: https://doi.org/10.1108/ilt-02-2013-0016
+- **TM-LA17** Lee, Choi, Lee, Trans. KSME B 26(6) (2002) [AB]: https://doi.org/10.3795/ksme-b.2002.26.6.779
+- **TM-LA18** Raudensky, Horsky, Kotrbacek, IHTC-13 (2006) [AB]: https://ihtcdigitallibrary.com/conferences/IHTC13,0339d661102ccf6d,432afcd979c92b6b.html ; Kotrbacek et al., Rev. Met. 103 (2006) 333 [AB]: https://www.metallurgical-research.org/articles/metal/abs/2006/07/P333/P333.html
+- **TM-LA19** Yin, Li, Zhang, Li (2003) [AB; = PT-T16]: https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2003.06.020 ; Yin et al., Chin. J. Nonferrous Met., 1400F mill [AB]: http://www.ysxbcn.com/paper/paperView.aspx?id=paper_20302 ; Yin, Li, Zhang (2005) [AB; = PT-T17]: https://cje.ustb.edu.cn/article/doi/10.13374/j.issn1001-053x.2005.04.023
+- **TM-LA20** Shao, He, Yang et al., Chin. J. Eng. 37(8) (2015) [AB here; = PT-T18]: https://doi.org/10.13374/j.issn2095-9389.2015.08.018
+- **TM-LA21** Hlady, UBC thesis [EX]: https://doi.org/10.14288/1.0078484 ; Hlady et al., Metall. Mater. Trans. B, "Heat transfer in the hot rolling of metals" [AB]: https://link.springer.com/article/10.1007/BF02654104
+- **TM-LA22** Jeswiet, Nshama (1995) [AB]: https://doi.org/10.1007/978-1-349-13796-1_56
+- **TM-LA23** Wu, Qu, Zhang, Li, Jiang, Key Eng. Mater. 725 (2016) 548 [AB]: https://www.scientific.net/KEM.725.548
+- **TM-LA24** Olaogun et al., Int. J. Adv. Manuf. Technol. 100 (2019) 2617, AA8015 [AB]: https://doi.org/10.1007/s00170-018-2811-2
+- **TM-LA25** Shao, Sun, He, Li, heat-generation model for high-strength aluminium strip [EX]: https://www.iieta.org/download/file/fid/24141
+- **TM-LA26** Gao, Wang, Adv. Mater. Res. 150-151 (2010) 97 [AB]: https://doi.org/10.4028/www.scientific.net/amr.150-151.97
+- **TM-LA27** Sun, master's thesis abstract, 1600 mm aluminium cold mill [AB]: https://www.globethesis.com/?t=2321330512976284
+- **TM-LA28** Christoforou, Mater. Sci. Forum 765 (2013) 373 [AB]: https://www.scientific.net/MSF.765.373
+- **TM-LA29** Innoval, "Optimising spray cooling" [FT; = PT-T20]: https://www.innovaltec.com/optimising-spray-cooling-blog/
+- **TM-LA30** "Research on the set curve for tandem cold rolling mill automatic flatness control", Atlantis Press [EX]: https://www.atlantis-press.com/article/25850221.pdf
+- **TM-LA31** Neumann, Karhausen, Light Metals 2011 [EX]: https://books-library.website/files/books-library.online-10111353Pt1F6.pdf
+- **TM-LA32** Nam et al., Mater. Sci. Forum 918 (2018) 110 [EX]: https://doi.org/10.4028/www.scientific.net/msf.918.110
+- **TM-LA33** Belov et al., Heat Transfer Engineering (2022) [EX]: https://www.tandfonline.com/doi/full/10.1080/01457632.2022.2059217
+- **TM-LA34** Yang et al., ISIJ Int. 65(11) (2025) [AB]: https://www.jstage.jst.go.jp/article/isijinternational/65/11/65_ISIJINT-2025-177/_html/-char/en
+- **TM-LA35** FM Global Data Sheet 7-21, Rolling Mills [EX]: https://www.fm.com/FMAApi/data/ApprovalStandardsDownload?itemId=%7BBAA685F2-3B86-4CC6-B5D5-CA9F2A4CBFB5%7D ; AXA XL PRC.17.13.1 [EX; = PT-T14] ; Missouri 10 CSR 10-5.451 [AB here; = PT-T13] ; Failure Knowledge Database, foil-mill fire 1989 [FT]: https://www.shippai.org/fkd/en/cfen/CC1000139.html
+- **TM-LA36** IHI, "Mill setting calculation system for aluminum rolling mill" [EX]: https://www.ihi.co.jp/en/technology/techinfo/contents_no/__icsFiles/afieldfile/2023/06/18/7cf1a559f1a1c3adb06d539ffe29c98f.pdf
+- **TM-LA37** Chien, Hwu, China Steel Tech. Rep. 21 (2008) [EX]: https://www.csc.com.tw/csc_e/ts/ena/pdf/no21/06-W.%20Y.%20Chien.pdf ; Wang et al., J. Cent. South Univ. 17 (2010) 1251 [AB; its reference list names Ginzburg 1997 and Ginzburg & Giusto 1994]: https://journal.hep.com.cn/jocsu/EN/10.1007/s11771-010-0628-8
+- **TM-LA38** Meijer et al., IEEE IAS 1989, "Aluminium hot mill work roll cooling control" [AB]: https://doi.org/10.1109/ias.1989.96829
+
+Material behaviour:
+
+- **TM-LB1** Bonatti, Mohr, "Anisotropic viscoplasticity and fracture of fine grained metallic aluminum foil used in Li-ion batteries" [EX of the full paper]: https://old.mohr.ethz.ch/papers/56.pdf
+- **TM-LB2** Hara, Egusa, Mihara, Tanaka, Ohnuma, Abe, Mater. Trans. 62(4) (2021) [EX, most of the text]: https://www.jstage.jst.go.jp/article/matertrans/62/4/62_MT-M2020349/_pdf/-char/en
+- **TM-LB3** Liu, Huang, Lloyd, Hansen, Acta Mater. 50 (2002) 3789 [AB]: https://doi.org/10.1016/s1359-6454(02)00174-x
+- **TM-LB4** Poole, Embury, Lloyd, "Work hardening in aluminium alloys", in Fundamentals of Aluminium Metallurgy (2011) [EX]: https://www.researchgate.net/publication/285784404_Work_hardening_in_aluminium_alloys
+- **TM-LB5** Ryen, PhD thesis, NTNU (2003) [EX]: http://hdl.handle.net/11250/244466
+- **TM-LB6** Hasenclever, ICAA9 (2004), AlFe alloys AA1050-AA8021 [EX]: http://www.icaa-conference.net/ICAA9/data/papers/GP%20124.pdf
+- **TM-LB7** Cuic, master's thesis, Montanuniversitaet Leoben (2023), AA8079 [AB]: https://pure.unileoben.ac.at/en/publications/einfluss-des-kaltwalzens-auf-die-mikrostrukturentwicklung-und-das/
+- **TM-LB8** Santora, thesis, Leoben (2025), 8xxx foil stock microchemistry [AB]: https://pure.unileoben.ac.at/en/publications/microchemistry-evolution-in-8xxx-aluminium-foil-stock-alloys-duri/
+- **TM-LB9** Suzuki, Kuramoto, Itoh, Cui, J. JILM 69 (2019) 493 [AB]: https://doi.org/10.2464/jilm.69.493
+- **TM-LB10** Allazadeh (2020), rate sensitivity of AA1050-H14 [EX; = PT-T33]: https://strathprints.strath.ac.uk/74717/1/Allazadeh_ISSJ_2020_Computing_strain_rate_sensitivity_of_aluminium_alloy_1050.pdf
+- **TM-LB11** Chiddister, Malvern, Exp. Mech. 3 (1963) 81 [AB]: https://doi.org/10.1007/BF02325890 ; dos Santos et al., Mech. Time-Depend. Mater. 26 (2022) 347 [AB]: https://doi.org/10.1007/s11043-021-09491-3 ; Karnes, Ripperger (1966) and Rosen, Bodner (1967) [CIT, titles only]
+- **TM-LB12** Ha, Fones, Kinsey, Korkolis, Materials (2020), AA1100-O [EX]: https://pmc.ncbi.nlm.nih.gov/articles/PMC7579055/
+- **TM-LB13** Batorfi et al., Appl. Sci. 13 (2023) 4359 [EX; = PT-T7]: https://www.mdpi.com/2076-3417/13/7/4359
+- **TM-LB14** Yan et al., Materiali in tehnologije (2019), texture of 1235 [EX]: https://doi.org/10.17222/mit.2018.195
+- **TM-LB15** Zhang, Chen, Fan, Chen, Xiao, Coatings 15 (2025) 472 [EX of the full paper]: https://www.mdpi.com/2079-6412/15/4/472
+- **TM-LB16** Pinhole abstracts [AB]: Khot et al., TMS abstract: https://www.programmaster.org/PM/PM.nsf/ApprovedAbstracts/0130B06C9AEEA62185258E3400411C96 ; Ozcetin et al., TMS 2024: https://www.programmaster.org/PM/PM.nsf/ApprovedAbstracts/F07C049FCFE77D8A852589DA0044E5B8 ; Dai et al., Adv. Mater. Res. 884-885 (2014) 308: https://www.scientific.net/AMR.884-885.308 ; Pakzamani et al.: https://civilica.com/doc/897784/ ; Denizli et al.: https://link.springer.com/chapter/10.1007/978-3-030-92529-1_79 ; Keles, Dundar, J. Mater. Process. Technol. (2007) [CIT]: https://doi.org/10.1016/j.jmatprotec.2006.12.027
+- **TM-LB17** Roy, "Recrystallization behavior of commercial purity aluminium alloys", IntechOpen (2014) [EX]: https://www.intechopen.com/chapters/46803
+- **TM-LB18** Chen et al., Mater. Res. Express (2020), AA8021 foil [EX]: https://google.iopscience.iop.org/article/10.1088/2053-1591/abb7ab
+- Open data of the right kind but the wrong alloy (format example): NIST, dynamic stress-strain curves of 6061-T6 [AB]: https://data.nist.gov/od/id/mds2-3090
+
+Mill dynamics, gauge and tension:
+
+- **TM-LC1** Yun, Wilson, Ehmann, Int. J. Mach. Tools Manuf. 38 (1998), review [CIT, title]: https://doi.org/10.1016/s0890-6955(97)00133-8 ; "Chatter in the strip rolling process", Parts 1 and 3, J. Manuf. Sci. Eng. (1998) [AB]: https://doi.org/10.1115/1.2830131 , https://doi.org/10.1115/1.2830133
+- **TM-LC2** Hu, Zhao, Ehmann, Proc. IMechE B (2006), Part 1 [AB]: https://journals.sagepub.com/doi/10.1243/09544054B06804
+- **TM-LC3** Zhao, Ehmann, J. Manuf. Sci. Eng. (2013), Part 1 [AB]: https://doi.org/10.1115/1.4024032
+- **TM-LC4** Gao, J. Mech. Eng. (China) 51(16) (2015) 87, review [EX]: https://doi.org/10.3901/jme.2015.16.087
+- **TM-LC5** Floris et al., "Analysis of regenerative chatter in tandem cold rolling mills", Politecnico di Torino repository [EX]: https://iris.polito.it/retrieve/4891f3b8-3bb9-4104-a646-5bf4c04cf1e8/Regenerative_Chatter.pdf
+- **TM-LC6** Heidari, Forouzan, Akbarzadeh, ISIJ Int. 54(10) (2014) 2349 [EX]: https://www.jstage.jst.go.jp/article/isijinternational/54/10/54_2349/_pdf ; ISIJ Int. 54(1) (2014) 165 [EX]: https://www.jstage.jst.go.jp/article/isijinternational/54/1/54_165/_html/-char/en ; Heidari, Forouzan, J. Adv. Res. 4 (2013) 27 [AB]: https://pmc.ncbi.nlm.nih.gov/articles/PMC4260885/
+- **TM-LC7** Niroomand, Forouzan, Salimi, ISIJ Int. 55(3) (2015) 637 [EX]: https://www.jstage.jst.go.jp/article/isijinternational/55/3/55_637/_html/-char/en ; ISIJ Int. 52 (2012) 2245 [AB]: https://doi.org/10.2355/isijinternational.52.2245 ; J. Vibroengineering 14(2) (2012) [EX]: https://www.extrica.com/article/10642/pdf
+- **TM-LC8** Meehan, J. Vib. Acoust. 124 (2002) 221 [AB]: https://doi.org/10.1115/1.1456457
+- **TM-LC9** Zeng, Zang, Gao, Shock and Vibration (2016) [EX]: https://doi.org/10.1155/2016/2347386 ; Zeng et al., J. Vibroengineering (2015) [AB]: https://www.extrica.com/article/16133
+- **TM-LC10** Liu, Gao, Zeng, Zang, J. Vibroengineering (2017) [EX]: https://www.extrica.com/article/17456 ; Yang, Li, Tong, Liu (2012), aluminium mill [AB]: https://doi.org/10.1155/2012/734510 ; Xin et al., J. Iron Steel Res. Int. (2023) [CIT, title]: https://doi.org/10.1007/s42243-023-01047-8
+- **TM-LC11** Niziol, Swiatoniowski, J. Mater. Process. Technol. 162-163 (2005) 546 [CIT, title; content as described in TM-LC12 and TM-LC6]: https://doi.org/10.1016/j.jmatprotec.2005.02.121 ; Bar, Swiatoniowski, J. Mater. Process. Technol. 155-156 (2004) 2116 [EX, introduction and conclusions]: https://www.sciencedirect.com/science/article/abs/pii/S0924013604006028
+- **TM-LC12** Brusa, Lemma, J. Mater. Process. Technol. 209 (2009) 2436 [EX]: https://www.sciencedirect.com/science/article/abs/pii/S0924013608004639
+- **TM-LC13** Kim, Kim, Lee, Park, ISIJ Int. 52 (2012) 2042 [EX]: https://doi.org/10.2355/isijinternational.52.2042
+- **TM-LC14** Innoval Technology blogs [FT]: https://www.innovaltec.com/mill-vibration-blog/ ; https://www.innovaltec.com/strip-chatter-marks-blog/ ; https://www.innovaltec.com/chatter-cold-rolling-mill-blog/
+- **TM-LC15** Vaidya, J. Inst. Eng. India C 103 (2022) 107 [AB]: https://ui.adsabs.harvard.edu/abs/2022JIEIC.103..107V/abstract
+- **TM-LC16** US 5,724,846 [AB]: https://exa.ai/library/legal/patent/1jjvxkjsb93
+- **TM-LC17** SMS group, chatter management page [VP]: https://www.sms-group.com/insights/all-insights/efficient-chatter-management-in-cold-rolling-mills
+- **TM-LC18** ABB, "Technological controls for cold rolling processes" [VP, technical brochure]: https://library.e.abb.com/public/04580d2383cc4b53b8573d1bb8eda2e8/Technological_Controls_for_Cold_Rolling_Mill_190815_LowRes.pdf ; ABB, "Improvement of thickness tolerances for a two-stand aluminum cold rolling mill" [EX]: https://library.e.abb.com/public/5760448a863657428525796500748dea/Improvement_Thickness_Tolerances_3BDD017154EN_final.pdf
+- **TM-LC19** Sun, Hu, Li, Zhang, J. Northeastern Univ. (Nat. Sci.) 35(4) (2014) 516 [AB]: https://xuebao.neu.edu.cn/natural/EN/10.12068/j.issn.1005-3026.2014.04.014
+- **TM-LC20** Metals-Tech, mass-flow control in foil rolling [VP]: https://www.metals-tech.com/mass-flow-control-improves-aluminium-foil-rolling-quality/
+- **TM-LC21** Alcoa US 4,648,257 [EX]: https://www.freepatentsonline.com/4648257.html ; Alcoa US 4,905,491 [EX]: https://exa.ai/library/legal/patent/n3z6bnz0zz1
+- **TM-LC22** "Tension regulation in a metal rolling mill", Virginia Tech thesis [EX]: https://vtechworks.lib.vt.edu/server/api/core/bitstreams/57bde869-0117-4d81-8aab-8027f1ad4597/content
+- **TM-LC23** Pushkina, Kushnarev, Grigorev, Russ. Electr. Eng. (2020) [AB]: https://doi.org/10.3103/s1068371220070111
+- **TM-LC24** Global Gauge, aluminium thickness gauges [VP]: https://globalgauge.com/industries/aluminum/
+- **TM-LC25** Sutcliffe, Montmitonnet, Rev. Met. 98 (2001) 435 [AB here; full text is the project's S11]: https://www.metallurgical-research.org/articles/metal/abs/2001/05/P435/P435.html ; Keife, Jonsater, J. Tribol. 119 (1997) 349 [AB]: https://doi.org/10.1115/1.2833228
+- **TM-LC26** Miki, Takai, Yamaguchi, Trans. ISIJ 26 (1986) 551 [AB]: https://www.jstage.jst.go.jp/article/isijinternational1966/26/6/26_6_551/_article/-char/en
+- **TM-LC28** Zhang, Wang, Zong, Xiang, IET J. Eng. (2016) [EX]: https://digital-library.theiet.org/doi/full/10.1049/joe.2016.0182
+
+### Shape, stack and winding report (`SS-`)
+
+| id | reference | URL | read |
+|---|---|---|---|
+| SS-S1 | Malik (2007) PhD thesis, Wright State Univ., "Rolling mill optimization using an accurate and rapid new model for mill deflection and strip thickness profile" | https://corescholar.libraries.wright.edu/etd_all/137 | EX |
+| SS-S2 | Zhang & Malik (2018) J. Manuf. Sci. Eng. 140(1):011008, roll-stack model for CVC mills | https://asmedigitalcollection.asme.org/manufacturingscience/article/140/1/011008/383992/ | EX |
+| SS-S3 | Patel, Malik, Zhang & Mathews (2022) Int. J. Adv. Manuf. Technol. 120:7389-7413, doi:10.1007/s00170-022-09228-7 | https://par.nsf.gov/servlets/purl/10359685 | FT |
+| SS-S4 | Previati & Ballo (2026) Int. J. Adv. Manuf. Technol., "Strip flatness prediction in cold rolling: a review", doi:10.1007/s00170-026-19263-3 (open access) | https://link.springer.com/article/10.1007/s00170-026-19263-3 | EX (abstract, introduction, parts of sections 3-4) |
+| SS-S5 | Yun, Shin & Hwang (2007) ISIJ Int. 47:1300 | https://doi.org/10.2355/isijinternational.47.1300 | EX |
+| SS-S6 | Hacquin, Montmitonnet & Guillerault (1996) J. Mater. Process. Technol. 60:109; (1998) Eur. J. Mech. A/Solids 17:79 | https://doi.org/10.1016/0924-0136(96)02315-1 ; https://www.sciencedirect.com/science/article/abs/pii/S099775389880065X | SN |
+| SS-S7 | Montmitonnet, Fourment, Ripert, Ngo & Ehrlacher (2016) "State of the art in rolling process modelling", slides | https://sf2m.fr/wp-content/uploads/2018/12/Expos8Rolling2016-Montmitonnet.pdf | EX |
+| SS-S8 | Abdelkhalek, Montmitonnet, Legrand & Buessler (2011) Int. J. Mech. Sci. 53:661-675 | https://www.academia.edu/31485162/Coupled_approach_for_flatness_prediction_in_cold_rolling_of_thin_strip | EX |
+| SS-S9 | Abdelkhalek et al. (2010) Ironmaking & Steelmaking 37(4), doi:10.1179/030192310X12646889255708 | https://doi.org/10.1179/030192310x12646889255708 | AB |
+| SS-S10 | Abdelkhalek, Nakhoul, Zahrouni, Montmitonnet, Legrand & Potier-Ferry (2012) HAL hal-00724898; Abdelkhalek et al. (2011) HAL hal-00674953 | https://minesparis-psl.hal.science/hal-00724898v1/document ; https://minesparis-psl.hal.science/hal-00674953 | AB |
+| SS-S11 | Nakhoul et al., "Coupled rolling and buckling model for friction-sensitive setting of flatness actuators" | http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.739.6240 | EX |
+| SS-S12 | Rammerstorfer, Fischer & Friedl (2001) J. Appl. Mech. 68:399-404 | https://doi.org/10.1115/1.1357519 | AB |
+| SS-S13 | Fischer, Rammerstorfer & Friedl (2003) J. Appl. Mech., doi:10.1115/1.1532322 | https://doi.org/10.1115/1.1532322 | AB |
+| SS-S14 | Fischer, Friedl, Noe & Rammerstorfer (2005) steel research int. 76:327-335 | https://doi.org/10.1002/srin.200506016 | AB |
+| SS-S15 | Kpogan & Potier-Ferry (2014) Key Eng. Mater. 611-612:221 | https://doi.org/10.4028/www.scientific.net/kem.611-612.221 | EX |
+| SS-S16 | Abdelkhalek, Zahrouni, Legrand & Potier-Ferry (2015) Int. J. Mech. Sci. 104:126-137 | https://www.sciencedirect.com/science/article/abs/pii/S0020740315003586 | EX (highlights, introduction) |
+| SS-S17 | Bush, Nicholls & Tunstall (2001) Ironmaking & Steelmaking 28:481-484 | https://doi.org/10.1179/030192301678361 | AB |
+| SS-S18 | Tran, Tardif, El Khaloui & Limam (2017) Thin-Walled Struct. 113:129-135 (HAL post-print); Tran, Tardif & Limam (2015) Int. J. Solids Struct. 69-70:343 | https://hal.science/hal-01802236v1/file/2017_TRAN_Thin_walled_Structures_PostPrint.pdf ; https://doi.org/10.1016/j.ijsolstr.2015.05.017 | FT ; SN |
+| SS-S19 | Dai, Zhang & Qin (2011) Engineering Mechanics 28(10):236-241 (Chinese); Zhang et al. (2013) same journal | https://pubs.cstam.org.cn/data/article/em/preview/pdf/em_2898.pdf ; http://en.cnki.com.cn/Article_en/CJFDTOTAL-GCLX201311046.htm | FT (formulas garbled) ; AB |
+| SS-S20 | Kiakidis et al. (2023) La Metallurgia Italiana, "A fully integrated roll deflection and strip buckling model" | https://aimnet.it/la_metallurgia_italiana/2023/maggio/Kiakidis.pdf | EX |
+| SS-S21 | Ren, Xiao, Liu & Yan (2018) ISIJ Int. 58(2) | https://www.jstage.jst.go.jp/article/isijinternational/58/2/58_ISIJINT-2017-519/_html/-char/en | EX |
+| SS-S22 | Zhang, Wang, Xu & Liu (2023) Appl. Sci. 13:6781 | https://www.mdpi.com/2076-3417/13/11/6781 | EX |
+| SS-S23 | Dixon & Yuen (2004) ANZIAM J. 45 | https://doi.org/10.21914/anziamj.v45i0.899 | EX |
+| SS-S24 | "Development of three-dimensional strip profile model for thin-foil cold rolling" (2014) Adv. Mech. Eng., doi:10.1155/2014/312382 (authors not captured) | https://journals.sagepub.com/doi/10.1155/2014/312382 | EX |
+| SS-S25 | Jiang, Zhu & Tieu (2003) J. Mater. Process. Technol. 140; Jiang et al. (2004) JMPT 155-156:1280; (2005); Jiang, Wei & Tieu (2008) Int. J. Mod. Phys. B; CCP 84 paper 198; Guan, He & Sun (2015) J. Northeastern Univ. | https://doi.org/10.1016/s0924-0136(03)00783-0 ; https://doi.org/10.1016/j.jmatprotec.2004.04.293 ; https://www.ctresources.info/ccp/paper.html?id=4273 ; https://xuebao.neu.edu.cn/natural/EN/10.12068/j.issn.1005-3026.2015.07.007 | AB |
+| SS-S26 | Masui, Yamada, Nagai & Nishino (1983) Trans. ISIJ 23:846 | https://doi.org/10.2355/isijinternational1966.23.846 | EX |
+| SS-S27 | Lawlor, Pack, Hua & Faure (2013) 50th ABM Rolling Seminar, DSR on aluminium cold mills | https://abmproceedings.com.br/en/article/recent-operational-experience-with-the-dynamic-shape-roll-on-aluminium-cold-mills | AB |
+| SS-S28 | Achenbach DVC roll; Nippon Steel VCROLL | https://www.achenbach.de/en/machines-equipment/technology-components/dvc-rolls-system/ ; https://www.nipponsteel.com/en/product/railway-automotive-machinery-parts/list/16.html | VP |
+| SS-S29 | ABB Stressometer measuring roll data; ABB "50 years of flatness control" | https://www.abb.com/global/en/areas/automation/measurement-analytics/force-measurement/flatness-measurement/measuring-roll ; https://library.e.abb.com/public/d83ad7d9b0b8438193e9fe7e67a2a03a/ | VP |
+| SS-S30 | Vollmer VPMR data sheet; IMS shapemeter roll; Primetals air-bearing shapemeter | https://www.vollmergmbh.de/fileadmin/user_upload/downloads/vollmer-datenblaetter_dina4_eng_vpmr.pdf ; https://www.ims-experts.com/en/measuring-system/shapemeter-roll-aluminium-cold-rolling-mills/ ; https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/air-bearing-shapemeter/ | VP |
+| SS-S31 | Tsuzuki, Kira & Misumi, IHI Engineering Review, "Flatness control system of cold rolling process with pneumatic bearing type shape roll" | https://www.ihi.co.jp/en/technology/techinfo/contents_no/__icsFiles/afieldfile/2023/06/18/e66183a7b7832fe902c826e949d1ff1b.pdf | EX (vendor technical paper) |
+| SS-S32 | Silvey, US 2010/0236310 A1, "Edge flatness monitoring" | https://www.patents-review.com/a/20100236310-edge-flatness-monitoring.html | EX |
+| SS-S33 | Lloyd (Lechler, 2010), roll cooling and flatness | https://www.lechler.com/fileadmin/media/fachberichte/metallurgy/lechler_fachbericht_walzenkuehlung_09-2010_fundamentals-of-roll-cooling-and-control-of-flatness-at-primary-cold-reduction_dlloyd_en.pdf | EX |
+| SS-S34 | Bemporad, Bernardini, Cuzzola & Spinelli (2010) J. Process Control, optimisation-based flatness control | https://cse.lab.imtlucca.it/~bemporad/publications/papers/jpc-flatness.pdf | EX |
+| SS-S35 | Davies (1975) Metals Technology 2(1), "Prediction and control of strip flatness in cold rolling" | https://www.tandfonline.com/doi/abs/10.1179/030716975803277735 | AB |
+| SS-S36 | Primetals hot edge induction heating; Hulamin news item | https://www.primetals.com/en/portfolio/solutions/cold-rolling/non-ferrous/aluminum/hot-edge-induction-heating/ | VP |
+| SS-S37 | Molleda, Usamentiaga & Garcia (2013) Sensors 13, on-line flatness measurement | https://pmc.ncbi.nlm.nih.gov/articles/PMC3812602/ | EX |
+| SS-S38 | Spreitzhofer et al. (2005) Rev. Metall., SI-FLAT | https://www.metallurgical-research.org/articles/metal/abs/2005/08/P589/P589.html | AB |
+| SS-S39 | Magne et al., fibre-Bragg flatness roll prototype (CEA, HAL) | https://cea.hal.science/cea-04155953/file/article_Magne_flatness_roll_FBG_JAP_v3.pdf | EX |
+| SS-S40 | Hesling, steelonthenet technical modules (temper rolling and tension levelling; coil winding) | https://www.steelonthenet.com/resources/technical/temper-rolling-tension-levelling.html ; https://www.steelonthenet.com/resources/technical/coil-winding-galvanising-lines.html | VP |
+| SS-S41 | Usamentiaga et al. (2006) IEEE IAS, temperature compensation in flatness control | https://doi.org/10.1109/ias.2006.256569 | AB |
+| SS-S42 | Good (2005) "Winding and unwinding webs: a review", Fundamental Research Symposium | https://doi.org/10.15376/frc.2005.1.307 | EX |
+| SS-S43 | Hakiel (1987) Tappi J. 70(5):113-117 | https://eurekamag.com/research/005/993/005993354.php | AB |
+| SS-S44 | Hakiel (1991) "On the effect of width direction thickness variations in wound rolls", IWEB; US 5,308,010 | https://hdl.handle.net/20.500.14446/321658 | AB ; EX |
+| SS-S45 | Olsen (2005) IWEB, widthwise variations in web properties and wound roll structure | https://hdl.handle.net/11244/321890 | EX |
+| SS-S46 | Mollamahmutoglu & Good (2009) IWEB, axisymmetric wound roll models; (2015) CIRP J. Manuf. Sci. Technol., doi:10.1016/j.cirpj.2014.10.004 | https://hdl.handle.net/20.500.14446/321947 | EX ; SN |
+| SS-S47 | Gale (2012) MS thesis, Oklahoma State Univ., winding experiments on non-uniform thickness webs | http://hdl.handle.net/11244/9931 | EX |
+| SS-S48 | Kiribe, Aoki & Hashimoto (2015) Trans. JSME 81(821) | https://www.jstage.jst.go.jp/article/transjsme/81/821/81_14-00143/_article/-char/en | AB |
+| SS-S49 | Hashimoto, Jeenkour & Mongkolwongrojn (2010) J. Adv. Mech. Des. Syst. Manuf. 4:214 | https://doi.org/10.1299/jamdsm.4.214 | EX |
+| SS-S50 | Keshavan & Wickert (1997) J. Appl. Mech.; Forrest (1995) IWEB; Holmberg (1992) thesis; Taylor & Good (1997) IWEB; Lei, Cole & Weinstein (2003) | https://doi.org/10.1115/1.2788999 ; https://hdl.handle.net/20.500.14446/321710 ; http://hdl.handle.net/11244/13479 ; https://hdl.handle.net/20.500.14446/321744 | AB ; AB ; EX ; AB ; SN |
+| SS-S51 | Becker (Alcoa), IWEB paper on coil collapse of coated aluminium sheet | https://openresearch.okstate.edu/server/api/core/bitstreams/c5d493ad-ad07-4f43-b034-adf7dfba2346/content | EX |
+| SS-S52 | Lin & Wickert (2006) J. Manuf. Sci. Eng., corrugation and buckling defects in wound rolls | https://doi.org/10.1115/1.2113068 | AB |
+| SS-S53 | Walker & Cole (2015) IWEB, tin-canning; Jones (2012) AIMCAL slides; Smith (2007) TAPPI PLACE; PFFC columns | https://hdl.handle.net/11244/322043 ; https://pdfs.semanticscholar.org/c815/3a14e99fd5bcd13d4242ae71890b8cc1dcfb.pdf ; https://www.tappi.org/content/events/07place/papers/smith.pdf | EX ; EX ; EX ; VP |
+| SS-S54 | Good, Beisel & Yurtcu (2009) FRC, doi:10.15376/frc.2009.1.517; same authors, IWEB 2009; Good & Beisel, Tappi J. | https://bioresources.cnr.ncsu.edu/wp-content/uploads/2019/05/2009.1.517.pdf ; https://hdl.handle.net/11244/321965 ; https://doi.org/10.32964/tj5.12.9 | EX ; EX ; SN |
+| SS-S55 | Walker, Cole, Zagar & Quass (2011) IWEB, "Wrinkling of foils" | https://hdl.handle.net/11244/321981 | EX |
+| SS-S56 | Fu & Good (2013) IWEB, moment transfer; Beisel (2006) thesis; Fernandez Arias (1998) thesis | https://hdl.handle.net/11244/322020 ; http://hdl.handle.net/11244/11919 | SN ; EX |
+| SS-S57 | Hashimoto (2010) J. Adv. Mech. Des. Syst. Manuf. 4:238 | https://doi.org/10.1299/jamdsm.4.238 | EX |
+| SS-S58 | Ducotey & Good (1999) J. Tribol.; Rice & Gans (2003) IWEB; Kothari (1996) thesis; Brown (2012) AIMCAL slides | https://doi.org/10.1115/1.2834112 ; https://hdl.handle.net/20.500.14446/321859 ; http://hdl.handle.net/11244/12549 | AB ; EX ; EX ; EX |
+| SS-S59 | Swanson (2017) IWEB, baggy webs; Welch (2006) thesis; Roisum (1998) "Reading a roll" | https://hdl.handle.net/11244/322063 ; http://hdl.handle.net/11244/10087 ; https://shareok.org/handle/11244/321739 | EX ; EX ; AB |
+| SS-S60 | Sun, Zhang, He & Shao (2016) La Metallurgia Italiana, ridge buckle at local high points | http://www.aimnet.it/allpdf/pdf_pubbli/gen16/XYZhang.pdf | EX |
+| SS-S61 | "Effect of hot coil profile containing ridges on ridge-buckle defects of cold rolled thin strip" (2009) Int. J. Mater. Form., doi:10.1007/s12289-009-0412-1 (author list not captured) | https://www.academia.edu/27820504/ | EX |
+| SS-S62 | Weisz-Patrault, Ehrlacher & Legrand (2015, 2016, 2017), Weisz-Patrault (2018), coiling models | https://doi.org/10.1016/j.ijsolstr.2016.05.012 ; https://doi.org/10.1051/meca/2016038 ; https://doi.org/10.1016/j.apm.2018.03.042 | AB ; EX ; AB |
+| SS-S63 | Dai, Liang, Qiu & Xiao (2024) ISIJ Int. 64(6), coiling FE with interlayer contact deformation | https://www.jstage.jst.go.jp/article/isijinternational/64/6/64_ISIJINT-2023-405/_html/-char/en | EX |
+| SS-S64 | Bel'skii & Shopin (2017) Steel in Translation, stress-strain state of coiled steel | https://doi.org/10.3103/s096709121711002x | AB |
+| SS-S65 | Innoval Technology blogs: foil separator winding model (2018); foil final anneal (2016) | https://www.innovaltec.com/foil-separator-blog/ ; https://www.innovaltec.com/aluminium-foil-quality-blog/ | VP |
+| SS-S66 | EAFA (2020) Surface characteristics of aluminium foil | https://www.alufoil.org/surface-characteristics | EX |
+| SS-S67 | Aluminum Association (2002) QCA-1, 4th ed. | https://www.aluminum.org/sites/default/files/2021-10/VisualQualityCharacteristicsSheet%26Plate.pdf | EX |
+| SS-S68 | "Thermal camber and temperature evolution on work roll during aluminum hot rolling" (2020) Metals 10(11):1434 (authors not captured) | https://www.mdpi.com/2075-4701/10/11/1434 | EX |
+| SS-S69 | Garcia-Gil & Colas (2000) Int. J. Mach. Tools Manuf. 40:1977 | https://www.sciencedirect.com/science/article/abs/pii/S0890695500000468 | AB |
+| SS-S70 | Shao, Sun, He & Li (2015) Int. J. Heat & Technology 33(1):91-98 | https://www.iieta.org/journals/ijht/paper/10.18280/ijht.330113 | EX |
+| SS-S71 | Souto, Abdelkhalek, Koont & Legrand, TEC3 work-roll thermal crown model, ABM proceedings | https://abmproceedings.com.br/en/article/download-pdf/tec3-work-roll-thermal-crown-modelfor-hot-and-cold-rolling-of-steel | AB |
+| SS-S72 | Le & Sutcliffe (2000) Wear 244:71-78 | https://www.sciencedirect.com/science/article/abs/pii/S0043164800004415 | EX |
+| SS-S73 | Wang, Zhang & Ai (2023) Int. J. Adv. Manuf. Technol., edge thermal spraying in aluminium cold rolling | https://doi.org/10.1007/s00170-023-11830-2 | SN |
+| SS-S74 | US 4,325,753 (Swiss Aluminium), degrease annealing; TAPPI 2007 European PLACE, adhesion of coatings to foil | https://www.freepatentsonline.com/4325753.html ; https://www.tappi.org/content/events/07europlace/papers/07europl33.pdf | EX |
+| SS-S75 | Ataka (2015) ISIJ Int. 55:89, rolling theory review | https://www.jstage.jst.go.jp/article/isijinternational/55/1/55_89/_html/-char/en | EX |
+| SS-S76 | "Coil Winding" (unattributed upload, steel-industry text) | https://www.scribd.com/document/281411813/Coil-Winding | SN |
+
+Earlier project research cited by this report: PT-T21 to PT-T25 (hot-edge sprays, vendor papers on roll cooling, foil-mill thermal crown).
+
+From memory, not verified in this session: the classical axisymmetric shell-buckling wavelength used in G12; the thermal expansion coefficient of aluminium used in G6; the attribution of the flatness dead band to a 1971 Shohet & Townsend paper distinct from their 1968 roll-bending paper.
+
+### Open data and codes report (`OD-`)
+
+Datasets and repositories, OD-1 to OD-15 (verified to resolve through the repository API, a raw file fetch or a page extract); papers and theses, OD-16 to OD-26. The report gives further URLs in its tables; those used here are in section 7.
+
+- **OD-1** Zenodo 10685675, D4ASCR, https://zenodo.org/records/10685675 - LP + CSV header (first 3 kB).
+- **OD-2** Xiao et al., IEEE Trans. Ind. Inform. 2024, https://doi.org/10.1109/tii.2024.3390625 - AB.
+- **OD-3** Zenodo 8085933, https://zenodo.org/records/8085933 - LP. https://github.com/CuAuPro/opti-rec-sys - README EX, LICENSE seen (GPL-3.0).
+- **OD-4** https://github.com/DGlql/CRD - README FT; no LICENSE file.
+- **OD-5** Ayuba et al., Data in Brief 2018, https://pmc.ncbi.nlm.nih.gov/articles/PMC5996350/ - EX.
+- **OD-6** Univ. of Pretoria / Figshare 29877497, doi 10.25403/UPresearchdata.29877497.v1 - LP (API).
+- **OD-7** Zenodo 11469702, https://zenodo.org/records/11469702 - LP; https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2026.1770922/full - EX; https://github.com/jjakubow/pdm-steel-datasets - README EX.
+- **OD-8** IEEE DataPort PRESAGE, https://ieee-dataport.org/documents/presage-physics-anchored-digital-twin-hot-strip-mill-two-year-dataset-controlled - EX.
+- **OD-9** NBSDC Xi'an dataset via https://www.selectdataset.com/dataset/8dc3db8da3379d87e0e7ab7e8285ddee - SN.
+- **OD-10** Kaggle: `pandhuw/maximum-rolling-force-at-f1-for-steel-grade-ss400` EX; `ziya07/hot-strip-rolling-process-dataset` EX; `lukaszduss/vibration-data-from-rolling-mill` EX; `inancolak/machine-data-tpv10` EX (appears to be a polymer film extrusion, calender and winding line, not metal; no licence shown).
+- **OD-11** Zenodo 17493399 (SOMAR) - LP. Zenodo 2646505 (AA8079 foil) - LP. Zenodo 1339094 (Tibar & Jiang paper) - AB.
+- **OD-12** Mendeley `wcp8wrdhyj` - LP. AGH RODBUK doi 10.58032/AGH/SQEVDB - LP. Zenodo 6470217 - LP.
+- **OD-13** NPL TENSTAND, https://www.npl.co.uk/products-services/advanced-materials/tensile-testing - EX.
+- **OD-14** Tianchi APDDD https://tianchi.aliyun.com/dataset/148297 - EX. Figshare 32726052 - AB. IEEE DataPort APSDS-SR - EX. Fordatis 420 - EX. https://github.com/jsq0903/CR7-DET/ - README EX. https://github.com/zh-lv-94/SACV - README FT. Lv et al. 2023, https://www.sciencedirect.com/science/article/abs/pii/S0952197623012071 - AB.
+- **OD-15** https://github.com/pyroll-project/pyroll-core - README + LICENSE FT. https://github.com/francisflanagan/EJM_A_input_files - README + LICENSE FT. https://github.com/ErikHansenGit/EHL - README EX + LICENSE. https://github.com/a-dorgham/TriboSim - README EX + LICENSE. https://github.com/mahshadlotfinia/Stress316L - README EX. https://github.com/1500ssp-oss/timc-rolling-replay - README EX.
+- **OD-16** Boemer et al. 2021, https://orbi.uliege.be/handle/2268/261506 - AB. Boemer 2020 thesis, https://orbi.uliege.be/handle/2268/245441 - AB. Stephany 2008 thesis - EX (front matter). Carretta et al. 2011, https://orbi.uliege.be/handle/2268/90243 - AB.
+- **OD-17** Sutcliffe & Montmitonnet 2001, https://minesparis-psl.hal.science/hal-00574224v1/document - EX. Le & Sutcliffe 2001 (J. Tribol.) - AB. Tabary et al. 1996 - AB. Sutcliffe & Rayner 1998 - LP. Keife & Jonsäter, J. Tribol. 119 (1997) 349 - AB (**a simulation study of a Stribeck curve for foil rolling, not a measurement paper**). Sutcliffe 1989 thesis, https://www.repository.cam.ac.uk/handle/1810/244874 - AB.
+- **OD-18** Jiang 2011, https://www.intechopen.com/chapters/19449 - EX. Jiang & Tieu, Wear 263 (2007) 1447 - AB.
+- **OD-19** Öztürk & Şeherli 2019, TÜBİTAK - EX. Zhang et al. 2016, IET J. Eng. (in the project) - EX.
+- **OD-20** Hobbis, STLE 2017 slides - EX. Heenan & Januszkiewicz 2015 - AB. Christoforou, Mater. Sci. Forum 765 (2013) 373 - AB. Wang, Zhang & Ai 2023 - LP. Souto et al. (ABM) - AB. Song et al. 2013 - AB. Li et al. 2014 - AB. Yin et al. (ysxbcn.com paper 20302) - AB.
+- **OD-21** Kpogan et al. 2012, https://hal.science/hal-01868101v1/file/Kpogan2012.pdf - EX. Abdelkhalek et al., hal-00674953 - AB. Nakhoul 2014 - AB. Wang et al. 2022, Metals 12:1977 - EX. Malik 2007, https://corescholar.libraries.wright.edu/etd_all/137 - AB. Magne et al. 2022 - AB. Liu et al., Sensors 22 (2022) 656 - EX (describes a flatness dataset of 234,527 rows at 0.08 s from a steel tandem mill; no download link in the part read).
+- **OD-22** Niroomand et al. 2015, https://www.jstage.jst.go.jp/article/isijinternational/55/3/55_637/_html/-char/en - EX. Zhao 2008 (doi 10.21985/n2d444) and Zhao & Ehmann 2013 - AB. Vaidya et al. 2021 - SN. Usmani et al. 2018 - EX. Pérez et al. 2018 - EX.
+- **OD-23** Forrest 1999, https://shareok.org/handle/11244/321804 - AB; other SHAREOK items - SN. Weisz-Patrault et al. - SN. ISIJ Int. 64 (2024) 1037 - SN. Innoval winding blog - SN.
+- **OD-24** Ryen 2003, https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/244466 - SN (the handle page returned no content to the reader). Bacha et al. 2006 - SN. Strathclyde AA1050 - SN. TALAT index, https://aluminium-guide.com/talat-lectures/ - SN.
+- **OD-25** NIST cryogenic pages - SN. arXiv 2509.23422 - SN.
+- **OD-26** ASTM A1030 store page and Bailey Metal Processing note - SN. EN 546-4:2007 listing - SN. GB/T 22638.2-2016 preview - SN. ASTM B926 - SN.
+
+From memory, not verified: Hockett & Sherby 1975; Severstal and GC10-DET image sets; ASTM D2578; the status of MatWeb, MPDB and Total Materia as non-open.
+
+### Bite and tribology report (`BT-`)
+
+| id | reference | URL | read |
+|---|---|---|---|
+| BT-S1 | Fleck, Johnson, Mear & Zhang (1992) Cold rolling of foil. Proc. IMechE B 206:119-131 | https://www.fleckmech.org/papers/34.pdf | FT (scan, all 13 pages read as images) |
+| BT-S2 | Fleck & Johnson (1987) Towards a new theory of cold rolling thin foil. Int. J. Mech. Sci. 29:507-524 | https://www.fleckmech.org/papers/12.pdf | FT for pp.507-516 (10 of 18 pages); appendices not read |
+| BT-S3 | Sutcliffe & Montmitonnet (2001) Numerical modelling of lubricated foil rolling. Rev. Metall. 98:435-442 | https://minesparis-psl.hal.science/hal-00574224v1/document | EX (long passages of the HAL text returned by the search tool; direct download blocked) |
+| BT-S4 | Le & Sutcliffe (2001) A robust model for rolling of thin strip and foil. Int. J. Mech. Sci. 43:1405-1419 | https://doi.org/10.1016/S0020-7403(00)00092-8 | AB |
+| BT-S5 | Le & Sutcliffe (2002) Rolling of thin strip and foil: application of a tribological model for "mixed" lubrication. J. Tribol. 124:129-136 | https://doi.org/10.1115/1.1402179 | AB |
+| BT-S6 | Tabary, Sutcliffe, Porral & Deneuville (1996) Measurements of friction in cold metal rolling. J. Tribol. 118:629-636 | https://doi.org/10.1115/1.2831584 | AB |
+| BT-S7 | Le & Sutcliffe (2001) A semi-empirical friction model for cold metal rolling. Tribol. Trans. 44:284-290 (author manuscript) | https://studylib.net/doc/7558620/friction4 ; https://doi.org/10.1080/10402000108982460 | EX (manuscript passages returned by the search tool) |
+| BT-S8 | Le & Sutcliffe (2000) Analysis of surface roughness of cold-rolled aluminium foil. Wear 244:71-78 | https://doi.org/10.1016/S0043-1648(00)00441-5 | EX (publisher preview) |
+| BT-S9 | Sutcliffe (2002) Surface finish and friction in cold metal rolling, ch. 4 in Lenard (ed.) Metal Forming Science and Practice | https://doi.org/10.1016/b978-008044024-8/50004-7 ; manuscript copy https://docest.com/doc/493218/guidelines-for-authors | EX (sections 4.1-4.2 from a manuscript copy; parts of 4.3.1 from a search excerpt; sections 4.3.2-4.6 not read) |
+| BT-S10 | Sutcliffe & Johnson (1990) Lubrication in cold strip rolling in the "mixed" regime. Proc. IMechE 204:249-261 | (abstract in a publication listing) | AB |
+| BT-S11 | Sutcliffe (1990) Experimental measurements of lubricant film thickness in cold strip rolling. Proc. IMechE 204:263-273 | (as S10) | AB |
+| BT-S12 | Sutcliffe (1989) Friction and lubrication in metal rolling. PhD thesis, Cambridge | https://www.repository.cam.ac.uk/items/c795b400-951f-4dcf-b43d-1e421264497a | AB (77 MB file not downloaded) |
+| BT-S13 | Keife & Jonsater (1997) Influence of rolling speed upon friction in cold rolling of foils. J. Tribol. 119:349-357 | https://doi.org/10.1115/1.2833228 | AB |
+| BT-S14 | Boemer (2020) Numerical modeling of friction in lubricated cold rolling. PhD thesis, Liege | https://orbi.uliege.be/handle/2268/245441 | FT for abstract, sections 2.2.4.1, 2.2.4.3 (first part), 2.3, 4.10.3.4 (part); remainder not read |
+| BT-S15 | Shigaki, Nakhoul & Montmitonnet (2015) Numerical treatments of slipping/no-slip zones in cold rolling of thin sheets with heavy roll deformation. Lubricants 3:113-131 | https://www.mdpi.com/2075-4442/3/2/113 | EX (abstract, introduction, figure captions) |
+| BT-S16 | Dbouk, Montmitonnet et al. (2013/2015) Advanced roll bite models for cold and temper rolling processes | https://hal.science/hal-00824368 | AB |
+| BT-S17 | Langlands & McElwain (2002) A modified Hertzian foil rolling model. Int. J. Mech. Sci. 44:1715-1730 | https://eprints.qut.edu.au/22766/ | SN (record only) |
+| BT-S18 | Langlands, McElwain & Domanti (2004) An approximate method for the solution of an influence function foil rolling model. Int. J. Mech. Sci. 46:1139-1156 | https://eprints.qut.edu.au/23046/ | AB |
+| BT-S19 | Dixon & Yuen (2003) The development of a fast and robust computer model for metal rolling. Proc. IMechE; and (1995) CTAC95 paper | https://doi.org/10.1243/095440503321148812 | AB (2003); citation only (1995) |
+| BT-S20 | Domanti, Edwards, Thomas & Chefneux (1994) Application of foil rolling models to thin steel strip and temper rolling. 6th Int. Rolling Conf. | - | SN (citation only) |
+| BT-S21 | MISG report, A simple model for the cold rolling of metal foil | https://miis.maths.ox.ac.uk/465/1/A-simple-model-for-the-cold-rolling-of-metal-foil.pdf | EX |
+| BT-S22 | Sutcliffe & Rayner (1998) Experimental measurements of load and strip profile in thin strip rolling. Int. J. Mech. Sci. 40:887-899 | https://doi.org/10.1016/S0020-7403(97)00138-0 | AB (aggregator copy with dropped words) |
+| BT-S23 | Keife, Shi, McElwain & Langlands (2002) Foil rolling: a new interpretation of experimental results. J. Mater. Process. Technol. 121:50-59 | https://eprints.qut.edu.au/23378/ | AB |
+| BT-S24 | Jiang (2011) Mechanics of cold rolling of thin strip, in Numerical Analysis - Theory and Application (InTech) | https://cdn.intechopen.com/pdfs/19449/InTech-Mechanics_of_cold_rolling_of_thin_strip.pdf | FT for sections 2.6, 3 (part), 4.1, the section with Figs 18-19, and 5 |
+| BT-S25 | Jiang & Tieu (2007) Contact mechanics and work roll wear in cold rolling of thin strip. Wear 263:1447-1453 | https://doi.org/10.1016/j.wear.2006.12.068 | EX (publisher preview) |
+| BT-S26 | Ogawa, Hamauzu, Matsumoto & Kawanami (1991) Prediction of flatness of fine gauge strip rolled by 12-high cluster mill. ISIJ Int. 31:599 | https://doi.org/10.2355/isijinternational.31.599 | EX |
+| BT-S27 | Jiang, Wei & Tieu (2008) An influence function method analysis of cold strip rolling. Int. J. Mod. Phys. B 22:5728 | https://doi.org/10.1142/S021797920805108X | AB |
+| BT-S28 | Utsunomiya, Sutcliffe, Shercliff, Bate & Miller (2004) Evolution of matt surface topography in aluminium pack rolling, Part I. Int. J. Mech. Sci. 46:1349-1364 (Part II and the 3D paper: titles only) | https://doi.org/10.1016/j.ijmecsci.2004.07.004 | EX (publisher preview) |
+| BT-S29 | Crystal-plasticity simulation of the evolution of the matt surface in pack rolling of aluminium foil. Mater. Sci. Forum 794-796:553 | https://www.scientific.net/MSF.794-796.553 | SN |
+| BT-S30 | Le, Sutcliffe, Wang & Burstein (2004) Surface oxide fracture in cold aluminium rolling. Acta Mater. 52:911-920 | https://doi.org/10.1016/j.actamat.2003.10.027 | SN (abstract as summarised by the search tool) |
+| BT-S31 | Sutcliffe, Combarieu & Montmitonnet (2004) Wear 257:1071-1080; Sutcliffe, Combarieu, Repoux & Montmitonnet (2003) Wear 254:65-79 | https://doi.org/10.1016/j.wear.2004.07.001 | AB (as summarised by the search tool) |
+| BT-S32 | Le & Sutcliffe (2006) A multi-scale model for friction in cold rolling of aluminium alloy. Tribol. Lett. 22:95-104 | - | AB (as summarised by the search tool) |
+| BT-S33 | Lugt, Wemekamp, ten Napel, van Liempt & Otten (1993) Lubrication in cold rolling: elasto-plasto-hydrodynamic lubrication of smooth surfaces. Wear 166:203-214 | https://ris.utwente.nl/ws/files/6764115/Lugt93lubrication.pdf | FT for abstract and introduction |
+| BT-S34 | Domermuth (1982) The effect of forward slip on the surface finish of cold rolled aluminum. MSc thesis, Virginia Tech | https://vtechworks.lib.vt.edu/items/413ecd17-a8aa-4585-ae84-c712194878e3 | FT (OCR of a scan: abstract, set-up, Tables 1, 2, 4, discussion lines) |
+| BT-S35 | Szucs et al. (2020) Investigation of tribological conditions for cold rolling of aluminium. Mater. Sci. Eng. (Miskolc) | https://real.mtak.hu/221795 | AB |
+| BT-S36 | Montmitonnet, Stephany, Cassarini, Ponthot, Laugier & Legrand (2007) Modelling of metal forming lubrication by O/W emulsions. ICTMP 2007 | https://orbi.uliege.be/bitstream/2268/35217/1/085-A4-1.pdf | FT for summary and introduction |
+| BT-S37 | Lenard & Zhang (1997) J. Mater. Process. Technol., doi:10.1016/S0924-0136(97)00183-0; Lenard (1992) Tribol. Trans., doi:10.1080/10402009208982138 | DOIs | SN |
+| BT-S38 | Plouraboue & Boehm (1999) Multi-scale roughness transfer in cold metal rolling. Tribol. Int. | https://core.ac.uk/download/12043019.pdf (download refused) | SN |
+| BT-S39 | Reich, Epp & Gantzer (1996) debris generation in aluminium cold rolling; US 5,508,119; US 5,025,547 | - | SN |
+| BT-S40 | Keles & Dundar (2007) Aluminum foil: its typical quality problems and their causes. J. Mater. Process. Technol. 186:125-137 | https://doi.org/10.1016/j.jmatprotec.2006.12.027 | AB (as summarised by the search tool) |
+| BT-S41 | Okamura & Ichikawa (2002) Mathematical models and flatness control of an aluminum foil rolling mill. SICE 2002, p.2632 | https://manuscript.isc.ac/Inventory/49/393751.htm | AB |
+| BT-S42 | Publitec, The engineering design of rolling mill (closed gap) | https://www.publiteconline.it/ael/?p=1912 | VP (via search summary; already project source S16) |
+| BT-S43 | Patel et al. (2022) roll grinding deviations and strip thickness/flatness, 3D roll-stack FE. Int. J. Adv. Manuf. Technol. | https://par.nsf.gov/servlets/purl/10359685 | SN |
+| BT-S44 | Wang, Zhu & Zhao (2012) Friction and forward slip in high-speed cold rolling process of aluminum alloys. Appl. Mech. Mater. 229-231:361 | https://www.scientific.net/AMM.229-231.361 | SN |
+| BT-S45 | Finite element analysis of forward slip in micro flexible rolling of thin aluminium strips. Metals 9(10):1062 (2019) | https://www.mdpi.com/2075-4701/9/10/1062 | EX (numerical study, dry friction, 250 um grains; not validation data) |
+| BT-S46 | University of Twente, RoughTrans project (roughness transfer model) | https://www.utwente.nl/en/et/ms3/research-chairs/nsm/research/current_research_projects/RoughTrans | SN |
+| BT-S47 | Achenbach, Aluminium Rolling Mill Technology (extract) | https://www.alufoil.org/files/images_alufoil/about_alufoil/reference_library/achenbach_extract.pdf | VP (pp.15-19 only; nothing beyond what the project cites) |
+| BT-S48 | Zhang (1995) On the mechanism of cold rolling thin foil. Int. J. Mach. Tools Manuf. 35 | https://doi.org/10.1016/0890-6955(94)E0028-H | SN (citation only) |
+
+Earlier project research on process temperatures and on packaging foil was used for additive temperature limits and closed-gap trade statements.
+
+From memory, not verified, and used only where marked [M]: the Patir-Cheng averaged Reynolds equation as the usual inlet flow model; the plain-mattress calibration `K = 1.18 E*/a` in Johnson's Contact Mechanics (the value the project derived); the original Wilson & Walowit expression containing the back tension in the exponent.
+
+## 10. Looked for and not found
+
+Merged from the four reports. Access limits are listed at the end.
+
+**Datasets and codes**
+
+- Any open dataset from an aluminium foil mill (force, speed, tension, gauge, flatness).
+- Any open dataset with shapemeter channels, for any metal. Several papers describe such data and
+  none releases them.
+- Any open record of roll surface temperature, thermal crown, coolant zone states or spray flows on
+  a cold mill.
+- Open vibration data from an aluminium mill; the only open chatter set is from a 20-high mill.
+- An image dataset of aluminium strip or foil rolling defects. The one strip set described is not
+  released; all public aluminium sets are extruded profiles.
+- An open-source flat-strip cold-rolling simulator, foil bite solver, roll-stack or flatness code,
+  chatter model, mixed-lubrication rolling solver or Python wound-roll model. Rolling input decks
+  for MOOSE, FEniCS or deal.II (only the Abaqus decks of OD-15).
+- The variables and metal of D2, and the units, sampling rate and gauge of D1. The data behind one
+  cold-mill thickness prediction study (19,058 samples described in slides).
+- Open copies of five paywalled, high-value papers: load and strip profile in thin strip rolling
+  (1998), foil mixed lubrication with mill trials, the 1975 paper on three thermal time constants,
+  the 2015 base-oil cooling paper, and the 1996 friction measurements on aluminium.
+
+**Roll bite, friction, surface**
+
+- A peer-reviewed model or measurement of roll kiss in an aluminium foil mill (onset gauge, load
+  share, effect on flatness). Only thin steel on laboratory mills, one computed aluminium case and
+  vendor descriptions.
+- A roll-stack or shape model for closed-gap aluminium foil rolling validated against measured foil
+  profile or flatness.
+- Measured forward slip, load and torque for foil passes below 50 um with all inputs. The one mill
+  point with numbers has no stated roll radius.
+- A measured friction coefficient for foil passes other than 0.026 (inferred) and "about 0.03".
+- Measured oil film thickness in foil rolling with numbers; a mill curve of gauge against speed at
+  constant load; a published gauge-to-speed or gauge-to-tension sensitivity for foil.
+- A closed-form contact-area or friction law ready to code; the fitted functions of the two
+  asperity-flattening papers were not read.
+- A bite model for doubled rolling (two sheets with oil between them).
+- Starvation in neat-oil aluminium foil mills; a model linking nozzle oil flow to inlet film.
+- A quantitative model of herringbone, of roll coating or pick-up growth, of smudge, or of pinhole
+  formation linked to bite mechanics.
+- Roughness transfer ratios for aluminium foil against film ratio and reduction.
+- Full texts of several bite and friction papers (listed in the bite report's sources as AB or SN).
+
+**Thermal and coolant**
+
+- An absolute measured spray coefficient for a kerosene-type oil on a rotating roll. One producer
+  measured it on a rotating-roll rig; only relative results are public.
+- Measured roll surface or bulk temperatures on a foil mill, and a measured strip temperature
+  profile across the width of a foil.
+- Numbers for the three thermal time constants of the 1975 paper, and the test design and the 20 s
+  of the plant-identification paper: abstracts only.
+- The full text of the foil-mill heat-partition paper (gauge, speed, method).
+- Any model or measurement of a width-wise change of flow stress, film thickness or friction caused
+  by a temperature difference, in any mill. The deferred item has to be built from its ingredients.
+- Guo's work-roll thermal crown models; Ginzburg's roll-cooling papers (reference-list entries
+  only).
+- Published spray-zone influence functions (thermal spread to neighbouring zones) for aluminium
+  mills.
+- Quantified effect of hot-edge sprays or inductors on edge flatness (vendor claims only), and the
+  number of pads or zones of variable-crown rolls on foil mills.
+- Coil cooling curves for foil coils and the radial conductivity of an oil-wet foil coil.
+- Oil-mist concentration limits tied to a rolling parameter.
+
+**Material**
+
+- Flow curves of 1235, 1100, 8011, 8079 or 8021 in the as-rolled H18 state at rolling strain rates
+  and 20-150 C. The 16 um 1235-H18 data stop at 1e-2 /s.
+- An open, tabulated or machine-readable data set of flow stress against cold reduction for 1xxx,
+  3xxx or 8xxx alloys beyond small-strain tensile curves.
+- Stress against strain numbers from the AA1200 large-strain study (abstract only).
+- Elastic modulus of thin foil against temperature.
+
+**Shape, web handling, winding**
+
+- Any paper that isolates the exit-tension feedback on the transfer of a narrow roll bump, or that
+  measures such a transfer on aluminium foil.
+- Measured cross-width flatness maps of aluminium foil below 50 um showing a band a few centimetres
+  wide, with the roll thermal profile or valve states that caused it. No data set gives, for
+  aluminium foil, a roll thermal or ground profile together with the resulting flatness or
+  thickness of a narrow band.
+- Measured ridge build-up in aluminium foil coils, interlayer pressure, or stack compressibility
+  for oily aluminium foil or strip.
+- Measured entrained-air film in aluminium foil winding at mill speed, or a measured ironing-roll
+  effect.
+- A published physical model of battery-foil tension lines.
+- Quantitative slitting or separating studies for foil.
+- Original texts of several classical papers and theses on roll bending, the flatness dead band,
+  winding and coupled rolling-buckling. They are represented through later papers that restate
+  them; one was not found even as an abstract.
+
+**Dynamics and control**
+
+- A chatter study on an aluminium foil mill (frequency, critical speed, mechanism).
+- The 1980 paper on chatter in ultra-thin gauge rolling (cited by others only).
+- Open step-response, mill-modulus or torsional data.
+
+**Standards**
+
+- A standard that defines "band" or "tension line" on foil with a measurement method, or that
+  specifies foil flatness in I-units.
+
+**Not searched, for lack of time** (thermal report): roll bending and cross-width dynamics,
+roughness transfer, edge drop. The shape and bite reports cover these in part.
+
+**Access limits.** Some hosts could not be reached by the fetch tools and were read as search
+extracts: `link.springer.com`, `www.lechler.com`, `doi.org`, `ieee-dataport.org`,
+`www.repository.cam.ac.uk`, `vtechworks.lib.vt.edu` (in one session), `mdpi.com`,
+`orbi.uliege.be`. Two repositories refused direct downloads. The GitHub API was closed for
+third-party repositories; README and licence files were read as raw files. Nothing large was
+downloaded: of D1 only the first 3 kB were read.
+
+## Appendix A. Benchmark values quoted by the reports
+
+Reference material for the validation rows of the register (G16, BT-G17) and for section 7. The
+tables are the reports' own, with ids prefixed. Values marked as computed, simulated or model
+results are model output, not measurement. `PT-T..` ids are in
+[thin-gauge-products.md](thin-gauge-products.md).
+
+### A.1 Thermal, material and dynamics report
+
+| part | quantity | value | conditions | read | source |
+|---|---|---|---|---|---|
+| A | Heat partition, foil mill | strip 0.11-0.33, rolls 0.67-0.89; roll share rises with cooling | Measured strip surface temperature, three nozzle states; gauge and speed not in abstract | AB | TM-LA19 |
+| A | Bite conductance, hot AA5xxx | 200-450 kW/m2K; thesis table 65-464 | Pilot mill, 274-516 C | AB / EX | TM-LA21 |
+| A | Bite conductance, aluminium models and measurements | 25-40 used; 7-800 measured | Review | EX | PT-T34 |
+| A | Spray coefficient, water on rotating roll | 10-22 kW/m2K on the sprayed area; linear in flow | Flat nozzles, large roll | AB | TM-LA17 |
+| A | Oil against water | 3-6 times lower | Plate test | EX | PT-T19 |
+| A | Base-oil ranking | up to 25 % below normal paraffin | Heated block and rotating roll rigs | EX | TM-LA15; TM-LA16 AB |
+| A | Spray coefficient, simulated | 2.5-4.3 kW/m2K | 1800 mm aluminium cold mill | FT (garbled) | PT-T18 |
+| A | Overall coefficient in a design tool | 4.65 / 4.98 / 5.51 kW/m2K | 0.3 m rolls, coolant not named | FT | TM-LA29 |
+| A | Hot-mill coefficients fitted to measured cambers | 17.5-22 kW/m2K | Water / emulsion, hot aluminium mill | EX | TM-LA8 |
+| A | Zone-cooling response, simulated | diameter change on a 0-4 um axis over 0-100 s | 83 C spot against 60 C, 125 mm roll | EX | TM-LA12 |
+| A | Zone-cooling authority, simulated | +-3.6 to +-4.2 um on diameter after 20 revolutions | 1100 alloy | FT (garbled) | PT-T18 |
+| A | Thermal crown, foil mill | 30 um maximum | 260 x 900 mm roll | EX | PT-T25 |
+| A | Thermal crown model error, hot mill | within 10 um | 2-D axisymmetric FV, identified parameters | EX | TM-LA37 |
+| A | Strip temperature to flatness | 1 C = 2.5 MPa = 1.2 I-units (steel) | Target-curve compensation | EX | TM-LA30 |
+| A | Coil temperature and properties | 77 C at 550 m/min; 98-100 C at 600 m/min; decay above 90 C | 20 to 13 um battery foil | EX | PT-T1; PT-T2 |
+| A | Coil creep | hoop stress 80 to -20 MPa in 5 days | 0.28 mm, wound at 140 C, 30 MPa | EX | TM-LA31 |
+| A | Force and slip, aluminium cold mill | 5144 / 5017 / 4302 kN; forward slip 0.0150 / 0.0182 / 0.0227; friction 0.075 / 0.071 / 0.069 | 5052, 4.1 to 1.72 mm, 1360 mm wide, three passes | EX | TM-LA25 |
+| B | 1235-H18 foil, 16 um | stress at 2 % strain 160 to 200 MPa over 1e-5 to 1e-2 /s; m about 0.027; r = 0.2 / 1.5 / 1.1; transverse stress +10 %; fracture strain 0.023-0.028 | Micro-tensile, three directions; Yld2000-2d fit | EX | TM-LB1 |
+| B | AA1200 to strain 5 | no saturation of flow stress or boundary spacing | Tensile tests on rolled sheet, reductions 40-99 % | AB | TM-LB3 |
+| B | Hardness against reduction | A1050 peak at 80 %, about 43 HV; Al-0.69 mol% Fe peak at 60 %, softening beyond 80 % | Cold rolled 40-95 % after 330 C anneal | EX | TM-LB2 |
+| B | As-rolled strength at 50 um by alloy; Fe in solution | 405-469 ppm as rolled without intermediate anneal; softening start 200-220 C (8079 / 8021), above 260 C (1050) | 1050, 1200, 8079, 8021, industrial route | EX (figure values partly unreadable) | TM-LB6 |
+| B | 1100-H18 against temperature | 165 / 150 MPa at RT; 145 / 130 at 100 C; 125 at 150 C | Long holding | AB / EX | PT-T31; PT-T39 |
+| B | m against temperature, 1050-H14 | 0.04 at 100 C, 0.07 at 200 C | Slow tensile tests | EX | TM-LB10 |
+| B | 1100-O Voce | `sigma = 133 - 81*exp(-6.1*eps)` MPa | Tension to 0.2 | EX | TM-LB12 |
+| B | 1050 annealed | E = 69.8 GPa, K = 144.6 MPa, n = 0.3 | Tensile and Brinell | EX | TM-LB13 |
+| B | 8021 foil, 40 um | 47.6 HV as rolled; softening from 180 C at 40 C/h | 92 % cold reduction | EX | TM-LB18 |
+| B | Pinhole onset | interface opens above 38 % cumulative reduction; 10-70 um foreign particles perforate 40 um foil | 8021 pilot rolling | EX | TM-LB15 |
+| C | Third octave, two-stand steel mill | 5.81 m/s, 124.6 Hz (model 6.42 m/s, 129 Hz); 139 Hz (model 141 Hz); 137-144 Hz on backup roll and housing | 2 mm entry, third pass | EX | TM-LC7 |
+| C | Critical speeds, five coils | measured against Coulomb and Tresca models; simulated 12.4 m/s and 191 Hz for one coil | Two-stand steel mill | EX | TM-LC6 |
+| C | Single-stand against two-stand | simulation 42 % above experiment on average | Unsteady-lubrication model | EX | TM-LC6 |
+| C | Ten chatter events | calculated critical speeds within 14 %, all above the tests | Stand 4 of a 2030 mm five-stand mill | EX | TM-LC9 |
+| C | Aluminium, third octave | typical 100-150 Hz, up to 300 Hz; onset in under 1 s | General statement | FT | TM-LC14 |
+| C | Aluminium tandem mill | speed held at 1000 of 1800 m/min by chatter | AA3104, 0.15 mm, four stands | AB | TM-LC15 |
+| C | Forced vibration, aluminium | 315 Hz at 470 m/min; 0.6 um chock displacement; 20-25 mm pitch; 2 x BPFI | Work-roll bearing | FT | TM-LC14 |
+| C | Fifth octave | 1190 Hz, 12 mm pitch; gear mesh 355 Hz | Steel cold mill, multibody model | EX | TM-LC13 |
+| C | Eccentricity and hardness compensation | standard deviation -38 % at 950 um; 2 % hardness, once per decoiler revolution | Two-stand aluminium mill | EX | TM-LC18 |
+| C | Foil-stock pass record | 0.152 to 0.128 mm, 1045 mm, 309-313 m/min, 20.7 km | One coil | VP | TM-LC20 |
+| C | Foil shape control | within 6 I-units around a 30 I-unit wavy-edge target | 2 x 6.5 um doubled foil | EX | TM-LA12 |
+| C | Foil gauge | 0.1-0.2 % accuracy; under 10 ms response | Vendor specification | VP | TM-LC24 |
+
+Nothing in this table is a measured chatter frequency or critical speed on a foil mill, a measured roll surface temperature on a foil mill, or a rolling-rate flow curve for an H18 foil alloy.
+
+### A.2 Shape, stack and winding report
+
+| # | Data | Material, geometry | What is measured | Usable for | Source, read status |
+|---|---|---|---|---|---|
+| SS-V1 | Wrinkling of a tensioned strip with heated edge bands, during unloading | Steel 0.332 x 210 x 800 mm (free length 731 mm), E = 205.7 GPa; heated edge zones 25 x 400 mm; mean tension 50 MPa; local temperature rise up to 60 C, 34 C at unloading | Full-field out-of-plane shape (resolution about 0.01 mm) and temperature; mode changes while tension is released; bifurcation force | G4: buckling of a narrow band under tension and after release (thermal strain stands in for residual strain); the project's `_SineModeSearch` | SS-S18 [FT of the 2017 post-print; the 2015 paper SN] |
+| SS-V2 | Local interior buckle, industrial | Steel 0.5 x 1000 mm, buckle half-width 75 mm, half wavelength 60 mm | Shapemeter 7.5-8 I-units at the wave; no waves where below 6 I-units; computed critical 5.3 (simply supported), 6.38 (elastic restraint), 8.92 I-units (clamped) | G4: critical elongation difference and wavelength of a local band; direct test of `k = 4` and of the half-wave = width assumption | SS-S19 [FT, formulas garbled] |
+| SS-V3 | Local buckle, laboratory rolling | Aluminium sheet 270 mm wide, 0.4 -> 0.3 mm (25 %), ground roll profile designed to give a local wave | Buckle width 105 mm, wavelength about 75 mm | G4, and the roll-profile -> local wave chain end to end (aluminium) | SS-S19 [FT] |
+| SS-V4 | Stress-meter profile against models with and without buckling | Tinplate, last stand of a tandem mill (the "Counhaye case") | Far-field longitudinal stress across the width | G3, G4 (saturation), G5 | SS-S8 [EX], SS-S9 [AB] |
+| SS-V5 | Roll-profile transfer study | 4-high, work roll 76.2 mm, 301 SS / 6061-O Al / Cu, 2.576 mm and 0.236 mm entry; measured new / warm / worn roll diameter profiles | Simulated thickness and reduction deviations; stiffness table | G13, cross-check of the local transfer (model-to-model, not a measurement) | SS-S3 [FT] |
+| SS-V6 | Transverse displacement in ultra-thin rolling | Strip 65 mm wide, 0.05 -> 0.037 mm and 0.04 -> 0.033 mm, tensions 118 and 90 MPa | Lateral displacement from a lithographic grid (10 um lines) | G3 (`xi`, edge flow) | SS-S21 [EX] |
+| SS-V7 | Stress evolution after the bite | Cold-rolled strip (experiment described) | Tension profile at distance from the bite | G3, G5 (shapemeter distance) | SS-S22 [EX] |
+| SS-V8 | Foil flatness control performance | Aluminium foil 0.013 mm (2 x 0.0065 mm) | Target wavy edge 30 I-units; control within 6 I-units at steady speed | G5 (order of magnitude; the project already cites it) | SS-S31 [EX] |
+| SS-V9 | Computed aluminium foil kiss-rolling case | 30 um x 1100 mm, 300 tf, 50 %, work roll 270 mm, backup 635 mm | Thickness distribution against VC pressure and bending; kiss force share 22 % | G2 (model-to-model benchmark) | SS-S26 [EX] |
+| SS-V10 | Work-roll thermal camber | Aluminium hot rolling, 5754: +6 um in 100 s with entry cooling, +4 um with both sides, model "validated with industrial data"; cold reversing mills: thermal crown in the range "2 to 12" (unit cut off in the extract); foil mill maximum 30 um on a 260 x 900 mm roll (earlier project research, PT-T25) | Camber against time | `roll_thermal`, G8 | SS-S68 [EX], SS-S69 [AB], earlier project research |
+| SS-V11 | Sheet-gauge aluminium passes with force and slip | 5052, 1360 mm wide, 4.1 -> 2.90 -> 2.21 -> 1.72 mm, work-roll radius 210.81 mm, 4.0-4.7 m/s, tensions 7.3-9.5 MPa | Force 5144 / 5017 / 4302 kN; forward slip 0.0150 / 0.0182 / 0.0227 | Bite models (`slab.py`), heat input to `roll_thermal` | SS-S70 [EX] |
+| SS-V12 | Wound roll with cross-width thickness variation | PET film 101.6 um x 254 mm, two measured thickness profiles | Core pressure on a core of 25.4 mm ring segments; outer-lap radius profile | G9 (pseudo-2D winding; no metal equivalent found) | SS-S46 [EX], SS-S47 [EX], SS-S44 [AB] |
+| SS-V13 | Ridge in steel coils | 0.35 mm x 880 mm tinplate, 25 t coil: permissible hot-coil ridge 6-7 um; measured against calculated ridge-buckle height; FE coiling at 0.4-0.6 mm, 1300 mm coil, high points 1-4 um; measured strip profiles with a local high point 100-200 mm from the edge | Ridge-buckle height, strain per wrap, profiles | G9, `coil_ridge_buildup` | SS-S61 [EX], SS-S60 [EX] |
+| SS-V14 | Foil wrinkling against roller misalignment | Copper 10 um x 0.4 m; aluminium and copper below 25 um, wider than 0.6-1 m | Critical misalignment against tension; ratio to the isolated-span prediction | G11, `tension_trough_screen` | SS-S55 [EX] |
+| SS-V15 | Troughs and wrinkles on polyester | 23.4 um x 152.4 mm, spans 0.508 / 0.762 / 1.016 m, roller radius 36.8 mm | Critical taper and misalignment for troughs and for wrinkles | G11 (already the project's formula source) | SS-S54 [EX] |
+| SS-V16 | Air film in winding; slip and wrinkle maps | Films | In-situ entrained-air thickness; slip-onset speed; wrinkle onset | G10 | SS-S50 [AB], SS-S57 [EX] |
+| SS-V17 | Foil coil stresses (model output) | 6.3 um x 1616 mm, 300 mm steel core, 700 mm coil, more than 32,000 laps | Radial pressure, lap thickness, hoop stress for three core stiffnesses (figures only) | G9 (plausibility) | SS-S65 [VP] |
+| SS-V18 | Roughness transfer in industrial foil rolling | AA1200, from 0.4 mm, two passes of about 50 % | Surface spectra: long wavelengths flatten faster than short ones | G13 (wavelength dependence of surface transfer) | SS-S72 [EX] |
+| SS-V19 | Shapemeter specifications | - | Zone widths, accuracy, spreading | G5 | SS-S29, SS-S30 [VP] |
+
+No published data set was found that gives, for aluminium foil, a roll thermal or ground profile
+together with the resulting cross-width flatness or thickness of a narrow band.
+
+### A.3 Bite and tribology report
+
+| # | Source, location | Material and pass | Conditions | Values | Use | Status |
+|---|---|---|---|---|---|---|
+| BT-V1 | Fleck et al. 1992, Fig. 9 and text p.128 | Ideal plastic strip, 20 um entry (b0 0.01 mm), r 25 % | R 89 mm, `Y_s` 230 MPa (plane strain), `E_R*` 230 GPa, `E_s*` 80 GPa, mu 0.03, no tensions | `W_bar` 118 (half-space), 120 (perturbation), 62 (Fleck-Johnson mattress); 2.42 kN/mm [derived]. Project mattress: 49.8 [run] | Code benchmark for BT-G1 (theory against theory) | FT |
+| BT-V2 | Fleck et al. 1992, Fig. 8 and p.127 | AA1100, third pass of a foil mill (Davy-McKee data), 73 um -> 31 um (b0 0.0365 mm, r 57 %) | `Y_s` 230 MPa, tensions 0.107 and 0.132 `Y_s` (24.6, 30.4 MPa); roll radius, speed, width not stated | Measured `W_bar` 58, giving mu 0.026; torque `Q_bar` predicted 370, measured 480 (strain gauges, within 10 %); Davy-McKee mill tests suggest mu about 0.03 | Mill point for load and torque; needs an assumed radius (1.19 kN/mm if R 89 mm, 1.8 kN/mm if 135 mm [derived]). Project mattress at mu 0.026: `W_bar` 41 (R 89 mm) or 51 (R 135 mm) [run] | FT |
+| BT-V3 | Fleck et al. 1992, Figs 1, 3, 4, 5, 6, eq. 29 | Ideal plastic, entry 140, 60, 48, 30, 20, 13 um at r 50 %; 60 um at 50 %; 20 um at 10 % and 50 % | R 89 mm, mu 0.03, `Y_s` 230 MPa, `E_R*` 230 GPa (U = 30) | Pressure and shape profiles; `W_bar` and `Q_bar` against `B0` for r 10, 30, 50 %; master curves; regime boundary `B0*U^-1.24*r^-0.5 ~ 6` | Regime map and load curves (figures must be digitised) | FT |
+| BT-V4 | Sutcliffe & Montmitonnet 2001, Table I, Figs 6-7 | Aluminium foil 50 -> 25 um (model results) | Yield 150 MPa, tensions 20/20 MPa, R 135 mm, 5-40 m/s, roughness 0.3 um, wavelength 30 um, `mu_a` 0.1 or `m_a` 0.25, oil 2.5e-3 Pa s, 1.2e-8 /Pa | `Lambda_s` 0.22-1.76; forward slip about 5 % to 45 % (Coulomb); flat zone below about 20 or 30 m/s; load ratio up to 40 between 10 and 40 m/s | Trend benchmark for BT-G1+BT-G3, BT-G13 | EX |
+| BT-V5 | Le & Sutcliffe 2002, J. Tribol. 124:129 | Thin strip and foil, industrial mill trials | Not in the abstract | Load in reasonable agreement; forward slip over-estimated for foil unless friction varies through the bite | The foil-mill slip and load data sought; full text needed | AB |
+| BT-V6 | Tabary et al. 1996 (conditions from Le & Sutcliffe manuscript, Fig. 7) | Aluminium strip, experimental mill, 0.35 mm entry, 25 % | Rolls R 30 mm, Vitrea 68 (0.077 Pa s, 2.2e-8 /Pa), strip Rq 0.5 um, rolls 0.06 um, oil 40-60 C | Friction about 0.09 at the smallest films, below 0.01 at the highest speed; film 5-500 nm | Friction against `Lambda_s` for BT-G3 (curve must be digitised from the paper) | AB + EX |
+| BT-V7 | Le & Sutcliffe 2001 manuscript, Fig. 6 | AA1050 work hardened, strip drawing, 6 mm thick | `Y_ps` 161 MPa, Rq 0.225 um, 0.016 m/s, oils HVI 650, M320, Vitrea 68, reductions 12.5 % and 25 % | Contact friction rises as film falls from 100 to 1 nm; higher at 25 %; exit Rq about 0.125 um against die 0.1 um | `mu_c(h_s, r)` for BT-G3 | EX |
+| BT-V8 | Le & Sutcliffe 2000, Wear 244:71 | AA1200, 0.4 mm, two passes of about 50 %, industrial mill, freshly ground rolls | First pass constant speed, second pass over a wide speed range | Strip roughness nearly conforms to the roll after pass 1; long wavelengths flattened faster | Roughness transfer for BT-G9 | EX |
+| BT-V9 | Domermuth 1982 (thesis), Tables 1, 2, 4 | Unalloyed aluminium (H16 in the text, H-18 in the abstract), 1.63 mm entry | Two-high laboratory mill, rolls 127 mm diameter; 0.305 and 1.473 m/s; kerosene + 5 % butyl stearate (1 cP) and 10W40 oil (5 cP); roll Ra 0.5 um (rough) and 0.4 um (polished) | Forward slip in percent at reductions 16.4 / 34.4 / 50 / 59 %: rough, kerosene, low speed 3.3 / 6.5 / 12.2 / 15.57; rough, oil, low 2.4 / 3.16 / 3.73 / 4.4; smooth, kerosene, low 1.4 / 2.8 / 11.1 / 21.46; smooth, kerosene, high 1.95 / 3.3 / 5.0 / 10.99; smooth, oil, low 0.42 / 0.02 / 2.68 / 10.34; smooth, oil, high -0.44 / -2.6 / - / - (OCR of a scan; check digits against the PDF) | Forward slip at sheet gauge for `slab.py` and BT-G6; no load data | FT |
+| BT-V10 | Sutcliffe & Rayner 1998 | Plasticine strip, elastomer rolls | Thick to thin strip range | Short inlet reduction and flat centre confirmed; exit reduction not seen; thinnest strips: load almost ten times below theory | Qualitative check of the bite shape | AB |
+| BT-V11 | Jiang 2011 (chapter), Table 1, Figs 18-19 | Thin steel strip 0.2 -> 0.12 mm, 160 mm wide | Hille 100 mill, work rolls 63 mm, backup 228 mm, barrel 254 mm, mu 0.1 | Rolling force 596 kN with kiss, 620 kN without; kiss force 65.3 kN; kiss length 36 mm; crown 36.5 against 45.6 um; kiss share 15.0 % and 15.6 % at 0.27 and 0.15 m/s | Code benchmark for BT-G2 (steel, laboratory mill) | FT |
+| BT-V12 | Ogawa et al. 1991, Figs 7-12 | Thin strip 0.05 -> 0.03 mm, 200 mm wide, 12-high laboratory cluster mill | Roll force 98 kN prescribed | Thickness, kiss force and tension distributions; bending ineffective | Second benchmark for BT-G2 | EX |
+| BT-V13 | Lenard & Zhang 1997; Lenard 1992 | Commercially pure aluminium strip | Laboratory mill, several oils, speeds, reductions | Roll force, torque, forward slip; negative slip with heavy oil | Sheet-gauge friction identification; full texts needed | SN |
+| BT-V14 | Szucs et al. 2020 | Aluminium, lubricant test to herringbone onset | Laboratory mill | Force and torque records, friction factor | Herringbone onset; full text needed | AB |
+| BT-V15 | Sutcliffe 1990 | Experimental mill, film thickness | - | Films up to two times below smooth theory where film exceeds roughness | Film check; numbers not retrieved | AB |
+| BT-V16 | Utsunomiya et al. 2004 | Pack-rolled aluminium, 50 % | Grain size series; Alcan trial data | Matt roughness against grain size and grains through thickness | BT-G14 | EX |
+| BT-V17 | Le et al. 2004 | Anodised aluminium strip, experimental mill | Oxide thickness series | Critical reduction about 13 % for extruded metal to reach the roll | Pick-up threshold for BT-G11 | SN |
+
+Already in the project and not repeated: the trade range 0.9-2.3 kN/mm for battery-foil passes; the three-pass AA5052 comparison; Misovic et al. 2016.

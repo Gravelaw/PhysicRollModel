@@ -1,0 +1,234 @@
+{
+  "case_schema": "physicroll.band_case.v2",
+  "name": "plant_case_template",
+  "synthetic": false,
+  "provenance": "REPLACE: who measured what, where and when (coil ids, dates, instruments).",
+  "notes": [
+    "TEMPLATE for a real problem: replace every mill, pass and material value with your own (SI units: m, Pa, kg, N/m, m/s, Hz, rad). The values shown are the synthetic demo mill, not your mill. Leave an observation null when you have not looked: null means 'not observed' and never counts against a hypothesis.",
+    "schedule (optional): add your pass schedule as a list of {label, entry_thickness_m, exit_thickness_m, mean_flow_stress_pa, friction_coefficient, entry_tension_pa, exit_tension_pa, exit_speed_m_s} to get the per-pass chatter margin and ripple table.",
+    "observation.orientation: how the marks run across the strip: 'transverse' (straight across), 'diagonal', 'chevron' (herringbone V shapes), 'longitudinal' (lengthwise bands along the rolling direction), 'irregular', or null.",
+    "observation.pitch_observations: MOST VALUABLE. Stone or etch a strip sample and measure the distance between successive marks along the rolling direction (pitch_m), together with the steady exit speed the sample was rolled at (exit_speed_m_s). Do it at two clearly different speeds (at least 20 % apart): if the pitch grows in proportion to speed the source is a fixed-frequency vibration (chatter, resonance); if the pitch stays the same the source is locked to a roll, bearing, gear or coil.",
+    "observation.faces: 'both' if the marks are visible on top and bottom strip faces, 'one' if only on one face.",
+    "observation.gauge_variation_detected: true if the exit thickness gauge / X-ray shows a periodic thickness variation at the mark frequency, false if the gauge is clean at that frequency; gauge_variation_amplitude_m: its peak-to-peak size in metres if known (recorded only).",
+    "observation.first_seen: 'bite_exit' if the marks appear straight out of the roll bite, 'incoming_strip' if the entry coil already has them, 'after_bending_or_levelling' if they appear only after a deflector roll, coiler or leveller.",
+    "observation.disappears_after_work_roll_change / disappears_after_backup_roll_change: true/false from a roll-change test, null if not tried.",
+    "observation.onset_above_exit_speed_m_s: the exit speed above which the marks start, if there is such a threshold.",
+    "observation.worse_at_thinner_gauge: true if the marks are more frequent or stronger at thinner exit gauge.",
+    "observation.band_positions_across_width_m: for lengthwise bands only: band positions measured on the same barrel coordinate as the coolant header (0 at the header start), after removing strip tracking offset.",
+    "observation.measured_vibration_hz: dominant stand vibration frequency from a chock accelerometer at the operating speed, if measured.",
+    "kinematics: list work-roll and backup-roll bearings (rolling elements, element and pitch diameters, contact angle), gear meshes (teeth and shaft speed ratio to the work roll) and known grinder-mark counts; without them the drive/bearing hypothesis cannot be checked.",
+    "coolant: header geometry and any blocked nozzles; lubrication: base-oil viscosity, pressure-viscosity coefficient and roll/strip roughness. Set either to null if unknown.",
+    "model_options.bite_response_override: for gauges where the slab model rejects (thin hard strip, foil; see docs/band-diagnosis.md), supply bite force and sensitivities from a plant or foil mill model here instead of null.",
+    "case_schema physicroll.band_case.v2: every v1 key stays; the six sections below are optional (null = not supplied, the result section then says NOT_SUPPLIED). Values shown are the synthetic demo mill, not your mill.",
+    "width_model (lengthwise bands): work-roll thermal and strip-shape model. roll = work-roll steel properties and barrel length; spray_header = nozzle pitch, standoff, fan angle, offset angle, mean spray heat-transfer coefficient and background coefficient; coolant_temperature_k; blocked_nozzle_indices (0 = first nozzle from the header start) or nozzle_levels (one flow level 0..1 per nozzle); events = valve switching or intermittent blockage [{start_s, duration_s, nozzle_indices, level}]; rolls_carrying_stripe = 1 if one header is affected, 2 if both; roll_heat_fraction_per_roll and bite_heat_per_width_w_m may stay null (computed; a null roll_heat_fraction_per_roll is derived from tribology.strip_heat_fraction as (1 - strip share)/2, and if both are given and disagree the result flags HEAT_PARTITION_INPUTS_INCONSISTENT: the roll thermal model uses the width-model value, pass heating the tribology value); crowns, heredity coefficient, incoming ridges, coil, previous widths, grinding, cooling-zone pitch, deflector radius and lateral compressive stress are optional and switch on the corresponding screens.",
+    "tribology: rolling-oil viscosity law, roll/strip roughness and temperatures. The friction closure is a PLACEHOLDER (not fitted): the computed friction is shown beside your value; it replaces it only with use_computed_friction true. Its slope with speed is the useful output (speed-consistent chatter critical speed).",
+    "hardening: 'power' {yield_stress_pa, strength_coefficient_pa, exponent} or 'voce' {initial_stress_pa, saturation_stress_pa, characteristic_strain, stage_iv_slope_pa} with provenance, prior_equivalent_strain and the reference (annealed) thickness; with use_computed_flow_stress true the computed flow stress replaces the supplied one on every pass.",
+    "gauge_control: gaugemeter AGC compensation gain (0..1), cylinder bandwidth and optional force filter; drive: drive-train inertias and shaft stiffnesses (torsional modes); incoming_variation: relative hardness variation of the incoming coil and whether it repeats once per decoiler revolution.",
+    "observation.lengthwise_continuity: 'continuous' if a band runs along the whole coil, 'intermittent' if bands appear only for a while, 'both' if you see both kinds.",
+    "observation.intermittent_duration_s: typical time a short-lived band lasts (seconds of rolling).",
+    "observation.band_width_m / band_spacing_m: typical width of one band across the strip, and the distance between neighbouring bands if they are roughly regular.",
+    "observation.band_positions_across_width_m (lengthwise bands): measure on the barrel coordinate of the coolant header (0 at the header start), as for v1.",
+    "observation.positions_repeat_across_coils: true if the bands sit at the same width positions on successive coils; positions_change_after_work_roll_change: true if they move (or vanish) after a work-roll change.",
+    "observation.changes_with_coolant_zone_switching: true if the bands come and go when coolant zones (flatness control valves) switch.",
+    "observation.appearance: 'gloss_or_shade' (bright/dull stripe), 'loose_or_buckle' (wavy, loose band), 'tight' (tight stripe), 'stain' (oil/coolant stain, often after annealing), 'crease_or_flute' (sharp fold or flute).",
+    "observation.visible_only_after_tension_release: true if the bands are invisible in the mill and show only on the coil or after slitting (latent tension stripes).",
+    "observation.worse_toward_outer_wraps: true if the band is stronger toward the outside of the wound coil; changes_with_tension: true if changing the strip tension changes the bands.",
+    "observation.follows_previous_strip_edges: true if band edges line up with the edges of narrower strip rolled earlier on the same work rolls; worse_at_higher_speed: true if the bands get worse as the mill speeds up.",
+    "Battery foil (exit gauge below 100 um): the result then carries a foil_regime block and the flag CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED: the mill is in or near closed-gap rolling, which the tool does not model; the lever table and the gauge-control section assume an open gap.",
+    "observation.worse_at_lower_tension: true if the bands are more visible when the strip tension is lower and fade above some tension (step the exit tension and note at which tension they fade). Note: a band hidden under mill tension (a latent thermal stripe) is also worse at lower tension.",
+    "observation.changes_with_ironing_roll_pressure: true if the bands change when the ironing-roll pressure (per side) is changed; changes_with_exit_air_blowoff: true if they change when the exit air blow-off is reduced or redirected.",
+    "observation.changes_after_roll_wiper_cleaning: true if the bands change or go after the roll wipers are cleaned (wiper debris), false if they stay.",
+    "observation.tracks_speed_changes: true if the bands appear, move or fade when the mill speed changes, false if they ignore speed changes.",
+    "observation.appeared_after_narrower_coil: true if the bands started when a wider coil was rolled after a narrower one (without a backup-roll change).",
+    "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied.",
+    "material.final_pass_doubled (optional, v2): whether the thinnest pass of the case (schedule rows and the case pass) is rolled doubled, two sheets in one bite. null = not stated (the foil-regime block then asks the plant); false = single-sheet stated (the block records it and notes that both faces are roll-side, so observation.faces is worth recording); true = doubled stated (flag DOUBLED_FINAL_PASS_NOT_MODELLED: the tool models one sheet in the bite). It has no effect when the case is not in the foil regime (exit gauge of 100 um or more, no foil_regime block).",
+    "material.product (optional, v2): a product id from the thin-gauge catalogue (physicroll/band_products.py, docs/thin-gauge-products.md): battery_collector_foil, battery_pouch_laminate_foil, capacitor_anode_foil_high_voltage, capacitor_anode_foil_low_voltage, capacitor_cathode_foil, pharma_blister_lidding, pharma_cold_form_foil, pharma_strip_pack_foil, household_foil, household_foil_heavy_duty, converter_foil, cigarette_liner_foil, dairy_lidding_foil, container_foil_wrinkle_wall, container_foil_smooth_wall, container_foil_retortable, brazed_fin_stock, brazing_sheet_tube, hvac_fin_stock, litho_sheet, can_body_stock, can_end_stock, closure_sheet, transformer_strip. With it the result carries a product_check: every pass against the published envelope of that product (final gauge, per-pass and final-pass reduction, final-pass entry gauge, speed, rolled mode, alloy, temper, flow stress as an indicator) and the nearest published passes. It is a literature check and never changes the hypothesis scores; an unknown id is rejected with the list of valid ids. material.alloy may carry a prefix (AA1235, EN AW-1235): the check uses the bare designation."
+  ],
+  "pass": {
+    "entry_thickness_m": 0.0003,
+    "exit_thickness_m": 0.00021,
+    "width_m": 1.5,
+    "work_roll_radius_m": 0.2,
+    "mean_flow_stress_pa": 270000000.0,
+    "friction_coefficient": 0.03,
+    "entry_tension_pa": 25000000.0,
+    "exit_tension_pa": 30000000.0,
+    "exit_speed_m_s": 16.0
+  },
+  "material": {
+    "alloy": "AA3104",
+    "temper": "H19",
+    "yield_stress_pa": 285000000.0,
+    "youngs_modulus_pa": 70000000000.0,
+    "luders_strain": null,
+    "magnesium_wt_pct": 1.1,
+    "grain_size_m": null,
+    "final_pass_doubled": null,
+    "product": null
+  },
+  "stand": {
+    "work_roll_mass_kg": 3000.0,
+    "backup_roll_mass_kg": 22000.0,
+    "work_backup_contact_stiffness_n_m": 40000000000.0,
+    "housing_stiffness_n_m": 14000000000.0,
+    "modal_damping_ratio": 0.03,
+    "roll_youngs_modulus_pa": 210000000000.0,
+    "roll_poisson_ratio": 0.3
+  },
+  "spans": {
+    "strip_youngs_modulus_pa": 70000000000.0,
+    "entry_span_length_m": 4.0,
+    "exit_span_length_m": 4.0
+  },
+  "kinematics": {
+    "backup_roll_diameter_m": 1.15,
+    "gear_meshes": [
+      {
+        "name": "pinion_stand_mesh",
+        "teeth": 23,
+        "shaft_speed_ratio_to_work_roll": 1.0
+      }
+    ],
+    "bearings": [
+      {
+        "name": "WR_chock_4row_TRB",
+        "shaft": "work_roll",
+        "elements": 35,
+        "element_diameter_m": 0.0235,
+        "pitch_diameter_m": 0.34,
+        "contact_angle_rad": 0.2618
+      }
+    ],
+    "grinder_marks": [],
+    "deflector_roll_diameters_m": [
+      0.3
+    ],
+    "entry_coil_diameter_m": 1.2,
+    "exit_coil_diameter_m": 1.0
+  },
+  "lubrication": {
+    "viscosity_pa_s": 0.004,
+    "pressure_viscosity_coefficient_per_pa": 1.5e-08,
+    "roll_roughness_rq_m": 2.5e-07,
+    "strip_roughness_rq_m": 3e-07
+  },
+  "coolant": {
+    "barrel_length_m": 1.7,
+    "nozzle_pitch_m": 0.052,
+    "standoff_m": 0.15,
+    "spray_angle_rad": 0.6,
+    "offset_angle_rad": 0.17,
+    "blocked_nozzle_indices": [],
+    "roll_expansion_coefficient_per_k": 1.2e-05,
+    "assumed_excess_temperature_k": 5.0
+  },
+  "model_options": {
+    "bite_damping_transit_fraction": 0.5,
+    "max_radius_ratio": 1.5,
+    "cells": 256,
+    "bite_response_override": null,
+    "bite_model": "hitchcock"
+  },
+  "observation": {
+    "orientation": null,
+    "pitch_observations": [],
+    "faces": null,
+    "gauge_variation_detected": null,
+    "gauge_variation_amplitude_m": null,
+    "first_seen": null,
+    "disappears_after_work_roll_change": null,
+    "disappears_after_backup_roll_change": null,
+    "onset_above_exit_speed_m_s": null,
+    "worse_at_thinner_gauge": null,
+    "band_positions_across_width_m": [],
+    "measured_vibration_hz": null,
+    "lengthwise_continuity": null,
+    "intermittent_duration_s": null,
+    "band_width_m": null,
+    "band_spacing_m": null,
+    "positions_repeat_across_coils": null,
+    "positions_change_after_work_roll_change": null,
+    "changes_with_coolant_zone_switching": null,
+    "appearance": null,
+    "visible_only_after_tension_release": null,
+    "worse_toward_outer_wraps": null,
+    "changes_with_tension": null,
+    "follows_previous_strip_edges": null,
+    "worse_at_higher_speed": null,
+    "worse_at_lower_tension": null,
+    "changes_with_ironing_roll_pressure": null,
+    "changes_with_exit_air_blowoff": null,
+    "changes_after_roll_wiper_cleaning": null,
+    "tracks_speed_changes": null,
+    "appeared_after_narrower_coil": null
+  },
+  "width_model": {
+    "roll": {
+      "barrel_length_m": 1.7,
+      "conductivity_w_mk": 40.0,
+      "density_kg_m3": 7850.0,
+      "specific_heat_j_kgk": 470.0,
+      "expansion_coefficient_per_k": 1.17e-05,
+      "poisson_ratio": 0.3,
+      "expansion_constraint": "axially_free"
+    },
+    "spray_header": {
+      "nozzle_pitch_m": 0.052,
+      "standoff_m": 0.15,
+      "spray_angle_rad": 0.6,
+      "offset_angle_rad": 0.17,
+      "spray_mean_htc_w_m2k": 3000.0,
+      "background_htc_w_m2k": 50.0
+    },
+    "coolant_temperature_k": 318.15,
+    "strip_centre_m": null,
+    "roll_heat_fraction_per_roll": null,
+    "bite_heat_per_width_w_m": null,
+    "blocked_nozzle_indices": [],
+    "nozzle_levels": null,
+    "events": [],
+    "numerics": null,
+    "rolls_carrying_stripe": 1,
+    "shape_disturbing_coefficient": null,
+    "heredity_coefficient": null,
+    "gap_crown_m": null,
+    "entry_crown_m": null,
+    "incoming_ridges": [],
+    "coil": null,
+    "previous_strip_widths_m": [],
+    "grinding": null,
+    "cooling_zone_pitch_m": null,
+    "deflector_roll_radius_m": null,
+    "lateral_compressive_stress_pa": null,
+    "shape_inputs": null
+  },
+  "tribology": {
+    "lubricant": {
+      "viscosity_ref_pa_s": 0.0018,
+      "reference_temperature_k": 313.15,
+      "temperature_viscosity_coefficient_per_k": 0.015,
+      "pressure_viscosity_coefficient_per_pa": 1.2e-08,
+      "conductivity_w_mk": null,
+      "name": "kerosene-based rolling oil"
+    },
+    "surface_finish": {
+      "roll_roughness_rq_m": 2.5e-07,
+      "strip_roughness_rq_m": 3e-07
+    },
+    "friction_closure": null,
+    "inlet_temperature_k": 318.15,
+    "strip_entry_temperature_k": 313.15,
+    "strip_heat_fraction": 0.84,
+    "temperature_limit_k": null,
+    "thermal_correction": false,
+    "use_computed_friction": false
+  },
+  "hardening": null,
+  "gauge_control": {
+    "compensation_gain": 0.9,
+    "bandwidth_hz": 25.0,
+    "force_filter_hz": null
+  },
+  "drive": null,
+  "incoming_variation": null
+}

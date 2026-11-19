@@ -1,0 +1,11 @@
+{
+  "battery_collector_foil": {
+    "entry_thickness_m": 3.0e-05,
+    "exit_thickness_m": 1.8e-05,
+    "mean_flow_stress_pa": 180000000.0,
+    "exit_speed_m_s": 10.0
+  },
+  "household_foil": {
+    "exit_tension_pa": 30000000.0
+  }
+}

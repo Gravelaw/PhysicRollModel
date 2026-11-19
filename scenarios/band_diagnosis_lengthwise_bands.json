@@ -1,0 +1,341 @@
+{
+  "case_schema": "physicroll.band_case.v2",
+  "name": "lengthwise_bands_demo",
+  "synthetic": true,
+  "provenance": "SYNTHETIC demonstration, not plant data, modelled on the plant description (thicker coil rolled to thin gauge; bands along the length at several width positions, some continuous, some short-lived, worse at thinner gauge). Same single-stand four-high aluminium mill as thin_gauge_chatter_demo, final pass 0.30 -> 0.21 mm at 12 m/s, friction 0.03 supplied (the placeholder tribology closure is shown beside it, not used), flow stress computed from a synthetic Voce law (use_computed_flow_stress true), schedule 2.2 -> 0.21 mm in six passes. Work-roll spray header: 32 nozzles at 52 mm pitch, 0.2 m standoff, 0.8 rad fans, mean spray coefficient 3 kW/m2K; nozzle 12 PARTLY blocked (flow level 0.45, continuous band of 2.72 um, chosen so that it stays latent in the mill on the thicker passes and buckles in the mill only at final gauge); zone switching: nozzles 20-21 off for 60 s and nozzle 6 off for 150 s (short-lived bands). The roll heat share (0.08 per roll, strip_heat_fraction 0.84) and the spray coefficient were CHOSEN so that the thermal crown lands in the 2-16 um reported for mills (model: 9.2 um). Observations were GENERATED FROM THE MODEL ITSELF (cells 256, default thermal numerics): band positions = model steady stripe peak and the two event stripe peaks rounded to 1 mm (0.357, 0.667, 1.093 m), intermittent duration = mean model visible time of the event bands (time above the in-mill manifest threshold) rounded to 10 s (40 s), continuity both, loose/buckle appearance and visible in the mill (the model bands are MANIFEST in the mill at the final pass), positions repeat across coils and do not move after a work-roll change, worse at thinner gauge. The case therefore tests the screening logic, not the physics.",
+  "notes": [
+    "Closed-loop demo: planted causes are a blocked nozzle (continuous band, nozzle_thermal_stripe) and cooling-zone switching (short-lived bands, cooling_zone_switching_transient); the continuous stripe is the stronger finding.",
+    "Phase-1 coolant section kept consistent with width_model.spray_header (same geometry); its geometric screen can only represent a FULLY blocked nozzle, so nozzle 12 is listed as blocked there although width_model gives it flow level 0.45; its free-expansion screen uses an assumed 10 K excess temperature.",
+    "Grinding data (4 mm/s traverse at 0.5 roll rev/s, 8 mm feed pitch) are supplied so that the grinding hypothesis is tested against the observed spacing."
+  ],
+  "pass": {
+    "entry_thickness_m": 0.0003,
+    "exit_thickness_m": 0.00021,
+    "width_m": 1.5,
+    "work_roll_radius_m": 0.2,
+    "mean_flow_stress_pa": 270000000.0,
+    "friction_coefficient": 0.03,
+    "entry_tension_pa": 25000000.0,
+    "exit_tension_pa": 30000000.0,
+    "exit_speed_m_s": 12.0
+  },
+  "material": {
+    "alloy": "AA3104",
+    "temper": "H19",
+    "yield_stress_pa": 285000000.0,
+    "youngs_modulus_pa": 70000000000.0,
+    "luders_strain": null,
+    "magnesium_wt_pct": 1.1,
+    "grain_size_m": null
+  },
+  "stand": {
+    "work_roll_mass_kg": 3000.0,
+    "backup_roll_mass_kg": 22000.0,
+    "work_backup_contact_stiffness_n_m": 40000000000.0,
+    "housing_stiffness_n_m": 14000000000.0,
+    "modal_damping_ratio": 0.03,
+    "roll_youngs_modulus_pa": 210000000000.0,
+    "roll_poisson_ratio": 0.3
+  },
+  "spans": {
+    "strip_youngs_modulus_pa": 70000000000.0,
+    "entry_span_length_m": 4.0,
+    "exit_span_length_m": 4.0
+  },
+  "kinematics": {
+    "backup_roll_diameter_m": 1.15,
+    "gear_meshes": [
+      {
+        "name": "pinion_stand_mesh",
+        "teeth": 23,
+        "shaft_speed_ratio_to_work_roll": 1.0
+      }
+    ],
+    "bearings": [
+      {
+        "name": "WR_chock_4row_TRB",
+        "shaft": "work_roll",
+        "elements": 35,
+        "element_diameter_m": 0.0235,
+        "pitch_diameter_m": 0.34,
+        "contact_angle_rad": 0.2618
+      }
+    ],
+    "grinder_marks": [],
+    "deflector_roll_diameters_m": [
+      0.3
+    ],
+    "entry_coil_diameter_m": 1.2,
+    "exit_coil_diameter_m": 1.0
+  },
+  "lubrication": {
+    "viscosity_pa_s": 0.004,
+    "pressure_viscosity_coefficient_per_pa": 1.5e-08,
+    "roll_roughness_rq_m": 2.5e-07,
+    "strip_roughness_rq_m": 3e-07
+  },
+  "coolant": {
+    "barrel_length_m": 1.7,
+    "nozzle_pitch_m": 0.052,
+    "standoff_m": 0.2,
+    "spray_angle_rad": 0.8,
+    "offset_angle_rad": 0.17,
+    "blocked_nozzle_indices": [
+      12
+    ],
+    "roll_expansion_coefficient_per_k": 1.17e-05,
+    "assumed_excess_temperature_k": 10.0
+  },
+  "model_options": {
+    "bite_damping_transit_fraction": 0.5,
+    "max_radius_ratio": 1.5,
+    "cells": 256,
+    "bite_response_override": null,
+    "bite_model": "auto"
+  },
+  "observation": {
+    "orientation": "longitudinal",
+    "pitch_observations": [],
+    "faces": null,
+    "gauge_variation_detected": null,
+    "gauge_variation_amplitude_m": null,
+    "first_seen": null,
+    "disappears_after_work_roll_change": null,
+    "disappears_after_backup_roll_change": null,
+    "onset_above_exit_speed_m_s": null,
+    "worse_at_thinner_gauge": true,
+    "band_positions_across_width_m": [
+      0.357,
+      0.667,
+      1.093
+    ],
+    "measured_vibration_hz": null,
+    "lengthwise_continuity": "both",
+    "intermittent_duration_s": 40.0,
+    "band_width_m": null,
+    "band_spacing_m": null,
+    "positions_repeat_across_coils": true,
+    "positions_change_after_work_roll_change": false,
+    "changes_with_coolant_zone_switching": null,
+    "appearance": "loose_or_buckle",
+    "visible_only_after_tension_release": false,
+    "worse_toward_outer_wraps": null,
+    "changes_with_tension": null,
+    "follows_previous_strip_edges": null,
+    "worse_at_higher_speed": null
+  },
+  "schedule": [
+    {
+      "label": "P1 2.20->1.40 mm",
+      "entry_thickness_m": 0.0022,
+      "exit_thickness_m": 0.0014,
+      "mean_flow_stress_pa": 190000000.0,
+      "friction_coefficient": 0.08,
+      "entry_tension_pa": 15000000.0,
+      "exit_tension_pa": 20000000.0,
+      "exit_speed_m_s": 3.0
+    },
+    {
+      "label": "P2 1.40->0.90 mm",
+      "entry_thickness_m": 0.0014,
+      "exit_thickness_m": 0.0009,
+      "mean_flow_stress_pa": 220000000.0,
+      "friction_coefficient": 0.07,
+      "entry_tension_pa": 20000000.0,
+      "exit_tension_pa": 25000000.0,
+      "exit_speed_m_s": 5.0
+    },
+    {
+      "label": "P3 0.90->0.60 mm",
+      "entry_thickness_m": 0.0009,
+      "exit_thickness_m": 0.0006,
+      "mean_flow_stress_pa": 240000000.0,
+      "friction_coefficient": 0.06,
+      "entry_tension_pa": 20000000.0,
+      "exit_tension_pa": 25000000.0,
+      "exit_speed_m_s": 7.5
+    },
+    {
+      "label": "P4 0.60->0.42 mm",
+      "entry_thickness_m": 0.0006,
+      "exit_thickness_m": 0.00042,
+      "mean_flow_stress_pa": 255000000.0,
+      "friction_coefficient": 0.05,
+      "entry_tension_pa": 25000000.0,
+      "exit_tension_pa": 30000000.0,
+      "exit_speed_m_s": 10.0
+    },
+    {
+      "label": "P5 0.42->0.30 mm",
+      "entry_thickness_m": 0.00042,
+      "exit_thickness_m": 0.0003,
+      "mean_flow_stress_pa": 265000000.0,
+      "friction_coefficient": 0.04,
+      "entry_tension_pa": 25000000.0,
+      "exit_tension_pa": 30000000.0,
+      "exit_speed_m_s": 13.0
+    },
+    {
+      "label": "P6 0.30->0.21 mm",
+      "entry_thickness_m": 0.0003,
+      "exit_thickness_m": 0.00021,
+      "mean_flow_stress_pa": 270000000.0,
+      "friction_coefficient": 0.03,
+      "entry_tension_pa": 25000000.0,
+      "exit_tension_pa": 30000000.0,
+      "exit_speed_m_s": 12.0
+    }
+  ],
+  "width_model": {
+    "roll": {
+      "barrel_length_m": 1.7,
+      "conductivity_w_mk": 40.0,
+      "density_kg_m3": 7850.0,
+      "specific_heat_j_kgk": 470.0,
+      "expansion_coefficient_per_k": 1.17e-05,
+      "poisson_ratio": 0.3,
+      "expansion_constraint": "axially_free"
+    },
+    "spray_header": {
+      "nozzle_pitch_m": 0.052,
+      "standoff_m": 0.2,
+      "spray_angle_rad": 0.8,
+      "offset_angle_rad": 0.17,
+      "spray_mean_htc_w_m2k": 3000.0,
+      "background_htc_w_m2k": 50.0
+    },
+    "coolant_temperature_k": 318.15,
+    "strip_centre_m": null,
+    "roll_heat_fraction_per_roll": null,
+    "bite_heat_per_width_w_m": null,
+    "blocked_nozzle_indices": [],
+    "nozzle_levels": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.45,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "events": [
+      {
+        "start_s": 0.0,
+        "duration_s": 60.0,
+        "nozzle_indices": [
+          20,
+          21
+        ],
+        "level": 0.0,
+        "label": "zone 20-21 valve closed"
+      },
+      {
+        "start_s": 300.0,
+        "duration_s": 150.0,
+        "nozzle_indices": [
+          6
+        ],
+        "level": 0.0,
+        "label": "nozzle 6 intermittently blocked"
+      }
+    ],
+    "numerics": null,
+    "rolls_carrying_stripe": 1,
+    "shape_disturbing_coefficient": null,
+    "heredity_coefficient": null,
+    "gap_crown_m": null,
+    "entry_crown_m": null,
+    "incoming_ridges": [],
+    "coil": {
+      "inner_radius_m": 0.3,
+      "outer_radius_m": 0.9,
+      "winding_tension_pa": 20000000.0,
+      "compaction_factor": 0.5
+    },
+    "previous_strip_widths_m": [],
+    "grinding": {
+      "traverse_speed_m_s": 0.004,
+      "roll_rotation_hz": 0.5
+    },
+    "cooling_zone_pitch_m": 0.104,
+    "deflector_roll_radius_m": 0.15,
+    "lateral_compressive_stress_pa": null
+  },
+  "tribology": {
+    "lubricant": {
+      "viscosity_ref_pa_s": 0.0018,
+      "reference_temperature_k": 313.15,
+      "temperature_viscosity_coefficient_per_k": 0.015,
+      "pressure_viscosity_coefficient_per_pa": 1.2e-08,
+      "conductivity_w_mk": null,
+      "name": "kerosene-based rolling oil (synthetic)"
+    },
+    "surface_finish": {
+      "roll_roughness_rq_m": 2.5e-07,
+      "strip_roughness_rq_m": 3e-07
+    },
+    "friction_closure": null,
+    "inlet_temperature_k": 318.15,
+    "strip_entry_temperature_k": 313.15,
+    "strip_heat_fraction": 0.84,
+    "temperature_limit_k": 393.15,
+    "thermal_correction": false,
+    "use_computed_friction": false
+  },
+  "hardening": {
+    "law": "voce",
+    "provenance": "synthetic Voce parameters (not fitted)",
+    "initial_stress_pa": 100000000.0,
+    "saturation_stress_pa": 260000000.0,
+    "characteristic_strain": 0.6,
+    "stage_iv_slope_pa": 10000000.0,
+    "prior_equivalent_strain": 0.0,
+    "reference_thickness_m": 0.0022,
+    "use_computed_flow_stress": true
+  },
+  "gauge_control": {
+    "compensation_gain": 0.9,
+    "bandwidth_hz": 25.0,
+    "force_filter_hz": null
+  },
+  "drive": {
+    "inertias_kg_m2": [
+      600.0,
+      120.0,
+      90.0
+    ],
+    "stiffnesses_n_m_rad": [
+      4000000.0,
+      1500000.0
+    ]
+  },
+  "incoming_variation": {
+    "flow_stress_variation_fraction": 0.02,
+    "coil_synchronous": true
+  }
+}

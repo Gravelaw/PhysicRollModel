@@ -1,0 +1,114 @@
+{
+  "case_schema": "physicroll.band_case.v1",
+  "name": "bearing_order_demo",
+  "synthetic": true,
+  "provenance": "SYNTHETIC demonstration modelled on the published aluminium case described by Innoval Technology (Farley): 20-25 mm transverse bands whose pitch does not change with speed, 315 Hz at 470 m/min equal to 2 x BPFI of a work-roll bearing. Same synthetic stand and spans as the thin-gauge demo, BUT the work roll is 0.284 m diameter (radius 0.142 m): with a 0.40 m roll a BPFI order of 18.66 gives a 35 mm pitch and 221 Hz at 470 m/min, so the published numbers (BPFI ~18.66, 315 Hz, ~25 mm) are only mutually consistent with a ~0.28 m work roll. Bearing: 35 rollers, 16.47 mm, pitch diameter 0.24 m, 15 deg contact angle -> BPFI order 18.66. Pass 1.0 -> 0.70 mm, flow stress 230 MPa, friction 0.06, tensions 20/25 MPa at 7.8333 m/s. Pitch = pi*D_w*(1+f)/(2*BPFI) with the model forward slip; observed at 6.0 and 7.8333 m/s (same pitch), measured stand vibration 2*BPFI*f_wr at 470 m/min; no gauge variation, both faces, persists after work- and backup-roll change.",
+  "notes": [
+    "Closed-loop demo: the planted cause is an order-locked work-roll bearing defect (2 x BPFI)."
+  ],
+  "pass": {
+    "entry_thickness_m": 0.001,
+    "exit_thickness_m": 0.0007,
+    "width_m": 1.5,
+    "work_roll_radius_m": 0.142,
+    "mean_flow_stress_pa": 230000000.0,
+    "friction_coefficient": 0.06,
+    "entry_tension_pa": 20000000.0,
+    "exit_tension_pa": 25000000.0,
+    "exit_speed_m_s": 7.8333
+  },
+  "material": {
+    "alloy": "AA5052",
+    "temper": "H34",
+    "yield_stress_pa": 215000000.0,
+    "youngs_modulus_pa": 70000000000.0,
+    "luders_strain": null,
+    "magnesium_wt_pct": 2.5,
+    "grain_size_m": null
+  },
+  "stand": {
+    "work_roll_mass_kg": 3000.0,
+    "backup_roll_mass_kg": 22000.0,
+    "work_backup_contact_stiffness_n_m": 40000000000.0,
+    "housing_stiffness_n_m": 14000000000.0,
+    "modal_damping_ratio": 0.03,
+    "roll_youngs_modulus_pa": 210000000000.0,
+    "roll_poisson_ratio": 0.3
+  },
+  "spans": {
+    "strip_youngs_modulus_pa": 70000000000.0,
+    "entry_span_length_m": 4.0,
+    "exit_span_length_m": 4.0
+  },
+  "kinematics": {
+    "backup_roll_diameter_m": 1.15,
+    "gear_meshes": [
+      {
+        "name": "pinion_stand_mesh",
+        "teeth": 23,
+        "shaft_speed_ratio_to_work_roll": 1.0
+      }
+    ],
+    "bearings": [
+      {
+        "name": "WR_chock_4row_TRB",
+        "shaft": "work_roll",
+        "elements": 35,
+        "element_diameter_m": 0.01647,
+        "pitch_diameter_m": 0.24,
+        "contact_angle_rad": 0.2618
+      }
+    ],
+    "grinder_marks": [],
+    "deflector_roll_diameters_m": [
+      0.3
+    ],
+    "entry_coil_diameter_m": 1.2,
+    "exit_coil_diameter_m": 1.0
+  },
+  "lubrication": {
+    "viscosity_pa_s": 0.004,
+    "pressure_viscosity_coefficient_per_pa": 1.5e-08,
+    "roll_roughness_rq_m": 2.5e-07,
+    "strip_roughness_rq_m": 3e-07
+  },
+  "coolant": {
+    "barrel_length_m": 1.7,
+    "nozzle_pitch_m": 0.052,
+    "standoff_m": 0.15,
+    "spray_angle_rad": 0.6,
+    "offset_angle_rad": 0.17,
+    "blocked_nozzle_indices": [],
+    "roll_expansion_coefficient_per_k": 1.2e-05,
+    "assumed_excess_temperature_k": 5.0
+  },
+  "model_options": {
+    "bite_damping_transit_fraction": 0.5,
+    "max_radius_ratio": 1.5,
+    "cells": 256,
+    "bite_response_override": null
+  },
+  "observation": {
+    "orientation": "transverse",
+    "pitch_observations": [
+      {
+        "exit_speed_m_s": 6.0,
+        "pitch_m": 0.024921
+      },
+      {
+        "exit_speed_m_s": 7.8333,
+        "pitch_m": 0.024921
+      }
+    ],
+    "faces": "both",
+    "gauge_variation_detected": false,
+    "gauge_variation_amplitude_m": null,
+    "first_seen": "bite_exit",
+    "disappears_after_work_roll_change": false,
+    "disappears_after_backup_roll_change": false,
+    "onset_above_exit_speed_m_s": null,
+    "worse_at_thinner_gauge": null,
+    "band_positions_across_width_m": [],
+    "measured_vibration_hz": 314.3
+  }
+}

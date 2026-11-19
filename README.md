@@ -230,3 +230,70 @@ recipe targets, applied references and measured samples separately. The
 histories and reports per-model readiness with explicit missing-data reasons.
 Readiness permits only a separate domain check; replay computes no predictions,
 advances no material state and implements no dynamic physics or control.
+
+## Band / chatter-mark root-cause screening
+
+Opt-in, standard-library-only screening for strip bands of both families. For **lengthwise
+bands** (stripes along the rolling direction at fixed width positions, continuous or
+short-lived) it solves a work-roll temperature and thermal-radius field for the spray header,
+carries the resulting roll stripes through a strip-shape chain to flatness and to the band
+state in the mill and after tension release, simulates cooling-zone switching events, and
+follows one stripe through the pass schedule to show how thin gauge changes it. For
+**transverse marks** (repeating across the strip) it uses a linear third-octave chatter model
+and pitch-law, roll, bearing, gear and coil signatures, with levers and a pass-schedule sweep.
+Optional process and dynamics sections add lubricant film and placeholder friction, pass
+heating, work hardening, gaugemeter AGC, drive torsional modes and incoming hardness
+variation. Twenty hypotheses are ranked by an ordinal evidence tally against the plant
+observations, not by probability.
+
+**Battery foil** (exit gauge below 100 um): the tool runs at foil gauge and says what it
+cannot assess there. It warns that the mill is in or near closed-gap rolling, which it does
+not model, and it has no model of a doubled pass. Below about 60 um the roll bite comes from an
+experimental model (order of magnitude only); below 20 um exit gauge (down to 8 um) and above
+50 % reduction (up to 65 %) that model runs in a flagged, unvalidated extended domain, and a
+bite there whose force lies outside the 0.9-2.3 kN/mm reported for battery-foil passes is
+marked not credible and kept out of every trend statement. It adds six foil observations, a
+tension-line hypothesis built on the published description (no physical model), and, with
+`material.product`, an evidence-neutral check of every pass against a literature survey of
+published product ranges and schedules
+([thin-gauge products](docs/thin-gauge-products.md)). For a battery product it also proposes
+alloy and temper for the final gauge from a literature grade table (`material_selection`: the
+gauge band, its options with evidence ratings, a standard and a high-strength proposal, and
+the case compared with them; a proposal for the plant to confirm, never a change to the case or
+the scores). With a width model or tribology, `thermal_check` compares the case's process
+temperatures, heat partition and spray coefficient with a literature temperature map and
+shows, in `width.thermal_sensitivity`, how the cooling-stripe result moves across the measured
+heat partition and the published spray coefficients (no roll-wear or surface-finish model).
+The foil demo follows the plant's route
+(50 um input, two single-sheet passes, final 17-19 um, down to 12 um; intermediates assumed;
+alloy and temper the literature proposal 1235-H18; measured heat partition 0.22, simulated
+spray 3.4 kW/m2K): 50 -> 30 -> 18 um, plus the thinnest product's 50 -> 25 -> 12 um as an
+alternative. The 18 um final pass gets an extended-domain bite with its force inside the
+reported range (still unvalidated); the 12 um bite is not credible. In the demo a cooling
+stripe becomes harder, not easier, to see in the mill as the gauge thins (at the measured heat
+partition it shows in the mill on the thick stock passes and stays hidden on the foil passes); see
+section 3 of the doc. Four synthetic demos:
+
+```
+python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
+```
+
+`python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis` screens one
+synthetic final pass per catalogue product (literature inputs, one synthetic mill per gauge
+class, unvalidated) and ranks the products per mechanism, with a battery-foil block by gauge
+(20 to 10 um) and grade (standard and high-strength proposals); see sections 3.10 and 3.11 of
+the doc.
+To use your own machine instead of the demo mills (`--mill my_mill.json`, also
+`--products`, `--overrides`, `--write-cases`), and for which case-file keys are the machine,
+the product and the observations, see "Using your own mill" (section 5.3 of the doc).
+
+Start a real case from `scenarios/band_diagnosis_template.json` (schema
+`physicroll.band_case.v2`; leave an observation `null` when nobody has looked); see
+[band diagnosis](docs/band-diagnosis.md) for what the tool can and cannot say at foil gauge,
+which observations matter most, the evidence rules, the equations with their source tags,
+how to read the report and the limitations.
+Status: a screening tool on synthetic, uncalibrated models; nothing in it has been validated
+against plant data, and the demo observations were generated from the model itself.
