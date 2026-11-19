@@ -539,6 +539,11 @@ def bite_free(mill, h1, sigma, exit_tension, width=None):
                                       poisson_ratio=bw.STRIP_POISSON_RATIO)
         out['trough_onset_lateral_stress_pa'] = tr['trough_critical_lateral_stress_pa']
         out['roller_wrinkle_threshold_pa'] = tr['roller_wrinkle_critical_lateral_stress_pa']
+        if out['roller_wrinkle_threshold_pa'] is None:
+            # key only then: the roller-wrinkle check needs the deflector roll radius
+            out['roller_wrinkle_error'] = ('the mill has no width_model.deflector_roll_radius_m'
+                                           if d['deflector_roll_radius_m'] is None else
+                                           'roller-wrinkle threshold not computed')
     except ValueError as exc:
         out['trough_onset_lateral_stress_pa'] = out['roller_wrinkle_threshold_pa'] = None
         out['trough_error'] = str(exc)
@@ -923,6 +928,8 @@ def rankings(rows):
                     why = st['text']
             elif key in ('troughs', 'roller_wrinkles') and r.get('trough_error'):
                 why = r['trough_not_assessable_reason']
+            elif key == 'roller_wrinkles' and r.get('roller_wrinkle_error'):
+                why = f'roller-wrinkle check not assessable: {r["roller_wrinkle_error"]}'
             elif key == 'coil_ridges' and r.get('critical_ridge_error'):
                 why = f'coil ridge model not assessable: {r["critical_ridge_error"]}'
             elif get(r) is None and _domain(r, key):
@@ -1082,7 +1089,7 @@ _CELL_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'reduction_fraction', 'mi
               'critical_status', 'critical_status_without_bite_damping',
               'critical_speed_scan_range_m_s',
               'chatter_reliability', 'rejected', 'trough_error', 'trough_not_assessable_reason',
-              'dead_band_error')
+              'dead_band_error', 'roller_wrinkle_error')
 
 
 def _matrix_cell(p, mills, g_um, grade):
@@ -1107,11 +1114,13 @@ def _matrix_cell(p, mills, g_um, grade):
                 **{k: row.get(k) for k in _CELL_KEYS if k in row})
     cell['critical_ridge_height_at_flow_stress_m'] = row.get('critical_ridge_height_m')
     try:
-        cell['critical_ridge_height_m'] = bite_free(mills['foil'], h1, rp,
-                                                    row['exit_tension_pa'])[
-            'critical_ridge_height_m']
-    except ValueError:
+        bf = bite_free(mills['foil'], h1, rp, row['exit_tension_pa'])
+        cell['critical_ridge_height_m'] = bf['critical_ridge_height_m']
+        if bf.get('critical_ridge_error'):
+            cell['critical_ridge_error'] = bf['critical_ridge_error']   # key only then
+    except ValueError as exc:
         cell['critical_ridge_height_m'] = None
+        cell['critical_ridge_error'] = str(exc)
     cell['credible'] = row.get('bite_status') == 'BITE' and _credible(row)
     if row.get('bite_status') != 'BITE':
         cell['bite_excluded_reason'] = row.get('rejected') or row.get('bite_note') or 'no bite'
@@ -1123,11 +1132,43 @@ def _matrix_cell(p, mills, g_um, grade):
 
 
 def _pct(a, b):
+    """Percentage change a -> b; None unless both exist and a is non-zero."""
+    if a is None or b is None or not a:
+        return None
     return (b / a - 1) * 100
 
 
 def _span_txt(vals, scale, unit, d=3):
     return f'{vals[0] * scale:.{d}g} -> {vals[-1] * scale:.{d}g} {unit}'
+
+
+# the stored reason of each bite-free quantity that can be None (bite_free, matrix cells)
+_REASON_KEYS = {'critical_ridge_height_m': ('critical_ridge_error',),
+                'trough_onset_lateral_stress_pa': ('trough_error',),
+                'roller_wrinkle_threshold_pa': ('trough_error', 'roller_wrinkle_error'),
+                'dead_band_half_width_i_units': ('dead_band_error',)}
+
+
+def _reason(c, key):
+    """The stored reason why a bite-free quantity of a row or cell is None."""
+    return next((c[k] for k in _REASON_KEYS.get(key, ()) if c.get(k)), None)
+
+
+def _why_none(cells, key):
+    """'not assessable (reason)' for a quantity missing in one or more cells."""
+    reasons = sorted({_reason(c, key) or 'no value' for c in cells
+                      if c is not None and c.get(key) is None})
+    return 'not assessable (' + '; '.join(reasons) + ')'
+
+
+def _pct_words(name, a_cell, b_cell, key, absval=False):
+    a, b = a_cell.get(key), b_cell.get(key)
+    if absval and a is not None and b is not None:
+        a, b = abs(a), abs(b)
+    v = _pct(a, b)
+    if v is None:
+        return f'{name} {_why_none([a_cell, b_cell], key) if (a is None or b is None) else "not assessable (zero reference)"}'
+    return f'{name} {v:+.0f} %'
 
 
 def _grade_sentences(cells):
@@ -1146,6 +1187,7 @@ def _grade_sentences(cells):
                  'magnitude', True)):
             v = [c.get(key) for c in cs]
             if any(x is None for x in v):
+                free.append(f'{name} {_why_none(cs, key)}')
                 continue
             v = [abs(x) if absval else x for x in v]
             free.append(f'{name} {_span_txt(v, scale, unit)}')
@@ -1193,13 +1235,14 @@ def _grade_sentences(cells):
                 weak.append(f'the {c["grade"].replace("_", "-")} proposal at {g:g} um '
                             f'({c["alloy"]})')
         txt = (f'{g:g} um {s["alloy"]} {s["tensile_strength_pa"] * 1e-6:.0f} -> {h["alloy"]} '
-               f'{h["tensile_strength_pa"] * 1e-6:.0f} MPa (Rm {_pct(s["tensile_strength_pa"], h["tensile_strength_pa"]):+.0f} %, '
-               f'ridge {_pct(s["critical_ridge_height_m"], h["critical_ridge_height_m"]):+.0f} %, '
-               f'trough {_pct(abs(s["trough_onset_lateral_stress_pa"]), abs(h["trough_onset_lateral_stress_pa"])):+.0f} %')
+               f'{h["tensile_strength_pa"] * 1e-6:.0f} MPa ('
+               + _pct_words('Rm', s, h, 'tensile_strength_pa') + ', '
+               + _pct_words('ridge', s, h, 'critical_ridge_height_m') + ', '
+               + _pct_words('trough', s, h, 'trough_onset_lateral_stress_pa', absval=True))
         if s['credible'] and h['credible']:
             a = (s.get('stripe') or {}).get('in_mill_onset_height_m')
             b = (h.get('stripe') or {}).get('in_mill_onset_height_m')
-            if a is not None and b is not None:
+            if _pct(a, b) is not None:
                 txt += f', in-mill stripe onset {_pct(a, b):+.0f} %'
                 both.append(f'{g:g}')
         rows.append(txt + ')')
@@ -1373,10 +1416,11 @@ def _onset(h, dom=None):
             else f'{h * 1e6:.3g} µm')
 
 
-def _free(r, key, scale, err):
+def _free(r, key, scale, *errs):
     """A bite-free value, or 'not assessable' with the model's reason."""
-    if r.get(key) is None and r.get(err):
-        return f'<em>not assessable: {_e(r[err])}</em>'
+    why = next((r[e] for e in errs if r.get(e)), None)
+    if r.get(key) is None and why:
+        return f'<em>not assessable: {_e(why)}</em>'
     return _e(_f(r.get(key), scale))
 
 
@@ -1401,7 +1445,8 @@ def _table_rows(rows):
             _free(r, 'dead_band_half_width_i_units', 1.0, 'dead_band_error'),
             _free(r, 'critical_ridge_height_m', 1e6, 'critical_ridge_error'),
             _free(r, 'trough_onset_lateral_stress_pa', 1e-3, 'trough_error'),
-            _free(r, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error'),
+            _free(r, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error',
+                  'roller_wrinkle_error'),
             _cell_bite(r, lambda: _e(f'{_f(st.get("linear_feedback_i_units"))} I; in mill '
                                      f'{_onset(st.get("in_mill_onset_height_m"), dm)}; '
                                      f'after release '
@@ -1516,9 +1561,10 @@ def _matrix_section(m):
             _e(f'{c["entry_thickness_m"] * 1e6:.4g} → {c["exit_thickness_m"] * 1e6:.4g} µm: '
                f'{c["pass_basis"]}'),
             bite, _free(c, 'dead_band_half_width_i_units', 1.0, 'dead_band_error'),
-            _e(_f(c.get('critical_ridge_height_m'), 1e6)),
+            _free(c, 'critical_ridge_height_m', 1e6, 'critical_ridge_error'),
             _free(c, 'trough_onset_lateral_stress_pa', 1e-3, 'trough_error'),
-            _free(c, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error'), stripe, chat])
+            _free(c, 'roller_wrinkle_threshold_pa', 1e-6, 'trough_error',
+                  'roller_wrinkle_error'), stripe, chat])
     return ('<section><h2>Battery foil by gauge and grade</h2>'
             f'<p class="note">{_e(m["status"])}: {_e(m["note"])} {_e(m["rules"])}. '
             f'{_e(m["ridge_strength_basis"])}.</p>'

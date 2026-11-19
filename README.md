@@ -122,7 +122,9 @@ The full catalogue is in [thin-gauge products](docs/thin-gauge-products.md).
 The product survey screens one synthetic final pass per catalogue product. Without options it
 uses the two demo mills; `my_mill.json` below is a v2 case file of your mill (a copy of the
 template with your machine values, a `width_model` and `model_options.bite_response_override`
-set to `null`). Only its machine keys are used.
+set to `null`). Only its machine keys are used. Fill in `width_model.coil` and
+`width_model.deflector_roll_radius_m` (both `null` in the template) to get the coil-ridge and
+roller-wrinkle thresholds; without them the survey reports those two as not assessable.
 
 ```bash
 python -m physicroll.band_survey --out my_survey
