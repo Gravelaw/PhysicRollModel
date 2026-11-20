@@ -281,7 +281,8 @@ THERMAL_SENS_WORDS = {'off': 'Off', 'partition': 'Heat share only (default)',
                       'full': 'Heat share and spray coefficient (slow)'}
 CONSTRAINT_WORDS = {'axially_free': 'Free to expand along the barrel',
                     'plane_strain': 'Held along the barrel (plane strain)'}
-HARDENING_WORDS = {'power': 'Power law', 'voce': 'Voce law'}
+HARDENING_WORDS = {'power': 'Power law', 'voce': 'Voce law',
+                   'tome_voce': 'Voce law with late slope (Tome form)'}
 
 
 def _choices(values, labels):
@@ -525,8 +526,13 @@ PASS_QUESTIONS = (
        'Voce law: saturation stress', 'MPa.', unit='mpa', group='Hardening'),
     _p('voce_strain', 'hardening.characteristic_strain', 'number',
        'Voce law: characteristic strain', 'Dimensionless.', unit='ratio', group='Hardening'),
-    _p('voce_slope', 'hardening.stage_iv_slope_pa', 'number', 'Voce law: late hardening slope',
-       'MPa.', unit='mpa', group='Hardening'),
+    _p('voce_slope', 'hardening.stage_iv_slope_pa', 'number',
+       'Voce law: late hardening slope (negative for work softening)',
+       'MPa. Also the late slope of the Tome form.', unit='mpa', group='Hardening'),
+    _p('tome_scale', 'hardening.saturation_scale_pa', 'number',
+       'Voce law, Tome form: saturation scale', 'MPa.', unit='mpa', group='Hardening'),
+    _p('tome_rate', 'hardening.initial_hardening_rate_pa', 'number',
+       'Voce law, Tome form: initial hardening rate', 'MPa.', unit='mpa', group='Hardening'),
     _p('incoming_hardness_variation', 'incoming_variation.flow_stress_variation_fraction',
        'number', 'Hardness variation of the incoming coil',
        'Relative variation of the flow stress along the incoming coil.', unit='percent',
@@ -1560,7 +1566,8 @@ def case_from_answers(answers, preset):
         if law not in bproc.HARDENING_LAW_KEYS:
             raise AnswerError('Choose the work-hardening law (power or Voce) or leave all '
                               'hardening answers unknown.', 'hardening_law')
-        other = [k for lw, ks in bproc.HARDENING_LAW_KEYS.items() if lw != law for k in ks]
+        other = [k for lw, ks in bproc.HARDENING_LAW_KEYS.items() if lw != law for k in ks
+                 if k not in bproc.HARDENING_LAW_KEYS[law]]      # stage_iv_slope_pa is shared
         for k in other:
             case['hardening'].pop(k, None)
         for k in ('provenance',) + bproc.HARDENING_LAW_KEYS[law]:
@@ -2462,6 +2469,25 @@ FLAGS = {
     'NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT': (
         'In the half-space model the strip creeps a little where it should move with the '
         'roll; the forward slip is less exact than usual.', 'Read forward slip as rough.'),
+    'FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED': (
+        'The flow stress of every pass was multiplied by your strain-rate and temperature '
+        'factor; the measured rate sensitivity stops five decades below rolling rates.',
+        'Enter both the rate and the temperature terms, or neither.'),
+    'STRAIN_RATE_FROM_UNDEFORMED_ARC': (
+        'The strain rate of each pass uses the contact length of the undeformed roll.',
+        'No action.'),
+    'BITE_TEMPERATURE_NOT_AVAILABLE_REFERENCE_USED': (
+        'Without rolling-oil data the bite temperature is unknown; the reference temperature '
+        'of your factor was used.', 'Enter the rolling-oil data for a bite temperature.'),
+    'RATE_SENSITIVITY_EXTRAPOLATED_BEYOND_MEASURED_RATES': (
+        'The rate sensitivity was measured far below rolling strain rates and is used beyond '
+        'that range.', 'Read the factored flow stress as rough.'),
+    'RATE_TEMPERATURE_FACTOR_REJECTED': (
+        'For at least one pass the rate and temperature factor fell outside 0.2 to 5 and was '
+        'not used.', 'Check the factor numbers.'),
+    'NEGATIVE_LATE_HARDENING_SLOPE_WORK_SOFTENING': (
+        'The hardening law softens at large strain (a negative late slope), as reported for '
+        'purified Al-Fe and high-purity grades beyond 80 % reduction.', 'No action.'),
     'FRICTION_IDENTIFIED_FROM_ENTERED_RECORDS': (
         'A friction value was worked out from the roll force (and slip or torque where '
         'entered) of your pass records; it is shown only and used nowhere.',

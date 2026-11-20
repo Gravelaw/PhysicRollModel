@@ -1182,7 +1182,10 @@ def pass_heating(*, entry_thickness_m, exit_thickness_m, exit_speed_m_s, mean_fl
 class VoceHardening:
     """Generalised Voce with stage-IV slope; parameters are supplied, never defaulted.
 
-    ``sigma = s0 + (ss - s0)*(1 - exp(-eps/eps_c)) + theta4*eps`` [D form].
+    ``sigma = s0 + (ss - s0)*(1 - exp(-eps/eps_c)) + theta4*eps`` [D form]. ``theta4`` may be
+    negative (down to -5e9 Pa; SPEC18 package 8, B2): work softening of purified-matrix Al-Fe
+    and high-purity grades beyond 80 % reduction [TM-LB2 EX]; ``validate`` then requires
+    ``sigma(eps) > 0`` on ``[0, 10]`` (checked at 0, 10 and the stationary point).
     """
     initial_stress_pa: float
     saturation_stress_pa: float
@@ -1193,11 +1196,22 @@ class VoceHardening:
     def validate(self):
         s0 = _num('initial_stress_pa', self.initial_stress_pa, nonnegative=True, hi=5e9)
         ss = _num('saturation_stress_pa', self.saturation_stress_pa, positive=True, hi=5e9)
-        _num('characteristic_strain', self.characteristic_strain, positive=True, hi=100.0)
-        _num('stage_iv_slope_pa', self.stage_iv_slope_pa, nonnegative=True, hi=5e10)
+        ec = _num('characteristic_strain', self.characteristic_strain, positive=True, hi=100.0)
+        th4 = _num('stage_iv_slope_pa', self.stage_iv_slope_pa, lo=-5e9, hi=5e10)
         _name('provenance', self.provenance)
         if ss < s0:
             raise ValueError('saturation_stress_pa must be >= initial_stress_pa')
+        if th4 < 0:
+            pts = [0.0, POSITIVITY_STRAIN_MAX]
+            d = ss - s0
+            if d > 0 and -th4 * ec / d < 1:      # d(sigma)/d(eps) = 0
+                e_star = -ec * math.log(-th4 * ec / d)
+                if 0 < e_star < POSITIVITY_STRAIN_MAX:
+                    pts.append(e_star)
+            for e in pts:
+                if not s0 + d * -math.expm1(-e / ec) + th4 * e > 0:
+                    raise ValueError(f'the flow stress must stay > 0 for equivalent strain in '
+                                     f'[0, {POSITIVITY_STRAIN_MAX:g}] (it is not at {e:.4g})')
 
     def stress(self, equivalent_strain):
         self.validate()
@@ -1223,6 +1237,281 @@ class VoceHardening:
                 + self.stage_iv_slope_pa * 0.5 * (a + b))
 
 
+POSITIVITY_STRAIN_MAX = 10.0        # strain range of the positivity rule [SPEC18 package 8]
+TOME_SIMPSON_PANELS = 64            # [D] composite Simpson of the Tome-Voce mean
+NEGATIVE_SLOPE_FLAG = 'NEGATIVE_LATE_HARDENING_SLOPE_WORK_SOFTENING'
+
+
+@dataclass(frozen=True)
+class TomeVoceHardening:
+    """Voce law with late slope in the Tome form (SPEC18 package 8, B2):
+    ``sigma = (s_v + theta4*eps)*(1 - exp(-theta0*eps/s_v))`` [form: TM-LB4 EX]. Parameters
+    supplied, never defaulted; ``s_v > 0``, ``theta0 > 0``, ``theta4`` in [-5e9, 5e10] Pa, and
+    ``sigma > 0`` on (0, 10] (checked at 10, which suffices: the first factor is positive and
+    increasing, the second linear). ``sigma(0) = 0`` by the form."""
+    saturation_scale_pa: float
+    stage_iv_slope_pa: float
+    initial_hardening_rate_pa: float
+    provenance: str
+
+    def validate(self):
+        sv = _num('saturation_scale_pa', self.saturation_scale_pa, positive=True, hi=5e9)
+        th4 = _num('stage_iv_slope_pa', self.stage_iv_slope_pa, lo=-5e9, hi=5e10)
+        _num('initial_hardening_rate_pa', self.initial_hardening_rate_pa, positive=True,
+             hi=1e13)
+        _name('provenance', self.provenance)
+        if not sv + th4 * POSITIVITY_STRAIN_MAX > 0:
+            raise ValueError(f'the flow stress must stay > 0 for equivalent strain in (0, '
+                             f'{POSITIVITY_STRAIN_MAX:g}]')
+
+    def _sigma(self, e):
+        sv, th4 = self.saturation_scale_pa, self.stage_iv_slope_pa
+        return (sv + th4 * e) * -math.expm1(-self.initial_hardening_rate_pa * e / sv)
+
+    def stress(self, equivalent_strain):
+        self.validate()
+        return self._sigma(_num('equivalent_strain', equivalent_strain, nonnegative=True,
+                                hi=100.0))
+
+    def mean_stress(self, start, end, panels=TOME_SIMPSON_PANELS):
+        """Strain mean over [start, end] by composite Simpson with ``panels`` panels [D]."""
+        self.validate()
+        a = _num('start', start, nonnegative=True, hi=100.0)
+        b = _num('end', end, nonnegative=True, hi=100.0)
+        if b < a:
+            raise ValueError('invalid strain interval')
+        if b == a:
+            return self._sigma(a)
+        n = panels + panels % 2
+        h = (b - a) / n
+        total = self._sigma(a) + self._sigma(b) + sum(
+            (4 if i % 2 else 2) * self._sigma(a + i * h) for i in range(1, n))
+        return total * h / 3 / (b - a)
+
+
+# ------------------------------------------------- rate and temperature (SPEC18 package 8, B1)
+RATE_TEMPERATURE_FACTOR_RANGE = (0.2, 5.0)
+
+
+@dataclass(frozen=True)
+class RateTemperatureFactor:
+    """Flow-stress factor ``(rate/rate_ref)^m(T) * (1 - c_T*(T - T_ref))`` with
+    ``m(T) = m + dm/dT*(T - T_ref)`` floored at 0 [form: TM report gap B1, "as the minimum"].
+    No default instance: every number is the user's. Example values with their sources (never
+    defaults): m about 0.027 for 16 um 1235-H18 over 1e-5 to 1e-2 /s [TM-LB1 EX]; m 0.04 at
+    100 C and 0.07 at 200 C for 1050-H14 in slow tests [TM-LB10 EX]; c_T 0.0015 to 0.0019 /K
+    [D from PT-T31, PT-T39]."""
+    rate_sensitivity: float
+    reference_strain_rate_per_s: float
+    temperature_coefficient_per_k: float
+    reference_temperature_k: float
+    rate_sensitivity_slope_per_k: float = 0.0
+    provenance: str = ''
+
+    def validate(self):
+        _num('rate_sensitivity', self.rate_sensitivity, lo=0.0, hi=0.2)
+        r = _num('reference_strain_rate_per_s', self.reference_strain_rate_per_s, hi=1e6)
+        if not r > 1e-8:
+            raise ValueError('reference_strain_rate_per_s must be in (1e-8, 1e6]')
+        _num('temperature_coefficient_per_k', self.temperature_coefficient_per_k, lo=0.0,
+             hi=0.01)
+        _num('reference_temperature_k', self.reference_temperature_k, lo=250.0, hi=700.0)
+        _num('rate_sensitivity_slope_per_k', self.rate_sensitivity_slope_per_k, lo=0.0,
+             hi=0.002)
+
+    def rate_sensitivity_at(self, temperature_k):
+        t = _num('temperature_k', temperature_k, positive=True, hi=2000.0)
+        return max(0.0, self.rate_sensitivity + self.rate_sensitivity_slope_per_k
+                   * (t - self.reference_temperature_k))
+
+    def parts(self, strain_rate_per_s, temperature_k):
+        """(rate factor, temperature factor, m(T)); ValueError when the product is outside
+        [0.2, 5]."""
+        self.validate()
+        rate = _num('strain_rate_per_s', strain_rate_per_s, positive=True, hi=1e9)
+        m = self.rate_sensitivity_at(temperature_k)
+        fr = (rate / self.reference_strain_rate_per_s) ** m
+        ft = 1 - self.temperature_coefficient_per_k * (temperature_k
+                                                        - self.reference_temperature_k)
+        lo, hi = RATE_TEMPERATURE_FACTOR_RANGE
+        if not lo <= fr * ft <= hi:
+            raise ValueError(f'rate and temperature factor {fr * ft:.4g} is outside '
+                             f'[{lo:g}, {hi:g}]')
+        return fr, ft, m
+
+    def factor(self, strain_rate_per_s, temperature_k):
+        fr, ft, _ = self.parts(strain_rate_per_s, temperature_k)
+        return fr * ft
+
+
+def mean_bite_strain_rate_per_s(exit_speed_m_s, contact_length_m, entry_thickness_m,
+                                exit_thickness_m):
+    """Mean bite strain rate ``(u/l_d)*ln(h0/h1)`` [TM report gap B1]."""
+    u = _num('exit_speed_m_s', exit_speed_m_s, positive=True, hi=MAX_SPEED_M_S)
+    ld = _num('contact_length_m', contact_length_m, positive=True, hi=1.0)
+    h0, h1 = _thickness_pair(entry_thickness_m, exit_thickness_m)
+    return u / ld * math.log(h0 / h1)
+
+
+# ------------------------------------------------ fit to pass strengths (SPEC18 package 8, B2)
+FIT_CHARACTERISTIC_STRAINS = (0.05, 5.0, 60)    # geometric scan of eps_c [D, SPEC18]
+FIT_STRENGTH_KINDS = ('as_rolled_tensile', 'flow_stress')
+FIT_UNDERDETERMINED = 'UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS'
+FIT_SINGULAR = 'UNDERDETERMINED_SINGULAR_NORMAL_EQUATIONS'
+FIT_PARABOLA_STEPS = 8              # [D] repeated parabola (deviation, see the fit)
+FIT_PARABOLA_TOL = 1e-6             # [D] in ln(eps_c)
+
+
+def _solve_linear(a, b):
+    """Gaussian elimination with partial pivoting; None when singular."""
+    n = len(b)
+    m = [list(r) + [v] for r, v in zip(a, b)]
+    for c in range(n):
+        p = max(range(c, n), key=lambda r: abs(m[r][c]))
+        scale = max(abs(x) for x in m[p][:n]) or 1.0
+        if abs(m[p][c]) <= 1e-12 * scale:
+            return None
+        m[c], m[p] = m[p], m[c]
+        for r in range(c + 1, n):
+            f = m[r][c] / m[c][c]
+            for k in range(c, n + 1):
+                m[r][k] -= f * m[c][k]
+    x = [0.0] * n
+    for r in range(n - 1, -1, -1):
+        x[r] = (m[r][n] - sum(m[r][k] * x[k] for k in range(r + 1, n))) / m[r][r]
+    return x
+
+
+def _voce_lsq(eps, ys, ec, with_slope):
+    cols = [[1.0] * len(eps), [-math.expm1(-e / ec) for e in eps]]
+    if with_slope:
+        cols.append(list(eps))
+    # scale columns for conditioning
+    sc = [max(abs(v) for v in c) or 1.0 for c in cols]
+    cols = [[v / s_ for v in c] for c, s_ in zip(cols, sc)]
+    a = [[sum(ci * cj for ci, cj in zip(c1, c2)) for c2 in cols] for c1 in cols]
+    b = [sum(ci * y for ci, y in zip(c, ys)) for c in cols]
+    x = _solve_linear(a, b)
+    if x is None:
+        return None
+    x = [v / s_ for v, s_ in zip(x, sc)]
+    if not with_slope:
+        x.append(0.0)
+    res = [y - (x[0] + x[1] * -math.expm1(-e / ec) + x[2] * e) for e, y in zip(eps, ys)]
+    return x, res, sum(r * r for r in res)
+
+
+def fit_voce_to_pass_strengths(gauges_m, strengths_pa, *, reference_thickness_m,
+                               prior_equivalent_strain=0.0, strength_is='as_rolled_tensile'):
+    """Generalised Voce law fitted to entered strengths at entered gauges [D, SPEC18].
+
+    ``eps_i = prior + (2/sqrt(3))*ln(h_ref/h_i)``; for 60 characteristic strains (geometric,
+    0.05 to 5) the model ``s0 + d*(1 - exp(-eps/eps_c)) + th4*eps`` is linear in (s0, d, th4)
+    and solved by its normal equations (``th4`` fixed to 0 with 3 points); the best ``eps_c``
+    is refined by a parabola in ``ln(eps_c)`` through its neighbours, repeated on the bracket
+    until it settles (the first parabola's value is kept in the result). ValueError (message
+    starting with the outcome name) below 3 points, for gauges that do not decrease, or when
+    the normal equations are singular: no number is returned for an under-determined fit.
+    Nothing is written into a case."""
+    if strength_is not in FIT_STRENGTH_KINDS:
+        raise ValueError(f'strength_is must be one of {FIT_STRENGTH_KINDS}')
+    for name, v in (('gauges_m', gauges_m), ('strengths_pa', strengths_pa)):
+        if isinstance(v, (str, bytes)) or not hasattr(v, '__iter__'):
+            raise ValueError(f'{name} must be a list of numbers')
+    hs = [_num(f'gauges_m[{i}]', h, positive=True, hi=0.1) for i, h in enumerate(gauges_m)]
+    ys = [_num(f'strengths_pa[{i}]', y, positive=True, hi=5e9)
+          for i, y in enumerate(strengths_pa)]
+    if len(hs) != len(ys):
+        raise ValueError('gauges_m and strengths_pa must have the same length')
+    if len(hs) < 3:
+        raise ValueError(f'{FIT_UNDERDETERMINED}: {len(hs)} points for at least 3 parameters '
+                         '(s0, d, eps_c with th4 = 0)')
+    if any(b >= a for a, b in zip(hs, hs[1:])):
+        raise ValueError('gauges_m must be strictly decreasing')
+    href = _num('reference_thickness_m', reference_thickness_m, positive=True, hi=0.1)
+    if href < hs[0] * (1 - 1e-9):
+        raise ValueError('reference_thickness_m must be >= the first gauge')
+    prior = _num('prior_equivalent_strain', prior_equivalent_strain, nonnegative=True,
+                 hi=100.0)
+    k = 2 / math.sqrt(3)
+    eps = [prior + k * math.log(href / h) for h in hs]
+    with_slope = len(hs) > 3
+    lo, hi, n = FIT_CHARACTERISTIC_STRAINS
+    grid = [lo * (hi / lo) ** (i / (n - 1)) for i in range(n)]
+    sols = [(ec, _voce_lsq(eps, ys, ec, with_slope)) for ec in grid]
+    sols = [(ec, r) for ec, r in sols if r is not None]
+    if not sols:
+        raise ValueError(f'{FIT_SINGULAR}: the strains do not separate the parameters')
+    i = min(range(len(sols)), key=lambda j: sols[j][1][2])
+    ec, best = sols[i]
+    refined, first = 0, None
+    if 0 < i < len(sols) - 1:
+        # parabola in ln(eps_c) through the best point and its neighbours; repeated on the
+        # bracket until eps_c moves less than 1e-6 in ln (SPEC18 package 8 deviation, as the
+        # joint fit of package 7: one parabola leaves eps_c ~5e-4 off and th4 ~1e-3 off)
+        tri = [(math.log(e), r[2]) for e, r in sols[i - 1:i + 2]]
+        for refined in range(1, FIT_PARABOLA_STEPS + 1):
+            (x0, j0), (x1, j1), (x2, j2) = tri
+            den = (x0 - x1) * (x0 - x2) * (x1 - x2)
+            a = (x2 * (j1 - j0) + x1 * (j0 - j2) + x0 * (j2 - j1)) / den
+            b = (x2 * x2 * (j0 - j1) + x1 * x1 * (j2 - j0) + x0 * x0 * (j1 - j2)) / den
+            if not a > 0:
+                refined -= 1
+                break
+            xv = min(max(-b / (2 * a), x0), x2)
+            r = _voce_lsq(eps, ys, math.exp(xv), with_slope)
+            if r is None:
+                refined -= 1
+                break
+            if first is None:
+                first = math.exp(xv)
+            moved = abs(xv - math.log(ec))
+            if r[2] <= best[2]:
+                ec, best = math.exp(xv), r
+            if moved < FIT_PARABOLA_TOL or xv in (x0, x1, x2):
+                break
+            pts3 = sorted(tri + [(xv, r[2])])
+            k3 = min(range(1, 3), key=lambda q: pts3[q][1])
+            tri = pts3[k3 - 1:k3 + 2]
+    (s0, d, th4), res, sse = best
+    flags = ['FIT_TO_ENTERED_STRENGTHS_NOT_VERIFIED']
+    if len(hs) < 5:
+        flags.append('FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS')
+    if strength_is == 'as_rolled_tensile':
+        flags.append('TENSILE_STRENGTH_USED_AS_FLOW_STRESS')
+    if th4 < 0:
+        flags.append(NEGATIVE_SLOPE_FLAG)
+    params = {'initial_stress_pa': s0, 'saturation_stress_pa': s0 + d,
+              'characteristic_strain': ec, 'stage_iv_slope_pa': th4}
+    try:
+        VoceHardening(provenance='fit', **params).validate()
+        valid = None
+    except ValueError as exc:
+        valid = str(exc)
+    return _checked({
+        'status': 'FITTED_TO_ENTERED_STRENGTHS_NOT_VERIFIED', 'law': 'voce',
+        'parameters': params, 'equivalent_strains': eps, 'residuals_pa': res,
+        'rms_residual_pa': math.sqrt(sse / len(hs)), 'points': len(hs),
+        'parameters_fitted': 4 if with_slope else 3,
+        'stage_iv_slope_sign': (th4 > 0) - (th4 < 0),
+        'stage_iv_slope_fixed_to_zero': not with_slope,
+        'parabola_steps': refined, 'first_parabola_characteristic_strain': first,
+        'law_rejected_by_validation': valid,
+        'strength_is': strength_is,
+        'formula': 'sigma = s0 + d*(1 - exp(-eps/eps_c)) + th4*eps; eps = prior + '
+                   '(2/sqrt(3))*ln(h_ref/h)',
+        'basis': '[D, SPEC18 package 8] linear least squares in (s0, d, th4) for 60 eps_c from '
+                 '0.05 to 5, the best refined by repeated parabolas in ln(eps_c)',
+        'flags': flags,
+        'limitations': [
+            'The strengths are entered numbers; nothing verifies them.',
+            'An as-rolled tensile strength of a hard temper is taken as the flow stress at '
+            'that strain (an assumption [D]).' if strength_is == 'as_rolled_tensile' else
+            'The entered values are taken as flow stresses.',
+            'With fewer than 5 points the fit has no redundancy to check it.',
+            'No recovery term: the gap row gives no formula for it.']})
+
+
 def literature_power_law(fit_id):
     """A ``PowerHardeningLaw`` from ``LITERATURE_FITS`` (tensile fits, not rolling-calibrated)."""
     if fit_id not in LITERATURE_FITS:
@@ -1240,11 +1529,12 @@ def schedule_flow_stress(gauges_m, law, *, prior_equivalent_strain=0.0):
     """Per-pass equivalent strain and flow stress along a gauge schedule.
 
     ``gauges_m = [h_0, h_1, ..., h_N]`` (strictly decreasing) defines N passes; strain is
-    ``eps = prior + (2/sqrt(3))*ln(h_0/h)``. ``law`` is a ``PowerHardeningLaw`` or a
-    ``VoceHardening``. Rate sensitivity is zero.
+    ``eps = prior + (2/sqrt(3))*ln(h_0/h)``. ``law`` is a ``PowerHardeningLaw``, a
+    ``VoceHardening`` or a ``TomeVoceHardening``. Rate sensitivity is zero.
     """
-    if not isinstance(law, (PowerHardeningLaw, VoceHardening)):
-        raise ValueError('law must be a PowerHardeningLaw or VoceHardening')
+    if not isinstance(law, (PowerHardeningLaw, VoceHardening, TomeVoceHardening)):
+        raise ValueError('law must be a PowerHardeningLaw, VoceHardening or '
+                         'TomeVoceHardening')
     law.validate()
     if isinstance(gauges_m, (str, bytes)) or not hasattr(gauges_m, '__iter__'):
         raise ValueError('gauges_m must be a sequence of thicknesses')
@@ -1271,9 +1561,13 @@ def schedule_flow_stress(gauges_m, law, *, prior_equivalent_strain=0.0):
     final_strain = passes[-1]['exit_equivalent_strain']
     if is_power and final_strain > 0.3:
         flags.append('POWER_LAW_BEYOND_EPS_0P3_OVERPREDICTS')
+    if not is_power and law.stage_iv_slope_pa < 0:
+        flags.append(NEGATIVE_SLOPE_FLAG)
+    is_tome = isinstance(law, TomeVoceHardening)
     return _checked({
         'status': STATUS_HARDENING,
-        'law_type': 'power_hardening' if is_power else 'voce_stage_iv',
+        'law_type': ('power_hardening' if is_power else
+                     'tome_voce_stage_iv' if is_tome else 'voce_stage_iv'),
         'law': asdict(law), 'prior_equivalent_strain': prior,
         'final_equivalent_strain': final_strain, 'passes': passes,
         'formula': 'eps = prior + (2/sqrt(3))*ln(h_0/h); mean = (1/(eps1-eps0))*int sigma deps',
@@ -1281,6 +1575,8 @@ def schedule_flow_stress(gauges_m, law, *, prior_equivalent_strain=0.0):
             'strain_convention': '[D] same as physicroll.materials (homogeneous plane strain)',
             'law': ('PowerHardeningLaw reused from physicroll.materials; provenance: '
                     + law.provenance if is_power else
+                    '[form: TM-LB4 EX] Tome-Voce form; parameters supplied: ' + law.provenance
+                    if is_tome else
                     '[D] generalised Voce form; parameters supplied: ' + law.provenance),
             'rate_sensitivity': '[M] taken as zero (room-temperature m ~ 0.002-0.02)'},
         'reasons': [f'{len(passes)} passes to equivalent strain {final_strain:.3f}.'],

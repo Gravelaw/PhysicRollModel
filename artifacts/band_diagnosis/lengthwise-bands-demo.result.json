@@ -380,6 +380,11 @@
       "Symmetric (gap-changing) mode only; no roll bending, cross-width or drive dynamics."
     ],
     "operating_exit_speed_m_s": 12.0,
+    "rate_sensitivity_damping": {
+      "not_supplied": true,
+      "reason": "hardening.rate_temperature is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "reliability": "WITHIN_SPAN_WAVE_LIMIT",
     "span_wave_limit_basis": "c/(2L) of the shorter span, c = sqrt(E/rho), rho = 2700 kg/m3",
     "span_wave_limit_hz": 636.4688465216444,
@@ -4271,6 +4276,7 @@
       "law": "voce",
       "prior_equivalent_strain": 0.0,
       "provenance": "synthetic Voce parameters (not fitted)",
+      "rate_temperature": null,
       "reference_thickness_m": 0.0022,
       "saturation_stress_pa": 260000000.0,
       "stage_iv_slope_pa": 10000000.0,
@@ -4774,6 +4780,12 @@
   },
   "process": {
     "flow_stress": {
+      "alloy_group_context": {
+        "alloy": "AA3104",
+        "reason": "band_products.alloy_group_reference has no alloy matching of its own; see that table (thin-gauge products guide) for the rows by alloy group",
+        "row": null,
+        "sentence": "A positive stage-IV (late) hardening slope is right for 1200-type and solute-bearing grades [TM-LB3 AB] and wrong in sign for purified-matrix Al-Fe alloys and high-purity grades beyond 80 % reduction [TM-LB2 EX]; it is temperature-dependent in 8079 [TM-LB7 AB]. Nothing selects a law by alloy group: the law and its sign are your entry."
+      },
       "flags": [
         "STRAIN_RATE_SENSITIVITY_IGNORED",
         "UNCALIBRATED_FOR_ROLLING"

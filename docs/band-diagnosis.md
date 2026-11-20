@@ -1296,6 +1296,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 |---|---|---|---|
 | `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
 | `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
+| `hardening.rate_temperature` | optional strain-rate and temperature factor of the flow stress (section 8.3); no default number; enter the rate and temperature terms together or not at all | – | rate-jump and warm tensile tests on your stock |
 | `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model; enter measured passes in `measurement.pass_records` and the tool reports the friction they imply (section 8.5) |
 | `stand.work_roll_mass_kg`, `stand.backup_roll_mass_kg` | moving mass of one work-roll and one backup-roll assembly (roll, necks, chocks, bearings) | kg | roll and chock drawings |
 | `stand.work_backup_contact_stiffness_n_m` | stiffness of the work-roll / backup-roll contact | N/m | stand designer's data, or a roll-contact calculation |
@@ -2524,7 +2525,7 @@ Equivalent strain `eps = prior + (2/sqrt(3))*ln(h_ref/h)` (as `physicroll.materi
 power `sigma = sigma_y + K*eps^n` and a generalised Voce law with a stage-IV term
 `sigma = s0 + (ss - s0)*(1 - exp(-eps/eps_c)) + theta4*eps` [D form; Hirsch et al., Ryen et
 al. 2006, read second-hand], with the analytic pass mean. Strain-rate sensitivity is taken as
-zero [M]. Literature fits shipped for reference:
+zero [M] unless a rate and temperature factor is entered (below). Literature fits shipped for reference:
 
 | fit id | alloy, temper | law | yield [MPa] | K [MPa] | n | tag |
 |---|---|---|---|---|---|---|
@@ -2541,12 +2542,90 @@ Hardening and softening data found by alloy group (gap study B3) and the anisotr
 (B4) are in `docs/thin-gauge-products.md` ("Alloy groups: hardening and softening data found",
 "Anisotropy and the plane-strain factor"; `band_products.alloy_group_reference`,
 `anisotropy_reference`). They are tables only: nothing is fitted or passed to a hardening law
-or a bite. The positive stage-IV slope used for every alloy is wrong in sign for purified Al-Fe
-and high-purity grades beyond 80 % reduction [TM-LB2 EX] (gap study X2). The plane-strain
+or a bite. A positive stage-IV slope is wrong in sign for purified Al-Fe and high-purity
+grades beyond 80 % reduction [TM-LB2 EX] (gap study X2); since SPEC18 package 8 the slope may
+be entered negative (below). The plane-strain
 factor stays the isotropic `2/sqrt(3)`; the r-values 0.2 / 1.5 / 1.1 of one 16 um 1235-H18 foil
 [TM-LB1 EX] would move it by -12 % to +1 % under Hill's 1948 criterion
 (`plane_strain_factor_hill48`, [D, re-derived in SPEC17]); Hill-type criteria are known to be
 poor for aluminium [M].
+
+**Strain rate and temperature (SPEC18 package 8, gap rows B1 and X1).** The optional
+`hardening.rate_temperature` (null by default; no demo has one) multiplies the computed flow
+stress of each pass by
+
+    factor = (rate/rate_ref)^m(T) * (1 - c_T*(T - T_ref)),   m(T) = m + dm/dT*(T - T_ref) >= 0
+
+[form: TM report gap B1, "as the minimum"]; keys `rate_sensitivity`,
+`reference_strain_rate_per_s`, `temperature_coefficient_per_k`, `reference_temperature_k`,
+`rate_sensitivity_slope_per_k`, `provenance`, `use_rate_temperature` (true needs
+`use_computed_flow_stress`). There is no default number: what has been measured, each with its
+source, is
+
+| quantity | value | conditions | source |
+|---|---|---|---|
+| rate sensitivity m | about 0.027 | 16 um 1235-H18 foil, 1e-5 to 1e-2 /s | TM-LB1 EX |
+| m against temperature | 0.04 at 100 C, 0.07 at 200 C | 1050-H14, slow tensile tests | TM-LB10 EX |
+| c_T | 0.0015 to 0.0019 /K | 1100-H18: 165 -> 145 and 150 -> 130 MPa between about 20 and 100 C, 165 -> 125 MPa at 150 C | [D from PT-T31, PT-T39]; the report states 0.15-0.3 %/K |
+
+Worked numbers: `(1e-2/1e-5)^0.027 = 1.205036` (160 -> 192.806 MPa over the measured range;
+the source reads "about 200"); `(2.6e3/1e-3)^0.027 = 1.490062` (the report's "about 1.5");
+`c_T` 1.5152e-3, 1.6667e-3 and 1.8648e-3 /K from the three pairs above; at 10 m/s, contact
+length 2 mm and 30 -> 18 um the mean bite strain rate `(u/l_d)*ln(h0/h1)` is 2554.128 /s, the
+rate factor (m 0.027, reference 1e-3 /s) 1.489346 and, with `c_T` 0.0015 and 60 K above the
+reference, the combined factor 1.355305. **The measurement stops at 1e-2 /s; rolling rates are
+five decades higher** (flag `RATE_SENSITIVITY_EXTRAPOLATED_BEYOND_MEASURED_RATES` on every real
+pass, by design). Rate raises and temperature lowers the flow stress: **the net of rate and
+temperature at rolling conditions is not known; enter both or neither.**
+
+Each row of `process.flow_stress.passes` then carries `strain_rate_per_s` (contact length of
+the undeformed arc `sqrt(R*(h0 - h1))`, flag `STRAIN_RATE_FROM_UNDEFORMED_ARC`: strain rate
+from the undeformed arc, which avoids a fixed point with the bite [D, SPEC18]),
+`bite_temperature_k` (strip entry temperature plus half the strip's share of the plastic work
+of the unfactored flow stress, the mid-bite strip temperature [D, SPEC18]; without `tribology`
+the reference temperature and flag `BITE_TEMPERATURE_NOT_AVAILABLE_REFERENCE_USED`; the
+computed heat partition of package 9 is not used here), `rate_factor`, `temperature_factor`,
+`rate_temperature_factor` and `flow_stress_with_rate_temperature_pa`; a factor outside 0.2 to
+5 is not used (`rate_temperature_rejected`, flag `RATE_TEMPERATURE_FACTOR_REJECTED`). With
+`use_rate_temperature` true the factored value becomes the pass flow stress (flag
+`FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED`, also at the top level). Which consumers take it
+(`process.flow_stress.rate_temperature.consumers`):
+
+| consumer | uses the factored flow stress | how the result shows it |
+|---|---|---|
+| `schedule_flow_stress` | no | unchanged; its `STRAIN_RATE_SENSITIVITY_IGNORED` stays in its own result |
+| every bite model (Hitchcock, mattress, half-space), case pass and schedule | yes | the effective pass flow stress (`effective_inputs`, `used_mean_flow_stress_pa`) |
+| bite sensitivities | yes, perturbed about it | the rate term is not a force term of the stability calculation; `chatter.rate_sensitivity_damping` reports it (section 11.4) |
+| speed-change gauge shift | yes, through the bite | the factor is not re-evaluated at the changed speed |
+| pass heating | yes | plastic work from the effective flow stress |
+| shape inputs and yield checks | yes | through the bite and the effective flow stress |
+| the bite temperature of the factor | no | plastic work from the unfactored flow stress |
+
+**Law forms (B2, X2).** The late (stage-IV) slope of the Voce law may be negative (down to
+-5e9 Pa; the flow stress must stay positive up to strain 10), for the work softening of
+purified-matrix Al-Fe and high-purity grades beyond 80 % reduction [TM-LB2 EX]; flag
+`NEGATIVE_LATE_HARDENING_SLOPE_WORK_SOFTENING`. A second form, `law: tome_voce`,
+`sigma = (s_v + theta4*eps)*(1 - exp(-theta0*eps/s_v))` [form: TM-LB4 EX] (keys
+`saturation_scale_pa`, `stage_iv_slope_pa`, `initial_hardening_rate_pa`; pass mean by
+composite Simpson with 64 panels [D]: within 1e-9 of 512 panels on passes away from the steep
+start, 2e-7 to 5e-7 on a first pass from zero strain with `theta0/s_v` 13). Nothing selects a
+law by alloy group: `process.flow_stress.alloy_group_context` gives the X2 sentence and no
+table row, because the alloy-group table has no alloy matching of its own. No recovery term:
+the gap row gives no formula for it. The logarithmic rate law of E10 is not added (no parameter
+set for a foil alloy).
+
+**Fit to pass strengths.** `python -m physicroll.band_cli --fit-hardening FILE.json` (keys
+`gauges_m`, `strengths_pa`, `reference_thickness_m`, `prior_equivalent_strain`) fits the
+generalised Voce law (`bite_tribology.fit_voce_to_pass_strengths`): for 60 characteristic
+strains from 0.05 to 5 the law is linear in `(s0, d, theta4)` and solved by least squares
+(`theta4` 0 with 3 points), the best one refined by repeated parabolas in `ln(eps_c)` (one
+parabola leaves `theta4` about 1e-3 off on exact data). It prints the parameters, residuals,
+RMS, the sign of the late slope and flags (`FIT_TO_ENTERED_STRENGTHS_NOT_VERIFIED`,
+`FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS`, `TENSILE_STRENGTH_USED_AS_FLOW_STRESS`: an
+as-rolled tensile strength of a hard temper is taken as the flow stress at that strain [D]);
+with fewer than 3 points it refuses (`NOT_FITTED`, outcome
+`UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS`) and returns no number. Nothing is written into
+a case.
 
 ### 8.4 Speed-consistent chatter critical speed
 
@@ -3222,6 +3301,18 @@ the low end of the scanned speeds. So the case checks the stand and strip-stiffn
 does not check the speed at which chatter starts, and it is not a validation on an aluminium
 foil mill.
 
+**The rate share of the bite damping (B1; C3 itself is not implemented).** A rate-sensitive
+flow stress gives a force in phase with gap velocity [D, re-derived in SPEC18]: the bite strain
+rate gains `-h_dot/h_mean` when the gap moves, so `F_hdot_rate = -F_Y*Y*m*l_d/(h_mean*u*
+ln(h0/h1))` and the transit fraction it alone would justify is
+`beta_rate = F_Y*Y*m/(Q*h_mean*ln(h0/h1))` (`F_Y = dF/dY` of the operating bite model,
+`Q = -F_h`). With `hardening.rate_temperature` the result carries it as
+`chatter.rate_sensitivity_damping` beside the heuristic `bite_damping_transit_fraction`;
+reported only, the stability results use the heuristic unchanged. On the published foil case
+(half-space bite, 80 GPa strip spring, m 0.027: `F_Y*Y` 4.8213e6 N/m, `Q` 5.57561e11 Pa)
+`beta_rate` is 0.046375, 9.3 % of a heuristic 0.5: the measured rate sensitivity explains a
+tenth of the damping the heuristic assumes.
+
 ### 11.5 Levers and coolant for chatter
 
 Lever table of the thin-gauge demo (`levers`; baseline 13.27 m/s, 4.83 m/s with beta 0):
@@ -3462,6 +3553,7 @@ real mill.
 | friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| flow stress law forms / `tests/test_bite_tribology.py` (`FlowStressRateTemperatureTests`), `tests/test_band_rate_temperature.py` | the worked numbers of section 8.3 (1e-6); `m(T)` and its floor; factor limits; a negative late slope accepted with the positivity rule and its flag; the Tome form against a hand value (169999724 Pa to 1 Pa) and Simpson against 512 panels; the fit recovers a Voce law from 6 exact points (1e-3, positive and negative slope), flags 4 points and refuses 2; in the engine the rows carry the factor, `use_rate_temperature` needs computed flow stress, with it false nothing else differs, `chatter.rate_sensitivity_damping` equals the formula, and the worked damping share 0.046375 |
 | friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
 | `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
@@ -3498,6 +3590,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **Flow stress against rate and temperature is a form without data** (section 8.3): the rate
+  sensitivity was measured five decades below rolling rates, the net of rate and temperature
+  at rolling conditions is not known, the strain rate uses the undeformed arc, the bite
+  temperature is a mid-bite estimate, no law is selected by alloy group, no recovery term,
+  and the rate share of the bite damping is reported only.
 - **Friction from pass records is reported, never applied** (section 8.5): it is identified
   with a constant friction through the bite (a friction distribution is the published remedy
   for foil slip and is not built), it absorbs the bite model's own error (12 % from load and

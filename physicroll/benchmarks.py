@@ -241,8 +241,9 @@ RECORDED = {
 NOT_ENCODED = (
     {'id': 'BT-V4', 'reason': 'film ratio encoded as BT-V4-FILM; load and slip curves need '
                               'digitising and a friction distribution through the bite'},
-    {'id': 'BT-V9', 'reason': 'forward slip without load data; needs a friction value per row, '
-                              'i.e. BT-G6'},
+    {'id': 'BT-V9', 'reason': 'the published rows give forward slip without load, flow stress '
+                              'or tension values, so the friction identification of BT-G6 '
+                              '(force required) cannot give a friction per row'},
     {'id': 'SS-V1', 'reason': 'needs the buckling model of G4'},
     {'id': 'SS-V4', 'reason': 'needs the buckling model of G4'},
     {'id': 'SS-V5', 'reason': 'needs the roll profiles of the paper'},

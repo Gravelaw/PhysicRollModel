@@ -272,7 +272,13 @@ HARDENING_COMMON = ('law', 'provenance', 'prior_equivalent_strain', 'reference_t
 HARDENING_LAW_KEYS = {
     'power': ('yield_stress_pa', 'strength_coefficient_pa', 'exponent'),
     'voce': ('initial_stress_pa', 'saturation_stress_pa', 'characteristic_strain',
-             'stage_iv_slope_pa')}
+             'stage_iv_slope_pa'),
+    'tome_voce': ('saturation_scale_pa', 'stage_iv_slope_pa', 'initial_hardening_rate_pa')}
+HARDENING_OPTIONAL = ('rate_temperature',)        # SPEC18 package 8 (B1), null by default
+RATE_TEMPERATURE_KEYS = ('rate_sensitivity', 'reference_strain_rate_per_s',
+                         'temperature_coefficient_per_k', 'reference_temperature_k',
+                         'rate_sensitivity_slope_per_k', 'provenance', 'use_rate_temperature')
+SIGNED_HARDENING_KEYS = ('stage_iv_slope_pa',)   # may be negative (work softening, B2)
 
 
 def _fire_limit(t, key):
@@ -351,11 +357,36 @@ def tribology_objects(t):
     return lubricant, finish, closure
 
 
+def validate_rate_temperature(rt, use_computed):
+    """``hardening.rate_temperature`` (SPEC18 package 8): the five numbers of
+    ``bite_tribology.RateTemperatureFactor``, ``provenance`` and ``use_rate_temperature``."""
+    keys('hardening.rate_temperature', rt, RATE_TEMPERATURE_KEYS)
+    prov = rt['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError('hardening.rate_temperature.provenance must be a nonempty string')
+    out = {k: num(f'hardening.rate_temperature.{k}', rt[k]) for k in RATE_TEMPERATURE_KEYS[:5]}
+    out['provenance'] = prov
+    out['use_rate_temperature'] = boolean('hardening.rate_temperature.use_rate_temperature',
+                                          rt['use_rate_temperature'])
+    try:
+        rate_temperature_factor(out).validate()
+    except ValueError as exc:
+        raise ValueError(f'hardening.rate_temperature: {exc}') from exc
+    if out['use_rate_temperature'] and not use_computed:
+        raise ValueError('hardening.rate_temperature.use_rate_temperature needs '
+                         'use_computed_flow_stress')
+    return out
+
+
+def rate_temperature_factor(rt):
+    return bt.RateTemperatureFactor(**{k: rt[k] for k in RATE_TEMPERATURE_KEYS[:6]})
+
+
 def validate_hardening(h, material):
     if not isinstance(h, dict) or h.get('law') not in HARDENING_LAW_KEYS:
-        raise ValueError("hardening.law must be 'power' or 'voce'")
+        raise ValueError("hardening.law must be 'power', 'voce' or 'tome_voce'")
     law_keys = HARDENING_LAW_KEYS[h['law']]
-    keys('hardening', h, HARDENING_COMMON + law_keys)
+    keys('hardening', h, HARDENING_COMMON + law_keys, HARDENING_OPTIONAL)
     prov = h['provenance']
     if not isinstance(prov, str) or not prov.strip():
         raise ValueError('hardening.provenance must be a nonempty string')
@@ -367,11 +398,14 @@ def validate_hardening(h, material):
            'use_computed_flow_stress': boolean('hardening.use_computed_flow_stress',
                                                h['use_computed_flow_stress'])}
     for k in law_keys:
-        out[k] = num(f'hardening.{k}', h[k], nonnegative=True)
+        out[k] = num(f'hardening.{k}', h[k], nonnegative=k not in SIGNED_HARDENING_KEYS)
     try:
         hardening_law(out, material).validate()
     except ValueError as exc:
         raise ValueError(f'hardening: {exc}') from exc
+    rt = h.get('rate_temperature')
+    out['rate_temperature'] = (None if rt is None else
+                               validate_rate_temperature(rt, out['use_computed_flow_stress']))
     return out
 
 
@@ -381,6 +415,11 @@ def hardening_law(h, material):
                                  yield_stress_pa=h['yield_stress_pa'],
                                  strength_coefficient_pa=h['strength_coefficient_pa'],
                                  exponent=h['exponent'], provenance=h['provenance'])
+    if h['law'] == 'tome_voce':
+        return bt.TomeVoceHardening(saturation_scale_pa=h['saturation_scale_pa'],
+                                    stage_iv_slope_pa=h['stage_iv_slope_pa'],
+                                    initial_hardening_rate_pa=h['initial_hardening_rate_pa'],
+                                    provenance=h['provenance'])
     return bt.VoceHardening(initial_stress_pa=h['initial_stress_pa'],
                             saturation_stress_pa=h['saturation_stress_pa'],
                             characteristic_strain=h['characteristic_strain'],
@@ -575,6 +614,7 @@ def flow_stress_section(case, hardening):
     """Flow stress per pass from the hardening law (supplied value beside it)."""
     law = hardening_law(hardening, case['material'])
     ref = hardening['reference_thickness_m']
+    rt = hardening.get('rate_temperature')
     rows, flags = [], []
     for label, src in pass_rows(case):
         h0, h1 = src['entry_thickness_m'], src['exit_thickness_m']
@@ -599,15 +639,163 @@ def flow_stress_section(case, hardening):
                        exit_flow_stress_pa=last['exit_flow_stress_pa'])
         except ValueError as exc:
             row['rejected'] = str(exc)
+        if rt is not None and 'computed_mean_flow_stress_pa' in row:
+            _rate_temperature_row(case, src, row, rt, flags)
         rows.append(row)
-    return {'status': bt.STATUS_HARDENING, 'law_type': hardening['law'],
-            'law': asdict(law), 'prior_equivalent_strain': hardening['prior_equivalent_strain'],
-            'reference_thickness_m': ref,
-            'use_computed_flow_stress': hardening['use_computed_flow_stress'],
-            'passes': rows, 'flags': flags,
-            'note': 'Equivalent strain eps = prior + (2/sqrt(3))*ln(h_ref/h); the mean flow '
-                    'stress of each pass is the strain average over that pass '
-                    '(bite_tribology.schedule_flow_stress).'}
+    out = {'status': bt.STATUS_HARDENING, 'law_type': hardening['law'],
+           'law': asdict(law), 'prior_equivalent_strain': hardening['prior_equivalent_strain'],
+           'reference_thickness_m': ref,
+           'use_computed_flow_stress': hardening['use_computed_flow_stress'],
+           'passes': rows, 'flags': flags,
+           'note': 'Equivalent strain eps = prior + (2/sqrt(3))*ln(h_ref/h); the mean flow '
+                   'stress of each pass is the strain average over that pass '
+                   '(bite_tribology.schedule_flow_stress).'}
+    # SPEC18 package 8: keys only when given (the artifacts stay additive)
+    if rt is not None:
+        out['rate_temperature'] = dict(
+            rt, basis=RATE_TEMPERATURE_BASIS, consumers=RATE_TEMPERATURE_CONSUMERS,
+            applied=rt['use_rate_temperature'], note=RATE_TEMPERATURE_NOTE)
+    out['alloy_group_context'] = alloy_group_context(case)
+    return out
+
+
+# ------------------------------------------------ rate and temperature (SPEC18 package 8, B1)
+RATE_MEASURED_LIMIT_PER_S = 1e-2      # the measured range ends here [TM-LB1 EX]
+RATE_EXTRAPOLATION_MULTIPLE = 100.0   # flag above 100 times it [SPEC18 package 8]
+RATE_FROM_ARC_FLAG = 'STRAIN_RATE_FROM_UNDEFORMED_ARC'
+BITE_TEMPERATURE_MISSING_FLAG = 'BITE_TEMPERATURE_NOT_AVAILABLE_REFERENCE_USED'
+RATE_FACTOR_APPLIED_FLAG = 'FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED'
+RATE_EXTRAPOLATED_FLAG = 'RATE_SENSITIVITY_EXTRAPOLATED_BEYOND_MEASURED_RATES'
+RATE_FACTOR_REJECTED_FLAG = 'RATE_TEMPERATURE_FACTOR_REJECTED'
+RATE_TEMPERATURE_FLAGS = (RATE_FROM_ARC_FLAG, BITE_TEMPERATURE_MISSING_FLAG,
+                          RATE_FACTOR_APPLIED_FLAG, RATE_EXTRAPOLATED_FLAG,
+                          RATE_FACTOR_REJECTED_FLAG)
+RATE_TEMPERATURE_BASIS = {
+    'factor': '(rate/rate_ref)^m(T) * (1 - c_T*(T - T_ref)), m(T) = m + dm/dT*(T - T_ref) '
+              'floored at 0 [form: TM report gap B1, "as the minimum"]',
+    'strain_rate': 'mean bite rate (u/l_d)*ln(h0/h1) [TM gap B1] with l_d = sqrt(R*(h0 - h1)): '
+                   'strain rate from the undeformed arc [D, SPEC18: avoids a fixed point with '
+                   'the bite; the rate enters to the power m]',
+    'bite_temperature': 'tribology.strip_entry_temperature_k + 0.5*strip_heat_fraction*w_pl/'
+                        '(rho*c), w_pl = (2/sqrt(3))*Y*ln(h0/h1) from the unfactored flow '
+                        'stress, rho*c 2.43e6 J/m3K [D, SPEC18: mid-bite strip temperature]; '
+                        'the reference temperature without tribology'}
+RATE_TEMPERATURE_NOTE = ('The measured rate sensitivity ends at 1e-2 /s [TM-LB1 EX]; rolling '
+                         'rates are about five decades higher. The net of rate and temperature '
+                         'at rolling conditions is not known; enter both or neither.')
+# Which consumer takes the factored flow stress (use_rate_temperature true): it replaces the
+# mean flow stress of every pass row of the effective case, so everything that reads that
+# value takes it; the rows of process.flow_stress say so (flow_stress_with_rate_temperature_pa,
+# used_mean_flow_stress_pa) and the flag FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED is set.
+RATE_TEMPERATURE_CONSUMERS = [
+    {'consumer': 'bite_tribology.schedule_flow_stress', 'uses_factor': False,
+     'how_shown': 'unchanged; its flag STRAIN_RATE_SENSITIVITY_IGNORED stays in its own result'},
+    {'consumer': 'every bite model (Hitchcock, experimental mattress, reduced half-space) of '
+                 'the case pass and the schedule', 'uses_factor': True,
+     'how_shown': 'the bite takes the effective mean flow stress (effective_inputs.pass, '
+                  'process.flow_stress.passes[].used_mean_flow_stress_pa)'},
+    {'consumer': 'bite sensitivities (flow stress, friction, tensions, gauges)',
+     'uses_factor': True,
+     'how_shown': 'perturbed about the factored value; the strain-rate term itself is NOT a '
+                  'force term in the stability calculation (chatter.rate_sensitivity_damping '
+                  'reports it beside the heuristic bite damping)'},
+    {'consumer': 'speed-change gauge shift (gauge_control)', 'uses_factor': True,
+     'how_shown': 'through the bite; the factor is NOT re-evaluated at the changed speed'},
+    {'consumer': 'pass heating', 'uses_factor': True,
+     'how_shown': 'plastic work from the effective flow stress'},
+    {'consumer': 'shape inputs and yield checks (width model, flatness)', 'uses_factor': True,
+     'how_shown': 'through the bite and the effective flow stress'},
+    {'consumer': 'the bite temperature of the factor itself', 'uses_factor': False,
+     'how_shown': 'w_pl from the unfactored flow stress (bite_temperature_k in each row)'}]
+
+
+def _rate_temperature_row(case, src, row, rt, flags):
+    """Strain rate, bite temperature and factor of one pass row (SPEC18 package 8)."""
+    trib = case['tribology']
+    h0, h1 = src['entry_thickness_m'], src['exit_thickness_m']
+    radius = case['pass']['work_roll_radius_m']
+    y = row['computed_mean_flow_stress_pa']
+    try:
+        ld = math.sqrt(radius * (h0 - h1))
+        rate = bt.mean_bite_strain_rate_per_s(src['exit_speed_m_s'], ld, h0, h1)
+        row['strain_rate_per_s'] = rate
+        row['strain_rate_contact_length_m'] = ld
+        _add(flags, RATE_FROM_ARC_FLAG)
+        if trib is not None:
+            w_pl = 2 / math.sqrt(3) * y * math.log(h0 / h1)
+            t = (trib['strip_entry_temperature_k'] + 0.5 * trib['strip_heat_fraction'] * w_pl
+                 / bt.ALUMINIUM_VOLUMETRIC_HEAT_CAPACITY_J_M3K)
+            row['bite_temperature_basis'] = 'mid-bite strip temperature [D, SPEC18]'
+        else:
+            t = rt['reference_temperature_k']
+            row['bite_temperature_basis'] = ('reference temperature (no tribology: '
+                                             'bite temperature not available)')
+            _add(flags, BITE_TEMPERATURE_MISSING_FLAG)
+        row['bite_temperature_k'] = t
+        if rate > RATE_MEASURED_LIMIT_PER_S * RATE_EXTRAPOLATION_MULTIPLE:
+            _add(flags, RATE_EXTRAPOLATED_FLAG)
+        fr, ft, m = rate_temperature_factor(rt).parts(rate, t)
+        row.update(rate_sensitivity_at_bite_temperature=m, rate_factor=fr,
+                   temperature_factor=ft, rate_temperature_factor=fr * ft,
+                   flow_stress_with_rate_temperature_pa=y * fr * ft)
+    except ValueError as exc:
+        row['rate_temperature_rejected'] = str(exc)
+        _add(flags, RATE_FACTOR_REJECTED_FLAG)
+
+
+def _add(flags, flag):
+    if flag not in flags:
+        flags.append(flag)
+
+
+X2_SENTENCE = ('A positive stage-IV (late) hardening slope is right for 1200-type and '
+               'solute-bearing grades [TM-LB3 AB] and wrong in sign for purified-matrix Al-Fe '
+               'alloys and high-purity grades beyond 80 % reduction [TM-LB2 EX]; it is '
+               'temperature-dependent in 8079 [TM-LB7 AB]. Nothing selects a law by alloy '
+               'group: the law and its sign are your entry.')
+
+
+def alloy_group_context(case):
+    """The X2 sentence and the alloy-group table row for ``material.alloy``: the table
+    (``band_products.alloy_group_reference``) has no alloy matching of its own, so no row is
+    selected (SPEC18 package 8 left this open)."""
+    return {'alloy': case['material']['alloy'], 'row': None,
+            'reason': 'band_products.alloy_group_reference has no alloy matching of its own; '
+                      'see that table (thin-gauge products guide) for the rows by alloy group',
+            'sentence': X2_SENTENCE}
+
+
+def rate_sensitivity_damping(case, bite, flow_section, dforce_dflow_stress_m2, heuristic):
+    """The force term in phase with gap velocity that a rate-sensitive flow stress gives
+    (SPEC18 package 8, D) [D, re-derived in SPEC18]: the thickness strain rate in the bite gains
+    ``-h_dot/h_mean`` when the gap moves at ``h_dot``, so
+    ``d(eps_dot)/eps_dot = -h_dot*l_d/(h_mean*u*ln(h0/h1))``, ``dY/Y = m*d(eps_dot)/eps_dot``,
+    ``dF = F_Y*dY``. Hence ``F_hdot_rate = -F_Y*Y*m*l_d/(h_mean*u*ln(h0/h1))`` and the
+    equivalent transit fraction ``beta_rate = F_hdot_rate*u/(F_h*l_d) =
+    F_Y*Y*m/(Q*h_mean*ln(h0/h1))``, ``Q = -F_h``. REPORTED only: no stability calculation uses
+    it."""
+    p = case['pass']
+    rows = [r for r in flow_section.get('passes') or [] if r.get('label') == 'case pass']
+    if not rows or rows[0].get('rate_sensitivity_at_bite_temperature') is None:
+        raise ValueError('no rate sensitivity for the case pass (its flow-stress row has no '
+                         'rate and temperature factor)')
+    m = rows[0]['rate_sensitivity_at_bite_temperature']
+    h0, h1 = bite.entry_thickness_m, bite.exit_thickness_m
+    h_mean, ln_r = 0.5 * (h0 + h1), math.log(h0 / h1)
+    y, u, ld = p['mean_flow_stress_pa'], p['exit_speed_m_s'], bite.contact_length_m
+    q = -bite.dforce_dexit_thickness_n_m
+    f_hdot = -dforce_dflow_stress_m2 * y * m * ld / (h_mean * u * ln_r)
+    beta = dforce_dflow_stress_m2 * y * m / (q * h_mean * ln_r)
+    return {'rate_sensitivity': m, 'dforce_dgap_velocity_n_s_m': f_hdot,
+            'equivalent_transit_fraction': beta, 'heuristic_transit_fraction': heuristic,
+            'share_of_heuristic': beta / heuristic if heuristic else None,
+            'formula': 'F_hdot_rate = -F_Y*Y*m*l_d/(h_mean*u*ln(h0/h1)); beta_rate = '
+                       'F_Y*Y*m/(Q*h_mean*ln(h0/h1)), Q = -F_h',
+            'basis': '[D, re-derived in SPEC18] rate-sensitive flow stress with the mean bite '
+                     'strain rate; m at the bite temperature of the case pass; F_Y = dF/dY of '
+                     'the operating bite model',
+            'note': 'reported only: the stability results use the heuristic unchanged (gap C3 '
+                    'is not implemented)'}
 
 
 def apply_flow_stress(case, section):
@@ -618,9 +806,17 @@ def apply_flow_stress(case, section):
     rows = section['passes']
     if len(rows) != len(pass_rows(case)):
         raise ValueError('flow stress rows do not match the case pass and schedule')
+    rt = section.get('rate_temperature')
+    use_rt = rt is not None and rt['use_rate_temperature']
     for (_, src), row in zip(pass_rows(case), rows):
-        if 'computed_mean_flow_stress_pa' in row:
+        if use_rt and 'flow_stress_with_rate_temperature_pa' in row:
+            src['mean_flow_stress_pa'] = row['flow_stress_with_rate_temperature_pa']
+            row['rate_temperature_factor_applied'] = True
+            _add(section['flags'], RATE_FACTOR_APPLIED_FLAG)
+        elif 'computed_mean_flow_stress_pa' in row:
             src['mean_flow_stress_pa'] = row['computed_mean_flow_stress_pa']
+            if use_rt:
+                row['rate_temperature_factor_applied'] = False
         row['used_mean_flow_stress_pa'] = src['mean_flow_stress_pa']
 
 

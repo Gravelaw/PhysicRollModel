@@ -4,6 +4,10 @@
     python -m physicroll.band_cli --product-survey --out DIR [survey options]
         (physicroll.band_survey: --mill, --foil-mill, --sheet-mill, --products,
          --overrides, --write-cases)
+    python -m physicroll.band_cli --fit-hardening FILE.json
+        (bite_tribology.fit_voce_to_pass_strengths on {"gauges_m", "strengths_pa",
+         "reference_thickness_m", "prior_equivalent_strain"}; prints the JSON result, writes
+         nothing into a case)
 
 Writes ``DIR/<slug>.result.json`` and ``DIR/<slug>.report.html`` atomically and prints the
 ranked standings. The result is an unvalidated screening tally, not a certified cause.
@@ -34,6 +38,8 @@ def main(argv=None):
                         help='run the product survey (physicroll.band_survey) instead of a case; '
                              'its options (--mill, --products, ...) are passed on')
     argv = list(sys.argv[1:] if argv is None else argv)
+    if '--fit-hardening' in argv:
+        return _fit_hardening(argv)
     if '--product-survey' in argv:
         # every other argument belongs to the survey (it validates them itself)
         from . import band_survey
@@ -64,6 +70,37 @@ def main(argv=None):
     print('(score = ordinal evidence tally, not a probability)')
     print(f'result: {json_path}')
     print(f'report: {html_path}')
+
+
+FIT_KEYS = ('gauges_m', 'strengths_pa', 'reference_thickness_m', 'prior_equivalent_strain')
+
+
+def _fit_hardening(argv):
+    """SPEC18 package 8: fit a Voce law to entered pass strengths and print the result.
+    An under-determined or invalid input prints ``{"status": "NOT_FITTED", "outcome", "reason"}``
+    and exits 2; no number is returned for it."""
+    import json
+    from . import bite_tribology as bt
+    parser = argparse.ArgumentParser(description='Fit a Voce hardening law to pass strengths')
+    parser.add_argument('--fit-hardening', type=Path, required=True, metavar='FILE.json')
+    args = parser.parse_args(argv)
+    try:
+        data = json.loads(args.fit_hardening.read_text())
+        if not isinstance(data, dict) or set(data) - set(FIT_KEYS) or \
+                not {'gauges_m', 'strengths_pa', 'reference_thickness_m'} <= set(data):
+            raise ValueError(f'the file must be a JSON object with keys {list(FIT_KEYS)} '
+                             '(prior_equivalent_strain optional)')
+        res = bt.fit_voce_to_pass_strengths(
+            data['gauges_m'], data['strengths_pa'],
+            reference_thickness_m=data['reference_thickness_m'],
+            prior_equivalent_strain=data.get('prior_equivalent_strain', 0.0))
+    except (ValueError, TypeError, OSError) as exc:
+        text = str(exc)
+        outcome = text.split(':')[0] if text.startswith('UNDERDETERMINED') else 'INVALID_INPUT'
+        print(json.dumps({'status': 'NOT_FITTED', 'outcome': outcome, 'reason': text},
+                         indent=1))
+        sys.exit(2)
+    print(json.dumps(res, indent=1))
 
 
 if __name__ == '__main__':

@@ -587,5 +587,103 @@ class LoadSharingClosureTests(unittest.TestCase):
         self.assertIn('contact_area_ratio', r)
 
 
+
+class FlowStressRateTemperatureTests(unittest.TestCase):
+    """SPEC18 package 8: rate and temperature factor, law forms, fit to pass strengths."""
+
+    def test_worked_numbers(self):
+        from physicroll import bite_tribology as bt
+        self.assertAlmostEqual((1e-2 / 1e-5) ** 0.027, 1.205036, delta=1e-6)
+        self.assertAlmostEqual(160 * (1e-2 / 1e-5) ** 0.027, 192.806, delta=1e-3)
+        self.assertAlmostEqual((2.6e3 / 1e-3) ** 0.027, 1.490062, delta=1e-6)
+        for want, got in ((1.5152e-3, (1 - 145 / 165) / 80), (1.6667e-3, (1 - 130 / 150) / 80),
+                          (1.8648e-3, (1 - 125 / 165) / 130)):
+            self.assertAlmostEqual(got, want, delta=1e-7)
+        rate = bt.mean_bite_strain_rate_per_s(10.0, 2e-3, 30e-6, 18e-6)
+        self.assertAlmostEqual(rate, 2554.128, delta=1e-3)
+        f = bt.RateTemperatureFactor(0.027, 1e-3, 0.0015, 293.15, provenance='test')
+        fr, ft, m = f.parts(rate, 293.15)
+        self.assertAlmostEqual(fr, 1.489346, delta=1e-6)
+        self.assertEqual((ft, m), (1.0, 0.027))
+        self.assertAlmostEqual(f.factor(rate, 293.15 + 60), 1.355305, delta=1e-6)
+
+    def test_rate_sensitivity_slope_and_limits(self):
+        from physicroll import bite_tribology as bt
+        f = bt.RateTemperatureFactor(0.02, 1.0, 0.0, 300.0, rate_sensitivity_slope_per_k=0.0003)
+        self.assertAlmostEqual(f.rate_sensitivity_at(400.0), 0.05, delta=1e-12)
+        self.assertEqual(f.rate_sensitivity_at(200.0), 0.0)          # floored at 0
+        with self.assertRaises(ValueError):                          # factor above 5
+            bt.RateTemperatureFactor(0.2, 1e-8 * 1.0001, 0.0, 300.0).factor(1e6, 300.0)
+        with self.assertRaises(ValueError):                          # factor below 0.2
+            bt.RateTemperatureFactor(0.0, 1.0, 0.01, 250.0).factor(1.0, 700.0)
+        for bad in (dict(rate_sensitivity=0.3), dict(reference_strain_rate_per_s=1e-8),
+                    dict(temperature_coefficient_per_k=0.02),
+                    dict(reference_temperature_k=200.0),
+                    dict(rate_sensitivity_slope_per_k=0.003)):
+            kw = dict(rate_sensitivity=0.02, reference_strain_rate_per_s=1.0,
+                      temperature_coefficient_per_k=0.001, reference_temperature_k=300.0)
+            kw.update(bad)
+            with self.assertRaises(ValueError):
+                bt.RateTemperatureFactor(**kw).validate()
+
+    def test_negative_late_slope(self):
+        from physicroll import bite_tribology as bt
+        law = bt.VoceHardening(100e6, 180e6, 0.4, -5e6, 'test')
+        law.validate()
+        res = bt.schedule_flow_stress([1e-3, 1e-4, 1e-5], law)
+        self.assertIn(bt.NEGATIVE_SLOPE_FLAG, res['flags'])
+        with self.assertRaises(ValueError):          # sigma(10) = 180 - 200 < 0
+            bt.VoceHardening(100e6, 180e6, 0.4, -20e6, 'test').validate()
+        with self.assertRaises(ValueError):
+            bt.VoceHardening(100e6, 180e6, 0.4, -6e9, 'test').validate()
+        ok = bt.schedule_flow_stress([1e-3, 1e-4], bt.VoceHardening(100e6, 180e6, 0.4, 5e6, 'x'))
+        self.assertNotIn(bt.NEGATIVE_SLOPE_FLAG, ok['flags'])
+
+    def test_tome_voce(self):
+        from physicroll import bite_tribology as bt
+        t = bt.TomeVoceHardening(150e6, 20e6, 2e9, 'test')
+        self.assertAlmostEqual(t.stress(1.0), 169999724, delta=1.0)
+        self.assertAlmostEqual(t.stress(1.0), 170e6 * (1 - math.exp(-2e9 / 150e6)), delta=1e-6)
+        # 64 panels against 512: 1e-9 on a pass away from the steep start (see the guide)
+        for a, b in ((0.6, 1.2), (1.0, 1.6), (2.0, 2.5)):
+            self.assertAlmostEqual(t.mean_stress(a, b) / t.mean_stress(a, b, 512), 1,
+                                   delta=1e-9)
+        res = bt.schedule_flow_stress([1e-3, 5e-4, 2e-4], t)
+        self.assertEqual(res['law_type'], 'tome_voce_stage_iv')
+        with self.assertRaises(ValueError):
+            bt.TomeVoceHardening(150e6, -20e6, 2e9, 'test').validate()   # 150 - 200 < 0
+        bt.TomeVoceHardening(150e6, -10e6, 2e9, 'test').validate()
+
+    def test_fit_recovers_voce(self):
+        from physicroll import bite_tribology as bt
+        k = 2 / math.sqrt(3)
+        hs = [100e-6 * 0.6 ** i for i in range(6)]
+        for th4 in (8e6, -5e6):
+            law = bt.VoceHardening(100e6, 180e6, 0.55, th4, 'truth')
+            ys = [law.stress(0.05 + k * math.log(100e-6 / h)) for h in hs]
+            r = bt.fit_voce_to_pass_strengths(hs, ys, reference_thickness_m=100e-6,
+                                              prior_equivalent_strain=0.05)
+            for key, want in (('initial_stress_pa', 100e6), ('saturation_stress_pa', 180e6),
+                              ('characteristic_strain', 0.55), ('stage_iv_slope_pa', th4)):
+                self.assertAlmostEqual(r['parameters'][key] / want, 1, delta=1e-3, msg=key)
+            self.assertLess(r['rms_residual_pa'], 1.0)
+            self.assertEqual(r['stage_iv_slope_sign'], 1 if th4 > 0 else -1)
+            self.assertEqual(len(r['residuals_pa']), 6)
+            self.assertNotIn('FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS', r['flags'])
+            self.assertIn('TENSILE_STRENGTH_USED_AS_FLOW_STRESS', r['flags'])
+        self.assertIn(bt.NEGATIVE_SLOPE_FLAG, r['flags'])
+        r4 = bt.fit_voce_to_pass_strengths(hs[:4], ys[:4], reference_thickness_m=100e-6,
+                                           strength_is='flow_stress')
+        self.assertIn('FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS', r4['flags'])
+        self.assertNotIn('TENSILE_STRENGTH_USED_AS_FLOW_STRESS', r4['flags'])
+        r3 = bt.fit_voce_to_pass_strengths(hs[:3], ys[:3], reference_thickness_m=100e-6)
+        self.assertTrue(r3['stage_iv_slope_fixed_to_zero'])
+        self.assertEqual(r3['parameters']['stage_iv_slope_pa'], 0.0)
+        with self.assertRaises(ValueError) as ctx:
+            bt.fit_voce_to_pass_strengths(hs[:2], ys[:2], reference_thickness_m=100e-6)
+        self.assertTrue(str(ctx.exception).startswith(bt.FIT_UNDERDETERMINED))
+        with self.assertRaises(ValueError):
+            bt.fit_voce_to_pass_strengths(hs[::-1], ys, reference_thickness_m=100e-6)
+
 if __name__ == '__main__':
     unittest.main()

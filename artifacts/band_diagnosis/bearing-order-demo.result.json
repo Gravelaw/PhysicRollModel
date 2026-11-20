@@ -377,6 +377,11 @@
       "Symmetric (gap-changing) mode only; no roll bending, cross-width or drive dynamics."
     ],
     "operating_exit_speed_m_s": 7.8333,
+    "rate_sensitivity_damping": {
+      "not_supplied": true,
+      "reason": "hardening.rate_temperature is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "reliability": "WITHIN_SPAN_WAVE_LIMIT",
     "span_wave_limit_basis": "c/(2L) of the shorter span, c = sqrt(E/rho), rho = 2700 kg/m3",
     "span_wave_limit_hz": 636.4688465216444,

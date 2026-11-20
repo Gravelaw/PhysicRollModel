@@ -2420,6 +2420,8 @@ def _process_inputs(eff, cache, flags, supplied=None):
             if eff['hardening']['use_computed_flow_stress']:
                 bp.apply_flow_stress(eff, fs)
                 flags.append('FLOW_STRESS_FROM_HARDENING_LAW')
+                if bp.RATE_FACTOR_APPLIED_FLAG in fs['flags']:       # SPEC18 package 8
+                    flags.append(bp.RATE_FACTOR_APPLIED_FLAG)
             else:
                 for r in fs['passes']:
                     r['used_mean_flow_stress_pa'] = r['supplied_mean_flow_stress_pa']
@@ -3542,6 +3544,28 @@ def diagnose(case):
     else:
         fid = bp.not_supplied('measurement.pass_records is null or absent')
     result['process']['friction_identification'] = fid
+    # SPEC18 package 8 (D): the rate share of the heuristic bite damping, reported only
+    if bite is not None:
+        rt = (eff['hardening'] or {}).get('rate_temperature')
+        fs = (result['process'] or {}).get('flow_stress')
+        if rt is None:
+            rsd = bp.not_supplied('hardening.rate_temperature is null or absent')
+        else:
+            try:
+                if not isinstance(fs, dict) or fs.get('status') == 'FAILED':
+                    raise ValueError('the flow-stress section is not available')
+                st = cache.state_for(bite) if bp.is_half_space(bite) else None
+                if st is not None:
+                    f_y = st['extra']['dforce_dflow_stress_m2']
+                else:
+                    model = perturbed_bite_model(eff, bite)
+                    f_y = bp.flow_stress_sensitivity(
+                        lambda q: cache.get(q, model=model), _bite_pass(eff))[
+                        'dforce_dflow_stress_m2']
+                rsd = bp.rate_sensitivity_damping(eff, bite, fs, f_y, beta)
+            except ValueError as exc:
+                rsd = bp.failed('chatter.rate_sensitivity_damping', exc)
+        result['chatter']['rate_sensitivity_damping'] = rsd
     ctx.process = result['process']
 
     # perturbed bites of the sensitivities: same bite model as the operating bite (a supplied
