@@ -29,6 +29,7 @@ Maintained documents built from these reports:
 | [gap-open-data-codes.md](gap-open-data-codes.md) | Open datasets, open-source codes, published benchmark data, validation plan | `OD-` |
 | [phase1-equations.md](phase1-equations.md) (2026-11-19) | Equations and constants the gap reports cite without giving | `E` (ids `E1`-`E19`) |
 | [roll-grinding.md](roll-grinding.md) (2026-11-20) | Roll grinding for foil and thin-strip mills: ground camber, accuracy and roughness, grinding marks that print, wear, open data | `RG` (ids `RG1`-`RG51`) |
+| [spray-nozzles.md](spray-nozzles.md) (2026-11-20) | Coolant nozzles and spray headers on aluminium cold and foil mills: nozzle types, rows and pitch, zone control and valves, flow and pressure, footprint and heat transfer, the basis of published coefficients | `SN` |
 
 Inside each report the sources carry the report's own numbering (for example `S12`, `G7`,
 `T25`). The maintained documents put the prefix above in front of that number.
