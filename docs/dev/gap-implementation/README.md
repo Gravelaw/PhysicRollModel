@@ -19,17 +19,13 @@ study. Whether this folder stays in the final pull request is to be decided when
 | `prototypes/` | The planners' and the researcher's scratch scripts. Prototypes, not specifications; where they differ from a brief, the brief holds. Inside the briefs they are named by their original scratch folders: `s21` is `prototypes/phase0`, `s23` is `prototypes/phase1`, `s24` is `prototypes/phase1-research`, `s25` is `prototypes/phase2`. |
 | `verify_additive.py` | Compares the working-tree artifacts with the last commit and reports added, grown, changed and removed paths. Run from the repository root. |
 | `verify_tests.sh` | Runs the band test modules in four parallel groups and the smoke script. Run from the repository root. |
-| `wip/phase0-package6-in-progress.patch` | Unfinished, unverified work on Phase 0 package 6, saved at the pause. Applies to commit `ab4f4ea`. It has no tests or documentation yet, and its artifacts are not included (regenerate them). |
 
-## Status at the pause (2026-11-19)
+## Status
 
-| Phase | Brief | State |
-|---|---|---|
-| 0 | `SPEC17.md` | Packages 1 to 5 committed (`2d0bc71`, `7166c5f`, `9b9fade`, `4f60b5e`, `ab4f4ea`). Package 6 in progress (the patch above). Packages 7 to 9 not started. |
-| 1 | `SPEC18.md` | Brief written; amendment after the equation research not yet made. |
-| 2 | `SPEC19.md` | Brief written. |
-| 3 | none yet | Brief not started. |
+The commit history of the branch is the record of which packages are done. Briefs: Phase 0
+`SPEC17.md`, Phase 1 `SPEC18.md` (to be amended after the equation research), Phase 2 `SPEC19.md`;
+the Phase 3 brief is not written yet.
 
-Decisions already taken on the open decisions of `SPEC17.md` section 3: all as the planner chose.
-In addition, the flag `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD` stays set in the battery-foil demo
-(the brief's sentence that no conditional flag is set there was wrong).
+Decisions taken on the open decisions of `SPEC17.md` section 3: all as the planner chose. In
+addition, the flag `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD` stays set in the battery-foil demo (the
+brief's sentence that no conditional flag is set there was wrong).

@@ -1318,7 +1318,90 @@ def _width_section(r):
     else:
         body += _state_p('Position match ' + (_bad(pos) or 'not available'))
     body += _other_width_results(w)
+    body += _strip_temperature_block(r, w)
     return head + body + '</section>'
+
+
+def _strip_temperature_block(r, w):
+    """SPEC17 package 6: flatness measured hot against after cooling (supplied scan)."""
+    s = w.get('strip_temperature')
+    if not isinstance(s, dict):
+        return ''
+    head = '<h3>Strip temperature and flatness</h3>'
+    if s.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(s.get('error')))
+    if s.get('not_supplied'):
+        from .strip_shape import ALUMINIUM_EXPANSION_PER_K
+        return (head + '<p>No strip temperature scan: a 1 K hotter fibre reads about '
+                f'{_f(ALUMINIUM_EXPANSION_PER_K * 1e5, digits=2)} I-units loose at the '
+                'shapemeter (textbook expansion coefficient of aluminium, 23.6e-6 /K, from '
+                'memory in the reports).</p>')
+    z, temps = s['z_m'], s['temperature_k']
+    prof = s['profiles']
+    mech, hot = prof['mechanical'], prof['as_measured_hot']
+    th = s['thermal_i_units']
+    k = max(range(len(th)), key=lambda i: abs(th[i]))
+    key = [('mechanical (model today; also after cooling)', C_FB, '', 'thick'),
+           ('as measured hot (no temperature compensation)', C_ACT, '', 'line'),
+           ('thermal term alone', C_EVENT, '7 4', 'line')]
+    key_parts, rows = _key2(key)
+    top = 14 + 15 * rows + 10
+    bot = top + 200
+    height = bot + MB
+    sx = _Axis(z[0], z[-1], ML, W - MR)
+    vals = [v for v in mech['i_units'] + hot['i_units'] + th if _ok(v)] + [0.0]
+    lo, hi = min(vals), max(vals)
+    pad = 0.08 * (hi - lo or 1.0)
+    sy = _Axis(lo - pad, hi + pad, bot, top)
+    c = [f'<svg viewBox="0 0 {W} {height}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="flatness measured hot and after cooling"><title>Flatness '
+         'as measured hot and the mechanical flatness</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
+         'fill="#fbfcfe" stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for ys, col, dash, wd in ((mech['i_units'], C_FB, '', 3.0), (hot['i_units'], C_ACT, '', 2.0),
+                              (th, C_EVENT, '7 4', 1.6)):
+        c.append(f'<polyline points="{_pts(z, ys, sx, sy)}" fill="none" stroke="{col}" '
+                 f'stroke-width="{wd}" stroke-dasharray="{dash}"/>')
+    cy = (top + bot) / 2
+    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">flatness [I-units]</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">position on the barrel [m]</text>')
+    c += key_parts
+    c.append('</svg>')
+    rows_t = []
+    for name in ('mechanical', 'as_measured_hot', 'after_cooling',
+                 'after_cooling_if_hot_reading_held_flat'):
+        pr = prof[name]
+        big = max(pr['bands'], key=lambda b: abs(b['peak_i_units']), default=None)
+        rows_t.append([_e(name.replace('_', ' ')), _e(pr['meaning']),
+                       _f(big['peak_i_units'], 1, 4) if big else 'below the threshold',
+                       _txt(big['state']) if big else '–',
+                       _txt(big['state_after_tension_release']) if big else '–'])
+    sc = _get(r, 'inputs', 'width_model', 'strip_temperature') or {}
+    scan = ('; '.join(f'{_f(x, 1, 3)} m {_f(v - 273.15, 1, 5)} °C'
+                      for x, v in zip(sc.get('positions_m') or [], sc.get('temperature_k') or [])))
+    scan = f' Scan: {_e(scan)}.' if scan else ''
+    return (head + f'<p>Supplied scan ({_e(s["provenance"])}): mean '
+            f'{_f(s["mean_temperature_k"] - 273.15, 1, 4)} °C, largest deviation '
+            f'{_f(s["max_temperature_deviation_k"], 1, 3)} K; expansion coefficient '
+            f'{_f(s["expansion_coefficient_per_k"], 1e6, 3)}e-6 /K '
+            f'({_e(s["expansion_coefficient_basis"])}), '
+            f'{_f(s["i_units_per_kelvin"], digits=3)} I-units per kelvin.{scan}</p>'
+            + _wide(''.join(c))
+            + _table(['profile', 'meaning', 'largest band peak [I]', 'in the mill',
+                      'after tension release'], rows_t, 'wrapall')
+            + '<p class="warn">The temperature profile was supplied, not computed. Flatness '
+              'measured hot and flatness after the coil has cooled differ by the thermal term: '
+              f'{_f(th[k], 1, 3)} I-units at {_f(z[k], 1e3, 4)} mm.</p>')
 
 
 # ------------------------------------------------------------------------------ short-lived bands

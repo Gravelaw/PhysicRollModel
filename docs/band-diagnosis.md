@@ -1040,6 +1040,10 @@ For the battery-foil demo values (3400 and 50 W/m2K) a 60 degree arc would give 
 kW/m2K inside a 60 degree jet zone is a mean of 0.42-0.72 kW/m2K [D]. The demo carries no arc
 (no plant value) and no coefficient was changed.
 
+**Strip temperature across the width** (SPEC17 A1): a supplied scan gives the flatness a
+shapemeter measures hot against the flatness after cooling, about 2.4 I-units per kelvin
+[computed]; section 7.7.
+
 **Fire limits (SPEC17 A10).** With `tribology.oil_flash_point_k` and / or
 `tribology.oil_supply_temperature_cap_k` (user limits, 250-700 K, never defaulted)
 `thermal_check.fire_limits` compares the oil inlet temperature and the coolant temperature
@@ -1374,6 +1378,14 @@ wets, in (0, 2*pi]; only expresses the spray coefficient on a jet-zone basis, se
 does not enter the roll thermal model), `tribology.oil_flash_point_k` (oil data sheet) and
 `tribology.oil_supply_temperature_cap_k` (a site or insurer cap), both 250-700 K, used only by
 the fire-limit check (section 3.12); the guided app asks for the two oil limits.
+`width_model.strip_temperature` (SPEC17 package 6, section 7.7; null = no scan):
+`positions_m` (at least 3, increasing, on the barrel), `temperature_k` (one per position,
+250-700 K), `expansion_coefficient_per_k` (null = the textbook 23.6e-6 /K, flagged) and
+`provenance`. Take the scan at the exit, near the shapemeter, with a line-scan pyrometer or a
+contact probe across the strip, or on the coil face; the low and variable emissivity of
+aluminium makes pyrometer readings difficult (gap study section 7.4), so calibrate against a
+contact probe. `measurement.shapemeter.temperature_compensated` (true / false / null) says
+whether the shapemeter corrects for strip temperature.
 
 ## 6. Hypotheses and evidence rules
 
@@ -1680,7 +1692,10 @@ axial decay of a 52 mm stripe and 4-7 min radially for a 260 mm roll [PT-T18, PT
 computed]: the plant's 20 s is of the order of the axial (local) scale, the model's steady
 build-up of the radial one. Plant time constants themselves were not found (abstract only,
 [PT-T26]). Partly open. Possible causes, none modelled: bite heat that depends
-on the roll surface temperature, emulsion-level heat transfer, per-revolution effects.
+on the roll surface temperature, emulsion-level heat transfer, per-revolution effects. The
+literature adds two candidates (gap study X5): the surface time scale of the roll, and the
+strip-temperature term in measured flatness (section 7.7; a hot fibre reads loose while hot);
+neither is tested here.
 
 Not modelled: the per-revolution surface temperature cycle, the bite contact conductance
 and roll-strip temperature coupling (`q` is supplied or computed from the pass, not coupled
@@ -2094,6 +2109,66 @@ relief of a buckled band, vendor edge rules, any controller.
 
 The thickness gauge of the same `measurement` section (the transverse side: what a gauge keeps
 of a mark pitch) is described in section 11.6.
+
+### 7.7 Strip temperature across the width
+
+SPEC17 package 6 (gap rows A1, G6; `strip_shape.thermal_flatness_term`,
+`band_width.strip_temperature_section`). A strip fibre hotter than its neighbours at the
+shapemeter is longer by `alpha*dT`: it reads loose in the mill and the difference disappears
+when the coil cools [TM-LA13 EX; for steel 1 C = 1.2 I-units, TM-LA30 EX; SS-S40 VP]. With the
+optional `width_model.strip_temperature` (a measured or assumed scan across the width; **the
+profile is supplied, not computed**: the per-width heat balance that would compute it needs the
+heat split, gap A3, Phase 1) the result gains `width.strip_temperature`.
+
+Formula [TM report gap A1]: `eps_T(z) = alpha*(T(z) - mean(T))` (arithmetic mean over the strip
+samples), `I_T = 1e5*eps_T`. The default `alpha = 23.6e-6 /K` is a textbook value used by the
+gap reports and tagged from memory there [M]; it is used with the flag
+`STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT` unless `expansion_coefficient_per_k` is
+supplied. That gives 2.36, about 2.4, I-units per kelvin [computed], above the tool's 2 I-unit
+band threshold. The scan is interpolated linearly onto the strip samples of the steady shape;
+outside its range the end value is held (`scan_coverage.extrapolated_width_m`, flag
+`STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP` when that exceeds one grid cell).
+
+Which profile means what [D, re-derived in SPEC17]: with `eps_m` the model's mechanical
+elongation (what the roll gap printed, referred to a uniform temperature), the stress a
+shapemeter senses in the hot strip follows `eps_m + eps_T`; after the coil has cooled to a
+uniform temperature only `eps_m` is left. The model has no flatness controller, so:
+
+| profile | elongation | meaning |
+|---|---|---|
+| `mechanical` | `eps_m` | the model's flatness as it is today (`width.shape.steady`, with feedback) |
+| `as_measured_hot` | `eps_m + eps_T` | what a shapemeter without temperature compensation senses; also the strip in the mill and a sample released while hot |
+| `after_cooling` | `eps_m` | equal to `mechanical` (no controller in the model); listed so that the reader sees it |
+| `after_cooling_if_hot_reading_held_flat` | `-eps_T` | BOUNDING CASE only: if a flatness control had removed everything the hot shapemeter showed, the cold strip would carry the negative of the thermal term (a hot fibre becomes tight); it needs the controller of G5 to be more than a bound |
+
+Each profile is evaluated by `flatness_from_elongation` (bands, in-mill state, state after
+release). `state_changes` compares every band of `mechanical` and `as_measured_hot` with the
+band of the other at its peak (flag `STRIP_TEMPERATURE_CHANGES_A_BAND_STATE`). The term is
+reported beside the width section: it is not added to `width.shape.steady`, the onsets, the
+gauge trend or any evidence item, so no latent / manifest verdict and no score moves. Without a
+mechanical profile the hot profile is the thermal term alone (flag
+`STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE`). The shapemeter of section 7.6 also reads
+`steady_as_measured_hot`; with `measurement.shapemeter.temperature_compensated: true` that
+profile is labelled "before the shapemeter's own temperature compensation; a compensated system
+shows the mechanical profile" (flag `SHAPEMETER_TEMPERATURE_COMPENSATED`).
+
+**Battery-foil demo** (synthetic scan, marked so in its provenance and notes: +3 K at the partly
+blocked nozzle, a Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at
+50 mm pitch; an assumption, not a model output). Mean 353.416 K, largest deviation 2.33 K;
+thermal term +5.50 / -0.63 I-units (alone: one loose band 0.560-0.685 m, peak 5.50 at
+0.6025 m, latent in the mill, manifest after release). `mechanical` equals the steady profile
+(peak 25.09 I-units at 0.6225 m, latent / manifest after release). `as_measured_hot`: 30.47
+I-units at 0.6175 m (band 0.495-0.745 m), latent / manifest after release, tight edges -5.81
+and -5.85; no band state changes. Bounding case: one tight band of -5.50 I-units, latent, flat
+after release. A 24-zone shapemeter reads 29.81 I-units hot in zone 9 against 24.49 for the
+mechanical profile. The report's warning: flatness measured hot and after cooling differ by
+5.5 I-units at 602.5 mm.
+
+Limits: the temperature profile is an input; the thermal strain is not fed back into the bite
+or the exit-tension feedback; where the mechanical profile was saturation-scaled the sum is
+indicative; the temperature at the shapemeter is taken equal to the scan; the after-cooling
+profile assumes no creep or set in the coil (A8); no target-curve offset [TM-LA30], no
+controller, no coil cooling model.
 
 ## 8. Process models
 
@@ -2710,7 +2785,13 @@ Without a shapemeter the section is one paragraph ("No shapemeter was described 
 the section adds a table "What the thickness gauge keeps" (source, pitch, speed, frequency,
 spot, time-constant and combined fraction kept, aliased, resolvable), the shortest resolvable
 pitch, the not-detected note (the tally is not changed) and the bands under the gauge
-(section 11.6). The v1 report is
+(section 11.6). The width section ends with
+"Strip temperature and flatness" (section 7.7): with a scan, the scan points, a chart of the
+mechanical and the as-measured-hot profiles with the thermal term, the table of the four
+profiles (meaning, largest band, in-mill state, state after release) and the warning "The
+temperature profile was supplied, not computed. Flatness measured hot and flatness after the
+coil has cooled differ by the thermal term: X I-units at Y mm."; without a scan one line ("a
+1 K hotter fibre reads about 2.4 I-units loose", the textbook coefficient). The v1 report is
 unchanged. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
@@ -2811,6 +2892,7 @@ real mill.
 | extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Coil, trough spacing, perturbed bites** (now in `tests/test_band_robustness.py`): one coil for all pitches (`CoilSingleSourceTests`: the reviewer's pitches 1 m at 2 m/s and 1.4 m at 20 m/s on coils of 1 m and 1.4 m pitch no longer give two exact matches; the coil hypothesis contradicts weakly and does not lead; two pitches on one coil still support; a single pitch as before); trough spacing (`TroughSpacingEstablishedTests`: one gap weak and never contradicting, irregular gaps weak, regular or stated spacing strong, a stated spacing outside a factor 4 still contradicts); perturbed bites (`PerturbedBiteModelTests`: an `auto` case with a mattress operating bite has every lever row equal to a direct mattress derivation; a Hitchcock operating bite reports the friction x1.3 variant Hitchcock rejects as a rejected row). **Onset search** (`OnsetSearchDomainTests`): the reviewer's soft-strip case (1e9 Pa, 9 um bump) no longer reports the old 4.28 um in-mill onset: the reported onset is manifest with feedback and the scale just below is not; a stubbed feedback calculation that leaves its domain before buckling gives the domain-limit outcome with its height, one that buckles first gives the onset, one that stays latent gives not-reached; a sheet-gauge case gives exactly the onset of the old search. **Undefined bound levels** (`UndefinedBoundLevelTests`, the reviewer's 8 um pass, one striped roll, 9 um bump, shape inputs 1e12 Pa / 1 mm / 0.01 m): `shape_levels` keeps both compliant levels with the rigid bound not defined and its reason, a very soft strip (1e9 Pa) keeps the feedback level with the compliance-only level not defined, a normal bump reports the rigid bound exactly as the direct calculation; through `diagnose` the steady shape and the gauge-trend row are assessed, the trend text names the pass without a rigid bound, the report omits the rigid curve with a note and has no nan / inf. **Large forward slip** (`LargeForwardSlipTests`, the reviewer's 30 -> 12 um pass on a 0.14 m roll): the mattress slip is at least 0.5, `diagnose` returns, both slip flags are set, the signatures use slip 0, the schedule row keeps its slip; the forward-slip screen is not assessable with the actual slip, the skid evidence does not support. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
 | `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI; alloy-group and anisotropy tables (`AlloyAndAnisotropyTests`, SPEC17): the nine `TM-` sources with the read tags of the gap study and never an upgraded read status, ten alloy-group rows, the Hill 1948 plane-strain factor 1.154701 / 1.014185 / 1.046734 / 1.169130 for (1, 1), (0.2, 0.2), (0.2, 1.1), (1.075, 1.075) and `ValueError` for r <= 0, both sections in the generated document |
 | `band_sensors.py` / `tests/test_band_sensors.py` | zone edges and coverage (body and edge zones, centre default, end zones 54 % covered); a 20 mm top-hat of 25 reads 9.6154 as the mean of a 52 mm zone; a 20 mm band of 3.1 I-units reads 1.19; a uniform profile reads zero; the roll mean of a mean-free, fully covered profile is zero; spreading conserves the sum and s = 0 is the identity; the dilution closed forms against the numbers of SPEC17 and a sampled Gaussian; on the committed battery-foil profile the zone readings 6.5973 / 20.4506 / 24.4912 / 20.4517 / 6.5979, the tight edges, the half-peak width 0.160 m, spreading 23.4812, the event 19.3326, the ripple 0.5296 and 23 zones 23.5348; one nozzle per zone (zone j holds nozzle j + 2 at its centre) from `band_width.spray_layout` and the boundary rule; every validation message, v1 and a non-null thickness gauge rejected; a small case with and without a shapemeter differs only in `measurement`, `inputs` and the new flags, hypotheses identical, the report escapes the provenance; no width model is not assessable with the dilution table |
+| `strip_shape.thermal_flatness_term`, `band_width.strip_temperature_section` / `tests/test_band_strip_temperature.py` | a 1 K step over half the strip gives 2.36 I-units (1e-9), a custom coefficient scales linearly, the default sets the flag; a uniform temperature gives zero and equal profiles; on the committed battery-foil profile with the demo scan: 2.36 I-units/K, mean 353.416125 K, deviation 2.332175 K, thermal +5.5039 / -0.6281 (alone one band 0.560-0.685 m, peak 5.5039 at 0.6025 m), mechanical bands and states equal to the width section's, as measured hot 30.4694 at 0.6175 m (0.495-0.745 m) and tight -5.8106 / -5.8524, held-flat bound -5.5039, no state change, shapemeter zone 9 29.8136 hot against 24.4912; the committed section equals a fresh one; without a mechanical profile the thermal term alone with its flag; a hand case where the term lifts a 1.5 I-unit band above the threshold is a reported state change; a scan not covering the strip holds its end values and reports 0.6 m; every validation message; a small case with and without a scan differs only in `width.strip_temperature`, `measurement`, `inputs` and flags, hypotheses identical; the report renders |
 | `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
@@ -2858,7 +2940,8 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   computed for a 260 mm roll [PT-T25]) and the lengthwise demo's events fade over about a
   minute (half-decay 57 s and 84 s). The 20 s is of the order of the local time scale, not of
   the steady build-up; plant time constants were not found (only an abstract, [PT-T26]).
-  Partly open.
+  Partly open. The strip-temperature term in measured flatness (section 7.7) is one of two
+  candidate causes the literature adds (X5); it is not tested here.
 - **The roll thermal model** is circumferentially averaged, with top-hat footprints (the
   nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
   expansion with a source-dependent factor (1 or 1 + nu), and no coupling of roll temperature
@@ -2874,6 +2957,10 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **After-release onsets** limited by the reporting threshold are upper bounds.
 - **Gauge trend** carries one stripe shape through all passes; it does not re-solve the roll
   temperature for each pass.
+- **Strip temperature term** (section 7.7): the scan is supplied, not computed (no per-width
+  heat balance, A3); the expansion coefficient defaults to a textbook value from memory;
+  without a controller `after_cooling` equals the mechanical profile, and the held-flat case
+  is only a bound; no coil cooling or creep.
 - **Thickness gauge transfer** keeps about a fraction of a mark: a spot average and a
   first-order lag only; real gauges have other filters; the evidence is not changed when the
   gauge cannot resolve the observed pitch (flag only); no accelerometer model (section 11.6).

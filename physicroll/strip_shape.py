@@ -1018,6 +1018,45 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
 
 
+# SPEC17 A1 / G6: the strip-temperature term of measured flatness
+# [M] textbook value used by the gap reports, not verified there
+ALUMINIUM_EXPANSION_PER_K = 23.6e-6
+EXPANSION_FROM_MEMORY_FLAG = 'STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT'
+
+
+def thermal_flatness_term(z_m, temperature_k, *,
+                          expansion_coefficient_per_k=ALUMINIUM_EXPANSION_PER_K):
+    """Thermal elongation across the width ``eps_T(z) = alpha*(T(z) - mean(T))``, I-units
+    ``1e5*eps_T`` [TM report gap A1; the mean is the arithmetic mean over the samples, as in
+    ``flatness_from_elongation``]. About 2.4 I-units per kelvin for aluminium [computed].
+
+    A hotter fibre is longer while hot and reads loose at a shapemeter without temperature
+    compensation; the difference disappears when the coil cools [TM-LA13 EX]. The temperature
+    profile is an input (supplied, not computed: no per-width heat balance, gap A3).
+    """
+    z = _grid(z_m, min_len=3)
+    t = _list('temperature_k', temperature_k, min_len=3, lo=1.0, hi=5000.0)
+    if len(t) != len(z):
+        raise ValueError('temperature_k must have one value per position')
+    a = _num('expansion_coefficient_per_k', expansion_coefficient_per_k, positive=True,
+             hi=1e-3)
+    mean = math.fsum(t) / len(t)
+    dev = [v - mean for v in t]
+    eps = [a * d for d in dev]
+    flags = [EXPANSION_FROM_MEMORY_FLAG] if expansion_coefficient_per_k == \
+        ALUMINIUM_EXPANSION_PER_K else []
+    return _checked({
+        'i_units': [e / I_UNIT for e in eps], 'elongation': eps, 'mean_temperature_k': mean,
+        'temperature_deviation_k': dev, 'i_units_per_kelvin': a / I_UNIT,
+        'expansion_coefficient_per_k': a,
+        'formula_basis': ('eps_T = alpha*(T - mean T), I = 1e5*eps_T [TM report gap A1]; '
+                          'alpha ' + ('23.6e-6 /K [M, textbook value used by the gap reports, '
+                                      'not verified there]' if flags else 'supplied')),
+        'flags': flags,
+        'limitations': ['The temperature profile is supplied, not computed.',
+                        'Linear thermal expansion only; no thermal stress in the bite.']})
+
+
 def _peak_abs(values):
     return max(abs(v) for v in values)
 

@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # (section, key) of every optional key a SPEC17 package added to the template
 SPEC17_OPTIONAL_KEYS = (('tribology', 'oil_flash_point_k'),
                         ('tribology', 'oil_supply_temperature_cap_k'),
-                        ('width_model', 'spray_wetted_arc_rad'))
+                        ('width_model', 'spray_wetted_arc_rad'),
+                        ('width_model', 'strip_temperature'))
 
 
 class AbsentEqualsNullTests(unittest.TestCase):

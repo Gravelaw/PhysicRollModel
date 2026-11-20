@@ -4563,7 +4563,8 @@
         "standoff_m": 0.2
       },
       "spray_wetted_arc_rad": null,
-      "strip_centre_m": null
+      "strip_centre_m": null,
+      "strip_temperature": null
     }
   },
   "leading_hypotheses": [
@@ -16949,6 +16950,11 @@
       "status": "EVALUATED"
     },
     "status": "SCREENING_RESULT_NOT_PLANT_VALIDATED",
+    "strip_temperature": {
+      "not_supplied": true,
+      "reason": "width_model.strip_temperature is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "thermal_events": {
       "attribution_definition": "event metrics use the monitor history from the event start to attribution_window_end_s: the start of the next event switching nozzles within the isolation margin (0.1 m) of this one, else the end of the run; a fade beyond it gives only a lower bound (flag FADE_BEYOND_ATTRIBUTION_WINDOW), a later event starting during this one truncates its peak (flag PEAK_TRUNCATED_BY_LATER_EVENT); an earlier event in the same neighbourhood leaves its residual in the history (flag EARLIER_EVENT_IN_SAME_REGION)",
       "band_life_definition": "band_life_s = event duration + time after the event ends for the stripe to fall below the manifest threshold (or the reporting threshold when it never becomes manifest)",

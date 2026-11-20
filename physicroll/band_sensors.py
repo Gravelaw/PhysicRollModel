@@ -47,14 +47,19 @@ MEASUREMENT_KEYS = ('shapemeter', 'thickness_gauge')
 SHAPEMETER_REQUIRED = ('zone_width_m', 'zone_count', 'provenance')
 SHAPEMETER_DEFAULTS = {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
                        'centre_m': None, 'neighbour_spreading_fraction': 0.0,
-                       'resolution_i_units': None}
+                       'resolution_i_units': None, 'temperature_compensated': None}
 DILUTION_BAND_WIDTHS_M = (0.010, 0.020, 0.040, 0.080, 0.160)
 EDGE_TOL_M = 1e-9
 FLAG_APPLIED = 'SHAPEMETER_OPERATOR_APPLIED'
 FLAG_BELOW = 'MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD'
 FLAG_UNCOVERED = 'SHAPEMETER_DOES_NOT_COVER_STRIP'
 FLAG_SPREAD = 'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED'
-FLAGS = (FLAG_APPLIED, FLAG_BELOW, FLAG_UNCOVERED, FLAG_SPREAD)
+FLAG_COMPENSATED = 'SHAPEMETER_TEMPERATURE_COMPENSATED'
+FLAGS = (FLAG_APPLIED, FLAG_BELOW, FLAG_UNCOVERED, FLAG_SPREAD, FLAG_COMPENSATED)
+HOT_LABEL_COMPENSATED = ("steady profile as measured hot: before the shapemeter's own "
+                         'temperature compensation; a compensated system shows the mechanical '
+                         'profile')
+HOT_LABEL = 'steady profile as measured hot: what the shapemeter shows'
 NO_CONTROLLER = ('NO flatness controller: the tool does not predict what the control would have '
                  'done with these readings (gap G5, Phase 2).')
 LIMITATIONS = (
@@ -136,6 +141,10 @@ def validate_shapemeter(s):
             raise ValueError(f'{w}.resolution_i_units must be in (0, 100] or null')
         res = float(res)
     out['resolution_i_units'] = res
+    tc = s.get('temperature_compensated')
+    if tc is not None and not isinstance(tc, bool):
+        raise ValueError(f'{w}.temperature_compensated must be true, false or null')
+    out['temperature_compensated'] = tc
     pv = s['provenance']
     if not isinstance(pv, str) or not pv.strip():
         raise ValueError(f'{w}.provenance must be a nonempty string')
@@ -437,7 +446,7 @@ def dilution_table(zone_width_m):
             'rows': [dilution(b, zone_width_m) for b in DILUTION_BAND_WIDTHS_M]}
 
 
-def shapemeter_profiles(width):
+def shapemeter_profiles(width, temperature_compensated=None):
     """Modelled flatness profiles the operator reads (later packages append to this list)."""
     out = []
     if not isinstance(width, dict):
@@ -474,6 +483,17 @@ def shapemeter_profiles(width):
                     'healthy header', 'z_m': st['z_m'], 'i_units': rip['i_units_with_feedback'],
                     'bands': [], 'reporting_threshold_i_units':
                         st.get('reporting_threshold_i_units')})
+    # SPEC17 package 6: the steady profile as measured hot (mechanical + thermal term)
+    stt = width.get('strip_temperature')
+    hot = ((stt.get('profiles') or {}).get('as_measured_hot')
+           if isinstance(stt, dict) and not stt.get('not_supplied') else None)
+    if isinstance(hot, dict) and isinstance(hot.get('i_units'), list) \
+            and len(hot['i_units']) == len(stt.get('z_m') or []) and len(hot['i_units']) > 1:
+        out.append({'name': 'steady_as_measured_hot',
+                    'label': HOT_LABEL_COMPENSATED if temperature_compensated else HOT_LABEL,
+                    'z_m': stt['z_m'], 'i_units': hot['i_units'], 'bands': hot['bands'],
+                    'reporting_threshold_i_units': (st or {}).get(
+                        'reporting_threshold_i_units') if isinstance(st, dict) else None})
     return out
 
 
@@ -579,7 +599,8 @@ def shapemeter_section(case, result):
            'nozzle_map': nmap if nmap is not None else bp.not_supplied(
                'no width_model: no spray header to map'),
            'basis': dict(BASIS), 'limitations': list(LIMITATIONS)}
-    profiles = shapemeter_profiles(result.get('width')) if reason is None else []
+    profiles = (shapemeter_profiles(result.get('width'), s['temperature_compensated'])
+                if reason is None else [])
     if not profiles:
         out.update(status='NOT_ASSESSABLE', reason=reason or 'no modelled flatness profile in '
                    'the width section', profiles=[], threshold_i_units=None,
@@ -601,6 +622,9 @@ def shapemeter_section(case, result):
         flags.append(FLAG_UNCOVERED)
     if s['neighbour_spreading_fraction'] > 0:
         flags.append(FLAG_SPREAD)
+    if s['temperature_compensated'] and any(p['name'] == 'steady_as_measured_hot'
+                                            for p in read):
+        flags.append(FLAG_COMPENSATED)
     out.update(threshold_i_units=thr, threshold_basis=basis, profiles=read, flags=flags)
     return out
 

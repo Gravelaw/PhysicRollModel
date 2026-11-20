@@ -120,6 +120,8 @@ If the case describes the mill's shapemeter (`measurement.shapemeter`: zone widt
 the report also shows what each zone would read for every modelled band, with a table of how
 much a band narrower than a zone is diluted. These are zone means of the model, not a forecast
 of the shapemeter screen: no flatness controller is modelled (section 7.6 of the guide).
+A supplied strip temperature scan across the width (`width_model.strip_temperature`) adds
+the flatness a shapemeter measures hot beside the flatness after cooling (section 7.7).
 
 ### Product, alloy and temper lookups
 

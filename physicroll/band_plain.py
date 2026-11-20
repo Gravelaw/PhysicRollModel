@@ -2235,6 +2235,25 @@ FLAGS = {
     'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
         'Part of each zone reading is shared with its neighbours, as you set it.',
         'Set the spreading to zero unless your vendor states it.'),
+    'STRIP_TEMPERATURE_TERM_SUPPLIED_PROFILE': (
+        'The strip temperature scan you gave is used to show flatness as measured hot and '
+        'after cooling; the scan is your input, not worked out by the tool.',
+        'Check where and when the scan was taken.'),
+    'STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT': (
+        'The heat expansion of aluminium is a textbook value, not checked against your alloy.',
+        'Give the value from your alloy data if you have it.'),
+    'STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP': (
+        'The temperature scan does not reach the whole strip width; the end values are carried '
+        'to the edges.', 'Scan the full strip width.'),
+    'STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE': (
+        'There is no modelled flatness for this pass, so only the temperature part is shown.',
+        'Read it as the temperature effect alone.'),
+    'STRIP_TEMPERATURE_CHANGES_A_BAND_STATE': (
+        'The strip temperature changes whether a band shows in the mill or after release.',
+        'Compare the hot reading with a cold sample of the same coil.'),
+    'SHAPEMETER_TEMPERATURE_COMPENSATED': (
+        'Your shapemeter corrects for strip temperature, so it would show the flatness without '
+        'the temperature part.', 'No action.'),
     'GAUGE_TRANSFER_APPLIED': (
         'The page shows about how much of each mark the thickness gauge you described keeps '
         '(spot size and response time only).',

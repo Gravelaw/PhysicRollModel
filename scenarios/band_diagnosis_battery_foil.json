@@ -10,7 +10,8 @@
     "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
     "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
     "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check.",
-    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record."
+    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record.",
+    "width_model.strip_temperature (SPEC17, synthetic): +3 K at the partly blocked nozzle, an assumption, not a model output; it shows how the strip-temperature term changes the flatness a shapemeter measures hot."
   ],
   "pass": {
     "entry_thickness_m": 5e-05,
@@ -292,7 +293,65 @@
     "cooling_zone_pitch_m": 0.104,
     "deflector_roll_radius_m": 0.125,
     "lateral_compressive_stress_pa": null,
-    "shape_inputs": null
+    "shape_inputs": null,
+    "strip_temperature": {
+      "positions_m": [
+        0.15,
+        0.2,
+        0.25,
+        0.3,
+        0.35,
+        0.4,
+        0.45,
+        0.5,
+        0.55,
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9,
+        0.95,
+        1.0,
+        1.05,
+        1.1,
+        1.15,
+        1.2,
+        1.25,
+        1.3,
+        1.35
+      ],
+      "temperature_k": [
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.151,
+        353.197,
+        353.849,
+        355.757,
+        355.583,
+        353.717,
+        353.183,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15
+      ],
+      "expansion_coefficient_per_k": null,
+      "provenance": "synthetic: +3 K at the partly blocked nozzle, an assumption, not a model output (Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at 50 mm pitch)"
+    }
   },
   "tribology": {
     "lubricant": {
