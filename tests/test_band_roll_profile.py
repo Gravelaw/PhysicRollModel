@@ -171,8 +171,11 @@ class DiagnoseTests(unittest.TestCase):
                 continue
             self.assertEqual(a.get(k), b.get(k), k)
         self.assertEqual(a['hypotheses'], b['hypotheses'])     # incl. roll_surface_band etc.
+        # SPEC20: a 100 mm station grid is flagged as too coarse for a 30 mm stripe
         self.assertTrue(set(b['flags']) - set(a['flags']) <= {bw.RP_FLAG_SUPPLIED,
-                                                                bw.RP_FLAG_BAND})
+                                                                bw.RP_FLAG_BAND, bw.RP_FLAG_GRID,
+                                                                bw.RP_FLAG_ORDER})
+        self.assertIn(bw.RP_FLAG_GRID, b['flags'])
         html = render_band_report(b)
         self.assertIn('Measured roll profile', html)
         self.assertNotIn('>nan<', html)

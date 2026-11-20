@@ -14,7 +14,7 @@ python -m unittest tests.test_band_lengthwise tests.test_band_diagnosis \
   tests.test_band_robustness tests.test_band_local > "$S/c.txt" 2>&1 &
 python -m unittest tests.test_band_survey tests.test_band_app tests.test_band_app_drawing \
   tests.test_band_app_reopen tests.test_band_lengthwise_events tests.test_band_foil_demo \
-  tests.test_band_plain_phase1 tests.test_band_local_sources "$@" > "$S/d.txt" 2>&1 &
+  tests.test_band_plain_phase1 tests.test_band_local_sources tests.test_band_grinding "$@" > "$S/d.txt" 2>&1 &
 python -m unittest tests.test_band_absent_inputs tests.test_band_sensors \
   tests.test_band_sensors_gauge tests.test_band_strip_temperature \
   tests.test_band_friction_stripes tests.test_band_roll_profile tests.test_halfspace_bite \

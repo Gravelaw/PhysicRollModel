@@ -1802,13 +1802,35 @@ def _h_fifth(ctx):
     return ev, pred
 
 
+# SPEC20 part 2: once-per-wheel-revolution grinder chatter leaves 12-240 marks per roll
+# circumference [RG25 AB, RG26 AB, RG24 VP; range computed from printed settings]. It bounds
+# what cannot be excluded without grinder data; it is never used to compute a count or a pitch.
+GRINDER_CHATTER_COUNT_RANGE = (12, 240)
+GRINDER_CHATTER_FLAG = 'GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA'
+GRINDER_CHATTER_NOTE = ('a grinder chatter pattern (12-240 marks per circumference [RG25 AB, '
+                        'RG26 AB, RG24 VP; range computed from printed settings]) cannot be '
+                        "excluded without the grinder's wheel and roll speeds or a supplied "
+                        'count')
+GRINDER_TEST_SENTENCE = ("Entering the grinder's last-pass wheel and roll speeds (or a counted "
+                         'number of marks around the roll) turns this into a test.')
+ROLL_MARK_TOLERANCE = 0.03       # the rule's existing tolerance (3 %)
+
+
+def _grinder_counts(ctx, roll):
+    """[(count, how obtained, basis)] of the grinder_marks entries of ``roll`` (SPEC20)."""
+    return [bs.grinder_mark_count(g, i)
+            for i, g in enumerate(ctx.case['kinematics']['grinder_marks']) if g['roll'] == roll]
+
+
 def _mark_count(ctx, diameter, roll):
     """Review finding (single source, as for the coil): ONE mark count n must explain every
     pitch. n is the count with the smallest worst relative mismatch over all pitches; on a tie
-    a supplied grinder-mark count is preferred, then the smaller n. Returns (n, worst mismatch,
-    how chosen, supplied counts) or (None, None, '', counts) without pitches."""
-    marks = sorted({g['marks_per_circumference'] for g in ctx.case['kinematics']['grinder_marks']
-                    if g['roll'] == roll})
+    a supplied or computed grinder-mark count is preferred, then the smaller n. Returns (n,
+    worst mismatch, how chosen, grinder counts) or (None, None, '', counts) without pitches.
+    SPEC20: a grinder count may be computed from the grinder's settings and need not be an
+    integer (it is never rounded)."""
+    entries = _grinder_counts(ctx, roll)
+    marks = sorted({c for c, _, _ in entries})
     ns = sorted(set(range(1, 9)) | set(marks))
     if not ctx.pitches:
         return None, None, '', marks
@@ -1825,7 +1847,38 @@ def _mark_count(ctx, diameter, roll):
     if len(tied) > 1:
         how += (f'; tie between n = {tied}, the supplied grinder-mark count preferred'
                 if pref else f'; tie between n = {tied}, the smaller count taken')
+    if n in marks:
+        obtained = next(h for c, h, _ in entries if c == n)
+        if obtained != 'supplied':
+            how += f'; grinder count {n:.4g} {obtained}'
+    if n == int(n):
+        n = int(n)
     return n, w[n], how, marks
+
+
+def grinder_pitch_check(ctx, diameter, roll):
+    """SPEC20 part 2: per observed pitch the implied marks per circumference and whether it lies
+    in the typical grinder chatter range (work roll only: the range is from work-roll
+    grinding), with the grinder counts entered and how each was obtained."""
+    circ = math.pi * diameter * (1 + ctx.kin_slip)
+    entries = _grinder_counts(ctx, roll)
+    lo, hi = GRINDER_CHATTER_COUNT_RANGE
+    rows = []
+    for p in ctx.pitches:
+        k = circ / p['pitch_m']
+        rows.append({'pitch_m': p['pitch_m'], 'implied_marks_per_circumference': k,
+                     'in_typical_grinder_chatter_range': (lo <= k <= hi
+                                                          if roll == 'work_roll' else None)})
+    return {'grinder_data_entered': bool(entries),
+            'grinder_counts': [{'marks_per_circumference': c, 'obtained': h, 'basis': b}
+                               for c, h, b in entries],
+            'pitches': rows,
+            'typical_grinder_chatter_range': list(GRINDER_CHATTER_COUNT_RANGE),
+            'typical_range_basis': ('[RG25 AB, RG26 AB, RG24 VP; range computed from printed '
+                                    'settings] work-roll grinding; bounds what cannot be '
+                                    'excluded, never a default grinder'),
+            'typical_range_applies': roll == 'work_roll',
+            'note': GRINDER_TEST_SENTENCE}
 
 
 def _roll_mark(ctx, diameter, roll, label):
@@ -1834,18 +1887,37 @@ def _roll_mark(ctx, diameter, roll, label):
     mixed = len(ctx.pitches) > 1 and len({
         min(sorted(set(range(1, 9)) | set(marks)),
             key=lambda k: abs(circ / k - p['pitch_m'])) for p in ctx.pitches}) > 1
+    crit = f'pitch = pi*D_{label}*(1+f)/n'
+    expected = (f'within 3 % for one n in 1..8 or grinder marks '
+                f'{[int(m) if m == int(m) else round(m, 4) for m in marks]}, the same n for '
+                'every pitch')
 
     def rule(p):
         mis = abs(circ / n - p['pitch_m']) / p['pitch_m']
-        note = f'n = {n} ({how}), mismatch {mis:.2%}'
+        note = f'n = {n if isinstance(n, int) else f"{n:.4g}"} ({how}), mismatch {mis:.2%}'
         if mixed:
             note += '; the pitches fit different counts separately, one count is applied to all'
-        if mis <= 0.03:
+        if mis <= ROLL_MARK_TOLERANCE:
             return ('SUPPORTS', 'strong', note)
         return ('CONTRADICTS', 'moderate', note)
-    return _per_pitch(ctx, f'pitch = pi*D_{label}*(1+f)/n',
-                      f'within 3 % for one n in 1..8 or grinder marks {marks}, the same n for '
-                      'every pitch', rule)
+    # SPEC20 part 2, no grinder data (WORK roll only; the range is from work-roll grinding):
+    # when no count in 1..8 explains every pitch but every implied count lies in the typical
+    # grinder chatter range, a grinder source cannot be excluded: NEUTRAL, never CONTRADICTS.
+    # With grinder data entered the test is decisive (rule above); the neutral case never
+    # applies.
+    if ctx.pitches and roll == 'work_roll' and not _grinder_counts(ctx, roll):
+        lo, hi = GRINDER_CHATTER_COUNT_RANGE
+        items = [rule(p) for p in ctx.pitches]
+        if any(v == 'CONTRADICTS' for v, _, _ in items) and all(
+                lo <= circ / p['pitch_m'] <= hi for p in ctx.pitches):
+            ctx.grinder_chatter_not_excluded = True
+            observed = '; '.join(
+                f'{p["pitch_m"] * 1e3:.4g} mm at {p["exit_speed_m_s"]:.4g} m/s ({note}; '
+                f'implied {circ / p["pitch_m"]:.4g} marks per circumference)'
+                for p, (_, _, note) in zip(ctx.pitches, items))
+            return _ev(crit, observed + '. ' + GRINDER_CHATTER_NOTE + '. '
+                       + GRINDER_TEST_SENTENCE, expected, 'NEUTRAL')
+    return _per_pitch(ctx, crit, expected, rule)
 
 
 def _h_roll(ctx, which):
@@ -1880,6 +1952,8 @@ def _h_roll(ctx, which):
     if n is not None:     # keys only with pitches
         pred.update(mark_count_used=n, mark_count_worst_relative_mismatch=worst,
                     mark_count_basis=how)
+        pred['grinder_pitch_check'] = grinder_pitch_check(
+            ctx, d, 'work_roll' if work else 'backup_roll')     # SPEC20 part 2
     return ev, pred
 
 
@@ -3738,7 +3812,10 @@ def diagnose(case):
         fpw_case = bite.separating_force_n / eff['pass']['width_m']
         if _bite_credibility(bite.flags, fpw_case)[0] == CREDIBILITY_OUTSIDE:
             ctx.credibility_gate_note = _credibility_gate_note(fpw_case)
+    ctx.grinder_chatter_not_excluded = False
     hyps, leading = _hypotheses(ctx)
+    if ctx.grinder_chatter_not_excluded:          # SPEC20 part 2
+        flags.append(GRINDER_CHATTER_FLAG)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
     band_sensors.name_gauge_hypotheses(result)      # text only; the tally is unchanged

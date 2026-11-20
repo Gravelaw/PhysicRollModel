@@ -1501,8 +1501,25 @@ def _roll_profile_block(r, w):
             + _wide(''.join(c))
             + _table(['stripe peak', 'radius deviation', 'half-peak width', 'I with feedback',
                       'in the mill', 'after tension release'], srows)
-            + sm_line + st_line
+            + sm_line + st_line + _roll_profile_checks(rp)
             + '<p class="warn">' + _e(' '.join(rp.get('limitations') or [])) + '</p>')
+
+
+def _roll_profile_checks(rp):
+    """SPEC20 parts 3 and 4: de-trending order and station grid of a measured profile."""
+    out = []
+    ds = rp.get('detrend_sensitivity')
+    if isinstance(ds, dict):
+        out.append(f'<p>De-trending with order 2 finds {len(ds["bands_order_2"])} band(s), '
+                   f'with order 4 {len(ds["bands_order_4"])}; the local deviation differs by '
+                   f'up to {_um(ds["largest_local_deviation_difference_m"])} at '
+                   f'{_f(ds["largest_difference_position_m"], 1, 4)} m.</p>')
+        if ds.get('sentence'):
+            out.append(f'<p class="warn">{_e(ds["sentence"])}</p>')
+    g = rp.get('grid')
+    if isinstance(g, dict) and g.get('sentence'):
+        out.append(f'<p class="warn">The station grid: {_e(g["sentence"])}.</p>')
+    return ''.join(out)
 
 
 def _friction_stripe_block(w):

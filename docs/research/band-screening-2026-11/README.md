@@ -62,6 +62,19 @@ Tags of [phase1-equations.md](phase1-equations.md), from its own list (never upg
 - **"No foil-bite benchmark with fully known inputs was found."** The bite gap study found one
   (Fleck et al. 1992) and ran the tool's foil model on it: 0.42 of the reference load. The merged
   gap study records this.
+- **Feed-mark spacing below 30 mm** (`grinding_feed_marks`): printed final-pass feeds reach
+  53 mm on foil rolls (roll-grinding report, 4.1); the ceiling is now 60 mm (guide 6.2).
+- **One mark count from 1 to 8** (`work_roll_borne_marks`): grinder chatter leaves 12-240 marks
+  per circumference; the count can now be computed from the grinder's wheel and roll speeds, and
+  without grinder data such a pitch is neutral, not a contradiction (roll-grinding report 4.2;
+  guide 6.3).
+- **De-trending order 2 for a measured roll profile**: it leaves a residual of a cosine crown
+  larger than the worked case's bump; the default is now 4 with both orders reported, and the
+  worked case's 2 um crown is replaced by an example of 40 um on radius (roll-grinding report
+  3.4, 8 (b); guide 7.9).
+- **"At least five positions" for a measured roll profile**: a 21-station report cannot carry a
+  20-30 mm stripe; the section now reports the smallest resolvable width and flags a coarse grid
+  (roll-grinding report 3.4; guide 7.9).
 - **Disagreements between the gap reports** (the size of the elastic strip zones at foil gauge,
   the share of load carried outside the strip in a closed gap, which gap best explains "worse at
   thin gauge") are listed in the merged gap study and were not resolved.

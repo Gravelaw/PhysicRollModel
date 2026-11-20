@@ -345,6 +345,53 @@ def _keys(name, item, required):
         raise ValueError(f'{name} entries must be dicts with exactly keys {sorted(required)}')
 
 
+# SPEC20 part 2: grinder chatter leaves n = f/n_roll marks per roll circumference
+# [RG25 AB, RG26 AB, RG24 VP]; f = the vibration frequency when given, else the wheel rotation
+# frequency (once-per-wheel-revolution forcing). The count need not be an integer: grinder
+# chatter is a spiral on the roll and the strip carries its local pitch circumference/n.
+GRINDER_SETTING_KEYS = ('wheel_rotation_hz', 'roll_rotation_hz', 'vibration_frequency_hz')
+GRINDER_COUNT_BASIS = '[RG25 AB, RG26 AB, RG24 VP] n = f/n_roll'
+
+
+def grinder_mark_count(g, index=0):
+    """(count, how obtained, basis) of one validated ``grinder_marks`` entry."""
+    if g.get('marks_per_circumference') is not None:
+        return float(g['marks_per_circumference']), 'supplied', 'supplied count'
+    nr = g['roll_rotation_hz']
+    if g.get('vibration_frequency_hz') is not None:
+        return (g['vibration_frequency_hz'] / nr,
+                'computed from vibration frequency and roll speed', GRINDER_COUNT_BASIS)
+    return (g['wheel_rotation_hz'] / nr, 'computed from wheel and roll speed',
+            GRINDER_COUNT_BASIS)
+
+
+def validate_grinder_mark(g, i):
+    """One ``grinder_marks`` entry: ``roll`` and EITHER ``marks_per_circumference`` OR the
+    grinder's last-pass settings (``roll_rotation_hz`` with ``wheel_rotation_hz`` and/or
+    ``vibration_frequency_hz``)."""
+    where = f'grinder_marks[{i}]'
+    allowed = {'roll', 'marks_per_circumference'} | set(GRINDER_SETTING_KEYS)
+    if not isinstance(g, dict) or 'roll' not in g or set(g) - allowed:
+        raise ValueError(f'{where} must be a dict with roll and either marks_per_circumference '
+                         'or wheel_rotation_hz / vibration_frequency_hz with roll_rotation_hz')
+    if g['roll'] not in ('work_roll', 'backup_roll'):
+        raise ValueError(f"{where}: grinder mark roll must be 'work_roll' or 'backup_roll'")
+    count = g.get('marks_per_circumference')
+    settings = {k: g.get(k) for k in GRINDER_SETTING_KEYS if g.get(k) is not None}
+    if (count is None) == (not settings):
+        raise ValueError(f'{where}: give exactly one of marks_per_circumference or the '
+                         'grinder settings (roll_rotation_hz with wheel_rotation_hz or '
+                         'vibration_frequency_hz)')
+    if count is not None:
+        _int(f'{where}.marks_per_circumference', count, lo=1, hi=100000)
+        return
+    if 'roll_rotation_hz' not in settings or len(settings) < 2:
+        raise ValueError(f'{where}: the grinder settings need roll_rotation_hz and '
+                         'wheel_rotation_hz or vibration_frequency_hz')
+    for k, v in settings.items():
+        _num(f'{where}.{k}', v, positive=True, hi=1e5)
+
+
 @dataclass(frozen=True)
 class MillKinematics:
     """Rotating-element geometry of one stand; diameters in m, all optional lists as tuples."""
@@ -385,11 +432,8 @@ class MillKinematics:
                 raise ValueError("bearing shaft must be 'work_roll' or 'backup_roll'")
             bearing_defect_orders(b['elements'], b['element_diameter_m'], b['pitch_diameter_m'],
                                   b['contact_angle_rad'])
-        for g in _seq('grinder_marks', self.grinder_marks):
-            _keys('grinder_marks', g, ('roll', 'marks_per_circumference'))
-            if g['roll'] not in ('work_roll', 'backup_roll'):
-                raise ValueError("grinder mark roll must be 'work_roll' or 'backup_roll'")
-            _int('marks_per_circumference', g['marks_per_circumference'], lo=1, hi=100000)
+        for i, g in enumerate(_seq('grinder_marks', self.grinder_marks)):
+            validate_grinder_mark(g, i)
         for i, d in enumerate(_seq('deflector_roll_diameters_m', self.deflector_roll_diameters_m)):
             _diameter(f'deflector_roll_diameters_m[{i}]', d)
         for label in ('entry_coil_diameter_m', 'exit_coil_diameter_m'):
@@ -464,11 +508,12 @@ def source_catalogue(mill, exit_speed_m_s, forward_slip_fraction, *,
             locked(f'bearing:{label}:{key}', f"{b['shaft']} bearing {label} {desc}",
                    mult * scale, 'bearing', [SOURCES['randall_antoni_2011'], SOURCES['innoval']])
     for i, g in enumerate(mill.grinder_marks):
-        n = g['marks_per_circumference']
+        n, how, _ = grinder_mark_count(g, i)
         scale = 1.0 if g['roll'] == 'work_roll' else dw / db
-        locked(f"grinder_marks:{g['roll']}:{i}",
-               f"{n} grinder/chatter marks per circumference on the {g['roll']}",
-               n * scale, 'grinder_marks')
+        text = (f"{g['marks_per_circumference']} grinder/chatter marks per circumference on the "
+                f"{g['roll']}" if how == 'supplied' else
+                f"{n:.4g} grinder/chatter marks per circumference on the {g['roll']} ({how})")
+        locked(f"grinder_marks:{g['roll']}:{i}", text, n * scale, 'grinder_marks')
     for i, d in enumerate(mill.deflector_roll_diameters_m):
         d = float(d)
         freq = ux / (math.pi * d)

@@ -2142,7 +2142,7 @@ def _validate_roll_profile(s, barrel):
                for i, v in enumerate(dev)]
     except ValueError:
         raise ValueError(dmsg) from None
-    order = s.get('detrend_order', 2)
+    order = s.get('detrend_order', ROLL_PROFILE_DETREND_ORDER_DEFAULT)
     if order is not None and (isinstance(order, bool) or not isinstance(order, int)
                               or not 0 <= order <= 6):
         raise ValueError(f'{where}.detrend_order must be an int in [0, 6] or null')
@@ -2156,6 +2156,18 @@ def _validate_roll_profile(s, barrel):
             'rolls_carrying': nr, 'provenance': pv}
 
 
+# SPEC20 part 3: order 2 removes a parabolic crown only; on a cosine-ground roll (80 um crown
+# on diameter, 70 degree half angle) it leaves a W-shaped residual of 0.68 um peak to peak on
+# radius, order 4 under 0.02 um [computed, prototypes/grinding-research/detrend_check.py,
+# curve form assumed]
+ROLL_PROFILE_DETREND_ORDER_DEFAULT = 4
+DETREND_ORDERS_COMPARED = (2, 4)
+RP_FLAG_ORDER = 'ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER'
+# SPEC20 part 4: two samples per feature [D]; the narrow stripe of the guide's worked case [D]
+NARROW_STRIPE_REFERENCE_WIDTH_M = 0.030
+RP_FLAG_GRID = 'ROLL_PROFILE_GRID_TOO_COARSE'
+RP_ORDER_SENTENCE = ('The bands of this profile depend on the de-trending order: subtract the '
+                     "grinder's target curve before entering the profile, or state the curve.")
 RP_FLAG_SUPPLIED = 'ROLL_GROUND_PROFILE_SUPPLIED'
 RP_FLAG_BAND = 'ROLL_GROUND_PROFILE_BAND_ABOVE_THRESHOLD'
 RP_LIMITATIONS = (
@@ -2166,7 +2178,11 @@ RP_LIMITATIONS = (
     'The removed polynomial (crown or camber) is reported only; it is not passed to the crown '
     'or heredity model.',
     'The hypotheses roll_surface_band and grinding_feed_marks stay rule-based and do not read '
-    'this section.')
+    'this section.',
+    'A report taken on a roll not thermally settled carries a thermal profile of the size of '
+    'the grinding tolerance: 3.3 um per K on a 280 mm roll [computed; rest time about a day, '
+    'RG5].',
+    'Grinder gauges measure diameter: deviations are halved for the radius input.')
 RP_PUBLISHED_STIFFNESS = ('thin aluminium 0.236 mm: 176 / 57.8 kN/mm2, ratio 3.04; thin '
                           'stainless: ratio 28, transfer almost negligible (model output) '
                           '[SS-S3 FT]')
@@ -2197,14 +2213,17 @@ def roll_profile_section(case, w, sp, shape_reason, z, th, thermal_steady, bite=
     dz = z[1] - z[0]
     a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
     extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
-    loc = rt.local_stripes(z, vals, th.centre, th.width, threshold_m=STRIPE_THRESHOLD_M,
-                           smooth_order=s['detrend_order'])
-    by_z = dict(zip(loc['z_m'], loc['local_radius_deviation_m']))
-    dev = [by_z.get(x, 0.0) for x in z]
+    spr = dict(sp, n_rolls=s['rolls_carrying'])
+
+    def detrended(order):
+        lo_ = rt.local_stripes(z, vals, th.centre, th.width, threshold_m=STRIPE_THRESHOLD_M,
+                               smooth_order=order)
+        bz = dict(zip(lo_['z_m'], lo_['local_radius_deviation_m']))
+        dv = [bz.get(x, 0.0) for x in z]
+        return lo_, bz, dv, shape_levels(z, dv, spr)
+    loc, by_z, dev, lv = detrended(s['detrend_order'])
     smooth = [a - b for a, b in zip(
         [v for x, v in zip(z, vals) if x in by_z], loc['local_radius_deviation_m'])]
-    spr = dict(sp, n_rolls=s['rolls_carrying'])
-    lv = shape_levels(z, dev, spr)
     out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
            'provenance': s['provenance'], 'detrend_order': s['detrend_order'],
            'rolls_carrying': s['rolls_carrying'],
@@ -2279,6 +2298,62 @@ def roll_profile_section(case, w, sp, shape_reason, z, th, thermal_steady, bite=
     flags = list(lv.get('flags') or []) + [RP_FLAG_SUPPLIED]
     if lv['levels']['with_feedback']['bands']:
         flags.append(RP_FLAG_BAND)
+    # SPEC20 part 3: the bands with de-trending orders 2 and 4 (always computed)
+    tol, tbasis = position_tolerance(obs, w['spray_header']['nozzle_pitch_m'])
+    runs = {}
+    for order in DETREND_ORDERS_COMPARED:
+        runs[order] = ((loc, dev, lv) if order == s['detrend_order']
+                       else (lambda r: (r[0], r[2], r[3]))(detrended(order)))
+
+    def bands_of(lv_):
+        return [{'peak_position_m': b['peak_position_m'], 'peak_i_units': b['peak_i_units'],
+                 'state': b['state'],
+                 'state_after_tension_release': b['state_after_tension_release']}
+                for b in lv_['levels']['with_feedback']['bands']]
+    b2, b4 = (bands_of(runs[o][2]) for o in DETREND_ORDERS_COMPARED)
+
+    def same(a, b):
+        if len(a) != len(b):
+            return False
+        return all(abs(x['peak_position_m'] - y['peak_position_m']) <= tol
+                   and x['state'] == y['state']
+                   and x['state_after_tension_release'] == y['state_after_tension_release']
+                   for x, y in zip(a, b))
+    diffs = [abs(a - b) for a, b in zip(runs[2][1], runs[4][1])]
+    k = max(range(len(z)), key=lambda i: diffs[i])
+    depends = not same(b2, b4)
+    out['detrend_sensitivity'] = {
+        'bands_order_2': b2, 'bands_order_4': b4,
+        'largest_local_deviation_difference_m': diffs[k],
+        'largest_difference_position_m': z[k], 'bands_depend_on_order': depends,
+        'position_tolerance_m': tol, 'position_tolerance_basis': tbasis,
+        'sentence': RP_ORDER_SENTENCE if depends else None,
+        'basis': ('order 2 removes a parabolic crown only; on a cosine-ground roll it leaves a '
+                  'W-shaped residual (0.68 um peak to peak on radius for an 80 um diameter '
+                  'crown, 70 degree half angle), order 4 under 0.02 um [computed, curve form '
+                  'assumed]')}
+    if depends:
+        flags.append(RP_FLAG_ORDER)
+    # SPEC20 part 4: what the station grid can carry (a flag and a sentence only)
+    gaps = [b - a for a, b in zip(xs, xs[1:]) if b > a0 and a < a1]
+    largest = max(gaps) if gaps else None
+    resolvable = None if largest is None else 2 * largest
+    ref = obs['band_width_m']
+    ref_basis = ('observation.band_width_m' if ref is not None else
+                 f'{NARROW_STRIPE_REFERENCE_WIDTH_M * 1e3:g} mm, the narrow stripe of the '
+                 "guide's worked case [D]")
+    ref = ref if ref is not None else NARROW_STRIPE_REFERENCE_WIDTH_M
+    coarse = resolvable is not None and resolvable > ref
+    out['grid'] = {'largest_spacing_inside_strip_m': largest,
+                   'smallest_resolvable_width_m': resolvable,
+                   'basis': 'two samples per feature [D]',
+                   'reference_width_m': ref, 'reference_width_basis': ref_basis,
+                   'too_coarse': coarse,
+                   'sentence': (f'this profile cannot show a mark narrower than '
+                                f'{resolvable * 1e3:.3g} mm; a missing band here does not mean '
+                                'the roll has none' if coarse else None)}
+    if coarse:
+        flags.append(RP_FLAG_GRID)
     out['flags'] = flags
     out['limitations'] = list(RP_LIMITATIONS)
     return out
@@ -3334,7 +3409,8 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['roll_profile'] = failed('roll_profile', exc)
         out['failures'].append(out['roll_profile']['error'])
     rp_flags = [f for f in ((out['roll_profile'].get('flags') or []) if isinstance(
-        out['roll_profile'], dict) else []) if f in (RP_FLAG_SUPPLIED, RP_FLAG_BAND)]
+        out['roll_profile'], dict) else []) if f in (RP_FLAG_SUPPLIED, RP_FLAG_BAND, RP_FLAG_ORDER,
+                                        RP_FLAG_GRID)]
     flags += [f for f in rp_flags if f not in flags]
     # SPEC17 BT-G4: friction / film stripes as a second band source (screening version)
     try:
@@ -3863,6 +3939,17 @@ def _h_roll_surface(f):
                'note': 'settle by roll inspection and a work-roll change test'}
 
 
+# SPEC20 part 1: printed final-pass feeds 9-53 mm [RG5; RG7 computed]; ceiling set just above
+# the largest, an analyst choice [D]
+FEED_MARK_SPACING_CEILING_M = 0.060
+FEED_RANGE_NOTE = (
+    'Printed final-pass traverse feeds per roll revolution: 9-25 mm on an aluminium cold-mill '
+    'roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings]; the law '
+    'pitch = traverse per roll revolution is confirmed [RG8 FT, RG11 VP]. A wide, irregular '
+    'spiral from table float does not follow the feed law and belongs with roll_surface_band '
+    '[RG8 FT].')
+
+
 def _h_grinding(f):
     o = f.obs
     e = [_orientation(o)]
@@ -3883,16 +3970,18 @@ def _h_grinding(f):
         e.append(ev(crit, '; '.join(notes) + f' (feed pitch {p * 1e3:.4g} mm)',
                     'every gap within 10 % of 1-3 x feed pitch', 'SUPPORTS' if ok else
                     'CONTRADICTS', 'strong' if ok else 'moderate'))
-    crit = 'regular fine spacing (CV < 0.15, spacing < 30 mm)'
+    ceil_mm = f'{FEED_MARK_SPACING_CEILING_M * 1e3:.0f} mm'
+    crit = f'regular fine spacing (CV < 0.15, spacing < {ceil_mm})'
     sp = f.spacing
     if sp is None or len(sp['gaps_m']) < 2:
-        e.append(ev(crit, 'fewer than three observed positions', 'regular and < 30 mm',
+        e.append(ev(crit, 'fewer than three observed positions', f'regular and < {ceil_mm}',
                     'NOT_OBSERVED'))
     else:
         spacing = o['band_spacing_m'] if o['band_spacing_m'] is not None else sp['mean_gap_m']
-        ok = sp['coefficient_of_variation'] < 0.15 and spacing < 0.030
+        ok = (sp['coefficient_of_variation'] < 0.15
+              and spacing < FEED_MARK_SPACING_CEILING_M)
         e.append(ev(crit, f'CV {sp["coefficient_of_variation"]:.3f}, spacing '
-                    f'{spacing * 1e3:.4g} mm', 'regular and < 30 mm',
+                    f'{spacing * 1e3:.4g} mm', f'regular and < {ceil_mm}',
                     'SUPPORTS' if ok else 'NEUTRAL', 'weak' if ok else None))
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'true',
@@ -3901,7 +3990,7 @@ def _h_grinding(f):
                      {'gloss_or_shade': ('SUPPORTS', 'moderate')}))
     e.append(_choice(o, 'lengthwise_continuity', 'continuity', 'continuous',
                      {'continuous': ('SUPPORTS', 'weak')}))
-    return e, {'grinding_feed_pitch_m': p}
+    return e, {'grinding_feed_pitch_m': p, 'feed_range_note': FEED_RANGE_NOTE}
 
 
 def _h_ridge(f):

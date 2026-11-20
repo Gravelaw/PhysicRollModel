@@ -115,6 +115,7 @@ UNITS = {
     'um_radius': ('µm on radius', 1.0, 1e6, 0.0),
     'kn': ('kN', 1e3, 1.0, 0.0), 'knm': ('kN·m', 1e3, 1.0, 0.0),
     'percent_per_k': ('% per K', 1.0, 100.0, 0.0), 'per_s': ('1/s', 1.0, 1.0, 0.0),
+    'r_min': ('r/min', 1.0, 60.0, 0.0),
 }
 INTEGER_UNITS = ('count', 'nozzle_no')
 
@@ -671,10 +672,18 @@ MILL_QUESTIONS = (
                Field('contact_angle_rad', 'Contact angle', unit='deg')),
        group='Drive and bearings'),
     _m('grinder_marks', 'kinematics.grinder_marks', 'list',
-       'Known grinder or chatter marks on a roll',
-       'Marks per circumference counted on the roll.',
+       'Grinder or chatter marks on a roll',
+       'Either the number of marks counted around the roll, or how fast the grinding wheel '
+       'turned and how fast the roll turned in the last grinding pass (both from the '
+       "grinder's program sheet). Left empty, the tool cannot rule a grinder pattern in or "
+       'out.',
        fields=(Field('roll', 'Roll', kind='choice', choices=_choices(ROLL_VALUES, ROLL_WORDS)),
-               Field('marks_per_circumference', 'Marks per turn', unit='count')),
+               Field('marks_per_circumference', 'Marks counted around the roll',
+                     unit='count', optional=True),
+               Field('wheel_rotation_hz', 'How fast the grinding wheel turned', unit='r_min',
+                     optional=True),
+               Field('roll_rotation_hz', 'How fast the roll turned in the last grinding pass',
+                     unit='r_min', optional=True)),
        group='Drive and bearings'),
     _m('deflector_diameters', 'kinematics.deflector_roll_diameters_m', 'numbers',
        'Deflector roll diameters', 'Every deflector or idler roll the strip wraps.', unit='mm',
@@ -1097,7 +1106,7 @@ PARALLEL_LISTS = {
                                        'provenance': 'entered in the band app'}),
     'width_model.roll_ground_profile': ({'position': 'positions_m',
                                          'deviation': 'radius_deviation_m'},
-                                        {'detrend_order': 2, 'rolls_carrying': 1,
+                                        {'detrend_order': 4, 'rolls_carrying': 1,
                                          'provenance': 'entered in the band app'}),
 }
 
@@ -1118,8 +1127,10 @@ ADDON_GROUPS = (
      'A temperature reading across the strip after the roll gap: the result shows flatness '
      'measured hot and after cooling.', ('strip_temperature_scan',)),
     ('grinder_report', 'A roll grinder report',
-     'The measured roll profile: the result shows the bands it would make.',
-     ('roll_profile_scan',)),
+     'The measured roll profile, and the marks counted around the roll or the wheel and roll '
+     'speeds of the last grinding pass: the result shows the bands the profile would make and '
+     'whether a grinder pattern fits the mark pitch.',
+     ('roll_profile_scan', 'grinder_marks')),
     ('pass_records', 'Pass records (force, torque, slip)',
      'Logged rolling force, torque or forward slip: the result shows which friction each one '
      'corresponds to.', ('pass_records',)),
@@ -1444,6 +1455,10 @@ def answer_to_si(q, value, origin_m=0.0):
             rec['name'] = f'gear mesh {len(out) + 1}'
         if q.key == 'kinematics.bearings' and not rec.get('name'):
             rec['name'] = f'bearing {len(out) + 1}'
+        if q.key == 'kinematics.grinder_marks':     # a count OR the grinder's speeds
+            for k in ('marks_per_circumference', 'wheel_rotation_hz', 'roll_rotation_hz'):
+                if rec.get(k) is None:
+                    rec.pop(k, None)
         out.append(rec)
     return out
 
@@ -2487,7 +2502,7 @@ CRITERIA = {
                                                 ['positions_move_after_wr_change']),
     'positions repeat across coils': ('whether the bands sit at the same places on the next '
                                       'coils', ['positions_repeat']),
-    'regular fine spacing (CV < 0.15, spacing < 30 mm)': ('a regular fine spacing below 30 mm',
+    'regular fine spacing (CV < 0.15, spacing < 60 mm)': ('a regular fine spacing below 60 mm',
                                                           ['band_spacing', 'band_positions']),
     'roll-change test': ('what a roll change did', ['gone_after_wr_change',
                                                     'gone_after_bur_change']),
@@ -2647,6 +2662,19 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA': (
+        'The mark pitch fits no simple count of marks around the work roll, but it would fit a '
+        'pattern left by a vibrating grinder; without the grinder\'s speeds that cannot be '
+        'ruled out.', 'Enter the wheel and roll speeds of the last grinding pass, or count the '
+        'marks around the roll.'),
+    'ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER': (
+        'The bands of the measured roll profile change with how the smooth crown is taken '
+        'out.', 'Subtract the grinder\'s target curve before entering the profile, or state '
+        'the curve.'),
+    'ROLL_PROFILE_GRID_TOO_COARSE': (
+        'The points of the measured roll profile are too far apart to show a narrow mark; a '
+        'missing band there does not mean the roll has none.',
+        'Use a finer trace from the grinder if it has one.'),
     'LOCAL_STATE_COMPUTED': (
         'The oil film, friction, metal strength and strip temperature across the width were '
         'worked out as differences from a healthy spray header; they change no other result.',
@@ -4355,6 +4383,10 @@ def _group_line(gid, vals):
         if has('gauge_time_constant'):
             bits.append(f'response {_f3(vals["gauge_time_constant"])} ms')
         return ', '.join(bits) or None
+    if gid == 'grinder_report' and has('grinder_marks'):
+        n = len(vals.get('roll_profile_scan') or [])
+        return ((f'{n} point{"s" if n != 1 else ""}, ' if n else '')
+                + 'grinder marks or speeds entered')
     if gid in ('temperature_scan', 'grinder_report', 'pass_records', 'friction_difference'):
         q = ADDON_Q1[gid]
         n = len(vals.get(q) or [])

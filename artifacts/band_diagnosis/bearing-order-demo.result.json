@@ -490,6 +490,7 @@
   },
   "flags": [
     "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
+    "GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA",
     "LUDERS_STRAIN_NOT_SUPPLIED_ZERO_USED_IN_WINDOWS",
     "SYNTHETIC_INPUTS"
   ],
@@ -2317,6 +2318,105 @@
       "title": "Third-octave self-excited gauge chatter"
     },
     {
+      "confirming_test": "Measure the pitch and compare with the work-roll circumference times (1 + forward slip); inspect / profile the work roll; roll-change test.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "pitch-speed law",
+          "expected": "SPEED_INDEPENDENT_PITCH",
+          "observed": "SPEED_INDEPENDENT_PITCH (exponent 0.000)",
+          "verdict": "SUPPORTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "pitch = pi*D_w*(1+f)/n",
+          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
+          "observed": "24.92 mm at 6 m/s (n = 8 (best single count for all pitches), mismatch 366.50%; implied 37.32 marks per circumference); 24.92 mm at 7.833 m/s (n = 8 (best single count for all pitches), mismatch 366.50%; implied 37.32 marks per circumference). a grinder chatter pattern (12-240 marks per circumference [RG25 AB, RG26 AB, RG24 VP; range computed from printed settings]) cannot be excluded without the grinder's wheel and roll speeds or a supplied count. Entering the grinder's last-pass wheel and roll speeds (or a counted number of marks around the roll) turns this into a test.",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "work-roll change",
+          "expected": "disappears",
+          "observed": "false",
+          "verdict": "CONTRADICTS",
+          "weight": "strong"
+        },
+        {
+          "basis": "observation",
+          "criterion": "faces",
+          "expected": "one",
+          "observed": "both",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "not longitudinal",
+          "observed": "transverse",
+          "verdict": "NEUTRAL",
+          "weight": null
+        }
+      ],
+      "family": "transverse",
+      "id": "work_roll_borne_marks",
+      "levers": [
+        "change the work rolls",
+        "check grinding (wheel balance, chatter on the grinder)",
+        "inspect the work-roll surface for damage or pick-up"
+      ],
+      "mechanism": "A mark, flat or grinder-chatter pattern on a work roll prints once (or n times) per revolution, so the strip pitch is the work-roll circumference over n.",
+      "model_prediction": {
+        "forward_slip_fraction_used": 0.042419216766307555,
+        "grinder_pitch_check": {
+          "grinder_counts": [],
+          "grinder_data_entered": false,
+          "note": "Entering the grinder's last-pass wheel and roll speeds (or a counted number of marks around the roll) turns this into a test.",
+          "pitches": [
+            {
+              "implied_marks_per_circumference": 37.32030260232317,
+              "in_typical_grinder_chatter_range": true,
+              "pitch_m": 0.024921
+            },
+            {
+              "implied_marks_per_circumference": 37.32030260232317,
+              "in_typical_grinder_chatter_range": true,
+              "pitch_m": 0.024921
+            }
+          ],
+          "typical_grinder_chatter_range": [
+            12,
+            240
+          ],
+          "typical_range_applies": true,
+          "typical_range_basis": "[RG25 AB, RG26 AB, RG24 VP; range computed from printed settings] work-roll grinding; bounds what cannot be excluded, never a default grinder"
+        },
+        "mark_count_basis": "best single count for all pitches",
+        "mark_count_used": 8,
+        "mark_count_worst_relative_mismatch": 3.665037825290396,
+        "pitch_one_mark_m": 0.9300592611524956,
+        "pitch_two_marks_m": 0.4650296305762478,
+        "roll_diameter_m": 0.284
+      },
+      "rank": 7,
+      "score": -4,
+      "standing": "CONTRADICTED",
+      "tallies": {
+        "contradiction_points": 7,
+        "contradicts": 2,
+        "neutral": 2,
+        "not_observed": 0,
+        "observation_supports": 1,
+        "strong_contradictions": 1,
+        "support_points": 3,
+        "supports": 1
+      },
+      "title": "Work-roll-borne marks (damage, ovality, grinder chatter)"
+    },
+    {
       "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
       "evidence": [
         {
@@ -2423,7 +2523,7 @@
         "film_ratio_basis": "lubrication-screen inlet film (Wilson & Walowit form)",
         "regime_at_operating_point": null
       },
-      "rank": 7,
+      "rank": 8,
       "score": -5,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2568,7 +2668,7 @@
         "position_tolerance_m": 0.013,
         "steady_model_bands": []
       },
-      "rank": 8,
+      "rank": 9,
       "score": -5,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2644,6 +2744,29 @@
       "mechanism": "A mark or pattern on a backup roll transfers at equal surface pitch to the work roll and then to the strip, so the pitch is the backup-roll circumference over n.",
       "model_prediction": {
         "forward_slip_fraction_used": 0.042419216766307555,
+        "grinder_pitch_check": {
+          "grinder_counts": [],
+          "grinder_data_entered": false,
+          "note": "Entering the grinder's last-pass wheel and roll speeds (or a counted number of marks around the roll) turns this into a test.",
+          "pitches": [
+            {
+              "implied_marks_per_circumference": 151.12094363616774,
+              "in_typical_grinder_chatter_range": null,
+              "pitch_m": 0.024921
+            },
+            {
+              "implied_marks_per_circumference": 151.12094363616774,
+              "in_typical_grinder_chatter_range": null,
+              "pitch_m": 0.024921
+            }
+          ],
+          "typical_grinder_chatter_range": [
+            12,
+            240
+          ],
+          "typical_range_applies": false,
+          "typical_range_basis": "[RG25 AB, RG26 AB, RG24 VP; range computed from printed settings] work-roll grinding; bounds what cannot be excluded, never a default grinder"
+        },
         "mark_count_basis": "best single count for all pitches",
         "mark_count_used": 8,
         "mark_count_worst_relative_mismatch": 17.890117954520967,
@@ -2651,7 +2774,7 @@
         "pitch_two_marks_m": 1.883042518178468,
         "roll_diameter_m": 1.15
       },
-      "rank": 9,
+      "rank": 10,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2774,7 +2897,7 @@
           120.0
         ]
       },
-      "rank": 10,
+      "rank": 11,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2810,8 +2933,8 @@
         },
         {
           "basis": "observation",
-          "criterion": "regular fine spacing (CV < 0.15, spacing < 30 mm)",
-          "expected": "regular and < 30 mm",
+          "criterion": "regular fine spacing (CV < 0.15, spacing < 60 mm)",
+          "expected": "regular and < 60 mm",
           "observed": "fewer than three observed positions",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -2849,9 +2972,10 @@
       ],
       "mechanism": "Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution.",
       "model_prediction": {
+        "feed_range_note": "Printed final-pass traverse feeds per roll revolution: 9-25 mm on an aluminium cold-mill roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings]; the law pitch = traverse per roll revolution is confirmed [RG8 FT, RG11 VP]. A wide, irregular spiral from table float does not follow the feed law and belongs with roll_surface_band [RG8 FT].",
         "grinding_feed_pitch_m": null
       },
-      "rank": 11,
+      "rank": 12,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -2953,7 +3077,7 @@
       "model_prediction": {
         "ridges": []
       },
-      "rank": 12,
+      "rank": 13,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3031,7 +3155,7 @@
       "model_prediction": {
         "note": "no model quantity; settle by annealing a sample and checking wipers"
       },
-      "rank": 13,
+      "rank": 14,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3116,7 +3240,7 @@
       "model_prediction": {
         "crown_classification": null
       },
-      "rank": 14,
+      "rank": 15,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3235,7 +3359,7 @@
         "trough_status": [],
         "trough_wavelengths_m": {}
       },
-      "rank": 15,
+      "rank": 16,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3299,7 +3423,7 @@
           1.5666600000000002
         ]
       },
-      "rank": 16,
+      "rank": 17,
       "score": -6,
       "standing": "CONTRADICTED",
       "tallies": {
@@ -3313,82 +3437,6 @@
         "supports": 0
       },
       "title": "Torsional / low-frequency drive vibration"
-    },
-    {
-      "confirming_test": "Measure the pitch and compare with the work-roll circumference times (1 + forward slip); inspect / profile the work roll; roll-change test.",
-      "evidence": [
-        {
-          "basis": "observation",
-          "criterion": "pitch-speed law",
-          "expected": "SPEED_INDEPENDENT_PITCH",
-          "observed": "SPEED_INDEPENDENT_PITCH (exponent 0.000)",
-          "verdict": "SUPPORTS",
-          "weight": "strong"
-        },
-        {
-          "basis": "observation",
-          "criterion": "pitch = pi*D_w*(1+f)/n",
-          "expected": "within 3 % for one n in 1..8 or grinder marks [], the same n for every pitch",
-          "observed": "24.92 mm at 6 m/s (n = 8 (best single count for all pitches), mismatch 366.50%); 24.92 mm at 7.833 m/s (n = 8 (best single count for all pitches), mismatch 366.50%)",
-          "verdict": "CONTRADICTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "work-roll change",
-          "expected": "disappears",
-          "observed": "false",
-          "verdict": "CONTRADICTS",
-          "weight": "strong"
-        },
-        {
-          "basis": "observation",
-          "criterion": "faces",
-          "expected": "one",
-          "observed": "both",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "orientation",
-          "expected": "not longitudinal",
-          "observed": "transverse",
-          "verdict": "NEUTRAL",
-          "weight": null
-        }
-      ],
-      "family": "transverse",
-      "id": "work_roll_borne_marks",
-      "levers": [
-        "change the work rolls",
-        "check grinding (wheel balance, chatter on the grinder)",
-        "inspect the work-roll surface for damage or pick-up"
-      ],
-      "mechanism": "A mark, flat or grinder-chatter pattern on a work roll prints once (or n times) per revolution, so the strip pitch is the work-roll circumference over n.",
-      "model_prediction": {
-        "forward_slip_fraction_used": 0.042419216766307555,
-        "mark_count_basis": "best single count for all pitches",
-        "mark_count_used": 8,
-        "mark_count_worst_relative_mismatch": 3.665037825290396,
-        "pitch_one_mark_m": 0.9300592611524956,
-        "pitch_two_marks_m": 0.4650296305762478,
-        "roll_diameter_m": 0.284
-      },
-      "rank": 17,
-      "score": -6,
-      "standing": "CONTRADICTED",
-      "tallies": {
-        "contradiction_points": 9,
-        "contradicts": 3,
-        "neutral": 1,
-        "not_observed": 0,
-        "observation_supports": 1,
-        "strong_contradictions": 1,
-        "support_points": 3,
-        "supports": 1
-      },
-      "title": "Work-roll-borne marks (damage, ovality, grinder chatter)"
     },
     {
       "confirming_test": "Raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time; check roll parallelism.",

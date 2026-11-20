@@ -3572,8 +3572,8 @@
         },
         {
           "basis": "observation",
-          "criterion": "regular fine spacing (CV < 0.15, spacing < 30 mm)",
-          "expected": "regular and < 30 mm",
+          "criterion": "regular fine spacing (CV < 0.15, spacing < 60 mm)",
+          "expected": "regular and < 60 mm",
           "observed": "fewer than three observed positions",
           "verdict": "NOT_OBSERVED",
           "weight": null
@@ -3611,6 +3611,7 @@
       ],
       "mechanism": "Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution.",
       "model_prediction": {
+        "feed_range_note": "Printed final-pass traverse feeds per roll revolution: 9-25 mm on an aluminium cold-mill roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings]; the law pitch = traverse per roll revolution is confirmed [RG8 FT, RG11 VP]. A wide, irregular spiral from table float does not follow the feed law and belongs with roll_surface_band [RG8 FT].",
         "grinding_feed_pitch_m": null
       },
       "rank": 11,
