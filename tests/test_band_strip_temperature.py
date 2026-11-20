@@ -17,6 +17,7 @@ from physicroll import strip_shape as ss
 from physicroll.band_diagnosis import diagnose, load_case, validate_case
 from physicroll.band_report import render_band_report
 from tests.test_band_robustness import v2case
+from tests.json_close import first_difference
 
 ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / 'artifacts' / 'band_diagnosis'
@@ -144,7 +145,9 @@ class DemoProfileTests(unittest.TestCase):
 
     def test_committed_artifact(self):
         st = self.r['width']['strip_temperature']
-        self.assertEqual(json.loads(json.dumps(self.sec)), st)
+        # equal apart from the last digits of floats: the artifact was generated on Linux and
+        # the recomputation differs in the last digit of a float on Windows
+        self.assertIsNone(first_difference(json.loads(json.dumps(self.sec)), st))
         self.assertIn(bw.ST_FLAG_SUPPLIED, self.r['flags'])
         self.assertIn(ss.EXPANSION_FROM_MEMORY_FLAG, self.r['flags'])
         names = [x['name'] for x in self.r['measurement']['shapemeter']['profiles']]
