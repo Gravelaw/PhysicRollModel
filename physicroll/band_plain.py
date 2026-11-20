@@ -2235,6 +2235,14 @@ FLAGS = {
     'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
         'Part of each zone reading is shared with its neighbours, as you set it.',
         'Set the spreading to zero unless your vendor states it.'),
+    'FRICTION_STRIPE_SCREEN_APPLIED': (
+        'The page shows how much a local difference in friction across the width would mark '
+        'the strip, as a rough linear estimate; it does not change the scores.',
+        'Read the compliance-only and the with-feedback rows together; neither is checked on '
+        'a mill.'),
+    'FRICTION_STRIPE_LINEAR_FEEDBACK_NOT_SATURATED': (
+        'A friction stripe you gave would buckle the strip in the mill; the rough linear '
+        'estimate then overstates it.', 'Read that stripe\'s number as an upper estimate.'),
     'STRIP_TEMPERATURE_TERM_SUPPLIED_PROFILE': (
         'The strip temperature scan you gave is used to show flatness as measured hot and '
         'after cooling; the scan is your input, not worked out by the tool.',

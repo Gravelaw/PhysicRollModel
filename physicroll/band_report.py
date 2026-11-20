@@ -1319,7 +1319,84 @@ def _width_section(r):
         body += _state_p('Position match ' + (_bad(pos) or 'not available'))
     body += _other_width_results(w)
     body += _strip_temperature_block(r, w)
+    body += _friction_stripe_block(w)
     return head + body + '</section>'
+
+
+def _friction_stripe_block(w):
+    """SPEC17 package 7: a friction or oil-film stripe as a band source (screening)."""
+    fs = w.get('friction_stripes')
+    if not isinstance(fs, dict):
+        return ''
+    head = '<h3>A friction or oil-film stripe as a band source</h3>'
+    if fs.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(fs.get('error')))
+    if fs.get('not_supplied'):
+        return (head + '<p>No friction-stripe screen requested '
+                '(width_model.friction_stripe_screen): a local friction or oil-film difference '
+                'across the width is a second band source beside the roll bump.</p>')
+    if fs.get('status') == 'NOT_ASSESSABLE' and not fs.get('per_pass'):
+        return head + _state_p('Not assessable: ' + str(fs.get('reason')))
+    rows = []
+    for x in fs.get('per_pass') or []:
+        if 'rejected' in x:
+            rows.append([_e(x['label']), _f(x['exit_thickness_m'], 1e6, 3), '–', '–', '–',
+                         '–', f'<em>rejected: {_e(x["rejected"])}</em>'])
+            continue
+        mark = []
+        if x.get('is_case_pass'):
+            mark.append('case pass')
+        if x.get('bite_credibility'):
+            mark.append(_txt(x['bite_credibility']))
+        rows.append([_e(x['label']), _f(x['exit_thickness_m'], 1e6, 3),
+                     _f(x['force_per_width_n_m'], 1e-3, 4),
+                     _f(x['load_exponent_in_friction'], 1, 3),
+                     _f(x['i_units_per_percent_friction_with_feedback'], 1, 3),
+                     _f(x['i_units_per_percent_friction_compliance_only'], 1, 4),
+                     _e(', '.join(mark)) or ''])
+    out = [head, '<p>A local difference of friction at one width position (roughness, roll '
+           'coating, oil supply or temperature) changes the local roll force like a roll bump. '
+           'I-units at the centre of a 1 % friction stripe (Gaussian, half-peak width '
+           f'{_mm2(fs.get("reference_half_peak_width_m"), 3)}), with the exit-tension feedback '
+           'and compliance only; both levels belong together.</p>',
+           _table(['pass', 'exit gauge [µm]', 'F/w [kN/m]', 'load exponent in friction',
+                   'I per +1 % friction, with feedback', 'I per +1 % friction, compliance only',
+                   'marks'], rows),
+           f'<p>{_e(fs.get("trend_text"))}</p>']
+    cp = fs.get('case_pass') or {}
+    ref = fs.get('reference') or {}
+    if cp:
+        thr = ref.get('friction_change_fraction_for_reporting_threshold') or 0
+        out.append(f'<p>Case pass: load exponent {_f(cp.get("load_exponent_in_friction"), 1, 3)}'
+                   f' against the published {_e(cp.get("published_load_exponent"))} '
+                   f'{_e(cp.get("published_load_exponent_note"))}; about '
+                   f'{_f(100 * thr, 1, 2)}'
+                   ' % friction difference reaches the 2 I-unit threshold with the feedback.</p>')
+    out.append(f'<p class="note">{_e(fs.get("sign_note"))}</p>')
+    st = fs.get('stripes') or []
+    if st:
+        srows = [[_e(s.get('label') or str(s['index'] + 1)), _f(s['position_m'], 1, 4) + ' m',
+                  _mm2(s['half_peak_width_m'], 3), _f(100 * s['friction_change_fraction'], 1, 3)
+                  + ' %', _f(s['peak_local_thickness_change_m'], 1e9, 3) + ' nm',
+                  _f(s['peak_i_units'], 1, 4), _txt(s['state']),
+                  _txt(s['state_after_tension_release'])] for s in st]
+        out.append('<p>Supplied stripes (case pass, with feedback):</p>'
+                   + _table(['stripe', 'position', 'half-peak width', 'friction change',
+                             'thickness change', 'peak [I]', 'in the mill',
+                             'after tension release'], srows))
+    else:
+        out.append('<p>No stripe supplied: the table above is the sensitivity only.</p>')
+    cv = fs.get('conversion_placeholder')
+    if isinstance(cv, dict):
+        out.append('<div class="warn"><p><strong>Placeholder friction closure, not fitted '
+                   '(PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED):</strong> per kelvin of oil '
+                   f'temperature dmu = {_f(cv["friction_change_per_kelvin_oil"], 1, 3)} '
+                   f'({_f(100 * (cv["friction_change_per_kelvin_oil_fraction"] or 0), 1, 3)} % '
+                   'of the friction used); per +10 % roll roughness dmu = '
+                   f'{_f(cv["friction_change_per_10_percent_roll_roughness"], 1, 3)}. '
+                   f'{_e(cv["note"])}</p></div>')
+    out.append('<p class="warn">' + _e(' '.join(fs.get('limitations') or [])) + '</p>')
+    return ''.join(out)
 
 
 def _strip_temperature_block(r, w):

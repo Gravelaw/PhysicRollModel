@@ -116,7 +116,9 @@ WIDTH_DEFAULTS = {
     # roll thermal model
     'spray_wetted_arc_rad': None,
     # SPEC17 A1 / G6: a supplied strip temperature scan across the width (not computed)
-    'strip_temperature': None}
+    'strip_temperature': None,
+    # SPEC17 BT-G4 (screening version): friction / film stripes as a second band source
+    'friction_stripe_screen': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -213,6 +215,8 @@ def validate_width_model(w, pass_):
     out['spray_wetted_arc_rad'] = arc
     out['strip_temperature'] = _validate_strip_temperature(w.get('strip_temperature'),
                                                            roll['barrel_length_m'])
+    out['friction_stripe_screen'] = _validate_friction_screen(w.get('friction_stripe_screen'),
+                                                              roll['barrel_length_m'])
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -1678,6 +1682,286 @@ def strip_temperature_section(case, w, shape_steady, z_strip, strip_start, strip
             'flags': flags, 'limitations': list(ST_LIMITATIONS)}
 
 
+def _validate_friction_screen(s, barrel):
+    if s is None:
+        return None
+    where = 'width_model.friction_stripe_screen'
+    keys(where, s, (), ('reference_half_peak_width_m', 'stripes'))
+    ref = s.get('reference_half_peak_width_m')
+    if ref is not None:
+        if isinstance(ref, bool) or not isinstance(ref, (int, float)) or not math.isfinite(ref) \
+                or not 0 < ref <= 1:
+            raise ValueError(f'{where}.reference_half_peak_width_m must be in (0, 1] m or null')
+        ref = float(ref)
+    stripes = s.get('stripes', [])
+    if not isinstance(stripes, list):
+        raise ValueError(f'{where}.stripes must be a list (it may be empty)')
+    out = []
+    for i, x in enumerate(stripes):
+        w_i = f'{where}.stripes[{i}]'
+        keys(w_i, x, ('position_m', 'half_peak_width_m', 'friction_change_fraction'),
+             ('label',))
+        pos = num(f'{w_i}.position_m', x['position_m'])
+        if not 0 <= pos <= barrel:
+            raise ValueError(f'{w_i}.position_m must be >= 0 and on the barrel')
+        hw = num(f'{w_i}.half_peak_width_m', x['half_peak_width_m'])
+        if not 0 < hw <= 1:
+            raise ValueError(f'{w_i}.half_peak_width_m must be in (0, 1] m')
+        fr = num(f'{w_i}.friction_change_fraction', x['friction_change_fraction'])
+        if not -0.9 <= fr <= 5 or fr == 0:
+            raise ValueError(f'{w_i}.friction_change_fraction must be in [-0.9, 5] and not 0')
+        lab = x.get('label')
+        if lab is not None and (not isinstance(lab, str) or not lab.strip()):
+            raise ValueError(f'{w_i}.label must be a nonempty string or null')
+        out.append({'position_m': pos, 'half_peak_width_m': hw,
+                    'friction_change_fraction': fr, 'label': lab})
+    return {'reference_half_peak_width_m': ref, 'stripes': out}
+
+
+FS_FLAG_APPLIED = 'FRICTION_STRIPE_SCREEN_APPLIED'
+FS_FLAG_NOT_SATURATED = 'FRICTION_STRIPE_LINEAR_FEEDBACK_NOT_SATURATED'
+FS_PUBLISHED_EXPONENT = [2.0, 2.6]
+FS_PUBLISHED_EXPONENT_NOTE = ('[derived by the bite report, slope read by eye from BT-S1 Fig. '
+                              '6a; regimes II-III at fixed gauge and reduction]')
+FS_TREND_END = ('Whether a friction stripe grows as gauge falls therefore depends on the '
+                'exit-tension feedback, the least supported element of the shape chain.')
+FS_SIGN_NOTE = ('A locally higher friction makes the strip locally thicker and the fibre tight; '
+                'a locally lower friction makes it loose. For a hot roll stripe the film path '
+                '(thinner film, more friction) therefore acts against the roll-growth path '
+                '(larger roll, thinner strip). The net sign is not known (gap A2).')
+FS_LIMITATIONS = (
+    'Linear sensitivity chain: dh from dF/dmu times a supplied friction change; the band-wise '
+    'saturation of the roll-bump chain is not applied.',
+    'dF/dmu is a central difference (+-2 %) of a constant-friction bite; at foil gauge that '
+    'bite is the experimental mattress model, which returns 0.42 of the reference load on '
+    'the one published benchmark (physicroll.benchmarks, BT-V1).',
+    'The with-feedback level rests on the linear exit-tension feedback, which the literature '
+    'neither supports nor contradicts (gap study X17); the compliance-only level is shown '
+    'beside it.',
+    'Friction is taken as uniform through the bite; no film model across the width, no '
+    'starvation (BT-G12), no coupling to the roll temperature (gap A2); entry tension uniform.',
+    'No evidence item: the screen does not change any hypothesis score (SPEC17 open decision '
+    '3).')
+FS_PLACEHOLDER_NOTE = ('The closure\'s slope is not supported by data (X22); these conversions '
+                       'show orders of magnitude only.')
+
+
+def _gauss(z, c, b, amp):
+    return [amp * math.exp(-4 * math.log(2) * ((x - c) / b) ** 2) for x in z]
+
+
+def _friction_i_units(z, dp, sp, feedback):
+    h = sp['exit_thickness_m']
+    tr = ss.transfer_force_profile(
+        z, dp, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'],
+        exit_tension_force_sensitivity_per_width_m=(
+            sp['exit_tension_force_sensitivity_per_width_m'] if feedback else None),
+        exit_thickness_m=h, strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        xi=sp['xi'])
+    dh = tr['local_thickness_change_m']
+    el = ss.differential_elongation(z, [h] * len(z), [h + v for v in dh], xi=sp['xi'])
+    eps = el['elongation']
+    m = math.fsum(eps) / len(eps)
+    return tr, [1e5 * (e - m) for e in eps], eps
+
+
+def _monotonic_words(values):
+    if all(b > a for a, b in zip(values, values[1:])):
+        return 'rises'
+    if all(b < a for a, b in zip(values, values[1:])):
+        return 'falls'
+    overall = 'up' if values[-1] > values[0] else 'down'
+    return f'is not monotonic (overall {overall})'
+
+
+def friction_trend_text(rows):
+    """Trend of the three quantities over the credible rows, ordered by falling exit gauge."""
+    ok = sorted([r for r in rows if 'rejected' not in r], key=lambda r: -r['exit_thickness_m'])
+    if len(ok) < 2:
+        return ('Fewer than two assessable passes: no trend. ' + FS_TREND_END)
+    span = (f'{ok[0]["exit_thickness_m"] * 1e3:.3g} -> {ok[-1]["exit_thickness_m"] * 1e3:.3g} '
+            'mm')
+    ex = [r['load_exponent_in_friction'] for r in ok]
+    co = [abs(r['i_units_per_percent_friction_compliance_only']) for r in ok]
+    fb = [abs(r['i_units_per_percent_friction_with_feedback']) for r in ok]
+    names = ', '.join(r['label'].split()[0] for r in ok)
+    return (f'As the exit gauge falls ({span}, {names}): the load '
+            f'exponent in friction {_monotonic_words(ex)} ({ex[0]:.3g} to {ex[-1]:.3g}); the '
+            f'compliance-only I-units per 1 % friction {_monotonic_words(co)} in magnitude '
+            f'({co[0]:.3g} to {co[-1]:.3g}); with exit-tension feedback the magnitude '
+            f'{_monotonic_words(fb)} (between {min(fb):.3g} and {max(fb):.3g}). '
+            + FS_TREND_END)
+
+
+def _friction_row(case, w, src, label, bite, sens, z, b_ref):
+    width = case['pass']['width_m']
+    sp, sp_basis = shape_params_or_none(case, bite, w, None if src is case['pass'] else src)
+    if sp is None:
+        raise ValueError('no bite and no shape inputs for this pass')
+    mu = src['friction_coefficient']
+    fpw = bite.separating_force_n / width
+    m_mu = sens['dforce_dfriction_n'] / width
+    zc = sp['strip_centre_m']
+    k = min(range(len(z)), key=lambda i: abs(z[i] - zc))
+    dp = [m_mu * v for v in _gauss(z, zc, b_ref, 0.01 * mu)]
+    _, iu_fb, _ = _friction_i_units(z, dp, sp, True)
+    _, iu_co, _ = _friction_i_units(z, dp, sp, False)
+    nx = sp['exit_tension_force_sensitivity_per_width_m']
+    return {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
+            'friction_coefficient': mu, 'force_per_width_n_m': fpw,
+            'dforce_per_width_dfriction_n_m': m_mu,
+            'load_exponent_in_friction': m_mu * mu / fpw,
+            'i_units_per_percent_friction_with_feedback': iu_fb[k],
+            'i_units_per_percent_friction_compliance_only': iu_co[k],
+            'feedback_limit_i_units_per_percent': (
+                None if not nx else -1e5 * m_mu * 0.01 * mu
+                / (nx * sp['strip_youngs_modulus_pa'])),
+            'shape_inputs_basis': sp_basis, 'bite_model': bite_model_name(bite),
+            'bite_flags': list(bite.flags), 'sensitivity_bite_model': sens.get('bite_model')}, sp
+
+
+def friction_stripes_section(case, w, op_bite, get_bite, friction_sensitivity, steady_shape,
+                             th, trib, friction_row, bite_error=None):
+    """SPEC17 BT-G4, screening version: a local friction difference as a band source.
+
+    With ``M_mu = (dF/dmu)/width`` of the existing bite (central difference +-2 %), a friction
+    stripe ``dmu(z)`` gives ``dp0' = M_mu*dmu`` at an unchanged gap, ``dh`` by
+    ``strip_shape.transfer_force_profile`` (with and without the exit-tension feedback) and the
+    flatness as the shape chain computes it. Reported beside the roll-bump chain, never summed
+    into it, and never evidence (open decision 3).
+    """
+    s = w.get('friction_stripe_screen')
+    if s is None:
+        return not_supplied('width_model.friction_stripe_screen is null or absent')
+    if op_bite is None or friction_sensitivity is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': ('no bite for the case pass'
+                           + (f' ({bite_error})' if bite_error else '')
+                           + ': dF/dmu is not available'), 'flags': []}
+    b_ref = s['reference_half_peak_width_m'] or REFERENCE_HALF_PEAK_WIDTH_M
+    p = case['pass']
+    centre, width = th.centre, th.width
+    if isinstance(steady_shape, dict) and isinstance(steady_shape.get('z_m'), list) \
+            and len(steady_shape['z_m']) >= 4:
+        z = list(steady_shape['z_m'])
+        grid_basis = 'the strip samples of width.shape.steady'
+    else:
+        n = max(4, int(round(width / 0.005)))
+        z = [centre - width / 2 + (i + 0.5) * width / n for i in range(n)]
+        grid_basis = 'a uniform 5 mm grid over the strip (no steady shape)'
+    flags = [FS_FLAG_APPLIED]
+    # passes: the case pass and every other schedule pass (a schedule row that IS the case
+    # pass is listed once, under its own label, with the operating bite)
+    srcs, case_label = [], 'case pass'
+    for r in case['schedule']:
+        if is_case_pass(case, r):
+            case_label = r['label']
+    srcs.append((case_label, p, True))
+    srcs += [(r['label'], r, False) for r in case['schedule'] if not is_case_pass(case, r)]
+    rows, case_row, case_sp = [], None, None
+    for label, src, is_case in srcs:
+        try:
+            bite = op_bite if is_case else get_bite(src)
+            sens = friction_sensitivity(src)
+            row, sp = _friction_row(case, w, src, label, bite, sens, z, b_ref)
+            if is_case:
+                case_row, case_sp = row, sp
+        except ValueError as exc:
+            row = {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
+                   'friction_coefficient': src['friction_coefficient'], 'rejected': str(exc)}
+        row['is_case_pass'] = is_case
+        rows.append(row)
+    rows.sort(key=lambda r: -r['exit_thickness_m'])
+    out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+           'grid_basis': grid_basis, 'reference_half_peak_width_m': b_ref,
+           'reference_half_peak_width_basis': ('supplied' if s['reference_half_peak_width_m']
+                                               else 'default, the gauge trend\'s reference'),
+           'per_pass': rows, 'trend_text': friction_trend_text(rows),
+           'sign_note': FS_SIGN_NOTE, 'stripes': []}
+    if case_row is None:
+        out.update(status='NOT_ASSESSABLE', reason=next(
+            (r['rejected'] for r in rows if r['is_case_pass']), 'case pass not assessable'),
+            flags=flags, limitations=list(FS_LIMITATIONS))
+        return out
+    fb_value = case_row['i_units_per_percent_friction_with_feedback']
+    out['case_pass'] = {
+        'label': case_row['label'], 'force_per_width_n_m': case_row['force_per_width_n_m'],
+        'friction_coefficient': case_row['friction_coefficient'],
+        'dforce_per_width_dfriction_n_m': case_row['dforce_per_width_dfriction_n_m'],
+        'load_exponent_in_friction': case_row['load_exponent_in_friction'],
+        'published_load_exponent': list(FS_PUBLISHED_EXPONENT),
+        'published_load_exponent_note': FS_PUBLISHED_EXPONENT_NOTE}
+    out['reference'] = {
+        'stripe': (f'Gaussian friction stripe dmu = 0.01*mu*exp(-4 ln2 ((z - z_c)/b)^2) at the '
+                   f'strip centre, b = {b_ref:g} m'),
+        'i_units_per_percent_friction_with_feedback': fb_value,
+        'i_units_per_percent_friction_compliance_only':
+            case_row['i_units_per_percent_friction_compliance_only'],
+        'friction_change_fraction_for_reporting_threshold': (
+            None if fb_value == 0 else 0.01 * 2 / abs(fb_value)),
+        'feedback_limit_i_units_per_percent': case_row['feedback_limit_i_units_per_percent']}
+    mu, m_mu, sp = case_row['friction_coefficient'], case_row['dforce_per_width_dfriction_n_m'], \
+        case_sp
+    for i, st in enumerate(s['stripes']):
+        dmu = _gauss(z, st['position_m'], st['half_peak_width_m'],
+                     st['friction_change_fraction'] * mu)
+        tr, _, eps = _friction_i_units(z, [m_mu * v for v in dmu], sp, True)
+        fl = ss.flatness_from_elongation(
+            z, eps, youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+            poisson_ratio=sp['strip_poisson_ratio'], thickness_m=sp['exit_thickness_m'],
+            mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+        band = _band_at(fl['bands'], st['position_m'])
+        peak = max(fl['i_units'], key=abs)
+        if any(b['state'] == 'MANIFEST_BUCKLE' for b in fl['bands']):
+            if FS_FLAG_NOT_SATURATED not in flags:
+                flags.append(FS_FLAG_NOT_SATURATED)
+        out['stripes'].append({
+            'index': i, 'label': st['label'], 'position_m': st['position_m'],
+            'half_peak_width_m': st['half_peak_width_m'],
+            'friction_change_fraction': st['friction_change_fraction'],
+            'peak_local_thickness_change_m': tr['peak_local_thickness_change_m'],
+            'peak_i_units': peak, 'sense': None if band is None else band['sense'],
+            'state': 'BELOW_REPORTING_THRESHOLD' if band is None else band['state'],
+            'state_after_tension_release': (None if band is None
+                                            else band['state_after_tension_release']),
+            'band': band, 'bands': fl['bands'], 'i_units': fl['i_units'], 'z_m': z,
+            'reporting_threshold_i_units': ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS})
+    if trib is not None and isinstance(friction_row, dict) \
+            and friction_row.get('film_ratio') is not None:
+        out['conversion_placeholder'] = _friction_placeholder(trib, friction_row)
+    out['flags'] = flags
+    out['limitations'] = list(FS_LIMITATIONS)
+    return out
+
+
+def _friction_placeholder(trib, row):
+    from . import band_process as bproc
+    from . import bite_tribology as bt
+    _, fin, clo = bproc.tribology_objects(trib)
+    lam = row['film_ratio']
+    d = bt.friction_coefficient(lam, clo)['dmu_dlambda']
+    beta = trib['lubricant']['temperature_viscosity_coefficient_per_k']
+    rr, rs = fin.roll_roughness_rq_m, fin.strip_roughness_rq_m
+    mu_used = row.get('used_friction_coefficient', row.get('supplied_friction_coefficient'))
+    per_k = d * lam * (-beta)
+    per_rough = d * lam * (-0.1 * rr ** 2 / (rr ** 2 + rs ** 2))
+    return {'flags': [bt.PLACEHOLDER_FLAG],
+            'film_ratio': lam, 'dmu_dlambda': d,
+            'friction_change_per_kelvin_oil': per_k,
+            'friction_change_per_kelvin_oil_fraction': None if not mu_used else per_k / mu_used,
+            'friction_change_per_10_percent_roll_roughness': per_rough,
+            'friction_change_per_10_percent_roll_roughness_fraction':
+                None if not mu_used else per_rough / mu_used,
+            'friction_coefficient_used': mu_used,
+            'basis': ('dmu/dT = dmu/dLambda * Lambda * (-beta) (film proportional to the inlet '
+                      'viscosity, eta0 ~ exp(-beta dT)); dmu per +10 % roll Rq = dmu/dLambda * '
+                      'Lambda * (-0.1 Rq_r^2/(Rq_r^2 + Rq_s^2)) [D]; placeholder closure'),
+            'note': FS_PLACEHOLDER_NOTE}
+
+
 def _troughs(case, w, obs):
     p, spans = case['pass'], case['spans']
     out = {}
@@ -2162,7 +2446,8 @@ def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
 
-def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
+def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
+                  friction_sensitivity=None, friction_row=None, friction_get_bite=None):
     """The ``width`` result section (SPEC6 6.2). ``get_bite(src)`` returns the bite of a
     schedule pass (effective values) or raises ValueError.
 
@@ -2367,6 +2652,18 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
         flags.append('THERMAL_SENSITIVITY_FAILED')
+    # SPEC17 BT-G4: friction / film stripes as a second band source (screening version)
+    try:
+        out['friction_stripes'] = friction_stripes_section(
+            case, w, bite, friction_get_bite or get_bite, friction_sensitivity,
+            shape.get('steady'), th,
+            trib, friction_row, bite_error)
+    except (ValueError, ArithmeticError) as exc:
+        out['friction_stripes'] = failed('friction_stripes', exc)
+        out['failures'].append(out['friction_stripes']['error'])
+    fs_flags = (out['friction_stripes'].get('flags') or []) if isinstance(
+        out['friction_stripes'], dict) else []
+    flags += [f for f in fs_flags if f not in flags]
     if out['failures']:
         flags.append('WIDTH_SECTION_PARTIAL_FAILURE')
     if steady and any(s['sign'] == 'HOT_HIGH' for s in steady['stripes']):

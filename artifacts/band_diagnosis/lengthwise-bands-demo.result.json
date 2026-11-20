@@ -4497,6 +4497,7 @@
           "start_s": 300.0
         }
       ],
+      "friction_stripe_screen": null,
       "gap_crown_m": null,
       "grinding": {
         "roll_rotation_hz": 0.5,
@@ -13141,6 +13142,11 @@
       "NOZZLES_REDUCED_OR_OFF",
       "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
     ],
+    "friction_stripes": {
+      "not_supplied": true,
+      "reason": "width_model.friction_stripe_screen is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "gauge_trend": {
       "evaluation_grid_m": 0.009970588235294118,
       "own_stripe_text": "The text above holds the case-pass stripe on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6; it would stay latent on P1. (width.thermal_sensitivity.per_pass)",

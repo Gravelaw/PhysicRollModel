@@ -351,6 +351,10 @@
       ],
       "expansion_coefficient_per_k": null,
       "provenance": "synthetic: +3 K at the partly blocked nozzle, an assumption, not a model output (Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at 50 mm pitch)"
+    },
+    "friction_stripe_screen": {
+      "reference_half_peak_width_m": null,
+      "stripes": []
     }
   },
   "tribology": {

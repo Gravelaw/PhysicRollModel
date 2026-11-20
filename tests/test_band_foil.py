@@ -832,6 +832,9 @@ class FoilDemoTests(unittest.TestCase):
         demo['schedule'] = [x for x in demo['schedule']            # F1, F2 and ALT2
                             if x['label'].split()[0] in ('F1', 'F2', 'ALT2')]
         demo['gauge_control'] = demo['drive'] = None
+        # the friction-stripe screen (SPEC17 package 7) is tested in
+        # tests/test_band_friction_stripes.py; it changes nothing tested here
+        demo['width_model']['friction_stripe_screen'] = None
         r = diagnose(demo)
         self.assertEqual(r['leading_hypotheses'], ['nozzle_thermal_stripe'])
         self.assertEqual(_h(r)['cooling_zone_switching_transient']['standing'], 'CONSISTENT')
@@ -918,6 +921,9 @@ class FoilDemoTests(unittest.TestCase):
         demo['model_options']['thermal_sensitivity'] = 'partition'
         demo['model_options']['cells'] = 64
         demo['gauge_control'] = demo['drive'] = None
+        # the friction-stripe screen (SPEC17 package 7) is tested in
+        # tests/test_band_friction_stripes.py; it changes nothing tested here
+        demo['width_model']['friction_stripe_screen'] = None
         r = diagnose(demo)
         rows = r['width']['gauge_trend']['rows']
         self.assertEqual(len(rows), 7)

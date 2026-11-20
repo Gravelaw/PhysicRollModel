@@ -516,6 +516,104 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
         'sources': [SOURCES['johnson_contact']]})
 
 
+def transfer_force_profile(z_m, local_force_per_width_n_m, *, bite_half_length_m,
+                           strip_stiffness_per_width_pa, roll_radius_m,
+                           roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU,
+                           exit_tension_force_sensitivity_per_width_m=None,
+                           exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA,
+                           xi=1.0):
+    """Thickness change from a local change of roll force per width at an unchanged gap [D].
+
+    [D, re-derived in SPEC17; the same balance as the incoming-ridge formula of band_width]
+    ``dp0'(z)`` [N/m] is a local change of roll force per unit width at an unchanged gap (a
+    friction stripe: ``M_mu*dmu``). The strip answers a local thickness change ``dh`` with
+    ``-Q_eff*dh``, so the net local force change is ``dp' = dp0' - Q_eff*dh``; both roll
+    surfaces indent under it, ``dh = 2*C(lam)*dp'``, hence per Fourier component
+    ``dh_k = G(lam_k)*dp0'_k`` with ``G = 2*C/(1 + 2*C*Q_eff)``. ``C``, the clamps (``lam < 4a``
+    -> ``4a``, ``lam > R`` -> ``R``), ``Q_eff = Q + N_x'*E_strip*xi/h_exit`` and the mean
+    component keeping ``Q`` are as in ``transfer_radius_profile``. Signs: more friction -> more
+    local force -> the rolls indent more -> the strip is locally THICKER (``dh > 0``) -> a
+    shorter fibre -> tight. Limits: ``Q_eff -> inf`` gives ``dh -> dp0'/Q_eff``; with the
+    feedback dominant ``eps = -xi*dh/h -> -dp0'/(N_x'*E_strip)``, independent of gauge.
+    """
+    z = _grid(z_m, min_len=4)
+    dp = _list('local_force_per_width_n_m', local_force_per_width_n_m, min_len=4,
+               lo=-1e9, hi=1e9)
+    if len(dp) != len(z):
+        raise ValueError('local_force_per_width_n_m must have the same length as z_m')
+    if len(z) > MAX_DFT_POINTS:
+        raise ValueError(f'at most {MAX_DFT_POINTS} points (plain O(N^2) DFT)')
+    uniform, dz = _uniform(z)
+    if not uniform:
+        raise ValueError('z_m must be uniformly spaced for the DFT transfer')
+    a = _num('bite_half_length_m', bite_half_length_m, positive=True, hi=0.1)
+    q = _num('strip_stiffness_per_width_pa', strip_stiffness_per_width_pa, positive=True,
+             hi=1e14)
+    radius = _num('roll_radius_m', roll_radius_m, positive=True, hi=5.0)
+    e = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
+    nu = _poisson('roll_poisson_ratio', roll_poisson_ratio)
+    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                         strip_youngs_modulus_pa, xi)
+    q_eff = q + q_fb
+    lam_short = SHORT_WAVELENGTH_FACTOR * a
+    if radius <= lam_short:
+        raise ValueError('roll_radius_m must exceed 4*bite_half_length_m')
+    n = len(z)
+    period = n * dz
+    spectrum = _dft(dp)
+    gains, energy = [], []
+    e_short = e_long = 0.0
+    for k in range(n):
+        kk = min(k, n - k)
+        lam = math.inf if kk == 0 else period / kk
+        pw = abs(spectrum[k]) ** 2
+        energy.append(pw)
+        if lam < lam_short:
+            e_short += pw
+            lam_eff = lam_short
+        elif lam > radius:
+            e_long += pw
+            lam_eff = radius
+        else:
+            lam_eff = lam
+        c = _compliance(lam_eff, a, e, nu)
+        gains.append(2 * c / (1 + 2 * c * (q if kk == 0 else q_eff)))
+    total = math.fsum(energy)
+    out = _dft([g * s for g, s in zip(gains, spectrum)], sign=+1)
+    dh = [v.real / n for v in out]
+    f_short = e_short / total if total > 0 else 0.0
+    f_long = e_long / total if total > 0 else 0.0
+    flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
+    if nx:
+        flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
+    if f_short > SPECTRUM_FLAG_FRACTION:
+        flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
+    if f_long > LONG_WAVELENGTH_FLAG_FRACTION:
+        flags.append('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL')
+    j_pk = max(range(n), key=lambda i: abs(dh[i]))
+    i_pk = max(range(n), key=lambda i: abs(dp[i]))
+    return _checked({
+        'status': 'UNVALIDATED_LOCAL_TRANSFER_ESTIMATE',
+        'z_m': z, 'local_force_per_width_n_m': dp, 'local_thickness_change_m': dh,
+        'sample_spacing_m': dz, 'period_m': period, 'short_wavelength_limit_m': lam_short,
+        'long_wavelength_limit_m': radius,
+        'strip_stiffness_per_width_pa': q, **_feedback_keys(q, nx, q_fb),
+        'short_wavelength_energy_fraction': f_short, 'long_wavelength_energy_fraction': f_long,
+        'peak_local_force_per_width_n_m': dp[i_pk],
+        'peak_local_thickness_change_m': dh[j_pk],
+        'formula_basis': {'transfer': "[D, re-derived in SPEC17] dh_k = G(lam_k)*dp0'_k, "
+                                      'G = 2*C/(1 + 2*C*Q_eff)',
+                          'tension_feedback': FEEDBACK_BASIS + '; k = 0 keeps Q'},
+        'threshold_basis': 'lam < 4a -> C(4a), lam > R -> C(R); flags above 5 % (short) / '
+                           '75 % (long) of the spectrum energy (spec/analyst choices) [D].',
+        'flags': flags,
+        'limitations': _transfer_limitations(nx is not None)
+        + ['The DFT treats the window as periodic: content near one end wraps to the other.',
+           'The local force change is supplied (a friction stripe: dF/dmu times dmu); it is '
+           'not computed here.'],
+        'sources': [SOURCES['johnson_contact']]})
+
+
 # --------------------------------------------------------------------------- W2.2
 def crown_heredity(gap_crown_m, entry_crown_m, entry_thickness_m, exit_thickness_m,
                    heredity_coefficient):

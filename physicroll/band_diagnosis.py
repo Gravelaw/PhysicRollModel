@@ -3022,6 +3022,28 @@ def _apply_credibility(result, eff, bite, flags):
                          + ' Not credible (excluded from the trend): ' + '; '.join(excluded)
                          + '.')
             g['excluded_not_credible'] = excluded
+    # SPEC17 BT-G4: the friction-stripe screen's per-pass rows, marked as the gauge trend's
+    fs = w.get('friction_stripes') if isinstance(w, dict) else None
+    if isinstance(fs, dict) and isinstance(fs.get('per_pass'), list):
+        excluded = []
+        for row in fs['per_pass']:
+            if 'rejected' in row:
+                continue
+            mark, ratio = _bite_credibility(row.get('bite_flags'), row.get('force_per_width_n_m'))
+            if mark:
+                row['bite_credibility'] = mark
+                row['bite_force_ratio_to_reported_range'] = ratio
+                row['bite_credibility_basis'] = CREDIBILITY_BASIS
+            if mark == CREDIBILITY_OUTSIDE:
+                excluded.append(_credibility_note(row['label'], row['force_per_width_n_m'],
+                                                  ratio))
+        if excluded:
+            credible = [r for r in fs['per_pass']
+                        if r.get('bite_credibility') != CREDIBILITY_OUTSIDE]
+            fs['trend_text'] = (bw.friction_trend_text(credible)
+                                + ' Not credible (excluded from the trend): '
+                                + '; '.join(excluded) + '.')
+            fs['excluded_not_credible'] = excluded
     fr = result.get('foil_regime')
     if isinstance(fr, dict) and fr.get('extended_bite_domain'):
         notes = []
@@ -3376,9 +3398,29 @@ def diagnose(case):
 
     def get_bite(src):
         return cache.get(bp.bite_pass(eff, src))
+
+    # SPEC17 BT-G4: the friction-stripe screen derives its bites in a cache of its own, so the
+    # result's bite_derivations count (and every other section) is the same with or without it
+    fs_cache = _BiteCache(eff)
+
+    def fs_get_bite(src):
+        return fs_cache.get(bp.bite_pass(eff, src))
+
+    def friction_sens(src):
+        # dF/dmu of the pass's bite model (the case pass: the operating bite's model)
+        if src is eff['pass']:
+            return bp.friction_force_sensitivity(lambda q: fs_cache.get(q, model=sens_model),
+                                                 bp.bite_pass(eff, src))
+        model = perturbed_bite_model(eff, fs_get_bite(src))
+        return bp.friction_force_sensitivity(lambda q: fs_cache.get(q, model=model),
+                                             bp.bite_pass(eff, src))
+    proc = result.get('process') if isinstance(result.get('process'), dict) else {}
+    fr_row = (proc.get('friction') or {}).get('operating') if isinstance(
+        proc.get('friction'), dict) else None
     try:
         result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags,
-                                           bite_error)
+                                           bite_error, friction_sensitivity=friction_sens,
+                                           friction_row=fr_row, friction_get_bite=fs_get_bite)
     except ValueError as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']

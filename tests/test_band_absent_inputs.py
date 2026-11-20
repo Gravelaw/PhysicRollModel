@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC17_OPTIONAL_KEYS = (('tribology', 'oil_flash_point_k'),
                         ('tribology', 'oil_supply_temperature_cap_k'),
                         ('width_model', 'spray_wetted_arc_rad'),
-                        ('width_model', 'strip_temperature'))
+                        ('width_model', 'strip_temperature'),
+                        ('width_model', 'friction_stripe_screen'))
 
 
 class AbsentEqualsNullTests(unittest.TestCase):

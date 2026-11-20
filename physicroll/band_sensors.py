@@ -494,6 +494,15 @@ def shapemeter_profiles(width, temperature_compensated=None):
                     'z_m': stt['z_m'], 'i_units': hot['i_units'], 'bands': hot['bands'],
                     'reporting_threshold_i_units': (st or {}).get(
                         'reporting_threshold_i_units') if isinstance(st, dict) else None})
+    # SPEC17 package 7: one profile per supplied friction stripe (case pass, with feedback)
+    fs = width.get('friction_stripes')
+    for s in (fs.get('stripes') or []) if isinstance(fs, dict) else []:
+        if isinstance(s.get('i_units'), list) and len(s['i_units']) == len(s.get('z_m') or []):
+            out.append({'name': f'friction_stripe_{s["index"]}',
+                        'label': ('friction stripe ' + (s.get('label') or str(s['index'] + 1))
+                                  + f' ({100 * s["friction_change_fraction"]:+.3g} % friction)'),
+                        'z_m': s['z_m'], 'i_units': s['i_units'], 'bands': s['bands'],
+                        'reporting_threshold_i_units': s.get('reporting_threshold_i_units')})
     return out
 
 

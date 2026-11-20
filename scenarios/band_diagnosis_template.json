@@ -46,7 +46,8 @@
     "width_model.spray_wetted_arc_rad (optional, null = not given): the arc of the roll circumference [rad, in (0, 2*pi]] that the coolant spray wets. The model's spray_mean_htc_w_m2k is a mean around the roll; with the arc, thermal_check also shows the equivalent coefficient inside the jet zone, h_bg + spray_mean_htc * 2*pi/arc. It does not enter the roll thermal model.",
     "tribology.oil_flash_point_k and tribology.oil_supply_temperature_cap_k (optional, null = not given, 250-700 K): the flash point of your rolling oil (data sheet) and a site or insurer cap on the oil supply temperature. thermal_check.fire_limits compares the oil temperatures and the modelled strip exit temperatures with them (a rule check; a modelled exit temperature is not a coil temperature); there is no default limit.",
     "measurement (optional, v2; null = not supplied): {\"shapemeter\": {zone_width_m, zone_count, edge_zone_width_m, edge_zone_count_per_side, centre_m, neighbour_spreading_fraction, resolution_i_units, provenance}, \"thickness_gauge\": null}. The shapemeter block gives what each zone of a flatness roll with that zone width would read for every modelled band (zone means of the model profile; no flatness controller is modelled). Zone width, count and edge zones come from the shapemeter data sheet or the level-2 configuration; leave neighbour_spreading_fraction at 0 unless the vendor states it, and resolution_i_units null unless the vendor gives one.",
-    "width_model.strip_temperature (optional, null = not supplied): a measured or assumed strip temperature scan across the width, {positions_m (>= 3, increasing, on the barrel), temperature_k (one per position, 250-700 K), expansion_coefficient_per_k (null = 23.6e-6 /K, a textbook value), provenance}. It is not computed by the tool. The result then shows flatness as a shapemeter measures it hot (model flatness plus about 2.4 I-units per kelvin) beside the flatness after the coil has cooled."
+    "width_model.strip_temperature (optional, null = not supplied): a measured or assumed strip temperature scan across the width, {positions_m (>= 3, increasing, on the barrel), temperature_k (one per position, 250-700 K), expansion_coefficient_per_k (null = 23.6e-6 /K, a textbook value), provenance}. It is not computed by the tool. The result then shows flatness as a shapemeter measures it hot (model flatness plus about 2.4 I-units per kelvin) beside the flatness after the coil has cooled.",
+    "width_model.friction_stripe_screen (optional, null = not supplied): {reference_half_peak_width_m (null = 0.1 m), stripes: [{position_m, half_peak_width_m, friction_change_fraction (relative change of the pass friction, -0.9 to 5, not 0), label}]}. A screening estimate of a local friction or oil-film difference across the width as a band source: I-units per 1 % friction per pass (with and without the exit-tension feedback) and the flatness of each supplied stripe; the list may be empty. It never changes a score."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -206,7 +207,8 @@
     "lateral_compressive_stress_pa": null,
     "shape_inputs": null,
     "spray_wetted_arc_rad": null,
-    "strip_temperature": null
+    "strip_temperature": null,
+    "friction_stripe_screen": null
   },
   "tribology": {
     "lubricant": {

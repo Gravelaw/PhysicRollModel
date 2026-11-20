@@ -883,3 +883,65 @@ class TestValidationAndJson(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TransferForceProfileTests(unittest.TestCase):
+    """SPEC17 package 7: a local force change per width transferred into thickness."""
+
+    KW = dict(bite_half_length_m=0.004, strip_stiffness_per_width_pa=3e11, roll_radius_m=0.135)
+
+    def _wave(self, lam, n=128, amp=1e-7):
+        dz = 4 * lam / n                       # four whole waves in the window
+        z = [i * dz for i in range(n)]
+        return z, [amp * math.cos(2 * math.pi * x / lam) for x in z]
+
+    def test_matches_the_radius_transfer_for_one_sinusoid(self):
+        lam = 0.05
+        z, dr = self._wave(lam)
+        c = ss.roll_line_compliance_m2_n(lam, self.KW['bite_half_length_m'])
+        dp = [-2 * v / (2 * c) for v in dr]
+        for fb in ({}, {'exit_tension_force_sensitivity_per_width_m': 2e-4,
+                        'exit_thickness_m': 30e-6, 'xi': 1.0}):
+            a = ss.transfer_force_profile(z, dp, **self.KW, **fb)['local_thickness_change_m']
+            b = ss.transfer_radius_profile(z, dr, n_rolls=2, **self.KW,
+                                           **fb)['local_thickness_change_m']
+            for x, y in zip(a, b):
+                self.assertLessEqual(abs(x - y), 1e-9 * max(abs(v) for v in b))
+
+    def test_zero_mean_sign_and_feedback_limit(self):
+        z = [i * 0.005 for i in range(64)]
+        self.assertTrue(all(v == 0 for v in ss.transfer_force_profile(
+            z, [0.0] * 64, **self.KW)['local_thickness_change_m']))
+        # the mean component keeps Q: a uniform force change gives a uniform dh with Q
+        r = ss.transfer_force_profile(z, [1e3] * 64, **self.KW,
+                                      exit_tension_force_sensitivity_per_width_m=1e-3,
+                                      exit_thickness_m=30e-6)
+        c = ss.roll_line_compliance_m2_n(0.135, 0.004)
+        want = 2 * c / (1 + 2 * c * 3e11) * 1e3
+        self.assertTrue(all(abs(v - want) < 1e-12 * want for v in r['local_thickness_change_m']))
+        # more friction (positive force) -> thicker strip (dh > 0)
+        g = [1e3 * math.exp(-((x - 0.16) / 0.03) ** 2) for x in z]
+        r = ss.transfer_force_profile(z, g, **self.KW)
+        self.assertGreater(r['peak_local_thickness_change_m'], 0)
+        # feedback dominant: eps = -xi*dh/h -> -dp0'/(N_x'*E), independent of gauge
+        gm = [v - sum(g) / 64 for v in g]          # mean-free (the mean keeps Q)
+        k = max(range(64), key=lambda i: abs(gm[i]))
+        for h in (30e-6, 3e-6):
+            r = ss.transfer_force_profile(z, gm, **dict(self.KW, strip_stiffness_per_width_pa=1.0),
+                                          exit_tension_force_sensitivity_per_width_m=1.0,
+                                          exit_thickness_m=h)
+            eps = -r['local_thickness_change_m'][k] / h
+            self.assertAlmostEqual(eps / (-gm[k] / 70e9), 1.0, delta=1e-3)
+
+    def test_validation_and_radius_transfer_unchanged(self):
+        z = [i * 0.005 for i in range(16)]
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z, [2e9] * 16, **self.KW)
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z, [0.0] * 15, **self.KW)
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z[:-1] + [1.0], [0.0] * 16, **self.KW)
+        dr = [1e-7 * math.sin(i) for i in range(16)]
+        a = ss.transfer_radius_profile(z, dr, **self.KW)
+        b = ss.transfer_radius_profile(z, dr, **self.KW)
+        self.assertEqual(a, b)
