@@ -499,7 +499,9 @@ by deleting its folder while the app is stopped.
   printed from a desktop-size window. A long shortlist of tied causes (for example the typical
   foil mill with nothing answered) or the battery-foil example takes two pages, and so does any
   print made from a phone-size window.
-- The guide `docs/band-diagnosis.md` (section 14) lists the model limitations in full.
+- The guide `docs/band-diagnosis.md` (section 14) lists the model limitations in full; the
+  register `docs/limitations.md` collects every limitation, exception, analyst choice, recorded
+  discrepancy and flag of the tool in one place.
 
 ## 10. Troubleshooting
 

@@ -185,6 +185,7 @@ are taken from your file.
 | Path | What it is |
 |---|---|
 | [`docs/band-diagnosis.md`](docs/band-diagnosis.md) | The guide: battery foil first (section 3), how to run (4), filling in the template and using your own mill (5, 5.3), evidence rules (6), equations with source tags (7-11), how to read the report (12), limitations (14) |
+| [`docs/limitations.md`](docs/limitations.md) | The register of limitations and exceptions: what the band screening tool assumes, where it cannot decide, the analyst choices, the recorded discrepancies with published values and the flag index, kept in step with the code by a test |
 | [`docs/band-app.md`](docs/band-app.md) | The guided app: starting it, the three steps, how to read each picture, quick and detailed runs, the trust rule, where runs are kept, safeguards |
 | [`docs/thin-gauge-products.md`](docs/thin-gauge-products.md) | Product reference, generated from the catalogue |
 | [`docs/simulation-coverage-gaps.md`](docs/simulation-coverage-gaps.md) | What the simulation does not cover yet, from a literature review |
@@ -528,5 +529,6 @@ the machine, the product and the observations.
 - The demo observations were generated from the model itself, so the demos test the screening
   logic, not the physics.
 
-The full list is in section 14 of [band diagnosis](docs/band-diagnosis.md); what is missing
-compared with the literature is in the [gap study](docs/simulation-coverage-gaps.md).
+The full list is in section 14 of [band diagnosis](docs/band-diagnosis.md) and, one row per
+limitation, exception, analyst choice and flag, in the [register of limitations](docs/limitations.md);
+what is missing compared with the literature is in the [gap study](docs/simulation-coverage-gaps.md).

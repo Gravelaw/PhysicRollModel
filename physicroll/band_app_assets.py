@@ -1619,7 +1619,8 @@ APP_JS = r''''use strict';
         var m = /^(.*?): (.{80,})$/.exec(r.text);
         return m ? '<li>' + esc(m[1]) + '. <details class="inline"><summary>Which ones</summary>' + esc(m[2]) + '</details></li>' : '<li>' + esc(r.text) + '</li>';
       }).join('') : '<li>No cap applies; the level is never higher than fair because nothing has been compared with plant data.</li>') +
-      '</ul><details class="noprint"><summary class="small">The rule</summary><p class="small soft">' + esc(t.rule) + '</p></details></details></div>';
+      '</ul><details class="noprint"><summary class="small">The rule</summary><p class="small soft">' + esc(t.rule) + '</p></details></details></div>' +
+      '<p class="small soft">The full list of what this tool assumes and cannot decide is in docs/limitations.md of the repository.</p>';
   }
 
   function profileLine(sum, run) {

@@ -4143,6 +4143,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 
 ## 14. Limitations and open discrepancies
 
+The register [`docs/limitations.md`](limitations.md) collects these limitations, the
+exceptions, the analyst choices, the recorded benchmark discrepancies and the flags in one
+place, one row each, and is kept in step with the code by a test; this section stays as the
+guide's own list.
+
 - **No plant validation.** Synthetic, uncalibrated stand, spans, bite, thermal and shape
   parameters; every demo's observations were generated from the model.
 - **Evidence rules are engineering judgement.** Weights, thresholds (pitch exponent bands,

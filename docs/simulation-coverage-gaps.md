@@ -2,7 +2,8 @@
 
 A literature gap study, dated 2026-11-18. **Nothing in this document was implemented or
 validated when it was written.** Section 11 lists what has been implemented since; none of it is
-validated on a mill.
+validated on a mill. What is still open, gap by gap, is also in part 6 of the register of
+limitations, [limitations.md](limitations.md).
 It lists what the published literature, open datasets and open codes contain that `physicroll` does
 not, and which physical effects would have to be coupled to cover thin-gauge aluminium rolling.
 
