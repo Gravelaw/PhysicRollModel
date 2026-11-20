@@ -154,7 +154,8 @@ class BenchmarkTests(unittest.TestCase):
                          _q(case, 'equivalent_coulomb_friction')['project_value'])
         for text in ('The frequency agrees because it is set by the stand and the strip '
                      'stiffness.', '0.02 -> 5.731 m/s, 107.77 Hz', '0.03 -> 9.261 m/s, 128.41 Hz',
-                     '0.054 -> 16.980 m/s, 160.23 Hz', 'unstable at any speed in its upper mode',
+                     '0.054 -> 16.980 m/s, 160.23 Hz',
+                     'unstable from about 0.52 m/s in its upper mode (481 Hz)',
                      'indicative only', 'not a validation of the chatter screen'):
             self.assertIn(text, case['note'])
         unloaded = chatter.natural_frequencies(bm._stand(bm.TM_LC7_STAND))['symmetric_hz']

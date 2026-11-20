@@ -626,6 +626,11 @@ def _tm_lc7():
         'factor the forward slip falls to 0.004 and the friction march fails '
         '[computed, SPEC18 prototype]).',
     ]
+    if z['critical_exit_speed_m_s'] is not None and z['onset_frequency_hz'] is not None:
+        no_damping_text = (f'the model is unstable from about {z["critical_exit_speed_m_s"]:.2f} '
+                           f'm/s in its upper mode ({z["onset_frequency_hz"]:.0f} Hz)')
+    else:
+        no_damping_text = f'the scan gives {z["critical_status"]}'
     speed_a = w['critical_exit_speed_m_s'] / TM_LC7_SPEED_IF_INTERSTAND_M_S
     speed_b = w['critical_exit_speed_m_s'] / TM_LC7_MEASURED_SPEED_M_S
     note = ('Comparison of the paper\'s stand structure with the project\'s own bite under the '
@@ -633,8 +638,8 @@ def _tm_lc7():
             'paper\'s model and not a validation of the chatter screen. The frequency agrees '
             'because it is set by the stand and the strip stiffness. The speed depends on the '
             'friction substitution (5.7 to 9.3 m/s for 0.02 to 0.03) and on a damping '
-            'heuristic; without the heuristic the model is unstable at any speed in its upper '
-            f'mode. Project, bite damping 0.5: {_fmt_onset(w)}; without bite damping: '
+            f'heuristic; without the heuristic {no_damping_text}. Project, bite damping 0.5: '
+            f'{_fmt_onset(w)}; without bite damping: '
             f'{_fmt_onset(z)}; speed ratio {speed_a:.3f} on reading (a) and {speed_b:.3f} '
             'on reading (b), '
             'indicative only. Sensitivity to substitution 2 (other Coulomb coefficients, bite '
