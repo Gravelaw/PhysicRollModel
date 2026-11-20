@@ -267,6 +267,26 @@ def reader_texts(summary, path='summary'):
     return out
 
 
+# technical terms that need a plain-word gloss wherever a card uses them
+TECH_TERMS = ('I-unit', 'film ratio', 'forward slip', 'heat share', 'half-space model',
+              'standard foil model', 'exit-tension feedback', 'compliance', 'flow stress',
+              'contact friction', 'shapemeter', 'thermal camber', 'flatness roll zone',
+              'strain rate', 'Roelands', 'Eyring', 'mattress', 'Hitchcock', 'heat partition')
+
+
+def glossary_problems(found):
+    """Texts that use a technical term the glossary does not explain (one source:
+    band_plain.GLOSSARY; the page glosses its first use on a screen)."""
+    keys = {k.lower() for k in bpl.GLOSSARY}
+    bad = []
+    for where, t in found:
+        for term in TECH_TERMS:
+            if re.search(r'(?<![\w-])' + re.escape(term) + r's?(?![\w-])', t, re.I) and \
+                    term.lower() not in keys:
+                bad.append((where, term))
+    return bad
+
+
 def engine_token_problems(found):
     """Reader-facing texts that carry a snake_case key, a SCREAMING_CASE token, a bare engine
     enum value or a bare true / false."""
@@ -423,8 +443,7 @@ class MeasurementQuestionTest(unittest.TestCase):
            'strip_temperature_scan', 'roll_profile_scan', 'friction_stripes', 'spray_wetted_arc')
 
     def test_the_new_questions_and_their_invariants(self):
-        group = [q.id for q in bpl.QUESTIONS if q.group == bpl.MEASURE_GROUP]
-        self.assertEqual(tuple(group), self.IDS)
+        self.assertEqual({q for q in self.IDS if q in bpl.ADDON_BY_QUESTION}, set(self.IDS))
         for qid in self.IDS:
             q = bpl.QUESTION_BY_ID[qid]
             self.assertEqual(q.step, 'mill', qid)
@@ -528,6 +547,209 @@ class MeasurementQuestionTest(unittest.TestCase):
         with self.assertRaises(bpl.AnswerError) as cm:
             bpl.case_from_answers(b, q)
         self.assertEqual(cm.exception.question, 'gauge_spot_length')
+
+
+PRE_PHASE0_MORE = {'mill': 77, 'rolling': 38}   # "More details" counts at commit 8f10cbe
+
+
+class AddonGroupTest(unittest.TestCase):
+    """The owner's standing requirement: the default path does not grow; add-on inputs are
+    grouped by what the person has, each question in exactly one group."""
+
+    def test_every_addon_question_is_in_exactly_one_group(self):
+        seen = [q for g in bpl.ADDON_GROUPS for q in g[3]]
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertTrue(set(seen) <= set(bpl.QUESTION_BY_ID))
+        for gid, title, help_, qs in bpl.ADDON_GROUPS:
+            self.assertTrue(title and help_.endswith('.') and qs, gid)
+            self.assertEqual(engine_token_problems([(gid, title), (gid, help_)]), [])
+            for q in qs:
+                self.assertFalse(bpl.QUESTION_BY_ID[q].ask_first, q)
+                self.assertEqual(bpl.QUESTION_BY_ID[q].step, 'mill', q)
+        # every add-on input of the two blocks is in a group (none left on the default path)
+        for q in bpl.QUESTIONS:
+            if q.key.startswith(('measurement.', 'hardening.rate_temperature',
+                                 'width_model.circumferential_layout',
+                                 'width_model.strip_temperature',
+                                 'width_model.roll_ground_profile',
+                                 'width_model.friction_stripe_screen')):
+                self.assertIn(q.id, bpl.ADDON_BY_QUESTION, q.id)
+
+    def test_the_default_path_does_not_grow(self):
+        for step, before in PRE_PHASE0_MORE.items():
+            more = [q for q in bpl.QUESTIONS if q.step == step and not q.ask_first
+                    and q.id not in bpl.ADDON_BY_QUESTION and not q.show_if]
+            self.assertLessEqual(len(more), before, step)
+        ask = [q.id for q in bpl.QUESTIONS if q.ask_first]
+        self.assertFalse(set(ask) & set(bpl.ADDON_BY_QUESTION))
+        self.assertEqual(len(ask), 29)                    # 16 + 4 + 9, as before Phase 0
+
+    def test_conditional_questions(self):
+        for qid in ('tome_scale', 'tome_rate'):
+            d = bpl.QUESTION_BY_ID[qid].to_dict()['show_if']
+            self.assertEqual(d, {'question': 'hardening_law', 'values': ['tome_voce']})
+
+    def test_group_status_lines_come_from_the_built_case(self):
+        p = preset('example_battery_foil')
+        st = bpl.addon_status(bpl.case_from_answers(bpl.answers_from_case(p['case']), p))
+        self.assertEqual(st['flatness_roll'], {'filled': True, 'summary': '24 zones of 52 mm'})
+        self.assertEqual(st['temperature_scan']['summary'], '25 points')
+        self.assertFalse(st['oil_data']['filled'])           # the default pressure rule
+        self.assertEqual(st['model_choices'], {'filled': False,
+                                               'summary': 'standard choices'})
+        self.assertEqual(set(st), {g[0] for g in bpl.ADDON_GROUPS})
+
+    def test_second_friction_law_does_not_ask_for_the_placeholder_numbers(self):
+        p = preset('foil_mill')
+        a = bpl.answers_from_case(p['case'])
+        a['values'].update(closure_model='load_sharing_curve', closure_contact_friction=0.04)
+        c = bpl.case_from_answers(a, p)
+        clo = c['tribology']['friction_closure']
+        self.assertEqual((clo['model'], clo['contact_friction']), ('load_sharing_curve', 0.04))
+        self.assertEqual((clo['mu_b'], clo['mu_v'], clo['lambda0']), (0.09, 0.008, 1.0))
+        a['values']['closure_contact_friction'] = None
+        with self.assertRaises(ValueError) as cm:
+            bpl.case_from_answers(a, p)
+        self.assertEqual(bpl.plain_error(cm.exception)['question'], 'closure_contact_friction')
+
+
+PASS_CODE_TEXT = re.compile(r'(?<![\w-])((S|F|P|ALT)\d{1,2}|case pass)(?![\w-])')
+
+
+def labels_in(obj):
+    """Every 'label' string of a structure (row labels of charts and views)."""
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == 'label' and isinstance(v, str):
+                out.append(v)
+            else:
+                out += labels_in(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            out += labels_in(v)
+    return out
+
+
+def check_chart(ch):
+    """What is wrong with a chart spec of an add-on card (empty: nothing)."""
+    bad = []
+    marks, refs, legend = ch.get('marks') or [], ch.get('references') or [], ch.get('legend')
+    ids = [m['id'] for m in marks]
+    if not marks or len(ids) != len(set(ids)):
+        bad.append('marks missing or repeated')
+    if legend is None or len(legend) != len(set(legend)) or not set(legend) <= set(ids):
+        bad.append(f'legend {legend} is not a one-to-one subset of the marks {ids}')
+    for m in marks:                         # each mark is either in the legend or labelled
+        if (m['id'] in (legend or [])) == bool(m['direct_label']):
+            bad.append(f'{m["id"]}: in the legend and labelled, or neither')
+        if m['colour'] not in bpl.SERIES_COLOURS:
+            bad.append(f'{m["id"]}: colour {m["colour"]} is not a series colour')
+    looks = [(m['shape'], m['fill'], m['colour'], m['line']) for m in marks]
+    if len(looks) != len(set(looks)):
+        bad.append('two marks are drawn alike')
+    by_colour = {}
+    for m in marks:
+        by_colour.setdefault(m['colour'], set()).add(m['meaning'])
+    bad += [f'colour {k} carries {sorted(v)}' for k, v in by_colour.items() if len(v) > 1]
+    bad += [f'reference {x["id"]} is not neutral' for x in refs if x['colour'] != bpl.NEUTRAL]
+    for name in ('x_axis', 'y_axis'):
+        a = ch.get(name)
+        if name == 'x_axis' and not a:
+            bad.append('no x axis title')
+        if a and not a.get('categories') and not (a.get('title') and (
+                a.get('unit') or a.get('dimensionless'))):
+            bad.append(f'{name} {a} has no title with a unit')
+    return bad
+
+
+class CardPatternTest(unittest.TestCase):
+    """One card pattern for every add-on result: takeaway, chart, how to read, details, text
+    alternative; cards only when their result exists; one quiet line for the rest."""
+
+    def test_cards_of_the_artifacts(self):
+        for name, r in all_results().items():
+            with self.subTest(result=name):
+                s = bpl.plain_summary(r)
+                ids = [c['id'] for c in s['addon_cards']]
+                self.assertEqual(len(ids), len(set(ids)))
+                for c in s['addon_cards']:
+                    self.assertTrue(c['takeaway'] and c['how_to_read'] and
+                                    c['text_alternative'], c['id'])
+                    self.assertTrue(c.get('left_out') or c['chart'], c['id'])
+                    self.assertIn(c['group'], bpl.ADDON_QUESTIONS)
+                    texts = [('t', c['takeaway']), ('h', c['how_to_read'])] + [
+                        ('d', d) for d in c['details'] + c['text_alternative']
+                        + [c.get('caveat') or '']]
+                    self.assertEqual(engine_token_problems(texts), [], c['id'])
+                    self.assertEqual(glossary_problems(texts), [], c['id'])
+                more = s['addon_more']
+                for m in more['items']:
+                    self.assertNotIn(next(sp[0] for sp in bpl.CARD_SPECS if sp[4] == m['what']),
+                                     ids)
+                    self.assertIn(m['group_title'], more['text'])
+        battery = bpl.plain_summary(artifact('battery-foil-demo'))
+        self.assertEqual([c['id'] for c in battery['addon_cards']],
+                         ['shapemeter', 'hotcold', 'friction'])
+        # the heat-share and roll-gap results exist in every foil run, but their cards wait for
+        # their group: a person who uses no add-on sees no new card
+        self.assertIn('"Model choices"', battery['addon_more']['text'])
+        self.assertEqual(battery['addon_more']['text'].count('"Model choices"'), 1)
+        self.assertTrue(battery['heat_share_view']['available'])
+        self.assertTrue(battery['roll_gap_model_view']['available'])
+        case = copy.deepcopy(artifact('battery-foil-demo')['inputs'])
+        case['model_options']['bite_model'] = 'auto_half_space'
+        ids = [c['id'] for c in
+               bpl.plain_summary(artifact('battery-foil-demo'), case)['addon_cards']]
+        self.assertEqual(ids, ['shapemeter', 'hotcold', 'friction', 'heatshare', 'rollgap'])
+        bearing = bpl.plain_summary(artifact('bearing-order-demo'))
+        self.assertEqual(bearing['addon_cards'], [])
+        self.assertIn('A thickness gauge', bearing['addon_more']['text'])
+
+    def test_charts_say_each_thing_once(self):
+        """Legend entries map one-to-one to series and are drawn from the same mark; one colour
+        carries one meaning in a chart; references are neutral; value axes carry a title with
+        a unit; one how-to-read line."""
+        for name, r in all_results().items():
+            for c in bpl.plain_summary(r)['addon_cards']:
+                ch = c['chart']
+                if ch is None:
+                    continue
+                with self.subTest(result=name, card=c['id']):
+                    chart_problems = check_chart(ch)
+                    self.assertEqual(chart_problems, [])
+                    one = c['how_to_read']                   # one sentence, one line
+                    self.assertTrue(one.endswith('.') and '. ' not in one and len(one) <= 120,
+                                    one)
+
+    def test_no_engine_pass_codes_in_views(self):
+        """Passes are named by their gauges ("50 → 30 µm"), with "this pass" and "alternative
+        route" where they apply, never by the case's short codes."""
+        for name, r in all_results().items():
+            s = bpl.plain_summary(r)
+            with self.subTest(result=name):
+                found = [(k, t) for k in bpl.PASS_VIEWS + ('addon_cards',)
+                         for _, t in reader_texts({k: s[k]}) + [
+                             ('label', x) for x in labels_in(s[k])]
+                         if PASS_CODE_TEXT.search(t)]
+                self.assertEqual(found, [])
+        s = bpl.plain_summary(artifact('battery-foil-demo'))
+        self.assertEqual([r['label'] for r in s['heat_share_view']['rows']][:2],
+                         ['50 → 30 µm (this pass)', '0.26 → 0.135 mm'])
+        self.assertIn('50 → 25 µm (alternative route)',
+                      [r['label'] for r in s['heat_share_view']['rows']])
+
+    def test_roll_gap_card_reads_the_recorded_benchmark_runs(self):
+        from physicroll import benchmarks as bb
+        v = bpl.plain_summary(artifact('battery-foil-demo'))['roll_gap_model_view']
+        hs = bb.RECORDED['BT-V1-HS']
+        self.assertEqual(v['loads']['half_space'], hs['w_bar_rigid_strip'])
+        self.assertEqual(v['loads']['standard'], bb.RECORDED['BT-V1']['w_bar'])
+        self.assertIn(f'a load of {round(hs["w_bar_rigid_strip"])} and the standard foil model '
+                      f'{round(bb.RECORDED["BT-V1"]["w_bar"])}', v['benchmark_text'])
+        self.assertIn(f'give {round(hs["w_bar_printed_end_40_um"])} to '
+                      f'{round(hs["w_bar_printed_end_2.5_um"])}', v['benchmark_text'])
+        self.assertNotIn('0.7', v['benchmark_text'])          # no ratio is shown (SPEC18 risks)
 
 
 class UnitTest(unittest.TestCase):
@@ -820,7 +1042,8 @@ class SummaryTest(unittest.TestCase):
                     engine |= {sv['strip_start_m'], sv['strip_end_m']}
                 for view in ('strip_view', 'along_view', 'gauge_view', 'temperature_view',
                              'shapemeter_view', 'temperature_flatness_view', 'friction_view',
-                             'roll_profile_view', 'gauge_sensor_view'):
+                             'roll_profile_view', 'gauge_sensor_view', 'friction_records_view',
+                             'heat_share_view', 'roll_surface_view', 'flow_stress_view'):
                     for x in numbers_in(s[view]):
                         if isinstance(x, int) and x < 100:      # indices, counts
                             continue

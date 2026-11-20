@@ -304,3 +304,36 @@ class ShapemeterRunTest(ServerCase):
         self.assertEqual(st, 200, chk)
         self.assertEqual(chk['case']['measurement'], case['measurement'])
         self.assertEqual(model_zones(chk), drawn)
+
+
+class PassRecordsRunTest(ServerCase):
+    """SPEC18 package 12: a run with pass records (and the other Phase 1 answers) stores them
+    in its case and reopens with the same answers."""
+    engine = staticmethod(fake_engine)
+
+    def test_pass_records_run_stores_and_reopens(self):
+        api = Api(self)
+        records = [{'label': 'coil 4711', 'separating_force_n': 1200.0,
+                    'forward_slip_fraction': 6.0, 'torque_per_work_roll_nm': None,
+                    'exit_speed_m_s': None}]
+        api.answers['values'].update(pass_records=records,
+                                     spray_arcs=[{'start_rad': 90.0, 'arc_rad': 60.0}])
+        st, out = api.check()
+        self.assertEqual(st, 200, out)
+        self.assertEqual(out['model']['addons']['pass_records'],
+                         {'filled': True, 'summary': '1 record'})
+        st, run = self.client.json('POST', '/api/runs', api.body(profile='quick'))
+        self.assertEqual(st, 202, run)
+        done, _ = self.wait(run['id'])
+        self.assertEqual(done['run']['status'], 'done')
+        case = json.loads((self.tmp / run['id'] / 'case.json').read_text())
+        self.assertEqual(case['measurement']['pass_records'][0]['separating_force_n'], 1.2e6)
+        st, ro = self.client.json('GET', f'/api/runs/{run["id"]}/reopen')
+        self.assertEqual(st, 200, ro)
+        self.assertEqual(ro['answers']['values']['pass_records'], records)
+        st, chk = self.client.json('POST', '/api/case/check',
+                                   {'preset': ro['preset'], 'answers': ro['answers']})
+        self.assertEqual(st, 200, chk)
+        self.assertEqual(chk['case']['measurement'], case['measurement'])
+        self.assertEqual(chk['case']['width_model']['circumferential_layout'],
+                         case['width_model']['circumferential_layout'])

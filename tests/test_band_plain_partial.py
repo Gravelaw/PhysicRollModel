@@ -52,11 +52,20 @@ class PartialResultTest(unittest.TestCase):
                           'gauge_sensor_view': good(m.get('thickness_gauge')),
                           'temperature_flatness_view': good(w.get('strip_temperature')),
                           'friction_view': good(w.get('friction_stripes')),
-                          'roll_profile_view': good(w.get('roll_profile'))}
+                          'roll_profile_view': good(w.get('roll_profile')),
+                          'friction_records_view': good((r.get('process') or {}).get(
+                              'friction_identification')),
+                          'roll_surface_view': good(w.get('roll_surface_cycle'))}
                 for v, want in expect.items():
                     self.assertEqual(s[v]['available'], want, v)
                 if name != 'foil_not_credible':           # the battery-foil scenario carries
                     self.assertFalse(any(expect.values()))   # a shapemeter and a scan
+                self.assertFalse(s['flow_stress_view']['available'])    # no factor entered
+                ids = [c['id'] for c in s['addon_cards']]
+                for card, view in (('shapemeter', 'shapemeter_view'), ('rollsurface',
+                                                                       'roll_surface_view'),
+                                   ('records', 'friction_records_view')):
+                    self.assertEqual(card in ids, s[view]['available'], card)
         # a shapemeter on a pass with no roll bite: the engine's own section is not
         # assessable (no modelled flatness), and the page shows no zone readings
         case, result = P.result('no_bite_width')

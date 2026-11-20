@@ -67,6 +67,7 @@ import math
 import re
 
 from . import band_diagnosis as bd
+from . import benchmarks as bbench
 from . import bite_tribology as bt
 from . import band_process as bproc
 from . import band_signatures as bsig
@@ -112,6 +113,8 @@ UNITS = {
     'pos_mm': ('mm from the strip edge', 1.0, 1e3, 0.0),
     'i_units': ('I-units', 1.0, 1.0, 0.0), 'ms': ('ms', 1.0, 1e3, 0.0),
     'um_radius': ('µm on radius', 1.0, 1e6, 0.0),
+    'kn': ('kN', 1e3, 1.0, 0.0), 'knm': ('kN·m', 1e3, 1.0, 0.0),
+    'percent_per_k': ('% per K', 1.0, 100.0, 0.0), 'per_s': ('1/s', 1.0, 1.0, 0.0),
 }
 INTEGER_UNITS = ('count', 'nozzle_no')
 
@@ -153,6 +156,7 @@ class Field:
     kind: str = 'number'            # number | text | choice | yesno | numbers
     unit: str | None = None
     choices: tuple = ()
+    optional: bool = False              # a number that may stay empty ("Don't know")
 
     def validate(self):
         if self.kind not in ('number', 'text', 'choice', 'yesno', 'numbers'):
@@ -165,7 +169,8 @@ class Field:
     def to_dict(self):
         return {'name': self.name, 'label': self.label, 'kind': self.kind, 'unit': self.unit,
                 'unit_label': unit_label(self.unit),
-                'choices': [{'value': v, 'label': lab} for v, lab in self.choices]}
+                'choices': [{'value': v, 'label': lab} for v, lab in self.choices],
+                'optional': self.optional}
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,7 @@ class Question:
     also_keys: tuple = ()
     lo_si: float | None = None
     hi_si: float | None = None
+    show_if: tuple = ()                 # (question id, values): shown only when that answer is one
 
     def validate(self):
         if not re.fullmatch(r'[a-z][a-z0-9_]*', self.id):
@@ -223,7 +229,10 @@ class Question:
                 'choices': [{'value': v, 'label': lab} for v, lab in self.choices],
                 'fields': [f.to_dict() for f in self.fields], 'unknown': self.unknown,
                 'family': self.family, 'origin_tracked': self.origin_tracked,
-                'also_keys': list(self.also_keys), 'lo_si': self.lo_si, 'hi_si': self.hi_si}
+                'also_keys': list(self.also_keys), 'lo_si': self.lo_si, 'hi_si': self.hi_si,
+                'show_if': ({'question': self.show_if[0], 'values': list(self.show_if[1])}
+                            if self.show_if else None),
+                'addon_group': ADDON_BY_QUESTION.get(self.id)}
 
 
 def _q(id_, step, group, key, kind, wording, help_, **kw):
@@ -530,9 +539,11 @@ PASS_QUESTIONS = (
        'Voce law: late hardening slope (negative for work softening)',
        'MPa. Also the late slope of the Tome form.', unit='mpa', group='Hardening'),
     _p('tome_scale', 'hardening.saturation_scale_pa', 'number',
-       'Voce law, Tome form: saturation scale', 'MPa.', unit='mpa', group='Hardening'),
+       'Voce law, Tome form: saturation scale', 'MPa.', unit='mpa', group='Hardening',
+       show_if=('hardening_law', ('tome_voce',))),
     _p('tome_rate', 'hardening.initial_hardening_rate_pa', 'number',
-       'Voce law, Tome form: initial hardening rate', 'MPa.', unit='mpa', group='Hardening'),
+       'Voce law, Tome form: initial hardening rate', 'MPa.', unit='mpa', group='Hardening',
+       show_if=('hardening_law', ('tome_voce',))),
     _p('incoming_hardness_variation', 'incoming_variation.flow_stress_variation_fraction',
        'number', 'Hardness variation of the incoming coil',
        'Relative variation of the flow stress along the incoming coil.', unit='percent',
@@ -908,7 +919,11 @@ MILL_QUESTIONS = (
     _m('grinding_rotation', 'width_model.grinding.roll_rotation_hz', 'number',
        'Roll rotation on the grinder', 'Turns per second.', unit='hz', group='Coil and deflector'),
     _m('bite_model', 'model_options.bite_model', 'choice', 'Roll-gap model',
-       'Keep the starting point\'s choice unless you know why.',
+       'Keep the starting point\'s choice unless you know why. The reduced half-space foil '
+       'model is an option, not checked on a mill: on the one published foil case it gives a '
+       f'load of {round(bbench.RECORDED["BT-V1-HS"]["w_bar_rigid_strip"])} and the standard '
+       f'foil model {round(bbench.RECORDED["BT-V1"]["w_bar"])}; the published 118 depends on a '
+       'numerical detail the paper does not state.',
        choices=_choices(bd.BITE_MODELS, BITE_MODEL_WORDS), group='Model settings'),
     _m('shear_cap_factor', 'model_options.shear_cap_factor', 'number',
        'Largest friction stress as a share of the metal\'s shear strength',
@@ -1026,7 +1041,55 @@ MEASUREMENT_QUESTIONS = (
           'The angle of the roll surface the coolant sprays cover, from the header drawing. '
           'Used only to state what kind of spray cooling value you entered.', unit='deg'),
 )
+RATE_HELP = (' From tensile tests at two or more speeds or temperatures of your alloy. Enter it '
+             'with the temperature softening below, or not at all: one without the other biases '
+             'every roll force.')
+PHASE1_QUESTIONS = (
+    _meas('pass_records', 'measurement.pass_records', 'list',
+          'Rolling force and forward slip you have logged for this pass',
+          'From the mill log of this pass (up to 8 coils): the rolling force, and if you have '
+          'them the forward slip (strip speed over roll speed, minus 1) and the torque of one '
+          'work roll. The tool works out which friction each one corresponds to; it changes '
+          'nothing in the case.',
+          fields=(Field('label', 'Coil or note', kind='text'),
+                  Field('separating_force_n', 'Rolling force', unit='kn'),
+                  Field('forward_slip_fraction', 'Forward slip', unit='percent', optional=True),
+                  Field('torque_per_work_roll_nm', 'Torque per work roll', unit='knm',
+                        optional=True),
+                  Field('exit_speed_m_s', 'Strip speed', unit='m_min', optional=True))),
+    _meas('rate_sensitivity', 'hardening.rate_temperature.rate_sensitivity', 'number',
+          'How much the metal\'s strength rises with rolling speed (rate exponent)',
+          'One laboratory measurement on 16 µm foil gives 0.027, at speeds far below rolling; '
+          'rolling is about five decades faster, so the effect is an extrapolation.' + RATE_HELP,
+          unit='ratio'),
+    _meas('rate_reference', 'hardening.rate_temperature.reference_strain_rate_per_s', 'number',
+          'Strain rate of the tests that exponent comes from',
+          'The deformation speed of those tensile tests (1/s); one published set ends at 0.01.',
+          unit='per_s'),
+    _meas('temperature_softening', 'hardening.rate_temperature.temperature_coefficient_per_k',
+          'number', 'How much the strength falls per degree of temperature',
+          'Published hot strengths of foil alloys fall by about 0.15 to 0.19 % per kelvin '
+          'between room temperature and 150 °C.' + RATE_HELP, unit='percent_per_k'),
+    _meas('rate_reference_temperature', 'hardening.rate_temperature.reference_temperature_k',
+          'number', 'Temperature of the tests those values come from',
+          'Usually room temperature.', unit='degc'),
+    _meas('use_rate_temperature', 'hardening.rate_temperature.use_rate_temperature', 'yesno',
+          'Apply the speed and temperature factor to the roll forces?',
+          'Normally no: the factor is then shown beside the forces only. Yes needs "Use the '
+          'computed flow stress" of the hardening law as well.'),
+    _meas('spray_arcs', 'width_model.circumferential_layout.spray_arcs', 'list',
+          'Where around the roll the sprays hit',
+          'Each spray band around the roll: where it starts, in degrees after the roll gap in '
+          'the direction of rotation, and how long it is. From the header drawing. With it the '
+          'tool shows the roll surface temperature within one turn.',
+          fields=(Field('start_rad', 'Start after the roll gap', unit='deg'),
+                  Field('arc_rad', 'Length', unit='deg'))),
+)
 MEASUREMENT_SECTIONS = ('measurement.shapemeter', 'measurement.thickness_gauge')
+# optional sub-objects the add-on questions fill: all their questions "Don't know" -> null;
+# otherwise their required answers are needed and unanswered optional keys take the defaults
+OPTIONAL_SECTIONS = MEASUREMENT_SECTIONS + ('hardening.rate_temperature',
+                                            'width_model.circumferential_layout')
 # list questions stored as parallel arrays of one case object: key -> ({field: array}, defaults)
 PARALLEL_LISTS = {
     'width_model.strip_temperature': ({'position': 'positions_m', 'temperature': 'temperature_k'},
@@ -1038,8 +1101,54 @@ PARALLEL_LISTS = {
                                          'provenance': 'entered in the band app'}),
 }
 
+# ============================================================================= add-on groups
+# What a person may have beyond the three steps, one group each (the owner's standing
+# requirement: grouped by what the person has, not by model). id, title, one-line help, questions.
+ADDON_GROUPS = (
+    ('flatness_roll', 'A flatness roll (shapemeter)',
+     'Zone width and count of your flatness roll: the result then shows what each zone would '
+     'read.', ('shapemeter_zone_width', 'shapemeter_zone_count', 'shapemeter_edge_zone_width',
+               'shapemeter_edge_zone_count', 'shapemeter_spreading', 'shapemeter_resolution',
+               'shapemeter_temperature_compensated')),
+    ('thickness_gauge', 'A thickness gauge',
+     'Spot size and response time of your gauge: the result shows how much of each mark it '
+     'keeps.', ('gauge_spot_length', 'gauge_time_constant', 'gauge_sample_interval',
+                'gauge_position', 'gauge_spot_width')),
+    ('temperature_scan', 'A strip temperature scan',
+     'A temperature reading across the strip after the roll gap: the result shows flatness '
+     'measured hot and after cooling.', ('strip_temperature_scan',)),
+    ('grinder_report', 'A roll grinder report',
+     'The measured roll profile: the result shows the bands it would make.',
+     ('roll_profile_scan',)),
+    ('pass_records', 'Pass records (force, torque, slip)',
+     'Logged rolling force, torque or forward slip: the result shows which friction each one '
+     'corresponds to.', ('pass_records',)),
+    ('oil_data', 'Oil data',
+     'Oil laboratory data beyond the basic oil values: viscosity at several temperatures, '
+     'high-pressure behaviour, flash point and site limits.',
+     ('oil_viscosity_table', 'oil_pressure_law', 'oil_roelands_z', 'oil_eyring_stress',
+      'oil_eyring_coefficient', 'oil_limiting_shear', 'oil_limiting_shear_coefficient',
+      'oil_flash_point', 'oil_supply_temperature_cap')),
+    ('friction_difference', 'A known friction difference across the width',
+     'A place where the oil film or roll surface is known to differ: the result shows the band '
+     'it could make.', ('friction_stripes',)),
+    ('roll_cooling', 'How the roll is cooled around its circumference',
+     'Where around the roll the sprays hit: the result shows the roll surface temperature '
+     'within one turn.', ('spray_wetted_arc', 'spray_arcs')),
+    ('model_choices', 'Model choices',
+     'Leave these alone unless you want to compare models: which roll-gap model, which friction '
+     'law, and a speed and temperature factor on the metal\'s strength. Each changes the '
+     'numbers on purpose; the standard choices are what the shortlist was built with.',
+     ('bite_model', 'shear_cap_factor', 'closure_model', 'closure_contact_friction',
+      'closure_valley_model', 'closure_contact_ratio_curve', 'closure_valley_film_curve',
+      'interface_conductance', 'use_computed_heat_partition', 'rate_sensitivity',
+      'rate_reference', 'temperature_softening', 'rate_reference_temperature',
+      'use_rate_temperature')),
+)
+ADDON_BY_QUESTION = {q: g[0] for g in ADDON_GROUPS for q in g[3]}
+
 QUESTIONS = tuple(q.validate() for q in OBSERVATION_QUESTIONS + PASS_QUESTIONS + FAULT_QUESTIONS
-                  + MILL_QUESTIONS + MEASUREMENT_QUESTIONS)
+                  + MILL_QUESTIONS + MEASUREMENT_QUESTIONS + PHASE1_QUESTIONS)
 QUESTION_BY_ID = {q.id: q for q in QUESTIONS}
 if len(QUESTION_BY_ID) != len(QUESTIONS):
     raise RuntimeError('duplicate question id')
@@ -1065,8 +1174,13 @@ SECTIONS = {
                                   'exit_tension_force_sensitivity_per_width_m',
                                   'bite_half_length_m'),
                                  {'provenance': 'entered in the band app'}),
-    'tribology.friction_closure': ('the placeholder friction law', ('mu_b', 'mu_v', 'lambda0'),
-                                   {}),
+    # a friction law chosen on the page starts from the engine's own defaults of the
+    # placeholder law (bite_tribology.FrictionClosure), so choosing the second law never asks
+    # for the placeholder's three numbers
+    'tribology.friction_closure': ('the friction law', (),
+                                   {'mu_b': bt.FrictionClosure().mu_b,
+                                    'mu_v': bt.FrictionClosure().mu_v,
+                                    'lambda0': bt.FrictionClosure().lambda0}),
     'measurement': ('a flatness or gauge measurement', (),
                     {'shapemeter': None, 'thickness_gauge': None, 'pass_records': None}),
     'measurement.shapemeter': ('the shapemeter', ('zone_width_m', 'zone_count'),
@@ -1080,6 +1194,16 @@ SECTIONS = {
                                      'provenance': 'entered in the band app'}),
     'width_model.friction_stripe_screen': ('the friction stripe estimate', (),
                                            {'reference_half_peak_width_m': None, 'stripes': []}),
+    'hardening.rate_temperature': ('the speed and temperature factor',
+                                   ('rate_sensitivity', 'reference_strain_rate_per_s',
+                                    'temperature_coefficient_per_k', 'reference_temperature_k'),
+                                   {'rate_sensitivity_slope_per_k': 0.0,
+                                    'provenance': 'entered in the band app',
+                                    'use_rate_temperature': False}),
+    'width_model.circumferential_layout': ('the spray layout around the roll', ('spray_arcs',),
+                                           {'backup_contact': None,
+                                            'provenance': 'entered in the band app'}),
+
 }
 SECTION_NAMES = {'width_model': 'a roll thermal model (width model)',
                  'tribology': 'rolling-oil data (tribology)', 'lubrication': 'a simple oil film '
@@ -1230,6 +1354,8 @@ def _num_display(value, unit, origin):
 def _field_si(q, f, value, origin):
     label = f'{q.wording}: {f.label}'
     if f.kind == 'number':
+        if value is None and f.optional:
+            return None
         return _num_si(q, label, value, f.unit, origin)
     if f.kind == 'numbers':
         if not isinstance(value, list):
@@ -1295,7 +1421,9 @@ def answer_to_si(q, value, origin_m=0.0):
         rows = [{f.name: _field_si(q, f, item.get(f.name), origin_m) for f in q.fields}
                 for item in value]
         return dict(defaults, **{arr: [r[name] for r in rows] for name, arr in arrays.items()})
-    if q.key in NULL_WHEN_EMPTY_LISTS and not value:
+    if (q.key in NULL_WHEN_EMPTY_LISTS or q.key in ('measurement.pass_records',
+                                                    'width_model.circumferential_layout.'
+                                                    'spray_arcs')) and not value:
         return None                     # no points: the single viscosity value is used
     out = []
     for item in value:
@@ -1306,6 +1434,12 @@ def answer_to_si(q, value, origin_m=0.0):
             rec['label'] = f'pass {len(out) + 1}'
         if q.key == 'width_model.events' and rec.get('label') is None:
             rec.pop('label')
+        if q.key == 'measurement.pass_records':
+            rec['label'] = rec.get('label') or f'record {len(out) + 1}'
+            rec['provenance'] = 'entered in the band app'
+            for k in ('forward_slip_fraction', 'torque_per_work_roll_nm', 'exit_speed_m_s'):
+                if rec.get(k) is None:
+                    rec.pop(k, None)
         if q.key == 'kinematics.gear_meshes' and not rec.get('name'):
             rec['name'] = f'gear mesh {len(out) + 1}'
         if q.key == 'kinematics.bearings' and not rec.get('name'):
@@ -1569,7 +1703,7 @@ def case_from_answers(answers, preset):
                   if f'{path}.{r}' in QUESTION_BY_KEY]
             raise AnswerError(f'To use {label}, also answer: ' + '; '.join(qs) + '.',
                               QUESTION_BY_KEY.get(f'{path}.{lack[0]}', QUESTIONS[0]).id)
-    _tidy_measurement(case, values)
+    _tidy_optional(case, values)
     if case.get('hardening') is not None:
         law = case['hardening'].get('law')
         if law not in bproc.HARDENING_LAW_KEYS:
@@ -1615,32 +1749,35 @@ def case_from_answers(answers, preset):
     return case
 
 
-def _tidy_measurement(case, values):
-    """A shapemeter or thickness gauge whose questions are all "Don't know" is not described
-    (the section becomes null, and ``measurement`` too when it is left empty); a described one
-    needs its required answers, and its unanswered optional keys take the engine defaults."""
-    m = case.get('measurement')
-    if not isinstance(m, dict):
-        return
-    for path in MEASUREMENT_SECTIONS:
-        name = path.split('.')[1]
-        sec = m.get(name)
-        if not isinstance(sec, dict):
+def _section_questions(path):
+    return [q for q in QUESTIONS if q.key == path or q.key.startswith(path + '.')]
+
+
+def _tidy_optional(case, values):
+    """An optional sub-object (a shapemeter, a thickness gauge, the speed and temperature factor,
+    the spray layout around the roll, the roll scan) whose questions are all "Don't know" is not
+    described: it becomes null (and ``measurement`` too when it is left empty). A described one
+    needs its required answers; its unanswered optional keys take the engine defaults."""
+    for path in OPTIONAL_SECTIONS:
+        parent_path, name = path.rsplit('.', 1)
+        parent = _get(case, parent_path)
+        if not isinstance(parent, dict) or not isinstance(parent.get(name), dict):
             continue
-        qs = [q for q in QUESTIONS if q.key.startswith(path + '.')]
-        if all(values.get(q.id) is None for q in qs):
-            m[name] = None
+        sec = parent[name]
+        if all(_empty(values.get(q.id)) for q in _section_questions(path)):
+            parent[name] = None
             continue
         label, required, defaults = SECTIONS[path]
-        lack = [r for r in required if sec.get(r) is None]
+        lack = [r for r in required if _empty(sec.get(r))]
         if lack:
-            raise AnswerError(f'To use {label}, also answer: ' + '; '.join(
-                QUESTION_BY_KEY[f'{path}.{r}'].wording.rstrip('?') for r in lack) + '.',
-                QUESTION_BY_KEY[f'{path}.{lack[0]}'].id)
+            qs = [QUESTION_BY_KEY[f'{path}.{r}'] for r in lack]
+            names = list(dict.fromkeys(q.wording.rstrip('?') for q in qs))
+            raise AnswerError(f'To use {label}, also answer: ' + '; '.join(names) + '.', qs[0].id)
         for k, d in defaults.items():
             if sec.get(k) is None and d is not None:
                 sec[k] = d
-    if all(m.get(k) is None for k in m):
+    m = case.get('measurement')
+    if isinstance(m, dict) and all(m.get(k) is None for k in m):
         case['measurement'] = None
 
 
@@ -2081,6 +2218,7 @@ def drawing_model(case, starting_point=None):
     out['route'] = _route_model(case)
     out['side'] = _side_model(case, edge, starting_point)
     out['shapemeter'] = _shapemeter_layout(case)
+    out['addons'] = addon_status(case)
     return out
 
 
@@ -2780,6 +2918,27 @@ GLOSSARY = {
     'flatness roll zone': 'One measuring section of a flatness (shapemeter) roll across the '
                           'strip; it shows the average flatness over its width.',
     'I-unit': 'The unit of flatness: a length difference of 1 in 100 000 between strip fibres.',
+    'film ratio': 'Oil film thickness divided by the combined roughness of roll and strip: below '
+                  'about 1 the surfaces touch through the oil.',
+    'forward slip': 'How much faster the strip leaves the roll gap than the roll surface moves '
+                    '(strip speed over roll speed, minus 1).',
+    'heat share': 'The part of the heat made in the roll gap that stays in the strip; the rest '
+                  'goes into the rolls.',
+    'half-space model': 'A more detailed foil roll-gap model that treats roll and strip surfaces '
+                        'as elastic bodies; a reduced form of a published model.',
+    'standard foil model': 'The foil roll-gap model the tool uses by default where the sheet '
+                           'model stops (a simplified elastic foundation).',
+    'exit-tension feedback': 'The way a longer strip fibre loses tension after the roll gap and '
+                             'so is rolled less; it limits how strong a band gets.',
+    'compliance': 'How much roll and strip give way under a local load.',
+    'flow stress': 'The stress at which the metal deforms plastically; it rises with work '
+                   'hardening and speed and falls with temperature.',
+    'contact friction': 'The friction where roll and strip touch metal to metal, without oil '
+                        'between them.',
+    'shapemeter': 'A flatness measuring roll after the mill; it shows the tension across the '
+                  'strip zone by zone.',
+    'thermal camber': 'The roll diameter profile caused by the roll being hotter in some places.',
+    'roll gap': 'Where the work rolls squeeze the strip.',
     'chatter': 'A vibration of the roll stack that prints marks across the strip.',
     'onset': 'The point where something starts to happen, for example the stripe height at '
              'which a band starts to buckle.',
@@ -3659,6 +3818,567 @@ def _candidate_pitch(h):
                        'gauge.')}
 
 
+# ============================================================================= Phase 1 views
+def _pct(x):
+    return _fixed(x * 100, 2)
+
+
+def _c(k):
+    return _fixed(k - 273.15, 3)
+
+
+def _roll_gap_model_view(result):
+    """Which roll-gap model ran and, when a foil model ran, the standing of the half-space option
+    on the one published foil case (recorded benchmark runs, ``benchmarks.RECORDED``: the values
+    the benchmark tests pin to ``benchmarks.run_case``)."""
+    flags = set(result.get('flags') or [])
+    if 'BITE_FROM_REDUCED_HALF_SPACE_MODEL' in flags:
+        model = 'the reduced half-space foil model (an option, not the standard choice)'
+    elif 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL' in flags:
+        model = 'the standard foil model'
+    else:
+        return {'available': False}
+    hs, std = bbench.RECORDED['BT-V1-HS'], bbench.RECORDED['BT-V1']
+    a, a2 = hs['w_bar_rigid_strip'], hs['w_bar_strip_spring_80_gpa']
+    b = std['w_bar']
+    c, d = hs['w_bar_printed_end_40_um'], hs['w_bar_printed_end_2.5_um']
+    lc = hs['contact_length_rigid_strip_m']
+    return {'available': True, 'model_words': model,
+            'loads': {'half_space': a, 'half_space_strip_spring': a2, 'standard': b,
+                      'published_family': [c, d]},
+            'contact_length_m': lc, 'reference_contact_length_m': bbench.BT_V1_CONTACT_LENGTH_E6_M,
+            'text': (f'The roll-gap numbers of this pass come from {model}.'),
+            'benchmark_text': (
+                f'On the one published foil case the half-space model gives a load of '
+                f'{round(a)} and the standard foil model {round(b)}. The published figure is '
+                f'118, but it depends on a numerical detail the paper does not state: the same '
+                f'published equations give {round(c)} to {round(d)}. The half-space model\'s '
+                f'contact length, {_f3(lc * 1000)} mm, is close to the published solution\'s '
+                f'{_f3(bbench.BT_V1_CONTACT_LENGTH_E6_M * 1000)} mm.'),
+            'option_text': ('The reduced half-space foil model is an option under "Model '
+                            'choices"; the standard choice is what the shortlist was built '
+                            'with.')}
+
+
+def _friction_records_view(result):
+    fi = (result.get('process') or {}).get('friction_identification')
+    if not _good(fi) or not isinstance(fi.get('rows'), list):
+        return {'available': False}
+    rows = []
+    for r in fi['rows']:
+        ff, fsl, ft = (r.get('friction_from_force') or {}), (r.get('friction_from_slip') or {}), \
+            (r.get('friction_from_torque') or {})
+        meas = r.get('measured') or {}
+
+        def point(kind, d):
+            if d.get('value') is None:
+                return None
+            iv = (d.get('uncertainty') or {}).get('interval') or [None, None]
+            return {'kind': kind, 'value': d['value'], 'low': iv[0], 'high': iv[1]}
+        pts = [x for x in (point('force', ff), point('slip', fsl), point('torque', ft)) if x]
+        text = ''
+        unc, dflt = r.get('uncertainties') or {}, fi.get('uncertainty_defaults') or {}
+
+        def between(d, what):
+            # the range the measuring error allows; the app asks for no error, so it is
+            # usually the tool's assumption, and the sentence says which
+            lo, hi = (d.get('uncertainty') or {}).get('interval') or [None, None]
+            if lo is None or hi is None:
+                return ''
+            u = unc.get(what)
+            key = {'force': 'force_uncertainty_fraction', 'slip': 'slip_uncertainty_absolute',
+                   'torque': 'torque_uncertainty_fraction'}[what]
+            if not isinstance(u, (int, float)):
+                return f' (between {_f3(lo)} and {_f3(hi)})'
+            size = (f'±{_f3(u * 100)} %' if what != 'slip' else f'±{_f3(u * 100)} percentage '
+                    + ('point' if abs(u * 100 - 1) < 1e-9 else 'points'))
+            who = 'the tool\'s assumption' if u == dflt.get(key) else 'as entered'
+            return f' (between {_f3(lo)} and {_f3(hi)} for a {what} error of {size}, {who})'
+        if ff.get('value') is not None and meas.get('force') is not None:
+            # every value with its range, or none of them without
+            text = (f'Your force of {_f3(meas["force"] / 1000)} kN corresponds to a friction of '
+                    f'{_f3(ff["value"])} in this model' + between(ff, 'force'))
+            if fsl.get('value') is not None:
+                text += f'; your forward slip to {_f3(fsl["value"])}' + between(fsl, 'slip')
+            if ft.get('value') is not None:
+                text += f'; your torque to {_f3(ft["value"])}' + between(ft, 'torque')
+            text += '.'
+            ag = (r.get('agreement') or {}).get('outcome')
+            if len(pts) > 1 and ag:
+                text += (' They agree within these measuring errors.'
+                         if ag != 'MEASUREMENTS_CONTRADICT' else
+                         ' They do not agree within these measuring errors.')
+            if r.get('slip_weakly_determined'):
+                text += (' In this pass the forward slip hardly depends on friction; rely on '
+                         'the force.')
+        else:
+            text = f'{r.get("label")}: no friction found for your force in this model.'
+        rows.append({'label': r.get('label'), 'force_n': meas.get('force'), 'points': pts,
+                     'text': text})
+    summ = fi.get('summary') or {}
+    return {'available': True, 'rows': rows,
+            'case_friction': summ.get('case_friction_coefficient'),
+            'median': summ.get('median'),
+            'caveat': 'Nothing was changed; enter the value yourself if you want to use it.',
+            'what_words': ('An identified friction absorbs every error of the roll-gap model, '
+                           'of the entered flow stress and of the records themselves; the tool '
+                           'cannot check the entered numbers.')}
+
+
+def _heat_share_view(result):
+    op = ((result.get('process') or {}).get('heating') or {}).get('operating')
+    hp = op.get('heat_partition') if isinstance(op, dict) else None
+    if not isinstance(hp, dict) or hp.get('strip_heat_fraction_computed') is None:
+        return {'available': False}
+    a, b = op.get('strip_heat_fraction'), hp['strip_heat_fraction_computed']
+    rows = []
+    sched = ((result.get('process') or {}).get('heating') or {}).get('schedule') or []
+    for r in [op] + list(sched):
+        h = r.get('heat_partition') if isinstance(r, dict) else None
+        if isinstance(h, dict) and h.get('strip_heat_fraction_computed') is not None:
+            rows.append({'label': r.get('label'), 'entered': r.get('strip_heat_fraction'),
+                         'computed': h['strip_heat_fraction_computed']})
+    alt = hp.get('strip_heat_fraction_at_published_oil_conductivities') or []
+    band = (hp.get('measured_strip_share_foil_mill') or {}).get('range') \
+        if isinstance(hp.get('measured_strip_share_foil_mill'), dict) else None
+    out = {'available': True, 'entered': a, 'computed': b, 'rows': rows,
+           'measured_range': band if isinstance(band, list) else None,
+           'text': (f'You entered that {_pct(a)} % of the heat stays in the strip; the tool\'s '
+                    f'own estimate is {_pct(b)} %.' if a is not None else
+                    f'The tool\'s own estimate of the heat share to the strip is {_pct(b)} %.'),
+           'caveat': ('Shown as a comparison: the entered share is used unless you choose the '
+                      'computed one under "Model choices".'),
+           'what_words': ('The estimate rests on a smooth oil film and an oil conductivity '
+                          'known within a factor of about 2'
+                          + (': ' + ' and '.join(f'{_pct(x["strip_heat_fraction"])} %'
+                                                 for x in alt) + ' with the two published values'
+                             if alt else '') + '.')}
+    return out
+
+
+def _roll_surface_view(result):
+    rs = (result.get('width') or {}).get('roll_surface_cycle')
+    if not _good(rs) or not rs.get('cycles'):
+        return {'available': False}
+    by = {c.get('station'): c for c in rs['cycles']}
+    band = by.get('largest steady stripe') or rs['cycles'][0]
+    beside = by.get('first station under a healthy nozzle') or rs['cycles'][-1]
+    return {'available': True,
+            'series': [{'label': c.get('station'), 'angle_deg': c['angle_from_bite_exit_deg'],
+                        'temperature_k': c['surface_temperature_k']} for c in rs['cycles']],
+            'band_entry_k': band['bite_entry_temperature_k'],
+            'beside_entry_k': beside['bite_entry_temperature_k'],
+            'model_mean_k': band['mean_model_surface_temperature_k'],
+            'text': (f'Just before the roll gap the roll surface is at '
+                     f'{_c(band["bite_entry_temperature_k"])} °C at the band position and '
+                     f'{_c(beside["bite_entry_temperature_k"])} °C beside it; the average the '
+                     f'model works with is {_c(band["mean_model_surface_temperature_k"])} °C.'),
+            'bias_words': words(rs.get('bias_sentence') or ''),
+            'caveat': ('Reported only: the surface within one turn does not change the stripe '
+                       'heights or the shortlist.')}
+
+
+def _flow_stress_view(result):
+    fs = (result.get('process') or {}).get('flow_stress')
+    rows = [r for r in (fs.get('passes') or []) if r.get('rate_temperature_factor') is not None] \
+        if _good(fs) else []
+    if not rows:
+        return {'available': False}
+    used = bool(((fs.get('rate_temperature') or {}) if isinstance(fs.get('rate_temperature'),
+                                                                   dict) else {})
+                .get('use_rate_temperature'))
+    lo = min(r['rate_temperature_factor'] for r in rows)
+    hi = max(r['rate_temperature_factor'] for r in rows)
+    return {'available': True,
+            'rows': [{'label': r.get('label'), 'rate_factor': r.get('rate_factor'),
+                      'temperature_factor': r.get('temperature_factor'),
+                      'factor': r['rate_temperature_factor']} for r in rows],
+            'text': (f'With the speed and temperature factor the metal\'s strength would be '
+                     f'{_f3(lo)} to {_f3(hi)} times the entered value over the passes'
+                     + ('; the roll forces use it.' if used else '; shown only, the roll forces '
+                                                                 'do not use it.')),
+            'caveat': ('The speed part is an extrapolation: the measured speeds end about five '
+                       'decades below rolling.')}
+
+
+# ============================================================================= the add-on cards
+# One card pattern for every add-on result: a one-sentence takeaway, one chart, one "how to
+# read this" line, details collapsed, a text alternative. A card appears only when its result
+# exists; a quiet line names what else the tool could show and which group to fill in.
+CARD_SPECS = (
+    # card id, view, group, title, what else it would show (for the quiet line)
+    ('shapemeter', 'shapemeter_view', 'flatness_roll', 'What your flatness roll would show',
+     'what each zone of your flatness roll would read'),
+    ('gauge', 'gauge_sensor_view', 'thickness_gauge', 'What the thickness gauge keeps',
+     'how much of each mark your thickness gauge keeps'),
+    ('hotcold', 'temperature_flatness_view', 'temperature_scan',
+     'Flatness measured hot and after cooling', 'flatness measured hot and after cooling'),
+    ('rollprofile', 'roll_profile_view', 'grinder_report', 'Your measured roll profile',
+     'the bands your measured roll profile would make'),
+    ('records', 'friction_records_view', 'pass_records', 'Friction from your pass records',
+     'which friction your logged force and slip correspond to'),
+    ('friction', 'friction_view', 'friction_difference', 'A friction or oil-film stripe',
+     'the band a local friction difference could make'),
+    ('rollsurface', 'roll_surface_view', 'roll_cooling', 'The roll surface within one turn',
+     'the roll surface temperature within one turn'),
+    ('flowstress', 'flow_stress_view', 'model_choices', 'Speed and temperature factor',
+     'the strength factor for rolling speed and temperature'),
+    ('heatshare', 'heat_share_view', 'model_choices', 'Heat share: entered and computed',
+     'the tool\'s own heat-share estimate beside the one entered'),
+    ('rollgap', 'roll_gap_model_view', 'model_choices', 'Which roll-gap model',
+     'which roll-gap model gave the numbers and how the half-space option compares'),
+)
+# cards whose result every foil run has: shown only once their group is in use, so that a
+# person who uses no add-on sees no new card (the owner's rule: the default path does not grow)
+CARD_NEEDS_GROUP = {'heatshare': ('model_choices', 'oil_data'), 'rollgap': ('model_choices',)}
+GROUP_TITLES = {g[0]: g[1] for g in ADDON_GROUPS}
+
+
+def _strip_scale(result):
+    sv = _strip_view(result)
+    return {'barrel_length_m': sv.get('barrel_length_m'), 'strip_start_m': sv.get('strip_start_m'),
+            'strip_end_m': sv.get('strip_end_m')}
+
+
+def _card(cid, title, group, takeaway, how, chart, details, alt, caveat=None, **extra):
+    out = {'id': cid, 'title': title, 'group': group, 'group_title': GROUP_TITLES[group],
+           'takeaway': takeaway, 'how_to_read': how, 'chart': chart,
+           'details': [d for d in details if d], 'text_alternative': [a for a in alt if a]}
+    if caveat:
+        out['caveat'] = caveat
+    out.update(extra)
+    return out
+
+
+# what a chart draws, said once so the page draws legend and marks from the same words: each
+# series ("mark") with its shape, fill, colour token and line style, the neutral reference lines
+# and ranges, the axis titles with their units, and which marks the legend lists (the others are
+# labelled on the chart). One colour carries one meaning in a chart; references are neutral.
+SERIES_COLOURS = ('blue', 'orange', 'purple')
+NEUTRAL = 'neutral'
+ACROSS = {'title': 'position across the strip, from the edge nearest nozzle 1', 'unit': 'mm'}
+FLATNESS = {'title': 'flatness (up = longer, loose)', 'unit': 'I-units'}
+PASS_AXIS = {'title': 'pass', 'unit': None, 'categories': True}
+
+
+def _mk(mid, label, shape, fill, colour, line='solid', meaning=None, direct=False):
+    return {'id': mid, 'label': label, 'shape': shape, 'fill': fill, 'colour': colour,
+            'line': line, 'meaning': meaning or label, 'direct_label': direct}
+
+
+def _ref(rid, label, kind='line'):
+    return {'id': rid, 'label': label, 'colour': NEUTRAL, 'kind': kind}
+
+
+def _spec(chart, x_axis, y_axis, marks, refs=(), legend=None):
+    """The chart dict with its drawing words (``legend``: the marks the legend lists, by
+    default every mark that is not labelled on the chart)."""
+    chart = dict(chart)
+    chart.update(x_axis=x_axis, y_axis=y_axis, marks=list(marks), references=list(refs),
+                 legend=[m['id'] for m in marks if not m['direct_label']]
+                 if legend is None else list(legend))
+    return chart
+
+
+def _mmx(x, start):
+    return _mm_from(x, start)
+
+
+def _cards_from_views(views, result):
+    sc = _strip_scale(result)
+    start = sc['strip_start_m']
+    cards = []
+    v = views['shapemeter_view']
+    if v.get('available'):
+        cards.append(_card(
+            'shapemeter', 'What your flatness roll would show', 'flatness_roll',
+            v['bands'][0]['text'] if len(v['bands']) == 1 else (
+                f'{sum(1 for b in v["bands"] if b["shows"])} of the {len(v["bands"])} modelled '
+                'bands would show on the flatness display' + (
+                    '; the others would probably not show.' if not all(
+                        b['shows'] for b in v['bands']) else '.')),
+            'A bar is the modelled flatness averaged over one zone; beyond the band level it would '
+            'show.',
+            _spec(dict({'type': 'zones'}, **{k: v[k] for k in (
+                'strip_start_m', 'strip_end_m', 'barrel_length_m', 'threshold_i_units', 'zones',
+                'profile')}), ACROSS, FLATNESS,
+                [m for m, used in (
+                    (_mk('zone_shows', 'zone that would show', 'bar', 'solid', 'blue',
+                         meaning='zone reading'),
+                     any(abs(z['reading_i_units']) >= v['threshold_i_units']
+                         for z in v['zones'] if z['reading_i_units'] is not None)),
+                    (_mk('zone_not', 'zone that would probably not show', 'bar', 'open', 'blue',
+                         meaning='zone reading'),
+                     any(abs(z['reading_i_units']) < v['threshold_i_units']
+                         for z in v['zones'] if z['reading_i_units'] is not None)),
+                    (_mk('profile', 'modelled flatness', 'line', 'solid', 'orange'), True))
+                 if used],
+                [_ref('band_level', 'band level')]),
+            [v['setup_text'], v['what_words']] + [b['text'] for b in v['bands']] + [
+                f'{p["label"]}: largest zone reading {_f3(p["max_reading_i_units"])} I-units'
+                for p in v['other_profiles'] if p.get('max_reading_i_units') is not None],
+            [f'Zone {z["index"] + 1}, {_mmx(z["start_m"], start)} to {_mmx(z["end_m"], start)} '
+             f'mm from the strip edge: '
+             + (f'{_f3(z["reading_i_units"])} I-units' if z['reading_i_units'] is not None
+                else 'does not cover the strip') for z in v['zones']],
+            caveat=v['caveat']))
+    v = views['gauge_sensor_view']
+    if v.get('available'):
+        cards.append(_card(
+            'gauge', 'What the thickness gauge keeps', 'thickness_gauge', v['text'],
+            'Below half, a small gauge reading does not mean a small mark.',
+            _spec({'type': 'bars', 'unit': 'percent', 'line': 0.5, 'line_label': 'half',
+                   'rows': [{'label': f'{_f3(r["pitch_m"] * 1000)} mm', 'value': r['combined_gain'],
+                             'tip': r['text']} for r in v['rows']]},
+                  {'title': 'share of the mark the gauge keeps', 'unit': '%'},
+                  {'title': 'mark spacing', 'unit': 'mm', 'categories': True},
+                  [_mk('kept', 'share kept', 'bar', 'solid', 'blue', direct=True)],
+                  [_ref('half', 'half')]),
+            [r['text'] for r in v['rows']] + [v.get('not_detected_words')],
+            [r['text'] for r in v['rows']], caveat=v['caveat']))
+    v = views['temperature_flatness_view']
+    st = (result.get('width') or {}).get('strip_temperature')
+    if v.get('available') and isinstance(st, dict):
+        prof = st['profiles']
+        series = [{'id': 'hot', 'label': 'measured hot', 'z_m': st['z_m'],
+                   'values': prof['as_measured_hot']['i_units'], 'style': 'solid'}]
+        marks = [_mk('hot', 'measured hot', 'line', 'solid', 'blue', direct=True)]
+        if (prof.get('mechanical') or {}).get('available') is not False and \
+                prof.get('mechanical', {}).get('i_units'):
+            series.append({'id': 'cooled', 'label': 'after cooling', 'z_m': st['z_m'],
+                           'values': prof['mechanical']['i_units'], 'style': 'dashed'})
+            marks.append(_mk('cooled', 'after cooling', 'line', 'solid', 'orange', 'dashed',
+                             direct=True))
+        cards.append(_card(
+            'hotcold', 'Flatness measured hot and after cooling', 'temperature_scan',
+            v['text'].split(' The temperature profile')[0],
+            'A shapemeter without temperature correction senses the hot line; the coil keeps the '
+            'cooled one.', _spec(dict({'type': 'width_lines', 'unit': 'I-units', 'series': series},
+                                  **sc), ACROSS, FLATNESS, marks),
+            [v.get('state_text')], [f'{x["label"]}: from {_f3(min(x["values"]))} to '
+                                    f'{_f3(max(x["values"]))} I-units across the strip'
+                                    for x in series], caveat=v['caveat']))
+    v = views['roll_profile_view']
+    rp = (result.get('width') or {}).get('roll_profile')
+    if v.get('available') and isinstance(rp, dict) and rp.get('z_m'):
+        cards.append(_card(
+            'rollprofile', 'Your measured roll profile', 'grinder_report',
+            v['bands'][0]['text'] if v['bands'] else v['text'],
+            'The measured roll profile without its smooth crown, as the flatness it would print '
+            'into the strip.',
+            _spec(dict({'type': 'width_lines', 'unit': 'I-units',
+                        'series': [{'id': 'profile', 'label': 'from the roll profile',
+                                    'z_m': rp['z_m'], 'values': rp['i_units_with_feedback'],
+                                    'style': 'solid'}]}, **sc), ACROSS, FLATNESS,
+                  [_mk('profile', 'from the roll profile', 'line', 'solid', 'blue',
+                       direct=True)]),
+            [v['text']] + [b['text'] for b in v['bands']] + [
+                'On your flatness roll: ' + b['text'] for b in v.get('shapemeter') or []],
+            [b['text'] for b in v['bands']] or [v['text']], caveat=v['caveat']))
+    v = views['friction_records_view']
+    if v.get('available'):
+        cards.append(_card(
+            'records', 'Friction from your pass records', 'pass_records', v['rows'][0]['text'],
+            'The bar through a mark is the range its measuring error allows.',
+            _spec({'type': 'records', 'case_value': v['case_friction'],
+                   'rows': [{'label': r['label'], 'points': r['points']} for r in v['rows']]},
+                  {'title': 'friction coefficient', 'unit': None, 'dimensionless': True},
+                  {'title': 'record', 'unit': None, 'categories': True},
+                  [m for m in (_mk('force', 'from the force', 'circle', 'solid', 'blue'),
+                               _mk('slip', 'from the forward slip', 'diamond', 'solid',
+                                   'orange'),
+                               _mk('torque', 'from the torque', 'square', 'solid', 'purple'))
+                   if any(p['kind'] == m['id'] for r in v['rows'] for p in r['points'])],
+                  [_ref('case', 'friction of the case')]),
+            [r['text'] for r in v['rows'][1:]] + [v['what_words']],
+            [r['text'] for r in v['rows']], caveat=v['caveat']))
+    v = views['friction_view']
+    if v.get('left_out'):
+        cards.append(_card(
+            'friction', 'A friction or oil-film stripe', 'friction_difference', v['text'],
+            'Run in detail to see the estimate.', None, [], [v['text']], left_out=True))
+    elif v.get('available'):
+        cards.append(_card(
+            'friction', 'A friction or oil-film stripe', 'friction_difference',
+            v['text'].split(' This rests')[0] + ' This rests on the least certain part of the '
+            'model.',
+            'Read the two together: they are the model\'s two limits and differ greatly; '
+            'negative values mean a tight band.',
+            _spec({'type': 'pass_levels', 'rows': v['rows']},
+                  {'title': 'size of the band for 1 % more friction at one place, log scale',
+                   'unit': 'I-units'}, PASS_AXIS,
+                  [_mk('with', 'with the exit-tension feedback', 'circle', 'solid', 'blue'),
+                   _mk('without', 'without it', 'circle', 'open', 'orange')]),
+            [v['text']] + [x['text'] for x in v['stripes']] + [v['trend_words'],
+                                                               v['sign_words']],
+            [f'{r["label"]}: {_fixed(r["with_feedback"], 2)} I-units with the feedback, '
+             f'{_fixed(r["compliance_only"], 2)} without it'
+             + ('' if r['credible'] else ' (not credible)') for r in v['rows']],
+            caveat=v['caveat']))
+    v = views['roll_surface_view']
+    if v.get('available'):
+        cards.append(_card(
+            'rollsurface', 'The roll surface within one turn', 'roll_cooling', v['text'],
+            'The jump at 0° and 360° is the roll gap; the dips are the sprays.',
+            _spec({'type': 'cycle', 'series': v['series']},
+                  {'title': 'angle after the roll gap, in the direction of rotation',
+                   'unit': '°'}, {'title': 'roll surface temperature', 'unit': '°C'},
+                  [_mk(f's{k}', x['label'], 'line', 'solid', SERIES_COLOURS[k % 3],
+                       ('solid', 'dashed', 'dotted')[k % 3], direct=True)
+                   for k, x in enumerate(v['series'])]), [v['bias_words']],
+            [f'{x["label"]}: from {_c(min(x["temperature_k"]))} to '
+             f'{_c(max(x["temperature_k"]))} °C over one turn' for x in v['series']],
+            caveat=v['caveat']))
+    v = views['flow_stress_view']
+    if v.get('available'):
+        cards.append(_card(
+            'flowstress', 'Speed and temperature factor', 'model_choices', v['text'],
+            'Speed and temperature together; 1 is the strength as entered.',
+            _spec({'type': 'bars', 'unit': 'factor', 'line': 1, 'line_label': 'no change',
+             'rows': [{'label': r['label'], 'value': r['factor'],
+                       'tip': f'{r["label"]}: speed {_f3(r["rate_factor"])} times, temperature '
+                              f'{_f3(r["temperature_factor"])} times, together '
+                              f'{_f3(r["factor"])} times'} for r in v['rows']]},
+                  {'title': 'factor on the metal\'s strength', 'unit': 'times'}, PASS_AXIS,
+                  [_mk('factor', 'factor', 'bar', 'solid', 'blue', direct=True)],
+                  [_ref('no_change', 'no change')]),
+            [], [f'{r["label"]}: {_f3(r["factor"])} times' for r in v['rows']],
+            caveat=v['caveat']))
+    v = views['heat_share_view']
+    if v.get('available'):
+        cards.append(_card(
+            'heatshare', 'Heat share: entered and computed', 'model_choices', v['text'],
+            'The shaded range is the only measured foil-mill value.',
+            _spec({'type': 'shares', 'band': v['measured_range'], 'rows': v['rows']},
+                  {'title': 'share of the roll-gap heat in the strip', 'unit': '%'},
+                  PASS_AXIS,
+                  [_mk('entered', 'entered', 'circle', 'open', 'orange'),
+                   _mk('computed', 'computed by the tool', 'circle', 'solid', 'blue')],
+                  [_ref('measured', 'measured on a foil mill', 'range')]),
+            [v['what_words']],
+            [f'{r["label"]}: entered {_pct(r["entered"])} %, computed {_pct(r["computed"])} %'
+             for r in v['rows'] if r['entered'] is not None], caveat=v['caveat']))
+    v = views['roll_gap_model_view']
+    if v.get('available'):
+        ld = v['loads']
+        cards.append(_card(
+            'rollgap', 'Which roll-gap model', 'model_choices', v['text'],
+            'The published equations give anything in the shaded range, depending on a detail '
+            'the paper does not state.',
+            _spec({'type': 'loads', 'published': 118, 'range': ld['published_family'],
+                   'points': [{'id': 'half_space', 'label': 'half-space model',
+                               'value': ld['half_space']},
+                              {'id': 'standard', 'label': 'standard foil model',
+                               'value': ld['standard']}]},
+                  {'title': 'load on the published foil case', 'unit': None,
+                   'dimensionless': True}, None,
+                  [_mk('half_space', 'half-space model', 'circle', 'solid', 'blue',
+                       direct=True),
+                   _mk('standard', 'standard foil model', 'circle', 'solid', 'orange',
+                       direct=True)],
+                  [_ref('published', 'published 118'),
+                   _ref('family', 'the same published equations', 'range')]),
+            [v['benchmark_text'], v['option_text']],
+            [v['benchmark_text']]))
+    return cards
+
+
+def _cards_and_more(views, result, case=None):
+    cards = _cards_from_views(views, result)
+    try:
+        status = addon_status(case if case is not None else result['inputs'])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        status = {}
+    cards = [c for c in cards if c['id'] not in CARD_NEEDS_GROUP or any(
+        (status.get(g) or {}).get('filled') for g in CARD_NEEDS_GROUP[c['id']])]
+    shown = {c['id'] for c in cards}
+    more = [{'what': what, 'group': g, 'group_title': GROUP_TITLES[g]}
+            for cid, _, g, _, what in CARD_SPECS if what and cid not in shown]
+    titles = list(dict.fromkeys(m['group_title'] for m in more))      # one per group, in order
+    text = ('More cards are possible with what you can add in step 3: ' + ', '.join(
+        f'"{t}"' for t in titles) + '.') if more else ''
+    return cards, {'items': more, 'text': text}
+
+
+# ============================================================================= group status
+def _group_line(gid, vals):
+    def has(q):
+        return not _empty(vals.get(q))
+    if gid == 'flatness_roll':
+        if not has('shapemeter_zone_count'):
+            return None
+        return (f'{vals["shapemeter_zone_count"]} zones of {_f3(vals["shapemeter_zone_width"])} mm'
+                if has('shapemeter_zone_width') else f'{vals["shapemeter_zone_count"]} zones')
+    if gid == 'thickness_gauge':
+        bits = []
+        if has('gauge_spot_length'):
+            bits.append(f'spot {_f3(vals["gauge_spot_length"])} mm')
+        if has('gauge_time_constant'):
+            bits.append(f'response {_f3(vals["gauge_time_constant"])} ms')
+        return ', '.join(bits) or None
+    if gid in ('temperature_scan', 'grinder_report', 'pass_records', 'friction_difference'):
+        q = ADDON_Q1[gid]
+        n = len(vals.get(q) or [])
+        return (f'{n} point{"s" if n != 1 else ""}' if gid in ('temperature_scan',
+                                                              'grinder_report')
+                else f'{n} record{"s" if n != 1 else ""}' if gid == 'pass_records'
+                else f'{n} place{"s" if n != 1 else ""}') if n else None
+    if gid == 'roll_cooling':
+        bits = []
+        if has('spray_wetted_arc'):
+            bits.append(f'sprays wet {_f3(vals["spray_wetted_arc"])}°')
+        if has('spray_arcs'):
+            n = len(vals['spray_arcs'])
+            bits.append(f'{n} spray band{"s" if n != 1 else ""} placed')
+        return ', '.join(bits) or None
+    if gid == 'oil_data':
+        names = [QUESTION_GROUP_WORDS.get(q, q) for q in ADDON_QUESTIONS['oil_data'] if has(q)
+                 and not (q == 'oil_pressure_law' and vals[q] == 'barus')]   # the default rule
+        return ', '.join(dict.fromkeys(names)) or None
+    if gid == 'model_choices':
+        bits = []
+        bm = vals.get('bite_model')
+        if bm in ('half_space', 'auto_half_space'):
+            bits.append('roll-gap model: ' + BITE_MODEL_WORDS[bm].lower())
+        if vals.get('closure_model') == 'load_sharing_curve':
+            bits.append('friction law: touching share')
+        if has('rate_sensitivity'):
+            bits.append('speed and temperature factor'
+                        + (' (applied)' if vals.get('use_rate_temperature') else ''))
+        if vals.get('use_computed_heat_partition'):
+            bits.append('computed heat share')
+        if has('interface_conductance'):
+            bits.append('heat transfer in the roll gap entered')
+        if has('shear_cap_factor'):
+            bits.append('friction cap entered')
+        return ', '.join(bits) or None
+    return None
+
+
+ADDON_QUESTIONS = {g[0]: g[3] for g in ADDON_GROUPS}
+ADDON_Q1 = {g[0]: g[3][0] for g in ADDON_GROUPS}
+QUESTION_GROUP_WORDS = {'oil_viscosity_table': 'viscosity table', 'oil_pressure_law': 'pressure '
+                        'rule', 'oil_roelands_z': 'pressure rule', 'oil_eyring_stress':
+                        'high-pressure shear', 'oil_eyring_coefficient': 'high-pressure shear',
+                        'oil_limiting_shear': 'largest shear stress',
+                        'oil_limiting_shear_coefficient': 'largest shear stress',
+                        'oil_flash_point': 'flash point', 'oil_supply_temperature_cap':
+                        'site limit'}
+
+
+def addon_status(case):
+    """{group id: {'filled', 'summary'}} of a BUILT case (what the engine will be given), for
+    the one-line view of each add-on group on the page."""
+    vals = answers_from_case(case)['values']
+    out = {}
+    for gid, title, _, _ in ADDON_GROUPS:
+        line = _group_line(gid, vals)
+        out[gid] = {'filled': line is not None,
+                    'summary': line or ('standard choices' if gid == 'model_choices'
+                                        else 'not filled in')}
+    return out
+
+
 SECTION_WORDS = {'chatter': 'Chatter (roll-stack vibration) checks',
                  'levers': 'What-would-change table for chatter',
                  'gauge_control': 'Gauge control', 'drive': 'Drive train',
@@ -3747,6 +4467,67 @@ STANDING_LIMITATIONS = (
     'The score is an ordinal tally of fit, not a measure of how likely a cause is.')
 
 
+# ============================================================================= pass names
+# A pass is named the way the route step shows it: entry and exit gauge ("50 → 30 µm"), with
+# "this pass" on the pass where the bands show and "alternative route" where the route row says
+# so; never the case's short pass codes (S1, F2, ALT1, "case pass").
+PASS_VIEWS = ('gauge_view', 'temperature_view', 'friction_view', 'heat_share_view',
+              'flow_stress_view')
+CASE_PASS_LABELS = ('case', 'case pass')
+ALTERNATIVE = re.compile(r'(?<![\w-])(alt(ernative)?|ALT\d+)(?![\w-])', re.I)
+PASS_CODE = re.compile(r'[A-Z]{1,4}\d{1,2}')
+
+
+def gauge_words(entry_m, exit_m):
+    """'50 → 30 µm' below 0.1 mm, '2.2 → 1.4 mm' above."""
+    if entry_m is None or exit_m is None:
+        return None
+    if max(entry_m, exit_m) < 1e-4:
+        return f'{_f3(round(entry_m * 1e6, 6))} → {_f3(round(exit_m * 1e6, 6))} µm'
+    return f'{_f3(round(entry_m * 1e3, 6))} → {_f3(round(exit_m * 1e3, 6))} mm'
+
+
+def pass_names(case):
+    """{label as the case and the engine write it: plain name} for the pass where the bands show
+    and every route pass, plus the short codes of the route labels (for sentences)."""
+    ps = case.get('pass') or {}
+    this = gauge_words(ps.get('entry_thickness_m'), ps.get('exit_thickness_m'))
+    names = {k: (this + ' (this pass)') if this else 'this pass' for k in CASE_PASS_LABELS}
+    codes = {}
+    for r in case.get('schedule') or []:
+        lab = r.get('label')
+        if not lab:
+            continue
+        w = gauge_words(r.get('entry_thickness_m'), r.get('exit_thickness_m')) or lab
+        if ALTERNATIVE.search(lab):
+            w += ' (alternative route)'
+        names[lab] = w
+        code = lab.split()[0]
+        if PASS_CODE.fullmatch(code) and code not in codes:
+            codes[code] = w
+    return names, codes
+
+
+def _rename_passes(obj, names, codes):
+    """The same structure with every pass label and pass code in its strings replaced by the
+    plain pass name."""
+    if isinstance(obj, dict):
+        return {k: _rename_passes(v, names, codes) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_rename_passes(v, names, codes) for v in obj]
+    if not isinstance(obj, str):
+        return obj
+    if obj in names:
+        return names[obj]
+    for lab in sorted(names, key=len, reverse=True):
+        if lab not in CASE_PASS_LABELS and lab in obj:
+            obj = obj.replace(lab, names[lab])
+    obj = re.sub(r'(?<![\w-])case pass(?![\w-])', names['case pass'], obj)
+    for code in sorted(codes, key=len, reverse=True):
+        obj = re.sub(r'(?<![\w→.-])' + re.escape(code) + r'(?![\w-])', codes[code], obj)
+    return obj
+
+
 def plain_summary(result, case=None, value_origins_=None, own_mill=None):
     """JSON-ready plain summary of an engine result. ``case``: the case as entered (default:
     the result's inputs); ``value_origins_``: {dotted key: origin} (default: from the case's
@@ -3813,6 +4594,11 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
         'friction_view': _friction_view(result, case),
         'roll_profile_view': _roll_profile_view(result),
         'gauge_sensor_view': _gauge_sensor_view(result),
+        'roll_gap_model_view': _roll_gap_model_view(result),
+        'friction_records_view': _friction_records_view(result),
+        'heat_share_view': _heat_share_view(result),
+        'roll_surface_view': _roll_surface_view(result),
+        'flow_stress_view': _flow_stress_view(result),
         'not_assessable': _not_assessable(result, causes),
         'roll_gap_failed': bool(result.get('bite_error')),
         'limitations': list(STANDING_LIMITATIONS),
@@ -3822,6 +4608,10 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
                                                           'exit_speed_m_s')},
         'product': result['inputs']['material'].get('product'),
     }
+    names, codes = pass_names(result['inputs'])
+    for k in PASS_VIEWS:
+        out[k] = _rename_passes(out[k], names, codes)
+    out['addon_cards'], out['addon_more'] = _cards_and_more(out, result, case)
     json.dumps(out, allow_nan=False)
     return out
 
