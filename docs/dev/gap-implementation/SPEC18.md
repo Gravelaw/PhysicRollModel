@@ -20,6 +20,9 @@ read it. What changed:
    Every package number in this text is the new one. Old -> new: 1 -> 2 and 3; 2 -> 4;
    3 -> 5 and 6; 4 -> 7; 5 -> 8; 6 -> 9; 7 -> 10; 8 -> 11; 9 -> 12. The Phase 2 brief (SPEC19)
    still uses the old numbers (section 5).
+7. Ruling of 2026-11-20 on forward slip with zone E (package 2, model items 4 and 7; the slip
+   columns of every `A B E F` row in packages 3, 4 and 7): forward slip is taken at the E/F
+   boundary, not from the thickness of the no-slip zone. No load changes.
 
 Repository `/home/user/PhysicRollModel`. Planned against commit `8f10cbe` PLUS everything SPEC17
 (Phase 0, same scratchpad directory) specifies. State on 2026-11-20: commit `ec44a01` or later, Phase 0
@@ -148,7 +151,7 @@ R 89 mm, 20 -> 15 um, `Y_s` 230 MPa, `E_R*` 230 GPa, mu 0.03, no tensions.
 | contact length of the same case in E6 (FT, thesis p.54) | - | 2.14 | - | - |
 | Fig. 9 read by eye by the note | about 105 by trapezoid | about 2.1 | about 7.7 at +0.41 | - |
 | project mattress (Phase 0) | 49.77 | 1.474 | - | 0.170 |
-| **package 2-3 solver, strip rigid in thickness** (`E_s*` 1e13 Pa; structure A B E F) | **88.859** | 1.9614 | 7.521 at +0.305 | 0.2047 |
+| **package 2-3 solver, strip rigid in thickness** (`E_s*` 1e13 Pa; structure A B E F) | **88.859** | 1.9614 | 7.521 at +0.305 | 0.2026 |
 | **package 2-3 solver, strip thickness spring 80 GPa** (structure A B F) | **92.936** | 2.0384 | 7.331 at +0.349 | 0.2037 |
 | printed end conditions, pressure ramp 40 um outside both ends, rigid strip | 78.01 | 1.877 | 7.48 at +0.222 | 0.2108 |
 | ramp 30 um | 82.57 | 1.920 | 7.56 at +0.255 | 0.2072 |
@@ -486,7 +489,26 @@ roll; `E_s*` [Pa] plane-strain modulus of the strip; `t_b`, `t_f` [Pa] entry and
    Structures: `A F` (regime I, neutral point at the A/F boundary), `A B F`, `A B E F`
    (regimes II and III of E1; the split of B into its contained-plastic and elastic parts,
    zones B, C, D of E1, needs eqs (10)-(14) and does not change pressure, shape, load or torque
-   [E1 FT]: not modelled). Forward slip `= h_n/h1 - 1`, with `h_n = h_p` at the E/F boundary.
+   [E1 FT]: not modelled).
+   Neutral thickness and forward slip: in zone B above and in item 6, `h_n` is the flat
+   thickness of B (`H_n` of the equations; written `h_B` where the two must be told apart).
+   The NEUTRAL thickness, which sets forward slip, strip speed, the powers of item 7 and the
+   result key `neutral_thickness_m`, is `h_p` at the slip reversal: at the A/F boundary
+   (`A F`), at the downstream end of B (`A B F`, where it equals `h_B`) and at the E/F
+   boundary (`A B E F`); forward slip `= h_n/h1 - 1`, strip speed
+   `V_r*h_n/h_p` ["the peaks ... are located at neutral sections"; "the fact of no-slip at the
+   peak determines the value of the creep ratio", E1 FT]. In `A B E F` the flat thickness of B
+   (`H_n` of the equations, called `h_B` below) is larger than `h_n` by the reduction of zone
+   E: 0.05 to 0.6 % on the cases of package 3 (planner, `s23/v_slipdef.py`). This is not a
+   discretisation error and not the thickness spring. With a rigid roll surface and an
+   incompressible strip, a no-slip zone followed by a thinning zone with backward slip cannot
+   both hold exactly; E1 closes that gap with the elastic longitudinal strains of eqs
+   (10)-(14) (roll surface strain `0.57*p/E_R*`, 0.2 to 0.5 % on the same cases), which this
+   model leaves out. The rule here: every SLIDING zone slips in the direction its friction
+   acts, and B carries the relative creep `1 - h_n/h_B`, reported in `no_slip_zone`. The
+   alternative (`h_B/h1 - 1`, 1 to 2.5 % higher on these cases, 0.1 % on demo F2) would keep B
+   exactly stuck and make zone E slip forward against its friction, with negative dissipation
+   there.
 5. Conditions at the free boundaries. From E1, Appendix 2: `h_p' = 0` where A meets B
    (condition 1); `(h_n/2)*p' = T(p)` at the downstream end of B (condition 2: "slip occurs at
    x_BE"); `h_p' = 0` where plastic reduction ends at exit (condition 4). In place of E1's
@@ -503,12 +525,19 @@ roll; `E_s*` [Pa] plane-strain modulus of the strip; `t_b`, `t_f` [Pa] entry and
    the tolerance covers the discretisation at the upstream end of a short no-slip zone, where
    the prototype misses the bound by up to 0.013*K]`.
 7. Integrals: force per width `Int p`; traction per width (one roll)
-   `mu*Int_entry_zone p + Int_A T + (h_n/2)*(p(x_be) - p(x_a)) + Int_E T - Int_F T -
-   mu*Int_exit_zone p`; slip dissipation over roll speed, one interface,
-   `Int |tau_f|*|1 - h_n/h_p|` over the sliding zones; plastic power over roll speed
+   `mu*Int_entry_zone p + Int_A T + (h_B/2)*(p(x_be) - p(x_a)) + Int_E T - Int_F T -
+   mu*Int_exit_zone p`; slip dissipation over roll speed, one interface, SIGNED:
+   `Int tau_f*(1 - h_n/h_p)` over the sliding zones (every term is positive with the neutral
+   thickness of item 4), plus in `A B E F` the creep term of B,
+   `(1 - h_n/h_B)*(h_B/2)*(p(x_be) - p(x_a))` (0.6 to 1.2 % of the slip dissipation on the
+   cases of package 3; zero without zone E); plastic power over roll speed
    `h_n*K*ln(h0/h1)`; tension power `h_n*(t_f - t_b)`. Work identity
-   `2*traction + tension - plastic - 2*slip = 0` (projected small-angle convention of
-   `slab.py`). E1's torque formula (26) is the moment of the pressure about the roll centre; it
+   `2*traction + tension - plastic - 2*slip - 2*creep term = 0` (projected small-angle
+   convention of `slab.py`). The identity follows from equilibrium alone and closes for any
+   flow thickness when all terms are signed (planner: residual 4e-6 to 3e-5 with either
+   thickness, 1e-3 to 8e-3 when the B term is left out); it does not test the choice of `h_n`.
+   The key `slip_dissipation_both_interfaces_over_roll_speed_n` holds the sliding zones only;
+   the creep term is reported in `no_slip_zone`. E1's torque formula (26) is the moment of the pressure about the roll centre; it
    is not used (the traction integral is the project's convention); the docstring says so.
 
 NOT modelled (docstring and `limitations`): E1 eqs (4), (10)-(14): longitudinal elastic strain
@@ -660,8 +689,9 @@ inputs, `roll_youngs_modulus_pa`, `roll_poisson_ratio`, `strip_plane_strain_modu
 `plastic_work_power_over_roll_speed_n`, `slip_dissipation_both_interfaces_over_roll_speed_n`,
 `net_tension_power_over_roll_speed_n`, `max_coulomb_shear_over_yield_shear`
 (`mu*p_max/(K/2)`, may exceed 1 here), `shear_cap_active`, `no_slip_zone`
-(`{'eq16_shear_over_limit_max', 'friction_hill_margin_min_over_k', 'net_shear_over_limit',
-'note'}`; `None` for `A F`), `structure_selection` (list of `[step, outcome]` pairs; one entry
+(`{'eq16_shear_over_limit_max', 'no_slip_zone_thickness_m', 'relative_slip_in_no_slip_zone'
+(`1 - h_n/h_B`; 0.0 without zone E), 'slip_term_over_plastic_power',
+'friction_hill_margin_min_over_k', 'net_shear_over_limit', 'note'}`; `None` for `A F`), `structure_selection` (list of `[step, outcome]` pairs; one entry
 in this package), `convergence` (`zones`, `elements`, `newton_iterations`, `residual_max`,
 `homotopy_steps`, `structure_switches`, `cold_start`, `mechanical_work_residual_relative`; no
 wall time: results must be reproducible), `profile` (`x_m`, `pressure_pa`, `thickness_m`, `zone`
@@ -781,6 +811,15 @@ each step in `structure_selection`.
    `x_n`), `x_ef = x_n`, `H_n` = the smallest `H` in the stretch; solve; accept as in rule 3.
 6. Otherwise `ValueError('no admissible zone structure: ...')` with the recorded steps.
 
+Rule `SLIP_CONSISTENCY` (added during implementation, kept): a converged solution is rejected,
+in the march and in the selection, unless forward and backward slip are both positive and every
+reduction zone has a length (threshold `1e-6` relative). It removes a converged branch with zero
+forward slip and a collapsed zone F that passes rules 1 to 5.
+
+Forward slip of an `A B E F` solution is taken at the E/F boundary (package 2, model item 4).
+`relative_slip_in_no_slip_zone` above 0.01 adds the flag
+`NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT` (largest seen by the planner: 0.0062).
+
 **2. Cold start where the mattress bite rejects, and friction marching.** When
 `solve_mattress_bite` rejects the pass, or the march of package 2 fails: cold start at a
 friction of `min(mu, 0.03)`, then `0.02`, then `0.01` (the first that works), then march in
@@ -809,23 +848,23 @@ the result carries `max_thickening_over_exit_gauge`.
 
 ### Worked numbers (`s23/sel_final.log`, `v_tol.py`, `v_ramp.py`, `v_cap_tm.py`; R 89 mm, `Y_s` 230 MPa, `E_R*` 230 GPa, `E_s*` 80 GPa, mu 0.03, no tensions, unless stated)
 
-| case | selection steps | structure | `W_bar` | forward slip | contact length mm | no-slip / zone E um |
+| case | selection steps | structure | `W_bar` | forward slip (with zone E: from the thickness of B; creep of B) | contact length mm | no-slip / zone E um |
 |---|---|---|---|---|---|---|
 | 20 -> 15 um, `E_s*` 80 GPa | 2 | A B F | 92.936 | 0.2037 | 2.0384 | 1110 / 0 |
-| 20 -> 15 um, `E_s*` 1e13 | 2 fails, 3 | A B E F | 88.859 (A B F candidate 88.937) | 0.2047 | 1.9614 | 1012 / 14 |
+| 20 -> 15 um, `E_s*` 1e13 | 2 fails, 3 | A B E F | 88.859 (A B F candidate 88.937) | 0.2026 (0.2047; 0.0018) | 1.9614 | 1012 / 14 |
 | r 0.5: 56 um | 1 | A F | 75.676 | 0.2594 | 2.4603 | - |
 | r 0.5: 54 um | 2 fails, 3 fails, 4 | A F | 81.204 (A B F candidate 82.440) | 0.2891 | - | - |
-| r 0.5: 52 um | 2 fails, 3 | A B E F | 87.858 | 0.3285 | 2.5079 | 179 / 119 |
-| r 0.5: 48 um | 2 fails, 3 | A B E F | 100.186 | 0.3652 | 2.5585 | 419 / 73 |
-| r 0.5: 44 um | 2 fails, 3 | A B E F | 114.736 | 0.3965 | 2.6274 | 652 / 49 |
+| r 0.5: 52 um | 2 fails, 3 | A B E F | 87.858 | 0.3205 (0.3285; 0.0060) | 2.5079 | 179 / 119 |
+| r 0.5: 48 um | 2 fails, 3 | A B E F | 100.186 | 0.3593 (0.3652; 0.0044) | 2.5585 | 419 / 73 |
+| r 0.5: 44 um | 2 fails, 3 | A B E F | 114.736 | 0.3916 (0.3965; 0.0035) | 2.6274 | 652 / 49 |
 | r 0.25: 36 um | 1 | A F | 40.192 | 0.1166 | 1.5987 | - |
 | r 0.25: 34 um | 2 fails, 3 fails, 4 | A F | 43.979 | 0.1363 | - | - |
-| r 0.25: 32 um | 2 fails, 3 | A B E F | 48.351 | 0.1567 | 1.6509 | 192 / 68 |
-| r 0.25: 28 um | 2 fails, 3 | A B E F | 57.997 | 0.1769 | 1.7243 | 449 / 34 |
+| r 0.25: 32 um | 2 fails, 3 | A B E F | 48.351 | 0.1535 (0.1567; 0.0028) | 1.6509 | 192 / 68 |
+| r 0.25: 28 um | 2 fails, 3 | A B E F | 57.997 | 0.1748 (0.1769; 0.0018) | 1.7243 | 449 / 34 |
 | r 0.10: 30 um | 1 | A F | 21.862 | 0.0425 | 1.1079 | - |
 | r 0.10: 28 um | 2 fails, 3 fails, 4 | A F | 23.711 | 0.0506 | - | - |
-| r 0.10: 26 um | 2 fails, 3 | A B E F | 25.919 | 0.0584 | 1.1501 | 153 / 40 |
-| r 0.10: 22 um | 2 fails, 3 | A B E F | 31.507 | 0.0665 | 1.2200 | 368 / 14 |
+| r 0.10: 26 um | 2 fails, 3 | A B E F | 25.919 | 0.0574 (0.0584; 0.0009) | 1.1501 | 153 / 40 |
+| r 0.10: 22 um | 2 fails, 3 | A B E F | 31.507 | 0.0660 (0.0665; 0.0005) | 1.2200 | 368 / 14 |
 
 So the no-slip zone appears between 54 and 52 um at r = 0.5 (eq. 29 of E1: 51.2), between 34
 and 32 um at r = 0.25 (36.2), between 28 and 26 um at r = 0.10 (22.9), and the load is
@@ -835,21 +874,21 @@ The 52 um row misses the upstream friction-hill bound by `0.0095*K`, inside the 
 Battery-foil demo schedule (R 135 mm, `E` 210 GPa, `E_s*` 78.55 GPa, friction 0.03, tensions and
 flow stress of the scenario):
 
-| pass | structure | force N/m | forward slip | contact length mm | no-slip / zone E um |
+| pass | structure | force N/m | forward slip (with zone E: from the thickness of B; creep of B) | contact length mm | no-slip / zone E um |
 |---|---|---|---|---|---|
 | S1 260 -> 135 um | A F | 748924 | 0.0362 | 4.6416 | - |
 | S2 135 -> 85 | A F | 653874 | 0.0589 | 3.1410 | - |
 | S3 85 -> 50 | A F | 803151 | 0.1006 | 2.8178 | - |
 | F1 50 -> 30 (= case pass) | A F (rules 2 and 3 fail, 4 accepts) | 1369950 | 0.2374 | 2.6539 | - |
-| ALT1 50 -> 25 | A B E F | 2658150 | 0.4212 | 3.4062 | 943 / 58 |
-| F2 30 -> 18 | A B E F | 3243880 | 0.3678 | 3.3457 | 1800 / 2 |
+| ALT1 50 -> 25 | A B E F | 2658150 | 0.4162 (0.4212; 0.0035) | 3.4062 | 943 / 58 |
+| F2 30 -> 18 | A B E F | 3243880 | 0.3674 (0.3678; 0.0003) | 3.3457 | 1800 / 2 |
 | ALT2 25 -> 12 | A B F | 10128500 | 0.5527 | 5.7101 | 4441 / 0 |
 
 The six sheet passes of the lengthwise demo are all `A F` (forces 3513580, 3431780, 3133380,
 2643920, 2291870, 1996310 N/m for P1 to P6).
 
 Shear cap (50 -> 25 um, `K` 150 MPa, tensions 20 MPa, R 135 mm, `E` 210 GPa: the pass of E4's
-Table I [EX]; `E_s*` 80 GPa here): friction 0.03: `A B E F`, force 1517220 N/m, slip 0.3583, `p_max/K` 9.942
+Table I [EX]; `E_s*` 80 GPa here): friction 0.03: `A B E F`, force 1517220 N/m, slip 0.3499 (0.3583; 0.0062), `p_max/K` 9.942
 (no-slip 232 um, zone E 131 um). The mattress solver rejects this pass at 0.05 and 0.06.
 Marched in friction: 0.05 -> `A B F`, 7718180 N/m, slip 0.5565, `p_max/K` 19.18, cap active;
 0.10 -> `A B F`, 48652300 N/m, slip 0.6925, `p_max/K` 34.39, contact length 12.15 mm: 32 times
@@ -867,6 +906,10 @@ Cold solve with selection: at most 3.5 s on any case of the tables, 1.2 s on ave
 iteration limit before rule 4 accepts). The benchmark family: under 8 s.
 
 ### Tests (`tests/test_halfspace_bite_cases.py`)
+- `test_forward_slip_is_taken_at_the_slip_reversal`: on every `A B E F` row of both tables the
+  reported slip, `h_B/h1 - 1` and the creep (`1e-3` relative after pinning); creep below 0.01;
+  every signed slip term non-negative; the work residual below `1e-4` with the creep term and
+  above `1e-3` without it on the rigid-strip published case (planner 4.5e-6 and 7.9e-3).
 - `test_selection_table` (the first table: structure, steps, `W_bar` to `1e-4` after pinning);
   `test_demo_schedules` (second table and the lengthwise forces).
 - `test_zone_e_changes_the_load_by_less_than_0_3_percent`: rigid-strip published case, `A B E F`
@@ -943,7 +986,7 @@ digits on the cases tried):
 | case | structure | `F_h` Pa | `F_hin` Pa | `F_se` m | `F_sx` m | `dF/dmu` N/m | `dF/dK` m | `f_h` 1/m | load exponent in mu |
 |---|---|---|---|---|---|---|---|---|---|
 | published case, `E_s*` 80 GPa | A B F | -5.5756e11 | 2.7774e11 | -6.4418e-3 | -1.4705e-2 | 1.5605e8 | 2.0962e-2 | -5.0653e4 | 2.461 |
-| published case, `E_s*` 1e13 | A B E F | -5.4317e11 | 2.7202e11 | -6.1349e-3 | -1.3963e-2 | 1.4885e8 | 1.9945e-2 | -5.1218e4 | 2.455 |
+| published case, `E_s*` 1e13 | A B E F | -5.4317e11 | 2.7202e11 | -6.1349e-3 | -1.3963e-2 | 1.4885e8 | 1.9945e-2 | -5.1343e4 | 2.455 |
 | 140 -> 70 um | A F | -1.0589e10 | 5.0365e9 | -4.5143e-3 | -2.1458e-3 | 2.6908e7 | 5.2683e-3 | -1.4466e3 | 0.842 |
 
 (`dF/dK` is with respect to the plane-strain strength; multiply by `2/sqrt(3)` for the uniaxial
@@ -956,8 +999,8 @@ friction 0.03; mattress values are plain `solve_mattress_bite` calls with the sa
 | S2 135 -> 85 | A F | 6.5387e5 (6.409e5) | 0.059 (0.052) | 3.141 (3.205) | 9.0239e9 | 2.3447e-3 | 0.705 |
 | S3 85 -> 50 | A F | 8.0315e5 (7.560e5) | 0.101 (0.100) | 2.818 (2.829) | 2.5761e10 | 3.9077e-3 | 1.258 |
 | F1 50 -> 30 = case pass | A F | 1.36995e6 (9.586e5) | 0.237 (0.190) | 2.654 (2.384) | 1.9322e11 | 1.6777e-2 | 3.741 |
-| ALT1 50 -> 25 | A B E F | 2.65815e6 (1.4877e6) | 0.421 (0.315) | 3.406 (2.759) | 3.1795e11 | 2.1410e-2 | 3.044 |
-| F2 30 -> 18 | A B E F | 3.24388e6 (1.5360e6) | 0.368 (0.308) | 3.346 (2.317) | 6.4664e11 | 2.9182e-2 | 2.861 |
+| ALT1 50 -> 25 | A B E F | 2.65815e6 (1.4877e6) | 0.416 (0.315) | 3.406 (2.759) | 3.1795e11 | 2.1410e-2 | 3.044 |
+| F2 30 -> 18 | A B E F | 3.24388e6 (1.5360e6) | 0.367 (0.308) | 3.346 (2.317) | 6.4664e11 | 2.9182e-2 | 2.861 |
 | ALT2 25 -> 12 | A B F | 1.01285e7 (6.188e6) | 0.553 (0.422) | 5.710 (4.422) | 2.7362e12 | 8.9049e-2 | 3.278 |
 
 Sensitivities cost 0.07-0.15 s per pass in the prototype. On the last sheet pass of the
@@ -1466,7 +1509,7 @@ Which measured quantity carries the friction information depends on the regime (
 | case | structure | load exponent | forward-slip exponent |
 |---|---|---|---|
 | published foil case, 20 -> 15 um, friction 0.03, strip spring 80 GPa | A B F | 2.461 | 0.378 |
-| same, strip rigid in thickness | A B E F | 2.455 | 0.385 |
+| same, strip rigid in thickness | A B E F | 2.455 | 0.436 |
 | BT-V2, 73 -> 31.39 um, friction 0.026, R 89 mm | A F | 1.570 | 2.473 |
 
 With a no-slip zone the forward slip hardly depends on friction. In the printed-end family of
@@ -1560,7 +1603,9 @@ published remedy for foil slip [BT-S5 AB]; not built); the bite model's own stat
 mattress bite gives 49.8 and the reduced half-space bite 88.9 to 92.9 on the published case,
 whose printed model gives 78 to 134 depending on an unstated end length: an identified friction
 absorbs that spread, by about 12 % from load and 30 % from slip on that case); flow stress
-taken as entered; simple forward-slip formulas are reported as
+taken as entered; forward slip of the reduced half-space bite is defined to elastic order only
+(the no-slip zone creeps by up to 0.6 %, which is 1 to 2.5 % of the slip; package 2, item 4);
+simple forward-slip formulas are reported as
 unreliable [BT-S37 SN] and none is used; no closed-gap load share.
 
 **Report**: `band_report._process_section`: block "Friction from your pass records": one table
