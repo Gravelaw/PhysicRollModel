@@ -13,7 +13,7 @@ study. Whether this folder stays in the final pull request is to be decided when
 |---|---|
 | `SPEC-house-rules.md` | House rules every brief refers to (its section 0). |
 | `SPEC17.md` | Phase 0 brief: nine packages. |
-| `SPEC18.md` | Phase 1 brief: nine packages. **To be amended** with the findings of `research_phase1_equations.md` before Phase 1 coding starts. |
+| `SPEC18.md` | Phase 1 brief: twelve packages (amended 2026-11-20 after the equation research; its header lists the changes). |
 | `SPEC19.md` | Phase 2 brief: fifteen packages. |
 | `research_phase1_equations.md` | Literature research for Phase 1 (source prefix `E`). The first Phase 1 package that uses it moves it to `docs/research/band-screening-2026-11/phase1-equations.md`. |
 | `prototypes/` | The planners' and the researcher's scratch scripts. Prototypes, not specifications; where they differ from a brief, the brief holds. Inside the briefs they are named by their original scratch folders: `s21` is `prototypes/phase0`, `s23` is `prototypes/phase1`, `s24` is `prototypes/phase1-research`, `s25` is `prototypes/phase2`. |
@@ -23,7 +23,8 @@ study. Whether this folder stays in the final pull request is to be decided when
 ## Status
 
 The commit history of the branch is the record of which packages are done. Briefs: Phase 0
-`SPEC17.md`, Phase 1 `SPEC18.md` (to be amended after the equation research), Phase 2 `SPEC19.md`;
+`SPEC17.md`, Phase 1 `SPEC18.md`, Phase 2 `SPEC19.md` (it still names Phase 1 packages by their numbers
+before the amendment; the mapping is in `SPEC18.md` section 5);
 the Phase 3 brief is not written yet.
 
 Decisions taken on the open decisions of `SPEC17.md` section 3: all as the planner chose. In
