@@ -127,7 +127,9 @@ WIDTH_DEFAULTS = {
     # surface cycle within one revolution
     'circumferential_layout': None,
     # SPEC19 package 1 (A2 inputs, BT-G12, A1 computed): local state across the width
-    'local_coupling': None}
+    'local_coupling': None,
+    # SPEC19 package 4 (G5): a closed spray loop with the tool's own control law
+    'flatness_control': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -262,6 +264,156 @@ def validate_circumferential_layout(lay, wetted_arc=None):
     return {'spray_arcs': sprays, 'backup_contact': backup, 'provenance': prov}
 
 
+FC_WHERE = 'width_model.flatness_control'
+FC_REQUIRED = ('valve_levels', 'minimum_on_time_s', 'minimum_off_time_s', 'dead_band_i_units',
+               'provenance')
+FC_DEFAULTS = {'initial_level': None, 'control_zone_nozzles': None, 'integral_gain': 0.1,
+               'control_interval_s': 2.0, 'low_order_removed': 2, 'target_i_units': None,
+               'supplied_actuators': None, 'horizon_s': 1800.0, 'shapemeter_distance_m': None,
+               'display_time_constant_s': 0.0, 'include_local_sources': False}
+
+
+def _fc_num(key, value, lo, hi, lo_open=False):
+    where = f'{FC_WHERE}.{key}'
+    words = f'in {"(" if lo_open else "["}{lo:g}, {hi:g}]'
+    try:
+        v = num(where, value)
+    except ValueError:
+        raise ValueError(f'{where} must be a number {words}') from None
+    if (v <= lo if lo_open else v < lo) or v > hi:
+        raise ValueError(f'{where} must be {words}')
+    return v
+
+
+def validate_flatness_control(fc, local_coupling=None):
+    """``width_model.flatness_control`` (SPEC19 package 4), or None. Zone counts against the
+    shapemeter and nozzle indices are checked in ``check_flatness_control_zones``."""
+    if fc is None:
+        return None
+    w = FC_WHERE
+    keys(w, fc, FC_REQUIRED, tuple(FC_DEFAULTS))
+    out = dict(FC_DEFAULTS)
+    lv = fc['valve_levels']
+    msg = f'{w}.valve_levels must be 2 to 41 strictly increasing values in [0, 1]'
+    if not isinstance(lv, list) or not 2 <= len(lv) <= 41:
+        raise ValueError(msg)
+    try:
+        lv = [num(f'{w}.valve_levels[{i}]', v, lo=0.0, hi=1.0) for i, v in enumerate(lv)]
+    except ValueError:
+        raise ValueError(msg) from None
+    if any(b <= a for a, b in zip(lv, lv[1:])):
+        raise ValueError(msg)
+    out['valve_levels'] = lv
+    init = fc.get('initial_level')
+    if init is None:
+        init = lv[-1]
+    elif isinstance(init, bool) or init not in lv:
+        raise ValueError(f'{w}.initial_level must be one of valve_levels')
+    out['initial_level'] = float(init)
+    for k in ('minimum_on_time_s', 'minimum_off_time_s'):
+        out[k] = _fc_num(k, fc[k], 0.0, 600.0)
+    out['dead_band_i_units'] = _fc_num('dead_band_i_units', fc['dead_band_i_units'], 0.0, 100.0,
+                                       True)
+    groups = fc.get('control_zone_nozzles')
+    if groups is not None:
+        gm = f'{w}.control_zone_nozzles must be a list of non-empty, disjoint lists of nozzle ' \
+             'indices, or null'
+        if not isinstance(groups, list) or not groups:
+            raise ValueError(gm)
+        seen = set()
+        out_g = []
+        for i, g in enumerate(groups):
+            if not isinstance(g, list) or not g:
+                raise ValueError(gm)
+            g = int_list(f'{w}.control_zone_nozzles[{i}]', g)
+            if seen & set(g):
+                raise ValueError(gm)
+            seen |= set(g)
+            out_g.append(g)
+        groups = out_g
+    out['control_zone_nozzles'] = groups
+    if fc.get('integral_gain') is not None:
+        out['integral_gain'] = _fc_num('integral_gain', fc['integral_gain'], 0.0, 1.0, True)
+    if fc.get('control_interval_s') is not None:
+        out['control_interval_s'] = _fc_num('control_interval_s', fc['control_interval_s'],
+                                            0.5, 60.0)
+    lo = fc.get('low_order_removed', 2)
+    if isinstance(lo, bool) or not isinstance(lo, int) or not -1 <= lo <= 4:
+        raise ValueError(f'{w}.low_order_removed must be an int in [-1, 4]')
+    out['low_order_removed'] = lo
+    tg = fc.get('target_i_units')
+    if tg is not None:
+        tm = f'{w}.target_i_units must be one value in [-200, 200] per shapemeter zone, or null'
+        if not isinstance(tg, list):
+            raise ValueError(tm)
+        try:
+            tg = [num(f'{w}.target_i_units[{i}]', v, lo=-200.0, hi=200.0)
+                  for i, v in enumerate(tg)]
+        except ValueError:
+            raise ValueError(tm) from None
+    out['target_i_units'] = tg
+    acts = fc.get('supplied_actuators')
+    if acts is not None:
+        am = (f'{w}.supplied_actuators must be null or 1-4 of {{"name", '
+              '"influence_i_units_per_unit": [per zone], "minimum", "maximum"}')
+        if not isinstance(acts, list) or not 1 <= len(acts) <= 4:
+            raise ValueError(am)
+        out_a = []
+        for i, a in enumerate(acts):
+            keys(f'{w}.supplied_actuators[{i}]', a,
+                 ('name', 'influence_i_units_per_unit', 'minimum', 'maximum'))
+            if not isinstance(a['name'], str) or not a['name'].strip():
+                raise ValueError(f'{w}.supplied_actuators[{i}].name must be a nonempty string')
+            inf = num_list(f'{w}.supplied_actuators[{i}].influence_i_units_per_unit',
+                           a['influence_i_units_per_unit'], lo=-1e4, hi=1e4)
+            mn = num(f'{w}.supplied_actuators[{i}].minimum', a['minimum'])
+            mx = num(f'{w}.supplied_actuators[{i}].maximum', a['maximum'])
+            if mx <= mn:
+                raise ValueError(f'{w}.supplied_actuators[{i}].maximum must exceed minimum')
+            out_a.append({'name': a['name'], 'influence_i_units_per_unit': inf,
+                          'minimum': mn, 'maximum': mx})
+        acts = out_a
+    out['supplied_actuators'] = acts
+    if fc.get('horizon_s') is not None:
+        out['horizon_s'] = _fc_num('horizon_s', fc['horizon_s'], 600.0, 7200.0)
+    d = fc.get('shapemeter_distance_m')
+    out['shapemeter_distance_m'] = None if d is None else _fc_num('shapemeter_distance_m', d,
+                                                                  0.0, 20.0, True)
+    if fc.get('display_time_constant_s') is not None:
+        out['display_time_constant_s'] = _fc_num('display_time_constant_s',
+                                                 fc['display_time_constant_s'], 0.0, 60.0)
+    inc = fc.get('include_local_sources', False)
+    if not isinstance(inc, bool):
+        raise ValueError(f'{w}.include_local_sources must be true or false')
+    if inc and local_coupling is None:
+        raise ValueError(f'{w}.include_local_sources needs width_model.local_coupling')
+    out['include_local_sources'] = inc
+    pv = fc['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    out['provenance'] = pv
+    return out
+
+
+def check_flatness_control_zones(w, shapemeter):
+    """Zone-count checks of ``width_model.flatness_control`` against the shapemeter and the
+    header (called by the case validation once both sections are validated)."""
+    fc = w['flatness_control']
+    n = shapemeter['zone_count']
+    if fc['target_i_units'] is not None and len(fc['target_i_units']) != n:
+        raise ValueError(f'{FC_WHERE}.target_i_units must be one value in [-200, 200] per '
+                         f'shapemeter zone ({n}), or null')
+    for i, a in enumerate(fc['supplied_actuators'] or []):
+        if len(a['influence_i_units_per_unit']) != n:
+            raise ValueError(f'{FC_WHERE}.supplied_actuators[{i}].influence_i_units_per_unit '
+                             f'needs one value per shapemeter zone ({n})')
+    count = len(_header(w).nozzle_positions(w['roll']['barrel_length_m']))
+    for g in fc['control_zone_nozzles'] or []:
+        if max(g) >= count:
+            raise ValueError(f'{FC_WHERE}.control_zone_nozzles: nozzle index {max(g)} out of '
+                             f'range (header has {count} nozzles)')
+
+
 def validate_width_model(w, pass_):
     if not isinstance(w, dict):
         raise ValueError('width_model must be a JSON object or null')
@@ -300,6 +452,8 @@ def validate_width_model(w, pass_):
     out['circumferential_layout'] = validate_circumferential_layout(
         w.get('circumferential_layout'), arc)
     out['local_coupling'] = band_local.validate_local_coupling(w.get('local_coupling'))
+    out['flatness_control'] = validate_flatness_control(w.get('flatness_control'),
+                                                        out['local_coupling'])
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -3112,6 +3266,409 @@ def roll_surface_cycle_section(case, w, th, actual, bite, steady, healthy=None):
                 'the surface excess in the strip interior [run].']}
 
 
+
+# ======================================== closed spray loop (SPEC19 package 4, G5; I5)
+MADE_BAND_MIN_S = 20.0   # [D, analyst choice; the literature band life is 20-120 s,
+#                          LITERATURE_BAND_LIFE_S]
+PREDICTED_EVENTS_MAX = 50
+FC_STATUS = 'UNVALIDATED_FLATNESS_LOOP_SIMULATION_ANALYST_CONTROL_LAW'
+FC_FLAG_SIMULATED = 'FLATNESS_LOOP_SIMULATED'
+FC_FLAG_NOT_SETTLED = 'FLATNESS_LOOP_NOT_SETTLED'
+FC_FLAG_TRIMMING = 'FLATNESS_LOOP_TRIMMING_LIMIT_CYCLE'
+FC_FLAG_MADE = 'CONTROL_MADE_BAND'
+FC_FLAG_LOW_ORDER = 'LOW_ORDER_FLATNESS_LEFT_TO_BENDING_NOT_MODELLED'
+FC_FLAG_COARSE = 'FLATNESS_LOOP_ON_COARSE_GRID'
+FC_TOP_FLAGS = (FC_FLAG_SIMULATED, FC_FLAG_NOT_SETTLED, FC_FLAG_TRIMMING,
+                'CONTROL_INCREASES_RESIDUAL', 'CONTROL_ZONE_AT_LIMIT', FC_FLAG_MADE,
+                FC_FLAG_LOW_ORDER, FC_FLAG_COARSE)
+FC_LOW_ORDER_SENTENCE = ('This part is left to the bender and the tilt, which this tool does not '
+                         'model.')
+FC_WHAT_IT_IS = ('What such a loop would do with these settings on this model: the control law '
+                 "is the tool's own [D, SPEC19: analyst design], not the plant's controller; "
+                 'the roll model takes the heat share and the spray coefficient as inputs. '
+                 '"Could the control make or remove a band" is answered as could / could not '
+                 'within the model, never as did.')
+FC_UNSETTLED_NOTE = ('The loop has not settled: its end state is one moment of a loop that keeps '
+                     'switching, not the flatness the mill would have.')
+FC_STATUS_WORDS = {'SETTLED': 'The valves stop moving after {t} s.',
+                   'TRIMMING_WITHIN_BAND': 'The valves keep stepping; the zone error stays below '
+                                           '{x} I-units.',
+                   'NOT_SETTLED': 'The loop does not settle: {n} valve changes in {h} s.'}
+FC_LIMITATIONS = (
+    "The control law is the tool's own [D, SPEC19: analyst design]; the reports give its "
+    'structure only.',
+    'One spray header on one work roll.',
+    'Linear readings: a buckled band reads less (SPEC19 package 7).',
+    'The low-order part (mean, tilt, parabola) is assumed removed by bending and tilt, which '
+    'are not modelled.',
+    'The weak or blocked nozzle itself is not known to the controller.',
+    'No feed-forward, no speed or gauge interaction.',
+    'The valve events predicted here do not enter width.thermal_events or any evidence item.')
+
+
+def _fc_groups(fc, th, w):
+    if fc['control_zone_nozzles'] is not None:
+        return [list(g) for g in fc['control_zone_nozzles']], 'entered'
+    pitch = w.get('cooling_zone_pitch_m')
+    per = max(1, int(round(pitch / th.header.nozzle_pitch_m))) if pitch else 1
+    groups = [list(range(k, min(k + per, th.count))) for k in range(0, th.count, per)]
+    return groups, (f'groups of {per} adjacent nozzles from nozzle 0 '
+                    + ('(round(cooling_zone_pitch_m/nozzle_pitch_m))' if pitch else
+                       '(one nozzle per zone: no cooling_zone_pitch_m)'))
+
+
+def _linear_i_units(zs, dev, sp):
+    """Linear exit-tension-feedback I-units of a radius deviation on the strip samples, no
+    saturation, mean removed (eps = -xi*dh/h)."""
+    h = sp['exit_thickness_m']
+    tr = ss.transfer_radius_profile(
+        zs, dev, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], n_rolls=sp['n_rolls'],
+        roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'],
+        exit_tension_force_sensitivity_per_width_m=sp[
+            'exit_tension_force_sensitivity_per_width_m'],
+        exit_thickness_m=h, strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'], xi=sp['xi'])
+    eps = [-sp['xi'] * v / h for v in tr['local_thickness_change_m']]
+    m = math.fsum(eps) / len(eps)
+    return [(e - m) / ss.I_UNIT for e in eps]
+
+
+class _ReadingOperator:
+    """Zone readings of a radius deviation [D, SPEC19]: the linear transfer is symmetric, so
+    the zone means are ``M*dev`` with row ``j`` = the transfer of zone ``j``'s weight row
+    (scaled by 1e-6 into the transfer's range and back); then the roll-mean removal and
+    neighbour spreading of ``band_sensors.readings``."""
+
+    def __init__(self, zs, sp, a0, a1, edges, spreading):
+        from . import band_sensors as bsn
+        self.bsn, self.edges, self.spreading = bsn, edges, spreading
+        self.zs, self.sp, self._a = zs, sp, (a0, a1)
+        rows = bsn.zone_weight_rows(zs, a0, a1, edges)
+        self.cov = [c for _, c in rows]
+        self.m = [None if r is None else [v * 1e6 for v in _linear_i_units(
+            zs, [x * 1e-6 for x in r], sp)] for r, _ in rows]
+
+    def means(self, dev):
+        return [None if r is None else math.fsum(a * b for a, b in zip(r, dev))
+                for r in self.m]
+
+    def readings(self, dev, extra_means=None):
+        ms = self.means(dev)
+        if extra_means is not None:
+            ms = [None if m is None else m + e for m, e in zip(ms, extra_means)]
+        return self.bsn.readings(list(zip(ms, self.cov)), self.edges, self.spreading)[0]
+
+    def direct(self, dev):
+        """The direct route (transfer, then zone means): for the operator test."""
+        iu = _linear_i_units(self.zs, dev, self.sp)
+        a0, a1 = self._a
+        means = self.bsn.zone_means(self.zs, iu, a0, a1, self.edges)
+        return self.bsn.readings(means, self.edges, self.spreading)[0]
+
+
+def _predicted_events(timeline, groups, initial, dt, horizon):
+    """Per control zone every maximal interval with a valve level other than ``initial``."""
+    out = []
+    for k, g in enumerate(groups):
+        cur = None
+        for t, levels in timeline:
+            lv = levels[k]
+            if lv != initial and cur is None:
+                cur = {'start_s': t, 'nozzle_indices': list(g), 'acc': 0.0, 'changes': 1,
+                       'last': lv}
+            elif cur is not None and lv != cur['last'] and lv != initial:
+                cur['changes'] += 1
+            if cur is not None:
+                if lv == initial:
+                    cur['end'] = t
+                    out.append(cur)
+                    cur = None
+                else:
+                    cur['acc'] += lv * dt
+                    cur['last'] = lv
+        if cur is not None:
+            cur['end'] = None
+            out.append(cur)
+    rows = []
+    for e in sorted(out, key=lambda x: (x['start_s'], x['nozzle_indices'][0])):
+        end = e['end'] if e['end'] is not None else horizon
+        dur = end - e['start_s']
+        rows.append({'start_s': e['start_s'],
+                     'duration_s': None if e['end'] is None else dur,
+                     'nozzle_indices': e['nozzle_indices'],
+                     'level': e['acc'] / dur if dur > 0 else e['last'],
+                     'changes': e['changes'],
+                     'open_at_horizon': e['end'] is None})
+    return rows
+
+
+def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
+    """``width.flatness_control`` (SPEC19 package 4): a closed spray loop with the tool's own
+    control law (``flatness_control``) on ``roll_thermal.ControlledRun``, read through the
+    shapemeter operator of ``band_sensors``. Reported beside the width section; never evidence.
+    ``local``: ``{'params', 'sens', 'idx'}`` of the local sources (with
+    ``include_local_sources``)."""
+    from . import band_sensors as bsn
+    from . import flatness_control as flc
+    fc = w.get('flatness_control')
+    if fc is None:
+        return not_supplied('width_model.flatness_control is null or absent')
+    sm = (case.get('measurement') or {}).get('shapemeter')
+    if sm is None:
+        return not_assessable('needs measurement.shapemeter')
+    if actual is None or healthy is None:
+        return not_assessable('needs the steady roll thermal solution')
+    if sp is None:
+        return not_assessable('needs the shape parameters of the case pass')
+    if fc['include_local_sources'] and local is None:
+        return not_assessable('include_local_sources needs width.local_state and the force '
+                              'sensitivities of the case-pass bite')
+    groups, gbasis = _fc_groups(fc, th, w)
+    init = fc['initial_level']
+
+    def nozzle_levels(u):
+        lv = list(th.levels)
+        for k, g in enumerate(groups):
+            for i in g:
+                lv[i] = th.levels[i] * u[k]
+        return lv
+
+    def healthy_levels(u):
+        lv = [1.0] * th.count
+        for k, g in enumerate(groups):
+            for i in g:
+                lv[i] = u[k]
+        return lv
+    nk = len(groups)
+    u0 = [init] * nk
+    start = actual if nozzle_levels(u0) == list(th.levels) else th.steady(nozzle_levels(u0))
+    ref = (healthy if healthy_levels(u0) == [1.0] * th.count
+           else th.steady(healthy_levels(u0)))
+    z = start['z_m']
+    idx = _inside(z, sp['strip_centre_m'], sp['strip_width_m'])
+    zs = [z[i] for i in idx]
+    a0 = sp['strip_centre_m'] - sp['strip_width_m'] / 2
+    a1 = sp['strip_centre_m'] + sp['strip_width_m'] / 2
+    centre = sm['centre_m'] if sm['centre_m'] is not None else th.centre
+    edges = bsn.zone_edges(centre, sm['zone_width_m'], sm['zone_count'],
+                           sm['edge_zone_width_m'], sm['edge_zone_count_per_side'])
+    op = _ReadingOperator(zs, sp, a0, a1, edges, sm['neighbour_spreading_fraction'])
+    ref_g = [ref['radius_growth_m'][i] for i in idx]
+    ref_s = ref['surface_temperature_k']
+    hot = fc['include_local_sources']
+    compensated = bool(sm.get('temperature_compensated'))
+    force_rows = None
+    if hot:
+        from . import band_local
+        force_rows = [None if r is None else [v * 1e3 for v in band_local._force_i_units(
+            zs, [x * 1e-3 for x in r], sp, True)] for r, _ in bsn.zone_weight_rows(
+            zs, a0, a1, edges)]
+        lsens, lparams = local['sens'], local['params']
+
+    def extra_means(surface):
+        if not hot:
+            return None
+        from . import band_local
+        dtr = [surface[i] - ref_s[i] for i in idx]
+        ch = band_local.local_changes(zs, dtr, lparams)
+        dp = [lsens['dforce_per_width_dfriction_n_m'] * d for d in ch['friction_change']]
+        if ch.get('flow_stress_change_fraction') is not None:
+            dp = [a + lsens['dforce_per_width_dflow_stress_m'] * lsens['flow_stress_pa'] * b
+                  for a, b in zip(dp, ch['flow_stress_change_fraction'])]
+        out = [None if r is None else math.fsum(a * b for a, b in zip(r, dp))
+               for r in force_rows]
+        if not compensated and ch.get('strip_exit_temperature_k') is not None:
+            it = ss.thermal_flatness_term(zs, ch['strip_exit_temperature_k'])['i_units']
+            tm = bsn.zone_means(zs, it, a0, a1, edges)
+            out = [None if o is None else o + (m or 0.0) for o, (m, _) in zip(out, tm)]
+        return out
+
+    def readings_of(state):
+        dev = [state['radius_growth_m'][i] - g for i, g in zip(idx, ref_g)]
+        return op.readings(dev, extra_means(state['surface_temperature_k']))
+
+    def readings_at(u):
+        st = th.steady(nozzle_levels(u))
+        return readings_of(st)
+    weights = [c if r is not None else 0.0 for r, c in zip(op.m, op.cov)]
+    centres = [(lo + hi) / 2 for lo, hi in zip(edges, edges[1:])]
+    infl = flc.influence_matrix(readings_at, u0, groups)
+    diag = []
+    for k, g in enumerate(groups):
+        xk = sum(th.positions[i] for i in g) / len(g)
+        j = min(range(len(centres)), key=lambda q: abs(centres[q] - xk))
+        diag.append({'control_zone': k, 'shapemeter_zone': j, 'i_units_per_unit_level':
+                     infl[j][k]})
+    ctrl = flc.ZoneController(
+        infl, weights, groups, fc['valve_levels'], init, fc['minimum_on_time_s'],
+        fc['minimum_off_time_s'], fc['dead_band_i_units'], integral_gain=fc['integral_gain'],
+        low_order=fc['low_order_removed'], targets=fc['target_i_units'],
+        supplied_actuators=fc['supplied_actuators'], zone_centres_m=centres)
+    ts = min(th.numerics['time_step_s'], fc['control_interval_s'])
+    ci = max(1, int(round(fc['control_interval_s'] / ts))) * ts
+    u_exit = case['pass']['exit_speed_m_s']
+    delay = (0 if fc['shapemeter_distance_m'] is None
+             else int(round(fc['shapemeter_distance_m'] / (u_exit * ci))))
+    run = rt.ControlledRun(th.roll, th.header, th.segment(nozzle_levels(u0)), initial=start,
+                           **th.kw)
+    timeline, zhist = [], []
+
+    def on_step(t, shown, res, levels):
+        timeline.append((t, list(levels)))
+        zhist.append((t, shown, res))
+    out = flc.run_loop(lambda lv, d, dt: run.advance(nozzle_levels(lv), d, dt), readings_of,
+                       ctrl, horizon_s=fc['horizon_s'], control_interval_s=ci, time_step_s=ts,
+                       delay_intervals=delay,
+                       display_time_constant_s=fc['display_time_constant_s'], on_step=on_step)
+    horizon = out['horizon_s']
+    thr = ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS
+    win_start = horizon - out['settle_window_s']
+    nz = len(edges) - 1
+    r0 = out['initial']['residual_i_units']
+    outcomes = []
+    for j in range(nz):
+        if r0[j] is None:
+            outcomes.append({'zone': j, 'outcome': None, 'reason': 'no strip under the zone'})
+            continue
+        series = [(t, res[j]) for t, _, res in zhist]
+        above_t = sum(ci for _, v in series if abs(v) >= thr)
+        last_ok = all(abs(v) < thr for t, v in series if t > win_start + 1e-9)
+        if abs(r0[j]) >= thr:
+            word = 'REMOVED' if last_ok else 'REMAINS'
+        else:
+            word = 'MADE' if above_t > MADE_BAND_MIN_S else 'NONE'
+        outcomes.append({'zone': j, 'residual_start_i_units': r0[j],
+                         'residual_largest_i_units': max((v for _, v in series), key=abs),
+                         'residual_end_i_units': series[-1][1],
+                         'time_above_reporting_threshold_s': above_t,
+                         'outcome': word})
+    made = [o for o in outcomes if o['outcome'] == 'MADE']
+    # zone histories: at most four zones (largest initial residual, largest final residual,
+    # largest excursion, the zone over the largest steady stripe), thinned
+    cand = [j for j in range(nz) if r0[j] is not None]
+    pick = []
+
+    def add(j):
+        if j is not None and j not in pick:
+            pick.append(j)
+    add(max(cand, key=lambda j: abs(r0[j])) if cand else None)
+    add(max(cand, key=lambda j: abs(out['final']['residual_i_units'][j] or 0.0))
+        if cand else None)
+    add(max(cand, key=lambda j: max(abs(r[j]) for _, _, r in zhist)) if cand else None)
+    sdev = [actual['radius_growth_m'][i] - healthy['radius_growth_m'][i] for i in idx]
+    kbig = max(range(len(idx)), key=lambda i: abs(sdev[i]))
+    if abs(sdev[kbig]) > 0:                  # the zone over the largest steady stripe
+        add(bsn.zone_of(edges, zs[kbig]))
+    stride = max(1, int(math.ceil(len(zhist) / HISTORY_MAX_POINTS)))
+    keep = list(range(0, len(zhist), stride))
+    if keep[-1] != len(zhist) - 1:
+        keep = (keep if len(keep) < HISTORY_MAX_POINTS else keep[:-1]) + [len(zhist) - 1]
+    zone_hist = [{'zone': j, 'time_s': [zhist[i][0] for i in keep],
+                  'reading_i_units': [zhist[i][1][j] for i in keep],
+                  'residual_i_units': [zhist[i][2][j] for i in keep]} for j in pick[:4]]
+    ev = _predicted_events(timeline, groups, init, ci, horizon)
+    # valve map (thinned): control zones against time
+    vmap = {'time_s': [timeline[i][0] for i in keep],
+            'levels': [timeline[i][1] for i in keep]}
+    # limit cycle (estimate) of an unsettled loop: changes per zone in the last window
+    per_zone = [0] * nk
+    win_changes = {}
+    prev = u0
+    for t, lv in timeline:
+        for k in range(nk):
+            if lv[k] != prev[k]:
+                per_zone[k] += 1
+                if t > win_start + 1e-9:
+                    win_changes[k] = win_changes.get(k, 0) + 1
+        prev = lv
+    cycle = None
+    if out['status'] != 'SETTLED' and win_changes:
+        busiest = max(win_changes.values())
+        cycle = {'zones_switching_in_last_window': sorted(win_changes),
+                 'period_estimate_s': 2 * out['settle_window_s'] / busiest,
+                 'amplitude_i_units': (out['last_window']['max_abs_residual_i_units_highest']
+                                       - out['last_window']['max_abs_residual_i_units_lowest'])
+                 / 2,
+                 'basis': 'period: twice the last window over the most changes of one control '
+                          'zone in it (an up and a down step per cycle); amplitude: half the '
+                          'range of the largest zone residual in the last window [D]'}
+    lo_e = out['initial']['low_order_coefficients']
+    fin_e = out['final']['low_order_coefficients']
+    err_end = ctrl.error_terms(out['final']['readings_i_units'])
+    low_part = [None if (e is None or r is None) else e - r
+                for e, r in zip(err_end[0], err_end[1])]
+    covd = [j for j in range(nz) if low_part[j] is not None]
+    edge_centre = None
+    if len(covd) >= 3:
+        cj = min(covd, key=lambda j: abs(centres[j] - th.centre))
+        edge_centre = (low_part[covd[0]] + low_part[covd[-1]]) / 2 - low_part[cj]
+    flags = [FC_FLAG_SIMULATED, FC_FLAG_LOW_ORDER] + list(out['flags'])
+    if out['status'] == 'NOT_SETTLED':
+        flags.append(FC_FLAG_NOT_SETTLED)
+    elif out['status'] == 'TRIMMING_WITHIN_BAND':
+        flags.append(FC_FLAG_TRIMMING)
+    if made:
+        flags.append(FC_FLAG_MADE)
+    if th.numerics['axial_cell_m'] > sm['zone_width_m'] / 4:
+        flags.append(FC_FLAG_COARSE)
+    if out['status'] == 'SETTLED':
+        sentence = FC_STATUS_WORDS['SETTLED'].format(t=f'{out["last_valve_change_s"] or 0:.4g}')
+    elif out['status'] == 'TRIMMING_WITHIN_BAND':
+        sentence = FC_STATUS_WORDS['TRIMMING_WITHIN_BAND'].format(
+            x=f'{out["last_window"]["max_abs_residual_i_units_highest"]:.3g}')
+    else:
+        sentence = FC_STATUS_WORDS['NOT_SETTLED'].format(n=out['valve_changes'],
+                                                         h=f'{horizon:.4g}')
+    out.update({
+        'status_sentence': sentence, 'what_it_is': FC_WHAT_IT_IS,
+        'end_state_note': None if out['status'] == 'SETTLED' else FC_UNSETTLED_NOTE,
+        'provenance': fc['provenance'],
+        'reading_basis': (
+            'as measured hot: linear exit-tension-feedback transfer of the radius difference '
+            'from the healthy reference plus the film and flow-stress terms'
+            + ('' if compensated else ' and the strip temperature term')
+            + ' (width_model.flatness_control.include_local_sources)' if hot else
+            'mechanical: linear exit-tension-feedback transfer of the radius difference from '
+            'the healthy reference, mean removed, no band-wise saturation; zone means, roll-mean '
+            'removal and neighbour spreading of the shapemeter operator (band_sensors)'),
+        'set_up': {
+            'zones': [{'index': j, 'start_m': lo, 'end_m': hi, 'coverage_fraction': c}
+                      for j, (lo, hi, c) in enumerate(zip(edges, edges[1:], op.cov))],
+            'control_zones': [{'index': k, 'nozzle_indices': g,
+                               'nozzle_positions_m': [th.positions[i] for i in g]}
+                              for k, g in enumerate(groups)],
+            'control_zone_basis': gbasis,
+            'influence_diagonal': diag,
+            'influence_matrix_condition_note': (
+                'one-sided difference of steady readings per unit level (step 0.2) at the '
+                'initial levels; the gain is regularised with 0.01 of the largest diagonal of '
+                "B^T W B [D, SPEC19: analyst choice]"),
+            'reference_basis': ('steady radius growth of a HEALTHY header at the initial valve '
+                                'levels (the stripe difference convention: ground camber and '
+                                'set-up taken to match the healthy state)'),
+            'numerics': {'axial_cell_m': th.numerics['axial_cell_m'],
+                         'radial_cells': th.numerics['radial_cells'],
+                         'time_step_s': ts, 'control_interval_s': ci,
+                         'delay_intervals': delay}},
+        'valve_changes_per_control_zone': per_zone,
+        'valve_map': vmap, 'zone_histories': zone_hist,
+        'predicted_events': ev[:PREDICTED_EVENTS_MAX], 'predicted_event_count': len(ev),
+        'predicted_events_note': ('predicted by the flatness loop with the tool\'s own control '
+                                  'law; not a log of what happened. In the key names of '
+                                  'width_model.events: one can be copied into events to get '
+                                  'the event analysis for it (the valve level, not times the '
+                                  "nozzles' own levels). They enter no evidence."),
+        'zone_outcomes': outcomes, 'bands_made_by_switching': made,
+        'limit_cycle': cycle,
+        'low_order': {'coefficients_start': lo_e, 'coefficients_end': fin_e,
+                      'edge_to_centre_i_units': edge_centre,
+                      'sentence': FC_LOW_ORDER_SENTENCE},
+        'status_vocabulary': list(flc.LOOP_STATUSES), 'model_status': FC_STATUS,
+        'flags': flags, 'limitations': list(FC_LIMITATIONS) + list(out['limitations'])})
+    return out
+
 def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
@@ -3318,6 +3875,16 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                                                   else ''))
     else:
         out['thermal_events'] = not_supplied('no width_model.events')
+    # SPEC19 package 4: a closed spray loop with the tool's own control law (never evidence)
+    try:
+        lp = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
+              if local_ctx and local_sens is not None else None)
+        out['flatness_control'] = flatness_control_section(case, w, th, sp, healthy, actual, lp)
+    except (ValueError, ArithmeticError) as exc:
+        out['flatness_control'] = failed('flatness_control', exc)
+        out['failures'].append(out['flatness_control']['error'])
+    flags += [f for f in (out['flatness_control'].get('flags') or [])
+              if f in FC_TOP_FLAGS and f not in flags]
     try:
         if local_reason is not None:
             out['local_sources'] = band_local.not_assessable(local_reason)

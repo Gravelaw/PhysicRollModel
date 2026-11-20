@@ -453,6 +453,27 @@ def zone_means(z_m, values, strip_start_m, strip_end_m, edges):
     return out
 
 
+def zone_weight_rows(z_m, strip_start_m, strip_end_m, edges):
+    """The linear map of ``zone_means`` (SPEC19 package 4): per zone ``(row, coverage)``
+    with ``zone_means(...)[j][0] = sum_i row[i]*values[i]`` (row None for a zone without
+    strip); the same overlaps as ``zone_means``."""
+    dz = z_m[1] - z_m[0] if len(z_m) > 1 else 0.0
+    out = []
+    for lo, hi in zip(edges, edges[1:]):
+        a, b = max(lo, strip_start_m), min(hi, strip_end_m)
+        if b <= a:
+            out.append((None, 0.0))
+            continue
+        row, cov = [], 0.0
+        for zi in z_m:
+            cl, ch = max(zi - dz / 2, a), min(zi + dz / 2, b)
+            ov = ch - cl if ch > cl else 0.0
+            row.append(ov)
+            cov += ov
+        out.append(([v / cov for v in row] if cov > 0 else None, (b - a) / (hi - lo)))
+    return out
+
+
 def readings(means, edges, spreading_fraction):
     """``(r, u, m_bar)``: spread readings, unspread readings and the roll mean."""
     parts = [(m, c, hi - lo) for (m, c), lo, hi in zip(means, edges, edges[1:])]

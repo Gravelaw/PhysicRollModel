@@ -626,6 +626,11 @@ def _validate_v2_sections(case, out):
             raise ValueError(f'measurement.pass_records[{i}].exit_thickness_m must be below its '
                              'entry_thickness_m (null = the case pass value)')
     w = res['width_model']
+    if w is not None and w.get('flatness_control') is not None:     # SPEC19 package 4
+        sm = (res['measurement'] or {}).get('shapemeter')
+        if sm is None:
+            raise ValueError('width_model.flatness_control needs measurement.shapemeter')
+        bw.check_flatness_control_zones(w, sm)
     if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
         raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
                          'is null (otherwise it is (1 - tribology.strip_heat_fraction)/2)')

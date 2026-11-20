@@ -4535,6 +4535,7 @@
           "start_s": 300.0
         }
       ],
+      "flatness_control": null,
       "friction_stripe_screen": null,
       "gap_crown_m": null,
       "grinding": {
@@ -13687,6 +13688,11 @@
       "NOZZLES_REDUCED_OR_OFF",
       "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
     ],
+    "flatness_control": {
+      "not_supplied": true,
+      "reason": "width_model.flatness_control is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "friction_stripes": {
       "not_supplied": true,
       "reason": "width_model.friction_stripe_screen is null or absent",

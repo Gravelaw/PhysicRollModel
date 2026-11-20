@@ -252,7 +252,8 @@ class BenchmarkTests(unittest.TestCase):
                                                      bm.RECORDED_ON_SPEC18_P5,
                                                      bm.RECORDED_ON_SPEC18_P6,
                                                      bm.RECORDED_ON_SPEC18_P7,
-                                                     bm.RECORDED_ON_SPEC18_P9))
+                                                     bm.RECORDED_ON_SPEC18_P9,
+                                     bm.RECORDED_ON_SPEC19_P4))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -414,6 +415,16 @@ class BenchmarkTests(unittest.TestCase):
             q = _q(case, f'forward_slip_at_friction_r{mm}')
             self.assertAlmostEqual(q['project_value'], slip, delta=1e-4)
             self.assertEqual(q['row_verdict'], bm.NO_REFERENCE_VALUE)
+
+    def test_ss_v8_loop_indicative_against_the_published_band(self):
+        case = self.cases['SS-V8-LOOP']
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        self.assertEqual(case['reference_kind'], 'MEASUREMENT')
+        q = case['quantities'][0]
+        self.assertEqual(q['reference_value'], 6.0)
+        if q['project_value'] is not None:          # read from the committed artifact
+            self.assertLess(abs(q['project_value'] / q['recorded_project_value'] - 1), 1e-6)
+        self.assertNotIn('SS-V8', {e['id'] for e in self.result['not_encoded']})
 
     def test_tm_la19_heat_split_inside_measured_range(self):
         case = self.cases['TM-LA19-HEAT-SPLIT']

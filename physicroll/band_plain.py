@@ -1757,6 +1757,12 @@ def case_from_answers(answers, preset):
     notes.append(NOTE_PREFIX + f'starting point {pre["id"]}; observations answered by the person: '
                  + (', '.join(person_obs) if person_obs else 'none') + '.')
     case['notes'] = notes
+    # SPEC19 package 4: the simulated flatness loop reads the shapemeter; without one (the
+    # person answered "don't know") the starting point's loop settings are left out
+    wm = case.get('width_model')
+    if isinstance(wm, dict) and wm.get('flatness_control') is not None and \
+            not ((case.get('measurement') or {}).get('shapemeter')):
+        wm['flatness_control'] = None
     case = json.loads(json.dumps(case, allow_nan=False))
     bd.validate_case(case)
     canonical_nozzles(case)                      # one set of nozzle marks, as the engine reads
@@ -2662,6 +2668,32 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'FLATNESS_LOOP_SIMULATED': (
+        'The page shows what a flatness control loop with the settings you entered would do '
+        'on this model, with the tool\'s own control rule; it is not what your controller did '
+        'and changes no score.', 'Compare it with your own controller\'s valve log.'),
+    'FLATNESS_LOOP_NOT_SETTLED': (
+        'In this simulation the valves keep switching to the end of the run: the loop does '
+        'not settle with these settings.', 'Read the end state as one moment, not as the '
+        'flatness the mill would have.'),
+    'FLATNESS_LOOP_TRIMMING_LIMIT_CYCLE': (
+        'In this simulation the valves keep stepping by small amounts while the zone error '
+        'stays small.', 'Compare with how often your valves move in steady rolling.'),
+    'CONTROL_INCREASES_RESIDUAL': (
+        'In this simulation the flatness error at the end is larger than at the start.',
+        'Check the valve steps and minimum times you entered.'),
+    'CONTROL_ZONE_AT_LIMIT': (
+        'In this simulation at least one spray zone ends fully open or fully closed.',
+        'That zone cannot correct further; check the spray capacity there.'),
+    'CONTROL_MADE_BAND': (
+        'In this simulation the valve switching itself makes a band in at least one zone for '
+        'a while.', 'See the zone table for where and how long.'),
+    'LOW_ORDER_FLATNESS_LEFT_TO_BENDING_NOT_MODELLED': (
+        'The smooth overall shape (mean, slope, curve) is left to bending and tilt, which the '
+        'tool does not model.', 'Read only the local zone errors of the simulated loop.'),
+    'FLATNESS_LOOP_ON_COARSE_GRID': (
+        'The simulated loop ran on a roll grid coarse against the flatness zones.',
+        'Run in detail for a finer grid.'),
     'GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA': (
         'The mark pitch fits no simple count of marks around the work roll, but it would fit a '
         'pattern left by a vibrating grinder; without the grinder\'s speeds that cannot be '

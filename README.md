@@ -127,6 +127,10 @@ much a band narrower than a zone is diluted. These are zone means of the model, 
 of the shapemeter screen: no flatness controller is modelled (section 7.6 of the guide).
 A supplied strip temperature scan across the width (`width_model.strip_temperature`) adds
 the flatness a shapemeter measures hot beside the flatness after cooling (section 7.7).
+With `width_model.flatness_control` the tool also simulates a closed spray loop on that
+shapemeter with its own control law (section 7.12): whether such a loop would settle with the
+entered valve steps and times, and which valve events it would make. It is not what the plant's
+controller did, and it changes no score.
 
 ### Product, alloy and temper lookups
 

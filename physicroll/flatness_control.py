@@ -332,12 +332,15 @@ def _max_abs(values):
 
 
 def run_loop(advance, readings_of, controller, *, horizon_s, control_interval_s, time_step_s,
-             settle_window_s=300.0, delay_intervals=0, display_time_constant_s=0.0):
+             settle_window_s=300.0, delay_intervals=0, display_time_constant_s=0.0,
+             on_step=None):
     """Closed loop with a fixed control interval over a fixed horizon. ``advance(levels,
     duration_s, time_step_s)`` returns a plant state, ``readings_of(state)`` the zone readings.
     Every control interval: advance with the present valve levels; read; transport delay (a
     FIFO of ``delay_intervals`` readings) and display filter ``y += dt/(tau + dt)*(x - y)``;
-    ``controller.step``; log. ``initial`` is the first reading the controller sees."""
+    ``controller.step``; log. ``initial`` is the first reading the controller sees.
+    ``on_step(time_s, readings_seen, residual, levels)`` (optional) is called after every
+    control step (package 4 records zone histories and valve timelines with it)."""
     horizon = _finite('horizon_s', horizon_s)
     dt_c = _finite('control_interval_s', control_interval_s)
     window = _finite('settle_window_s', settle_window_s)
@@ -390,6 +393,8 @@ def run_loop(advance, readings_of, controller, *, horizon_s, control_interval_s,
                                 'to_level': b_})
         hist.append((t, _max_abs(res), _max_abs(shown), sum(a_ != b_ for a_, b_ in
                                                               zip(before, after))))
+        if on_step is not None:
+            on_step(t, list(shown), list(res), list(after))
     final = {'readings_i_units': list(shown), 'residual_i_units': list(res),
              'max_abs_residual_i_units': _max_abs(res),
              'max_abs_reading_i_units': _max_abs(shown),

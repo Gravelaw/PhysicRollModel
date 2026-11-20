@@ -1692,7 +1692,8 @@ def _local_block(w):
             f'{_f(a.get("strip_exit_temperature_change_k"), 1, 3)} K (strip-to-roll coupling '
             f'{_f(cp.get("strip_roll_temperature_coupling"), 1, 3)}).'
             + (' Oil supply of a healthy nozzle: a film of '
-               f'{_f(sup.get("healthy_supplied_film_m"), 1e6, 3)} µm, {_f(sup.get("ratio_to_smooth_film"), 1, 4)} times the smooth inlet film; '
+               f'{_f(sup.get("healthy_supplied_film_m"), 1e6, 3)} µm, '
+               f'{_f(sup.get("ratio_to_smooth_film"), 1, 4)} times the smooth inlet film; '
                'a nozzle starves the film below a level of '
                f'{_f(sup.get("level_below_which_starved"), 1, 3)}.'
                if not sup.get('not_supplied') and sup else '')
@@ -3234,6 +3235,146 @@ def _dilution_rows(dt):
              _f(x['gaussian_on_boundary'], 1, 4)] for x in dt.get('rows') or []]
 
 
+def _loop_chart(fc):
+    h = fc.get('history') or {}
+    t, y = h.get('time_s') or [], h.get('max_abs_residual_i_units') or []
+    if len(t) < 2:
+        return ''
+    key_parts, rows = _key2([('largest zone error after the low-order part [I-units]', C_FB, '',
+                              'thick'), ('dead band', C_THR, '7 4', 'line')])
+    top = 14 + 15 * rows + 10
+    bot = top + 180
+    sx = _Axis(0.0, t[-1], ML, W - MR)
+    db = (fc.get('parameters') or {}).get('dead_band_i_units') or 0.0
+    hi = max(max(y), db) * 1.08 or 1.0
+    sy = _Axis(0.0, hi, bot, top)
+    c = [f'<svg viewBox="0 0 {W} {bot + MB}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="largest zone error against time"><title>Largest zone error '
+         'of the simulated loop</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
+         'fill="#fbfcfe" stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    c.append(f'<polyline points="{_pts(t, y, sx, sy)}" fill="none" stroke="{C_FB}" '
+             'stroke-width="2.4"/>')
+    c.append(f'<line x1="{ML}" y1="{sy(db):.1f}" x2="{W - MR}" y2="{sy(db):.1f}" '
+             f'stroke="{C_THR}" stroke-dasharray="7 4"/>')
+    cy = (top + bot) / 2
+    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">zone error [I-units]</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">time [s]</text>')
+    c += key_parts
+    c.append('</svg>')
+    return _wide(''.join(c))
+
+
+def _valve_map(fc):
+    vm = fc.get('valve_map') or {}
+    t, lv = vm.get('time_s') or [], vm.get('levels') or []
+    if len(t) < 2 or not lv:
+        return ''
+    nk = len(lv[0])
+    top, rowh = 20, 12
+    bot = top + nk * rowh
+    sx = _Axis(0.0, t[-1], ML, W - MR)
+    c = [f'<svg viewBox="0 0 {W} {bot + MB}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="valve levels of the control zones against time"><title>'
+         'Valve map: control zones against time, darker = more coolant</title>']
+    for k in range(nk):
+        y0 = top + k * rowh
+        c.append(f'<text x="{ML - 6}" y="{y0 + rowh - 2}" text-anchor="end" class="tick">'
+                 f'{k}</text>')
+        i = 0
+        while i < len(t) - 1:                      # one rectangle per run of equal levels
+            v = lv[i][k]
+            j = i + 1
+            while j < len(t) - 1 and lv[j][k] == v:
+                j += 1
+            shade = int(round(235 - 175 * v))
+            wd = max(sx(t[j]) - sx(t[i]), 0.5)
+            c.append(f'<rect x="{sx(t[i]):.1f}" y="{y0}" width="{wd:.1f}" '
+                     f'height="{rowh - 1}" fill="rgb({shade},{shade},{min(255, shade + 20)})"/>')
+            i = j
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">time [s]; rows: control zones; darker = valve more open</text>')
+    c.append('</svg>')
+    return _wide(''.join(c))
+
+
+def _flatness_loop_block(r):
+    """SPEC19 package 4: what such a flatness control loop would do (simulation; the tool's own
+    control law). Nothing is rendered without width_model.flatness_control."""
+    fc = _get(r, 'width', 'flatness_control')
+    if not isinstance(fc, dict) or fc.get('not_supplied'):
+        return ''
+    out = ['<h3>What the flatness control would do</h3>']
+    if _bad(fc):
+        return out[0] + _state_p('Flatness loop ' + _bad(fc))
+    su = fc.get('set_up') or {}
+    num = su.get('numerics') or {}
+    par = fc.get('parameters') or {}
+    out.append(f'<p class="warn">{_e(fc.get("what_it_is"))}</p>')
+    out.append(f'<p>{len(su.get("control_zones") or [])} control zones '
+               f'({_e(su.get("control_zone_basis"))}), valve levels '
+               f'{_e(", ".join(_f(v, 1, 3) for v in par.get("valve_levels") or []))}, minimum '
+               f'on / off {_f(par.get("minimum_on_time_s"), 1, 3)} / '
+               f'{_f(par.get("minimum_off_time_s"), 1, 3)} s, dead band '
+               f'{_f(par.get("dead_band_i_units"), 1, 3)} I-units, control every '
+               f'{_f(num.get("control_interval_s"), 1, 3)} s over {_f(fc.get("horizon_s"), 1, 4)} '
+               f's. The loop reads: {_e(fc.get("reading_basis"))}. Source: '
+               f'{_e(fc.get("provenance"))}.</p>')
+    out.append(f'<p><strong>{_e(fc.get("status_sentence"))}</strong> Largest zone error '
+               f'{_f(fc["initial"]["max_abs_residual_i_units"], 1, 3)} I-units at the start; in '
+               'the last window '
+               f'{_f(fc["last_window"]["max_abs_residual_i_units_lowest"], 1, 3)} to '
+               f'{_f(fc["last_window"]["max_abs_residual_i_units_highest"], 1, 3)} I-units with '
+               f'{_f(fc["last_window"]["valve_changes"])} valve changes.'
+               + (f' {_e(fc["end_state_note"])}' if fc.get('end_state_note') else '') + '</p>')
+    lc = fc.get('limit_cycle')
+    if isinstance(lc, dict):
+        out.append(f'<p>Repeating pattern (estimate): period about '
+                   f'{_f(lc.get("period_estimate_s"), 1, 3)} s, amplitude about '
+                   f'{_f(lc.get("amplitude_i_units"), 1, 3)} I-units; zones still switching: '
+                   + _e(', '.join(str(k) for k in lc.get('zones_switching_in_last_window') or []))
+                   + '.</p>')
+    out.append(_loop_chart(fc))
+    out.append(_valve_map(fc))
+    rows = [[_f(o['zone']), _f(o.get('residual_start_i_units'), 1, 3),
+             _f(o.get('residual_largest_i_units'), 1, 3), _f(o.get('residual_end_i_units'), 1, 3),
+             _f(o.get('time_above_reporting_threshold_s'), 1, 4),
+             _e(str(o.get('outcome') or 'no strip').lower())]
+            for o in fc.get('zone_outcomes') or [] if o.get('outcome')]
+    out.append('<p>Per shapemeter zone (after the low-order part; "made" = a band the switching '
+               'itself would make, above the reporting threshold for more than 20 s, which a '
+               'shapemeter would show):</p>'
+               + _table(['zone', 'at the start [I]', 'largest [I]', 'at the end [I]',
+                         'time above 2 I-units [s]', 'could the control'], rows))
+    ev = fc.get('predicted_events') or []
+    if ev:
+        erows = [[_f(e['start_s'], 1, 4), _f(e['duration_s'], 1, 4) if e['duration_s'] is not None
+                  else 'open at the end', _e(', '.join(str(i) for i in e['nozzle_indices'])),
+                  _f(e['level'], 1, 3), _f(e['changes'])] for e in ev[:10]]
+        out.append(f'<p>Predicted valve events (first {len(erows)} of '
+                   f'{_f(fc.get("predicted_event_count"))}; {_e(fc.get("predicted_events_note"))}'
+                   '):</p>' + _table(['start [s]', 'duration [s]', 'nozzles', 'mean valve level',
+                                      'valve changes'], erows))
+    lo = fc.get('low_order') or {}
+    out.append(f'<p class="warn">Low-order part at the end: edge minus centre '
+               f'{_f(lo.get("edge_to_centre_i_units"), 1, 3)} I-units. '
+               f'{_e(lo.get("sentence"))}</p>')
+    return ''.join(out)
+
+
 def _measurement_section(r):
     """SPEC17 package 4: what a shapemeter would show (zone means of the model profile)."""
     m = r.get('measurement')
@@ -3310,6 +3451,7 @@ def _measurement_section(r):
     out.append(f'<p class="warn">{_e(NO_CONTROLLER)} The readings are zone means of a modelled '
                'stress, not a forecast of the operator\'s screen: a band below the threshold '
                'would probably not show, and it can still be on the strip.</p>')
+    out.append(_flatness_loop_block(r))
     out.append(_gauge_html(m))
     out.append('</section>')
     return ''.join(out)
