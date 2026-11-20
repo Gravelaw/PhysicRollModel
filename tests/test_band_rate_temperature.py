@@ -8,6 +8,7 @@ import unittest
 
 from physicroll import band_diagnosis as bd
 from physicroll import band_process as bp
+from physicroll import band_report
 from physicroll import benchmarks as bm
 from physicroll import chatter
 from physicroll.halfspace_bite import derive_bite_response_half_space
@@ -78,6 +79,17 @@ class EngineTest(unittest.TestCase):
         ca = {k: v for k, v in self.a['chatter'].items() if k != 'rate_sensitivity_damping'}
         cb = {k: v for k, v in self.b['chatter'].items() if k != 'rate_sensitivity_damping'}
         self.assertEqual(ca, cb)
+
+    def test_report_block(self):
+        self.assertEqual(band_report._rate_temperature_block(self.a['process']['flow_stress']),
+                         '')
+        html = band_report.render_band_report(self.b)
+        self.assertIn('Strain rate and temperature factor', html)
+        self.assertIn('(from the undeformed arc)', html)
+        self.assertIn('Reported only: the flow stress used is not factored.', html)
+        self.assertIn('reference temperature (no tribology', html)
+        self.assertNotIn('Strain rate and temperature factor',
+                         band_report.render_band_report(self.a))
 
     def test_damping_equals_the_formula(self):
         d = self.b['chatter']['rate_sensitivity_damping']

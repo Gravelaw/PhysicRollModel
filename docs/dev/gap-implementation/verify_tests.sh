@@ -20,7 +20,7 @@ python -m unittest tests.test_band_absent_inputs tests.test_band_sensors \
   tests.test_halfspace_bite_sensitivity tests.test_halfspace_bite_modes \
   tests.test_band_halfspace tests.test_band_halfspace_default \
   tests.test_asperity_contact tests.test_band_friction_identification \
-  tests.test_band_rate_temperature > "$S/e.txt" 2>&1 &
+  tests.test_band_rate_temperature tests.test_band_heat_partition > "$S/e.txt" 2>&1 &
 wait
 for f in a b c d e; do echo "group $f: $(tail -n 3 "$S/$f.txt" | tr '\n' ' ')"; grep -h "^FAIL:\|^ERROR:" "$S/$f.txt"; done
 python scripts/smoke.py > "$S/smoke.txt" 2>&1; echo "smoke exit $?"

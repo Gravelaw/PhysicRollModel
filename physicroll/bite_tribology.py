@@ -776,7 +776,9 @@ def inlet_film_thickness(lubricant, *, roll_surface_speed_m_s, strip_entry_speed
                                        'Yarita 1984 the entry pressure (sources disagree)',
             'thermal_loading_parameter': '[V] Ghosh & Hamrock 1985',
             'thermal_factor_form': '[M] Murch & Wilson form, quoted from memory',
-            'oil_conductivity': ('[M] default 0.13 W/mK' if lub.conductivity_w_mk is None
+            'oil_conductivity': ('[M] default 0.13 W/mK; published for a kerosine foil base '
+                                 'oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip '
+                                 '[E6 FT]' if lub.conductivity_w_mk is None
                                  else 'supplied by caller'),
             'viscosity_law': ('[D] exponential temperature law with Barus pressure law'
                               if lub.is_default_law() else
@@ -1177,6 +1179,155 @@ def pass_heating(*, entry_thickness_m, exit_thickness_m, exit_speed_m_s, mean_fl
         'sources': [SOURCES['yin_2003'], SOURCES['achenbach'], SOURCES['abb_review']]})
 
 
+# ------------------------------------------- computed bite heat partition (SPEC18 package 9, A3)
+STATUS_HEAT_PARTITION = 'UNVALIDATED_COMPUTED_HEAT_PARTITION'
+HEAT_PARTITION_STEPS = 400
+PUBLISHED_OIL_CONDUCTIVITIES_W_MK = (0.125, 0.25)    # ambient / in the nip [E6 FT]
+MEASURED_FOIL_STRIP_SHARE = (0.11, 0.33)             # [V abstract: Yin et al. 2003; TM-LA19 AB]
+HEAT_SHARE_OUTSIDE_FLAG = 'HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES'
+STRIP_NOT_THIN_FLAG = 'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE'
+FRICTION_SIDE_LABEL = ('half of the friction heat released on the strip side of the film '
+                       '(phi = 0.5) [D, SPEC18 analyst choice]')
+HEAT_PARTITION_LIMITATIONS = [
+    'Heat released uniformly over the contact.',
+    'One lumped strip temperature (strip thermally thin); a strip conductivity adds only the '
+    'slab\'s mean-to-surface resistance.',
+    'Roll curvature neglected (half-space over the contact time).',
+    'No asperity conduction: the gap row\'s "asperity term" has no formula in the reports; the '
+    'film conductance k_oil/h is the whole interface conductance.',
+    'Film thickness from the smooth inlet formula.',
+    'Not coupled back: the computed strip temperature does not enter the flow stress or the '
+    'film.']
+
+
+def _exp_erfc(x):
+    """exp(x^2)*erfc(x); the asymptotic form for x > 25 [SPEC18 package 9]."""
+    if x > 25:
+        return (1 - 1 / (2 * x * x)) / (x * math.sqrt(math.pi))
+    return math.exp(x * x) * math.erfc(x)
+
+
+def perfect_contact_strip_share(strip_capacity_j_m2k, roll_effusivity, contact_time_s):
+    """Strip share of uniform bite heat with perfect contact and equal entry temperatures
+    [D, re-derived in SPEC18: Laplace transform of the lumped strip on a half-space roll]:
+    ``T(t) = (g/e)*(2*sqrt(t/pi) - sqrt(tau)*(1 - exp(t/tau)*erfc(sqrt(t/tau))))``,
+    ``tau = (C_s/e)^2``, share ``C_s*T(t_c)/(g*t_c)``."""
+    c = _num('strip_capacity_j_m2k', strip_capacity_j_m2k, positive=True, hi=1e9)
+    e = _num('roll_effusivity', roll_effusivity, positive=True, hi=1e7)
+    t = _num('contact_time_s', contact_time_s, positive=True, hi=10.0)
+    tau = (c / e) ** 2
+    x = math.sqrt(t / tau)
+    temp_over_g = (2 * math.sqrt(t / math.pi) - math.sqrt(tau) * (1 - _exp_erfc(x))) / e
+    return c * temp_over_g / t
+
+
+def heat_partition(*, plastic_power_per_width_w_m, friction_power_per_width_w_m,
+                   contact_length_m, roll_surface_speed_m_s, exit_thickness_m, exit_speed_m_s,
+                   entry_thickness_m, strip_entry_temperature_k, roll_entry_surface_temperature_k,
+                   interface_conductance_w_m2k, roll_conductivity_w_mk, roll_density_kg_m3,
+                   roll_specific_heat_j_kgk,
+                   strip_volumetric_heat_capacity_j_m3k=ALUMINIUM_VOLUMETRIC_HEAT_CAPACITY_J_M3K,
+                   strip_conductivity_w_mk=None, friction_heat_to_strip_side_fraction=0.5,
+                   steps=HEAT_PARTITION_STEPS):
+    """Computed bite heat partition, one roll side per unit contact area [D, re-derived in
+    SPEC18; the gap row A3's series formula is its time-averaged form].
+
+    ``t_c = l_d/V_r``; ``C_s = rho_c*h1*u1/(2*V_r)``; ``e = sqrt(k*rho*c)`` of the roll;
+    ``g_p = P_pl/(2*l_d)``, ``g_f = P_f/(2*l_d)``; ``phi`` the share of the friction heat
+    released on the strip side of the film::
+
+        strip:        C_s*dT_s/dt = g_p + phi*g_f - h_c*(T_s - T_r)
+        roll surface: q_r = h_c*(T_s - T_r) + (1 - phi)*g_f
+                      T_r(t) = T_r0 + (1/(e*sqrt(pi)))*Int_0^t q_r(s)/sqrt(t - s) ds
+
+    ``steps`` equal steps, ``q_r`` constant per step with the exact half-space response at the
+    step ends, strip by backward Euler, the two linear equations of a step in closed form.
+    ``f_s = C_s*(T_s(t_c) - T_e)/((g_p + g_f)*t_c)``; reported as computed even outside [0, 1].
+    """
+    p_pl = _num('plastic_power_per_width_w_m', plastic_power_per_width_w_m, nonnegative=True,
+                hi=1e10)
+    p_f = _num('friction_power_per_width_w_m', friction_power_per_width_w_m, nonnegative=True,
+               hi=1e10)
+    ld = _num('contact_length_m', contact_length_m, positive=True, hi=1.0)
+    vr = _num('roll_surface_speed_m_s', roll_surface_speed_m_s, positive=True, hi=MAX_SPEED_M_S)
+    h0, h1 = _thickness_pair(entry_thickness_m, exit_thickness_m)
+    u1 = _num('exit_speed_m_s', exit_speed_m_s, positive=True, hi=MAX_SPEED_M_S)
+    t_e = _temperature('strip_entry_temperature_k', strip_entry_temperature_k)
+    t_r0 = _temperature('roll_entry_surface_temperature_k', roll_entry_surface_temperature_k)
+    hc = _num('interface_conductance_w_m2k', interface_conductance_w_m2k, positive=True,
+              hi=1e15)
+    k_r = _num('roll_conductivity_w_mk', roll_conductivity_w_mk, positive=True, hi=1000.0)
+    rho_r = _num('roll_density_kg_m3', roll_density_kg_m3, positive=True, hi=30000.0)
+    c_r = _num('roll_specific_heat_j_kgk', roll_specific_heat_j_kgk, positive=True, hi=1e4)
+    rho_c = _num('strip_volumetric_heat_capacity_j_m3k', strip_volumetric_heat_capacity_j_m3k,
+                 positive=True, hi=1e8)
+    phi = _num('friction_heat_to_strip_side_fraction', friction_heat_to_strip_side_fraction,
+               lo=0.0, hi=1.0)
+    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 100000:
+        raise ValueError('steps must be an integer in [1, 100000]')
+    t_c = ld / vr
+    cap = rho_c * h1 * u1 / (2 * vr)
+    eff = math.sqrt(k_r * rho_r * c_r)
+    g_p, g_f = p_pl / (2 * ld), p_f / (2 * ld)
+    g = g_p + g_f
+    fourier, flags = None, []
+    h_eff = hc
+    if strip_conductivity_w_mk is not None:
+        k_s = _num('strip_conductivity_w_mk', strip_conductivity_w_mk, positive=True, hi=1000.0)
+        h_eff = 1 / (1 / hc + (h0 + h1) / (12 * k_s))
+        fourier = k_s * t_c / (rho_c * (0.25 * (h0 + h1)) ** 2)
+        if fourier < 1:
+            flags.append(STRIP_NOT_THIN_FLAG)
+    dt = t_c / steps
+    k0 = 2 / (eff * math.sqrt(math.pi))
+    w = [k0 * (math.sqrt((i + 1) * dt) - math.sqrt(i * dt)) for i in range(steps)]
+    a = h_eff / (1 + h_eff * w[0])
+    b = (1 - phi) * g_f / (1 + h_eff * w[0])
+    # excess temperatures (strip over T_e, roll over T_r0) keep the energy balance to round-off
+    d0 = t_e - t_r0
+    qs, th_s, th_r, sum_ts = [], 0.0, 0.0, 0.0
+    for j in range(steps):
+        known = sum(qs[k] * w[j - k] for k in range(j))
+        th_s = ((cap / dt) * th_s + g + a * (known - d0) - b) / (cap / dt + a)
+        q = a * (th_s + d0 - known) + b
+        qs.append(q)
+        th_r = known + q * w[0]
+        sum_ts += th_s
+    t_s, t_r = t_e + th_s, t_r0 + th_r
+    sum_ts += steps * t_e
+    f_s = cap * th_s / (g * t_c) if g > 0 else None
+    if f_s is not None and not 0 <= f_s <= 1:
+        flags.append(HEAT_SHARE_OUTSIDE_FLAG)
+    r_roll = math.sqrt(math.pi * t_c) / (2 * eff)
+    mean_ts = sum_ts / steps
+    return _checked({
+        'status': STATUS_HEAT_PARTITION,
+        'strip_heat_fraction_computed': f_s,
+        'roll_heat_fraction_per_roll_computed': None if f_s is None else (1 - f_s) / 2,
+        'strip_exit_temperature_k': t_s, 'roll_surface_exit_temperature_k': t_r,
+        'contact_time_s': t_c, 'strip_capacity_j_m2k': cap, 'roll_effusivity': eff,
+        'interface_conductance_w_m2k': hc,
+        'interface_conductance_with_strip_conduction_w_m2k': h_eff,
+        'roll_transient_resistance_m2k_w': r_roll,
+        'gap_row_series_roll_flux_w_m2': (mean_ts - t_r0) / (1 / h_eff + r_roll),
+        'perfect_contact_strip_share': perfect_contact_strip_share(cap, eff, t_c),
+        'fourier_number': fourier, 'steps': steps,
+        'friction_heat_to_strip_side_fraction': phi,
+        'roll_heat_per_area_j_m2': sum(qs) * dt,
+        'heat_input_per_area_j_m2': g * t_c,
+        'basis': {
+            'model': '[D, re-derived in SPEC18] lumped strip on a half-space roll over the '
+                     'contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + '
+                     'sqrt(pi*t)/(2*e)) is its time-averaged form',
+            'friction_heat_side': FRICTION_SIDE_LABEL if phi == 0.5 else
+            f'{phi:g} of the friction heat on the strip side (entered)',
+            'strip_capacity': 'C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll '
+                              'side [D, SPEC18]',
+            'measured_strip_share_foil_mill': [list(MEASURED_FOIL_STRIP_SHARE),
+                                               '[V abstract: Yin et al. 2003; TM-LA19 AB]']},
+        'flags': flags, 'limitations': list(HEAT_PARTITION_LIMITATIONS)})
+
+
 # --------------------------------------------------------------------------- W3.5 hardening
 @dataclass(frozen=True)
 class VoceHardening:
@@ -1274,7 +1425,11 @@ class TomeVoceHardening:
                                 hi=100.0))
 
     def mean_stress(self, start, end, panels=TOME_SIMPSON_PANELS):
-        """Strain mean over [start, end] by composite Simpson with ``panels`` panels [D]."""
+        """Strain mean over [start, end] by composite Simpson with ``panels`` panels [D].
+
+        With 64 panels the mean is within 1e-9 of 512 panels on passes away from the steep
+        start, but 2e-7 to 5e-7 off on a first pass from zero strain (``theta0/s_v`` 13, e.g.
+        [0, 0.6] and [0.1, 1.5]) [run, SPEC18 package 8]."""
         self.validate()
         a = _num('start', start, nonnegative=True, hi=100.0)
         b = _num('end', end, nonnegative=True, hi=100.0)

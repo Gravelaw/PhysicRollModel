@@ -995,7 +995,9 @@ event scaled linearly with the roll heat at a fixed spray coefficient, checked b
 solve; the stripe is detected on every row's own scaled profile and its flatness states and, in
 `full` mode, its onsets over its own extent are recomputed for every row, as a direct run at that
 share would; in the default `partition` mode one onset window per spray coefficient is used, about
-1 % from a direct run):
+1 % from a direct run). The share the interface model computes for the case pass, 0.338
+(section 8.2), is shown beside these rows as `computed_strip_share`; it moves no stripe unless
+`tribology.use_computed_heat_partition` is set):
 
 | strip share (per roll) | spray [kW/m2K] | stripe [um] | I-units | in mill / after release | stripe / in-mill onset | event peak [um] | event visible after release [s] |
 |---|---|---|---|---|---|---|---|
@@ -1296,6 +1298,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 |---|---|---|---|
 | `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
 | `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
+| `tribology.interface_conductance_w_m2k`, `tribology.use_computed_heat_partition` | optional: a heat-transfer coefficient between strip and roll in the bite (else oil conductivity over film thickness), and whether the computed heat share replaces the entered one (section 8.2) | W/(m2 K), - | leave empty unless measured |
 | `hardening.rate_temperature` | optional strain-rate and temperature factor of the flow stress (section 8.3); no default number; enter the rate and temperature terms together or not at all | – | rate-jump and warm tensile tests on your stock |
 | `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model; enter measured passes in `measurement.pass_records` and the tool reports the friction they imply (section 8.5) |
 | `stand.work_roll_mass_kg`, `stand.backup_roll_mass_kg` | moving mass of one work-roll and one backup-roll assembly (roll, necks, chocks, bearings) | kg | roll and chock drawings |
@@ -2512,12 +2515,71 @@ each work roll receives (1 - f_s)/2 of Q             [D]
 ```
 
 `P_friction` is the interface slip dissipation of the slab (or mattress) solution. The
-strip heat fraction `f_s` is **supplied**, not computed: foil mills put 0.11-0.33 of the
+strip heat fraction `f_s` is **supplied** (a computed one is reported beside it, below): foil mills put 0.11-0.33 of the
 bite heat into the foil [V abstract: Yin et al. 2003]; thicker strip keeps much more [M]. The
 roll heat fraction derived from it drives the roll thermal model, so the stripe heights scale
 with this guess. Lengthwise demo (`process.heating.operating`): plastic power 293 kW/m,
 friction power 113 kW/m, total 406 kW/m; strip 313.15 -> 368.9 K (+55.7 K); 32.5 kW/m to each
 work roll.
+
+**Computed heat partition (SPEC18 package 9, gap row A3).** Beside the entered share each
+heating row carries `heat_partition`: the strip's share computed by an interface model
+(`bite_tribology.heat_partition`) [D, re-derived in SPEC18; the gap row's series formula
+`q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e))` is its time-averaged form]. One roll side per unit
+contact area, over the contact time `t_c = l_d/V_r`: a lumped strip of capacity
+`C_s = rho_c*h1*u1/(2*V_r)` (half the neutral thickness per side) on a roll that is a half-space
+(effusivity `e = sqrt(k*rho*c)`), coupled through the interface conductance `h_c`; plastic heat
+`P_pl/(2*l_d)` released in the strip, friction heat `P_f/(2*l_d)` at the interface with **half
+of it released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]**. 400
+time steps, the half-space response exact for a flux constant over a step, the strip by
+backward Euler; the share is `f_s = C_s*(T_s(t_c) - T_e)/(heat input)`, reported as computed
+even outside [0, 1] (flag `HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES`). With
+perfect contact and equal entry temperatures it has the closed form
+`T(t) = (g/e)*(2*sqrt(t/pi) - sqrt(tau)*(1 - exp(t/tau)*erfc(sqrt(t/tau))))`, `tau = (C_s/e)^2`
+(`perfect_contact_strip_share`, the test of the scheme).
+
+Inputs in the engine: contact length and forward slip of the pass's bite; the film thickness
+of the pass's friction row (smooth inlet film at that bite with the case's friction closure;
+the row's `interface_conductance_basis` names the bite model and the closure); `h_c =
+k_oil/h_film` [row A3] with the oil conductivity of the case (default 0.13 W/mK [M], unchanged),
+or `tribology.interface_conductance_w_m2k` when entered (1e3 to 1e9; models use 25-40 kW/m2K,
+measurements span 7-800 [PT-T34]); roll properties of `width_model.roll` (else the defaults of
+`roll_thermal.RollThermalProperties`); roll surface at bite entry = the coolant temperature
+(else the oil inlet temperature), flag `ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL`. The
+row also gives the share at the two published conductivities of a kerosine foil base oil,
+**0.125 W/mK at ambient pressure and 0.25 W/mK in the nip [E6 FT]**
+(`strip_heat_fraction_at_published_oil_conductivities`). No interface-conductance
+correlation is coded: a mixed-lubrication conductance model was found only as a publisher
+preview without its equations (E12 AB), the Tseng papers as abstracts (E14 AB), and the
+Cooper-Mikic-Yovanovich correlation on teaching pages (E13 VP), where it is a correlation for
+dry rough contacts at far lower pressures than a roll bite. The gap row's "asperity term" has
+no formula in the reports and is not built.
+
+Worked numbers (the thermal report's check case: steel `k` 43 W/mK, `rho*c` 3.6e6 J/m3K,
+24 um, `t_c` 0.2 ms; `C_s` 29.16 J/m2K, `tau` 5.4929e-6 s): perfect contact 0.162070 (the
+scheme 0.162060 / 0.162069 / 0.162070 with 50 / 400 / 800 steps; the report's capacity-ratio
+estimate gives 0.128); a 70 nm film with 0.13 W/mK 0.2254, 200 nm 0.3352, 40 kW/m2K 0.8775,
+60 % plastic and 40 % friction heat at 70 nm 0.2113; with 0.125 W/mK 0.2279 (70 nm) and
+0.3414 (200 nm), with 0.25 W/mK 0.1952 and 0.2553. The roll's transient resistance
+`sqrt(pi*t_c)/(2e)` is 1.0073e-6 m2K/W against 5.385e-7 for the 70 nm film: the roll, not the
+film, limits the heat flow. Sheet check, 0.25 mm and 0.4 ms, perfect contact: 0.6063.
+Benchmark `TM-LA19-HEAT-SPLIT`: 0.1621, 0.2279 and 0.1952, inside the measured 0.11-0.33
+(film and conductivity assumed).
+
+**The entered share keeps driving every result** unless `tribology.use_computed_heat_partition`
+is true: then pass heating uses `min(1, max(0, f_s))` of each pass (flag
+`STRIP_HEAT_FRACTION_COMPUTED_FROM_INTERFACE_MODEL` instead of
+`STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED`) and the width model's default roll heat fraction
+becomes the case pass's computed `(1 - f_s)/2` (basis "computed"). Otherwise each heating row
+gains `supplied_minus_computed_strip_heat_fraction`, `width.thermal_sensitivity.
+computed_strip_share` shows the computed share beside the rows (which keep their own shares) and
+`thermal_check.computed_heat_partition` states both and the measured range.
+
+**X4.** The entered 0.84 of the sheet demo is not supported: the computed value for that pass is
+0.662 (0.663 / 0.638 at the published oil conductivities; earlier passes 0.73 to 0.78) [run,
+`artifacts/band_diagnosis/lengthwise-bands-demo.result.json`]. For the battery demo the computed
+share of the case pass F1 is 0.338 against the entered 0.22 (F2 0.210, ALT2 0.117); the stripe
+heights stay those of the entered 0.22.
 
 ### 8.3 Work hardening
 
@@ -3553,6 +3615,7 @@ real mill.
 | friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| heat partition / `tests/test_bite_tribology.py` (`HeatPartitionTests`), `tests/test_band_heat_partition.py` | the closed form against the scheme (1e-5) and its asymptotic branch; the worked numbers of section 8.2 (1e-4); energy balance to 1e-9; zero conductance gives share 1, zero heat changes nothing, a hotter roll gives a share above 1 and the flag; in the engine the heating rows carry the block, with the option absent the result without the new keys equals the result with the partition switched off, with it set pass heating and the width model's roll heat fraction follow; the report line; `tests/test_benchmarks.py`: `TM-LA19-HEAT-SPLIT` |
 | flow stress law forms / `tests/test_bite_tribology.py` (`FlowStressRateTemperatureTests`), `tests/test_band_rate_temperature.py` | the worked numbers of section 8.3 (1e-6); `m(T)` and its floor; factor limits; a negative late slope accepted with the positivity rule and its flag; the Tome form against a hand value (169999724 Pa to 1 Pa) and Simpson against 512 panels; the fit recovers a Voce law from 6 exact points (1e-3, positive and negative slope), flags 4 points and refuses 2; in the engine the rows carry the factor, `use_rate_temperature` needs computed flow stress, with it false nothing else differs, `chatter.rate_sensitivity_damping` equals the formula, and the worked damping share 0.046375 |
 | friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
 | `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
@@ -3590,6 +3653,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **The computed heat partition is a reduced interface model** (section 8.2): lumped strip,
+  uniform heat over the contact, roll curvature neglected, no asperity conduction (no formula
+  in the reports), film from the smooth inlet formula, roll entry temperature assumed, not
+  coupled back into flow stress or film, not calibrated and not width-resolved; the entered
+  share drives every result unless the option is set.
 - **Flow stress against rate and temperature is a form without data** (section 8.3): the rate
   sensitivity was measured five decades below rolling rates, the net of rate and temperature
   at rolling conditions is not known, the strain rate uses the undeformed arc, the bite

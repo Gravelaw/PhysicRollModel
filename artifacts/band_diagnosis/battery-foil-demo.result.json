@@ -4711,6 +4711,7 @@
     "tribology": {
       "friction_closure": null,
       "inlet_temperature_k": 318.15,
+      "interface_conductance_w_m2k": null,
       "lubricant": {
         "conductivity_w_mk": null,
         "eyring_stress_pa": null,
@@ -4736,7 +4737,8 @@
       },
       "temperature_limit_k": 393.15,
       "thermal_correction": false,
-      "use_computed_friction": false
+      "use_computed_friction": false,
+      "use_computed_heat_partition": null
     },
     "width_model": {
       "bite_heat_per_width_w_m": null,
@@ -7806,12 +7808,81 @@
         ],
         "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
         "friction_power_per_width_w_m": 47108.373560989596,
+        "heat_partition": {
+          "basis": {
+            "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+            "measured_strip_share_foil_mill": [
+              [
+                0.11,
+                0.33
+              ],
+              "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+            ],
+            "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+            "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+          },
+          "contact_time_s": 0.00021818796215988934,
+          "film_thickness_m": 9.501809690476911e-08,
+          "flags": [
+            "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+          ],
+          "fourier_number": null,
+          "friction_heat_to_strip_side_fraction": 0.5,
+          "gap_row_series_roll_flux_w_m2": 8518552.74688637,
+          "heat_input_per_area_j_m2": 3997.4804012764384,
+          "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 9.502e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (experimental_mattress bite, placeholder_exponential closure)",
+          "interface_conductance_w_m2k": 1368160.4266426335,
+          "interface_conductance_with_strip_conduction_w_m2k": 1368160.4266426335,
+          "limitations": [
+            "Heat released uniformly over the contact.",
+            "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+            "Roll curvature neglected (half-space over the contact time).",
+            "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+            "Film thickness from the smooth inlet formula.",
+            "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+          ],
+          "measured_strip_share_foil_mill": {
+            "range": [
+              0.11,
+              0.33
+            ],
+            "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+          },
+          "perfect_contact_strip_share": 0.22202502872294222,
+          "roll_effusivity": 12148.250902907792,
+          "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+          "roll_entry_surface_temperature_k": 318.15,
+          "roll_heat_fraction_per_roll_computed": 0.3308935910463281,
+          "roll_heat_per_area_j_m2": 2645.4812902313515,
+          "roll_properties_basis": "width_model.roll",
+          "roll_surface_exit_temperature_k": 336.65389210063876,
+          "roll_transient_resistance_m2k_w": 1.0775727014575276e-06,
+          "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+          "steps": 400,
+          "strip_capacity_j_m2k": 43.362705337865435,
+          "strip_exit_temperature_k": 344.3288459809144,
+          "strip_heat_fraction_at_published_oil_conductivities": [
+            {
+              "oil_conductivity_w_mk": 0.125,
+              "strip_heat_fraction": 0.3407909458891574,
+              "tag": "[E6 FT] ambient pressure"
+            },
+            {
+              "oil_conductivity_w_mk": 0.25,
+              "strip_heat_fraction": 0.30603515991820923,
+              "tag": "[E6 FT] in the nip"
+            }
+          ],
+          "strip_heat_fraction_computed": 0.33821281790734375,
+          "supplied_strip_heat_fraction": 0.22
+        },
         "heat_to_each_work_roll_per_width_w_m": 34072.614640646076,
         "label": "case pass",
         "plastic_power_per_width_w_m": 40257.30500476957,
         "roll_heat_fraction_per_roll": 0.39,
         "strip_heat_fraction": 0.22,
         "strip_temperature_rise_k": 20.28115361872641,
+        "supplied_minus_computed_strip_heat_fraction": -0.11821281790734375,
         "temperature_limit_k": 393.15
       },
       "schedule": [
@@ -7826,12 +7897,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 63666.180549152705,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0004793984341724287,
+            "film_thickness_m": 3.182814793247012e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 8576320.111953657,
+            "heat_input_per_area_j_m2": 11511.855703241,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 3.183e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 4084434.9559962275,
+            "interface_conductance_with_strip_conduction_w_m2k": 4084434.9559962275,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.44204447103607075,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.239703128640526,
+            "roll_heat_per_area_j_m2": 5518.85565705046,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 345.1074433569628,
+            "roll_transient_resistance_m2k_w": 1.597274260710719e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 171.44802103828678,
+            "strip_exit_temperature_k": 348.10520105684026,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.5216398007045931,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.5077303119203838,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.520593742718948,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 81609.57479323164,
           "label": "S1 0.260->0.135 mm (assumed stock route)",
           "plastic_power_per_width_w_m": 145589.13943349253,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 14.771872194123794,
+          "supplied_minus_computed_strip_heat_fraction": -0.300593742718948,
           "temperature_limit_k": 393.15
         },
         {
@@ -7845,12 +7985,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 37560.940418018996,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0002973720593576827,
+            "film_thickness_m": 6.1309442789721e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 6697342.243498328,
+            "heat_input_per_area_j_m2": 5780.926625997426,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 6.131e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 2120391.1515861223,
+            "interface_conductance_with_strip_conduction_w_m2k": 2120391.1515861223,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.3904111130491128,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.23977900859674633,
+            "roll_heat_per_area_j_m2": 2772.2897103044315,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 335.66644676059497,
+            "roll_transient_resistance_m2k_w": 1.25800181557844e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 110.12950739216485,
+            "strip_exit_temperature_k": 340.46908084342414,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.5225993623664196,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.4930280928813484,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.5204419828065073,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 44398.96701321234,
           "label": "S2 0.135->0.085 mm (assumed stock route)",
           "plastic_power_per_width_w_m": 76282.56474406393,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 11.548257027888207,
+          "supplied_minus_computed_strip_heat_fraction": -0.30044198280650736,
           "temperature_limit_k": 393.15
         },
         {
@@ -7864,12 +8073,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 49488.68860063672,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0002500912037082731,
+            "film_thickness_m": 8.133388783521997e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 8592772.331713734,
+            "heat_input_per_area_j_m2": 5166.42141608977,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 8.133e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1598349.7587546303,
+            "interface_conductance_with_strip_conduction_w_m2k": 1598349.7587546303,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.2927157072696852,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.2925432034000377,
+            "roll_heat_per_area_j_m2": 3022.8029423548924,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 338.2826370830587,
+            "roll_transient_resistance_m2k_w": 1.1536668035467338e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 66.42411970698333,
+            "strip_exit_temperature_k": 345.4216881035231,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.4174513462126465,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.3828364993293008,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.41491359319992466,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 42384.078534055094,
           "label": "S3 0.085->0.050 mm (assumed stock route)",
           "plastic_power_per_width_w_m": 59188.4358456584,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 17.11144560972262,
+          "supplied_minus_computed_strip_heat_fraction": -0.19491359319992466,
           "temperature_limit_k": 393.15
         },
         {
@@ -7883,12 +8161,81 @@
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
           "friction_power_per_width_w_m": 47108.373560989596,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.00021818796215988934,
+            "film_thickness_m": 9.501809690476911e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 8518552.74688637,
+            "heat_input_per_area_j_m2": 3997.4804012764384,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 9.502e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (experimental_mattress bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1368160.4266426335,
+            "interface_conductance_with_strip_conduction_w_m2k": 1368160.4266426335,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.22202502872294222,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.3308935910463281,
+            "roll_heat_per_area_j_m2": 2645.4812902313515,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 336.65389210063876,
+            "roll_transient_resistance_m2k_w": 1.0775727014575276e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 43.362705337865435,
+            "strip_exit_temperature_k": 344.3288459809144,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.3407909458891574,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.30603515991820923,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.33821281790734375,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 34072.614640646076,
           "label": "F1 0.050->0.030 mm (plant pass 1; 30 um assumed)",
           "plastic_power_per_width_w_m": 40257.30500476957,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 20.28115361872641,
+          "supplied_minus_computed_strip_heat_fraction": -0.11821281790734375,
           "temperature_limit_k": 393.15
         },
         {
@@ -7902,12 +8249,81 @@
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
           "friction_power_per_width_w_m": 32706.445248156986,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0003030040234225167,
+            "film_thickness_m": 8.89300182096819e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 6452639.4451742675,
+            "heat_input_per_area_j_m2": 3388.525719402269,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 8.893e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (experimental_mattress bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1461823.6071141025,
+            "interface_conductance_with_strip_conduction_w_m2k": 1461823.6071141025,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.13571436951108604,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.39492167567849207,
+            "roll_heat_per_area_j_m2": 2676.404510372033,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 333.4393931603947,
+            "roll_transient_resistance_m2k_w": 1.2698586608035108e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 28.603042102672198,
+            "strip_exit_temperature_k": 338.0466947807176,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.2115536767892315,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.19326212208108698,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.21015664864301586,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 20208.866116235706,
           "label": "F2 0.030->0.018 mm (plant pass 2, final)",
           "plastic_power_per_width_w_m": 19111.160178088412,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 26.06281022810697,
+          "supplied_minus_computed_strip_heat_fraction": 0.009843351356984137,
           "temperature_limit_k": 393.15
         },
         {
@@ -7921,12 +8337,81 @@
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
           "friction_power_per_width_w_m": 70137.96886708197,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.00027908911091393147,
+            "film_thickness_m": 7.389733437501129e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 11452529.710857507,
+            "heat_input_per_area_j_m2": 5888.452577377762,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 7.39e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (experimental_mattress bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1759197.4203058681,
+            "interface_conductance_with_strip_conduction_w_m2k": 1759197.4203058681,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.1875486687539641,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.3706539972068285,
+            "roll_heat_per_area_j_m2": 4365.156970335785,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 344.34198710213684,
+            "roll_transient_resistance_m2k_w": 1.2187163393346036e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 39.93827980336203,
+            "strip_exit_temperature_k": 351.29124230041805,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.26028661337347436,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.23928225535905423,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.258692005586343,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 45411.52307744409,
           "label": "ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed)",
           "plastic_power_per_width_w_m": 46301.8338955952,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 32.43653891457926,
+          "supplied_minus_computed_strip_heat_fraction": -0.038692005586342976,
           "temperature_limit_k": 393.15
         },
         {
@@ -7940,12 +8425,81 @@
           ],
           "friction_power_basis": "experimental mattress slip dissipation x roll surface speed / width",
           "friction_power_per_width_w_m": 24784.321360792797,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0006287769810879466,
+            "film_thickness_m": 7.335427511452167e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 3427197.046645329,
+            "heat_input_per_area_j_m2": 3099.584068156295,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 7.335e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (experimental_mattress bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1772221.1799795208,
+            "interface_conductance_with_strip_conduction_w_m2k": 1772221.1799795208,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.07233634887732955,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.44172494709352084,
+            "roll_heat_per_area_j_m2": 2738.32721703652,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 328.6955169935951,
+            "roll_transient_resistance_m2k_w": 1.8292771300783347e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 20.730652024533615,
+            "strip_exit_temperature_k": 330.57621750113054,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.11703153579992959,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.11076832191528878,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.1165501058129583,
+            "supplied_strip_heat_fraction": 0.22
+          },
           "heat_to_each_work_roll_per_width_w_m": 17003.666751525478,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
           "plastic_power_per_width_w_m": 18814.824155939197,
           "roll_heat_fraction_per_roll": 0.39,
           "strip_heat_fraction": 0.22,
           "strip_temperature_rise_k": 32.893731185463096,
+          "supplied_minus_computed_strip_heat_fraction": 0.1034498941870417,
           "temperature_limit_k": 393.15
         }
       ],
@@ -11087,6 +11641,17 @@
       "elongation_decay_above": 90.0,
       "entering_final_pass": 75.0,
       "leaving_final_pass": 80.0
+    },
+    "computed_heat_partition": {
+      "computed_strip_heat_fraction": 0.33821281790734375,
+      "measured_source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract",
+      "measured_strip_share_foil_mill": [
+        0.11,
+        0.33
+      ],
+      "supplied_strip_heat_fraction": 0.22,
+      "text": "Strip share of the bite heat: entered 0.22, computed 0.338 by the interface model (measured on a foil mill: 0.11 to 0.33, abstract only). The entered value drives the thermal results.",
+      "used": "supplied"
     },
     "fire_limits": {
       "context": [
@@ -25796,6 +26361,12 @@
           "strip_heat_share": 0.84
         }
       ],
+      "computed_strip_share": {
+        "note": "strip share of the bite heat partition of the case pass (process.heating.operating.heat_partition); the rows above are evaluated at their own shares",
+        "roll_heat_fraction_per_roll": 0.3308935910463281,
+        "strip_heat_share": 0.33821281790734375,
+        "used_by_the_rows_above": false
+      },
       "linearity_check_max_relative_difference": 5.264034075246623e-13,
       "linearity_note": "stripe and event histories scaled with the roll heat share for a fixed spray coefficient (linear roll thermal model, coolant temperature as the zero); checked by one direct solve: maximum relative difference 5.3e-13",
       "literature_check_of_case_inputs": [

@@ -75,6 +75,7 @@ from . import band_products
 from . import roll_thermal as rt
 from . import strip_shape as ss
 from .band_process import (failed, int_list, keys, not_supplied, num, num_list,
+                           use_computed_heat_partition,
                            opt_num)
 
 STRIPE_THRESHOLD_M = 1e-7          # analyst choice: reporting threshold for radius stripes
@@ -2732,8 +2733,14 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                              'troughs', 'coil ridge build-up and critical ridge height',
                              'positions', 'two_tone', 'grinding_feed_pitch_m',
                              'shape.crown (Shohet-Townsend window)']}
+    f_c = ((heat_row or {}).get('heat_partition') or {}).get('strip_heat_fraction_computed')
     if w['roll_heat_fraction_per_roll'] is not None:
         fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
+    elif use_computed_heat_partition(trib) and f_c is not None:
+        # SPEC18 package 9: the case pass's computed share (clipped to [0, 1])
+        fraction = (1 - min(1.0, max(0.0, f_c))) / 2
+        fbasis = ('computed: (1 - strip share of the bite heat partition of the case pass)/2 '
+                  '(tribology.use_computed_heat_partition)')
     else:
         fraction = (1 - trib['strip_heat_fraction']) / 2
         fbasis = '(1 - tribology.strip_heat_fraction)/2'
@@ -2888,6 +2895,15 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
         flags.append('THERMAL_SENSITIVITY_FAILED')
+    ts = out['thermal_sensitivity']
+    if f_c is not None and isinstance(ts, dict) and ts.get('status') == 'EVALUATED':
+        # SPEC18 package 9: the computed share beside the rows (the stripes stay those above)
+        ts['computed_strip_share'] = {
+            'strip_heat_share': f_c, 'roll_heat_fraction_per_roll': (1 - f_c) / 2,
+            'used_by_the_rows_above': fbasis.startswith('computed'),
+            'note': 'strip share of the bite heat partition of the case pass '
+                    '(process.heating.operating.heat_partition); the rows above are evaluated '
+                    'at their own shares'}
     # SPEC17 G13: a measured roll ground profile through the existing transfer
     try:
         out['roll_profile'] = roll_profile_section(case, w, sp, shape_reason, z, th,

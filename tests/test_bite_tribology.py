@@ -685,5 +685,84 @@ class FlowStressRateTemperatureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             bt.fit_voce_to_pass_strengths(hs[::-1], ys, reference_thickness_m=100e-6)
 
+
+class HeatPartitionTests(unittest.TestCase):
+    """SPEC18 package 9: the computed bite heat partition (planner's s23/heat.py numbers)."""
+
+    @staticmethod
+    def run_case(hc, plastic=1.0, friction=0.0, steps=400, h1=24e-6, ld=2e-3, v=10.0,
+                 t_strip=300.0, t_roll=300.0, **kw):
+        from physicroll import bite_tribology as bt
+        return bt.heat_partition(
+            plastic_power_per_width_w_m=plastic, friction_power_per_width_w_m=friction,
+            contact_length_m=ld, roll_surface_speed_m_s=v, exit_thickness_m=h1,
+            exit_speed_m_s=v, entry_thickness_m=kw.pop('h0', 1.5 * h1),
+            strip_entry_temperature_k=t_strip, roll_entry_surface_temperature_k=t_roll,
+            interface_conductance_w_m2k=hc, roll_conductivity_w_mk=43.0,
+            roll_density_kg_m3=7200.0, roll_specific_heat_j_kgk=500.0, steps=steps, **kw)
+
+    def test_closed_form_and_scheme(self):
+        from physicroll import bite_tribology as bt
+        r = self.run_case(1e12)
+        self.assertAlmostEqual(r['roll_effusivity'], 12441.86, delta=0.01)
+        self.assertAlmostEqual(r['strip_capacity_j_m2k'], 29.16, delta=1e-9)
+        self.assertAlmostEqual((29.16 / r['roll_effusivity']) ** 2, 5.4929e-6, delta=1e-10)
+        exact = bt.perfect_contact_strip_share(29.16, r['roll_effusivity'], 2e-4)
+        self.assertAlmostEqual(exact, 0.162070, delta=1e-6)
+        self.assertAlmostEqual(r['strip_heat_fraction_computed'], exact, delta=1e-5)
+        for n, want in ((50, 0.162060), (400, 0.162069), (800, 0.162070)):
+            self.assertAlmostEqual(self.run_case(1e12, steps=n)['strip_heat_fraction_computed'],
+                                   want, delta=1e-6)
+        self.assertAlmostEqual(r['roll_transient_resistance_m2k_w'], 1.0073e-6, delta=1e-10)
+        # asymptotic branch of exp(x^2)*erfc(x) is continuous with the direct one
+        self.assertAlmostEqual(bt._exp_erfc(25.0 + 1e-12) / bt._exp_erfc(25.0), 1, delta=5e-6)
+
+    def test_worked_numbers(self):
+        for hc, want in ((0.13 / 70e-9, 0.2254), (0.13 / 200e-9, 0.3352), (40e3, 0.8775),
+                         (0.125 / 70e-9, 0.2279), (0.125 / 200e-9, 0.3414),
+                         (0.25 / 70e-9, 0.1952), (0.25 / 200e-9, 0.2553)):
+            self.assertAlmostEqual(self.run_case(hc)['strip_heat_fraction_computed'], want,
+                                   delta=1e-4, msg=hc)
+        self.assertAlmostEqual(self.run_case(0.13 / 70e-9, 0.6, 0.4)
+                               ['strip_heat_fraction_computed'], 0.2113, delta=1e-4)
+        self.assertAlmostEqual(70e-9 / 0.13, 5.385e-7, delta=1e-10)
+        # sheet check: 0.25 mm, 0.4 ms, perfect contact, lumped
+        sheet = self.run_case(1e12, h1=0.25e-3, ld=4e-3)
+        self.assertAlmostEqual(sheet['contact_time_s'], 4e-4, delta=1e-15)
+        self.assertAlmostEqual(sheet['strip_heat_fraction_computed'], 0.6063, delta=1e-4)
+        self.assertIsNone(sheet['fourier_number'])
+        # Fourier number 2.42 for a mean thickness of 0.25 mm and k_strip 230 W/mK (the
+        # conductivity is not stated beside the planner's number: inferred)
+        f = self.run_case(1e12, h1=0.24e-3, h0=0.26e-3, ld=4e-3, strip_conductivity_w_mk=230.0)
+        self.assertAlmostEqual(f['fourier_number'], 2.42, delta=5e-3)
+        self.assertEqual(f['flags'], [])
+        thick = self.run_case(1e12, h1=2e-3, h0=3e-3, ld=4e-3, strip_conductivity_w_mk=230.0)
+        self.assertIn('STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE', thick['flags'])
+
+    def test_energy_balance_and_limits(self):
+        r = self.run_case(0.13 / 70e-9, 0.6, 0.4)
+        # strip energy C_s*(T_s - T_e) is f_s times the input by definition of f_s
+        strip = r['strip_heat_fraction_computed'] * r['heat_input_per_area_j_m2']
+        self.assertAlmostEqual((strip + r['roll_heat_per_area_j_m2'])
+                               / r['heat_input_per_area_j_m2'], 1, delta=1e-9)
+        self.assertAlmostEqual(self.run_case(1e-6)['strip_heat_fraction_computed'], 1,
+                               delta=1e-6)
+        z = self.run_case(1e6, plastic=0.0, friction=0.0)
+        self.assertIsNone(z['strip_heat_fraction_computed'])
+        self.assertEqual((z['strip_exit_temperature_k'], z['roll_surface_exit_temperature_k']),
+                         (300.0, 300.0))
+        hot = self.run_case(1e6, t_roll=400.0)
+        self.assertGreater(hot['strip_heat_fraction_computed'], 1)
+        self.assertIn('HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES', hot['flags'])
+        self.assertIn('asperity', ' '.join(r['limitations']))
+        self.assertIn('phi = 0.5', r['basis']['friction_heat_side'])
+
+    def test_validation(self):
+        for kw in (dict(hc=0.0), dict(hc=1e6, steps=0), dict(hc=1e6, ld=0.0),
+                   dict(hc=1e6, friction_heat_to_strip_side_fraction=1.5)):
+            hc = kw.pop('hc')
+            with self.assertRaises(ValueError):
+                self.run_case(hc, **kw)
+
 if __name__ == '__main__':
     unittest.main()

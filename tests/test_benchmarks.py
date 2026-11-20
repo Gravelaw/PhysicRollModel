@@ -251,7 +251,8 @@ class BenchmarkTests(unittest.TestCase):
                                                      bm.RECORDED_ON_SPEC18_P4,
                                                      bm.RECORDED_ON_SPEC18_P5,
                                                      bm.RECORDED_ON_SPEC18_P6,
-                                                     bm.RECORDED_ON_SPEC18_P7))
+                                                     bm.RECORDED_ON_SPEC18_P7,
+                                                     bm.RECORDED_ON_SPEC18_P9))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -413,6 +414,20 @@ class BenchmarkTests(unittest.TestCase):
             q = _q(case, f'forward_slip_at_friction_r{mm}')
             self.assertAlmostEqual(q['project_value'], slip, delta=1e-4)
             self.assertEqual(q['row_verdict'], bm.NO_REFERENCE_VALUE)
+
+    def test_tm_la19_heat_split_inside_measured_range(self):
+        case = self.cases['TM-LA19-HEAT-SPLIT']
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        self.assertIn('inside the measured range; film thickness and conductivity are assumed',
+                      case['note'])
+        for key, want in (('perfect_contact', 0.1621), ('film_70nm_k0125', 0.2279),
+                          ('film_70nm_k025', 0.1952)):
+            for end, ref in (('low', 0.11), ('high', 0.33)):
+                q = _q(case, f'strip_share_{key}_vs_{end}_end')
+                self.assertAlmostEqual(q['project_value'], want, delta=1e-4)
+                self.assertEqual(q['reference_value'], ref)
+                self.assertTrue(0.11 <= q['project_value'] <= 0.33)
+                self.assertEqual(q['row_verdict'], 'INDICATIVE_ASSUMED_INPUTS')
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

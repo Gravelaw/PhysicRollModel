@@ -24,6 +24,7 @@ import math
 from dataclasses import replace
 
 from . import band_products as bp
+from .band_process import use_computed_heat_partition
 from .band_width import STRIPE_THRESHOLD_M, is_case_pass
 from . import roll_thermal as rt
 
@@ -457,6 +458,34 @@ def strip_rise_at_share(h, share):
 
 
 HEAT_PARTITION_FLAG = 'HEAT_PARTITION_INPUTS_INCONSISTENT'
+
+
+def computed_heat_partition_beside(result):
+    """SPEC18 package 9: the computed strip share of the case pass beside the supplied one and
+    the measured foil-mill range (None when no computed share exists)."""
+    heating = ((result.get('process') or {}).get('heating') or {})
+    op = heating.get('operating') if isinstance(heating, dict) else None
+    part = (op or {}).get('heat_partition') if isinstance(op, dict) else None
+    if not isinstance(part, dict) or part.get('strip_heat_fraction_computed') is None:
+        return None
+    f_c, f_s = part['strip_heat_fraction_computed'], part['supplied_strip_heat_fraction']
+    lo, hi = part['measured_strip_share_foil_mill']['range']
+    return {'supplied_strip_heat_fraction': f_s, 'computed_strip_heat_fraction': f_c,
+            'measured_strip_share_foil_mill': [lo, hi],
+            'measured_source': part['measured_strip_share_foil_mill']['source'],
+            'used': ('computed' if use_computed_heat_partition(result['inputs'].get(
+                'tribology')) else 'supplied'),
+            'text': (f'Strip share of the bite heat: entered {f_s:.3g}, computed {f_c:.3g} by '
+                     f'the interface model (measured on a foil mill: {lo:g} to {hi:g}, '
+                     'abstract only). The '
+                     + ('computed' if use_computed_heat_partition(
+                         result['inputs'].get('tribology')) else 'entered')
+                     + ' value drives the thermal results.')}
+
+
+def _computed_partition_key(result):
+    c = computed_heat_partition_beside(result)
+    return {} if c is None else {'computed_heat_partition': c}
 
 
 def heat_partition_consistency(case):
@@ -1053,6 +1082,7 @@ def thermal_check(result, case):
                               'elongation_decay_above': bp.COIL_OUT_FINAL_LIMIT_LOOSE.high},
             'outputs': outputs, 'growth': growth, 'property_risk': property_risk,
             'quarter_barrel_note': note_q, 'heat_partition_inputs': incons,
+            **_computed_partition_key(result),
             'fire_limits': fire,
             'texts': texts, 'flags': flags,
             'note': 'Evidence-neutral literature comparison: it never changes a number or a '

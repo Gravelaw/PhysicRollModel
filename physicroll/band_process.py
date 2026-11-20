@@ -266,7 +266,9 @@ TRIBOLOGY_KEYS = ('lubricant', 'surface_finish', 'inlet_temperature_k',
                   'strip_entry_temperature_k', 'strip_heat_fraction', 'thermal_correction',
                   'use_computed_friction')
 TRIBOLOGY_OPTIONAL = ('friction_closure', 'temperature_limit_k', 'oil_flash_point_k',
-                      'oil_supply_temperature_cap_k')   # SPEC17 A10: user limits, no default
+                      'oil_supply_temperature_cap_k',   # SPEC17 A10: user limits, no default
+                      'interface_conductance_w_m2k', 'use_computed_heat_partition')   # SPEC18 p9
+INTERFACE_CONDUCTANCE_RANGE_W_M2K = (1e3, 1e9)
 HARDENING_COMMON = ('law', 'provenance', 'prior_equivalent_strain', 'reference_thickness_m',
                     'use_computed_flow_stress')
 HARDENING_LAW_KEYS = {
@@ -329,6 +331,18 @@ def validate_tribology(t):
            'thermal_correction': boolean('tribology.thermal_correction', t['thermal_correction']),
            'use_computed_friction': boolean('tribology.use_computed_friction',
                                             t['use_computed_friction'])}
+    # SPEC18 package 9: computed heat partition (both null by default)
+    hc = t.get('interface_conductance_w_m2k')
+    if hc is not None:
+        lo, hi = INTERFACE_CONDUCTANCE_RANGE_W_M2K
+        hc = num('tribology.interface_conductance_w_m2k', hc)
+        if not lo <= hc <= hi:
+            raise ValueError(f'tribology.interface_conductance_w_m2k must be in [{lo:g}, {hi:g}] '
+                             'W/m2K or null')
+    out['interface_conductance_w_m2k'] = hc
+    uc = t.get('use_computed_heat_partition')
+    out['use_computed_heat_partition'] = (None if uc is None else boolean(
+        'tribology.use_computed_heat_partition', uc))
     lubricant, finish, closure = tribology_objects(out)
     try:
         lubricant.validate()
@@ -1079,20 +1093,136 @@ def friction_power_per_width(case, src, bite, cells, roll_e, roll_nu, state=None
             'width')
 
 
-def heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state=None):
+COMPUTED_HEAT_FLAG = 'STRIP_HEAT_FRACTION_COMPUTED_FROM_INTERFACE_MODEL'
+SUPPLIED_HEAT_FLAG = 'STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED'
+ROLL_ENTRY_ASSUMED_FLAG = 'ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL'
+HEAT_SHARE_DIFFERENCE_WARN = 0.1      # report: entered and computed share differ by more
+
+
+def use_computed_heat_partition(trib):
+    return bool(trib and trib.get('use_computed_heat_partition'))
+
+
+def _roll_thermal_inputs(case):
+    w = case.get('width_model')
+    if w is not None:
+        r = w['roll']
+        return (r['conductivity_w_mk'], r['density_kg_m3'], r['specific_heat_j_kgk'],
+                'width_model.roll')
+    from .roll_thermal import RollThermalProperties   # local: defaults only
+    d = RollThermalProperties(radius_m=1.0, barrel_length_m=1.0)
+    return (d.conductivity_w_mk, d.density_kg_m3, d.specific_heat_j_kgk,
+            'defaults of roll_thermal.RollThermalProperties (no width_model.roll)')
+
+
+def pass_heat_partition(case, src, bite, trib, plastic_power, friction_power, friction_row):
+    """``heat_partition`` of one pass (SPEC18 package 9), or ``not_supplied`` with the reason.
+    Reported beside the supplied share; it drives pass heating and the width model's default
+    roll heat fraction only with ``tribology.use_computed_heat_partition``."""
+    if trib is None:
+        return not_supplied('needs tribology')
+    if bite is None:
+        return not_supplied('needs a bite')
+    lub, _, clo = tribology_objects(trib)
+    film = (friction_row or {}).get('film_thickness_m')
+    hc_given = trib.get('interface_conductance_w_m2k')
+    if hc_given is None and not film:
+        return not_supplied('needs the film thickness of the pass (its friction row) or '
+                            'tribology.interface_conductance_w_m2k')
+    k_r, rho_r, c_r, roll_basis = _roll_thermal_inputs(case)
+    w = case.get('width_model')
+    if w is not None:
+        t_r0, t_basis = w['coolant_temperature_k'], 'width_model.coolant_temperature_k'
+    else:
+        t_r0, t_basis = trib['inlet_temperature_k'], 'tribology.inlet_temperature_k'
+    u = src['exit_speed_m_s']
+    kw = dict(plastic_power_per_width_w_m=plastic_power,
+              friction_power_per_width_w_m=friction_power,
+              contact_length_m=bite.contact_length_m,
+              roll_surface_speed_m_s=u / (1 + bite.forward_slip_fraction),
+              exit_thickness_m=src['exit_thickness_m'], exit_speed_m_s=u,
+              entry_thickness_m=src['entry_thickness_m'],
+              strip_entry_temperature_k=trib['strip_entry_temperature_k'],
+              roll_entry_surface_temperature_k=t_r0, roll_conductivity_w_mk=k_r,
+              roll_density_kg_m3=rho_r, roll_specific_heat_j_kgk=c_r)
+    if hc_given is not None:
+        hc, hc_basis = hc_given, 'tribology.interface_conductance_w_m2k (entered)'
+    else:
+        k_oil = lub.effective_conductivity_w_mk()
+        hc = k_oil / film
+        hc_basis = (f'k_oil/h = {k_oil:g} W/mK / {film:.4g} m [row A3]; k_oil '
+                    + ('[M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 '
+                       'W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT])'
+                       if lub.conductivity_w_mk is None else 'entered')
+                    + '; film: smooth inlet film of the friction row ('
+                    + str((friction_row or {}).get('bite_source') or 'bite') + ' bite, '
+                    + (clo.model if trib.get('friction_closure') else 'placeholder_exponential')
+                    + ' closure)')
+    res = bt.heat_partition(interface_conductance_w_m2k=hc, **kw)
+    out = dict(res)
+    out['interface_conductance_basis'] = hc_basis
+    out['film_thickness_m'] = film if hc_given is None else None
+    out['roll_properties_basis'] = roll_basis
+    out['roll_entry_surface_temperature_k'] = t_r0
+    out['roll_entry_surface_temperature_basis'] = t_basis
+    out['flags'] = list(res['flags']) + [ROLL_ENTRY_ASSUMED_FLAG]
+    out['supplied_strip_heat_fraction'] = trib['strip_heat_fraction']
+    out['measured_strip_share_foil_mill'] = {
+        'range': list(bt.MEASURED_FOIL_STRIP_SHARE),
+        'source': '[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, '
+                  'a net balance; gauge and speed not in the abstract'}
+    if hc_given is None:
+        out['strip_heat_fraction_at_published_oil_conductivities'] = [
+            {'oil_conductivity_w_mk': k, 'tag': tag,
+             'strip_heat_fraction': bt.heat_partition(interface_conductance_w_m2k=k / film,
+                                                      **kw)['strip_heat_fraction_computed']}
+            for k, tag in zip(bt.PUBLISHED_OIL_CONDUCTIVITIES_W_MK,
+                              ('[E6 FT] ambient pressure', '[E6 FT] in the nip'))]
+    return out
+
+
+def heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state=None, friction_row=None):
     power, basis = friction_power_per_width(case, src, bite, cells, roll_e, roll_nu, state)
     fs = trib['strip_heat_fraction'] if trib else 0.0
     t_in = trib['strip_entry_temperature_k'] if trib else 293.15
-    res = bt.pass_heating(entry_thickness_m=src['entry_thickness_m'],
-                          exit_thickness_m=src['exit_thickness_m'],
-                          exit_speed_m_s=src['exit_speed_m_s'],
-                          mean_flow_stress_pa=src['mean_flow_stress_pa'],
-                          strip_heat_fraction=fs, entry_temperature_k=t_in,
-                          friction_power_per_width_w_m=power,
-                          temperature_limit_k=trib['temperature_limit_k'] if trib else None)
+
+    def heating(share):
+        return bt.pass_heating(entry_thickness_m=src['entry_thickness_m'],
+                               exit_thickness_m=src['exit_thickness_m'],
+                               exit_speed_m_s=src['exit_speed_m_s'],
+                               mean_flow_stress_pa=src['mean_flow_stress_pa'],
+                               strip_heat_fraction=share, entry_temperature_k=t_in,
+                               friction_power_per_width_w_m=power,
+                               temperature_limit_k=trib['temperature_limit_k'] if trib else None)
+    res = heating(fs)
+    part = None
+    if trib is not None:      # SPEC18 package 9 (none without tribology: rows unchanged)
+        try:
+            part = pass_heat_partition(case, src, bite, trib,
+                                       res['plastic_power_per_width_w_m'], power, friction_row)
+        except ValueError as exc:
+            part = failed('heat_partition', exc)
+    f_c = (part or {}).get('strip_heat_fraction_computed')
+    computed_used = use_computed_heat_partition(trib) and f_c is not None
+    if computed_used:
+        res = heating(min(1.0, max(0.0, f_c)))
     flags = list(res['flags'])
+    if computed_used:
+        flags = [COMPUTED_HEAT_FLAG if f == SUPPLIED_HEAT_FLAG else f for f in flags]
     if bite.source == 'supplied' and not is_foil_model(bite):
         flags.append('FRICTION_POWER_NOT_AVAILABLE_FOR_SUPPLIED_BITE')
+    extra = {}
+    if part is not None:
+        extra['heat_partition'] = part
+        if f_c is not None and not use_computed_heat_partition(trib):
+            extra['supplied_minus_computed_strip_heat_fraction'] = fs - f_c
+        if computed_used:
+            extra['strip_heat_fraction_basis'] = ('computed: bite heat partition '
+                                                  '(heat_partition, clipped to [0, 1])')
+    return {**_heating_keys(res, power, basis, flags), **extra}
+
+
+def _heating_keys(res, power, basis, flags):
     return {'plastic_power_per_width_w_m': res['plastic_power_per_width_w_m'],
             'friction_power_per_width_w_m': power, 'friction_power_basis': basis,
             'bite_heat_per_width_w_m': res['bite_heat_per_width_w_m'],
@@ -1105,7 +1235,11 @@ def heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state=None):
             'temperature_limit_k': res['temperature_limit_k'], 'flags': flags}
 
 
-def heating_section(case, trib, cache, op_bite, cells, roll_e, roll_nu):
+def heating_section(case, trib, cache, op_bite, cells, roll_e, roll_nu, friction=None):
+    """``friction``: the friction section (its rows give each pass's film thickness, matched
+    by position) for the computed heat partition (SPEC18 package 9)."""
+    fr_rows = ([friction.get('operating')] + list(friction.get('schedule') or [])
+               if isinstance(friction, dict) and 'operating' in friction else [])
     rows = []
     for i, (label, src) in enumerate(pass_rows(case)):
         row = {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
@@ -1117,7 +1251,8 @@ def heating_section(case, trib, cache, op_bite, cells, roll_e, roll_nu):
                 raise ValueError('no bite response for the case pass')
             state_for = getattr(cache, 'state_for', None)
             state = state_for(bite) if state_for is not None and is_half_space(bite) else None
-            row.update(heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state))
+            row.update(heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state,
+                                   fr_rows[i] if i < len(fr_rows) else None))
         except ValueError as exc:
             row['rejected'] = str(exc)
         rows.append(row)

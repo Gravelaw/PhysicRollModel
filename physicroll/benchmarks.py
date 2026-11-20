@@ -89,13 +89,14 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
-            'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS')
+            'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
 RECORDED_ON_SPEC18_P5 = '2026-11-20, on commit 624f8e9 (SPEC18 package 5)'
 RECORDED_ON_SPEC18_P6 = '2026-11-20, on commit f494de6 (SPEC18 package 6)'
 RECORDED_ON_SPEC18_P7 = '2026-11-20, on commit a8160ae (SPEC18 package 7)'
+RECORDED_ON_SPEC18_P9 = '2026-11-20, on commit 42bd9c3 (SPEC18 package 9)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -236,6 +237,10 @@ RECORDED = {
                           'forward_slip_r89': 0.1965339747892556,
                           'friction_r135': 0.02487972694190181,
                           'forward_slip_r135': 0.25941949751226545},
+    # [run] at RECORDED_ON_SPEC18_P9 (computed heat partition)
+    'TM-LA19-HEAT-SPLIT': {'perfect_contact': 0.16206930854116774,
+                           'film_70nm_k0125': 0.22787082470045728,
+                           'film_70nm_k025': 0.19523048285294492},
 }
 
 NOT_ENCODED = (
@@ -1128,6 +1133,47 @@ def _bt_v2_friction_hs():
                  'radius).', ['ASSUMED_ROLL_RADIUS', 'MODEL_TO_MODEL_REFERENCE'])
 
 
+# --------------------------------------------- computed bite heat partition (SPEC18 package 9)
+TM_LA19_MEASURED_STRIP_SHARE = (0.11, 0.33)     # MEASUREMENT, abstract only [TM-LA19 AB]
+
+
+def _tm_la19_heat_split():
+    """The computed strip share of the bite heat against the measured foil-mill range."""
+    from . import bite_tribology as bt
+    kw = dict(plastic_power_per_width_w_m=1.0, friction_power_per_width_w_m=0.0,
+              contact_length_m=2e-3, roll_surface_speed_m_s=10.0, exit_thickness_m=24e-6,
+              exit_speed_m_s=10.0, entry_thickness_m=36e-6, strip_entry_temperature_k=300.0,
+              roll_entry_surface_temperature_k=300.0, roll_conductivity_w_mk=43.0,
+              roll_density_kg_m3=7200.0, roll_specific_heat_j_kgk=500.0)
+    rec, q, parts = RECORDED['TM-LA19-HEAT-SPLIT'], [], []
+    for key, hc, label in (('perfect_contact', 1e12, 'perfect contact (conductance 1e12)'),
+                           ('film_70nm_k0125', 0.125 / 70e-9,
+                            '70 nm film, oil 0.125 W/mK (ambient [E6 FT])'),
+                           ('film_70nm_k025', 0.25 / 70e-9,
+                            '70 nm film, oil 0.25 W/mK (in the nip [E6 FT])')):
+        f = bt.heat_partition(interface_conductance_w_m2k=hc, **kw)[
+            'strip_heat_fraction_computed']
+        parts.append(f'{label}: {f:.4f}')
+        for end, ref in zip(('low', 'high'), TM_LA19_MEASURED_STRIP_SHARE):
+            q.append(_quantity(f'strip_share_{key}_vs_{end}_end', '1', f, rec[key], ref,
+                               f'{label}; against the {end} end of the measured strip share '
+                               '0.11-0.33 (MEASUREMENT, AB; gauge and speed not in the '
+                               'abstract)', row_verdict='INDICATIVE_ASSUMED_INPUTS',
+                               recorded_on=RECORDED_ON_SPEC18_P9))
+    notes = ['Function inputs: exit thickness 24 um (entry 36 um, not used without a strip '
+             'conductivity), exit speed = roll surface speed = 10 m/s, contact length 2 mm, '
+             'roll k 43 W/mK, density 7200 kg/m3, specific heat 500 J/kgK (the thermal '
+             'report\'s own check case), equal entry temperatures, 1 W/m of plastic work.',
+             'Film thickness 70 nm and the oil conductivities are assumed; the measured range is '
+             'a net balance on a foil mill whose gauge and speed the abstract does not give.']
+    return _case('TM-LA19-HEAT-SPLIT', 'Strip share of the bite heat, computed interface model '
+                 'against the measured foil-mill range', 'Measured heat partition on a foil mill '
+                 '(abstract) [TM-LA19 AB; PT-T16]', 'TM-LA19', 'AB', 'MEASUREMENT',
+                 kw, notes, q, 'INDICATIVE_ASSUMED_INPUTS',
+                 '; '.join(parts) + '; inside the measured range; film thickness and '
+                 'conductivity are assumed.', ['ASSUMED_FILM_AND_CONDUCTIVITY'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1139,7 +1185,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-G3-FILM-E6-T42': _bt_g3_film_e6, 'BT-V4-FILM': _bt_v4_film,
           'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws,
           'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws,
-          'BT-V2-FRICTION-HS': _bt_v2_friction_hs}
+          'BT-V2-FRICTION-HS': _bt_v2_friction_hs,
+          'TM-LA19-HEAT-SPLIT': _tm_la19_heat_split}
 
 
 def run_case(case_id: str) -> dict:

@@ -869,6 +869,15 @@ MILL_QUESTIONS = (
        'A site or insurer limit, if there is one.', unit='degc', group='Rolling oil'),
     _m('thermal_correction', 'tribology.thermal_correction', 'yesno',
        'Correct the oil film for inlet heating?', YESNO_HELP.strip(), group='Rolling oil'),
+    _m('interface_conductance', 'tribology.interface_conductance_w_m2k', 'number',
+       'Heat-transfer coefficient between strip and work roll in the roll gap',
+       'Usually left empty: the tool then uses the oil film (oil conductivity over film '
+       'thickness). Models use 25-40 kW/(m²·K); measured values span 7-800.', unit='w_m2k',
+       group='Heat', lo_si=1e3, hi_si=1e9),
+    _m('use_computed_heat_partition', 'tribology.use_computed_heat_partition', 'yesno',
+       'Use the heat share the tool computes instead of the entered one?',
+       'Normally no: the computed share comes from an unvalidated interface model.',
+       group='Heat'),
     _m('use_computed_friction', 'tribology.use_computed_friction', 'yesno',
        'Replace the friction typed in by the placeholder friction law?',
        'Normally no: the law is not fitted.', group='Rolling oil'),
@@ -2488,6 +2497,18 @@ FLAGS = {
     'NEGATIVE_LATE_HARDENING_SLOPE_WORK_SOFTENING': (
         'The hardening law softens at large strain (a negative late slope), as reported for '
         'purified Al-Fe and high-purity grades beyond 80 % reduction.', 'No action.'),
+    'STRIP_HEAT_FRACTION_COMPUTED_FROM_INTERFACE_MODEL': (
+        'The strip\'s share of the roll-gap heat was computed by an interface model instead of '
+        'the share you entered.', 'Read the strip and roll temperatures as model values.'),
+    'ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL': (
+        'The work-roll surface temperature entering the roll gap was taken as the coolant or '
+        'oil temperature.', 'No action.'),
+    'HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES': (
+        'The computed heat share lies outside 0 to 1: the temperature difference between strip '
+        'and roll moves more heat than the roll gap makes.', 'Check the temperatures entered.'),
+    'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
+        'The strip is too thick for one temperature through its thickness.',
+        'Read the computed heat share as rough.'),
     'FRICTION_IDENTIFIED_FROM_ENTERED_RECORDS': (
         'A friction value was worked out from the roll force (and slip or torque where '
         'entered) of your pass records; it is shown only and used nowhere.',

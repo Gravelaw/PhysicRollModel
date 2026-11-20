@@ -533,7 +533,7 @@ From the thermal, material and dynamics gap report (sources `TM-`; gap study App
 | Pinhole onset | interface opens above 38 % cumulative reduction; 10-70 um foreign particles perforate 40 um foil | 8021 pilot rolling | EX | TM-LB15 |
 
 - Values as printed in the gap study (Appendix A.1, part B); nothing is fitted and nothing is passed to a hardening law or a bite.
-- The stage-IV hardening slope the engine uses for every alloy is wrong in sign for purified Al-Fe and high-purity grades beyond 80 % reduction [TM-LB2 EX] (gap study X2).
+- A positive stage-IV hardening slope is wrong in sign for purified Al-Fe and high-purity grades beyond 80 % reduction [TM-LB2 EX] (gap study X2); the engine's Voce laws accept a negative late slope, entered by the user (band-diagnosis 8.3); none is selected by alloy group.
 
 ## Anisotropy and the plane-strain factor
 

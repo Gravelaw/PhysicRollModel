@@ -3502,7 +3502,8 @@ def diagnose(case):
         try:
             process['heating'] = bp.heating_section(
                 eff, trib, cache, bite, eff['model_options']['cells'],
-                s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+                s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'],
+                friction=process.get('friction'))
             op = process['heating']['operating']
             if bite is None:
                 op['rejected'] = f'no roll bite for the case pass: {bite_error}'

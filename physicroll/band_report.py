@@ -2272,6 +2272,7 @@ def _process_section(r):
                     for x in fs.get('passes') or []]
             out.append(_table(('pass', 'gauge', 'equivalent strain', 'supplied', 'computed',
                                'used'), rows, 'num'))
+            out.append(_rate_temperature_block(fs))
         he = pr.get('heating')
         out.append('<h3>Pass heating</h3>')
         if _bad(he):
@@ -2309,6 +2310,7 @@ def _process_section(r):
                                'plastic work', 'interface slip', 'strip temperature rise',
                                'strip exit temperature', 'limit', 'heat to each work roll'),
                               rows, 'num'))
+            out.append(_heat_share_lines(he))
     out.append(_speed_consistent_block(r))
     out.append(_friction_identification_block(r))
     return head + ''.join(out) + '</section>'
@@ -2329,6 +2331,51 @@ def _ident_cell(x):
     if x.get('multiple_roots'):
         text += ' <em>several roots</em>'
     return text
+
+
+def _rate_temperature_block(fs):
+    """SPEC18 package 8: the strain-rate and temperature factor of the flow stress (nothing
+    without ``hardening.rate_temperature``)."""
+    rt = fs.get('rate_temperature')
+    if not isinstance(rt, dict):
+        return ''
+    applied = rt.get('applied')
+    out = ['<h4>Strain rate and temperature factor</h4>',
+           '<p class="warn"><strong>'
+           + ('Applied: the flow stress of every pass below was multiplied by this factor, and '
+              'every result computed from it uses the factored value.' if applied else
+              'Reported only: the flow stress used is not factored.')
+           + '</strong> ' + _e(rt.get('note') or '')
+           + f' Rate sensitivity {_f(rt.get("rate_sensitivity"), digits=3)} at '
+           f'{_f(rt.get("reference_strain_rate_per_s"), digits=3)} /s, temperature coefficient '
+           f'{_f(rt.get("temperature_coefficient_per_k"), digits=3)} /K from '
+           f'{_f(rt.get("reference_temperature_k"), digits=4)} K ({_e(rt.get("provenance") or "")}).'
+           '</p>']
+    rows = []
+    for x in fs.get('passes') or []:
+        if x.get('rate_temperature_rejected'):
+            rows.append([_e(x.get('label', '')), '', '', '', '',
+                         f'<em>not used: {_e(x["rate_temperature_rejected"])}</em>', ''])
+            continue
+        if 'strain_rate_per_s' not in x:
+            continue
+        rows.append([_e(x.get('label', '')),
+                     _f(x.get('strain_rate_per_s'), digits=4, unit='/s')
+                     + ' (from the undeformed arc)',
+                     _f(x.get('bite_temperature_k'), digits=4, unit='K'),
+                     _e(x.get('bite_temperature_basis') or ''),
+                     _f(x.get('rate_factor'), digits=4) + ' × '
+                     + _f(x.get('temperature_factor'), digits=4),
+                     f'<strong>{_f(x.get("rate_temperature_factor"), digits=4)}</strong>',
+                     _mpa(x.get('flow_stress_with_rate_temperature_pa'), 4)])
+    out.append(_table(('pass', 'strain rate', 'temperature', 'which temperature',
+                       'rate × temperature factor', 'factor', 'factored flow stress'),
+                      rows, 'num'))
+    cons = [[_e(c.get('consumer', '')), 'yes' if c.get('uses_factor') else 'no',
+             _e(c.get('how_shown', ''))] for c in rt.get('consumers') or []]
+    out.append(_table(('consumer', 'uses the factored flow stress', 'how the result shows it'),
+                      cons))
+    return ''.join(out)
 
 
 def _friction_identification_block(r):
@@ -2371,6 +2418,35 @@ def _friction_identification_block(r):
     if flags:
         out.append(f'<p>Flags: {_e(", ".join(flags))}.</p>')
     return ''.join(out)
+
+
+def _heat_share_lines(he):
+    """SPEC18 package 9: entered against computed strip share per pass (nothing without a
+    computed heat partition)."""
+    lines, warn = [], []
+    for x in [he.get('operating')] + list(he.get('schedule') or []):
+        part = x.get('heat_partition') if isinstance(x, dict) else None
+        if not isinstance(part, dict) or part.get('strip_heat_fraction_computed') is None:
+            continue
+        f_c, f_s = part['strip_heat_fraction_computed'], part['supplied_strip_heat_fraction']
+        lines.append(f'{_e(x.get("label", ""))}: heat share to the strip: entered '
+                     f'{_f(f_s, digits=2)}, computed {_f(f_c, digits=2)}')
+        if abs(f_c - f_s) > 0.1:
+            warn.append(_e(x.get('label', '')))
+    if not lines:
+        return ''
+    op = (he.get('operating') or {}).get('heat_partition') or {}
+    lo, hi = (op.get('measured_strip_share_foil_mill') or {}).get('range') or (0.11, 0.33)
+    out = ('<p>Computed bite heat partition (interface model: lumped strip on a half-space roll, '
+           'conductance of the oil film; measured on a foil mill: '
+           f'{_f(lo)} to {_f(hi)}, abstract only):</p>' + _ul(lines))
+    if warn:
+        out += ('<p class="warn">The entered and computed strip shares differ by more than 0.1 '
+                f'for {", ".join(warn)}; the '
+                + ('computed' if 'STRIP_HEAT_FRACTION_COMPUTED_FROM_INTERFACE_MODEL'
+                   in ((he.get('operating') or {}).get('flags') or []) else 'entered')
+                + ' value drives the results.</p>')
+    return out
 
 
 def _speed_consistent_block(r):
