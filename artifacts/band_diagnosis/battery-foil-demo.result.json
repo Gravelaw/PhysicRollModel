@@ -29,6 +29,11 @@
   },
   "bite_derivations": 32,
   "bite_error": null,
+  "bite_extras": {
+    "not_supplied": true,
+    "reason": "only the reduced half-space bite returns these",
+    "status": "NOT_SUPPLIED"
+  },
   "bite_fallback_reason": "Hitchcock contact radius ratio 2.481 exceeds max_radius_ratio 1.5: circular flattening is outside its envelope; a foil (non-circular) contact model or supplied sensitivities are needed",
   "case_name": "battery_foil_demo",
   "case_schema": "physicroll.band_case.v2",

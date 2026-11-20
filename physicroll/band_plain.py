@@ -261,7 +261,9 @@ ROLL_VALUES = ('work_roll', 'backup_roll')  # literal in band_signatures (bearin
 ROLL_WORDS = {'work_roll': 'Work roll', 'backup_roll': 'Backup roll'}
 BITE_MODEL_WORDS = {'hitchcock': 'Sheet roll-gap model (Hitchcock flattening)',
                     'mattress': 'Experimental foil roll-gap model (mattress)',
-                    'auto': 'Choose by gauge (sheet model, foil model where it fails)'}
+                    'auto': 'Choose by gauge (sheet model, foil model where it fails)',
+                    'half_space': 'Half-space foil roll-gap model (reduced)',
+                    'auto_half_space': 'Standard model, half-space model where it stops'}
 THERMAL_SENS_WORDS = {'off': 'Off', 'partition': 'Heat share only (default)',
                       'full': 'Heat share and spray coefficient (slow)'}
 CONSTRAINT_WORDS = {'axially_free': 'Free to expand along the barrel',
@@ -818,6 +820,10 @@ MILL_QUESTIONS = (
     _m('bite_model', 'model_options.bite_model', 'choice', 'Roll-gap model',
        'Keep the starting point\'s choice unless you know why.',
        choices=_choices(bd.BITE_MODELS, BITE_MODEL_WORDS), group='Model settings'),
+    _m('shear_cap_factor', 'model_options.shear_cap_factor', 'number',
+       'Largest friction stress as a share of the metal\'s shear strength',
+       'Only used by the half-space foil model. 1 means friction can reach the shear strength.',
+       unit='ratio', group='Model settings'),
     _m('bite_damping', 'model_options.bite_damping_transit_fraction', 'number',
        'Roll-gap damping fraction', 'A heuristic; the results without it are always shown.',
        unit='ratio', group='Model settings'),
@@ -2336,6 +2342,64 @@ FLAGS = {
     'BITE_MODEL_AUTO': (
         'The tool chose the roll-gap model by gauge (sheet model, foil model where it fails).',
         'No action.'),
+    'BITE_MODEL_HALF_SPACE': (
+        'The half-space foil roll-gap model (a reduced form of a published model) was chosen '
+        'for every pass.',
+        'Compare with the standard choice to see how far the conclusions depend on the '
+        'roll-gap model.'),
+    'BITE_MODEL_AUTO_HALF_SPACE': (
+        'The tool used the sheet roll-gap model and the half-space foil model where the sheet '
+        'model stops.', 'No action.'),
+    'BITE_FROM_REDUCED_HALF_SPACE_MODEL': (
+        'The roll-gap numbers come from the half-space foil model, a reduced form of a '
+        'published model that has not been checked on a mill.',
+        'Read roll force and forward slip as indicative; friction is the larger unknown.'),
+    'DERIVED_BY_HALF_SPACE_FOIL_MODEL': (
+        'A roll-gap result was computed by the half-space foil model.',
+        'Read it as indicative only.'),
+    'REDUCED_HALF_SPACE_FOIL_MODEL': (
+        'The half-space foil model leaves out the stretching of strip and roll surface inside '
+        'the contact.', 'No action; it explains a limit of the roll-gap numbers.'),
+    'HALF_SPACE_REGIME_FOIL': (
+        'The half-space model finds a zone where strip and roll move together (foil range).',
+        'No action.'),
+    'HALF_SPACE_REGIME_CONVENTIONAL': (
+        'The half-space model finds the strip sliding over the whole contact (sheet range).',
+        'No action.'),
+    'STRIP_THICKNESS_SPRING_NOT_IN_PUBLISHED_MODEL': (
+        'The half-space model lets the strip compress a little under the roll; the published '
+        'model does not. It raises the roll force by a few per cent.', 'No action.'),
+    'SHEAR_CAP_ACTIVE': (
+        'Friction reached the shear strength of the metal somewhere in the contact; the model '
+        'caps it there.',
+        'Check the friction value: a mill running at that friction is unusual.'),
+    'PEAK_PRESSURE_ABOVE_16_PLANE_STRAIN_YIELD': (
+        'The highest roll pressure is above what published foil solutions show.',
+        'Check the friction and gauges; the numbers are outside the published range.'),
+    'LIGHT_REDUCTION_ELASTIC_STRIP_ZONES_NOT_MODELLED': (
+        'The reduction is light (below 10 %), where the short elastic zones the model leaves '
+        'out matter more.', 'Read the roll-gap numbers as rough.'),
+    'ZONE_STRUCTURE_AT_REGIME_BOUNDARY': (
+        'The pass sits between the sheet and the foil range; the half-space model used the '
+        'sheet-type contact and reports the other one beside it.', 'No action.'),
+    'NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT': (
+        'In the half-space model the strip creeps a little where it should move with the '
+        'roll; the forward slip is less exact than usual.', 'Read forward slip as rough.'),
+    'COLD_START_BY_FRICTION_CONTINUATION': (
+        'The half-space model reached the entered friction from a lower friction, because the '
+        'simpler foil model could not start at it.', 'No action.'),
+    'ONE_SIDED_TENSION_DIFFERENCE_AT_ZERO_TENSION': (
+        'With zero tension the effect of tension on the roll force was taken from one side '
+        'only.', 'No action.'),
+    'REGIME_CHANGE_WITHIN_FINITE_DIFFERENCE_STENCIL': (
+        'A small change of the pass moves it across the sheet / foil boundary of the roll-gap '
+        'model, so its sensitivities straddle the two.', 'Read the sensitivities as rough.'),
+    'SENSITIVITY_STEP_NOT_CONVERGED': (
+        'The roll-gap sensitivities change with the step used to compute them.',
+        'Read the sensitivities as rough.'),
+    'CONTACT_RADIUS_RATIO_CLAMPED_TO_ONE': (
+        'The foil model\'s contact length is shorter than the undeformed roll would give; the '
+        'flattening figure was set to its lower limit.', 'No action.'),
     'BITE_MODEL_MATTRESS': (
         'The experimental foil roll-gap model was chosen for every pass.',
         'Read the roll-gap numbers as order of magnitude only.'),

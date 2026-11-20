@@ -86,9 +86,11 @@ VERDICTS = ('RECORDED_DISCREPANCY', 'WITHIN_AGREEMENT_BAND', 'INDICATIVE_ASSUMED
 NO_REFERENCE_VALUE = 'NO_REFERENCE_VALUE'
 REFERENCE_KINDS = ('MODEL_OUTPUT', 'MEASUREMENT', 'PUBLISHED_FORMULA', 'FIGURE_READ_BY_EYE')
 CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29',
-            'SS-V2', 'SS-V3', 'TM-LC7')
+            'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
+            'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
+RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -172,6 +174,33 @@ RECORDED = {
                'critical_exit_speed_m_s': 8.10139202893497,
                'critical_exit_speed_without_bite_damping_m_s': 0.5176731218858979,
                'onset_frequency_without_bite_damping_hz': 481.14904834135507},
+    # [run] at RECORDED_ON_SPEC18_P4 (reduced half-space bite)
+    'BT-V1-HS': {'w_bar_rigid_strip': 88.85871955010157,
+                 'w_bar_strip_spring_80_gpa': 92.93604427034032,
+                 'contact_length_rigid_strip_m': 0.0019613947598269856,
+                 'contact_length_strip_spring_80_gpa_m': 0.0020384344556250494,
+                 'peak_pressure_over_ys_rigid_strip': 7.521434258401501,
+                 'peak_pressure_over_ys_strip_spring_80_gpa': 7.331458838064114,
+                 'peak_position_rigid_strip_m': 0.00030539188604873164,
+                 'peak_position_strip_spring_80_gpa_m': 0.0003494098912534436,
+                 'contact_start_rigid_strip_m': -0.00111822787627059,
+                 'contact_end_rigid_strip_m': 0.0008431668835563955,
+                 'no_slip_zone_length_rigid_strip_m': 0.0010120889525228808,
+                 'w_bar_printed_end_40_um': 78.01229524577438,
+                 'w_bar_printed_end_21_um': 88.62210082746397,
+                 'w_bar_printed_end_10_um': 102.61675982282605,
+                 'w_bar_printed_end_5_um': 117.47031730128144,
+                 'w_bar_printed_end_2.5_um': 134.1517025183796},
+    'BT-V2-R89-HS': {'w_bar': 42.79958642116526},
+    'BT-V2-R135-HS': {'w_bar': 67.12525266591923},
+    'BT-V3-FIG1-140UM-HS': {'w_bar': 46.81955061964358},
+    'BT-V3-EQ29-HS': {'entry_gauge_r50_without_no_slip_zone_m': 5.4e-05,
+                      'entry_gauge_r50_with_no_slip_zone_m': 5.2e-05,
+                      'entry_gauge_r25_without_no_slip_zone_m': 3.4e-05,
+                      'entry_gauge_r25_with_no_slip_zone_m': 3.2e-05,
+                      'entry_gauge_r10_without_no_slip_zone_m': 2.8e-05,
+                      'entry_gauge_r10_with_no_slip_zone_m': 2.6e-05},
+    'BT-X29-LOAD-EXPONENT-HS': {'load_exponent_in_friction': 2.460861178126231},
 }
 
 NOT_ENCODED = (
@@ -664,10 +693,220 @@ def _tm_lc7():
                   'TANDEM_MILL_OUTSIDE_SINGLE_STAND_MODEL'] + run['flags'])
 
 
+# ------------------------------------------------- reduced half-space bite (SPEC18 package 4)
+# E_s* of the strip thickness spring: 80 GPa is the source's strip modulus of Fig. 9 [E1 FT],
+# used here for the planner's addition (the spring); 1e13 Pa = rigid strip, the source's
+# assumption. The printed end conditions are the benchmark mode of halfspace_bite (package 3).
+HS_STRIP_MODULUS_PA = 80e9
+HS_RIGID_STRIP_PA = 1e13
+# cross-check of the printed-end family by the research note's own numpy re-implementation
+# [computed, re-implementation of E1]: end length um -> W_bar (not a published value)
+PRINTED_END_CROSS_CHECK = {21: 88.0, 10: 101.9, 5: 116.6, 2.5: 133.2}
+BT_V1_HS_NOTE = (
+    'The printed model closes the bite with a pressure step; its load is not defined without an '
+    'end length (78 at 40 um, 88.6 at 21 um, 102.6 at 10 um, 117.5 at 5 um, 134.2 at 2.5 um, '
+    'computed twice independently). The caption value 118 corresponds to about 5 um; the paper '
+    'states an element size of about 21 um. This solver keeps the exit contact zone instead; '
+    'its value for a strip rigid in thickness, 88.86, equals the printed model at 21 um. A ratio '
+    'to 118 is recorded and not judged. The published contact length (2.14 mm) corresponds to '
+    'about 103 in the same family.')
+_HS_NOTES = ['Reduced half-space bite (physicroll.halfspace_bite): zone structure selected by '
+             'the rules of SPEC18 package 3; the strip thickness spring (planner\'s addition, '
+             'not in E1) at the stated E_s*; E_s* = 1e13 Pa is a strip rigid in thickness.',
+             _ES_NOTE] + _CONVERSION_NOTES
+
+
+def _half_space(h0, h1, radius, mu, es, ys=FLECK_YS_PA, er=FLECK_ER_STAR_PA, tb=0.0, tf=0.0):
+    """Reduced half-space bite on a BT-S1 case: (W_bar, result) [run]."""
+    from .halfspace_bite import solve_half_space_bite
+    y = ys * math.sqrt(3) / 2
+    e = er * (1 - ROLL_NU_FOR_SOLVER ** 2)
+    res = solve_half_space_bite(h0, h1, SOLVER_WIDTH_M, radius, y, mu, tb, tf,
+                                roll_youngs_modulus_pa=e, roll_poisson_ratio=ROLL_NU_FOR_SOLVER,
+                                strip_plane_strain_modulus_pa=es)
+    return fleck_dimensionless_load(res['force_per_width_n_m'], radius, ys, er), res
+
+
+def _hq(name, unit, project, key, reference, label, verdict, rec_case):
+    return _quantity(name, unit, project, RECORDED[rec_case][key], reference, label,
+                     row_verdict=verdict, recorded_on=RECORDED_ON_SPEC18_P4)
+
+
+def _bt_v1_hs():
+    from .halfspace_bite import _printed_end_condition_family
+    h0, h1 = 20e-6, 15e-6
+    w_r, rigid = _half_space(h0, h1, FLECK_RADIUS_M, FLECK_MU, HS_RIGID_STRIP_PA)
+    w_s, spring = _half_space(h0, h1, FLECK_RADIUS_M, FLECK_MU, HS_STRIP_MODULUS_PA)
+    ys = FLECK_YS_PA
+    ng, eye, band = 'REFERENCE_NOT_GRID_INDEPENDENT', 'REFERENCE_READ_BY_EYE', _band_verdict
+    cl = BT_V1_CONTACT_LENGTH_E6_M
+    q = [
+        _hq('w_bar_rigid_strip', '1', w_r, 'w_bar_rigid_strip', 118.0,
+            'caption value of Fig. 9 (MODEL_OUTPUT, E1 FT); not grid-independent', ng, 'BT-V1-HS'),
+        _hq('w_bar_strip_spring_80_gpa', '1', w_s, 'w_bar_strip_spring_80_gpa', 118.0,
+            'caption value of Fig. 9 (MODEL_OUTPUT, E1 FT); not grid-independent', ng, 'BT-V1-HS'),
+        _hq('contact_length_rigid_strip_m', 'm', rigid['contact_length_m'],
+            'contact_length_rigid_strip_m', cl, 'contact length of the same published solution '
+            '(MODEL_OUTPUT, E6 FT, thesis p.54)', band(rigid['contact_length_m'] / cl),
+            'BT-V1-HS'),
+        _hq('contact_length_strip_spring_80_gpa_m', 'm', spring['contact_length_m'],
+            'contact_length_strip_spring_80_gpa_m', cl, 'contact length of the same published '
+            'solution (MODEL_OUTPUT, E6 FT, thesis p.54)', band(spring['contact_length_m'] / cl),
+            'BT-V1-HS'),
+        _hq('peak_pressure_over_ys_rigid_strip', '1', rigid['max_pressure_pa'] / ys,
+            'peak_pressure_over_ys_rigid_strip', 7.7, 'about 7.7, Fig. 9 read by eye by the '
+            'research note (E1 FT figure)', eye, 'BT-V1-HS'),
+        _hq('peak_pressure_over_ys_strip_spring_80_gpa', '1', spring['max_pressure_pa'] / ys,
+            'peak_pressure_over_ys_strip_spring_80_gpa', 7.7, 'about 7.7, Fig. 9 read by eye',
+            eye, 'BT-V1-HS'),
+        _hq('peak_position_rigid_strip_m', 'm', rigid['peak_pressure_position_m'],
+            'peak_position_rigid_strip_m', 0.41e-3, 'about +0.41 mm, Fig. 9 read by eye', eye,
+            'BT-V1-HS'),
+        _hq('peak_position_strip_spring_80_gpa_m', 'm', spring['peak_pressure_position_m'],
+            'peak_position_strip_spring_80_gpa_m', 0.41e-3, 'about +0.41 mm, Fig. 9 read by '
+            'eye', eye, 'BT-V1-HS'),
+        _hq('contact_start_rigid_strip_m', 'm', rigid['contact_start_m'],
+            'contact_start_rigid_strip_m', -1.18e-3, 'entry about -1.18 mm, Fig. 9 read by eye',
+            eye, 'BT-V1-HS'),
+        _hq('contact_end_rigid_strip_m', 'm', rigid['contact_end_m'], 'contact_end_rigid_strip_m',
+            0.95e-3, 'exit about +0.95 mm, Fig. 9 read by eye', eye, 'BT-V1-HS'),
+        _hq('no_slip_zone_length_rigid_strip_m', 'm', rigid['flat_zone_length_m'],
+            'no_slip_zone_length_rigid_strip_m', None, 'regime: the figure shows regime II/III '
+            '(a no-slip zone); the project finds a foil structure with a no-slip zone '
+            f'({rigid["zone_structure"]}): consistent, no number to compare', NO_REFERENCE_VALUE,
+            'BT-V1-HS'),
+    ]
+    rows = _printed_end_condition_family(h0, h1, SOLVER_WIDTH_M, FLECK_RADIUS_M,
+                                         ys * math.sqrt(3) / 2, FLECK_MU, 0.0, 0.0,
+                                         roll_youngs_modulus_pa=FLECK_ER_STAR_PA *
+                                         (1 - ROLL_NU_FOR_SOLVER ** 2),
+                                         roll_poisson_ratio=ROLL_NU_FOR_SOLVER,
+                                         end_lengths_m=(40e-6, 21e-6, 10e-6, 5e-6, 2.5e-6))
+    family = {}
+    for row in rows:
+        um = round(row['end_length_m'] * 1e6, 1)
+        um = int(um) if um == int(um) else um
+        w = fleck_dimensionless_load(row['force_per_width_n_m'], FLECK_RADIUS_M, ys,
+                                     FLECK_ER_STAR_PA)
+        family[um] = w
+        cross = PRINTED_END_CROSS_CHECK.get(um)
+        label = (f'printed end conditions, end length {um} um (benchmark mode); no published '
+                 'value' + (f'; cross-check {cross} [computed, re-implementation of E1], ratio '
+                            f'{w / cross:.3f}' if cross else ''))
+        q.append(_hq(f'w_bar_printed_end_{um}_um', '1', w, f'w_bar_printed_end_{um}_um', None,
+                     label, NO_REFERENCE_VALUE, 'BT-V1-HS'))
+    notes = ['Every input as BT-V1 (E1 FT, Fig. 9).'] + _HS_NOTES + [
+        'Printed end conditions: one pressure element of the stated length outside each end, '
+        'strip rigid, structure A B F (benchmark mode, never used by the engine).']
+    flags = ['MODEL_TO_MODEL_REFERENCE', 'REFERENCE_NOT_GRID_INDEPENDENT',
+             'CONSISTENT_REGIME_WITH_FIGURE' if rigid['regime'] == 'foil'
+             else 'REGIME_DIFFERS_FROM_FIGURE']
+    note = BT_V1_HS_NOTE + (f' [run] W_bar {w_r:.3f} (rigid strip), {w_s:.3f} (80 GPa spring); '
+                            f'printed-end family {family[40]:.2f} to {family[2.5]:.2f}.')
+    case = _case('BT-V1-HS', 'Foil bite, published case in the reduced half-space bite',
+                 SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT', 'MODEL_OUTPUT',
+                 _fleck_inputs(h0, h1, FLECK_RADIUS_M, FLECK_MU), notes, q, ng, note, flags)
+    return case
+
+
+def _bt_v2_hs(case_id, radius):
+    h0 = 73e-6
+    h1 = h0 * (1 - 0.57)
+    mu = 0.026
+    tb, tf = 0.107 * FLECK_YS_PA, 0.132 * FLECK_YS_PA
+    w, res = _half_space(h0, h1, radius, mu, HS_STRIP_MODULUS_PA, tb=tb, tf=tf)
+    q = [_hq('w_bar', '1', w, 'w_bar', 58.0, 'measured W_bar, AA1100 third foil pass '
+             '(MEASUREMENT, E1 FT, Fig. 8)', 'INDICATIVE_ASSUMED_INPUTS', case_id)]
+    notes = [f'Roll radius {radius * 1e3:g} mm ASSUMED: ' + _BT_V2_UNSTATED_NOTE,
+             'Friction 0.026 was inferred by the authors from this measured load.'] + _HS_NOTES
+    return _case(case_id, f'Foil mill point, reduced half-space bite, R {radius * 1e3:g} mm '
+                 'assumed', SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT', 'MEASUREMENT',
+                 _fleck_inputs(h0, h1, radius, mu, tb=tb, tf=tf), notes, q,
+                 'INDICATIVE_ASSUMED_INPUTS', f'W_bar {w:.2f} against measured 58 with an '
+                 f'assumed radius ({res["zone_structure"]}); indicative only.',
+                 ['ASSUMED_ROLL_RADIUS', 'FRICTION_INFERRED_FROM_REFERENCE_LOAD'])
+
+
+def _bt_v3_fig1_hs():
+    w, res = _half_space(140e-6, 70e-6, FLECK_RADIUS_M, FLECK_MU, HS_STRIP_MODULUS_PA)
+    q = [_hq('w_bar', '1', w, 'w_bar', 50.0, '"about 50", read by eye by the bite report from '
+             'the r = 50 % curve of Fig. 4 (FIGURE_READ_BY_EYE)', 'REFERENCE_READ_BY_EYE',
+             'BT-V3-FIG1-140UM-HS')]
+    return _case('BT-V3-FIG1-140UM-HS', 'Regime I case of Fig. 1, reduced half-space bite',
+                 SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT; reference read by eye from Fig. 4',
+                 'FIGURE_READ_BY_EYE', _fleck_inputs(140e-6, 70e-6, FLECK_RADIUS_M, FLECK_MU),
+                 _HS_NOTES, q, 'REFERENCE_READ_BY_EYE',
+                 f'W_bar {w:.2f} ({res["zone_structure"]}) against a reference read by eye.',
+                 ['REFERENCE_READ_BY_EYE'])
+
+
+def _bt_v3_eq29_hs():
+    """The regime boundary of the reduced half-space bite against eq. 29 of E1."""
+    q, flags, ok = [], [], True
+    for red, thick, thin in ((0.5, 54, 52), (0.25, 34, 32), (0.10, 28, 26)):
+        h0c = fleck_regime_boundary_entry_gauge_m(FLECK_RADIUS_M, red, FLECK_MU, FLECK_YS_PA,
+                                                  FLECK_ER_STAR_PA)
+        verdict = 'CONSISTENT_REGIME' if red >= 0.25 else 'RECORDED_DISCREPANCY'
+        for gauge, want in ((thick, 'conventional'), (thin, 'foil')):
+            _, res = _half_space(gauge * 1e-6, gauge * 1e-6 * (1 - red), FLECK_RADIUS_M,
+                                 FLECK_MU, HS_STRIP_MODULUS_PA)
+            if res['regime'] != want:
+                ok = False
+                flags.append(f'REGIME_AT_{gauge}_UM_R_{red:g}_IS_{res["regime"].upper()}')
+            name = (f'entry_gauge_r{int(red * 100):02d}_'
+                    + ('without' if want == 'conventional' else 'with') + '_no_slip_zone_m')
+            q.append(_hq(name, 'm', gauge * 1e-6, name, h0c,
+                         f'eq. 29 of E1 (PUBLISHED_FORMULA, FT): h_0c {h0c * 1e6:.1f} um for r '
+                         f'{red:g}; project structure {res["zone_structure"]} at {gauge} um',
+                         verdict, 'BT-V3-EQ29-HS'))
+    if not ok:
+        flags.append('PROJECT_REGIME_DISAGREES_WITH_THE_PLANNER_BRACKETS')
+    note = ('No-slip zone absent at 54 / 34 / 28 um and present at 52 / 32 / 26 um for r 0.5 / '
+            '0.25 / 0.10 [run]; eq. 29 gives 51.2 / 36.2 / 22.9 um. For r 0.5 and 0.25 the '
+            'bracket lies 2-5 % above and 6-12 % below eq. 29 (consistent); for r 0.10 it lies '
+            '14-22 % above (recorded discrepancy).')
+    return _case('BT-V3-EQ29-HS', 'Regime boundary of the reduced half-space bite, eq. 29',
+                 SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT', 'PUBLISHED_FORMULA',
+                 {'friction_coefficient': FLECK_MU, 'work_roll_radius_m': FLECK_RADIUS_M,
+                  'plane_strain_yield_pa': FLECK_YS_PA,
+                  'roll_plane_strain_modulus_pa': FLECK_ER_STAR_PA,
+                  'strip_plane_strain_modulus_pa': HS_STRIP_MODULUS_PA}, _HS_NOTES, q,
+                 'CONSISTENT_REGIME', note, flags)
+
+
+def _bt_x29_load_exponent_hs():
+    from .halfspace_bite import derive_bite_response_half_space
+    y = FLECK_YS_PA * math.sqrt(3) / 2
+    _, state = derive_bite_response_half_space(
+        chatter.BitePass(20e-6, 15e-6, SOLVER_WIDTH_M, FLECK_RADIUS_M, y, FLECK_MU, 0.0, 0.0),
+        roll_youngs_modulus_pa=FLECK_ER_STAR_PA * (1 - ROLL_NU_FOR_SOLVER ** 2),
+        roll_poisson_ratio=ROLL_NU_FOR_SOLVER, strip_plane_strain_modulus_pa=HS_STRIP_MODULUS_PA,
+        with_state=True)
+    e = state['extra']['load_exponent_in_friction']
+    eye = 'REFERENCE_READ_BY_EYE'
+    label = ('of the range 2 to 2.6 the bite report derives from the master curve (slope read '
+             'by eye) [BT-S1 FT as restated in gap-bite-tribology.md]')
+    q = [_hq('load_exponent_in_friction', '1', e, 'load_exponent_in_friction', 2.0,
+             'lower end ' + label, eye, 'BT-X29-LOAD-EXPONENT-HS'),
+         _hq('load_exponent_in_friction', '1', e, 'load_exponent_in_friction', 2.6,
+             'upper end ' + label, eye, 'BT-X29-LOAD-EXPONENT-HS')]
+    inside = 2.0 <= e <= 2.6
+    return _case('BT-X29-LOAD-EXPONENT-HS', 'Load exponent in friction, published case',
+                 SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT; slope read by eye', 'FIGURE_READ_BY_EYE',
+                 _fleck_inputs(20e-6, 15e-6, FLECK_RADIUS_M, FLECK_MU), _HS_NOTES, q, eye,
+                 f'd ln W / d ln mu = {e:.3f} [run] ' + ('inside' if inside else 'outside') +
+                 ' the range 2 to 2.6 read from the master curve.',
+                 ['INSIDE_READ_RANGE' if inside else 'OUTSIDE_READ_RANGE'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
-          'SS-V3': _ss_v3, 'TM-LC7': _tm_lc7}
+          'SS-V3': _ss_v3, 'TM-LC7': _tm_lc7, 'BT-V1-HS': _bt_v1_hs,
+          'BT-V2-R89-HS': lambda: _bt_v2_hs('BT-V2-R89-HS', 0.089),
+          'BT-V2-R135-HS': lambda: _bt_v2_hs('BT-V2-R135-HS', 0.135),
+          'BT-V3-FIG1-140UM-HS': _bt_v3_fig1_hs, 'BT-V3-EQ29-HS': _bt_v3_eq29_hs,
+          'BT-X29-LOAD-EXPONENT-HS': _bt_x29_load_exponent_hs}
 
 
 def run_case(case_id: str) -> dict:
@@ -807,6 +1046,72 @@ def chatter_onset_comparison(stand: dict, spans: dict, bite_pass: dict, *,
                             'A tandem mill is outside the single-stand model.']}
 
 
+def _model_row(derive, bite_pass, width):
+    try:
+        out = derive(bite_pass)
+    except ValueError as exc:
+        return {'rejected': str(exc)}
+    bite, extra = out if isinstance(out, tuple) else (out, None)
+    row = {'force_per_width_n_m': bite.separating_force_n / width,
+           'forward_slip_fraction': bite.forward_slip_fraction,
+           'contact_length_m': bite.contact_length_m,
+           'strip_modulus_per_width_pa': bite.strip_modulus_n_m / width,
+           'exit_tension_force_sensitivity_per_width_m': -bite.dforce_dexit_tension_m2 / width,
+           'flags': list(bite.flags)}
+    if extra is not None:
+        row['zone_structure'] = extra['extra']['zone_structure']
+        row['load_exponent_in_friction'] = extra['extra']['load_exponent_in_friction']
+    return row
+
+
+def bite_model_comparison(case) -> dict:
+    """Hitchcock, experimental mattress and reduced half-space bite of the case pass and every
+    schedule pass, side by side, with the same inputs (each model's own rejection reason where
+    it has no solution). A comparison of models with each other, not a correction of any of
+    them: the spread is a measure of what is not known [SPEC18 package 4].
+
+    ``case``: a band case dict (validated by ``band_diagnosis.validate_case``). The strip
+    modulus of the half-space thickness spring is ``material.youngs_modulus_pa/(1 - 0.33^2)``.
+    """
+    from . import band_diagnosis as bd
+    from . import band_process as bproc
+    from .foil_bite import derive_bite_response_mattress
+    from .halfspace_bite import derive_bite_response_half_space
+    eff = bd.validate_case(case)
+    st, o, m = eff['stand'], eff['model_options'], eff['material']
+    e, nu = st['roll_youngs_modulus_pa'], st['roll_poisson_ratio']
+    width = eff['pass']['width_m']
+    es = m['youngs_modulus_pa'] / (1 - bd.bw.STRIP_POISSON_RATIO ** 2)
+    models = {
+        'hitchcock': lambda bp_: chatter.derive_bite_response(
+            bp_, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu, cells=o['cells'],
+            max_radius_ratio=o['max_radius_ratio']),
+        'experimental_mattress': lambda bp_: derive_bite_response_mattress(
+            bp_, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+            cells=max(o['cells'], bd.MATTRESS_MIN_CELLS)),
+        'reduced_half_space': lambda bp_: derive_bite_response_half_space(
+            bp_, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+            strip_plane_strain_modulus_pa=es,
+            shear_cap_factor=o.get('shear_cap_factor', 1.0), with_state=True)}
+    rows = []
+    for label, src in bproc.pass_rows(eff):
+        bp_ = bproc.bite_pass(eff, src)
+        row = {'label': label, 'entry_thickness_m': src['entry_thickness_m'],
+               'exit_thickness_m': src['exit_thickness_m'],
+               'friction_coefficient': src['friction_coefficient']}
+        for name, derive in models.items():
+            row[name] = _model_row(derive, bp_, width)
+        rows.append(row)
+    return {'status': STATUS, 'case_name': eff['name'], 'rows': rows,
+            'strip_plane_strain_modulus_pa': es,
+            'note': 'The same inputs in three bite models. The models disagree by up to a factor '
+                    'of about 2 in force at foil gauge; the spread measures what is not known '
+                    '(friction, with a load exponent of about 3 there, is the larger unknown). '
+                    'Not a correction of the mattress or the Hitchcock numbers.',
+            'limitations': ['Each model has its own domain and status; none is validated on a '
+                            'mill.']}
+
+
 def _fmt(value):
     if value is None:
         return '-'
@@ -814,12 +1119,33 @@ def _fmt(value):
 
 
 def main(argv=None):
-    """``python -m physicroll.benchmarks [--json]``."""
+    """``python -m physicroll.benchmarks [--json] [--bite-comparison CASE.json]``."""
     parser = argparse.ArgumentParser(
         description='Project values beside published benchmark values (software comparison, '
                     'not physical validation)')
     parser.add_argument('--json', action='store_true', help='print the full result as JSON')
+    parser.add_argument('--bite-comparison', metavar='CASE.json',
+                        help='print the three bite models side by side for a band case')
     args = parser.parse_args(argv)
+    if args.bite_comparison:
+        with open(args.bite_comparison, encoding='utf-8') as fh:
+            comp = bite_model_comparison(json.load(fh))
+        if args.json:
+            print(json.dumps(comp, indent=1, allow_nan=False))
+            return 0
+        print(comp['note'])
+        print(f'{"pass":40} {"model":22} {"F/w N/m":>12} {"slip":>8} {"L mm":>7} '
+              f'{"Q/w Pa":>11}  structure')
+        for row in comp['rows']:
+            for name in ('hitchcock', 'experimental_mattress', 'reduced_half_space'):
+                r = row[name]
+                if 'rejected' in r:
+                    print(f'{row["label"][:40]:40} {name:22} rejected: {r["rejected"][:60]}')
+                    continue
+                print(f'{row["label"][:40]:40} {name:22} {r["force_per_width_n_m"]:12.6g} '
+                      f'{r["forward_slip_fraction"]:8.4f} {r["contact_length_m"] * 1e3:7.3f} '
+                      f'{r["strip_modulus_per_width_pa"]:11.4g}  {r.get("zone_structure", "")}')
+        return 0
     result = run_all()
     if args.json:
         print(json.dumps(result, indent=1, allow_nan=False))

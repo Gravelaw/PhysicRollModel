@@ -10,6 +10,7 @@ import io
 import json
 import math
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from physicroll import benchmarks as bm
@@ -246,7 +247,8 @@ class BenchmarkTests(unittest.TestCase):
             for q in case['quantities']:
                 if q['project_value'] is not None:   # every software pin, 1e-6 relative
                     self.assertRel(q['project_value'], q['recorded_project_value'])
-                    self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1))
+                    self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1,
+                                                     bm.RECORDED_ON_SPEC18_P4))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -274,6 +276,74 @@ class BenchmarkTests(unittest.TestCase):
         self.assertIn('RECORDED_DISCREPANCY', buf.getvalue())
         for line in bm.TM_LC7_SUBSTITUTIONS:   # the substitutions wherever TM-LC7 is shown
             self.assertIn(line, buf.getvalue())
+
+    def test_bt_v1_hs_reference_not_grid_independent(self):
+        """Passing this test does not mean the physics is right. It records that the published
+        value depends on an unstated end length."""
+        case = self.cases['BT-V1-HS']
+        self.assertEqual(case['verdict'], 'REFERENCE_NOT_GRID_INDEPENDENT')
+        self.assertIn(bm.BT_V1_HS_NOTE, case['note'])
+        for name, pin in (('w_bar_rigid_strip', 88.859), ('w_bar_strip_spring_80_gpa', 92.936)):
+            q = _q(case, name)
+            self.assertRel(q['project_value'], pin, 1e-5)
+            self.assertEqual(q['row_verdict'], 'REFERENCE_NOT_GRID_INDEPENDENT')
+            self.assertEqual(q['reference_value'], 118.0)
+        for name, ratio in (('contact_length_rigid_strip_m', 0.9166),
+                            ('contact_length_strip_spring_80_gpa_m', 0.9525)):
+            q = _q(case, name)
+            self.assertAlmostEqual(q['ratio_project_to_reference'], ratio, delta=1e-4)
+            self.assertEqual(q['row_verdict'], 'WITHIN_AGREEMENT_BAND')
+        for name in ('peak_pressure_over_ys_rigid_strip', 'peak_position_rigid_strip_m',
+                     'contact_start_rigid_strip_m', 'contact_end_rigid_strip_m'):
+            self.assertEqual(_q(case, name)['row_verdict'], 'REFERENCE_READ_BY_EYE')
+        family = {um: _q(case, f'w_bar_printed_end_{um}_um')['project_value']
+                  for um in (40, 21, 10, 5, 2.5)}
+        for um, pin in ((40, 78.01), (21, 88.62), (10, 102.62), (5, 117.47), (2.5, 134.15)):
+            self.assertAlmostEqual(family[um], pin, delta=0.005)
+            self.assertEqual(_q(case, f'w_bar_printed_end_{um}_um')['row_verdict'],
+                             bm.NO_REFERENCE_VALUE)
+        self.assertGreater(family[5], 1.3 * family[21])
+        self.assertIn('CONSISTENT_REGIME_WITH_FIGURE', case['flags'])
+        for q in case['quantities']:          # no ratio to 118 is called agreement or not
+            if q['reference_value'] == 118.0:
+                self.assertNotIn(q['row_verdict'], ('RECORDED_DISCREPANCY',
+                                                    'WITHIN_AGREEMENT_BAND'))
+
+    def test_other_half_space_rows(self):
+        for case_id, pin, ratio in (('BT-V2-R89-HS', 42.800, 0.738),
+                                    ('BT-V2-R135-HS', 67.125, 1.157),
+                                    ('BT-V3-FIG1-140UM-HS', 46.820, 0.936)):
+            q = _q(self.cases[case_id], 'w_bar')
+            self.assertAlmostEqual(q['project_value'], pin, delta=5e-4)
+            self.assertAlmostEqual(q['ratio_project_to_reference'], ratio, delta=5e-4)
+        self.assertEqual(self.cases['BT-V2-R89-HS']['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        self.assertEqual(self.cases['BT-V3-FIG1-140UM-HS']['verdict'], 'REFERENCE_READ_BY_EYE')
+        eq29 = self.cases['BT-V3-EQ29-HS']
+        self.assertEqual(eq29['verdict'], 'CONSISTENT_REGIME')
+        self.assertEqual(eq29['flags'], [])
+        verdicts = {q['name']: q['row_verdict'] for q in eq29['quantities']}
+        self.assertEqual(verdicts['entry_gauge_r50_with_no_slip_zone_m'], 'CONSISTENT_REGIME')
+        self.assertEqual(verdicts['entry_gauge_r10_with_no_slip_zone_m'], 'RECORDED_DISCREPANCY')
+        x29 = self.cases['BT-X29-LOAD-EXPONENT-HS']
+        self.assertAlmostEqual(_q(x29, 'load_exponent_in_friction', 2.0)['project_value'], 2.461,
+                               delta=5e-4)
+        self.assertIn('INSIDE_READ_RANGE', x29['flags'])
+
+    def test_bite_comparison_cli(self):
+        fake = {'note': 'n', 'rows': [{'label': 'p', 'hitchcock': {'rejected': 'r'},
+                                       'experimental_mattress': {
+                                           'force_per_width_n_m': 1.0,
+                                           'forward_slip_fraction': 0.1,
+                                           'contact_length_m': 1e-3,
+                                           'strip_modulus_per_width_pa': 1e9},
+                                       'reduced_half_space': {'rejected': 'r2'}}]}
+        with mock.patch.object(bm, 'bite_model_comparison', return_value=fake):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                template = str(Path(__file__).resolve().parents[1] / 'scenarios'
+                               / 'band_diagnosis_template.json')
+                self.assertEqual(bm.main(['--bite-comparison', template]), 0)
+        self.assertIn('rejected: r2', buf.getvalue())
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

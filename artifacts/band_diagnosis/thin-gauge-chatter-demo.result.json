@@ -23,6 +23,11 @@
   },
   "bite_derivations": 19,
   "bite_error": null,
+  "bite_extras": {
+    "not_supplied": true,
+    "reason": "only the reduced half-space bite returns these",
+    "status": "NOT_SUPPLIED"
+  },
   "case_name": "thin_gauge_chatter_demo",
   "case_schema": "physicroll.band_case.v1",
   "chatter": {

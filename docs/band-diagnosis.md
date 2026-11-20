@@ -410,6 +410,27 @@ Where Hitchcock still solves at foil gauge (S1-S3 here) it carries
 `THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN`; its numbers are indicative only and assume an open
 gap. Mattress numbers are order of magnitude only (section 10.2).
 
+**The third model: the reduced half-space bite** (opt-in, `model_options.bite_model:
+"half_space"` or `"auto_half_space"`, section 10.3). The same passes, the same friction 0.03
+[run, `python -m physicroll.benchmarks --bite-comparison` on the demo; pinned in
+`tests/test_halfspace_bite_sensitivity.py`]:
+
+| pass | Hitchcock | experimental mattress | reduced half-space | half-space zone structure |
+|---|---|---|---|---|
+| F1 50 -> 30 um (case pass) | rejected | 0.96 kN/mm, slip 0.190 | 1.37 kN/mm, slip 0.237 | `A F` (at the regime boundary) |
+| F2 30 -> 18 um | rejected (below 20 um) | 1.54 kN/mm, slip 0.308 | 3.24 kN/mm, slip 0.367: NOT CREDIBLE | `A B E F` |
+| ALT2 25 -> 12 um | rejected | 6.19 kN/mm, slip 0.422: NOT CREDIBLE | 10.13 kN/mm, slip 0.553: NOT CREDIBLE | `A B F` |
+
+On the sheet-like passes S1-S3 the three models agree within 6 to 9 % in force. At foil gauge
+the half-space loads are 43 % (30 um) to 111 % (18 um) above the mattress loads and its strip
+stiffness 2.6 times higher; with friction 0.03 the 18 um and 12 um loads leave the reported
+battery-foil range, and the existing credibility mark says so (`FORCE_OUTSIDE_REPORTED_RANGE`).
+With a load exponent in friction of about 3 at these gauges, the 18 um pass would return into
+the range at a friction of about 0.027 [computed, SPEC18 prototype]: friction is the larger
+unknown, and the spread between the models measures what is not known. The half-space model
+is not the default: its published reference value is itself not a defined number (section
+10.3), and switching would move every foil force, stiffness, slip and heat.
+
 ### 3.4 What still runs without a roll bite, and supplying shape inputs
 
 When neither roll-bite model solves the case pass (a rejection, an exit gauge below
@@ -1286,6 +1307,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `gauge_control` | gaugemeter AGC compensation gain, cylinder bandwidth, force filter | –, Hz | AGC commissioning sheet |
 | `drive` | drive-train inertias and shaft stiffnesses (torsional modes) | kg m², N m/rad | drive-train data, torsional analysis |
 | `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
+| `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map |
 | `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
@@ -2695,8 +2717,11 @@ the cause, they are negligible above 10 % reduction [BT-S1 FT]. Treat foil-regim
 of magnitude only.
 
 **`model_options.bite_model`**: `hitchcock` (default; slab + circular flattening), `mattress`
-(always the experimental model, at least 200 cells) or `auto` (Hitchcock, and the mattress
-model only when Hitchcock rejects the pass; the reason is kept in `bite_fallback_reason`).
+(always the experimental model, at least 200 cells), `auto` (Hitchcock, and the mattress
+model only when Hitchcock rejects the pass; the reason is kept in `bite_fallback_reason`),
+`half_space` (the reduced half-space model, section 10.3, for every pass) or
+`auto_half_space` (Hitchcock, and the half-space model where Hitchcock rejects). `auto` never
+falls back to the half-space model.
 Mattress bites carry the flag `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL`, and the report's key
 numbers name their source `experimental_mattress`. The perturbed bites of the flow-stress and
 friction sensitivities (section 9) use the model of the operating bite: the mattress model
@@ -2715,9 +2740,9 @@ supplied in `model_options.bite_response_override`; for the strip-shape chain al
 
 ### 10.3 Reduced half-space model (`halfspace_bite.py`)
 
-Status `UNVALIDATED_REDUCED_HALF_SPACE_FOIL_BITE`. Not used by `diagnose()` yet: it is a
-module beside the mattress bite, with its own tests; the engine option and the benchmark case
-follow (SPEC18 package 4). It is a REDUCED form of the foil-bite model of Fleck,
+Status `UNVALIDATED_REDUCED_HALF_SPACE_FOIL_BITE`. Opt-in: `diagnose()` uses it only with
+`model_options.bite_model` set to `half_space` or `auto_half_space`; the default and the
+demos are unchanged. It is a REDUCED form of the foil-bite model of Fleck,
 Johnson, Mear & Zhang (1992) [E1 FT, transcribed in
 `docs/research/band-screening-2026-11/phase1-equations.md`].
 
@@ -2837,6 +2862,46 @@ family 78-134 and is not a target (section 10.2). Left out: the longitudinal ela
 and traction inside the no-slip zone and the regime-III zones C and D; friction varying
 through the bite; hardening, rate and temperature inside the bite; the lubricant film; the
 closed gap. One cold solve with the selection takes 0.3 to 2.5 s, a warm start about 0.2 s.
+
+**What "118" means (finding 1 of the Phase 1 brief, in full).** The printed model ends the
+bite with a pressure step from `Y_s` to zero and asks for `db/dx = 0` there. A pressure step on
+a half-space has a logarithmically infinite surface slope, so the condition means something
+only relative to the length over which the step is smeared. Two independent
+re-implementations (the research note's in numpy, the planner's in the standard library) give
+the same family: 78 to 134 for 40 to 2.5 um, no limit. 118 is obtained at about 5 um; at the
+element size the paper states, 88 to 89. "118" is the caption value of one unstated end length;
+it is recorded, not used as a target.
+
+**In the engine.** `derive_bite_response_half_space` returns the same `BiteResponse` as the
+other models: force, slip, contact length and the eight sensitivities, by central differences
+whose perturbed solutions are found by chord iterations with the factorised Jacobian of the
+nominal solution (half steps of 1e-3; the planner checked chord against full Newton to 7
+digits, a test to 1e-6). It also returns, in `result.bite_extras`, the friction and
+flow-stress derivatives (`dforce_dfriction_n`, `dforce_dflow_stress_m2`, the slip and
+contact-length derivatives, the load exponents), the torque and the slip dissipation; for any
+other bite `bite_extras` is `NOT_SUPPLIED`. Every consumer of the bite uses the half-space
+model when the operating bite is a half-space bite: the friction fixed point, the lever rows
+and the speed-consistent critical speed (`perturbed_bite_model: reduced_half_space`), pass
+heating (its own slip dissipation), the gauge trend, the schedule sweep and the friction
+stripe screen (`bite_model` / `sensitivity_bite_model: reduced_half_space` per row). With
+`auto_half_space` a pass Hitchcock solves stays Hitchcock and says so in its row. A pass the
+half-space model cannot solve is a rejected row with the solver's reason (stage and rule), as
+for the other models; it never stops `diagnose`. Derivations within one run warm-start from
+the nearest solved pass. Cost: 0.3 to 2.5 s cold per derivation, 0.4 to 1.5 s warm-started; the
+battery-foil demo with `auto_half_space` took 92 s (88 s with `half_space`) against 105 s
+with the default [run, one core].
+
+**Benchmarks** (`python -m physicroll.benchmarks`, section 13): `BT-V1-HS` (the published case:
+`W_bar` 88.86 with a rigid strip and 92.94 with the 80 GPa spring against the caption 118,
+verdict `REFERENCE_NOT_GRID_INDEPENDENT`, ratio recorded and not judged; contact length 1.961
+and 2.038 mm against 2.14 mm of the same published solution, 0.917 and 0.953, within the
+agreement band; peak, peak position and contact ends against the figure read by eye; the
+printed-end family 78.0 / 88.6 / 102.6 / 117.5 / 134.2 at 40 / 21 / 10 / 5 / 2.5 um),
+`BT-V2-*-HS` (42.80 and 67.13 against the measured 58 with an assumed radius),
+`BT-V3-FIG1-140UM-HS` (46.82 against about 50 by eye), `BT-V3-EQ29-HS` (the regime boundary:
+consistent for r 0.5 and 0.25, 14-22 % above eq. 29 for r 0.10, recorded) and
+`BT-X29-LOAD-EXPONENT-HS` (load exponent in friction 2.461, inside the 2 to 2.6 read from the
+master curve).
 
 ## 11. Transverse physics (chatter)
 
@@ -3155,11 +3220,13 @@ step limit) its section shows the failed state with the reason.
 supplied one (computed flow stress, or computed friction with
 `tribology.use_computed_friction`) the supplied value follows in brackets, as in the demo:
 "2.826e+08 Pa (computed; supplied 2.7e+08 Pa)". The "bite source" row reads
-`experimental_mattress` for a mattress bite, otherwise the bite's own source
+`experimental_mattress` for a mattress bite, `reduced_half_space` for a half-space bite
+(option `half_space` or `auto_half_space`), otherwise the bite's own source
 (`derived_slab_hitchcock` in the lengthwise demo; `experimental_mattress` in the foil
 demo). In the result JSON a mattress bite's own `source` field reads `supplied` (for example
 `chatter.critical_speed.bite_source` and the gauge-trend `bite_source` of the foil case pass);
-the `bite_model` fields (`experimental_mattress`) are the ones to read.
+the `bite_model` fields (`experimental_mattress`, `reduced_half_space`) are the ones to read.
+With a half-space operating bite the result also carries `bite_extras` (section 10.3).
 
 **Reading in-mill against after-release.** Every band state comes in pairs, written in plain
 words in the tables. *In the mill*: "hidden under mill tension" (`LATENT_UNDER_TENSION`: flat,
@@ -3201,7 +3268,8 @@ real mill.
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
 | `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of a 50 -> 25 um pass at a nominal friction of 0.10 (not the published case, where 0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]), the limiting gauge and a sticking exit; the large-slip flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL` (renamed in SPEC17); force trends; sensitivity signs match Hitchcock |
 | `halfspace_bite.py` / `tests/test_halfspace_bite.py` | influence coefficients against the uniform-grid closed form (`kappa`) and a quadrature of one hat, their slope against a central difference; Hertz line contact recovered (80 elements: 2.6e-3 of the indentation depth at all nodes, 7.6e-4 inside 0.8a; 160 elements 1.1e-3 and 2.7e-4); equations equal unknowns for `A F`, `A B F`, `A B E F`; the Winkler limit reproduces the mattress solver (force within 1 %, slip within 0.002); the planner's worked numbers pinned (published case `W_bar` 92.936, seven sheet and foil rows, a sheet pass within 8 % of the mattress); work identity below 1e-4; the three A B F candidates beyond the friction limit (eq. (16) shear 1.446, 1.030, 2.941) replaced by A B E F or A F; the strip-modulus trend (40 GPa 96.751, 160 GPa A B F candidate 90.933); a doubled grid moves the load by 0.37 %. `tests/test_halfspace_bite_cases.py`: the selection table of fifteen passes (structure, rule, `W_bar` to 1e-4 of the planner's values), the regime boundary against E1 eq. (29), load continuity, zone E under 0.3 % of the load, path independence and warm start equal to cold start, rule 6 message, the battery-foil and lengthwise schedules (13 passes in under 30 s), the shear-cap march where the mattress rejects, the printed-end family (W_bar 88.62 / 102.62 / 117.47 at 21 / 10 / 5 um, thickening before the exit). `tests/test_halfspace_bite_branch.py`: the same three passes with a Newton budget of 20, 40 and 80 per march step give the same load; the degenerate branch is rejected by rule `SLIP_CONSISTENCY`. Software checks only: a value near a published load would not validate the model |
-| `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
+| half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`); heat-streak tribology item (`test_heat_streak_regime_item`, SPEC17): with tribology and no temperature limit `NEUTRAL`, with a limit below the modelled exit temperature `SUPPORTS` / weak, the planted case still leads |
 | `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`); speed margin beyond the 0.05-60 m/s scan (`SpeedMarginScanRangeTests`): the reviewer's case (supplied bite, damping 0.21, 100 m/s, scan `STABLE_OVER_SCANNED_RANGE`, operating point unstable) supports strongly with the basis named and the chatter score 5 instead of 0; 10 m/s with no crossing still contradicts as before; zero slip in the pitch kinematics only (`KinematicSlipOnlyTests`: a supplied slip of 0.6 gives a not-assessable screen showing 0.6 and no skidding support; a slip of -0.01 still skids); coverage band-risk stripes matched as intervals (`CoverageIntervalMatchTests`: the reviewer's 0.065 m band in the 0.06-0.14 m gap supports and agrees with the screen, a band 0.045 m from every interval contradicts, modelled point sources still match by centre); 100 m/s stable at the operating point (damping 0.6) contradicts with the new wording; supplied `shape_inputs` with a zero exit-tension force sensitivity (`ZeroFeedbackSensitivityTests`): the steady shape and the case-pass gauge-trend row are assessed, feedback-level numbers equal the compliance-only ones, no nan / inf, a negative value is rejected at validation; inlet angle of the film (`InletAngleTests`, SPEC17): a mattress operating bite has `film_inlet_radius_ratio` 1.0 and its film ratio times `sqrt(contact_radius_ratio)` equals the former call to 1e-9; a Hitchcock bite keeps `film_inlet_radius_ratio == contact_radius_ratio` and the lengthwise demo's film ratio 0.180115 |
@@ -3379,8 +3447,8 @@ At battery-foil gauge, in addition (each checked against the code and
 - **Domain limits**: below 8 um exit gauge or above 65 % reduction no bite at all; doubled
   passes are not modelled (`material.final_pass_doubled` true flags it; the plant rolls
   single-sheet).
-- **The reduced half-space bite (`halfspace_bite.py`) is not used by the engine yet** and is
-  itself unvalidated: it leaves out the longitudinal elastic equations of its source, closes
+- **The reduced half-space bite (`halfspace_bite.py`) is opt-in** (`model_options.bite_model`)
+  and unvalidated: it leaves out the longitudinal elastic equations of its source, closes
   the bite ends by contact zones where the source uses a pressure step (the published loads
   depend on an unstated end length), and carries a strip thickness spring that is the
   planner's addition (+4.6 % load on the published case). At the regime boundary neither

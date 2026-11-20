@@ -242,6 +242,12 @@ THICKNESS_SPRING_LIMITATION = (
     'the strip; on the published case it raises the load by 4.6 % (W_bar 88.86 rigid, 92.94 at '
     'E_s* 80 GPa) [computed, SPEC18 prototype]. strip_plane_strain_modulus_pa = 1e13 switches it '
     'off.')
+CREEP_LIMITATION = (
+    'Forward slip is defined to elastic order only: with zone E the no-slip zone is thicker '
+    'than the strip at the slip reversal and creeps by up to 0.6 % [computed, SPEC18 '
+    'prototype], which is 1 to 2.5 % of the forward slip; the source closes this with its '
+    'longitudinal elastic equations (10)-(14), which are not solved here.')
+CREEP_FLAG_THRESHOLD = 0.01             # NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT [SPEC18 package 3]
 _LIMITATIONS = [
     'REDUCED half-space model: the longitudinal elastic equations of the source (E1 eqs (4), '
     '(10)-(14)) are not solved, so stress and traction inside the no-slip zone and the '
@@ -252,6 +258,7 @@ _LIMITATIONS = [
     'Constant friction coefficient through the bite, capped at m*K/2; no lubricant film, no '
     'hardening, rate or thermal effects inside the bite; traction does not displace the roll '
     'surface normally; no closed gap.',
+    CREEP_LIMITATION,
     'Numerical convergence and internal consistency are not physical validation; no foil pass '
     'with measured load, slip and every input stated was found to compare with.',
 ]
@@ -1200,6 +1207,58 @@ def _solve(h0, h1, width, radius, y, mu, tb, tf, e_roll, nu, strip_modulus, cap,
     return pr, u, record, sel, counter
 
 
+def _power_terms(pr, u):
+    """Integrals of model item 7 per unit width (one interface for traction and slip).
+
+    Slip terms are signed, tau_f*(1 - h_n/h_p) with the strip speed V*h_n/h_p and h_n the
+    neutral thickness (slip reversal). In 'A B E F' the flat thickness h_B of B exceeds h_n by
+    the reduction of zone E (elastic-order: E1 closes it with eqs (10)-(14), not solved here),
+    so B creeps by 1 - h_n/h_B; its term ``creep`` is kept in the work identity and reported
+    in ``no_slip_zone``, not in the slip dissipation of the sliding zones.
+    """
+    k, h0, h1, mu = pr.k, pr.h0, pr.h1, pr.mu
+    p, bnd, g0, hn_b, x, h, _ = pr.fields(u)
+    n = pr.n
+    i1, i2, i3, ie, i4 = pr.idx[1:6]
+    hn = h[ie]
+    L = pr.L
+    terms = {z: 0.0 for z in ('entry_contact', 'A', 'E', 'F', 'exit_contact')}
+    trac = creep = 0.0
+    cap_active = False
+    for j in range(n):
+        dx = (x[j + 1] - x[j]) * L
+        pm = 0.5 * (p[j] + p[j + 1])
+        if j < i1 or j >= i4:        # contact zones: tau = +-mu*p, h_p = h0 or h1
+            t = mu * pm * k
+            side = 1.0 if j < i1 else -1.0
+            hp = h0 / h1 if j < i1 else 1.0
+            trac += side * t * dx
+            terms['entry_contact' if j < i1 else 'exit_contact'] += side * t * dx * (1 - hn / hp)
+        elif i2 <= j < i3:           # no-slip zone, tau = (h_B/2)*p'
+            tb_ = 0.5 * hn_b * h1 * (p[j + 1] - p[j]) * k
+            trac += tb_
+            creep += tb_ * (1 - hn / hn_b)
+        else:
+            tt, dt = pr.tau(pm)
+            if dt == 0.0:
+                cap_active = True
+            t = tt * k
+            side = -1.0 if j >= ie else 1.0
+            hm = 0.5 * (h[j] + h[j + 1])
+            trac += side * t * dx
+            terms['A' if j < i2 else ('E' if j < ie else 'F')] += side * t * dx * (1 - hn / hm)
+    slip = sum(terms.values())
+    plastic = hn * h1 * k * math.log(h0 / h1)
+    tension = hn * h1 * (pr.tf - pr.tb)
+    scale = max(abs(2 * trac), plastic, abs(2 * slip), abs(tension), 1e-300)
+    work = 2 * trac + tension - plastic - 2 * slip - 2 * creep
+    return {'traction': trac, 'slip': slip, 'slip_terms': terms, 'creep': creep,
+            'plastic': plastic, 'tension': tension, 'scale': scale,
+            'work_residual_relative': abs(work) / scale,
+            'work_residual_relative_without_creep': abs(work + 2 * creep) / scale,
+            'cap_active': cap_active}
+
+
 def _result(pr, u, width, inputs, record, sel, counter):
     k, L, h0, h1, mu, radius = pr.k, pr.L, pr.h0, pr.h1, pr.mu, pr.radius
     p, bnd, g0, hn_b, x, h, _ = pr.fields(u)
@@ -1212,46 +1271,15 @@ def _result(pr, u, width, inputs, record, sel, counter):
     ps = [v * k for v in p]
     hs = [v * h1 for v in h]
     force = sum(0.5 * (ps[j] + ps[j + 1]) * (xs[j + 1] - xs[j]) for j in range(n))
-    # Slip terms are signed: tau_f*(1 - h_n/h_p) with the strip speed V*h_n/h_p. In 'A B E F'
-    # the neutral thickness h_n (E/F boundary) is below the no-slip thickness of B by an
-    # elastic-order amount (E1 keeps B at constant thickness "for the purpose of calculating
-    # the roll pressure"), so B carries a small relative slip; its term is kept in the work
-    # identity and reported in no_slip_zone (0 without zone E).
-    trac = slip = slip_b = 0.0
-    cap_active = False
-    for j in range(n):
-        dx = xs[j + 1] - xs[j]
-        pm = 0.5 * (p[j] + p[j + 1])
-        if j < i1 or j >= i4:        # contact zones: tau = +-mu*p, h_p = h0 or h1
-            t = mu * pm * k
-            side = 1.0 if j < i1 else -1.0
-            hp = h0 / h1 if j < i1 else 1.0
-            trac += side * t * dx
-            slip += side * t * dx * (1 - hn / hp)
-        elif i2 <= j < i3:           # no-slip zone, tau = (h_B/2)*p'
-            tb_ = 0.5 * hn_b * h1 * (ps[j + 1] - ps[j])
-            trac += tb_
-            slip_b += tb_ * (1 - hn / hn_b)
-        else:
-            tt, dt = pr.tau(pm)
-            if dt == 0.0:
-                cap_active = True
-            t = tt * k
-            side = -1.0 if j >= ie else 1.0
-            hm = 0.5 * (h[j] + h[j + 1])
-            trac += side * t * dx
-            slip += side * t * dx * (1 - hn / hm)
-    plastic = hn * h1 * k * math.log(h0 / h1)
-    tension = hn * h1 * (pr.tf - pr.tb)
-    work = 2 * trac + tension - plastic - 2 * slip - 2 * slip_b
-    scale = max(abs(2 * trac), plastic, abs(2 * slip), abs(tension), 1e-300)
-    work_rel = abs(work) / scale
+    pw = _power_terms(pr, u)
+    trac, slip, slip_b, cap_active = pw['traction'], pw['slip'], pw['creep'], pw['cap_active']
+    plastic, tension, work_rel = pw['plastic'], pw['tension'], pw['work_residual_relative']
     if work_rel > _WORK_TOL:
         raise HalfSpaceBiteError('post-processing', f'work identity residual {work_rel:.2e} '
                                                     'above 1e-3')
-    if slip < -1e-9 * scale:
-        raise HalfSpaceBiteError('post-processing', 'negative slip dissipation (sliding '
-                                                    'directions inconsistent)')
+    if min(pw['slip_terms'].values()) < -1e-9 * pw['scale']:
+        raise HalfSpaceBiteError('post-processing', 'negative slip dissipation in a sliding '
+                                                    'zone (sliding directions inconsistent)')
     q = pr.measures(u)
     jmax = max(range(n + 1), key=lambda j: ps[j])
     contact = cx - ci
@@ -1288,6 +1316,9 @@ def _result(pr, u, width, inputs, record, sel, counter):
                    'outcome': c['outcome']}
     if rule in (4, 5):
         flags.append('ZONE_STRUCTURE_AT_REGIME_BOUNDARY')
+    creep_rel = 1 - hn / hn_b if pr.flat else 0.0
+    if creep_rel > CREEP_FLAG_THRESHOLD:
+        flags.append('NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT')
     if cap_active:
         flags.append('SHEAR_CAP_ACTIVE')
     if pr.strip_modulus < RIGID_STRIP_MODULUS_PA:
@@ -1487,3 +1518,173 @@ def _printed_end_condition_family(entry_thickness_m, exit_thickness_m, width_m,
                      'limitation': _PRINTED_END_LIMITATION})
         old, u_old = pr, u
     return rows
+
+
+# ------------------------------------------------------------------- sensitivities (BiteResponse)
+
+_CHORD_TOL = 1e-10
+_CHORD_MAXIT = 40
+
+
+def _perturbed(sol, lu, changes, counter):
+    """Solution of the nominal structure at perturbed inputs: chord iterations with the LU
+    factors of the nominal Jacobian from the nominal solution converted through physical
+    units; one full Newton solve on failure (SPEC18 package 4, design 1)."""
+    old = sol.problem
+    args = dict(h0=old.h0, h1=old.h1, k=old.k, mu=old.mu, tb=old.tb, tf=old.tf)
+    args.update(changes)
+    pr = _Problem(args['h0'], args['h1'], old.radius, args['k'], args['mu'], args['tb'],
+                  args['tf'], old.e_star, old.strip_modulus, old.cap_factor, old.structure,
+                  old.base_zones)
+    start = _from_solution(sol, pr)
+    v = list(start)
+    try:
+        for _ in range(_CHORD_MAXIT):
+            r = pr.residual(v)
+            if max(abs(x) for x in r) < _CHORD_TOL:
+                counter['chord'] += 1
+                return pr, v
+            dv = _lu_solve(lu, [-x for x in r])
+            v = [a + b for a, b in zip(v, dv)]
+            if not pr.bounds_ok(v):
+                break
+    except (ArithmeticError, ValueError):
+        pass
+    try:
+        v = pr.newton(start)[0]
+    except HalfSpaceBiteError as exc:
+        raise HalfSpaceBiteError('sensitivities', f'perturbed solve failed ({changes}): '
+                                                  f'{exc.reason}') from exc
+    counter['newton'] += 1
+    return pr, v
+
+
+def _quantities(pr, u):
+    sol = HalfSpaceSolution(pr, u)
+    q = pr.measures(u)
+    _, bnd, _, _ = pr.unpack(u)
+    fb = pr.full_bounds(bnd)
+    return {'F': sol.force_per_width_n_m(), 'f': q['forward_slip'],
+            'L': (fb[6] - fb[0]) * pr.L}
+
+
+def derive_bite_response_half_space(bite_pass, *, roll_youngs_modulus_pa=210e9,
+                                    roll_poisson_ratio=0.3,
+                                    strip_plane_strain_modulus_pa=(
+                                        ALUMINIUM_PLANE_STRAIN_MODULUS_PA),
+                                    shear_cap_factor=1.0, zones=DEFAULT_ZONES, warm_start=None,
+                                    with_state=False):
+    """``chatter.BiteResponse`` from the reduced half-space bite (SPEC18 package 4).
+
+    Recipe of ``foil_bite.derive_bite_response_mattress``: central differences with steps
+    1e-3*h1, 1e-3*h0, 1e-3*Y (each tension) and in addition 1e-3*mu and 1e-3*Y (flow stress);
+    one-sided at zero tension (``ONE_SIDED_TENSION_DIFFERENCE_AT_ZERO_TENSION``). Each
+    perturbed solution is found by chord iterations in the nominal zone structure with the LU
+    factors of the nominal Jacobian (tolerance 1e-10, limit 40; on failure one full Newton
+    solve). Repeated with half steps: a change above 2 % in any of the twelve derivatives adds
+    ``SENSITIVITY_STEP_NOT_CONVERGED``; half-step values are returned. A perturbed solution not
+    admissible in the nominal structure adds ``REGIME_CHANGE_WITHIN_FINITE_DIFFERENCE_STENCIL``
+    (its value is still used: the structures join continuously). ``state`` (with_state):
+    ``{'solution', 'result' (without profile), 'extra'}`` with the friction and flow-stress
+    derivatives Phase 2 needs. Raises ValueError (HalfSpaceBiteError) on any failure.
+    """
+    from .chatter import BitePass, BiteResponse
+    if not isinstance(bite_pass, BitePass):
+        raise ValueError('bite_pass must be a BitePass')
+    bite_pass.validate()
+    p = bite_pass
+    h0, h1, se, sx = p.entry_thickness_m, p.exit_thickness_m, p.entry_tension_pa, p.exit_tension_pa
+    y, mu, w = p.mean_flow_stress_pa, p.friction_coefficient, p.width_m
+    result, sol = solve_half_space_bite(
+        h0, h1, w, p.work_roll_radius_m, y, mu, se, sx,
+        roll_youngs_modulus_pa=roll_youngs_modulus_pa, roll_poisson_ratio=roll_poisson_ratio,
+        strip_plane_strain_modulus_pa=strip_plane_strain_modulus_pa,
+        shear_cap_factor=shear_cap_factor, zones=zones, warm_start=warm_start,
+        with_solution=True)
+    pr0 = sol.problem
+    try:
+        _, jac = pr0.residual(sol.unknowns, True)
+        lu = _lu_factor(jac)
+    except (ArithmeticError, ValueError) as exc:
+        raise HalfSpaceBiteError('sensitivities', f'nominal Jacobian: {exc}') from exc
+    k = pr0.k
+    counter = {'chord': 0, 'newton': 0}
+    nominal = _quantities(pr0, sol.unknowns)
+    structure_changes = []
+    one_sided = []
+
+    def sens(scale):
+        dh1, dh0, ds = scale * 1e-3 * h1, scale * 1e-3 * h0, scale * 1e-3 * y
+        dmu = scale * 1e-3 * mu
+        dk = ds * 2 / math.sqrt(3)
+        out = {}
+        for key, var, base, step, kstep in (('h', 'h1', h1, dh1, dh1), ('hin', 'h0', h0, dh0, dh0),
+                                            ('se', 'tb', se, ds, ds), ('sx', 'tf', sx, ds, ds),
+                                            ('mu', 'mu', mu, dmu, dmu), ('y', 'k', k, ds, dk)):
+            if key in ('se', 'sx') and base - kstep < 0:
+                plus, minus, denom = base + 2 * kstep, base, 2 * step
+                one_sided.append(key)
+            else:
+                plus, minus, denom = base + kstep, base - kstep, 2 * step
+            vals = []
+            for v in (plus, minus):
+                pr, u = _perturbed(sol, lu, {var: v}, counter)
+                if not _admissible(pr, u)[0]:
+                    structure_changes.append(key)
+                vals.append(_quantities(pr, u))
+            for q in ('F', 'f', 'L'):
+                out[q + '_' + key] = (vals[0][q] - vals[1][q]) / denom
+        return out
+
+    try:
+        full = sens(1.0)
+        half = sens(0.5)
+    except (ArithmeticError, TypeError, IndexError) as exc:
+        raise HalfSpaceBiteError('sensitivities', f'evaluation failed: {exc}') from exc
+    flags = ['DERIVED_BY_HALF_SPACE_FOIL_MODEL', 'REDUCED_HALF_SPACE_FOIL_MODEL']
+    flags += [f for f in result['flags'] if f not in flags]
+    if structure_changes:
+        flags.append('REGIME_CHANGE_WITHIN_FINITE_DIFFERENCE_STENCIL')
+    if one_sided:
+        flags.append('ONE_SIDED_TENSION_DIFFERENCE_AT_ZERO_TENSION')
+    for key in full:
+        if key.startswith('L_'):
+            continue
+        a, b = full[key], half[key]
+        if abs(a - b) > 0.02 * max(abs(a), abs(b), 1e-300):
+            flags.append('SENSITIVITY_STEP_NOT_CONVERGED')
+            break
+    ratio = result['contact_radius_ratio']
+    if ratio < 1:
+        ratio = 1.0
+        flags.append('CONTACT_RADIUS_RATIO_CLAMPED_TO_ONE')
+    response = BiteResponse(
+        separating_force_n=w * nominal['F'], forward_slip_fraction=nominal['f'],
+        contact_length_m=nominal['L'], contact_radius_ratio=ratio,
+        entry_thickness_m=h0, exit_thickness_m=h1,
+        dforce_dexit_thickness_n_m=w * half['F_h'], dforce_dentry_thickness_n_m=w * half['F_hin'],
+        dforce_dentry_tension_m2=w * half['F_se'], dforce_dexit_tension_m2=w * half['F_sx'],
+        dslip_dexit_thickness_per_m=half['f_h'], dslip_dentry_thickness_per_m=half['f_hin'],
+        dslip_dentry_tension_per_pa=half['f_se'], dslip_dexit_tension_per_pa=half['f_sx'],
+        source='supplied', flags=tuple(flags))
+    response.validate()
+    if not with_state:
+        return response
+    force = w * nominal['F']
+    extra = {'dforce_dfriction_n': w * half['F_mu'],
+             'dforce_dflow_stress_m2': w * half['F_y'],
+             'dslip_dfriction': half['f_mu'], 'dslip_dflow_stress_per_pa': half['f_y'],
+             'dcontact_length_dexit_thickness': half['L_h'],
+             'dcontact_length_dfriction_m': half['L_mu'],
+             'torque_per_work_roll_nm': result['torque_per_work_roll_nm'],
+             'slip_dissipation_both_interfaces_over_roll_speed_n':
+                 result['slip_dissipation_both_interfaces_over_roll_speed_n'],
+             'load_exponent_in_friction': mu * w * half['F_mu'] / force,
+             'load_exponent_in_flow_stress': y * w * half['F_y'] / force,
+             'zone_structure': result['zone_structure'],
+             'perturbed_solves': dict(counter),
+             'basis': 'reduced half-space bite, central differences (half steps of 1e-3) by '
+                      'chord iterations in the nominal zone structure [D, SPEC18 package 4]'}
+    state = {'solution': sol, 'result': {k_: v for k_, v in result.items() if k_ != 'profile'},
+             'extra': extra}
+    return response, state

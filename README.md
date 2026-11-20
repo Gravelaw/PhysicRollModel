@@ -456,6 +456,11 @@ assess there:
   in a flagged, unvalidated extended domain. A bite there whose force lies outside the
   0.9-2.3 kN/mm reported for battery-foil passes is marked not credible and kept out of every
   trend statement.
+- As an option (`model_options.bite_model: "half_space"` or `"auto_half_space"`) the roll bite
+  comes from a reduced half-space foil model instead, so you can see how far the conclusions
+  depend on the roll-bite model; it is not validated, its loads at foil gauge are 40 to 110 %
+  above the experimental model's, and `python -m physicroll.benchmarks --bite-comparison
+  CASE.json` prints the models side by side.
 - It adds six foil observations and a tension-line hypothesis built on the published
   description (no physical model).
 - With `material.product` it makes an evidence-neutral check of every pass against a

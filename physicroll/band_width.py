@@ -2374,7 +2374,8 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 return None if scale is None else scale * height
             row.update(
                 shape_inputs_basis=sp_basis,
-                bite_source=None if bite is None else bite.source,
+                bite_source=(None if bite is None else 'reduced_half_space'
+                             if HALF_SPACE_FLAG in bite.flags else bite.source),
                 bite_model=bite_model_name(bite),
                 bite_flags=[] if bite is None else list(bite.flags),
                 separating_force_per_width_n_m=(None if bite is None else
@@ -2656,15 +2657,18 @@ def _rejected_text(rows):
 
 # ============================================================================= section
 def bite_model_name(bite):
-    """'hitchcock', 'experimental_mattress', 'supplied' or None (no bite)."""
+    """'hitchcock', 'experimental_mattress', 'reduced_half_space', 'supplied' or None."""
     if bite is None:
         return None
     if MATTRESS_FLAG in bite.flags:
         return 'experimental_mattress'
+    if HALF_SPACE_FLAG in bite.flags:
+        return 'reduced_half_space'
     return 'supplied' if bite.source == 'supplied' else 'hitchcock'
 
 
 MATTRESS_FLAG = 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL'
+HALF_SPACE_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
 
 
 def not_assessable(reason):

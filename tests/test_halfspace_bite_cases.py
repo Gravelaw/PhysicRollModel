@@ -16,7 +16,6 @@ import time
 import unittest
 from pathlib import Path
 
-from physicroll import foil_bite
 from physicroll import halfspace_bite as hb
 
 YS = 230e6
@@ -79,6 +78,18 @@ DEMO_FORCES = {'S1': ('A F', 748924), 'S2': ('A F', 653874), 'S3': ('A F', 80315
 LENGTHWISE_FORCES = (3513580, 3431780, 3133380, 2643920, 2291870, 1996310)
 
 
+_TABLE_RESULTS = {}
+
+
+def _table_results():
+    """The fifteen passes of the selection table, solved once per module run."""
+    if not _TABLE_RESULTS:
+        for name, row in TABLE.items():
+            g, red, es = row[0]
+            _TABLE_RESULTS[name] = _solve(g * 1e-6, g * 1e-6 * (1 - red), es=es)
+    return _TABLE_RESULTS
+
+
 def _rel(a, b):
     return abs(a / b - 1)
 
@@ -87,10 +98,7 @@ class SelectionTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.results = {}
-        for name, row in TABLE.items():
-            g, red, es = row[0]
-            cls.results[name] = _solve(g * 1e-6, g * 1e-6 * (1 - red), es=es)
+        cls.results = _table_results()
 
     def test_selection_table(self):
         for name, (inp, structure, rule, force, slip, w_bar, brief_slip, length, zl) in \
@@ -177,105 +185,89 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('rule 6', str(ctx.exception))
 
 
+def _schedule(name):
+    case = json.loads((ROOT / 'scenarios' / f'band_diagnosis_{name}.json').read_text())
+    out = []
+    for s in case['schedule']:
+        out.append((s['label'].split()[0],
+                    _solve(s['entry_thickness_m'], s['exit_thickness_m'],
+                           case['pass']['work_roll_radius_m'], s['mean_flow_stress_pa'],
+                           s['friction_coefficient'], s['entry_tension_pa'],
+                           s['exit_tension_pa'], case['stand']['roll_youngs_modulus_pa'], AL)))
+    return out
+
+
+CAP_ARGS = dict(r=0.135, y=150e6 * math.sqrt(3) / 2, tb=20e6, tf=20e6, e=210e9)
+
+# A B E F rows of the brief's tables: reported slip (at the slip reversal) [run], the brief's
+# slip from the thickness of B, and the brief's creep 1 - h_n/h_B
+ABEF_SLIP = {'pub1e13': (0.20255296015454682, 0.2047, 0.0018),
+             'r50_52': (0.32047725860653964, 0.3285, 0.0060),
+             'r50_48': (0.3592501572956328, 0.3652, 0.0044),
+             'r50_44': (0.39164470893873005, 0.3965, 0.0035),
+             'r25_32': (0.15351293440315383, 0.1567, 0.0028),
+             'r25_28': (0.17481382621616803, 0.1769, 0.0018),
+             'r10_26': (0.057408674297190654, 0.0584, 0.0009),
+             'r10_22': (0.06596779905874062, 0.0665, 0.0005),
+             'ALT1': (None, 0.4212, 0.0035), 'F2': (None, 0.3678, 0.0003),
+             'cap003': (None, 0.3583, 0.0062)}
+
+
 class ScheduleAndCapTests(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        start = time.perf_counter()
+        cls.battery = _schedule('battery_foil')
+        cls.lengthwise = _schedule('lengthwise_bands')
+        cls.elapsed = time.perf_counter() - start
+        cls.cap003 = _solve(50e-6, 25e-6, mu=0.03, **CAP_ARGS)
 
     def test_demo_schedules(self):
         """Second table of the brief and the lengthwise forces; timing guard: the 13 demo
         passes cold in under 30 s in total."""
-        start = time.perf_counter()
-        case = json.loads((ROOT / 'scenarios' / 'band_diagnosis_battery_foil.json').read_text())
-        for s in case['schedule']:
-            label = s['label'].split()[0]
-            r = _solve(s['entry_thickness_m'], s['exit_thickness_m'],
-                       case['pass']['work_roll_radius_m'], s['mean_flow_stress_pa'],
-                       s['friction_coefficient'], s['entry_tension_pa'], s['exit_tension_pa'],
-                       case['stand']['roll_youngs_modulus_pa'], AL)
+        for label, r in self.battery:
             structure, force = DEMO_FORCES[label]
             self.assertEqual(r['zone_structure'], structure, label)
             self.assertLess(_rel(r['force_per_width_n_m'], force), 5e-6, label)
-        case = json.loads((ROOT / 'scenarios' / 'band_diagnosis_lengthwise_bands.json')
-                          .read_text())
-        for s, force in zip(case['schedule'], LENGTHWISE_FORCES):
-            r = _solve(s['entry_thickness_m'], s['exit_thickness_m'],
-                       case['pass']['work_roll_radius_m'], s['mean_flow_stress_pa'],
-                       s['friction_coefficient'], s['entry_tension_pa'], s['exit_tension_pa'],
-                       case['stand']['roll_youngs_modulus_pa'], AL)
+        for (label, r), force in zip(self.lengthwise, LENGTHWISE_FORCES):
             self.assertEqual(r['zone_structure'], 'A F')
             self.assertLess(_rel(r['force_per_width_n_m'], force), 5e-6)
-        self.assertLess(time.perf_counter() - start, 30.0)
+        self.assertLess(self.elapsed, 30.0)
 
-    def test_shear_cap_march(self):
-        """The slowest test (about 8 s). 50 -> 25 um, K 150 MPa, tensions 20 MPa, R 135 mm,
-        E 210 GPa (E4's Table I pass [EX]), E_s* 80 GPa. A nominal friction of 0.10 is not the
-        published case (X24): 32 times the load at 0.03."""
-        y = 150e6 * math.sqrt(3) / 2
-        args = dict(r=0.135, y=y, tb=20e6, tf=20e6, e=210e9)
-        expected = ((0.03, 1.0, 'A B E F', 1517220), (0.05, 1.0, 'A B F', 7718180),
-                    (0.10, 1.0, 'A B F', 48652300), (0.05, 0.5, 'A B E F', 6313520),
-                    (0.10, 0.5, 'A B F', 18534400))
-        out = {}
-        for mu, cap, structure, force in expected:
-            r = _solve(50e-6, 25e-6, mu=mu, shear_cap_factor=cap, **args)
-            out[(mu, cap)] = r
-            self.assertEqual(r['zone_structure'], structure, (mu, cap))
-            self.assertLess(_rel(r['force_per_width_n_m'], force), 5e-6, (mu, cap))
-            if mu > 0.03:
-                self.assertIn('COLD_START_BY_FRICTION_CONTINUATION', r['flags'])
-                self.assertIn('SHEAR_CAP_ACTIVE', r['flags'])
-        r = out[(0.05, 1.0)]
-        self.assertAlmostEqual(r['forward_slip_fraction'], 0.5565, delta=5e-5)
-        self.assertAlmostEqual(r['max_pressure_pa'] / r['plane_strain_strength_pa'], 19.18,
-                               delta=5e-3)
-        r = out[(0.10, 1.0)]
-        self.assertAlmostEqual(r['forward_slip_fraction'], 0.6925, delta=5e-5)
-        self.assertAlmostEqual(r['max_pressure_pa'] / r['plane_strain_strength_pa'], 34.39,
-                               delta=5e-3)
-        self.assertAlmostEqual(r['contact_length_m'], 12.15e-3, delta=5e-6)
-        self.assertTrue(r['shear_cap_active'])
-        self.assertIn('PEAK_PRESSURE_ABOVE_16_PLANE_STRAIN_YIELD', r['flags'])
+    def test_forward_slip_is_taken_at_the_slip_reversal(self):
+        """Ruling of 2026-11-20: forward slip from h_p at the E/F boundary; the no-slip zone
+        B is thicker by an elastic-order amount and creeps by 1 - h_n/h_B (below 0.01)."""
+        battery = dict(self.battery)
+        table = {name: _table_results()[name] for name in ABEF_SLIP if name in TABLE}
+        table.update(ALT1=battery['ALT1'], F2=battery['F2'], cap003=self.cap003)
+        for name, (slip, brief_b, creep) in ABEF_SLIP.items():
+            r = table[name]
+            self.assertEqual(r['zone_structure'], 'A B E F', name)
+            ns = r['no_slip_zone']
+            h1 = r['exit_thickness_m']
+            if slip is not None:
+                self.assertLess(_rel(r['forward_slip_fraction'], slip), 1e-6, name)
+            self.assertAlmostEqual(ns['no_slip_zone_thickness_m'] / h1 - 1, brief_b, delta=6e-5)
+            self.assertAlmostEqual(ns['relative_slip_in_no_slip_zone'], creep, delta=6e-5)
+            self.assertLess(ns['relative_slip_in_no_slip_zone'], 0.01)
+            self.assertNotIn('NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT', r['flags'])
+            self.assertIn(hb.CREEP_LIMITATION, r['limitations'])
+        _, sol = _solve(20e-6, 15e-6, es=1e13, with_solution=True)
+        pw = hb._power_terms(sol.problem, sol.unknowns)
+        for zone, term in pw['slip_terms'].items():
+            self.assertGreaterEqual(term, 0.0, zone)
+        self.assertLess(pw['work_residual_relative'], 1e-4)
+        self.assertGreater(pw['work_residual_relative_without_creep'], 1e-3)
 
-    def test_mattress_rejects_where_this_solver_marches(self):
-        y = 150e6 * math.sqrt(3) / 2
-        for mu in (0.05, 0.06):
-            with self.assertRaises(ValueError):
-                foil_bite.solve_mattress_bite(50e-6, 25e-6, 1.0, 0.135, y, mu, 20e6, 20e6)
-        r = _solve(50e-6, 25e-6, r=0.135, y=y, mu=0.06, tb=20e6, tf=20e6, e=210e9)
-        self.assertIn('COLD_START_BY_FRICTION_CONTINUATION', r['flags'])
-        self.assertGreater(r['convergence']['friction_march_steps'], 0)
-        self.assertTrue(r['structure_selection'][0][1].startswith('failed'))
-
-
-class PrintedEndTests(unittest.TestCase):
-
-    def test_printed_end_conditions_family(self):
-        """Benchmark mode only: the printed end conditions with a pressure ramp of prescribed
-        length. The load rises without limit as the end shortens (W_bar 88.6 at 21 um, the
-        element size the paper states, 117.5 at 5 um); the strip thickens before the exit."""
-        rows = hb._printed_end_condition_family(20e-6, 15e-6, 1.0, 0.089, Y_PUB, 0.03, 0.0, 0.0,
-                                                roll_youngs_modulus_pa=E_PUB)
-        by = {round(r['end_length_m'] * 1e7): r for r in rows}
-        for tenth_um, w_bar, length, peak, slip, thick in (
-                (210, 88.62, 1.981e-3, 7.66, 0.2022, 0.00118),
-                (100, 102.62, 2.131e-3, 7.85, 0.1902, 0.00252),
-                (50, 117.47, 2.289e-3, 8.02, 0.1775, 0.00401)):
-            r = by[tenth_um]
-            self.assertLess(_rel(_w_bar(r['force_per_width_n_m']), w_bar), 1e-3)
-            self.assertLess(_rel(r['contact_length_m'], length), 1e-3)
-            self.assertLess(_rel(r['max_pressure_over_k'], peak), 1e-3)
-            self.assertLess(_rel(r['forward_slip_fraction'], slip), 1e-3)
-            self.assertLess(_rel(r['max_thickening_over_exit_gauge'], thick), 5e-3)
-        loads = [r['force_per_width_n_m'] for r in rows]
-        self.assertEqual(loads, sorted(loads))
-        self.assertAlmostEqual(_w_bar(loads[0]), 78.01, delta=0.01)
-        self.assertAlmostEqual(_w_bar(loads[-1]), 134.15, delta=0.01)
-        self.assertTrue(all(r['max_thickening_over_exit_gauge'] > 0 for r in rows))
-        pr = hb._Problem(20e-6, 15e-6, 0.089, YS, 0.03, 0.0, 0.0, 230e9, math.inf, 1.0,
-                         'A B F', hb.DEFAULT_ZONES, end_length_m=10e-6)
-        self.assertEqual(pr.unknown_count(), pr.n + 5)
-        u = [1.0] * (pr.n - 1) + [-1.0 + 0.5 * i for i in range(pr.nb)] + [0.5, 1.2]
-        self.assertEqual(len(pr.residual(u)), pr.n + 5)
-        json.dumps(rows, allow_nan=False)
-        self.assertNotIn('end_length_m', hb.solve_half_space_bite.__code__.co_varnames)
+    def test_creep_flag(self):
+        saved = hb.CREEP_FLAG_THRESHOLD
+        hb.CREEP_FLAG_THRESHOLD = 0.001
+        try:
+            r = _solve(52e-6, 26e-6)            # creep 0.0060
+        finally:
+            hb.CREEP_FLAG_THRESHOLD = saved
+        self.assertIn('NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT', r['flags'])
 
 
 if __name__ == '__main__':

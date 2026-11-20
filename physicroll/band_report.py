@@ -2473,6 +2473,7 @@ CSS3 = ('.foil{border:3px solid #b91c1c;background:#fef2f2;padding:.7rem 1rem;'
         '.foil p{margin:.35rem 0}')
 BITE_MODEL_NAMES = {'hitchcock': 'slab + circular (Hitchcock) flattening',
                     'experimental_mattress': 'EXPERIMENTAL mattress (elastic-foundation) model',
+                    'reduced_half_space': 'REDUCED half-space foil model',
                     'supplied': 'supplied sensitivities', None: 'no bite'}
 
 
@@ -3081,7 +3082,9 @@ def _key_numbers(r):
         b = r['bite']
         # foil_bite marks its bites source 'supplied'; name the model actually used
         src = ('experimental_mattress' if 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL' in
-               (b.get('flags') or []) else b['source'])
+               (b.get('flags') or []) else 'reduced_half_space'
+               if 'BITE_FROM_REDUCED_HALF_SPACE_MODEL' in (b.get('flags') or [])
+               else b['source'])
         rows += [['bite source', _e(src)],
                  ['separating force', _n(b['separating_force_n'], unit='N')],
                  ['contact radius ratio R\'/R', _n(b['contact_radius_ratio'])],

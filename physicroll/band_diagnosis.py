@@ -84,13 +84,20 @@ from .chatter import REDUCTION_EXTENDED_FLAG
 from .foil_bite import (EXTENDED_GAUGE_FLAG, EXTENDED_GAUGE_LIMITATION,
                         EXTENDED_REDUCTION_LIMITATION, LARGE_SLIP_EXPLANATION,
                         derive_bite_response_mattress)
+from . import halfspace_bite
 
 CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
 CASE_SCHEMA_V2 = 'physicroll.band_case.v2'
 CASE_SCHEMA = CASE_SCHEMA_V1          # phase-1 name kept (the v1 schema)
 CASE_SCHEMAS = (CASE_SCHEMA_V1, CASE_SCHEMA_V2)
-BITE_MODELS = ('hitchcock', 'mattress', 'auto')
+BITE_MODELS = ('hitchcock', 'mattress', 'auto', 'half_space', 'auto_half_space')
 MATTRESS_MIN_CELLS = 200
+HALF_SPACE_USED_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
+HALF_SPACE_LIMITATION = (
+    'Reduced half-space bite: its load depends on how the bite ends are closed; on the '
+    'published foil case it gives 88.9 to 92.9 where the printed model gives 78 to 134 '
+    'depending on an unstated end length [computed, SPEC18].')
+HALF_SPACE_WARM_START_DISTANCE = 0.25   # SPEC18 package 4: warm start below this distance
 STATUS = 'SCREENING_RESULT_NOT_PLANT_VALIDATED'
 REALISTIC_MAX_EXIT_SPEED_M_S = 35.0     # analyst choice: resonant speeds above are dropped
 SPEED_SCAN_M_S = (0.05, 60.0)
@@ -342,7 +349,7 @@ COOLANT_KEYS = ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_
                 'assumed_excess_temperature_k')
 OPTION_KEYS = ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
                'bite_response_override')
-OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity')
+OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity', 'shear_cap_factor')
 OBS_KEYS = ('orientation', 'pitch_observations', 'faces', 'gauge_variation_detected',
             'gauge_variation_amplitude_m', 'first_seen', 'disappears_after_work_roll_change',
             'disappears_after_backup_roll_change', 'onset_above_exit_speed_m_s',
@@ -517,6 +524,12 @@ def validate_case(case):
             raise ValueError('model_options.thermal_sensitivity must be one of '
                              f'{band_thermal.MODES}')
         out['model_options']['thermal_sensitivity'] = o['thermal_sensitivity']
+    if 'shear_cap_factor' in o:         # kept only when given (results without it unchanged)
+        cap = o['shear_cap_factor']
+        if isinstance(cap, bool) or not isinstance(cap, (int, float)) or \
+                not math.isfinite(cap) or not 0 < cap <= 1:
+            raise ValueError('model_options.shear_cap_factor must be in (0, 1]')
+        out['model_options']['shear_cap_factor'] = float(cap)
 
     ob = case['observation']
     _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()),
@@ -684,9 +697,13 @@ class _BiteCache:
     """Caches bite derivations per (BitePass, options) within one diagnose call.
 
     ``model_options.bite_model``: 'hitchcock' (slab + circular flattening), 'mattress' (the
-    EXPERIMENTAL elastic-foundation model, ``foil_bite``) or 'auto' (Hitchcock, and the
-    mattress model when Hitchcock rejects the pass). Mattress bites carry the flag
-    ``BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL``.
+    EXPERIMENTAL elastic-foundation model, ``foil_bite``), 'auto' (Hitchcock, and the
+    mattress model when Hitchcock rejects the pass), 'half_space' (the reduced half-space foil
+    model, ``halfspace_bite``, for every pass) or 'auto_half_space' (Hitchcock, and the
+    half-space model when Hitchcock rejects). Mattress bites carry
+    ``BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL``, half-space bites
+    ``BITE_FROM_REDUCED_HALF_SPACE_MODEL``. Half-space derivations keep their state
+    (``states``) and warm-start from the nearest stored solution (distance below 0.25).
     """
 
     def __init__(self, case):
@@ -694,6 +711,7 @@ class _BiteCache:
         self.store = {}
         self.derivations = 0
         self.fallbacks = {}
+        self.states = {}
 
     def _mattress(self, bite_pass):
         s, o = self.case['stand'], self.case['model_options']
@@ -702,9 +720,46 @@ class _BiteCache:
             roll_poisson_ratio=s['roll_poisson_ratio'], cells=max(o['cells'], MATTRESS_MIN_CELLS))
         return bp.replace_bite_flags(bite, (bp.MATTRESS_FLAG,))
 
+    def _nearest_state(self, bite_pass):
+        best, best_d = None, HALF_SPACE_WARM_START_DISTANCE
+        for key, st in self.states.items():
+            q = key[0]
+            y = bite_pass.mean_flow_stress_pa
+            d = (abs(math.log(bite_pass.entry_thickness_m / q.entry_thickness_m))
+                 + abs(math.log(bite_pass.exit_thickness_m / q.exit_thickness_m))
+                 + abs(math.log(y / q.mean_flow_stress_pa))
+                 + abs(math.log(bite_pass.friction_coefficient / q.friction_coefficient))
+                 + (abs(bite_pass.entry_tension_pa - q.entry_tension_pa)
+                    + abs(bite_pass.exit_tension_pa - q.exit_tension_pa)) / y)
+            if d < best_d:
+                best, best_d = st, d
+        return best
+
+    def _half_space(self, bite_pass, key):
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        warm = self._nearest_state(bite_pass)
+        bite, state = halfspace_bite.derive_bite_response_half_space(
+            bite_pass, roll_youngs_modulus_pa=s['roll_youngs_modulus_pa'],
+            roll_poisson_ratio=s['roll_poisson_ratio'],
+            strip_plane_strain_modulus_pa=(m['youngs_modulus_pa']
+                                           / (1 - bw.STRIP_POISSON_RATIO ** 2)),
+            shear_cap_factor=o.get('shear_cap_factor', 1.0),
+            warm_start=None if warm is None else warm['solution'], with_state=True)
+        bite = bp.replace_bite_flags(bite, (bp.HALF_SPACE_FLAG,))
+        state['response'] = bite
+        self.states[key] = state
+        return bite
+
+    def state_for(self, bite):
+        """The half-space state of a bite this cache derived, else None."""
+        for st in self.states.values():
+            if st['response'] is bite:
+                return st
+        return None
+
     def get(self, bite_pass, model=None):
         """Bite of ``bite_pass`` with the case's bite model, or with ``model`` ('hitchcock' /
-        'mattress') to keep perturbed bites on the model of a reference bite."""
+        'mattress' / 'half_space') to keep perturbed bites on the model of a reference bite."""
         s, o = self.case['stand'], self.case['model_options']
         model = o['bite_model'] if model is None else model
         key = (bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'], o['cells'],
@@ -718,6 +773,8 @@ class _BiteCache:
                 self.derivations += 1
                 if model == 'mattress':
                     self.store[key] = self._mattress(bite_pass)
+                elif model == 'half_space':
+                    self.store[key] = self._half_space(bite_pass, key)
                 else:
                     try:
                         self.store[key] = derive_bite_response(
@@ -725,13 +782,16 @@ class _BiteCache:
                             roll_poisson_ratio=s['roll_poisson_ratio'], cells=o['cells'],
                             max_radius_ratio=o['max_radius_ratio'])
                     except ValueError as exc:
-                        if model != 'auto':
+                        if model not in ('auto', 'auto_half_space'):
                             raise
+                        word = ('experimental mattress' if model == 'auto'
+                                else 'reduced half-space')
                         try:
-                            self.store[key] = self._mattress(bite_pass)
+                            self.store[key] = (self._mattress(bite_pass) if model == 'auto'
+                                               else self._half_space(bite_pass, key))
                         except ValueError as exc2:
-                            raise ValueError(f'{exc}; experimental mattress fallback also '
-                                             f'rejected: {exc2}') from exc2
+                            raise ValueError(f'{exc}; {word} fallback also rejected: '
+                                             f'{exc2}') from exc2
                         self.fallbacks[key] = str(exc)
             except ValueError as exc:
                 self.store[key] = exc
@@ -744,11 +804,15 @@ class _BiteCache:
 def perturbed_bite_model(case, bite):
     """Bite model for the perturbed bites of the levers, the speed-consistent critical speed
     and the sensitivities: the model of the operating bite (mattress when it is a mattress
-    bite or ``bite_model`` is 'mattress', else Hitchcock; a supplied bite keeps the selected
-    model, Hitchcock for 'auto'). No silent switch: a perturbed pass that model cannot solve is
-    reported as not assessable with the reason."""
+    bite or ``bite_model`` is 'mattress'; half-space when it is a half-space bite or
+    ``bite_model`` is 'half_space'; else Hitchcock; a supplied bite keeps the selected model,
+    Hitchcock for 'auto' and 'auto_half_space'). No silent switch: a perturbed pass that model
+    cannot solve is reported as not assessable with the reason."""
+    option = case['model_options']['bite_model']
+    if (bite is not None and bp.is_half_space(bite)) or option == 'half_space':
+        return 'half_space'
     return ('mattress' if (bite is not None and bp.is_mattress(bite))
-            or case['model_options']['bite_model'] == 'mattress' else 'hitchcock')
+            or option == 'mattress' else 'hitchcock')
 
 
 class _ModelCache:
@@ -759,6 +823,9 @@ class _ModelCache:
 
     def get(self, bite_pass, model=None):
         return self.cache.get(bite_pass, model=model or self.model)
+
+    def state_for(self, bite):
+        return self.cache.state_for(bite)
 
 
 def _opts(beta):
@@ -2314,6 +2381,11 @@ BITE_RELIABILITY = {
                              'zones (forward slip flagged implausible); not validated; it '
                              'models the contact on the strip only, not the load the rolls '
                              'carry outside the strip in closed gap.',
+    'reduced_half_space': 'REDUCED half-space foil model (halfspace_bite): rolls as elastic '
+                          'half-spaces, no longitudinal elastic strain of strip or roll; its '
+                          'load depends on how the bite ends are closed; not validated; it '
+                          'models the contact on the strip only, not the load the rolls carry '
+                          'outside the strip in closed gap.',
     'supplied': 'Supplied bite sensitivities, not verified by the tool.',
     None: 'No bite: chatter, levers, gauge control, forward slip and the derived shape chain '
           'are not assessable.'}
@@ -2943,6 +3015,9 @@ CREDIBILITY_BASIS = ('applied only to extended-domain mattress bites (exit gauge
                      'the 0.9-2.3 kN/mm range is the one reported for battery-foil passes '
                      '[V S3, S4; conversion D]')
 
+CREDIBILITY_BASIS_HALF_SPACE = CREDIBILITY_BASIS.replace(
+    'extended-domain mattress bites', 'extended-domain foil-model bites (mattress or reduced '
+    'half-space)')
 
 # Model-based evidence items that do not use the case-pass roll bite (tension-trough screen,
 # Shohet-Townsend dead band, yield-point bending window): left alone by the credibility gate.
@@ -3066,11 +3141,15 @@ def _apply_credibility(result, eff, bite, flags):
     if mark:
         result['case_bite_credibility'] = {'mark': mark, 'force_per_width_n_m': fpw,
                                            'ratio_to_reported_range': ratio,
-                                           'basis': CREDIBILITY_BASIS}
+                                           'basis': (CREDIBILITY_BASIS_HALF_SPACE
+                                                     if bp.is_half_space(bite)
+                                                     else CREDIBILITY_BASIS)}
     if mark == CREDIBILITY_OUTSIDE:
         flags.append(CASE_NOT_CREDIBLE_FLAG)
         result['limitations'].append(
-            'The case-pass roll bite is an extended-domain mattress bite whose force lies '
+            ('The case-pass roll bite is an extended-domain reduced half-space bite whose '
+             'force lies ' if bp.is_half_space(bite) else
+             'The case-pass roll bite is an extended-domain mattress bite whose force lies ') +
             'outside the range reported for battery-foil passes: every model result resting on '
             'it (chatter, levers, shape chain, onsets, model evidence) is not credible; the '
             'model evidence that rests on the bite is scored NEUTRAL (basis "model not '
@@ -3169,9 +3248,12 @@ def diagnose(case):
                     'downstream section uses these.'}
     result['bite'] = bite.to_dict() if bite is not None else None
     result['bite_error'] = bite_error
-    if bite is not None and bp.is_mattress(bite):
+    if bite is not None and bp.is_foil_model(bite):
         fb = [v for k, v in cache.fallbacks.items() if k[0] == _bite_pass(eff)]
         result['bite_fallback_reason'] = fb[0] if fb else None
+    state = cache.state_for(bite) if bite is not None and bp.is_half_space(bite) else None
+    result['bite_extras'] = (dict(state['extra']) if state is not None else
+                             bp.not_supplied('only the reduced half-space bite returns these'))
 
     q_s = bite.strip_modulus_n_m if bite is not None else 0.0
     nf = natural_frequencies(stand, q_s)
@@ -3257,6 +3339,8 @@ def diagnose(case):
                 sc['fixed_friction_critical_exit_speed_without_bite_damping_m_s'] = \
                     chat['without_bite_damping']['critical_exit_speed_m_s']
                 sc['fixed_friction_coefficient'] = p['friction_coefficient']
+                if perturbed_bite_model(eff, bite) == 'half_space':   # key only then
+                    sc['perturbed_bite_model'] = 'reduced_half_space'
                 chat['speed_consistent'] = sc
             except ValueError as exc:
                 chat['speed_consistent'] = bp.failed('chatter.speed_consistent', exc)
@@ -3274,6 +3358,8 @@ def diagnose(case):
         result['forced_response'] = _section_forced(eff, stand, bite, spans, u_op, beta,
                                                     unstable)
         levers = _lever_rows(eff, cache, stand, spans, bite, beta, override)
+        if perturbed_bite_model(eff, bite) == 'half_space':           # key only then
+            levers['perturbed_bite_model'] = 'reduced_half_space'
         result['levers'] = levers
         ctx.lever_directions = levers['directions']
     else:
@@ -3504,12 +3590,18 @@ def diagnose(case):
             'NOT_ASSESSABLE with score 0, the other hypotheses and sections are unaffected.')
     ext_flags = set(flags) | {f for x in (result.get('schedule_sweep') or {}).get('rows') or []
                               for f in x.get('bite_flags') or []}
+    if any(bp.is_half_space(b) for b in cache.store.values() if isinstance(b, BiteResponse)):
+        ext_flags.add(HALF_SPACE_USED_FLAG)
     if EXTENDED_GAUGE_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_GAUGE_LIMITATION)
     if REDUCTION_EXTENDED_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_REDUCTION_LIMITATION)
     if SLIP_KINEMATICS_FLAG in flags:
-        result['limitations'].append(SLIP_KINEMATICS_LIMITATION)
+        result['limitations'].append(
+            SLIP_KINEMATICS_LIMITATION.replace('experimental mattress', 'reduced half-space')
+            if bite is not None and bp.is_half_space(bite) else SLIP_KINEMATICS_LIMITATION)
+    if HALF_SPACE_USED_FLAG in ext_flags or (bite is not None and bp.is_half_space(bite)):
+        result['limitations'].append(HALF_SPACE_LIMITATION)
     _apply_credibility(result, eff, bite, flags)
     result['flags'] = sorted(set(flags))
     result['sources'] = list(SOURCES)

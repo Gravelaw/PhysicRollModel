@@ -44,6 +44,7 @@ from .foil_bite import solve_mattress_bite
 from .materials import PowerHardeningLaw
 from .model import Scenario
 from .slab import _solve_grid
+from .strip_shape import ALUMINIUM_NU
 
 FRICTION_FIXED_POINT_ITERATIONS = 5
 FRICTION_FIXED_POINT_TOL = 1e-4          # absolute friction change (analyst choice)
@@ -57,6 +58,7 @@ SPEED_CONSISTENT_MAX_ITERATIONS = 6
 DEFAULT_FORCE_FILTER_HZ = 25.0
 STRIP_DENSITY_KG_M3 = 2700.0             # aluminium; used for the span wave speed c = sqrt(E/rho)
 MATTRESS_FLAG = 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL'
+HALF_SPACE_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
 STATIC_LABEL = ('static formulas with tension coupling OFF (tensions held by the reel '
                 'regulators); with coupling on the constant-speed spans drive the DC gauge '
                 'response to the mass-flow limit (mill_dynamics docstring)')
@@ -304,6 +306,24 @@ def is_mattress(bite):
     return MATTRESS_FLAG in bite.flags
 
 
+def is_half_space(bite):
+    return HALF_SPACE_FLAG in bite.flags
+
+
+def is_foil_model(bite):
+    """Either foil model (experimental mattress or reduced half-space)."""
+    return is_mattress(bite) or is_half_space(bite)
+
+
+def bite_source_word(bite):
+    """'experimental_mattress', 'reduced_half_space' or the BiteResponse source."""
+    if is_mattress(bite):
+        return 'experimental_mattress'
+    if is_half_space(bite):
+        return 'reduced_half_space'
+    return bite.source
+
+
 # Inlet angle of the film [D, re-derived in SPEC17]: for a bite h(x) = h1 + x^2/R_c the inlet is
 # at x_i = -sqrt(R_c*draft) and each roll surface's slope there is |x_i|/R_c = sqrt(draft/R_c).
 # Hitchcock bite: R_c = R' (the deformed arc). Mattress bite: the roll is not an arc and its
@@ -313,14 +333,17 @@ def is_mattress(bite):
 INLET_ANGLE_BASIS_MATTRESS = ('undeformed-roll inlet slope theta0 = sqrt(draft/R) [BT-S3 EX]; '
                               'the mattress contact_radius_ratio L^2/(R*draft) is not a radius')
 INLET_ANGLE_BASIS_ARC = "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]"
+INLET_ANGLE_BASIS_HALF_SPACE = INLET_ANGLE_BASIS_MATTRESS.replace('mattress', 'half-space')
 
 
 def film_radius_ratio(bite):
-    """Radius ratio R_c/R of the film's inlet angle (1.0 for a mattress bite)."""
-    return 1.0 if is_mattress(bite) else bite.contact_radius_ratio
+    """Radius ratio R_c/R of the film's inlet angle (1.0 for a mattress or half-space bite)."""
+    return 1.0 if is_foil_model(bite) else bite.contact_radius_ratio
 
 
 def inlet_angle_basis(bite):
+    if is_half_space(bite):
+        return INLET_ANGLE_BASIS_HALF_SPACE
     return INLET_ANGLE_BASIS_MATTRESS if is_mattress(bite) else INLET_ANGLE_BASIS_ARC
 
 
@@ -360,7 +383,7 @@ def bite_sensitivity(get_bite, bite_pass_, field, relative_step):
             'dslip': (plus.forward_slip_fraction - minus.forward_slip_fraction) / (2 * step),
             'step': step, 'relative_step': relative_step,
             'mean_force': 0.5 * (plus.separating_force_n + minus.separating_force_n),
-            'bite_model': 'experimental_mattress' if is_mattress(plus) else plus.source,
+            'bite_model': bite_source_word(plus),
             'flags': flags}
 
 
@@ -464,7 +487,7 @@ def friction_single(case, src, trib, cache, op_bite=None):
                 or cache.get(bite_pass(case, src)))
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
         film_ratio, basis = film_radius_ratio(bite), inlet_angle_basis(bite)
-        out['bite_source'] = 'experimental_mattress' if is_mattress(bite) else bite.source
+        out['bite_source'] = bite_source_word(bite)
     except ValueError as exc:
         ratio, slip = 1.0, 0.0
         film_ratio, basis = 1.0, INLET_ANGLE_BASIS_MATTRESS + ' (no bite)'
@@ -524,8 +547,7 @@ def friction_fixed_point(case, src, trib, cache):
            'in_common_industrial_window': last['in_common_industrial_window'],
            'dmu_droll_speed_per_m_s': last['dmu_dspeed_per_m_s'],
            'dmu_dexit_speed_per_m_s': last['dmu_dspeed_per_m_s'] / f,
-           'bite_source': None if bite is None else
-           ('experimental_mattress' if is_mattress(bite) else bite.source),
+           'bite_source': None if bite is None else bite_source_word(bite),
            'method': 'fixed point friction -> bite -> contact radius -> friction'}
     if error is not None:
         out['bite_error'] = error
@@ -603,11 +625,31 @@ def friction_curve(case, trib, bite):
 
 
 # ============================================================================= heating
-def friction_power_per_width(case, src, bite, cells, roll_e, roll_nu):
-    """Interface slip dissipation of the pass, both interfaces, per unit width [W/m]."""
+def friction_power_per_width(case, src, bite, cells, roll_e, roll_nu, state=None):
+    """Interface slip dissipation of the pass, both interfaces, per unit width [W/m].
+
+    ``state``: the half-space state of ``bite`` (``_BiteCache.state_for``); without it a
+    half-space bite is solved again."""
     p = case['pass']
     h0, h1, u = src['entry_thickness_m'], src['exit_thickness_m'], src['exit_speed_m_s']
     width, radius = p['width_m'], p['work_roll_radius_m']
+    if is_half_space(bite):
+        if state is not None:
+            diss = state['extra']['slip_dissipation_both_interfaces_over_roll_speed_n']
+            slip = bite.forward_slip_fraction
+        else:
+            from .halfspace_bite import solve_half_space_bite   # local: optional model
+            r = solve_half_space_bite(
+                h0, h1, width, radius, src['mean_flow_stress_pa'],
+                src['friction_coefficient'], src['entry_tension_pa'], src['exit_tension_pa'],
+                roll_youngs_modulus_pa=roll_e, roll_poisson_ratio=roll_nu,
+                strip_plane_strain_modulus_pa=(case['material']['youngs_modulus_pa']
+                                               / (1 - ALUMINIUM_NU ** 2)),
+                shear_cap_factor=case['model_options'].get('shear_cap_factor', 1.0))
+            diss, slip = (r['slip_dissipation_both_interfaces_over_roll_speed_n'],
+                          r['forward_slip_fraction'])
+        return (diss * (u / (1 + slip)) / width,
+                'reduced half-space slip dissipation x roll surface speed / width')
     if is_mattress(bite):
         m = solve_mattress_bite(h0, h1, width, radius, src['mean_flow_stress_pa'],
                                 src['friction_coefficient'], src['entry_tension_pa'],
@@ -627,8 +669,8 @@ def friction_power_per_width(case, src, bite, cells, roll_e, roll_nu):
             'width')
 
 
-def heating_row(case, src, bite, trib, cells, roll_e, roll_nu):
-    power, basis = friction_power_per_width(case, src, bite, cells, roll_e, roll_nu)
+def heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state=None):
+    power, basis = friction_power_per_width(case, src, bite, cells, roll_e, roll_nu, state)
     fs = trib['strip_heat_fraction'] if trib else 0.0
     t_in = trib['strip_entry_temperature_k'] if trib else 293.15
     res = bt.pass_heating(entry_thickness_m=src['entry_thickness_m'],
@@ -639,7 +681,7 @@ def heating_row(case, src, bite, trib, cells, roll_e, roll_nu):
                           friction_power_per_width_w_m=power,
                           temperature_limit_k=trib['temperature_limit_k'] if trib else None)
     flags = list(res['flags'])
-    if bite.source == 'supplied' and not is_mattress(bite):
+    if bite.source == 'supplied' and not is_foil_model(bite):
         flags.append('FRICTION_POWER_NOT_AVAILABLE_FOR_SUPPLIED_BITE')
     return {'plastic_power_per_width_w_m': res['plastic_power_per_width_w_m'],
             'friction_power_per_width_w_m': power, 'friction_power_basis': basis,
@@ -663,7 +705,9 @@ def heating_section(case, trib, cache, op_bite, cells, roll_e, roll_nu):
                                            or cache.get(bite_pass(case, src)))
             if bite is None:
                 raise ValueError('no bite response for the case pass')
-            row.update(heating_row(case, src, bite, trib, cells, roll_e, roll_nu))
+            state_for = getattr(cache, 'state_for', None)
+            state = state_for(bite) if state_for is not None and is_half_space(bite) else None
+            row.update(heating_row(case, src, bite, trib, cells, roll_e, roll_nu, state))
         except ValueError as exc:
             row['rejected'] = str(exc)
         rows.append(row)
@@ -1014,7 +1058,7 @@ SENSITIVITY_MIX_NOTE = ('With a supplied bite response the force sensitivity her
 def supplied_bite_mix(bite):
     """True when ``bite`` is a supplied (override) bite: finite-difference force sensitivities
     then come from a derived model and are combined with the supplied strip modulus."""
-    return bite.source == 'supplied' and not is_mattress(bite)
+    return bite.source == 'supplied' and not is_foil_model(bite)
 
 
 def replace_bite_flags(bite, extra):
