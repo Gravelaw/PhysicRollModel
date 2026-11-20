@@ -469,6 +469,35 @@ def _reason(h):
             f'contradicted by {", ".join(con) or "nothing"}')
 
 
+def _mp_shown(h):
+    """model_prediction without the SPEC17 G12 block (rendered as its own table, v2 only)."""
+    mp = h['model_prediction']
+    if isinstance(mp, dict) and 'candidate_shell_buckling_pitch' in mp:
+        return {k: v for k, v in mp.items() if k != 'candidate_shell_buckling_pitch'}
+    return mp
+
+
+def _candidate_pitch_table(h):
+    """SPEC17 G12: the candidate tension-line pitch, a short table (candidate, not evidence)."""
+    c = (h.get('model_prediction') or {}).get('candidate_shell_buckling_pitch') \
+        if isinstance(h.get('model_prediction'), dict) else None
+    if not isinstance(c, dict):
+        return ''
+    head = ('<p><strong>Candidate tension-line pitch (shell buckling of the wound lap or the '
+            'strip on a roller; candidate, not evidence).</strong> ')
+    if c.get('status') != 'CANDIDATE_NOT_ESTABLISHED':
+        return head + _e(_txt(c.get('status'))) + '.</p>'
+    rows = [[_e(r['where']), _f(r['radius_m'], 1e3, 4) + ' mm', _mm2(r['pitch_m'], 3)]
+            for r in c['rows']]
+    obs = c.get('observed_spacing_m')
+    return (head + f'{_e(c["formula"])}. Published pitch 5-20 mm; '
+            + (f'observed spacing {_mm2(obs, 3)}, inside the candidate range: '
+               f'{"yes" if c.get("observed_inside_candidate_range") else "no"}. '
+               if _ok(obs) else 'no spacing observed. ')
+            + f'{_e(c["note"])}. {_e(c["how_to_test"])}</p>'
+            + _table(['radius in the case', 'radius', 'candidate pitch'], rows))
+
+
 def _hypothesis_rows(result, family=None):
     """Hypothesis table; with ``family`` (v2) a family column, observed family first."""
     out = []
@@ -487,8 +516,9 @@ def _hypothesis_rows(result, family=None):
             f'<p><strong>Mechanism.</strong> {_e(h["mechanism"])}</p>'
             + _table(('criterion', 'observed', 'expected', 'verdict', 'weight', 'basis'),
                      ev_rows, 'evidence fixed', ('16%', '31%', '26%', '11%', '8%', '8%'))
-            + f'<p><strong>Model prediction.</strong> {_e(_val(h["model_prediction"]))}</p>'
-            f'<p><strong>Confirming test.</strong> {_e(h["confirming_test"])}</p>'
+            + f'<p><strong>Model prediction.</strong> {_e(_val(_mp_shown(h)))}</p>'
+            + (_candidate_pitch_table(h) if family is not None else '')
+            + f'<p><strong>Confirming test.</strong> {_e(h["confirming_test"])}</p>'
             f'<p><strong>Levers if this is the cause.</strong> {_e("; ".join(h["levers"]))}</p>'
             + (f'<p><strong>Computed lever directions.</strong> '
                f'{_e("; ".join(h["computed_lever_directions"]))}</p>'
@@ -1320,7 +1350,103 @@ def _width_section(r):
     body += _other_width_results(w)
     body += _strip_temperature_block(r, w)
     body += _friction_stripe_block(w)
+    body += _roll_profile_block(r, w)
     return head + body + '</section>'
+
+
+def _roll_profile_block(r, w):
+    """SPEC17 package 8 (G13): a measured roll ground profile through the existing transfer."""
+    rp = w.get('roll_profile')
+    if not isinstance(rp, dict):
+        return ''
+    head = '<h3>Measured roll profile</h3>'
+    if rp.get('status') == 'FAILED':
+        return head + _state_p('FAILED: ' + str(rp.get('error')))
+    if rp.get('not_supplied'):
+        return (head + '<p>No measured roll profile (width_model.roll_ground_profile): a '
+                'grinder report of one roll can be put through the same transfer as a thermal '
+                'stripe.</p>')
+    if rp.get('status') == 'NOT_ASSESSABLE':
+        return head + _state_p('Not assessable: ' + str(rp.get('reason')))
+    zp = rp['removed_polynomial_z_m']
+    meas, poly = rp['measured_on_strip_m'], rp['removed_polynomial_m']
+    loc = rp['local_radius_deviation_m']
+    key = [('measured radius deviation', C_HEALTHY, '', 'line'),
+           ('removed polynomial (crown / camber, not used here)', C_COMP, '7 4', 'line'),
+           ('local deviation (put through the transfer)', C_ACT, '', 'thick')]
+    key_parts, rows_k = _key2(key)
+    top = 14 + 15 * rows_k + 10
+    bot = top + 180
+    height = bot + MB
+    sx = _Axis(zp[0], zp[-1], ML, W - MR)
+    vals = [v * 1e6 for v in meas + poly + [loc[i] for i in range(len(loc))] if _ok(v)] + [0.0]
+    lo, hi = min(vals), max(vals)
+    pad = 0.08 * (hi - lo or 1.0)
+    sy = _Axis(lo - pad, hi + pad, bot, top)
+    c = [f'<svg viewBox="0 0 {W} {height}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="measured roll profile"><title>Measured roll radius '
+         'deviation, removed polynomial and local deviation</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
+         'fill="#fbfcfe" stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    loc_strip = [v for x, v in zip(rp['z_m'], loc) if zp[0] - 1e-12 <= x <= zp[-1] + 1e-12]
+    z_strip = [x for x in rp['z_m'] if zp[0] - 1e-12 <= x <= zp[-1] + 1e-12]
+    for xs, ys, col, dash, wd in ((zp, meas, C_HEALTHY, '', 1.6), (zp, poly, C_COMP, '7 4', 1.6),
+                                  (z_strip, loc_strip, C_ACT, '', 2.6)):
+        c.append(f'<polyline points="{_pts(xs, [v * 1e6 for v in ys], sx, sy)}" fill="none" '
+                 f'stroke="{col}" stroke-width="{wd}" stroke-dasharray="{dash}"/>')
+    cy = (top + bot) / 2
+    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">radius deviation [µm]</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">position on the barrel [m]</text>')
+    c += key_parts
+    c.append('</svg>')
+    srows = []
+    for s in rp.get('stripe_table') or []:
+        fb = s.get('with_feedback') or {}
+        srows.append([_f(s['position_m'], 1, 4) + ' m', _um(s['peak_radius_deviation_m']),
+                      _mm2(s.get('width_at_half_peak_m'), 3), _f(fb.get('peak_i_units'), 1, 4),
+                      _txt(fb.get('state')), _txt(fb.get('state_after_tension_release'))])
+    sm = _get(r, 'measurement', 'shapemeter') or {}
+    shp = next((x for x in sm.get('profiles') or [] if x.get('name') == 'roll_ground_profile'),
+               None)
+    sm_line = ''
+    if shp:
+        sm_line = ('<p>Shapemeter readings: '
+                   + _e('; '.join(f'{_f(b["peak_i_units"], 1, 3)} I-units at '
+                                  f'{_f(b["peak_position_m"], 1, 4)} m reads '
+                                  f'{_f(b["zone_reading_i_units"], 1, 3)} '
+                                  f'({b["shows"]})' for b in shp['bands']) or 'no band')
+                   + ' (section "What a shapemeter would show").</p>')
+    stc = rp.get('stiffness_check') or {}
+    st_line = ''
+    if _ok(stc.get('roll_term_pa')):
+        st_line = (f'<p class="note">Stiffness indicator: strip foundation modulus '
+                   f'{_f(stc.get("strip_foundation_modulus_pa"), 1e-9, 4)} kN/mm² against the '
+                   f'roll term {_f(stc["roll_term_pa"], 1e-9, 4)} kN/mm² at '
+                   f'{_mm2(stc.get("wavelength_m"), 3)} (ratio '
+                   f'{_f(stc.get("ratio_strip_to_roll"), 1, 3)}); published: '
+                   f'{_e(stc.get("published_context"))}. {_e(stc.get("basis"))}.</p>')
+    return (head + f'<p>Supplied profile ({_e(rp["provenance"])}), de-trended with a polynomial '
+            f'of order {_e(rp["detrend_order"])} (peak-to-peak '
+            f'{_um(rp["removed_polynomial_peak_to_peak_m"])} removed; it belongs to the crown '
+            f'model and is not used here), on {_e(rp["rolls_carrying"])} roll(s); with '
+            f'feedback the largest band is {_f(rp.get("feedback_peak_i_units"), 1, 4)} '
+            f'I-units (compliance only {_f(rp.get("compliance_only_peak_i_units"), 1, 4)}, '
+            f'rigid bound {_f(rp.get("rigid_transfer_bound_i_units"), 1, 4)}).</p>'
+            + _wide(''.join(c))
+            + _table(['stripe peak', 'radius deviation', 'half-peak width', 'I with feedback',
+                      'in the mill', 'after tension release'], srows)
+            + sm_line + st_line
+            + '<p class="warn">' + _e(' '.join(rp.get('limitations') or [])) + '</p>')
 
 
 def _friction_stripe_block(w):

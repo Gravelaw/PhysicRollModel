@@ -494,6 +494,16 @@ def shapemeter_profiles(width, temperature_compensated=None):
                     'z_m': stt['z_m'], 'i_units': hot['i_units'], 'bands': hot['bands'],
                     'reporting_threshold_i_units': (st or {}).get(
                         'reporting_threshold_i_units') if isinstance(st, dict) else None})
+    # SPEC17 package 8: the measured roll ground profile (with feedback)
+    rp = width.get('roll_profile')
+    if isinstance(rp, dict) and isinstance(rp.get('z_m'), list) \
+            and isinstance(rp.get('i_units_with_feedback'), list) \
+            and len(rp['z_m']) == len(rp['i_units_with_feedback']) and len(rp['z_m']) > 1:
+        out.append({'name': 'roll_ground_profile',
+                    'label': 'measured roll ground profile (with exit-tension feedback)',
+                    'z_m': rp['z_m'], 'i_units': rp['i_units_with_feedback'],
+                    'bands': ((rp.get('levels') or {}).get('with_feedback') or {}).get('bands')
+                    or [], 'reporting_threshold_i_units': 2.0})
     # SPEC17 package 7: one profile per supplied friction stripe (case pass, with feedback)
     fs = width.get('friction_stripes')
     for s in (fs.get('stripes') or []) if isinstance(fs, dict) else []:

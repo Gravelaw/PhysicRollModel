@@ -969,3 +969,56 @@ class FoilDemoTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CandidateTensionLinePitchTests(unittest.TestCase):
+    """SPEC17 G12: the candidate shell-buckling pitch (candidate, not evidence)."""
+
+    def test_wavelength_coefficient_pitches_and_cross_check(self):
+        from physicroll import strip_shape as ss
+        self.assertAlmostEqual(2 * math.pi / (12 * (1 - 0.33 ** 2)) ** 0.25, 3.4746, delta=1e-4)
+        for t, rows in ((30e-6, ((0.125, 6.7285), (0.15, 7.3707), (0.45, 12.766),
+                                 (0.6, 14.7414))),
+                        (18e-6, ((0.125, 5.2119), (0.15, 5.7093), (0.6, 11.4187))),
+                        (12e-6, ((0.125, 4.2555),))):
+            for r, mm in rows:
+                self.assertAlmostEqual(ss.shell_buckling_wavelength_m(r, t, 0.33) * 1e3, mm,
+                                       delta=1e-3)
+        crit = 70e9 * 30e-6 / (0.125 * math.sqrt(3 * (1 - 0.33 ** 2)))
+        self.assertAlmostEqual(crit / 1e6, 10.2751, delta=1e-4)
+        self.assertAlmostEqual(ss.roller_wrinkle_critical_lateral_stress_pa(
+            30e-6, 0.125, 70e9, 0.33), -crit, delta=1e-3)
+
+    def test_model_prediction_blocks_and_rules_unchanged(self):
+        c = bw.candidate_tension_line_pitch(0.21e-3, [('x', 0.15)], 0.01)
+        self.assertEqual(c['status'], 'NOT_APPLICABLE_ABOVE_FOIL_GAUGE')
+        c = bw.candidate_tension_line_pitch(30e-6, [], None)
+        self.assertEqual(c['status'], 'NO_RADIUS_IN_CASE')
+        c = bw.candidate_tension_line_pitch(30e-6, [('a', 0.125), ('b', 0.6)], 0.010)
+        self.assertEqual(c['status'], 'CANDIDATE_NOT_ESTABLISHED')
+        self.assertAlmostEqual(c['pitch_range_m'][0] * 1e3, 6.7285, delta=1e-3)
+        self.assertTrue(c['observed_inside_candidate_range'])
+        self.assertIn('not evidence', c['note'])
+        self.assertIn('sqrt(radius x gauge)', c['how_to_test'])
+        # the battery-foil demo: the block, and every evidence item of the rule as committed
+        art = json.loads((SCEN.parent / 'artifacts' / 'band_diagnosis' /
+                          'battery-foil-demo.result.json').read_text())
+        h = {x['id']: x for x in art['hypotheses']}['foil_tension_lines']
+        mp = h['model_prediction']
+        cand = mp['candidate_shell_buckling_pitch']
+        self.assertEqual(cand['status'], 'CANDIDATE_NOT_ESTABLISHED')
+        self.assertEqual([round(x['pitch_m'] * 1e3, 3) for x in cand['rows']],
+                         [6.729, 7.371, 14.741, 6.729, 12.766])
+        self.assertFalse(cand['observed_inside_candidate_range'])        # 365 mm gap
+        self.assertEqual({k: v for k, v in mp.items() if k != 'candidate_shell_buckling_pitch'},
+                         {'model': 'NONE: rule-based hypothesis, the tool has no physical model '
+                                   'of tension lines (5-20 mm pitch reported, vanishing above a '
+                                   'threshold tension)', 'reported_pitch_m': [0.005, 0.02],
+                          'reported_onset_exit_gauge_m': [1.5e-05, 3e-05],
+                          'case_exit_thickness_m': 3e-05})
+        case = validate_case(load_case(SCEN / 'band_diagnosis_battery_foil.json'))
+        f = bw.Facts(case, art['width'], art['screens'], art.get('process'))
+        e, pred = bw._h_tension_lines(f)
+        self.assertEqual(json.loads(json.dumps(e)), h['evidence'])
+        self.assertEqual(json.loads(json.dumps(pred)), mp)
+        self.assertEqual((h['score'], h['standing']), (0, 'WEAKENED'))

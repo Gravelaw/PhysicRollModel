@@ -118,7 +118,9 @@ WIDTH_DEFAULTS = {
     # SPEC17 A1 / G6: a supplied strip temperature scan across the width (not computed)
     'strip_temperature': None,
     # SPEC17 BT-G4 (screening version): friction / film stripes as a second band source
-    'friction_stripe_screen': None}
+    'friction_stripe_screen': None,
+    # SPEC17 G13: a measured roll ground profile (radius deviation) through the existing transfer
+    'roll_ground_profile': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -217,6 +219,8 @@ def validate_width_model(w, pass_):
                                                            roll['barrel_length_m'])
     out['friction_stripe_screen'] = _validate_friction_screen(w.get('friction_stripe_screen'),
                                                               roll['barrel_length_m'])
+    out['roll_ground_profile'] = _validate_roll_profile(w.get('roll_ground_profile'),
+                                                        roll['barrel_length_m'])
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -1962,6 +1966,227 @@ def _friction_placeholder(trib, row):
             'note': FS_PLACEHOLDER_NOTE}
 
 
+def _case_radii(case):
+    """(label, radius) of every roller or coil radius the case gives (SPEC17 G12)."""
+    out = []
+    w = case.get('width_model')
+    if w is not None:
+        if w.get('deflector_roll_radius_m') is not None:
+            out.append(('width_model.deflector_roll_radius_m', w['deflector_roll_radius_m']))
+        coil = w.get('coil')
+        if coil is not None:
+            out.append(('width_model.coil.inner_radius_m', coil['inner_radius_m']))
+            out.append(('width_model.coil.outer_radius_m', coil['outer_radius_m']))
+    k = case.get('kinematics') or {}
+    for i, d in enumerate(k.get('deflector_roll_diameters_m') or []):
+        out.append((f'kinematics.deflector_roll_diameters_m[{i}]/2', d / 2))
+    if k.get('exit_coil_diameter_m') is not None:
+        out.append(('kinematics.exit_coil_diameter_m/2', k['exit_coil_diameter_m'] / 2))
+    return out
+
+
+TL_PUBLISHED_PITCH_M = [0.005, 0.020]
+TL_HOW_TO_TEST = ('Measure the pitch at two coil radii and two gauges: this candidate predicts '
+                  'pitch proportional to sqrt(radius x gauge).')
+TL_BASIS = ('entrained-air corrugation in winding has the same remedies and thin-gauge trend '
+            '[SS-S53 EX, SS-S66 EX]; wavelength formula re-derived (classical shell); no onset '
+            'condition, no air-film model (G9, G10)')
+TL_NOTE = ('not evidence: almost any foil coil gives a candidate pitch inside the published '
+           '5-20 mm')
+
+
+def candidate_tension_line_pitch(exit_thickness_m, radii, observed_spacing_m=None):
+    """SPEC17 G12: the shell-buckling pitch at each radius of the case; a candidate for
+    comparison only, never evidence (the tension-line rules are unchanged)."""
+    out = {'formula': 'pitch = 2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4) [D, re-derived in SPEC17; '
+                      'reported from memory as 3.47*sqrt(R*t)]',
+           'poisson_ratio': STRIP_POISSON_RATIO, 'rows': [], 'pitch_range_m': None,
+           'published_pitch_m': list(TL_PUBLISHED_PITCH_M),
+           'observed_spacing_m': observed_spacing_m, 'observed_inside_candidate_range': None,
+           'how_to_test': TL_HOW_TO_TEST, 'basis': TL_BASIS, 'note': TL_NOTE}
+    if exit_thickness_m >= FOIL_GAUGE_M:
+        out['status'] = 'NOT_APPLICABLE_ABOVE_FOIL_GAUGE'
+        return out
+    if not radii:
+        out['status'] = 'NO_RADIUS_IN_CASE'
+        return out
+    rows = [{'where': where, 'radius_m': r,
+             'pitch_m': ss.shell_buckling_wavelength_m(r, exit_thickness_m, STRIP_POISSON_RATIO)}
+            for where, r in radii]
+    lo, hi = min(x['pitch_m'] for x in rows), max(x['pitch_m'] for x in rows)
+    out.update(status='CANDIDATE_NOT_ESTABLISHED', rows=rows, pitch_range_m=[lo, hi])
+    if observed_spacing_m is not None:
+        out['observed_inside_candidate_range'] = lo <= observed_spacing_m <= hi
+    return out
+
+
+def _validate_roll_profile(s, barrel):
+    if s is None:
+        return None
+    where = 'width_model.roll_ground_profile'
+    keys(where, s, ('positions_m', 'radius_deviation_m', 'provenance'),
+         ('detrend_order', 'rolls_carrying'))
+    pos = s['positions_m']
+    msg = f'{where}.positions_m must be >= 5 strictly increasing positions on the barrel'
+    if not isinstance(pos, list) or len(pos) < 5:
+        raise ValueError(msg)
+    try:
+        pos = [num(f'{where}.positions_m[{i}]', v) for i, v in enumerate(pos)]
+    except ValueError:
+        raise ValueError(msg) from None
+    if any(b <= a for a, b in zip(pos, pos[1:])) or pos[0] < 0 or pos[-1] > barrel:
+        raise ValueError(msg)
+    dev = s['radius_deviation_m']
+    dmsg = f'{where}.radius_deviation_m needs one value in [-1e-3, 1e-3] m per position'
+    if not isinstance(dev, list) or len(dev) != len(pos):
+        raise ValueError(dmsg)
+    try:
+        dev = [num(f'{where}.radius_deviation_m[{i}]', v, lo=-1e-3, hi=1e-3)
+               for i, v in enumerate(dev)]
+    except ValueError:
+        raise ValueError(dmsg) from None
+    order = s.get('detrend_order', 2)
+    if order is not None and (isinstance(order, bool) or not isinstance(order, int)
+                              or not 0 <= order <= 6):
+        raise ValueError(f'{where}.detrend_order must be an int in [0, 6] or null')
+    nr = s.get('rolls_carrying', 1)
+    if isinstance(nr, bool) or nr not in (1, 2):
+        raise ValueError(f'{where}.rolls_carrying must be 1 or 2')
+    pv = s['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty string')
+    return {'positions_m': pos, 'radius_deviation_m': dev, 'detrend_order': order,
+            'rolls_carrying': nr, 'provenance': pv}
+
+
+RP_FLAG_SUPPLIED = 'ROLL_GROUND_PROFILE_SUPPLIED'
+RP_FLAG_BAND = 'ROLL_GROUND_PROFILE_BAND_ABOVE_THRESHOLD'
+RP_LIMITATIONS = (
+    "The profile is one roll's ground shape, measured cold and off the mill.",
+    'Marks narrower than about two grid cells or than 4a (four bite half-lengths) are smoothed.',
+    'No wear growth during the campaign.',
+    'No barrel-position modulation by roll bending (needs the roll stack, gap G1).',
+    'The removed polynomial (crown or camber) is reported only; it is not passed to the crown '
+    'or heredity model.',
+    'The hypotheses roll_surface_band and grinding_feed_marks stay rule-based and do not read '
+    'this section.')
+RP_PUBLISHED_STIFFNESS = ('thin aluminium 0.236 mm: 176 / 57.8 kN/mm2, ratio 3.04; thin '
+                          'stainless: ratio 28, transfer almost negligible (model output) '
+                          '[SS-S3 FT]')
+RP_LV_KEYS = ('status', 'released_status', 'z_m', 'local_radius_deviation_m',
+              'local_thickness_change_m', 'i_units_with_feedback', 'i_units_linear_feedback',
+              'rigid_transfer_bound_i_units', 'compliance_only_peak_i_units',
+              'feedback_peak_i_units', 'linear_feedback_peak_i_units', 'levels', 'flags')
+
+
+def roll_profile_section(case, w, sp, shape_reason, z, th, thermal_steady, bite=None):
+    """SPEC17 G13: a measured roll ground profile through the existing transfer.
+
+    The supplied radius deviation (one roll, positive = larger roll) is interpolated onto the
+    width section's grid (end values held outside the scan), de-trended over the strip by
+    ``roll_thermal.local_stripes`` (the removed polynomial is reported, not passed on) and put
+    through ``shape_levels`` exactly as a thermal stripe [SS-S3 FT: grinding residuals and
+    wear transfer like thermal stripes; the transfer itself is the project's, D]. Reported
+    beside the width section, never evidence.
+    """
+    s = w.get('roll_ground_profile')
+    if s is None:
+        return not_supplied('width_model.roll_ground_profile is null or absent')
+    if sp is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': shape_reason or 'no shape parameters', 'flags': []}
+    xs, ys = s['positions_m'], s['radius_deviation_m']
+    vals = [_interp_held(xs, ys, x) for x in z]
+    dz = z[1] - z[0]
+    a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
+    extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
+    loc = rt.local_stripes(z, vals, th.centre, th.width, threshold_m=STRIPE_THRESHOLD_M,
+                           smooth_order=s['detrend_order'])
+    by_z = dict(zip(loc['z_m'], loc['local_radius_deviation_m']))
+    dev = [by_z.get(x, 0.0) for x in z]
+    smooth = [a - b for a, b in zip(
+        [v for x, v in zip(z, vals) if x in by_z], loc['local_radius_deviation_m'])]
+    spr = dict(sp, n_rolls=s['rolls_carrying'])
+    lv = shape_levels(z, dev, spr)
+    out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+           'provenance': s['provenance'], 'detrend_order': s['detrend_order'],
+           'rolls_carrying': s['rolls_carrying'],
+           'scan_coverage': {'scan_start_m': xs[0], 'scan_end_m': xs[-1], 'strip_start_m': a0,
+                             'strip_end_m': a1, 'extrapolated_width_m': extrap,
+                             'rule': 'linear between scan points; end values held outside'},
+           'removed_polynomial_m': smooth, 'removed_polynomial_z_m': list(loc['z_m']),
+           'removed_polynomial_peak_to_peak_m': (max(smooth) - min(smooth)) if smooth else 0.0,
+           'removed_polynomial_note': ('the removed crown or camber belongs to the crown model; '
+                                       'it is reported and drawn, not passed to it'),
+           'measured_on_strip_m': [v for x, v in zip(z, vals) if x in by_z],
+           'stripes': loc['stripes'], 'local_stripes_status': loc['status'],
+           'local_stripes_flags': loc['flags']}
+    out.update({k: lv[k] for k in RP_LV_KEYS if k in lv})
+    stripe_input = {'stripes': loc['stripes'], 'z_m': z, 'local_deviation_m': dev}
+    try:
+        out['stripe_table'] = steady_stripe_table(stripe_input, lv, spr)
+        out['stripe_table_basis'] = 'steady_stripe_table (states and onsets per stripe)'
+    except (ValueError, KeyError):
+        out['stripe_table'] = [dict(position_m=st['peak_position_m'],
+                                    peak_radius_deviation_m=st['peak_deviation_m'],
+                                    width_at_half_peak_m=st['width_at_half_peak_m'],
+                                    **stripe_states(lv, st['peak_position_m']))
+                               for st in loc['stripes']]
+        out['stripe_table_basis'] = 'stripe_states at each stripe peak'
+    # combined with the thermal stripes of the same roll
+    if not isinstance(thermal_steady, dict) or 'local_deviation_m' not in thermal_steady:
+        out['combined_with_thermal'] = not_supplied('no roll thermal solution')
+    elif s['rolls_carrying'] != w['rolls_carrying_stripe']:
+        out['combined_with_thermal'] = not_assessable(
+            f'rolls_carrying {s["rolls_carrying"]} differs from '
+            f'width_model.rolls_carrying_stripe {w["rolls_carrying_stripe"]}: the two radius '
+            'deviations are not on the same roll(s)')
+    else:
+        comb = shape_levels(thermal_steady['z_m'],
+                            [a + _interp_held(z, dev, x) for x, a in
+                             zip(thermal_steady['z_m'], thermal_steady['local_deviation_m'])],
+                            sp)
+        out['combined_with_thermal'] = {k: comb[k] for k in RP_LV_KEYS if k in comb}
+    # stiffness indicator [SS-S3 FT idea and ratios; the project's analogue D]
+    p = case['pass']
+    big = max(loc['stripes'], key=lambda x: abs(x['peak_deviation_m']), default=None)
+    a_half = sp['bite_half_length_m']
+    lam = None if big is None else min(max(2 * big['width_at_half_peak_m'], 4 * a_half),
+                                       sp['roll_radius_m'])
+    roll_term = (None if lam is None else 1 / (2 * ss.roll_line_compliance_m2_n(
+        lam, a_half, sp['roll_youngs_modulus_pa'], sp['roll_poisson_ratio'])))
+    kf1 = (None if bite is None else bite.separating_force_n / p['width_m']
+           / (p['entry_thickness_m'] - p['exit_thickness_m']))
+    out['stiffness_check'] = {
+        'strip_foundation_modulus_pa': kf1,
+        'strip_foundation_modulus_basis': ("(F/width)/(h_entry - h_exit), Patel's kf1 as the "
+                                           'report restates it [SS-S3 FT]'),
+        'roll_term_pa': roll_term, 'wavelength_m': lam,
+        'wavelength_basis': 'twice the half-peak width of the largest stripe, clamped to [4a, R]',
+        'ratio_strip_to_roll': (None if kf1 is None or not roll_term else kf1 / roll_term),
+        'published_context': RP_PUBLISHED_STIFFNESS,
+        'basis': ("roll term 1/(2*C(lam)) is the project's analogue, not Patel's kf2 (its "
+                  'definition was not recorded) [D]')}
+    # observed positions: information only
+    obs = case['observation']
+    if obs['band_positions_across_width_m']:
+        tol, tbasis = position_tolerance(obs, w['spray_header']['nozzle_pitch_m'])
+        peaks = [b['peak_position_m'] for b in lv['levels']['with_feedback']['bands']]
+        out['position_match'] = {
+            'tolerance_m': tol, 'tolerance_basis': tbasis,
+            'matches': ss.match_positions(peaks, obs['band_positions_across_width_m'],
+                                          tol)['matches'],
+            'note': 'information only: not evidence'}
+    else:
+        out['position_match'] = None
+    flags = list(lv.get('flags') or []) + [RP_FLAG_SUPPLIED]
+    if lv['levels']['with_feedback']['bands']:
+        flags.append(RP_FLAG_BAND)
+    out['flags'] = flags
+    out['limitations'] = list(RP_LIMITATIONS)
+    return out
+
+
 def _troughs(case, w, obs):
     p, spans = case['pass'], case['spans']
     out = {}
@@ -2652,6 +2877,16 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
         flags.append('THERMAL_SENSITIVITY_FAILED')
+    # SPEC17 G13: a measured roll ground profile through the existing transfer
+    try:
+        out['roll_profile'] = roll_profile_section(case, w, sp, shape_reason, z, th,
+                                                   out.get('thermal_steady'), bite)
+    except (ValueError, ArithmeticError) as exc:
+        out['roll_profile'] = failed('roll_profile', exc)
+        out['failures'].append(out['roll_profile']['error'])
+    rp_flags = [f for f in ((out['roll_profile'].get('flags') or []) if isinstance(
+        out['roll_profile'], dict) else []) if f in (RP_FLAG_SUPPLIED, RP_FLAG_BAND)]
+    flags += [f for f in rp_flags if f not in flags]
     # SPEC17 BT-G4: friction / film stripes as a second band source (screening version)
     try:
         out['friction_stripes'] = friction_stripes_section(
@@ -2763,6 +2998,8 @@ class Facts:
             self.model_reason = ('shape chain: ' + str((steady_shape or {}).get(
                 'reason', (steady_shape or {}).get('error', 'not available'))))
         self.exit_thickness = case['pass']['exit_thickness_m']
+        # SPEC17 G12: radii in the case, for the candidate tension-line pitch
+        self.radii = _case_radii(case)
         self.film_ratio, self.film_basis = None, None
         coolant = case['coolant']
         pitch = (w['spray_header']['nozzle_pitch_m'] if w is not None else
@@ -3577,7 +3814,11 @@ def _h_tension_lines(f):
                         'tension)',
                'reported_pitch_m': [0.005, 0.020],
                'reported_onset_exit_gauge_m': [15e-6, 30e-6],
-               'case_exit_thickness_m': h}
+               'case_exit_thickness_m': h,
+               'candidate_shell_buckling_pitch': candidate_tension_line_pitch(
+                   h, f.radii, None if f.gaps is None else (
+                       o['band_spacing_m'] if o['band_spacing_m'] is not None
+                       else sum(f.gaps) / len(f.gaps)))}
 
 
 def _h_stain(f):

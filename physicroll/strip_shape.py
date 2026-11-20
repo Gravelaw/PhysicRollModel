@@ -1462,6 +1462,27 @@ def trough_critical_lateral_stress_pa(thickness_m, span_length_m, tension_stress
     return -(math.pi * t / a) * math.sqrt(e * sx / (3 * (1 - nu * nu)))
 
 
+def shell_buckling_wavelength_m(radius_m, thickness_m, poisson_ratio=ALUMINIUM_NU):
+    """Axisymmetric shell-buckling wavelength ``2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4)``.
+
+    [D, re-derived in SPEC17; the shape report quotes ``3.47*sqrt(R*t)`` from memory] Thin
+    cylindrical shell of radius ``R`` and wall ``t`` (a wound lap or the strip on a roller)
+    under axial, here width-direction, compression ``N`` per unit length:
+    ``D*w_xxxx + N*w_xx + (E*t/R^2)*w = 0``, ``D = E*t^3/(12*(1-nu^2))``. With
+    ``w = sin(k*x)``, ``N = D*k^2 + E*t/(R^2*k^2)``, least at
+    ``k^4 = E*t/(R^2*D) = 12*(1-nu^2)/(R^2*t^2)``; the full wavelength is ``2*pi/k``
+    (coefficient 3.4746 for nu = 0.33, 3.4564 for 0.3). The critical stress
+    ``N/t = E*t/(R*sqrt(3*(1-nu^2)))`` is the roller-wrinkle value of
+    ``roller_wrinkle_critical_lateral_stress_pa``. A CANDIDATE pitch for foil tension lines
+    (entrained-air corrugation in winding [SS-S53 EX, SS-S66 EX]), not an established model:
+    no onset condition, no air-film model.
+    """
+    r = _num('radius_m', radius_m, positive=True, hi=10.0)
+    t = _thickness('thickness_m', thickness_m)
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    return 2 * math.pi * math.sqrt(r * t) / (12 * (1 - nu * nu)) ** 0.25
+
+
 def roller_wrinkle_critical_lateral_stress_pa(thickness_m, roller_radius_m,
                                               youngs_modulus_pa=ALUMINIUM_E_PA,
                                               poisson_ratio=ALUMINIUM_NU):

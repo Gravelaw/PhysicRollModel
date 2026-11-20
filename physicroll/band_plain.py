@@ -2235,6 +2235,12 @@ FLAGS = {
     'SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED': (
         'Part of each zone reading is shared with its neighbours, as you set it.',
         'Set the spreading to zero unless your vendor states it.'),
+    'ROLL_GROUND_PROFILE_SUPPLIED': (
+        'The page puts the roll profile you gave through the same model as a heat stripe on '
+        'the roll.', 'Check that it is a radius (not diameter) profile of the right roll.'),
+    'ROLL_GROUND_PROFILE_BAND_ABOVE_THRESHOLD': (
+        'The roll profile you gave would make a band above the reporting level.',
+        'Compare the band positions with the marks on the strip.'),
     'FRICTION_STRIPE_SCREEN_APPLIED': (
         'The page shows how much a local difference in friction across the width would mark '
         'the strip, as a rough linear estimate; it does not change the scores.',

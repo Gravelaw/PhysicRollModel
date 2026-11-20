@@ -3475,6 +3475,22 @@
       ],
       "mechanism": "PUBLISHED DESCRIPTION, NOT A MODEL: longitudinal stripes at 5-20 mm pitch that appear below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk]; wider and more visible at low strip tension and vanishing above a threshold tension [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. The tool has no physical model of them.",
       "model_prediction": {
+        "candidate_shell_buckling_pitch": {
+          "basis": "entrained-air corrugation in winding has the same remedies and thin-gauge trend [SS-S53 EX, SS-S66 EX]; wavelength formula re-derived (classical shell); no onset condition, no air-film model (G9, G10)",
+          "formula": "pitch = 2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4) [D, re-derived in SPEC17; reported from memory as 3.47*sqrt(R*t)]",
+          "how_to_test": "Measure the pitch at two coil radii and two gauges: this candidate predicts pitch proportional to sqrt(radius x gauge).",
+          "note": "not evidence: almost any foil coil gives a candidate pitch inside the published 5-20 mm",
+          "observed_inside_candidate_range": null,
+          "observed_spacing_m": null,
+          "pitch_range_m": null,
+          "poisson_ratio": 0.33,
+          "published_pitch_m": [
+            0.005,
+            0.02
+          ],
+          "rows": [],
+          "status": "NOT_APPLICABLE_ABOVE_FOIL_GAUGE"
+        },
         "case_exit_thickness_m": 0.0007,
         "model": "NONE: rule-based hypothesis, the tool has no physical model of tension lines (5-20 mm pitch reported, vanishing above a threshold tension)",
         "reported_onset_exit_gauge_m": [
