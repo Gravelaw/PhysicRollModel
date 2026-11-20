@@ -30,3 +30,24 @@ the Phase 3 brief is not written yet.
 Decisions taken on the open decisions of `SPEC17.md` section 3: all as the planner chose. In
 addition, the flag `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD` stays set in the battery-foil demo (the
 brief's sentence that no conditional flag is set there was wrong).
+
+## Standing requirement for the guided app (owner, 2026-11-20)
+
+The app must stay streamlined and simple as the gap add-ons are attached, and its outputs (graphs,
+tooltips, other visualisations) must be good and clear to look at: people should want to use it.
+Every app package, and one consolidation pass before the pull request, is held to this:
+
+- The default path stays the three input steps and the result. Nothing an add-on needs is asked
+  on the default path.
+- Add-on inputs sit behind progressive disclosure, grouped by what the person has (a flatness
+  roll, a thickness gauge, a temperature scan, a roll grinder report, pass records, oil data),
+  one line per group when collapsed, showing whether it is filled in.
+- Add-on results appear only when their input was given, and all use one card pattern: one
+  sentence saying what it means, one chart, one "how to read this" line, details collapsed.
+- Charts share the strip's width scale where they show the width, have labelled axes with units,
+  label lines directly where they can, use a palette that survives colour blindness and both
+  themes, and give the exact value with its plain meaning in a tooltip on hover and on keyboard
+  focus.
+- Technical terms carry a plain-word tooltip the first time they appear on a screen.
+- Desktop and phone screenshots of every new or changed screen are reviewed before the package
+  is accepted.
