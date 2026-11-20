@@ -88,11 +88,13 @@ REFERENCE_KINDS = ('MODEL_OUTPUT', 'MEASUREMENT', 'PUBLISHED_FORMULA', 'FIGURE_R
 CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29',
             'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
-            'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE')
+            'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
+            'BT-G3-CRUSHING-LAWS')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
 RECORDED_ON_SPEC18_P5 = '2026-11-20, on commit 624f8e9 (SPEC18 package 5)'
+RECORDED_ON_SPEC18_P6 = '2026-11-20, on commit f494de6 (SPEC18 package 6)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -219,6 +221,15 @@ RECORDED = {
                                   'viscosity_roelands_625_mpa_pa_s': 0.18000092137559526,
                                   'viscosity_roelands_945_mpa_pa_s': 1.2282814920250922,
                                   'viscosity_roelands_1510_mpa_pa_s': 24.36294894144888},
+    # [run] at RECORDED_ON_SPEC18_P6 (crushing laws)
+    'BT-G3-CRUSHING-LAWS': {'w_thesis_fit_eq_3_20_a050_p10': 1.62,
+                            'w_thesis_fit_eq_3_20_a050_p06': 0.05,
+                            'w_korzekwa_regression_a050_p10': 1.7608874999999997,
+                            'w_korzekwa_regression_a050_p06': 0.5869268999999996,
+                            'w_marsault_form_a050_p10': 1.62,
+                            'w_marsault_form_a050_p06': 0.5832,
+                            'w_wilson_sheu_fit_a050_p10': 5.471148310128523,
+                            'w_wilson_sheu_fit_a050_p06': 1.1258163257085319},
 }
 
 NOT_ENCODED = (
@@ -1016,6 +1027,41 @@ def _a9_pressure_laws():
                  ['ONE_OIL_WITH_DATA'])
 
 
+def _bt_g3_crushing_laws():
+    """The four transcribed crushing laws against the thesis's theory values [E6 FT p.38]."""
+    from . import asperity_contact as ac
+    laws = {'thesis_fit_eq_3_20': lambda a, p: ac.crushing_rate_thesis(a, p),
+            'korzekwa_regression': lambda a, p: ac.crushing_rate_from_strain_rate(
+                ac.plastic_strain_rate_korzekwa(a, ac.hardness_from_mean_pressure(a, p))),
+            'marsault_form': lambda a, p: ac.crushing_rate_from_strain_rate(
+                ac.plastic_strain_rate_marsault(a, ac.hardness_from_mean_pressure(a, p))),
+            'wilson_sheu_fit': lambda a, p: ac.crushing_rate_from_strain_rate(
+                ac.plastic_strain_rate_wilson_sheu(a, ac.hardness_from_mean_pressure(a, p)))}
+    refs = {1.0: (1.47, 0.67), 0.6: (0.16, 0.32)}   # (new field, Wilson & Sheu's field)
+    q = []
+    for name, fun in laws.items():
+        for p_ in (1.0, 0.6):
+            ref = refs[p_][1] if name == 'wilson_sheu_fit' else refs[p_][0]
+            key = f'w_{name}_a050_p{int(p_ * 10):02d}'
+            q.append(_quantity(key, '1', fun(0.5, p_), RECORDED['BT-G3-CRUSHING-LAWS'][key],
+                               ref, f'theory value at A 0.5, p_bar/2k {p_:g} '
+                               + ("(Wilson & Sheu's field)" if name == 'wilson_sheu_fit'
+                                  else '(new velocity field)') + ' (MODEL_OUTPUT, E6 FT p.38)',
+                               recorded_on=RECORDED_ON_SPEC18_P6))
+    notes = ['Laws: the thesis fit [E6 FT (3.20), clipped to 0.05-2.5], the regression of '
+             'Korzekwa et al.\'s results [E5 FT (4.97)-(4.100)], the Marsault form [E5 FT '
+             '(4.96)], Wilson & Sheu\'s fit [E5 FT (4.92)]; W = 1/E_p, p_bar/2k = A*H_a/2 '
+             '[derived].',
+             'physicroll/asperity_contact.py; nothing in the engine uses these functions.']
+    return _case('BT-G3-CRUSHING-LAWS', 'Asperity crushing laws against the thesis theory '
+                 'values', 'Sutcliffe (1989) thesis (E6); Boemer (2020) thesis (E5)', 'E6, E5',
+                 'FT', 'MODEL_OUTPUT', {'contact_area_ratio': 0.5,
+                                        'p_over_2k': [1.0, 0.6]}, notes, q,
+                 'RECORDED_DISCREPANCY', 'The transcribed fits do not agree with one another or '
+                 'with the theory values away from one point; they are not assembled into a '
+                 'model.', ['NOT_ASSEMBLED_INTO_A_MODEL'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1025,7 +1071,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V3-FIG1-140UM-HS': _bt_v3_fig1_hs, 'BT-V3-EQ29-HS': _bt_v3_eq29_hs,
           'BT-X29-LOAD-EXPONENT-HS': _bt_x29_load_exponent_hs,
           'BT-G3-FILM-E6-T42': _bt_g3_film_e6, 'BT-V4-FILM': _bt_v4_film,
-          'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws}
+          'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws,
+          'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws}
 
 
 def run_case(case_id: str) -> dict:

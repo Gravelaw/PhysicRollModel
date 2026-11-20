@@ -249,7 +249,8 @@ class BenchmarkTests(unittest.TestCase):
                     self.assertRel(q['project_value'], q['recorded_project_value'])
                     self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1,
                                                      bm.RECORDED_ON_SPEC18_P4,
-                                                     bm.RECORDED_ON_SPEC18_P5))
+                                                     bm.RECORDED_ON_SPEC18_P5,
+                                                     bm.RECORDED_ON_SPEC18_P6))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -379,6 +380,24 @@ class BenchmarkTests(unittest.TestCase):
         # 100 MPa Roelands row: 0.928, inside the 0.9-1.1 band (the brief's text calls it a
         # discrepancy; the rule "row verdicts by the band" gives the agreement word)
         self.assertEqual(verdicts['viscosity_roelands_100_mpa_pa_s'][1], 'WITHIN_AGREEMENT_BAND')
+
+    def test_crushing_laws_recorded_discrepancy(self):
+        """Passing this test does not mean any law is right: it records that the four
+        transcribed crushing laws differ from the thesis theory values and from one another
+        away from A = 0.5, p_bar/2k = 1; they are not assembled into a model."""
+        case = self.cases['BT-G3-CRUSHING-LAWS']
+        self.assertEqual(case['verdict'], 'RECORDED_DISCREPANCY')
+        self.assertIn('not assembled into a model', case['note'])
+        ratios = {q['name']: q['ratio_project_to_reference'] for q in case['quantities']}
+        for name, want in (('w_thesis_fit_eq_3_20_a050_p10', 1.102),
+                           ('w_thesis_fit_eq_3_20_a050_p06', 0.31),
+                           ('w_korzekwa_regression_a050_p10', 1.198),
+                           ('w_korzekwa_regression_a050_p06', 3.67),
+                           ('w_marsault_form_a050_p10', 1.102),
+                           ('w_marsault_form_a050_p06', 3.65),
+                           ('w_wilson_sheu_fit_a050_p10', 8.17),
+                           ('w_wilson_sheu_fit_a050_p06', 3.52)):
+            self.assertAlmostEqual(ratios[name], want, delta=0.005 * want + 0.003, msg=name)
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

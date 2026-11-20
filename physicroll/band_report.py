@@ -2219,7 +2219,11 @@ def _process_section(r):
                 flags = sorted(set((fc.get('flags') or [])
                                    + ((fr or {}).get('flags') or [] if isinstance(fr, dict)
                                       else [])))
-                out.append('<p class="warn"><strong>Placeholder closure.</strong> '
+                ls = isinstance(fr, dict) and fr.get('status') == (
+                    'UNVALIDATED_LOAD_SHARING_ON_A_PUBLISHED_CONTACT_RATIO_CURVE')
+                out.append('<p class="warn"><strong>'
+                           + ('Load sharing on a published curve.' if ls
+                              else 'Placeholder closure.') + '</strong> '
                            + _e(' '.join(n for n in notes if n))
                            + (f' Flags: {_e(", ".join(flags))}.' if flags else '') + '</p>')
                 sl = fc.get('mean_slope_per_m_s')

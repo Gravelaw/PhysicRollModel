@@ -128,6 +128,8 @@ SOURCES = {
     'le_sutcliffe_2001': 'Le & Sutcliffe (2000/2001) mixed lubrication in strip rolling '
                          '(boundary friction varying with film thickness and reduction)',
     'yarita_1984': 'Yarita (1984) (inlet exponent written with the entry pressure)',
+    'sutcliffe_1989_thesis': 'Sutcliffe (1989) PhD thesis, Cambridge (E6 FT: Table 4.2 '
+                             'contact-ratio curve, eq. 4.32 valley shear)',
     'ghosh_hamrock_1985': 'Ghosh & Hamrock (1985) (thermal loading parameter L)',
     'murch_wilson': 'Murch & Wilson thermal reduction factor form (quoted from memory)',
     'tabary_1996': 'Tabary, Sutcliffe et al. (1996) J. Tribol. 118:629 (abstract: aluminium '
@@ -491,12 +493,121 @@ class SurfaceFinish:
         return math.hypot(self.roll_roughness_rq_m, self.strip_roughness_rq_m)
 
 
+# SPEC18 package 6: load sharing on a published contact-ratio curve (a REDUCED closure).
+# [E6 FT, Table 4.2: the 20 -> 15 um foil pass of Fig. 9 of E1, d0 0.1 um, wavelength 15 um,
+#  one oil, 1 to 30 m/s; film ratio = h_s/d0, derived]
+PUBLISHED_FOIL_CONTACT_RATIO_CURVE = ((0.14, 0.88), (0.36, 0.69), (0.55, 0.53), (0.97, 0.28),
+                                      (2.37, 0.01))
+PUBLISHED_FOIL_VALLEY_FILM_CURVE = ((0.14, 0.42), (0.36, 0.62), (0.55, 0.79), (0.97, 1.10),
+                                    (2.37, 2.17))   # (film ratio, valley film / roughness)
+CLOSURE_MODELS = ('placeholder_exponential', 'load_sharing_curve')
+VALLEY_MODELS = ('constant', 'eyring', 'newtonian_capped')
+STATUS_LOAD_SHARING = 'UNVALIDATED_LOAD_SHARING_ON_A_PUBLISHED_CONTACT_RATIO_CURVE'
+LOAD_SHARING_FLAG = 'REDUCED_LOAD_SHARING_CLOSURE_NO_INLET_ANALYSIS'
+PUBLISHED_CURVE_FLAG = 'CONTACT_RATIO_CURVE_OF_ONE_PUBLISHED_FOIL_PASS'
+ENTERED_CONTACT_FRICTION_FLAG = 'CONTACT_FRICTION_IS_AN_ENTERED_VALUE'
+OUTSIDE_CURVE_FLAG = 'FILM_RATIO_OUTSIDE_CONTACT_RATIO_CURVE'
+CONTACT_FRICTION_REQUIRED = ('friction_closure.contact_friction is required for the '
+                             'load_sharing_curve model: the sources span 0.013 to 0.1')
+LOAD_SHARING_NOTE = ('Load sharing on a published contact-ratio curve of one foil pass. The '
+                     'friction level is your entered contact friction; read the change with '
+                     'speed, not the level.')
+LOAD_SHARING_LIMITATIONS = [
+    'The contact-ratio curve is model output for one foil pass (20 -> 15 um, roughness 0.1 um, '
+    'wavelength 15 um, one oil) [E6 FT, Table 4.2]; it is not a property of other surfaces, '
+    'oils or reductions. It is the closure\'s input, so it cannot also serve as its benchmark.',
+    'The level of friction is set by the entered contact friction (0.013 to 0.1 in the '
+    'sources); the closure supports the change of friction with speed, not its level.',
+    'Published data need a contact friction that varies with film and reduction and cannot be '
+    'met with one value [E7 FT].',
+    'The film ratio entered is the smooth inlet film over the composite roughness; the '
+    'table\'s abscissa is the thesis\'s full inlet integration, which its own closed-form film '
+    'over-states by 1.36 / 1.11 / 0.98 / 0.89 / 0.79 at 30 / 10 / 5 / 3 / 1 m/s [E6 FT]: the '
+    'abscissa carries that much mismatch.',
+    'Friction is the same through the bite; no roughness wavelength, lay or reduction enters; '
+    'no inlet analysis (the transcribed height distribution and crushing laws do not reproduce '
+    'the source table and are not assembled: physicroll/asperity_contact.py).',
+]
+VALLEY_STEP = 1e-4
+
+
+def _curve(name, points, kind):
+    """Validated curve: 2 to 12 (film ratio, value) points, film ratios increasing in (0, 100];
+    contact ratios in [0, 1] non-increasing, or valley films positive non-decreasing."""
+    msg = (f'{name} must have 2 to 12 points with film ratios strictly increasing in (0, 100] '
+           + ('and contact ratios in [0, 1], non-increasing' if kind == 'contact'
+              else 'and valley films positive, non-decreasing'))
+    if not isinstance(points, (tuple, list)) or not 2 <= len(points) <= 12:
+        raise ValueError(msg)
+    out = []
+    for pt in points:
+        if not isinstance(pt, (tuple, list)) or len(pt) != 2 or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                for v in pt):
+            raise ValueError(msg)
+        lam, val = float(pt[0]), float(pt[1])
+        if not 0 < lam <= 100 or (kind == 'contact' and not 0 <= val <= 1) or \
+                (kind == 'valley' and not val > 0):
+            raise ValueError(msg)
+        out.append((lam, val))
+    for (l1, v1), (l2, v2) in zip(out, out[1:]):
+        if not l2 > l1 or (kind == 'contact' and v2 > v1) or (kind == 'valley' and v2 < v1):
+            raise ValueError(msg)
+    return tuple(out)
+
+
+def contact_ratio_at(film_ratio, curve=PUBLISHED_FOIL_CONTACT_RATIO_CURVE):
+    """(A, dA/dLambda, held) with A linear in ln(Lambda) between neighbouring points and the end
+    values held outside [D, SPEC18: interpolation of published points, not a contact model]."""
+    pts = _curve('contact_ratio_curve', curve, 'contact')
+    lam = _num('film_ratio', film_ratio, positive=True, hi=1e6)
+    if lam <= pts[0][0]:
+        return pts[0][1], 0.0, lam < pts[0][0]
+    if lam >= pts[-1][0]:
+        return pts[-1][1], 0.0, lam > pts[-1][0]
+    i = 0
+    while lam > pts[i + 1][0]:
+        i += 1
+    (l1, a1), (l2, a2) = pts[i], pts[i + 1]
+    k = (a2 - a1) / math.log(l2 / l1)
+    return a1 + k * math.log(lam / l1), k / lam, False
+
+
+def valley_film_over_rq_at(film_ratio, curve=PUBLISHED_FOIL_VALLEY_FILM_CURVE):
+    """h_v/Rq: linear in ln-ln between points; first value held below the curve; above it
+    Lambda*(last value/last film ratio) [D, SPEC18]."""
+    pts = _curve('valley_film_curve', curve, 'valley')
+    lam = _num('film_ratio', film_ratio, positive=True, hi=1e6)
+    if lam <= pts[0][0]:
+        return pts[0][1]
+    if lam >= pts[-1][0]:
+        return lam * pts[-1][1] / pts[-1][0]
+    i = 0
+    while lam > pts[i + 1][0]:
+        i += 1
+    (l1, v1), (l2, v2) = pts[i], pts[i + 1]
+    return math.exp(math.log(v1) + math.log(v2 / v1) * math.log(lam / l1) / math.log(l2 / l1))
+
+
 @dataclass(frozen=True)
 class FrictionClosure:
-    """Placeholder ``mu = mu_v + (mu_b - mu_v)*exp(-Lambda/lambda0)`` [D], not fitted."""
+    """Friction closure. ``model``: 'placeholder_exponential' (default, unchanged)
+    ``mu = mu_v + (mu_b - mu_v)*exp(-Lambda/lambda0)`` [D], not fitted; or
+    'load_sharing_curve' (SPEC18 package 6, a REDUCED closure): ``mu = A*mu_c + (1 - A)*mu_v``
+    [BT-S9 EX; E7 FT eq. 7] with the contact ratio A(Lambda) from a curve (default: the
+    published five points of one foil pass [E6 FT, Table 4.2]), ``contact_friction`` mu_c a
+    REQUIRED entered value (no default) and the valley friction mu_v from ``valley_model``:
+    'constant' (``mu_v``), 'eyring' ``min(tau_0*asinh(eta*u_s/(tau_0*h_v)), tau_L)/p_mean``
+    [E6 FT (4.32)] or 'newtonian_capped' ``min(eta*u_s/h_v, tau_L)/p_mean`` (a cap required).
+    """
     mu_b: float = 0.09     # [V] Tabary et al. 1996 low-speed (boundary additive) value
     mu_v: float = 0.008    # [D] within 0.005-0.01
     lambda0: float = 1.0   # [D]
+    model: str = 'placeholder_exponential'
+    contact_friction: float | None = None
+    contact_ratio_curve: tuple | None = None
+    valley_film_curve: tuple | None = None
+    valley_model: str = 'constant'
 
     def validate(self):
         mu_b = _num('mu_b', self.mu_b, positive=True, hi=1.0)
@@ -504,9 +615,46 @@ class FrictionClosure:
         _num('lambda0', self.lambda0, positive=True, hi=100.0)
         if mu_v > mu_b:
             raise ValueError('mu_v must not exceed mu_b')
+        if self.model not in CLOSURE_MODELS:
+            raise ValueError(f'friction_closure.model must be one of {CLOSURE_MODELS}')
+        if self.valley_model not in VALLEY_MODELS:
+            raise ValueError(f'friction_closure.valley_model must be one of {VALLEY_MODELS}')
+        if self.model == 'load_sharing_curve':
+            if self.contact_friction is None:
+                raise ValueError(CONTACT_FRICTION_REQUIRED)
+            mu_c = _num('contact_friction', self.contact_friction)
+            if not 0 < mu_c <= 1:
+                raise ValueError('friction_closure.contact_friction must be in (0, 1]')
+        if self.contact_ratio_curve is not None:
+            _curve('contact_ratio_curve', self.contact_ratio_curve, 'contact')
+        if self.valley_film_curve is not None:
+            _curve('valley_film_curve', self.valley_film_curve, 'valley')
+
+    def contact_curve(self):
+        return (PUBLISHED_FOIL_CONTACT_RATIO_CURVE if self.contact_ratio_curve is None
+                else self.contact_ratio_curve)
+
+    def valley_curve(self):
+        return (PUBLISHED_FOIL_VALLEY_FILM_CURVE if self.valley_film_curve is None
+                else self.valley_film_curve)
 
     def basis(self):
         default = FrictionClosure()
+        if self.model == 'load_sharing_curve':
+            return {'closure_form': '[BT-S9 EX; E7 FT eq. 7] mu = A*mu_c + (1 - A)*mu_v: load '
+                                    'sharing on a contact-ratio curve (REDUCED: no inlet '
+                                    'analysis)',
+                    'contact_ratio_curve': ('[E6 FT, Table 4.2] published curve of one foil '
+                                            'pass' if self.contact_ratio_curve is None
+                                            else 'supplied by caller'),
+                    'interpolation': '[D, SPEC18] A linear in ln(Lambda), end values held; h_v '
+                                     'ln-ln',
+                    'contact_friction': 'entered by the user (no default; sources 0.013-0.1)',
+                    'valley_model': {'constant': '[D] mu_v constant',
+                                     'eyring': '[E6 FT (4.32)] Eyring valley shear',
+                                     'newtonian_capped': '[D, SPEC18] Newtonian valley shear '
+                                                         'capped at the limiting stress'}[
+                                         self.valley_model]}
         return {
             'mu_b': '[V] Tabary et al. 1996 abstract' if self.mu_b == default.mu_b
                     else 'supplied by caller',
@@ -653,12 +801,72 @@ def _mu(lam, closure):
     return closure.mu_v + (closure.mu_b - closure.mu_v) * math.exp(-lam / closure.lambda0)
 
 
-def friction_coefficient(film_ratio, closure=None):
-    """Placeholder closure ``mu(Lambda)`` and its slope ``dmu/dLambda`` (always <= 0)."""
+def _valley(lam, closure, lub, rq, state):
+    """(mu_v, h_v [m] or None, tau_v [Pa] or None, capped or None, flags, notes)."""
+    if closure.valley_model == 'constant':
+        return closure.mu_v, None, None, None, [], []
+    if lub is None or rq is None or state is None or \
+            state.get('mean_pressure_pa') is None or \
+            state.get('mean_sliding_speed_m_s') is None:
+        raise ValueError('valley shear needs the bite state')
+    p = _num('mean_pressure_pa', state['mean_pressure_pa'], positive=True, hi=3e9)
+    u_s = _num('mean_sliding_speed_m_s', state['mean_sliding_speed_m_s'], nonnegative=True,
+               hi=MAX_SPEED_M_S)
+    t = _temperature('inlet_temperature_k', state['inlet_temperature_k'])
+    eta = lub.dynamic_viscosity_pa_s(t, p)
+    h_v = valley_film_over_rq_at(lam, closure.valley_curve()) * rq
+    tau_l = lub.limiting_shear_stress_at(p)
+    if closure.valley_model == 'eyring':
+        tau_0 = lub.eyring_stress_at(p)
+        if tau_0 is None or tau_0 <= 0:
+            raise ValueError('the eyring valley model needs an Eyring stress '
+                             '(tribology.lubricant.eyring_stress_pa or its pressure coefficient)')
+        tau = tau_0 * math.asinh(eta * u_s / (tau_0 * h_v))
+    else:
+        if tau_l is None:
+            raise ValueError('the newtonian_capped valley model needs a limiting shear stress '
+                             '(tribology.lubricant.limiting_shear_stress_pa or its pressure '
+                             'coefficient)')
+        tau = eta * u_s / h_v
+    capped = None
+    flags, notes = [], []
+    if tau_l is not None:
+        capped = tau > tau_l
+        tau = min(tau, tau_l)
+        flags, notes = lub.limiting_shear_check(p)
+    return tau / p, h_v, tau, capped, flags, notes
+
+
+def _load_sharing(lam, closure, lub, rq, state):
+    a, da, held = contact_ratio_at(lam, closure.contact_curve())
+    mu_v, h_v, tau, capped, flags, notes = _valley(lam, closure, lub, rq, state)
+    mu = a * closure.contact_friction + (1 - a) * mu_v
+    return {'mu': mu, 'a': a, 'da': da, 'held': held, 'mu_v': mu_v, 'h_v': h_v, 'tau': tau,
+            'capped': capped, 'flags': flags, 'notes': notes}
+
+
+def _closure_mu(lam, closure, lub=None, rq=None, state=None):
+    if closure.model == 'placeholder_exponential':
+        return _mu(lam, closure)
+    return _load_sharing(lam, closure, lub, rq, state)['mu']
+
+
+def friction_coefficient(film_ratio, closure=None, *, lubricant=None, finish=None,
+                         bite_state=None):
+    """Friction closure ``mu(Lambda)`` and its slope ``dmu/dLambda``.
+
+    Placeholder (default): ``mu = mu_v + (mu_b - mu_v)*exp(-Lambda/lambda0)``, slope <= 0.
+    'load_sharing_curve': ``mu = A*mu_c + (1 - A)*mu_v`` on the contact-ratio curve; the
+    valley models 'eyring' and 'newtonian_capped' need ``lubricant``, ``finish`` and
+    ``bite_state = {'mean_pressure_pa', 'mean_sliding_speed_m_s', 'inlet_temperature_k'}``
+    (ValueError 'valley shear needs the bite state' without them).
+    """
     closure = FrictionClosure() if closure is None else closure
     if not isinstance(closure, FrictionClosure):
         raise ValueError('closure must be a FrictionClosure')
     closure.validate()
+    if closure.model == 'load_sharing_curve':
+        return _friction_load_sharing(film_ratio, closure, lubricant, finish, bite_state)
     lam = _num('film_ratio', film_ratio, nonnegative=True, hi=1e6)
     mu = _mu(lam, closure)
     slope = -(closure.mu_b - closure.mu_v) / closure.lambda0 * math.exp(-lam / closure.lambda0)
@@ -684,15 +892,65 @@ def friction_coefficient(film_ratio, closure=None):
                     SOURCES['le_sutcliffe_2001']]})
 
 
+def _friction_load_sharing(film_ratio, closure, lub, finish, state):
+    lam = _num('film_ratio', film_ratio, positive=True, hi=1e6)
+    rq = finish.composite_rq_m() if finish is not None else None
+    r = _load_sharing(lam, closure, lub, rq, state)
+    if closure.valley_model == 'constant':
+        slope = (closure.contact_friction - closure.mu_v) * r['da']
+    else:
+        d = VALLEY_STEP * lam
+        slope = (_load_sharing(lam + d, closure, lub, rq, state)['mu']
+                 - _load_sharing(lam - d, closure, lub, rq, state)['mu']) / (2 * d)
+    regime = _regime(lam)
+    flags = [LOAD_SHARING_FLAG, ENTERED_CONTACT_FRICTION_FLAG]
+    if closure.contact_ratio_curve is None:
+        flags.append(PUBLISHED_CURVE_FLAG)
+    if r['held']:
+        flags.append(OUTSIDE_CURVE_FLAG)
+    flags += [f for f in r['flags'] if f not in flags]
+    limitations = list(LOAD_SHARING_LIMITATIONS) + r['notes']
+    if r['held']:
+        limitations.append(f'Film ratio {lam:.3g} lies outside the contact-ratio curve '
+                           f'({closure.contact_curve()[0][0]:g} to '
+                           f'{closure.contact_curve()[-1][0]:g}): the end value is held, not '
+                           'extrapolated.')
+    return _checked({
+        'status': STATUS_LOAD_SHARING, 'friction_coefficient': r['mu'],
+        'dmu_dlambda': slope, 'film_ratio': lam, 'regime': regime,
+        'in_common_industrial_window': in_common_industrial_window(lam),
+        'closure': asdict(closure),
+        'formula': 'mu = A*mu_c + (1 - A)*mu_v, A(Lambda) on the contact-ratio curve',
+        'regime_boundaries': dict(REGIME_BOUNDARIES),
+        'contact_area_ratio': r['a'], 'contact_friction': closure.contact_friction,
+        'valley_friction': r['mu_v'], 'valley_model': closure.valley_model,
+        'valley_film_thickness_m': r['h_v'], 'valley_shear_stress_pa': r['tau'],
+        'valley_shear_capped': r['capped'],
+        'contact_ratio_curve': [list(x) for x in closure.contact_curve()],
+        'curve_is_published_default': closure.contact_ratio_curve is None,
+        'basis': dict(closure.basis(), regime_boundaries='[V] Sutcliffe 2002; BT-S9 EX; window '
+                                                         'BT-S3 EX, BT-S9 EX'),
+        'reasons': [f'Film ratio {lam:.3f}: {_REGIME_WORDS[regime]}; contact ratio '
+                    f'{r["a"]:.3f}, mu = {r["mu"]:.4f} with the entered contact friction '
+                    f'{closure.contact_friction:g}.'],
+        'flags': flags, 'limitations': limitations,
+        'sources': [SOURCES['sutcliffe_2002'], SOURCES['le_sutcliffe_2001'],
+                    SOURCES['sutcliffe_1989_thesis']]})
+
+
 def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
                       strip_entry_speed_m_s, entry_thickness_m, exit_thickness_m,
                       contact_radius_m, plane_strain_yield_pa, back_tension_pa,
-                      inlet_temperature_k, thermal_correction=False):
-    """Oil + speed + temperature -> film -> Lambda -> placeholder friction, with speed slope.
+                      inlet_temperature_k, thermal_correction=False, mean_pressure_pa=None,
+                      backward_slip_fraction=None):
+    """Oil + speed + temperature -> film -> Lambda -> closure friction, with speed slope.
 
     ``dmu_dspeed_per_m_s`` is the central finite difference of mu with respect to the roll
     surface speed, the strip entry speed scaled in proportion (fixed slip); negative means
-    friction falls as speed rises.
+    friction falls as speed rises. ``mean_pressure_pa`` (the bite's mean pressure) and
+    ``backward_slip_fraction`` give the bite state the computed valley models of the
+    load-sharing closure need; the mean sliding speed is ``u_s = V_r*(b + f)/2`` with
+    ``f = u_entry*h0/(V_r*h1) - 1`` and ``b`` given, else ``1 - u_entry/V_r`` [D, SPEC18].
     """
     if not isinstance(finish, SurfaceFinish):
         raise ValueError('finish must be a SurfaceFinish')
@@ -712,17 +970,35 @@ def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
                              plane_strain_yield_pa, back_tension_pa, inlet_temperature_k,
                              thermal_correction))
     lam = film['film_thickness_m'] / rq
-    fric = friction_coefficient(lam, closure)
+    h0_, h1_ = args[3], args[4]
+
+    def state_at(ur, us):
+        if mean_pressure_pa is None:
+            return None
+        f = us * h0_ / (ur * h1_) - 1
+        b = (1 - us / ur) if backward_slip_fraction is None else backward_slip_fraction
+        return {'mean_pressure_pa': mean_pressure_pa,
+                'mean_sliding_speed_m_s': abs(ur * (b + f) / 2),
+                'inlet_temperature_k': args[8]}
+    state = state_at(args[1], args[2])
+    fric = friction_coefficient(lam, closure, lubricant=lubricant, finish=finish,
+                                bite_state=state)
     step = SPEED_DERIVATIVE_RELATIVE_STEP
     mus = []
     for sign in (1, -1):
         scaled = list(args)
         scaled[1] = args[1] * (1 + sign * step)
         scaled[2] = args[2] * (1 + sign * step)
-        mus.append(_mu(_film_core(*scaled)['h'] / rq, closure))
+        if closure.model == 'placeholder_exponential':
+            mus.append(_mu(_film_core(*scaled)['h'] / rq, closure))
+        else:
+            mus.append(_closure_mu(_film_core(*scaled)['h'] / rq, closure, lubricant, rq,
+                                   state_at(scaled[1], scaled[2])))
     dmu_dspeed = (mus[0] - mus[1]) / (2 * step * args[1])
     regime = fric['regime']
-    flags = [PLACEHOLDER_FLAG] + [f for f in film['flags'] if f not in (PLACEHOLDER_FLAG,)]
+    first = PLACEHOLDER_FLAG if closure.model == 'placeholder_exponential' else LOAD_SHARING_FLAG
+    flags = [first] + [f for f in film['flags'] if f not in (first,)]
+    flags += [f for f in fric['flags'] if f not in flags]
     if regime == 'HYDRODYNAMIC':
         flags.append('THICK_FILM_SKIDDING_MATTE_RISK')
     reasons = film['reasons'] + fric['reasons'] + [
@@ -732,7 +1008,7 @@ def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
     basis.update({f'closure_{k}': v for k, v in fric['basis'].items()})
     basis['speed_derivative'] = '[D] central difference, relative step 1e-4, fixed slip'
     return _checked({
-        'status': STATUS_FRICTION,
+        'status': fric['status'],
         'film_thickness_m': film['film_thickness_m'],
         'isothermal_film_thickness_m': film['isothermal_film_thickness_m'],
         'film_thickness_yield_only_exponent_m': film['film_thickness_yield_only_exponent_m'],
@@ -754,6 +1030,10 @@ def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
         'dmu_dspeed_per_m_s': dmu_dspeed,
         'closure': fric['closure'],
         'regime_boundaries': fric['regime_boundaries'],
+        **{k: fric[k] for k in ('contact_area_ratio', 'contact_friction', 'valley_friction',
+                                'valley_model', 'valley_film_thickness_m',
+                                'valley_shear_stress_pa', 'valley_shear_capped',
+                                'curve_is_published_default') if k in fric},
         'basis': basis, 'reasons': reasons, 'flags': flags,
         'limitations': film['limitations'] + fric['limitations'] + [
             'Rq-based film ratio ignores roughness lay and asperity flattening in the bite.'],
@@ -763,7 +1043,8 @@ def friction_at_speed(lubricant, finish, closure, *, roll_surface_speed_m_s,
 def friction_speed_curve(lubricant, finish, closure, *, exit_speeds_m_s, entry_thickness_m,
                          exit_thickness_m, contact_radius_m, plane_strain_yield_pa,
                          back_tension_pa, inlet_temperature_k, forward_slip_fraction=0.0,
-                         thermal_correction=False):
+                         thermal_correction=False, mean_pressure_pa=None,
+                         backward_slip_fraction=None):
     """Friction versus exit strip speed, for plots.
 
     For each exit speed ``u_x``: roll speed ``V_r = u_x/(1 + f)`` (forward slip ``f``), strip
@@ -778,7 +1059,9 @@ def friction_speed_curve(lubricant, finish, closure, *, exit_speeds_m_s, entry_t
         raise ValueError('exit_speeds_m_s must not be empty')
     f = _num('forward_slip_fraction', forward_slip_fraction, lo=-0.4, hi=0.4)
     h0, h1 = _thickness_pair(entry_thickness_m, exit_thickness_m)
-    points, flags = [], [PLACEHOLDER_FLAG]
+    points = []
+    flags = [PLACEHOLDER_FLAG if (closure is None or closure.model == 'placeholder_exponential')
+             else LOAD_SHARING_FLAG]
     last = None
     for ux in speeds:
         r = friction_at_speed(
@@ -786,7 +1069,8 @@ def friction_speed_curve(lubricant, finish, closure, *, exit_speeds_m_s, entry_t
             strip_entry_speed_m_s=ux * h1 / h0, entry_thickness_m=h0, exit_thickness_m=h1,
             contact_radius_m=contact_radius_m, plane_strain_yield_pa=plane_strain_yield_pa,
             back_tension_pa=back_tension_pa, inlet_temperature_k=inlet_temperature_k,
-            thermal_correction=thermal_correction)
+            thermal_correction=thermal_correction, mean_pressure_pa=mean_pressure_pa,
+            backward_slip_fraction=backward_slip_fraction)
         for fl in r['flags']:
             if fl not in flags:
                 flags.append(fl)
@@ -804,7 +1088,7 @@ def friction_speed_curve(lubricant, finish, closure, *, exit_speeds_m_s, entry_t
     basis = dict(last['basis'])
     basis['speed_mapping'] = '[D] mass flow with supplied forward slip'
     return _checked({
-        'status': STATUS_FRICTION, 'points': points,
+        'status': last['status'], 'points': points,
         'forward_slip_fraction': f, 'thermal_correction_applied': thermal_correction,
         'composite_roughness_rq_m': last['composite_roughness_rq_m'],
         'closure': last['closure'], 'basis': basis,

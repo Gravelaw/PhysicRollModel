@@ -265,6 +265,16 @@ BITE_MODEL_WORDS = {'hitchcock': 'Sheet roll-gap model (Hitchcock flattening)',
                     'auto': 'Choose by gauge (sheet model, foil model where it fails)',
                     'half_space': 'Half-space foil roll-gap model (reduced)',
                     'auto_half_space': 'Standard model, half-space model where it stops'}
+NULL_WHEN_EMPTY_LISTS = ('tribology.lubricant.viscosity_table',
+                         'tribology.friction_closure.contact_ratio_curve',
+                         'tribology.friction_closure.valley_film_curve')
+CLOSURE_MODEL_WORDS = {'placeholder_exponential': 'Placeholder law (default, not fitted)',
+                       'load_sharing_curve': 'Share of touching surface from a published foil '
+                                             'pass, with your contact friction'}
+VALLEY_MODEL_WORDS = {'constant': 'Constant (default)',
+                      'eyring': 'From the oil\'s shear data (needs its Eyring stress)',
+                      'newtonian_capped': 'Simple liquid, capped (needs its largest shear '
+                                          'stress)'}
 PRESSURE_LAW_WORDS = {'barus': 'Standard rule (exponential rise, default)',
                       'roelands': 'Textbook rule (Roelands; did worse on the only data)'}
 THERMAL_SENS_WORDS = {'off': 'Off', 'partition': 'Heat share only (default)',
@@ -807,6 +817,35 @@ MILL_QUESTIONS = (
     _m('closure_lambda0', 'tribology.friction_closure.lambda0', 'number',
        'Placeholder friction law: transition film ratio', 'See above.', unit='ratio',
        group='Rolling oil'),
+    _m('closure_model', 'tribology.friction_closure.model', 'choice',
+       'Which friction law to use with the oil film',
+       'The standard choice is the placeholder law. The other law follows how much of the roll '
+       'touches the strip on one published foil pass and needs your contact friction below.',
+       choices=_choices(bt.CLOSURE_MODELS, CLOSURE_MODEL_WORDS), unknown='null',
+       group='Rolling oil'),
+    _m('closure_contact_friction', 'tribology.friction_closure.contact_friction', 'number',
+       'Friction where roll and strip touch (needed for the second friction law)',
+       'There is no published value for your mill: published values run from 0.013 to 0.1. '
+       'Take it from your measured roll force or forward slip, or from a strip-drawing test '
+       'with your oil and roll finish. The second law cannot run without it.', unit='ratio',
+       group='Rolling oil'),
+    _m('closure_valley_model', 'tribology.friction_closure.valley_model', 'choice',
+       'Friction of the oil between the contacts',
+       'Keep the constant value unless you entered the oil\'s high-pressure shear data.',
+       choices=_choices(bt.VALLEY_MODELS, VALLEY_MODEL_WORDS), unknown='null',
+       group='Rolling oil'),
+    _m('closure_contact_ratio_curve', 'tribology.friction_closure.contact_ratio_curve', 'list',
+       'Your own curve of touching share against film ratio',
+       'Leave empty to use the published curve of one foil pass.',
+       fields=(Field('film_ratio', 'Film ratio', unit='ratio'),
+               Field('contact_ratio', 'Share of the surface touching', unit='ratio')),
+       unknown='null', group='Rolling oil'),
+    _m('closure_valley_film_curve', 'tribology.friction_closure.valley_film_curve', 'list',
+       'Your own curve of oil film in the valleys against film ratio',
+       'Leave empty to use the published curve of one foil pass.',
+       fields=(Field('film_ratio', 'Film ratio', unit='ratio'),
+               Field('valley_film_over_roughness', 'Valley film / roughness', unit='ratio')),
+       unknown='null', group='Rolling oil'),
     _m('oil_inlet_temperature', 'tribology.inlet_temperature_k', 'number',
        'Oil temperature at the roll gap inlet', 'Battery foil plants report 40-45 °C.',
        unit='degc', group='Rolling oil'),
@@ -1241,7 +1280,7 @@ def answer_to_si(q, value, origin_m=0.0):
         rows = [{f.name: _field_si(q, f, item.get(f.name), origin_m) for f in q.fields}
                 for item in value]
         return dict(defaults, **{arr: [r[name] for r in rows] for name, arr in arrays.items()})
-    if q.key == 'tribology.lubricant.viscosity_table' and not value:
+    if q.key in NULL_WHEN_EMPTY_LISTS and not value:
         return None                     # no points: the single viscosity value is used
     out = []
     for item in value:

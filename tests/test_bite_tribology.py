@@ -448,5 +448,144 @@ class OilPropertyTests(unittest.TestCase):
         self.assertIsNone(lub.viscosity_table)
 
 
+class LoadSharingClosureTests(unittest.TestCase):
+    """SPEC18 package 6: load sharing on the published contact-ratio curve (s23/v_fric2.py)."""
+
+    def setUp(self):
+        from physicroll import bite_tribology as bt
+        self.bt = bt
+
+    def closure(self, mu_c, **kw):
+        return FrictionClosure(model='load_sharing_curve', contact_friction=mu_c, **kw)
+
+    def rel(self, a, b, tol=1e-5):
+        self.assertLessEqual(abs(a - b), tol * max(abs(b), 1e-300), (a, b))
+
+    def test_worked_table(self):
+        rows = ((0.1, 0.8800, 0.08016, 0, 0.02736, 0, 0.08220, -0.07420),
+                (0.2, 0.8082, 0.07428, -0.08248, 0.02578, -0.02213, 0.07514, -0.06714),
+                (0.380072, 0.6695, 0.06290, -0.08145, 0.02273, -0.02185, 0.06407, -0.05607),
+                (0.5, 0.5660, 0.05441, -0.06191, 0.02045, -0.01661, 0.05774, -0.04974),
+                (1.0, 0.2708, 0.03021, -0.02478, 0.01396, -0.00665, 0.03817, -0.03017),
+                (2.0, 0.0613, 0.01303, -0.01239, 0.00935, -0.00332, 0.01910, -0.01110),
+                (3.0, 0.0100, 0.00882, 0, 0.00822, 0, 0.01208, -0.00408))
+        for lam, a, m9, s9, m3, s3, mp, sp in rows:
+            r9 = friction_coefficient(lam, self.closure(0.09))
+            r3 = friction_coefficient(lam, self.closure(0.03))
+            rp = friction_coefficient(lam)
+            self.assertAlmostEqual(r9['contact_area_ratio'], a, delta=5e-5)
+            for got, want in ((r9['friction_coefficient'], m9), (r9['dmu_dlambda'], s9),
+                              (r3['friction_coefficient'], m3), (r3['dmu_dlambda'], s3),
+                              (rp['friction_coefficient'], mp), (rp['dmu_dlambda'], sp)):
+                self.assertAlmostEqual(got, want, delta=5e-6)
+            held = lam in (0.1, 3.0)
+            self.assertEqual('FILM_RATIO_OUTSIDE_CONTACT_RATIO_CURVE' in r9['flags'], held)
+            self.assertEqual(r9['status'],
+                             'UNVALIDATED_LOAD_SHARING_ON_A_PUBLISHED_CONTACT_RATIO_CURVE')
+            self.assertIn('CONTACT_FRICTION_IS_AN_ENTERED_VALUE', r9['flags'])
+            self.assertNotIn(PLACEHOLDER_FLAG, r9['flags'])
+        # the five published points are returned exactly (a software identity, not a benchmark)
+        for lam, a in self.bt.PUBLISHED_FOIL_CONTACT_RATIO_CURVE:
+            self.assertEqual(self.bt.contact_ratio_at(lam)[0], a)
+            for d in (1e-9, -1e-9):                       # continuity across each point
+                self.assertAlmostEqual(
+                    friction_coefficient(lam * (1 + d), self.closure(0.09))[
+                        'friction_coefficient'],
+                    friction_coefficient(lam, self.closure(0.09))['friction_coefficient'],
+                    delta=1e-9)
+        a = self.bt.contact_ratio_at(0.380072)[0]
+        self.assertAlmostEqual((0.03 - (1 - a) * 0.008) / a, 0.04086, delta=5e-6)
+        self.assertAlmostEqual((0.027 - (1 - a) * 0.008) / a, 0.03638, delta=5e-6)
+        got = [friction_coefficient(lam, self.closure(0.0135))['friction_coefficient']
+               for lam, _ in self.bt.PUBLISHED_FOIL_CONTACT_RATIO_CURVE]
+        for g, w in zip(got, (0.01284, 0.01179, 0.01091, 0.00954, 0.00805)):
+            self.assertAlmostEqual(g, w, delta=5e-6)
+        for lam, w in ((0.1, 0.42), (0.2, 0.486548), (0.380072, 0.639534), (1.0, 1.125779),
+                       (3.0, 2.746835)):
+            self.assertAlmostEqual(self.bt.valley_film_over_rq_at(lam), w, delta=5e-7)
+
+    def test_valley_models(self):
+        lub = Lubricant(1.0e-3, C0 + 60, 0.015, 1.0e-8, eyring_stress_pressure_coefficient=0.007)
+        fin = SurfaceFinish(0.1e-6, 0.0)
+        st = {'mean_pressure_pa': 4e8, 'mean_sliding_speed_m_s': 0.3,
+              'inlet_temperature_k': C0 + 60}
+        self.rel(lub.dynamic_viscosity_pa_s(C0 + 60, 4e8), 0.0545982)
+        ey = friction_coefficient(0.36, self.closure(0.09, valley_model='eyring'),
+                                  lubricant=lub, finish=fin, bite_state=st)
+        self.rel(ey['valley_film_thickness_m'], 62e-9)
+        self.rel(ey['valley_shear_stress_pa'], 263794.2)
+        self.rel(ey['valley_friction'], 6.59485e-4)
+        self.rel(ey['friction_coefficient'], 0.0623044)
+        self.assertIsNone(ey['valley_shear_capped'])
+        newt = 0.0545982 * 0.3 / 62e-9
+        self.rel(newt, 264184.6)
+        lub2 = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, eyring_stress_pressure_coefficient=0.007,
+                         limiting_shear_pressure_coefficient=0.045)
+        fin2 = SurfaceFinish(0.3e-6, 0.0)
+        st2 = {'mean_pressure_pa': 6e8, 'mean_sliding_speed_m_s': 2.0,
+               'inlet_temperature_k': C0 + 40}
+        self.rel(lub2.dynamic_viscosity_pa_s(C0 + 40, 6e8), 3.348577)
+        e2 = friction_coefficient(0.2, self.closure(0.09, valley_model='eyring'),
+                                  lubricant=lub2, finish=fin2, bite_state=st2)
+        self.rel(e2['valley_film_thickness_m'], 145.964e-9)
+        self.rel(e2['valley_shear_stress_pa'], 1.296215e7)
+        self.rel(e2['valley_friction'], 0.0216036)
+        self.rel(e2['friction_coefficient'], 0.0768848)
+        self.assertFalse(e2['valley_shear_capped'])
+        n2 = friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                  lubricant=lub2, finish=fin2, bite_state=st2)
+        self.assertTrue(n2['valley_shear_capped'])
+        self.rel(n2['valley_friction'], 0.045)
+        self.rel(n2['friction_coefficient'], 0.0813711)
+        self.rel(3.348577 * 2.0 / 145.964e-9, 4.58821e7, 2e-5)
+        low = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.03)
+        n3 = friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                  lubricant=low, finish=fin2, bite_state=st2)
+        self.assertIn('LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND', n3['flags'])
+        with self.assertRaisesRegex(ValueError, 'valley shear needs the bite state'):
+            friction_coefficient(0.2, self.closure(0.09, valley_model='eyring'),
+                                 lubricant=lub2, finish=fin2)
+        with self.assertRaisesRegex(ValueError, 'needs a limiting shear stress'):
+            friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                 lubricant=lub, finish=fin, bite_state=st)
+        d = 1e-4 * 0.2
+        fd = (friction_coefficient(0.2 + d, self.closure(0.09, valley_model='eyring'),
+                                   lubricant=lub2, finish=fin2, bite_state=st2)
+              ['friction_coefficient']
+              - friction_coefficient(0.2 - d, self.closure(0.09, valley_model='eyring'),
+                                     lubricant=lub2, finish=fin2, bite_state=st2)
+              ['friction_coefficient']) / (2 * d)
+        self.rel(e2['dmu_dlambda'], fd, 1e-9)
+
+    def test_validation_and_default_identity(self):
+        with self.assertRaisesRegex(ValueError, 'contact_friction is required'):
+            FrictionClosure(model='load_sharing_curve').validate()
+        for bad in (dict(model='mixed'), dict(valley_model='x'),
+                    dict(model='load_sharing_curve', contact_friction=0.0),
+                    dict(contact_ratio_curve=((0.1, 0.5),)),
+                    dict(contact_ratio_curve=((0.1, 0.5), (0.2, 0.6))),
+                    dict(contact_ratio_curve=((0.2, 0.5), (0.1, 0.4))),
+                    dict(valley_film_curve=((0.1, 0.5), (0.2, 0.4))),
+                    dict(valley_film_curve=((0.1, 0.0), (0.2, 0.4)))):
+            with self.assertRaises(ValueError):
+                FrictionClosure(**bad).validate()
+        default = FrictionClosure()
+        self.assertEqual(default.model, 'placeholder_exponential')
+        self.assertIsNone(default.contact_friction)
+        for lam in (0.05, 0.38, 2.0):
+            r = friction_coefficient(lam)
+            self.assertEqual(r['friction_coefficient'],
+                             0.008 + (0.09 - 0.008) * math.exp(-lam / 1.0))
+            self.assertEqual(r['flags'], [PLACEHOLDER_FLAG])
+        r = friction_at_speed(FOIL_OIL, SurfaceFinish(1.5e-7, 2e-7), self.closure(0.05),
+                              roll_surface_speed_m_s=10.0, strip_entry_speed_m_s=7.0,
+                              entry_thickness_m=50e-6, exit_thickness_m=30e-6,
+                              contact_radius_m=0.135, plane_strain_yield_pa=200e6,
+                              back_tension_pa=35e6, inlet_temperature_k=C0 + 45)
+        self.assertIn('REDUCED_LOAD_SHARING_CLOSURE_NO_INLET_ANALYSIS', r['flags'])
+        self.assertLess(r['dmu_dspeed_per_m_s'], 0)
+        self.assertIn('contact_area_ratio', r)
+
+
 if __name__ == '__main__':
     unittest.main()

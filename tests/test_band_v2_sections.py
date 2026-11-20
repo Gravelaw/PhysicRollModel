@@ -799,5 +799,69 @@ class ViscosityTableSectionTests(unittest.TestCase):
                                0.03, places=12)
 
 
+class LoadSharingClosureSectionTests(unittest.TestCase):
+    """SPEC18 package 6: the load-sharing closure behind tribology.friction_closure.model."""
+
+    CLOSURE = {'mu_b': 0.09, 'mu_v': 0.008, 'lambda0': 1.0, 'model': 'load_sharing_curve',
+               'contact_friction': 0.06}
+
+    def _case(self, closure, override=True, computed=False):
+        c = v2(override=override, **LONG)
+        c['tribology'] = copy.deepcopy(TRIBOLOGY)
+        c['tribology']['friction_closure'] = copy.deepcopy(closure)
+        c['tribology']['use_computed_friction'] = computed
+        return c
+
+    def test_rows_carry_the_closure_and_nothing_else_moves(self):
+        plain = diagnose(self._case(None))
+        load = diagnose(self._case(self.CLOSURE))
+        f = load['process']['friction']
+        self.assertEqual(f['status'],
+                         'UNVALIDATED_LOAD_SHARING_ON_A_PUBLISHED_CONTACT_RATIO_CURVE')
+        for flag in ('REDUCED_LOAD_SHARING_CLOSURE_NO_INLET_ANALYSIS',
+                     'CONTACT_FRICTION_IS_AN_ENTERED_VALUE',
+                     'CONTACT_RATIO_CURVE_OF_ONE_PUBLISHED_FOIL_PASS'):
+            self.assertIn(flag, f['flags'])
+        self.assertIn('read the change with speed, not the level', f['note'])
+        op = f['operating']
+        for key in ('contact_area_ratio', 'contact_friction', 'valley_friction',
+                    'valley_model', 'dmu_dlambda', 'closure_flags'):
+            self.assertIn(key, op)
+        self.assertEqual(op['contact_friction'], 0.06)
+        self.assertNotIn('contact_area_ratio', plain['process']['friction']['operating'])
+        self.assertEqual(load['bite'], plain['bite'])
+        self.assertEqual([(h['id'], h['score'], h['standing']) for h in load['hypotheses']],
+                         [(h['id'], h['score'], h['standing']) for h in plain['hypotheses']])
+        sc = load['chatter']['speed_consistent']
+        self.assertTrue(sc.get('friction_closure') == 'load_sharing_curve'
+                        or sc.get('status') in ('FAILED', 'NOT_SUPPLIED'))
+        self.assertTrue(any('not a property of other surfaces' in x for x in f['limitations']))
+
+    def test_fixed_point_converges_with_the_new_closure(self):
+        r = diagnose(self._case(self.CLOSURE, override=False, computed=True))
+        op = r['process']['friction']['operating']
+        self.assertTrue(op['converged'])
+        self.assertEqual(op['bite_source'], 'derived_slab_hitchcock')
+        self.assertIn('contact_area_ratio', op)
+
+    def test_contact_friction_is_required(self):
+        closure = dict(self.CLOSURE)
+        del closure['contact_friction']
+        with self.assertRaisesRegex(ValueError, 'contact_friction is required for the '
+                                                'load_sharing_curve model.*supply the friction'):
+            validate_case(self._case(closure))
+        v = validate_case(self._case({'mu_b': 0.09, 'mu_v': 0.008, 'lambda0': 1.0}))
+        self.assertEqual(v['tribology']['friction_closure'],
+                         {'mu_b': 0.09, 'mu_v': 0.008, 'lambda0': 1.0,
+                          'model': 'placeholder_exponential', 'contact_friction': None,
+                          'contact_ratio_curve': None, 'valley_film_curve': None,
+                          'valley_model': 'constant'})
+        bad = dict(self.CLOSURE, contact_ratio_curve=[{'film_ratio': 0.1, 'contact_ratio': 0.5},
+                                                      {'film_ratio': 0.2,
+                                                       'contact_ratio': 0.6}])
+        with self.assertRaisesRegex(ValueError, 'contact_ratio_curve'):
+            validate_case(self._case(bad))
+
+
 if __name__ == '__main__':
     unittest.main()

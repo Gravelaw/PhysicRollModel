@@ -1946,13 +1946,19 @@ def _friction_placeholder(trib, row):
     from . import bite_tribology as bt
     _, fin, clo = bproc.tribology_objects(trib)
     lam = row['film_ratio']
-    d = bt.friction_coefficient(lam, clo)['dmu_dlambda']
+    load_sharing = clo.model == 'load_sharing_curve'
+    if load_sharing and row.get('dmu_dlambda') is not None:
+        d = row['dmu_dlambda']             # the friction row's slope (its bite state)
+    else:
+        d = bt.friction_coefficient(lam, clo)['dmu_dlambda']
     beta = trib['lubricant']['temperature_viscosity_coefficient_per_k']
     rr, rs = fin.roll_roughness_rq_m, fin.strip_roughness_rq_m
     mu_used = row.get('used_friction_coefficient', row.get('supplied_friction_coefficient'))
     per_k = d * lam * (-beta)
     per_rough = d * lam * (-0.1 * rr ** 2 / (rr ** 2 + rs ** 2))
-    return {'flags': [bt.PLACEHOLDER_FLAG],
+    extra = ({'friction_closure': 'load_sharing_curve', 'note_closure': bt.LOAD_SHARING_NOTE}
+             if load_sharing else {})      # keys only then
+    return {**extra, 'flags': [bt.LOAD_SHARING_FLAG if load_sharing else bt.PLACEHOLDER_FLAG],
             'film_ratio': lam, 'dmu_dlambda': d,
             'friction_change_per_kelvin_oil': per_k,
             'friction_change_per_kelvin_oil_fraction': None if not mu_used else per_k / mu_used,
@@ -1962,7 +1968,8 @@ def _friction_placeholder(trib, row):
             'friction_coefficient_used': mu_used,
             'basis': ('dmu/dT = dmu/dLambda * Lambda * (-beta) (film proportional to the inlet '
                       'viscosity, eta0 ~ exp(-beta dT)); dmu per +10 % roll Rq = dmu/dLambda * '
-                      'Lambda * (-0.1 Rq_r^2/(Rq_r^2 + Rq_s^2)) [D]; placeholder closure'),
+                      'Lambda * (-0.1 Rq_r^2/(Rq_r^2 + Rq_s^2)) [D]; '
+                      + ('load-sharing closure' if load_sharing else 'placeholder closure')),
             'note': FS_PLACEHOLDER_NOTE}
 
 

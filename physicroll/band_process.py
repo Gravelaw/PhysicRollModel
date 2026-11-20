@@ -179,6 +179,89 @@ def _lubricant_options(lub):
     return out
 
 
+# SPEC18 package 6: optional friction-closure keys (a given closure is normalised to all keys)
+CLOSURE_OPTIONAL_P6 = ('model', 'contact_friction', 'contact_ratio_curve', 'valley_film_curve',
+                       'valley_model')
+CONTACT_FRICTION_MESSAGE = (
+    'tribology.friction_closure.contact_friction is required for the load_sharing_curve model: '
+    'the sources span 0.013 to 0.1, so no default is set; supply the friction on the contact '
+    'areas, for example identified from your measured roll force or forward slip, or from a '
+    'strip-drawing test with your oil and roll finish')
+
+
+def _closure_curve(where, value, field):
+    msg = (f'{where} must be null or a list of 2 to 12 {{"film_ratio", "{field}"}} points with '
+           'increasing film ratio')
+    if value is None:
+        return None
+    if not isinstance(value, list) or not 2 <= len(value) <= 12:
+        raise ValueError(msg)
+    out = []
+    for pt in value:
+        if not isinstance(pt, dict) or set(pt) != {'film_ratio', field} or \
+                not _is_num(pt['film_ratio']) or not _is_num(pt[field]):
+            raise ValueError(msg)
+        out.append({'film_ratio': float(pt['film_ratio']), field: float(pt[field])})
+    try:
+        bt._curve(where, [(x['film_ratio'], x[field]) for x in out],
+                  'contact' if field == 'contact_ratio' else 'valley')
+    except ValueError as exc:
+        raise ValueError(f'{where}: {exc}') from exc
+    return out
+
+
+def _closure_options(clo):
+    model = clo.get('model') or 'placeholder_exponential'
+    if model not in bt.CLOSURE_MODELS:
+        raise ValueError(f'tribology.friction_closure.model must be one of {bt.CLOSURE_MODELS}')
+    valley = clo.get('valley_model') or 'constant'
+    if valley not in bt.VALLEY_MODELS:
+        raise ValueError('tribology.friction_closure.valley_model must be one of '
+                         f'{bt.VALLEY_MODELS}')
+    mu_c = clo.get('contact_friction')
+    if mu_c is not None:
+        if not _is_num(mu_c) or not 0 < mu_c <= 1:
+            raise ValueError('tribology.friction_closure.contact_friction must be in (0, 1]')
+        mu_c = float(mu_c)
+    if model == 'load_sharing_curve' and mu_c is None:
+        raise ValueError(CONTACT_FRICTION_MESSAGE)
+    return {'model': model, 'contact_friction': mu_c,
+            'contact_ratio_curve': _closure_curve('tribology.friction_closure.contact_ratio_curve',
+                                                  clo.get('contact_ratio_curve'),
+                                                  'contact_ratio'),
+            'valley_film_curve': _closure_curve('tribology.friction_closure.valley_film_curve',
+                                                clo.get('valley_film_curve'),
+                                                'valley_film_over_roughness'),
+            'valley_model': valley}
+
+
+def closure_kwargs(clo):
+    """FrictionClosure arguments from a validated friction_closure dict."""
+    out = {k: clo[k] for k in ('mu_b', 'mu_v', 'lambda0')}
+    for k in ('model', 'contact_friction', 'valley_model'):
+        if clo.get(k) is not None:
+            out[k] = clo[k]
+    if clo.get('contact_ratio_curve') is not None:
+        out['contact_ratio_curve'] = tuple((x['film_ratio'], x['contact_ratio'])
+                                           for x in clo['contact_ratio_curve'])
+    if clo.get('valley_film_curve') is not None:
+        out['valley_film_curve'] = tuple((x['film_ratio'], x['valley_film_over_roughness'])
+                                         for x in clo['valley_film_curve'])
+    return out
+
+
+def is_load_sharing(trib):
+    clo = (trib or {}).get('friction_closure')
+    return bool(clo) and clo.get('model') == 'load_sharing_curve'
+
+
+def bite_mean_pressure_pa(case, bite):
+    """Mean bite pressure F/(width*L) of a bite response, or None without a bite."""
+    if bite is None:
+        return None
+    return bite.separating_force_n / (case['pass']['width_m'] * bite.contact_length_m)
+
+
 TRIBOLOGY_KEYS = ('lubricant', 'surface_finish', 'inlet_temperature_k',
                   'strip_entry_temperature_k', 'strip_heat_fraction', 'thermal_correction',
                   'use_computed_friction')
@@ -222,8 +305,11 @@ def validate_tribology(t):
     clo = t.get('friction_closure')
     out_clo = None
     if clo is not None:
-        keys('tribology.friction_closure', clo, ('mu_b', 'mu_v', 'lambda0'))
-        out_clo = {k: num(f'tribology.friction_closure.{k}', clo[k]) for k in clo}
+        keys('tribology.friction_closure', clo, ('mu_b', 'mu_v', 'lambda0'),
+             CLOSURE_OPTIONAL_P6)
+        out_clo = {k: num(f'tribology.friction_closure.{k}', clo[k])
+                   for k in ('mu_b', 'mu_v', 'lambda0')}
+        out_clo.update(_closure_options(clo))
     out = {'lubricant': out_lub, 'surface_finish': out_fin, 'friction_closure': out_clo,
            'inlet_temperature_k': num('tribology.inlet_temperature_k', t['inlet_temperature_k']),
            'strip_entry_temperature_k': num('tribology.strip_entry_temperature_k',
@@ -261,7 +347,7 @@ def tribology_objects(t):
         pressure_law=lub.get('pressure_law', 'barus'))
     finish = bt.SurfaceFinish(**t['surface_finish'])
     closure = (bt.FrictionClosure() if t['friction_closure'] is None
-               else bt.FrictionClosure(**t['friction_closure']))
+               else bt.FrictionClosure(**closure_kwargs(t['friction_closure'])))
     return lubricant, finish, closure
 
 
@@ -401,9 +487,10 @@ def inlet_angle_basis(bite):
     return INLET_ANGLE_BASIS_MATTRESS if is_mattress(bite) else INLET_ANGLE_BASIS_ARC
 
 
-def _mu_inputs(trib, src, radius, ratio, slip, exit_speed):
+def _mu_inputs(trib, src, radius, ratio, slip, exit_speed, mean_pressure_pa=None):
     h0, h1 = src['entry_thickness_m'], src['exit_thickness_m']
-    return dict(roll_surface_speed_m_s=exit_speed / (1 + slip),
+    extra = {} if mean_pressure_pa is None else {'mean_pressure_pa': mean_pressure_pa}
+    return dict(extra, roll_surface_speed_m_s=exit_speed / (1 + slip),
                 strip_entry_speed_m_s=exit_speed * h1 / h0, entry_thickness_m=h0,
                 exit_thickness_m=h1, contact_radius_m=radius * ratio,
                 plane_strain_yield_pa=2 / math.sqrt(3) * src['mean_flow_stress_pa'],
@@ -459,10 +546,28 @@ def friction_force_sensitivity(get_bite, bite_pass_):
             'basis': 'central difference of the bite of the operating bite model (+-2 %)'}
 
 
-def friction_at(trib, src, radius, ratio, slip, exit_speed):
+def friction_at(trib, src, radius, ratio, slip, exit_speed, mean_pressure_pa=None):
+    """Closure friction at a pass; ``mean_pressure_pa`` (of the pass's bite) is the bite state
+    the computed valley models of the load-sharing closure need (the placeholder ignores it)."""
     lub, fin, clo = tribology_objects(trib)
     return bt.friction_at_speed(lub, fin, clo, **_mu_inputs(trib, src, radius, ratio, slip,
-                                                           exit_speed))
+                                                           exit_speed, mean_pressure_pa))
+
+
+LOAD_SHARING_ROW_KEYS = ('contact_area_ratio', 'contact_friction', 'valley_friction',
+                         'valley_model', 'valley_film_thickness_m', 'valley_shear_stress_pa',
+                         'valley_shear_capped', 'dmu_dlambda')
+
+
+def _closure_row_keys(trib, res):
+    """Keys of the load-sharing closure for a friction row (none for the placeholder)."""
+    if not is_load_sharing(trib):
+        return {}
+    out = {k: res[k] for k in LOAD_SHARING_ROW_KEYS if k in res}
+    out['closure_flags'] = [f for f in res['flags'] if f in (
+        bt.LOAD_SHARING_FLAG, bt.PUBLISHED_CURVE_FLAG, bt.ENTERED_CONTACT_FRICTION_FLAG,
+        bt.OUTSIDE_CURVE_FLAG, bt.LIMITING_SHEAR_FLAG)]
+    return out
 
 
 # ============================================================================= flow stress
@@ -542,12 +647,15 @@ def friction_single(case, src, trib, cache, op_bite=None):
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
         film_ratio, basis = film_radius_ratio(bite), inlet_angle_basis(bite)
         out['bite_source'] = bite_source_word(bite)
+        p_mean = bite_mean_pressure_pa(case, bite)
     except ValueError as exc:
         ratio, slip = 1.0, 0.0
         film_ratio, basis = 1.0, INLET_ANGLE_BASIS_MATTRESS + ' (no bite)'
+        p_mean = None
         out['bite_error'] = str(exc)
         out['method'] += ' (bite rejected: undeformed roll radius used)'
-    res = friction_at(trib, src, radius, film_ratio, slip, u)
+    res = friction_at(trib, src, radius, film_ratio, slip, u, p_mean)
+    out.update(_closure_row_keys(trib, res))
     out.update(computed_friction_coefficient=res['friction_coefficient'], converged=None,
                iterations=[], contact_radius_ratio=ratio, forward_slip_fraction=slip,
                film_inlet_radius_ratio=film_ratio, inlet_angle_basis=basis,
@@ -565,7 +673,12 @@ def friction_fixed_point(case, src, trib, cache):
     u = src['exit_speed_m_s']
     ratio, slip = 1.0, 0.0
     film_ratio, basis = 1.0, INLET_ANGLE_BASIS_MATTRESS + ' (no bite)'
-    first = friction_at(trib, src, radius, film_ratio, slip, u)
+    p0 = None
+    if is_load_sharing(trib) and trib['friction_closure']['valley_model'] != 'constant':
+        # the computed valley models need a bite state from the start: the supplied-friction
+        # bite's mean pressure (its own derivation; a rejection rejects the row)
+        p0 = bite_mean_pressure_pa(case, cache.get(bite_pass(case, src)))
+    first = friction_at(trib, src, radius, film_ratio, slip, u, p0)
     mu = first['friction_coefficient']
     history = [{'iteration': 0, 'contact_radius_ratio': ratio, 'forward_slip_fraction': slip,
                 'friction_coefficient': mu}]
@@ -580,7 +693,8 @@ def friction_fixed_point(case, src, trib, cache):
             break
         ratio, slip = bite.contact_radius_ratio, bite.forward_slip_fraction
         film_ratio, basis = film_radius_ratio(bite), inlet_angle_basis(bite)
-        res = friction_at(trib, src, radius, film_ratio, slip, u)
+        res = friction_at(trib, src, radius, film_ratio, slip, u,
+                          bite_mean_pressure_pa(case, bite))
         new = res['friction_coefficient']
         history.append({'iteration': k, 'contact_radius_ratio': ratio,
                         'forward_slip_fraction': slip, 'friction_coefficient': new,
@@ -603,6 +717,7 @@ def friction_fixed_point(case, src, trib, cache):
            'dmu_dexit_speed_per_m_s': last['dmu_dspeed_per_m_s'] / f,
            'bite_source': None if bite is None else bite_source_word(bite),
            'method': 'fixed point friction -> bite -> contact radius -> friction'}
+    out.update(_closure_row_keys(trib, last))
     if error is not None:
         out['bite_error'] = error
     return out
@@ -626,6 +741,14 @@ def friction_section(case, trib, cache, op_bite=None):
         rows.append(row)
     lub = tribology_objects(trib)[0]
     flags = [bt.PLACEHOLDER_FLAG]
+    if is_load_sharing(trib):
+        flags = [bt.LOAD_SHARING_FLAG, bt.ENTERED_CONTACT_FRICTION_FLAG]
+        if trib['friction_closure']['contact_ratio_curve'] is None:
+            flags.append(bt.PUBLISHED_CURVE_FLAG)
+        for row in rows:
+            for f in row.get('closure_flags') or []:
+                if f not in flags:
+                    flags.append(f)
     if not lub.is_default_law():       # keys only then: default results unchanged
         for row in rows:
             row['viscosity_law'] = lub.viscosity_law_text()
@@ -650,6 +773,15 @@ def friction_section(case, trib, cache, op_bite=None):
                         flags.append(x)
         if notes:
             extra['limitations'] = [notes[0]]
+    if is_load_sharing(trib):
+        extra['limitations'] = list(bt.LOAD_SHARING_LIMITATIONS) + extra.get('limitations', [])
+        return {'status': bt.STATUS_LOAD_SHARING,
+                'use_computed_friction': trib['use_computed_friction'],
+                'operating': rows[0], 'schedule': rows[1:], **extra, 'flags': flags,
+                'note': bt.LOAD_SHARING_NOTE + (
+                    ' With use_computed_friction the friction is a fixed point friction -> '
+                    f'bite -> friction (at most {FRICTION_FIXED_POINT_ITERATIONS} passes); '
+                    'otherwise it is evaluated once at the supplied-friction bite.')}
     return {'status': bt.STATUS_FRICTION, 'use_computed_friction': trib['use_computed_friction'],
             'operating': rows[0], 'schedule': rows[1:], **extra,
             'flags': flags,
@@ -683,7 +815,8 @@ def friction_curve(case, trib, bite):
         plane_strain_yield_pa=2 / math.sqrt(3) * p['mean_flow_stress_pa'],
         back_tension_pa=p['entry_tension_pa'], inlet_temperature_k=trib['inlet_temperature_k'],
         forward_slip_fraction=bite.forward_slip_fraction,
-        thermal_correction=trib['thermal_correction'])
+        thermal_correction=trib['thermal_correction'],
+        mean_pressure_pa=bite_mean_pressure_pa(case, bite))
     pts = [{k: q[k] for k in ('exit_speed_m_s', 'friction_coefficient', 'film_thickness_m',
                               'film_ratio', 'regime', 'dmu_dexit_speed_per_m_s')}
            for q in curve['points']]
@@ -700,6 +833,7 @@ def friction_curve(case, trib, bite):
             'inlet_angle_basis': inlet_angle_basis(bite),
             'mean_slope_per_m_s': mean_slope, 'mean_slope_speeds_m_s': [a, b],
             'flags': curve['flags'],
+            **({'closure_note': bt.LOAD_SHARING_NOTE} if is_load_sharing(trib) else {}),
             'note': 'Contact radius and forward slip held at the operating bite; the absolute '
                     'values are placeholders, the slope is the useful output.'}
 
@@ -805,15 +939,19 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
     ratio, slip = film_radius_ratio(op_bite), op_bite.forward_slip_fraction
     memo = {}
     _, _, closure = tribology_objects(trib)
-    anchor = friction_at(trib, p, radius, ratio, slip, p['exit_speed_m_s'])[
-        'friction_coefficient']
+    p_mean = bite_mean_pressure_pa(case, op_bite)
+    anchor_res = friction_at(trib, p, radius, ratio, slip, p['exit_speed_m_s'], p_mean)
+    anchor = anchor_res['friction_coefficient']
+    # floor: the closure's valley friction (the placeholder's mu_v; the load-sharing closure's
+    # valley friction at the operating point)
+    floor = anchor_res.get('valley_friction', closure.mu_v)
     mu_used = p['friction_coefficient']
 
     def at(u):
         if u not in memo:
-            raw = friction_at(trib, p, radius, ratio, slip, u)['friction_coefficient']
+            raw = friction_at(trib, p, radius, ratio, slip, u, p_mean)['friction_coefficient']
             # the closure's SLOPE is used, anchored at the friction used at the operating point
-            mu = max(closure.mu_v, mu_used + raw - anchor)
+            mu = max(floor, mu_used + raw - anchor)
             row = {'exit_speed_m_s': u, 'friction_coefficient': mu,
                    'placeholder_closure_friction_coefficient': raw}
             try:
@@ -863,6 +1001,11 @@ def speed_consistent_critical_speed(case, trib, cache, stand, spans, beta, op_bi
               'scan_note': 'speeds below the lowest assessable one have no roll bite with the '
                            "operating bite's model (see scan[].rejected)"}
              if lowest else {})          # keys only then
+    if is_load_sharing(trib):            # keys only then: default results unchanged
+        extra['friction_closure'] = 'load_sharing_curve'
+        extra['closure_note'] = ('The load-sharing closure supplies the slope (the '
+                                 '"placeholder_closure_*" keys hold its values); floored at its '
+                                 'valley friction at the operating point.')
     return {**extra, 'status': roots['critical_exit_speed_m_s'][1],
             'speed_consistent_critical_exit_speed_m_s': roots['critical_exit_speed_m_s'][0],
             'speed_consistent_critical_exit_speed_without_bite_damping_m_s':
@@ -1008,10 +1151,11 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
             sens = friction_force_sensitivity(get_bite, bite_pass(case, p))
             radius = p['work_roll_radius_m']
             lo_u = 0.5 * u
+            p_mean = bite_mean_pressure_pa(case, bite)
             mu_hi = friction_at(trib, p, radius, film_radius_ratio(bite),
-                                bite.forward_slip_fraction, u)['friction_coefficient']
+                                bite.forward_slip_fraction, u, p_mean)['friction_coefficient']
             mu_lo = friction_at(trib, p, radius, film_radius_ratio(bite),
-                                bite.forward_slip_fraction, lo_u)['friction_coefficient']
+                                bite.forward_slip_fraction, lo_u, p_mean)['friction_coefficient']
             shift = md.speed_change_gauge_shift(sens['dforce_dfriction_n'], mu_hi - mu_lo,
                                                 stand.mill_modulus_n_m, bite.strip_modulus_n_m,
                                                 gc['compensation_gain'])
@@ -1027,6 +1171,8 @@ def gauge_control_section(case, gc, stand, bite, spans, beta, roll_freqs, trib, 
                 'separating_force_change_n': shift['separating_force_change_n'],
                 'cylinder_stroke_change_m': shift['cylinder_stroke_change_m'],
                 'label': STATIC_LABEL}
+            if is_load_sharing(trib):          # key only then: default results unchanged
+                out['speed_change_gauge_shift']['friction_closure'] = 'load_sharing_curve'
             if supplied_bite_mix(bite):
                 note = SENSITIVITY_MIX_NOTE.format(sens['bite_model'])
                 out['speed_change_gauge_shift']['flags'] = [SENSITIVITY_MIX_FLAG]

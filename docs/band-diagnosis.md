@@ -1307,6 +1307,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `gauge_control` | gaugemeter AGC compensation gain, cylinder bandwidth, force filter | –, Hz | AGC commissioning sheet |
 | `drive` | drive-train inertias and shaft stiffnesses (torsional modes) | kg m², N m/rad | drive-train data, torsional analysis |
 | `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
+| `tribology.friction_closure.model: "load_sharing_curve"`, `contact_friction`, `valley_model`, `contact_ratio_curve`, `valley_film_curve` | the second friction law (section 8.1); the contact friction is REQUIRED with it; the curves default to the published foil pass | – | contact friction from your measured force, torque or slip, or a strip-drawing test; no default |
 | `tribology.lubricant.viscosity_table`, `pressure_law`, `roelands_z`, `eyring_stress_pa`, `eyring_stress_pressure_coefficient`, `limiting_shear_stress_pa`, `limiting_shear_pressure_coefficient` | oil viscosity at several temperatures (list of `{"temperature_k", "viscosity_pa_s"}`); the pressure law (`barus` default, `roelands` option); the oil's Eyring and limiting shear stress (no defaults) | K, Pa s, Pa, – | oil supplier data sheet; the shear stresses only from oil tests (section 8.1) |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
@@ -2443,6 +2444,59 @@ film ratios of another (`BT-V4-FILM`: 0.209 and 1.675 against 0.22 and 1.76 at 5
 speeds and inlet temperature assumed) [run]: the same closed form, not a check of the film
 physics.
 
+**The second friction law: load sharing on a published curve (SPEC18 package 6, opt-in:
+`tribology.friction_closure.model: "load_sharing_curve"`).** `mu = A*mu_c + (1 - A)*mu_v`
+[BT-S9 EX; E7 FT]: `A` is the share of the surface where roll and strip touch, read from a
+curve of `A` against the film ratio; `mu_c` the friction on those contacts; `mu_v` the friction
+of the oil between them (`valley_model`: `constant` = `mu_v` 0.008, `eyring` = the Eyring shear
+of the valley film [E6 FT (4.32)], `newtonian_capped` = a Newtonian shear capped at the oil's
+limiting stress; the last two need the oil data of package 5 and the bite's mean pressure and
+sliding speed). The default curve is the only published one: five points of contact ratio
+against film ratio for one foil pass (20 -> 15 um, roughness 0.1 um, wavelength 15 um, one oil)
+[E6 FT, Table 4.2], interpolated linearly in `ln(Lambda)`; outside its range (0.14 to 2.37) the
+end value is held, not extrapolated, with the flag `FILM_RATIO_OUTSIDE_CONTACT_RATIO_CURVE`.
+
+| film ratio | contact ratio | load sharing, `mu_c` 0.09 (slope) | load sharing, `mu_c` 0.03 (slope) | placeholder (slope) |
+|---|---|---|---|---|
+| 0.1 (below the curve) | 0.880 | 0.0802 (0) | 0.0274 (0) | 0.0822 (-0.074) |
+| 0.2 | 0.808 | 0.0743 (-0.082) | 0.0258 (-0.022) | 0.0751 (-0.067) |
+| 0.380 (battery-foil case pass) | 0.670 | 0.0629 (-0.081) | 0.0227 (-0.022) | 0.0641 (-0.056) |
+| 0.5 | 0.566 | 0.0544 (-0.062) | 0.0205 (-0.017) | 0.0577 (-0.050) |
+| 1.0 | 0.271 | 0.0302 (-0.025) | 0.0140 (-0.007) | 0.0382 (-0.030) |
+| 2.0 | 0.061 | 0.0130 (-0.012) | 0.0094 (-0.003) | 0.0191 (-0.011) |
+| 3.0 (above the curve) | 0.010 | 0.0088 (0) | 0.0082 (0) | 0.0121 (-0.004) |
+
+[run, `tests/test_bite_tribology.py`] **The contact friction must be entered; there is no
+default.** The sources give 0.013 to 0.1 (a boundary-film shear strength over pressure 0.013 to
+0.036 [E6 FT p.72, derived], 0.09 [BT-S6 AB], 0.1 or a factor 0.25 [E4 EX]); the demo's
+supplied 0.03 at its film ratio needs `mu_c` 0.041, 0.027 needs 0.036. It is best taken from
+your mill's own records: measured roll force, torque or forward slip (friction identification,
+a later package), or a strip-drawing test with your oil and roll finish. A missing value is a
+validation error that says so.
+
+**What this closure is and is not.** It is a REDUCED closure, not a mixed-lubrication model:
+its shape is the published curve and its level is your entered number, so read the change of
+friction with speed, not the level. Because the published curve is its INPUT, it returns the
+published contact ratios exactly at the five points; that is a software identity, not a
+benchmark, and no independent published friction value exists to compare it with. The
+inlet analysis that would compute the curve is not built: the transcribed height-distribution
+relation gives 0.91 to 0.50 of the source table's own mean film, and the four transcribed
+asperity-crushing laws differ by up to two orders of magnitude away from one point
+(`BT-G3-CRUSHING-LAWS`; `physicroll/asperity_contact.py` holds them as tested functions that
+nothing uses). The film ratio entered is the smooth inlet film over the composite roughness,
+while the table's abscissa came from the thesis's full inlet integration (its own closed-form
+film is 0.79 to 1.36 of that), so the abscissa carries that much mismatch. The curve belongs
+to one foil pass: another roughness, oil, wavelength or reduction has another curve.
+
+**X22 answered.** The placeholder's level and slope have no support; the new closure has a
+published shape for one foil pass and an entered level. Under the option every place that
+takes friction from the closure uses it: the friction rows and the fixed point (with either
+bite model), the friction-speed curve and its slope in the speed-consistent critical speed
+(floored at the closure's valley friction), the speed-change gauge shift, the friction stripe
+screen's conversion block; each says so (`status`, flags, `friction_closure` /
+`closure_note` keys). Pass heating takes the friction used for the pass, which is the closure's
+only when `tribology.use_computed_friction` replaces the supplied value.
+
 ### 8.2 Pass heating
 
 ```
@@ -3308,6 +3362,7 @@ real mill.
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
 | `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of a 50 -> 25 um pass at a nominal friction of 0.10 (not the published case, where 0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]), the limiting gauge and a sticking exit; the large-slip flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL` (renamed in SPEC17); force trends; sensitivity signs match Hitchcock |
 | `halfspace_bite.py` / `tests/test_halfspace_bite.py` | influence coefficients against the uniform-grid closed form (`kappa`) and a quadrature of one hat, their slope against a central difference; Hertz line contact recovered (80 elements: 2.6e-3 of the indentation depth at all nodes, 7.6e-4 inside 0.8a; 160 elements 1.1e-3 and 2.7e-4); equations equal unknowns for `A F`, `A B F`, `A B E F`; the Winkler limit reproduces the mattress solver (force within 1 %, slip within 0.002); the planner's worked numbers pinned (published case `W_bar` 92.936, seven sheet and foil rows, a sheet pass within 8 % of the mattress); work identity below 1e-4; the three A B F candidates beyond the friction limit (eq. (16) shear 1.446, 1.030, 2.941) replaced by A B E F or A F; the strip-modulus trend (40 GPa 96.751, 160 GPa A B F candidate 90.933); a doubled grid moves the load by 0.37 %. `tests/test_halfspace_bite_cases.py`: the selection table of fifteen passes (structure, rule, `W_bar` to 1e-4 of the planner's values), the regime boundary against E1 eq. (29), load continuity, zone E under 0.3 % of the load, path independence and warm start equal to cold start, rule 6 message, the battery-foil and lengthwise schedules (13 passes in under 30 s), the shear-cap march where the mattress rejects, the printed-end family (W_bar 88.62 / 102.62 / 117.47 at 21 / 10 / 5 um, thickening before the exit). `tests/test_halfspace_bite_branch.py`: the same three passes with a Newton budget of 20, 40 and 80 per march step give the same load; the degenerate branch is rejected by rule `SLIP_CONSISTENCY`. Software checks only: a value near a published load would not validate the model |
+| friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
 | `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
@@ -3488,6 +3543,10 @@ At battery-foil gauge, in addition (each checked against the code and
 - **Domain limits**: below 8 um exit gauge or above 65 % reduction no bite at all; doubled
   passes are not modelled (`material.final_pass_doubled` true flags it; the plant rolls
   single-sheet).
+- **The friction level is not known.** Neither friction law has a published level for your
+  mill: the placeholder is unfitted, and the load-sharing closure takes its level from an
+  entered contact friction (0.013 to 0.1 in the sources) on a contact-ratio curve published for
+  one foil pass; no inlet analysis is built (section 8.1).
 - **Oil properties at bite pressure are not known.** For the one foil oil with data neither
   the Barus law (default) nor the Roelands law (option) follows the measured viscosity above
   100 MPa (Roelands low by a factor 12 to 30); no source gives a limiting shear stress for a
@@ -3600,7 +3659,10 @@ Cambridge [FT for chapter 2, sections 3.2.1 (part), 3.3, 3.4, 4.2-4.3, 4.7-4.8, 
 4.2, Fig. 2.7]; E9 Niroomand, Forouzan & Salimi (2015) ISIJ Int. 55(3):637-646, the TM-LC7 mill
 [FT, sections 3-5 and all tables; section 2 skimmed]; E5 Boemer (2020) Numerical modeling of
 friction in lubricated cold rolling, PhD thesis, Liege [FT for the sections read, among them
-4.8.1.3-4.8.3 and Appendix L: the Roelands law]; E6 also for the kerosine base oil data
+4.8.1.3-4.8.3 and Appendix L: the Roelands law, and 4.7.1, 4.8.1.3: the crushing and
+flow-factor fits]; E4 Sutcliffe & Montmitonnet (2001) [EX: Table I, friction laws]; E7 Le &
+Sutcliffe, semi-empirical friction model (author manuscript) [FT of the manuscript text,
+equations partly damaged: the load-sharing law, its eq. 7]; E6 also for the kerosine base oil data
 (Table 2.1, Fig. 2.7) and the film table (Table 4.2).
 
 Battery foil (phase 3; labels as in the code's `FOIL_SOURCES`, read in a research pass for
