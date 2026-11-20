@@ -222,7 +222,10 @@ class SolverTests(unittest.TestCase):
     def test_no_slip_zone_fields(self):
         ns = self.published['no_slip_zone']
         self.assertEqual(set(ns), {'eq16_shear_over_limit_max', 'friction_hill_margin_min_over_k',
-                                   'net_shear_over_limit', 'note'})
+                                   'net_shear_over_limit', 'note', 'no_slip_zone_thickness_m',
+                                   'relative_slip_in_no_slip_zone',
+                                   'slip_term_over_plastic_power'})
+        self.assertAlmostEqual(ns['relative_slip_in_no_slip_zone'], 0.0, delta=1e-12)
         self.assertAlmostEqual(ns['eq16_shear_over_limit_max'], 0.955, delta=5e-4)
         self.assertLessEqual(ns['eq16_shear_over_limit_max'], 1.0)
         self.assertGreaterEqual(ns['friction_hill_margin_min_over_k'], -1e-9)
@@ -231,7 +234,9 @@ class SolverTests(unittest.TestCase):
         r = self.published
         self.assertEqual(r['backward_slip_zone_length_m'], 0.0)
         self.assertEqual(r['neutral_point_m'], r['flat_zone_end_m'])
-        self.assertEqual(r['structure_selection'], [['cold_start_march', 'A B F accepted']])
+        self.assertEqual(r['structure_selection'], [['cold_start_march', 'A B F candidate'],
+                                                    ['rule 2: A B F', 'accepted']])
+        self.assertIsNone(r['structure_nearest_rejected_candidate'])
         zones = r['profile']['zone']
         self.assertEqual(zones[0], 'entry_contact_zone')
         self.assertEqual(zones[-1], 'exit_contact_zone')
@@ -241,42 +246,43 @@ class SolverTests(unittest.TestCase):
         self.assertEqual(self.solution.structure, 'A B F')
         self.assertRel(self.solution.force_per_width_n_m(), r['force_per_width_n_m'], 1e-12)
 
-    def test_inadmissible_candidates_are_rejected(self):
-        """The cold start of this package returns A F or A B F only; these three candidates
-        need zone E or another structure (SPEC18 package 3) and must be rejected here."""
+    def test_candidates_beyond_the_friction_limit_get_zone_e(self):
+        """Package 2 rejected these three A B F candidates (eq. (16) shear above the limit);
+        the selection rule of package 3 rejects them again and accepts A B E F (rule 3) for
+        the first two and A F (rule 4) for the 50 -> 30 um demo pass."""
         rigid = CASES['published'][0][:8] + (1e13,)
-        for args, ratio in ((rigid, 1.446),
-                            ((30e-6, 18e-6, 0.135, 180e6, 0.03, 38e6, 42e6, 210e9, AL), 1.030),
-                            ((50e-6, 30e-6, 0.135, 175e6, 0.03, 35e6, 40e6, 210e9, AL), 2.941)):
-            with self.assertRaises(hb.HalfSpaceBiteError) as ctx:
-                _solve(args)
-            exc = ctx.exception
-            self.assertIsInstance(exc, ValueError)
-            self.assertEqual(exc.stage, 'structure')
-            self.assertIn('zone structure of the cold start is not admissible', str(exc))
-            self.assertAlmostEqual(exc.candidate.measures()['shear_ratio_max'], ratio,
-                                   delta=1e-3)
+        for args, ratio, structure, rule in (
+                (rigid, 1.446, 'A B E F', 3),
+                ((30e-6, 18e-6, 0.135, 180e6, 0.03, 38e6, 42e6, 210e9, AL), 1.030, 'A B E F', 3),
+                ((50e-6, 30e-6, 0.135, 175e6, 0.03, 35e6, 40e6, 210e9, AL), 2.941, 'A F', 4)):
+            r = _solve(args)
+            self.assertEqual((r['zone_structure'], r['structure_rule']), (structure, rule))
+            first = r['structure_selection'][1]
+            self.assertEqual(first[0], 'rule 2: A B F')
+            self.assertIn(f'eq. (16) shear in the no-slip zone is {ratio:.3f}', first[1])
 
     def test_strip_modulus_trend(self):
         r40 = _solve(CASES['published'][0][:8] + (40e9,))
         self.assertRel(_w_bar(r40['force_per_width_n_m']), 96.751, 5e-5)
-        with self.assertRaises(hb.HalfSpaceBiteError) as ctx:      # eq. (16) shear 1.15
-            _solve(CASES['published'][0][:8] + (160e9,))
-        cand = ctx.exception.candidate
-        self.assertAlmostEqual(cand.measures()['shear_ratio_max'], 1.150, delta=1e-3)
-        w160 = _w_bar(cand.force_per_width_n_m())
-        self.assertRel(w160, 90.933, 5e-5)
+        r160 = _solve(CASES['published'][0][:8] + (160e9,))     # A B F candidate: shear 1.15
+        cand = r160['structure_nearest_rejected_candidate']
+        self.assertEqual(cand['structure'], 'A B F')
+        self.assertIn('1.150 of the friction limit', cand['outcome'])
+        self.assertRel(_w_bar(cand['force_per_width_n_m']), 90.933, 5e-5)
+        self.assertEqual(r160['zone_structure'], 'A B E F')
+        w160 = _w_bar(r160['force_per_width_n_m'])
         self.assertTrue(w160 < _w_bar(self.published['force_per_width_n_m'])
                         < _w_bar(r40['force_per_width_n_m']))
 
-    def test_grid_doubled_candidate(self):
-        """Every zone count doubled: the load moves by 0.4 % (W_bar 93.299 against 92.936);
-        the eq. (16) shear of the finer candidate is 1.31, so it is rejected in this package."""
-        with self.assertRaises(hb.HalfSpaceBiteError) as ctx:
-            _solve(CASES['published'][0], zones=tuple(2 * z for z in hb.DEFAULT_ZONES))
-        cand = ctx.exception.candidate
-        self.assertAlmostEqual(cand.measures()['shear_ratio_max'], 1.313, delta=1e-3)
-        self.assertRel(_w_bar(cand.force_per_width_n_m()), 93.299, 5e-5)
+    def test_grid_doubled(self):
+        """Every zone count doubled: the A B F candidate gives W_bar 93.299 (brief) with eq. (16)
+        shear 1.31; zone E is inserted and the load is 0.37 % above the default grid."""
+        r = _solve(CASES['published'][0], zones=tuple(2 * z for z in hb.DEFAULT_ZONES))
+        cand = r['structure_nearest_rejected_candidate']
+        self.assertIn('1.313 of the friction limit', cand['outcome'])
+        self.assertRel(_w_bar(cand['force_per_width_n_m']), 93.299, 5e-5)
+        self.assertEqual(r['zone_structure'], 'A B E F')
+        self.assertRel(r['force_per_width_n_m'], self.published['force_per_width_n_m'], 5e-3)
 
     def test_rejections(self):
         base = CASES['published'][0]

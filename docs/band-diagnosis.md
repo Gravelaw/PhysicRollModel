@@ -2717,7 +2717,7 @@ supplied in `model_options.bite_response_override`; for the strip-shape chain al
 
 Status `UNVALIDATED_REDUCED_HALF_SPACE_FOIL_BITE`. Not used by `diagnose()` yet: it is a
 module beside the mattress bite, with its own tests; the engine option and the benchmark case
-follow (SPEC18 packages 3 and 4). It is a REDUCED form of the foil-bite model of Fleck,
+follow (SPEC18 package 4). It is a REDUCED form of the foil-bite model of Fleck,
 Johnson, Mear & Zhang (1992) [E1 FT, transcribed in
 `docs/research/band-screening-2026-11/phase1-equations.md`].
 
@@ -2727,13 +2727,35 @@ pressure at one point flattens the roll everywhere, not only under itself as in 
 Equilibrium, yield and Coulomb slip are E1 eqs (1), (3a), (9a), with the friction stress
 capped at `m*K/2`. The zones are those of E1: an entry contact zone, A (plastic reduction,
 backward slip), B (no-slip zone of constant thickness, E1 eq. (16)), E (a short backward-slip
-zone before the pressure peak, used from package 3 on), F (plastic reduction, forward slip)
-and an exit contact zone. A pass is solved as `A F` (no no-slip zone, sheet-like) or `A B F`
-(foil); the zone boundaries are unknowns of one Newton system on a grid fitted to them. The
+zone before the pressure peak), F (plastic reduction, forward slip) and an exit contact zone.
+A pass is solved as `A F` (E1's regime I, sheet-like), `A B F` or `A B E F` (regimes II and
+III); the zone boundaries are unknowns of one Newton system on a grid fitted to them. The
 start comes from the mattress bite, whose Winkler roll is blended into the half-space in
-steps. A candidate is accepted only if the pressure stays positive, the strip never thickens
-while it is being reduced, and the shear the no-slip zone needs (E1 eq. (16)) stays within the
-friction limit; otherwise the pass is rejected in this package with the measure that failed.
+steps; where the mattress bite rejects the pass (high friction), the solver starts at a
+friction of 0.03, 0.02 or 0.01 and steps the friction to the entered value (flag
+`COLD_START_BY_FRICTION_CONTINUATION`). A solution of a neighbouring pass can be given as a
+warm start.
+
+**Which zone structure is used.** The candidate is tested by six rules in a fixed order, and
+the first that passes is used: (1) `A F` if the strip never thickens in A and F; (2) `A B F`
+if the shear the no-slip zone needs (E1 eq. (16)) stays within the friction limit in every
+element; (3) otherwise zone E is inserted where the no-slip zone first needs more than the
+limit, accepted if the pressure in the no-slip zone stays under the two friction hills (within
+`0.02*K`, an analyst tolerance); (4) otherwise `A F` again from the middle of B and E; (5)
+`A B E F` built from that `A F` where its thickness rises; (6) otherwise the pass is rejected
+with every step listed. Every candidate must also pass a rule of this project's own
+(`SLIP_CONSISTENCY`, from E1 eq. (9a) and its zone description): the strip must leave faster
+than the roll and enter slower (forward and backward slip positive), and every reduction zone
+must have a length. It rejects a degenerate branch the Newton iteration can reach, in which
+zone F collapses to nothing, the strip leaves at roll speed and the load is 8.6 to 12.5 times
+the mattress load; the discrete equations hold there only because the rows of a zone without
+length hold trivially. With the rule the result does not depend on the Newton budget (tests
+with 20, 40 and 80 iterations per step). Every step of the selection is in the result
+(`structure_selection`); at the regime boundary, where neither the no-slip structure nor
+zone E is admissible and `A F` is used (rule 4 or 5), the result carries
+`ZONE_STRUCTURE_AT_REGIME_BOUNDARY` and the nearest rejected candidate with its force: on the
+battery-foil case pass F1 (50 -> 30 um) the `A B F` candidate is 1.7 % above the `A F` load
+that is used [run].
 
 **Three misprints of E1** are not used: its influence coefficient (30) has the wrong sign
 (the kernel here is re-derived and recovers Hertz line contact to 2.6e-3 of the indentation
@@ -2747,8 +2769,23 @@ depends on the length over which the step is smeared, which the source does not 
 independent re-implementations give `W_bar` 78 to 134 on the published case for end lengths
 of 40 to 2.5 um [computed]. This model keeps the strip in contact beyond the plastic zone at
 constant thickness until the pressure has fallen to zero (E1's elastic end zones, eq. (13),
-which E1 neglects), and its load is grid-converged: 0.4 % change when every zone count is
-doubled (`W_bar` 92.94 against 93.30 [run]).
+which E1 neglects), and its load is grid-converged: 0.37 % change when every zone count is
+doubled [run].
+
+The printed end conditions are kept as a benchmark mode only (never reachable from the
+engine): one pressure element of prescribed length outside each end, rigid strip, `A B F`.
+On the published case [run, tests/test_halfspace_bite_cases.py]:
+
+| end length [um] | 40 | 30 | 21 | 15 | 10 | 7 | 5 | 3.5 | 2.5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `W_bar` | 78.01 | 82.57 | 88.62 | 94.73 | 102.62 | 110.04 | 117.47 | 125.82 | 134.15 |
+| thickening before the exit, of the exit gauge | 0.00026 | 0.00064 | 0.00118 | 0.00175 | 0.00252 | 0.00326 | 0.00401 | 0.00485 | 0.00568 |
+
+The load has no limit as the end shortens. The caption value 118 corresponds to an end of
+about 5 um; at the element size the paper states (about 21 um) the printed model gives 88.6,
+the value this model gives with a rigid strip (88.86) [run]. So "118" is the result of one
+unstated numerical length, not a target; and every member of the family makes the strip
+thicken before the exit, which the model itself forbids.
 
 **The strip thickness spring is the planner's addition, not the source's.** The strip is
 given a thickness compliance `h_p = g + c_s*p`, `c_s = (h0 + h1)/2/E_s*`. E1 neglects the
@@ -2771,16 +2808,35 @@ Numbers [run, tests/test_halfspace_bite.py] (R 89 mm, `Y_s` 230 MPa, `E_R*` 230 
 | 73 -> 31.39 um, friction 0.026, tensions 0.107 / 0.132 `Y_s`, R 89 / 135 mm | A F | 42.800 / 67.125 | 876108 / 2084239 | 0.1295 / 0.3103 | 2.490 / 3.618 | 3.10 / 6.48 |
 | battery-foil demo ALT2, 25 -> 12 um | A B F | - | 10128540 | 0.5527 | 5.710 | 11.86 |
 
+Regime boundary [run, tests/test_halfspace_bite_cases.py] (`W_bar`, structure, rule):
+
+| reduction | thicker entry | thinner entry | E1 eq. (29) |
+|---|---|---|---|
+| 0.5 | 56 um: 75.68 `A F` (1); 54 um: 81.20 `A F` (4) | 52 um: 87.86 `A B E F` (3); 48 um: 100.19; 44 um: 114.74 | 51.2 um |
+| 0.25 | 36 um: 40.19 `A F` (1); 34 um: 43.98 `A F` (4) | 32 um: 48.35 `A B E F` (3); 28 um: 58.00 | 36.2 um |
+| 0.10 | 30 um: 21.86 `A F` (1); 28 um: 23.71 `A F` (4) | 26 um: 25.92 `A B E F` (3); 22 um: 31.51 | 22.9 um |
+
+The no-slip zone appears between 54 and 52 um, 34 and 32 um and 28 and 26 um, close to eq. (29)
+of E1, and the load is continuous across the boundary. Zone E changes the load by under 0.1 %
+(rigid strip, published case: 88.86 against 88.94 for the `A B F` candidate) but makes the
+passage between the regimes continuous. Forward slip with zone E is taken at the slip reversal
+(the E/F boundary); the no-slip zone is thicker by an elastic-order amount, which raises the
+slip by 1 to 2.5 % of its value if that thickness is used instead (the planner's prototype
+quoted the latter).
+
+Shear cap (50 -> 25 um, `K` 150 MPa, tensions 20 MPa, R 135 mm [E4 EX, Table I pass]; the
+mattress bite rejects it at friction 0.05): 1.52 MN/m at friction 0.03, 7.72 MN/m at 0.05,
+48.65 MN/m at 0.10 with a contact length of 12.15 mm and a peak of 34 times `K` (flags
+`SHEAR_CAP_ACTIVE`, `PEAK_PRESSURE_ABOVE_16_PLANE_STRAIN_YIELD`) [run]. As X24 says, a nominal
+friction of 0.10 is not the published case: no mill runs a foil pass at 32 times the load of
+0.03.
+
 On the published case the mattress bite gives 49.77, the reduced half-space 92.94 (88.86
 with a rigid strip [computed, SPEC18 prototype]); the caption value 118 is one member of the
-family 78-134 and is not a target (section 10.2). Three candidates are rejected in this
-package because their no-slip zone would need more than the friction limit: the published case
-with a rigid strip (1.45 times the limit), and the battery-foil demo's 30 -> 18 um and
-50 -> 30 um passes (1.03 and 2.94) [run]; zone E and the structure selection will solve
-them. Left out: the longitudinal elastic equations of E1 ((4), (10)-(14)), hence stress
+family 78-134 and is not a target (section 10.2). Left out: the longitudinal elastic equations of E1 ((4), (10)-(14)), hence stress
 and traction inside the no-slip zone and the regime-III zones C and D; friction varying
 through the bite; hardening, rate and temperature inside the bite; the lubricant film; the
-closed gap. One cold solve takes about 1 s.
+closed gap. One cold solve with the selection takes 0.3 to 2.5 s, a warm start about 0.2 s.
 
 ## 11. Transverse physics (chatter)
 
@@ -3144,7 +3200,7 @@ real mill.
 | `bite_tribology.py` / `tests/test_bite_tribology.py` | viscosity `beta` from the kerosene data points; film check case (62.8 nm, film ratio 0.209, within 5 % of the quoted 65 nm); film linear in speed and viscosity; closure limits and slope; friction falling monotonically with speed; pass heating check (49.35 K) and energy closure; Voce mean against quadrature; literature fits carry the warning; regime labels and window (`test_regime_labels_and_window`: 0.005, 0.01, 0.5, 0.99 `MIXED_SUBSTANTIAL_CONTACT` with the window false / true / true / false, 1.0 and 3.0 `MIXED_FIRST_CONTACT`, 3.01 `HYDRODYNAMIC`, no result contains `BOUNDARY`; SPEC17) |
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
 | `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of a 50 -> 25 um pass at a nominal friction of 0.10 (not the published case, where 0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]), the limiting gauge and a sticking exit; the large-slip flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL` (renamed in SPEC17); force trends; sensitivity signs match Hitchcock |
-| `halfspace_bite.py` / `tests/test_halfspace_bite.py` | influence coefficients against the uniform-grid closed form (`kappa`) and a quadrature of one hat, their slope against a central difference; Hertz line contact recovered (80 elements: 2.6e-3 of the indentation depth at all nodes, 7.6e-4 inside 0.8a; 160 elements 1.1e-3 and 2.7e-4); equations equal unknowns for `A F`, `A B F`, `A B E F`; the Winkler limit reproduces the mattress solver (force within 1 %, slip within 0.002); the planner's worked numbers pinned (published case `W_bar` 92.936, seven sheet and foil rows, a sheet pass within 8 % of the mattress); work identity below 1e-4; the three inadmissible candidates rejected with their eq. (16) shear (1.446, 1.030, 2.941); the strip-modulus trend (40 GPa 96.751, 160 GPa candidate 90.933); a doubled grid moves the load by 0.4 %. Software checks only: a value near a published load would not validate the model |
+| `halfspace_bite.py` / `tests/test_halfspace_bite.py` | influence coefficients against the uniform-grid closed form (`kappa`) and a quadrature of one hat, their slope against a central difference; Hertz line contact recovered (80 elements: 2.6e-3 of the indentation depth at all nodes, 7.6e-4 inside 0.8a; 160 elements 1.1e-3 and 2.7e-4); equations equal unknowns for `A F`, `A B F`, `A B E F`; the Winkler limit reproduces the mattress solver (force within 1 %, slip within 0.002); the planner's worked numbers pinned (published case `W_bar` 92.936, seven sheet and foil rows, a sheet pass within 8 % of the mattress); work identity below 1e-4; the three A B F candidates beyond the friction limit (eq. (16) shear 1.446, 1.030, 2.941) replaced by A B E F or A F; the strip-modulus trend (40 GPa 96.751, 160 GPa A B F candidate 90.933); a doubled grid moves the load by 0.37 %. `tests/test_halfspace_bite_cases.py`: the selection table of fifteen passes (structure, rule, `W_bar` to 1e-4 of the planner's values), the regime boundary against E1 eq. (29), load continuity, zone E under 0.3 % of the load, path independence and warm start equal to cold start, rule 6 message, the battery-foil and lengthwise schedules (13 passes in under 30 s), the shear-cap march where the mattress rejects, the printed-end family (W_bar 88.62 / 102.62 / 117.47 at 21 / 10 / 5 um, thickening before the exit). `tests/test_halfspace_bite_branch.py`: the same three passes with a Newton budget of 20, 40 and 80 per march step give the same load; the degenerate branch is rejected by rule `SLIP_CONSISTENCY`. Software checks only: a value near a published load would not validate the model |
 | `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`); heat-streak tribology item (`test_heat_streak_regime_item`, SPEC17): with tribology and no temperature limit `NEUTRAL`, with a limit below the modelled exit temperature `SUPPORTS` / weak, the planted case still leads |
@@ -3327,9 +3383,10 @@ At battery-foil gauge, in addition (each checked against the code and
   itself unvalidated: it leaves out the longitudinal elastic equations of its source, closes
   the bite ends by contact zones where the source uses a pressure step (the published loads
   depend on an unstated end length), and carries a strip thickness spring that is the
-  planner's addition (+4.6 % load on the published case). In this package it returns only
-  `A F` and `A B F` structures and rejects passes whose no-slip zone would need more than the
-  friction limit (section 10.3).
+  planner's addition (+4.6 % load on the published case). At the regime boundary neither
+  the no-slip structure nor zone E is admissible and the sheet-like structure is used, with
+  the other candidate reported (1.7 % apart in force on the battery-foil case pass); its
+  rule against the degenerate branch (`SLIP_CONSISTENCY`) is the project's own (section 10.3).
 - **Extended-domain bites are unvalidated.** Between 8 and 20 um exit gauge and between 50 and
   65 % reduction the mattress model gives numbers only because its solution stays converged
   and continuous in probes; no source validates it there, and the closed-gap load path is
