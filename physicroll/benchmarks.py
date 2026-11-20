@@ -255,6 +255,8 @@ NOT_ENCODED = (
     {'id': 'SS-V5', 'reason': 'needs the roll profiles of the paper'},
     {'id': 'SS-V11', 'reason': 'already encoded: physicroll/literature.py, '
                                'tests/test_literature.py (cross-reference only)'},
+    {'id': 'A2-LOCAL-SOURCES', 'reason': 'no published case of a film or flow-stress band '
+                                         'exists (gap study, I2)'},
 ) + tuple(
     {'id': i, 'reason': 'needs a model of a later phase or data not in the repository'}
     for i in ('BT-V5', 'BT-V6', 'BT-V7', 'BT-V8', 'BT-V10', 'BT-V11', 'BT-V12', 'BT-V13',

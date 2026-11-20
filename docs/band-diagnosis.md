@@ -624,6 +624,18 @@ with the exit-tension feedback (2.7 to 4.4 I-units per 1 %, no trend). So whethe
 explains "worse at thinner gauge" depends on the feedback, the least supported element of the
 shape chain; the screen changes no score.
 
+**A hot roll stripe at foil gauge: three parts, two signs** (SPEC19 package 2, section 7.11).
+With `width_model.local_coupling` the battery-foil demo shows what the stripe of the weak
+nozzle does besides growing the roll: roll growth +25.1 I-units (loose), the thinner oil film
+-3.7 (tight; -7.5 with the inlet weight 1), the softer metal +0.57, the strip temperature +4.1
+read while hot; mechanical net +21.9 (+18.2 with weight 1), loose either way. Twenty seconds
+after zone 18-19 closes the parts are +18.0, -10.0 (-19.7), +1.5 and +11.0, and the net is
++9.5 at weight 0.5 but -0.2 (below the reporting threshold) at weight 1: in the first tens of
+seconds the sign depends on an input nobody has measured. Every part rests on the exit-tension
+feedback (compliance only the film part is -463 I-units against -3.7) and the film part on a
+friction slope with no support in data. The terms are reported beside the band; they change no
+score and no band state.
+
 ### 3.6 The wrinkle rule of thumb
 
 "At 20 MPa tension, flatness worse than 30 I-units necessarily wrinkles" [V S27]. The
@@ -2065,7 +2077,13 @@ simulated rate over the first 5 s, the time to each threshold (in-mill manifest 
 after-release onset, reporting threshold, all as stripe heights from the peak profile
 scaled), the time above the in-mill threshold (`visible_time_s`), the fade time after the
 event, and the band life (event duration plus the time after the event to fall below the
-manifest threshold). These are integration choices of `band_width.py` [D]:
+manifest threshold). With `width_model.local_coupling` each event row also carries
+`local_sources` (section 7.11): the film, flow-stress and strip-temperature terms beside the
+roll-growth term at the snapshot nearest `start + min(20 s, duration)` (the fast path,
+`FAST_PATH_TIME_S` [D, SPEC19: analyst choice; the surface time scale is 8-25 s]) and at the
+peak snapshot, from the surface temperature and radius differences against the starting steady
+state; the simulation and every other event value are the same with and without the key.
+These are integration choices of `band_width.py` [D]:
 
 - **Stripes.** Each connected group of adjacent switched nozzles is one stripe with its own
   monitor; an event that switches separated nozzles therefore gives several stripes. The
@@ -2359,8 +2377,10 @@ flat after release (`tests/test_band_friction_stripes.py`).
 
 Sign: a locally higher friction makes the strip locally thicker and the fibre tight; a locally
 lower friction makes it loose. For a hot roll stripe the film path (thinner film, more friction)
-acts against the roll-growth path (larger roll, thinner strip); the net sign is not known (gap
-A2). With `tribology` a separate, flagged block (`PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED`)
+acts against the roll-growth path (larger roll, thinner strip). With
+`width_model.local_coupling` the model gives the film, flow-stress and strip-temperature terms
+of a hot roll stripe beside the roll-growth term, each on its own and summed, with two inlet
+weights (section 7.11, second part); their sign rests on an assumed inlet weight. With `tribology` a separate, flagged block (`PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED`)
 converts the placeholder closure's slope into a friction change per kelvin of oil temperature
 (`dmu/dLambda*Lambda*(-beta)`: +3.2e-4, about 1.1 % of the friction 0.03 at the case pass) and
 per +10 % roll roughness; the closure's slope is not supported by data (X22), so these are
@@ -2555,6 +2575,68 @@ list): `LOCAL_STATE_COMPUTED`, `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TE
 `LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE`, `OIL_SUPPLY_BELOW_SMOOTH_FILM` (a starved
 station under a nozzle whose level is above 0), `ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL`,
 `LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE`.
+
+**Second part: the local sources as a band** (SPEC19 package 2; gap rows A2, BT-G4 in full,
+I2; `band_local.source_terms`, `width.local_sources`). The film and flow-stress changes act as
+a local change of roll force per width at an unchanged gap, transferred as in section 7.8
+[D, re-derived in SPEC17]:
+
+```
+dp0'_film(z) = M_mu*dmu(z),   dp0'_flow(z) = M_Y*Y_pass*dY_rel(z)       M = (dF/dX)/width
+dh_X,k = G(lam_k)*dp0'_X,k,   G = 2*C/(1 + 2*C*Q_eff)                   (with the feedback)
+I_X = 1e5*(eps_X - mean),     eps_X = -xi*dh_X/h_exit                    (flat entry)
+I_T = thermal_flatness_term(z, T_x)                                     (first part)
+I_roll = width.shape.steady.i_units_linear_feedback                      (before saturation)
+mechanical_net = I_roll + I_film + I_flow       (what stays after the coil has cooled)
+as_measured_hot = mechanical_net + I_T          (a shapemeter without temperature compensation)
+```
+
+`M_mu` and `M_Y` come from the case-pass bite: central differences of its model (+-2 % friction,
++-0.5 % flow stress) in the friction screen's own bite cache, or the analytic derivatives of the
+reduced half-space bite (`bite_extras`) when that is the operating bite; the section names the
+model (`sensitivities.sensitivity_bite_model`). Every term is reported **separately**, with what
+it rests on (`terms_rest_on`) and the time scale it follows (`time_scales`: roll growth the roll
+body, `bulk_s`; film, flow stress and strip temperature the roll surface, `surface_film_s`, both
+from `roll_skin.time_scales`), and at both transfer levels (with the exit-tension feedback,
+used in the sums, and compliance only). The sums are never printed alone: every band row and
+event row carries the net at the inlet weights 0, entered and 1 with their sign words (`LOOSE`
+/ `TIGHT` at +-2 I-units, else `BELOW_REPORTING_THRESHOLD`), `sign_depends_on_inlet_weight`,
+the size of the mechanical terms against the net, and a `net_text` sentence. A term that cannot
+be evaluated (no softening coefficient, no strip-to-roll coupling) counts as zero, is named in
+`missing_terms`, and the sentence says "the net is incomplete" (flag
+`LOCAL_NET_INCOMPLETE_TERM_MISSING`, added beside the brief's flags). Two profiles go to the
+shapemeter (`local_mechanical_net`, `local_as_measured_hot`).
+
+Battery-foil demo (regenerated artifact; `M_mu` 5.1403e7 N/m, `M_Y` 0.011165 m, load
+exponents 1.609 in friction and 2.038 in flow stress, experimental mattress bite):
+
+| I-units at the band of 0.6225 m | roll growth | film (w 0.5 / 1.0) | flow stress | strip temperature | mechanical net (w 0.5 / 1.0) | as measured hot |
+|---|---|---|---|---|---|---|
+| steady stripe, `dT_r` 2.36 K | +25.1 | -3.7 / -7.5 | +0.57 | +4.1 | +21.9 / +18.2 | +26.0 |
+| 20 s after zone 18-19 closes, `dT_r` 6.47 K | +18.0 | -10.0 / -19.7 | +1.5 | +11.0 | +9.5 / -0.2 | +20.5 |
+| planner (peak estimates, SPEC19), steady | +25.1 | -4.3 / -8.6 | +0.7 | +4.7 | +21.5 / +17.2 | +26.2 |
+| planner, 20 s | +19.2 | -11.5 / -22.6 | +1.8 | +12.5 | +9.5 / -1.6 | +22.0 |
+
+The planner used one transfer gain at the stripe's dominant wavelength and no mean removal;
+the implementation works on whole profiles with the mean removed (the strip term's background
+is -0.64 I-units), and its flow-stress term uses formula 7 (`0.5*eta_x*dT_r`, 0.42 of `dT_r`)
+where the prototype took half of `dT_r`. Compliance only, the steady film term is -463 I-units
+(planner about -590). **Read the signs, not the digits.** Roll growth makes the strip thinner
+and the fibre loose; a thinner oil film raises friction and force, makes the strip thicker and
+the fibre tight; softer metal lowers the force and makes it loose; a hotter fibre reads loose
+while hot and that part is gone after cooling. In the steady state the net is loose with
+either weight. Twenty seconds after a zone closes the surface under it is 6.5 K hotter; the
+film term then nearly cancels the roll path at weight 1, and the mechanical net is +9.5 or
+-0.2: its sign in the first tens of seconds depends on an input nobody has measured (SPEC19
+finding 7; flag `LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT`). All of it rests on the exit-tension
+feedback, which an independent check does not confirm at foil gauge (SPEC19 package 8), and on
+the friction-closure slope of X22. No evidence item reads these terms (open decision 2); the
+steady shape, the band states, the onsets, the gauge trend and every score are unchanged.
+Flags: `LOCAL_SOURCES_COMPUTED`, `LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT`,
+`LOCAL_SOURCES_REVERSE_A_BAND` (a roll-growth band whose net has the other sign or falls below
+the threshold), `LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED`,
+`LOCAL_NET_INCOMPLETE_TERM_MISSING`. No published case of a film or flow-stress band exists
+(benchmarks `NOT_ENCODED` `A2-LOCAL-SOURCES`).
 
 ## 8. Process models
 
@@ -3661,6 +3743,7 @@ case". Sections of the lengthwise demo report
 | Leading hypotheses | each `CONSISTENT_LEADING` hypothesis with the criteria that support and contradict it; up to three other `CONSISTENT` hypotheses of the observed family with theirs |
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
 | Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
+| A hot stripe: roll growth, oil film, softer metal, strip temperature | only with `width_model.local_coupling` (inside the width section, after the friction-stripe block): the local state at the largest roll surface difference and the oil supply, a chart of the four terms and both sums, the band and event tables (both transfer levels, the net at inlet weights 0 / entered / 1 and the sign words), one sentence per row, the force sensitivities with their bite model and time scales, the sign note, and the warning "Read the signs, not the digits." |
 | Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 7.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
 | How the result changes with gauge | a generated direction sentence, then the gauge-trend text, two charts and the table of 7.3 |
 | Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
@@ -3847,6 +3930,7 @@ real mill.
 | `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
+| local sources / `tests/test_band_local_sources.py` | a single sinusoid of friction gives `-1e5*xi*G(lam)*M_mu*dmu/h` to 1e-9 with the feedback and compliance only (compliance only larger); signs (more friction tight, softer metal loose, hotter fibre loose); zero changes give zero terms and the net equals the roll term; sums; a missing term named and "the net is incomplete"; the sign words; on a coarse case with a valve event: the section, event rows with the key and not-supplied rows without it, event histories and every other result identical, the report block only with the key and without `nan`; the battery-foil artifact against the planner's peaks (15 %, the flow-stress term 20 %) and pinned to 1e-6 |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
 
 `tests/test_band_diagnosis.py` also checks that twenty hypotheses are evaluated for every
@@ -4042,6 +4126,11 @@ At battery-foil gauge, in addition (each checked against the code and
   100 MPa (Roelands low by a factor 12 to 30); no source gives a limiting shear stress for a
   rolling oil (only a lower bound 0.045 of the pressure for one base oil); the Eyring stress
   is known for one base oil without additives (section 8.1).
+- **The local sources of a hot stripe are linear and rest on the exit-tension feedback**
+  (section 7.11): their sum is taken on the linear-feedback profile; `dF/dmu` and `dF/dY` are
+  those of a constant-friction bite; the film term's sign against the roll path depends on the
+  assumed inlet weight in the first tens of seconds after a valve change; nothing feeds back to
+  the roll temperature and no evidence item reads them.
 - **The local state across the width is one-way and rests on an assumed inlet weight**
   (section 7.11): differences from the healthy header only; the share of a roll temperature
   difference that reaches the inlet oil (default 0.5) has not been measured; the local friction,

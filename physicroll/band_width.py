@@ -1245,7 +1245,7 @@ def event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, en
     return row
 
 
-def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
+def _events_section(th, sp, actual, events, shape_reason=None, scales=None, local=None):
     """One transient from the steady state through all events (overlaps combined).
 
     Per event: one monitor per connected group of adjacent switched nozzles (a stripe); the
@@ -1253,7 +1253,11 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
     start of the next event in the same neighbourhood (attribution window); what lies beyond
     it is reported as a lower bound, not as this event's value. The peak profile is the
     snapshot AT the governing stripe's measured peak time (event boundaries are always
-    recorded; a missing peak time is recorded by a second run)."""
+    recorded; a missing peak time is recorded by a second run).
+
+    ``local`` (SPEC19 package 2): None (no key), a dict put into every row as
+    ``local_sources`` (not supplied / not assessable), or a callable of the event context
+    returning that row's ``local_sources``; the simulation is the same in every case."""
     t0 = min(e['start_s'] for e in events)
     marks = sorted({0.0} | {e['start_s'] - t0 for e in events}
                    | {e['start_s'] - t0 + e['duration_s'] for e in events})
@@ -1397,6 +1401,13 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
                 for sc in scales]
         if flags:
             row['flags'] = flags
+        if isinstance(local, dict):
+            row['local_sources'] = dict(local)
+        elif local is not None:
+            row['local_sources'] = local({
+                'snapshots': sim['snapshots'], 'peak_snapshot': snap, 'start_s': ts,
+                'duration_s': e['duration_s'], 'x': x, 'base_radius': base,
+                'base_surface': actual['surface_temperature_k']})
         hist = [i for i, t in enumerate(times) if t >= ts - 1e-9]
         stride = max(1, int(math.ceil(len(hist) / HISTORY_MAX_POINTS)))
         keep = hist[::stride]
@@ -3057,7 +3068,8 @@ def thermal_heat_inputs(w, trib, heat_row):
 
 
 def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
-                  friction_sensitivity=None, friction_row=None, friction_get_bite=None):
+                  friction_sensitivity=None, friction_row=None, friction_get_bite=None,
+                  local_sensitivity=None):
     """The ``width`` result section (SPEC6 6.2). ``get_bite(src)`` returns the bite of a
     schedule pass (effective values) or raises ValueError.
 
@@ -3068,7 +3080,10 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     fraction. The shape chain (transfer, flatness, onsets, gauge trend of the case pass) uses
     ``width_model.shape_inputs`` when supplied (they take precedence over a derived bite),
     else the bite; with neither its parts are individually NOT_ASSESSABLE with the bite error
-    as the reason (``shape_chain``)."""
+    as the reason (``shape_chain``).
+
+    ``local_sensitivity()`` (SPEC19 package 2) returns the case-pass bite's force sensitivities
+    for ``width.local_sources``; called only with ``width_model.local_coupling``."""
     w = case.get('width_model')
     if w is None:
         return not_supplied('width_model is null or absent')
@@ -3149,10 +3164,11 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     except ValueError as exc:
         out['roll_surface_cycle'] = not_assessable(str(exc))
     # SPEC19 package 1: local state across the width (one-way; NOT_SUPPLIED without the key)
+    local_ctx = {}
     try:
         out['local_state'] = band_local.local_state_section(
             case, w, th, steady, trib, bite, heat_row, friction_row,
-            out['roll_surface_cycle'])
+            out['roll_surface_cycle'], context=local_ctx)
     except (ValueError, ArithmeticError) as exc:
         out['local_state'] = failed('local_state', exc)
         out['failures'].append(out['local_state']['error'])
@@ -3193,12 +3209,31 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     except ValueError as exc:
         shape['crown'] = failed('shape.crown', exc)
         out['failures'].append(shape['crown']['error'])
+    # SPEC19 package 2: the force sensitivities and the event callback of the local sources
+    local_sens, local_ev, local_reason = None, None, None
+    if w.get('local_coupling') is None:
+        local_ev = not_supplied('width_model.local_coupling is null or absent')
+    elif not local_ctx:
+        local_reason = 'needs width.local_state (' + str(
+            out['local_state'].get('reason') or out['local_state'].get('error')) + ')'
+    elif sp is None:
+        local_reason = f'needs the shape parameters of the case pass ({shape_reason})'
+    elif local_sensitivity is None:
+        local_reason = 'no force sensitivities of the case-pass bite'
+    else:
+        try:
+            local_sens = local_sensitivity()
+            local_ev = band_local.event_sources(local_ctx, sp, local_sens, th)
+        except (ValueError, ArithmeticError) as exc:
+            local_reason = f'force sensitivities of the case-pass bite: {exc}'
+    if local_ev is None:
+        local_ev = band_local.not_assessable(local_reason)
     if w['events'] and actual is not None:
         try:
             from . import band_thermal
             out['thermal_events'] = _events_section(
                 th, sp, actual, w['events'], shape_reason,
-                scales=band_thermal.event_scales(case, th.fraction))
+                scales=band_thermal.event_scales(case, th.fraction), local=local_ev)
         except ValueError as exc:
             out['thermal_events'] = failed('thermal_events', exc)
             out['failures'].append(out['thermal_events']['error'])
@@ -3208,6 +3243,18 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                                                   else ''))
     else:
         out['thermal_events'] = not_supplied('no width_model.events')
+    try:
+        if local_reason is not None:
+            out['local_sources'] = band_local.not_assessable(local_reason)
+        else:
+            out['local_sources'] = band_local.local_sources_section(
+                case, w, local_ctx, sp, local_sens, shape.get('steady'), th,
+                (out['thermal_events'] or {}).get('events'))
+    except (ValueError, ArithmeticError) as exc:
+        out['local_sources'] = failed('local_sources', exc)
+        out['failures'].append(out['local_sources']['error'])
+    flags += [f for f in (out['local_sources'].get('flags') or [])
+              if f in band_local.SOURCE_FLAGS and f not in flags]
     cell = th.numerics['axial_cell_m']
     z = steady['z_m'] if steady else [(i + 0.5) * cell for i in
                                       range(max(4, int(round(th.length / cell))))]

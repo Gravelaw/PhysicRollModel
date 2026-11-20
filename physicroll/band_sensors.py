@@ -557,6 +557,22 @@ def shapemeter_profiles(width, temperature_compensated=None):
                     'z_m': stt['z_m'], 'i_units': hot['i_units'], 'bands': hot['bands'],
                     'reporting_threshold_i_units': (st or {}).get(
                         'reporting_threshold_i_units') if isinstance(st, dict) else None})
+    # SPEC19 package 2: roll growth plus the local film and flow-stress terms (and hot)
+    lsrc = width.get('local_sources')
+    if isinstance(lsrc, dict) and lsrc.get('status') == 'SCREENING_RESULT_NOT_PLANT_VALIDATED':
+        for key, name, label in (
+                ('mechanical_net', 'local_mechanical_net',
+                 'roll growth plus film and flow-stress terms'),
+                ('as_measured_hot', 'local_as_measured_hot',
+                 'the same plus the strip temperature term')):
+            pr = (lsrc.get('profiles') or {}).get(key)
+            iu = lsrc.get(f'{key}_i_units')
+            if isinstance(pr, dict) and isinstance(iu, list) and len(iu) == len(lsrc['z_m']):
+                out.append({'name': name, 'label': label, 'z_m': lsrc['z_m'], 'i_units': iu,
+                            'bands': pr['bands'],
+                            'reporting_threshold_i_units': (st or {}).get(
+                                'reporting_threshold_i_units') if isinstance(st, dict)
+                            else None})
     # SPEC17 package 8: the measured roll ground profile (with feedback)
     rp = width.get('roll_profile')
     if isinstance(rp, dict) and isinstance(rp.get('z_m'), list) \

@@ -368,9 +368,10 @@ class EngineTests(unittest.TestCase):
             if key not in ('inputs', 'width', 'flags'):
                 self.assertEqual(a[key], b[key], key)
         for key in a['width']:
-            if key != 'local_state':
+            if key not in ('local_state', 'local_sources'):     # package 2 beside it
                 self.assertEqual(a['width'][key], b['width'][key], key)
-        self.assertEqual(a['flags'], [f for f in b['flags'] if f not in bl.TOP_LEVEL_FLAGS])
+        self.assertEqual(a['flags'], [f for f in b['flags'] if f not in bl.TOP_LEVEL_FLAGS
+                                      + bl.SOURCE_FLAGS])
         ia, ib = copy.deepcopy(a['inputs']), copy.deepcopy(b['inputs'])
         ib['width_model']['local_coupling'] = None
         self.assertEqual(ia, ib)

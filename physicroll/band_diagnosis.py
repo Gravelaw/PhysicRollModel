@@ -3655,13 +3655,39 @@ def diagnose(case):
         model = perturbed_bite_model(eff, fs_get_bite(src))
         return bp.friction_force_sensitivity(lambda q: fs_cache.get(q, model=model),
                                              bp.bite_pass(eff, src))
+    def local_sens():
+        # SPEC19 package 2: dF/dmu and dF/dY of the case-pass bite per width. A reduced
+        # half-space bite gives its analytic derivatives (bite_extras); otherwise central
+        # differences in the friction screen's own cache with the operating bite's model, so
+        # bite_derivations and every other section are unchanged
+        width_ = eff['pass']['width_m']
+        st_ = cache.state_for(bite) if bp.is_half_space(bite) else None
+        if st_ is not None:
+            f_mu, f_y = st_['extra']['dforce_dfriction_n'], st_['extra']['dforce_dflow_stress_m2']
+            model_, basis_ = 'reduced_half_space', ('analytic derivatives of the reduced '
+                                                   'half-space bite (bite_extras)')
+        else:
+            fr_ = friction_sens(eff['pass'])
+            fy_ = bp.flow_stress_sensitivity(lambda q: fs_cache.get(q, model=sens_model),
+                                             bp.bite_pass(eff, eff['pass']))
+            f_mu, f_y = fr_['dforce_dfriction_n'], fy_['dforce_dflow_stress_m2']
+            model_ = fr_['bite_model']
+            basis_ = (f'central differences of the {model_} bite (friction +-2 %, flow stress '
+                      '+-0.5 %)')
+        return {'dforce_per_width_dfriction_n_m': f_mu / width_,
+                'dforce_per_width_dflow_stress_m': f_y / width_,
+                'flow_stress_pa': eff['pass']['mean_flow_stress_pa'],
+                'force_per_width_n_m': bite.separating_force_n / width_,
+                'bite_model': model_, 'basis': basis_}
     proc = result.get('process') if isinstance(result.get('process'), dict) else {}
     fr_row = (proc.get('friction') or {}).get('operating') if isinstance(
         proc.get('friction'), dict) else None
     try:
         result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags,
                                            bite_error, friction_sensitivity=friction_sens,
-                                           friction_row=fr_row, friction_get_bite=fs_get_bite)
+                                           friction_row=fr_row, friction_get_bite=fs_get_bite,
+                                           local_sensitivity=(local_sens if bite is not None
+                                                              else None))
     except ValueError as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']

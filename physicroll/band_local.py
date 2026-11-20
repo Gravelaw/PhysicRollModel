@@ -49,6 +49,8 @@ row or the roll temperature (loop I1 stays open); lateral spreading or carry-ove
 inlet meniscus position (BT-G12 is reduced to a volume balance, SPEC19 finding 9); roughness
 across the barrel; a strip entry temperature across the width.
 """
+import math
+
 from . import bite_tribology as bt
 from . import strip_shape as ss
 from .band_process import (bite_mean_pressure_pa, keys, not_supplied, num,
@@ -353,9 +355,12 @@ def _strip_samples(th, steady):
     return idx, [z_all[i] for i in idx], [weights[i] for i in idx], near
 
 
-def local_state_section(case, w, th, steady, trib, bite, heat_row, friction_row, cycle):
+def local_state_section(case, w, th, steady, trib, bite, heat_row, friction_row, cycle,
+                        context=None):
     """``width.local_state`` (SPEC19 package 1): local state across the width as differences
-    from the healthy header; ``not_supplied`` without ``width_model.local_coupling``."""
+    from the healthy header; ``not_supplied`` without ``width_model.local_coupling``.
+    ``context`` (a dict, optional) receives the parameters, the changes and the strip sample
+    indices for the source terms of package 2."""
     lc = w.get('local_coupling')
     if lc is None:
         return not_supplied('width_model.local_coupling is null or absent')
@@ -386,6 +391,9 @@ def local_state_section(case, w, th, steady, trib, bite, heat_row, friction_row,
                    "healthy header's (no circumferential layout)")
     dtr = [act[i] - hea[i] for i in idx]
     ch = local_changes(z, dtr, params)
+    if context is not None:
+        context.update(params=params, changes=ch, z=z, idx=idx, dtr=dtr,
+                       z_full=list(steady['z_m']))
     flags = list(params['flags']) + ch['flags']
     flags += [f for f in params['closure_flags'] if f not in flags]
     j = max(range(len(z)), key=lambda k: abs(dtr[k]))
@@ -446,3 +454,369 @@ def local_state_section(case, w, th, steady, trib, bite, heat_row, friction_row,
             'thermal_flatness': tf,
             'closure_model': params['closure_model'], 'basis': dict(BASIS), 'flags': flags,
             'limitations': list(LIMITATIONS)}
+
+
+# ============================================================================= package 2
+# Local sources as a band (SPEC19 package 2; gap rows A2, BT-G4 in full; I2). The film and
+# flow-stress changes act as a local change of roll force per width at an unchanged gap
+# (SPEC17 package 7, strip_shape.transfer_force_profile) [D, re-derived in SPEC17]:
+#     dp0'_film = M_mu*dmu,  dp0'_flow = M_Y*Y_pass*dY_rel,  M = (dF/dX)/width of the pass bite
+#     dh_k = G(lam_k)*dp0'_k,  G = 2*C/(1 + 2*C*Q_eff)   (with the exit-tension feedback)
+#     I_X = 1e5*(eps_X - mean),  eps_X = -xi*dh_X/h_exit                          (flat entry)
+# and the strip temperature term I_T = thermal_flatness_term(z, T_x) (package 1). Summed with
+# the roll-growth term I_roll = width.shape.steady.i_units_linear_feedback (linear, before the
+# band-wise saturation):
+#     mechanical_net = I_roll + I_film + I_flow;   as_measured_hot = mechanical_net + I_T.
+# Reported beside the steady shape; never added to it, to an event's peak shape or to evidence.
+FAST_PATH_TIME_S = 20.0   # [D, SPEC19: analyst choice; the surface time scale is 8-25 s,
+#                           computed in the thermal report]
+SRC_FLAG_COMPUTED = 'LOCAL_SOURCES_COMPUTED'
+SRC_FLAG_WEIGHT = 'LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT'
+SRC_FLAG_REVERSE = 'LOCAL_SOURCES_REVERSE_A_BAND'
+SRC_FLAG_LINEAR = 'LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED'
+# added at the coordinator's request (not in SPEC19): a term of the net could not be evaluated
+SRC_FLAG_MISSING = 'LOCAL_NET_INCOMPLETE_TERM_MISSING'
+SOURCE_FLAGS = (SRC_FLAG_COMPUTED, SRC_FLAG_WEIGHT, SRC_FLAG_REVERSE, SRC_FLAG_LINEAR,
+                SRC_FLAG_MISSING)
+SIGN_NOTE = ('Roll growth makes the strip thinner and the fibre loose. A thinner oil film raises '
+             'friction and force, makes the strip thicker and the fibre tight. Softer metal '
+             'lowers the force and makes it loose. A hotter fibre reads loose while hot and that '
+             'part is gone after cooling. Roll growth needs minutes; the other three follow the '
+             'roll surface within seconds.')
+TERMS = ('roll_growth', 'film', 'flow_stress', 'strip_temperature')
+TERM_WORDS = {'roll_growth': 'roll growth', 'film': 'oil film', 'flow_stress': 'softer metal',
+              'strip_temperature': 'strip temperature'}
+TERM_RESTS_ON = {
+    'roll_growth': 'the roll thermal model and the shape chain with the exit-tension feedback '
+                   '(width.shape.steady, linear before saturation)',
+    'film': 'the inlet temperature weight (assumed), the oil viscosity law, the friction '
+            'closure slope and dF/dmu of the pass bite, through the force transfer',
+    'flow_stress': 'the softening coefficient, the strip-to-roll coupling and dF/dY of the pass '
+                   'bite, through the force transfer',
+    'strip_temperature': 'the strip-to-roll coupling of the heat partition and the expansion '
+                         'coefficient; read while hot only'}
+SOURCE_LIMITATIONS = (
+    'Linear: the terms are summed on the linear-feedback profile, before any band-wise '
+    'saturation.',
+    'dF/dmu and dF/dY of a constant-friction bite of the pass (central differences, or the '
+    'analytic derivatives of the reduced half-space bite).',
+    'The exit-tension feedback is not confirmed by an independent model (SPEC19 package 8): '
+    'the compliance-only level is printed beside it, two orders of magnitude larger.',
+    'width.shape.steady, the onsets, the gauge trend and every evidence item are NOT changed.')
+
+
+def _force_i_units(z, dp, sp, feedback):
+    from . import band_width as bw     # local: band_width imports this module
+    return bw._friction_i_units(z, dp, sp, feedback)[1]
+
+
+def sign_word(value):
+    thr = ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS
+    if value >= thr:
+        return 'LOOSE'
+    if value <= -thr:
+        return 'TIGHT'
+    return 'BELOW_REPORTING_THRESHOLD'
+
+
+def source_terms(z_strip, changes, sp, sens):
+    """The film, flow-stress and strip-temperature terms [I-units] of a set of local changes,
+    with the exit-tension feedback and compliance only. ``sens``:
+    ``dforce_per_width_dfriction_n_m`` (M_mu), ``dforce_per_width_dflow_stress_m`` (M_Y) and
+    ``flow_stress_pa`` (Y of the pass). A term that cannot be evaluated is None and named in
+    ``missing_terms`` with the reason."""
+    z = list(z_strip)
+    m_mu, m_y = sens['dforce_per_width_dfriction_n_m'], sens['dforce_per_width_dflow_stress_m']
+    out, missing = {}, {}
+    dp = [m_mu * d for d in changes['friction_change']]
+    out['film_i_units'] = _force_i_units(z, dp, sp, True)
+    out['film_i_units_compliance_only'] = _force_i_units(z, dp, sp, False)
+    dy = changes.get('flow_stress_change_fraction')
+    if dy is None:
+        out['flow_stress_i_units'] = out['flow_stress_i_units_compliance_only'] = None
+        missing['flow_stress'] = changes.get('flow_stress_reason') or (
+            'no flow-stress change (no softening coefficient or no strip-to-roll coupling)')
+    else:
+        dpy = [m_y * sens['flow_stress_pa'] * d for d in dy]
+        out['flow_stress_i_units'] = _force_i_units(z, dpy, sp, True)
+        out['flow_stress_i_units_compliance_only'] = _force_i_units(z, dpy, sp, False)
+    t_x = changes.get('strip_exit_temperature_k')
+    if t_x is None:
+        out['strip_temperature_i_units'] = None
+        missing['strip_temperature'] = ('no strip exit temperature (no strip-to-roll coupling or '
+                                        'no modelled exit temperature of the pass)')
+    else:
+        out['strip_temperature_i_units'] = ss.thermal_flatness_term(z, t_x)['i_units']
+    out['missing_terms'] = missing
+    return out
+
+
+def combine(roll, terms):
+    """``mechanical_net`` and ``as_measured_hot`` [I-units]; a missing term counts as zero (and
+    stays named in ``missing_terms``)."""
+    n = len(roll)
+
+    def get(key):
+        v = terms.get(key)
+        return v if v is not None else [0.0] * n
+    mech = [a + b + c for a, b, c in zip(roll, get('film_i_units'),
+                                          get('flow_stress_i_units'))]
+    hot = [a + b for a, b in zip(mech, get('strip_temperature_i_units'))]
+    return mech, hot
+
+
+def _val(series, j):
+    return None if series is None else series[j]
+
+
+def point_row(j, z, roll, terms, weight_film, missing, entered_weight):
+    """Every term, both sums and the sign words at sample ``j``. ``weight_film``: the film
+    term (with feedback) at inlet weights 0 and 1."""
+    r = roll[j]
+    f, y, t = (_val(terms['film_i_units'], j), _val(terms['flow_stress_i_units'], j),
+               _val(terms['strip_temperature_i_units'], j))
+    y0, t0 = y or 0.0, t or 0.0
+    mech = r + f + y0
+    hot = mech + t0
+    n0 = r + weight_film[0][j] + y0
+    n1 = r + weight_film[1][j] + y0
+    words = (sign_word(n0), sign_word(mech), sign_word(n1))
+    size = abs(r) + abs(f) + abs(y0)
+    row = {'position_m': z[j], 'roll_growth_i_units': r, 'film_i_units': f,
+           'film_i_units_compliance_only': _val(terms['film_i_units_compliance_only'], j),
+           'flow_stress_i_units': y,
+           'flow_stress_i_units_compliance_only': _val(
+               terms['flow_stress_i_units_compliance_only'], j),
+           'strip_temperature_i_units': t, 'mechanical_net_i_units': mech,
+           'as_measured_hot_i_units': hot, 'net_sign': words[1],
+           'as_measured_hot_sign': sign_word(hot),
+           'mechanical_net_at_weight_0_i_units': n0, 'mechanical_net_at_weight_1_i_units': n1,
+           'as_measured_hot_at_weight_0_i_units': n0 + t0,
+           'as_measured_hot_at_weight_1_i_units': n1 + t0,
+           'net_sign_at_weight_0': words[0], 'net_sign_at_weight_1': words[2],
+           'sign_depends_on_inlet_weight': len(set(words)) > 1,
+           'mechanical_terms_size_i_units': size,
+           'mechanical_terms_size_over_net': None if mech == 0 else size / abs(mech),
+           'missing_terms': sorted(missing)}
+    text = (f'Mechanical net {mech:+.3g} I-units ({words[1].lower().replace("_", " ")}) = '
+            f'roll growth {r:+.3g} + oil film {f:+.3g}'
+            + (f' + softer metal {y:+.3g}' if y is not None else '')
+            + f' (inlet weight {entered_weight:g}); with inlet weight 0 / 1 the net is '
+            f'{n0:+.3g} / {n1:+.3g}. The mechanical terms add to {size:.3g} I-units in size'
+            + (f', {size / abs(mech):.3g} times the net.' if mech != 0 else '.')
+            + (f' Read while hot: {hot:+.3g} with the strip temperature term {t:+.3g}.'
+               if t is not None else ''))
+    for name, why in sorted(missing.items()):
+        text += f' The {TERM_WORDS[name]} term is missing ({why}): the net is incomplete.'
+    row['net_text'] = text
+    return row
+
+
+def _weight_films(z, dtr, params, sp, sens):
+    out = []
+    for wt in (0.0, 1.0):
+        ch = local_changes(z, dtr, dict(params, inlet_roll_temperature_weight=wt))
+        out.append(_force_i_units(z, [sens['dforce_per_width_dfriction_n_m'] * d
+                                      for d in ch['friction_change']], sp, True))
+    return out
+
+
+def _changes_for_terms(ch, params):
+    c = dict(ch)
+    if c.get('flow_stress_change_fraction') is None:
+        c['flow_stress_reason'] = (
+            params['coefficient_basis'] if params['flow_stress_temperature_coefficient_per_k']
+            is None else 'needs the strip-to-roll temperature coupling: '
+            + params['coupling_basis'])
+    return c
+
+
+def event_sources(context, sp, sens, th):
+    """Callback for ``band_width._events_section``: the local sources of one event at the
+    snapshot nearest ``start + min(20 s, duration)`` and at its peak snapshot (surface and
+    radius differences from the starting steady state, circumferential mean), reported at the
+    event's monitor position."""
+    from . import band_width as bw
+    params, z, idx = context['params'], context['z'], context['idx']
+
+    def one(snap, base_r, base_s, ts, x):
+        dtr = [snap['surface_temperature_k'][i] - base_s[i] for i in idx]
+        dev = [g - b for g, b in zip(snap['radius_growth_m'], base_r)]
+        fb = bw._tsf(context['z_full'], dev, sp, True)
+        roll = bw._linear_feedback_i_units(fb, sp)
+        if len(roll) != len(z):
+            raise ValueError('the shape grid differs from the strip samples')
+        ch = local_changes(z, dtr, params)
+        terms = source_terms(z, _changes_for_terms(ch, params), sp, sens)
+        wf = _weight_films(z, dtr, params, sp, sens)
+        j = min(range(len(z)), key=lambda k: abs(z[k] - x))
+        row = point_row(j, z, roll, terms, wf, terms['missing_terms'],
+                        params['inlet_roll_temperature_weight'])
+        row.update(time_after_start_s=snap['time_s'] - ts,
+                   roll_surface_temperature_change_k=dtr[j],
+                   friction_change=ch['friction_change'][j])
+        return row
+
+    def run(ev):
+        snaps, ts, dur, x = ev['snapshots'], ev['start_s'], ev['duration_s'], ev['x']
+        target = ts + min(FAST_PATH_TIME_S, dur)
+        s20 = min(snaps, key=lambda s: (abs(s['time_s'] - target), s['time_s']))
+        try:
+            return {'status': STATUS, 'not_supplied': False,
+                    'at_20_s': one(s20, ev['base_radius'], ev['base_surface'], ts, x),
+                    'at_peak': one(ev['peak_snapshot'], ev['base_radius'], ev['base_surface'],
+                                   ts, x),
+                    'fast_path_time_s': FAST_PATH_TIME_S, 'monitor_position_m': x,
+                    'basis': 'surface temperature and radius growth of the snapshot minus the '
+                             'starting steady state (circumferential mean), on the whole strip; '
+                             'terms as width.local_sources, read at the monitor position'}
+        except (ValueError, ArithmeticError) as exc:
+            return {'status': 'FAILED', 'not_supplied': False, 'error': f'local_sources: {exc}'}
+    return run
+
+
+def local_sources_section(case, w, context, sp, sens, shape_steady, th, events_rows):
+    """``width.local_sources`` (SPEC19 package 2)."""
+    from . import roll_skin
+    if w.get('local_coupling') is None:
+        return not_supplied('width_model.local_coupling is null or absent')
+    if not context:
+        return not_assessable('needs width.local_state')
+    if sp is None:
+        return not_assessable('needs the shape parameters of the case pass')
+    if sens is None:
+        return not_assessable('needs dF/dmu and dF/dY of the case-pass bite')
+    if not isinstance(shape_steady, dict) or not isinstance(
+            shape_steady.get('i_units_linear_feedback'), list):
+        return not_assessable('needs width.shape.steady')
+    params, z, ch, dtr = context['params'], context['z'], context['changes'], context['dtr']
+    roll = list(shape_steady['i_units_linear_feedback'])
+    if len(roll) != len(z) or any(abs(a - b) > 1e-12 for a, b in zip(shape_steady['z_m'], z)):
+        return not_assessable('the steady shape grid differs from the strip samples')
+    terms = source_terms(z, _changes_for_terms(ch, params), sp, sens)
+    missing = terms['missing_terms']
+    mech, hot = combine(roll, terms)
+    wf = _weight_films(z, dtr, params, sp, sens)
+    kw = dict(youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+              poisson_ratio=sp['strip_poisson_ratio'], thickness_m=sp['exit_thickness_m'],
+              mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+    series = {'roll_growth': roll, 'film': terms['film_i_units'],
+              'flow_stress': terms['flow_stress_i_units'],
+              'strip_temperature': terms['strip_temperature_i_units'],
+              'mechanical_net': mech, 'as_measured_hot': hot}
+    profiles = {}
+    for name, iu in series.items():
+        if iu is None:
+            profiles[name] = None
+            continue
+        f = ss.flatness_from_elongation(z, [v * 1e-5 for v in iu], **kw)
+        profiles[name] = {'max_i_units': f['max_i_units'], 'min_i_units': f['min_i_units'],
+                          'status': f['status'], 'released_status': f['released_status'],
+                          'bands': f['bands']}
+    flags = [SRC_FLAG_COMPUTED]
+    sat = (((shape_steady.get('levels') or {}).get('with_feedback') or {})
+           .get('saturated_bands'))
+    if sat:
+        flags.append(SRC_FLAG_LINEAR)
+    if missing:
+        flags.append(SRC_FLAG_MISSING)
+    at_bands, seen = [], set()
+    for src in ('roll_growth', 'mechanical_net'):
+        for b in profiles[src]['bands']:
+            j = min(range(len(z)), key=lambda k: abs(z[k] - b['peak_position_m']))
+            if j in seen:
+                continue
+            seen.add(j)
+            row = point_row(j, z, roll, terms, wf, missing,
+                            params['inlet_roll_temperature_weight'])
+            row.update(band_of=src, band_peak_i_units=b['peak_i_units'],
+                       band_start_m=b['start_m'], band_end_m=b['end_m'])
+            if src == 'roll_growth' and sign_word(row['mechanical_net_i_units']) != sign_word(
+                    b['peak_i_units']):
+                row['reverses_the_roll_growth_band'] = True
+                if SRC_FLAG_REVERSE not in flags:
+                    flags.append(SRC_FLAG_REVERSE)
+            at_bands.append(row)
+    ev_rows = []
+    for e in events_rows or []:
+        ls = e.get('local_sources') if isinstance(e, dict) else None
+        if isinstance(ls, dict) and ls.get('status') == STATUS:
+            ev_rows.append({'index': e['index'], 'label': e['label'],
+                            'monitor_position_m': ls['monitor_position_m'],
+                            'at_20_s': ls['at_20_s'], 'at_peak': ls['at_peak']})
+    if any(r['sign_depends_on_inlet_weight'] for r in at_bands) or any(
+            e[k]['sign_depends_on_inlet_weight'] for e in ev_rows for k in ('at_20_s',
+                                                                             'at_peak')):
+        flags.append(SRC_FLAG_WEIGHT)
+
+    def peak(series_):
+        return None if series_ is None else max(series_, key=abs)
+    m_mu, m_y = sens['dforce_per_width_dfriction_n_m'], sens['dforce_per_width_dflow_stress_m']
+    fpw = sens['force_per_width_n_m']
+    roll_obj, hdr = th.roll, th.header
+    v_r = params['roll_surface_speed_m_s']
+    scales = roll_skin.time_scales(
+        conductivity_w_mk=roll_obj.conductivity_w_mk,
+        volumetric_heat_capacity_j_m3k=roll_obj.density_kg_m3 * roll_obj.specific_heat_j_kgk,
+        revolution_time_s=2 * math.pi * roll_obj.radius_m / v_r,
+        radius_m=roll_obj.radius_m, mean_htc_w_m2k=hdr.background_htc_w_m2k
+        + hdr.spray_mean_htc_w_m2k)
+    term_scales = {
+        'roll_growth': {'follows': 'the roll body (minutes)', 'scale': 'bulk_s',
+                        'scale_s': scales['bulk_s']},
+        'film': {'follows': 'the roll surface (seconds)', 'scale': 'surface_film_s',
+                 'scale_s': scales['surface_film_s']},
+        'flow_stress': {'follows': 'the roll surface (seconds)', 'scale': 'surface_film_s',
+                        'scale_s': scales['surface_film_s']},
+        'strip_temperature': {'follows': 'the roll surface (seconds); gone after cooling',
+                              'scale': 'surface_film_s', 'scale_s': scales['surface_film_s']}}
+    return {'status': STATUS, 'not_supplied': False, 'z_m': z,
+            'roll_growth_i_units': roll, 'film_i_units': terms['film_i_units'],
+            'film_i_units_compliance_only': terms['film_i_units_compliance_only'],
+            'flow_stress_i_units': terms['flow_stress_i_units'],
+            'flow_stress_i_units_compliance_only': terms['flow_stress_i_units_compliance_only'],
+            'strip_temperature_i_units': terms['strip_temperature_i_units'],
+            'mechanical_net_i_units': mech, 'as_measured_hot_i_units': hot,
+            'film_i_units_at_weight_0': wf[0], 'film_i_units_at_weight_1': wf[1],
+            'inlet_roll_temperature_weight': params['inlet_roll_temperature_weight'],
+            'profiles': profiles, 'at_bands': at_bands, 'missing_terms': missing,
+            'compliance_only': {
+                'film_peak_i_units': peak(terms['film_i_units_compliance_only']),
+                'flow_stress_peak_i_units': peak(terms['flow_stress_i_units_compliance_only']),
+                'film_peak_i_units_with_feedback': peak(terms['film_i_units']),
+                'flow_stress_peak_i_units_with_feedback': peak(terms['flow_stress_i_units']),
+                'note': 'Both transfer levels belong together: with the exit-tension feedback '
+                        '(used in the sums) and compliance only (exit_tension_force_'
+                        'sensitivity_per_width_m = None). The feedback is not confirmed by an '
+                        'independent model.'},
+            'sensitivities': {
+                'M_mu_n_m': m_mu, 'M_Y_m': m_y, 'flow_stress_pa': sens['flow_stress_pa'],
+                'force_per_width_n_m': fpw,
+                'load_exponent_in_friction': m_mu * case['pass']['friction_coefficient'] / fpw,
+                'load_exponent_in_flow_stress': m_y * sens['flow_stress_pa'] / fpw,
+                'sensitivity_bite_model': sens.get('bite_model'),
+                'basis': sens.get('basis')},
+            'time_scales': {'term_time_scales': term_scales, 'model_scales': {
+                k: scales[k] for k in ('per_revolution_s', 'surface_film_s', 'bulk_s',
+                                       'mean_htc_w_m2k')},
+                'scale_meaning': scales['scale_meaning']},
+            'terms_rest_on': dict(TERM_RESTS_ON),
+            'events': ev_rows, 'sign_note': SIGN_NOTE,
+            'basis': {'transfer': '[D, re-derived in SPEC17] dh_k = G(lam_k)*dp0\'_k, G = '
+                                  '2*C/(1 + 2*C*Q_eff) (strip_shape.transfer_force_profile)',
+                      'film': "dp0'_film = M_mu*dmu (package 1 dmu)",
+                      'flow_stress': "dp0'_flow = M_Y*Y_pass*dY_rel (package 1 dY_rel)",
+                      'strip_temperature': 'I_T = thermal_flatness_term(z, T_x) (package 1)',
+                      'roll_growth': 'width.shape.steady.i_units_linear_feedback (linear, '
+                                     'before the band-wise saturation)',
+                      'sums': 'mechanical_net = roll + film + flow; as_measured_hot = '
+                              'mechanical_net + strip temperature; a missing term counts as '
+                              'zero and is named',
+                      'sign_words': f'LOOSE >= +{ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS:g}, '
+                                    f'TIGHT <= -{ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS:g} '
+                                    'I-units (the reporting threshold), else '
+                                    'BELOW_REPORTING_THRESHOLD',
+                      'fast_path': f'events: the snapshot nearest start + min({FAST_PATH_TIME_S:g}'
+                                   ' s, duration) [D, SPEC19: analyst choice]'},
+            'flags': flags,
+            'limitations': list(LIMITATIONS) + list(SOURCE_LIMITATIONS)}

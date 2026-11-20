@@ -2668,6 +2668,24 @@ FLAGS = {
     'LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE': (
         'Somewhere across the width the friction changes by more than a fifth; the straight-'
         'line estimate built on it is then rough.', 'Read that part as a rough indication.'),
+    'LOCAL_SOURCES_COMPUTED': (
+        'Besides the roll growth, the page shows what a hot roll stripe does through the oil '
+        'film, the softer metal and the strip temperature, each on its own and summed; it '
+        'changes no score.', 'Read the signs of the parts, not the digits of the sum.'),
+    'LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT': (
+        'Whether the sum makes the strip loose or tight depends on how much of the roll '
+        'temperature reaches the oil, which nobody has measured.',
+        'Do not act on the sign of the sum alone.'),
+    'LOCAL_SOURCES_REVERSE_A_BAND': (
+        'At a band of the roll growth, the oil film and metal parts cancel it or turn it '
+        'round in this rough estimate.', 'Treat that band as uncertain in sign.'),
+    'LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED': (
+        'The parts are added on the straight-line flatness profile; a band that buckles is '
+        'not capped there.', 'Read the sums at buckled bands as upper estimates.'),
+    'LOCAL_NET_INCOMPLETE_TERM_MISSING': (
+        'One part of the sum could not be worked out (for example no softening of the metal '
+        'with temperature was given), so the sum is incomplete.',
+        'Enter the missing value if you have it.'),
     'ROLL_SURFACE_CYCLE_COMPUTED': (
         'The roll surface temperature within one revolution was computed from the angular '
         'layout of bite and sprays you entered; it changes no other result.', 'No action.'),

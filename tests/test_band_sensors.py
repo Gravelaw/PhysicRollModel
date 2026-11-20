@@ -135,7 +135,9 @@ class DemoProfileTests(unittest.TestCase):
 
     def test_band_metrics_on_the_committed_demo_profile(self):
         self.assertEqual(list(self.profiles), ['steady', 'event_0_peak', 'nozzle_pattern_ripple',
-                                               'steady_as_measured_hot'])   # + package 6
+                                               'steady_as_measured_hot',    # + package 6
+                                               'local_mechanical_net',      # + SPEC19 p2
+                                               'local_as_measured_hot'])
         p = self._read('steady')
         for got, want in zip(p['readings_i_units'][7:12],
                              (6.5973, 20.4506, 24.4912, 20.4517, 6.5979)):

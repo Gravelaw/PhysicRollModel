@@ -1350,6 +1350,7 @@ def _width_section(r):
     body += _other_width_results(w)
     body += _strip_temperature_block(r, w)
     body += _friction_stripe_block(w)
+    body += _local_block(w)
     body += _roll_profile_block(r, w)
     body += _surface_cycle_block(w)
     return head + body + '</section>'
@@ -1577,6 +1578,155 @@ def _friction_stripe_block(w):
                    f'{_f(cv["friction_change_per_10_percent_roll_roughness"], 1, 3)}. '
                    f'{_e(cv["note"])}</p></div>')
     out.append('<p class="warn">' + _e(' '.join(fs.get('limitations') or [])) + '</p>')
+    return ''.join(out)
+
+
+def _local_chart(ls):
+    z = ls['z_m']
+    lines = [('roll growth', ls.get('roll_growth_i_units'), C_FB, '', 2.0),
+             ('oil film', ls.get('film_i_units'), C_ACT, '7 4', 1.6),
+             ('softer metal', ls.get('flow_stress_i_units'), C_THR, '2 3', 1.6),
+             ('strip temperature (hot only)', ls.get('strip_temperature_i_units'), C_EVENT,
+              '9 3 2 3', 1.6),
+             ('mechanical net', ls.get('mechanical_net_i_units'), C_OBS, '', 3.0),
+             ('as measured hot', ls.get('as_measured_hot_i_units'), C_COMP, '4 2', 2.0)]
+    lines = [x for x in lines if isinstance(x[1], list) and len(x[1]) == len(z)]
+    key_parts, rows = _key2([(a, c, d, 'thick' if wd >= 3 else 'line')
+                             for a, _, c, d, wd in lines])
+    top = 14 + 15 * rows + 10
+    bot = top + 200
+    sx = _Axis(z[0], z[-1], ML, W - MR)
+    vals = [v for x in lines for v in x[1] if _ok(v)] + [0.0]
+    lo, hi = min(vals), max(vals)
+    pad = 0.08 * (hi - lo or 1.0)
+    sy = _Axis(lo - pad, hi + pad, bot, top)
+    c = [f'<svg viewBox="0 0 {W} {bot + MB}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="local sources of a hot roll stripe"><title>Roll growth, '
+         'oil film, softer metal and strip temperature terms and their sums</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
+         'fill="#fbfcfe" stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for _, ys, col, dash, wd in lines:
+        c.append(f'<polyline points="{_pts(z, ys, sx, sy)}" fill="none" stroke="{col}" '
+                 f'stroke-width="{wd}" stroke-dasharray="{dash}"/>')
+    cy = (top + bot) / 2
+    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">flatness [I-units]</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">position on the barrel [m]</text>')
+    c += key_parts
+    c.append('</svg>')
+    return ''.join(c)
+
+
+def _local_row(name, x):
+    def lv(a, b):
+        return _f(x.get(a), 1, 3) + (f' ({_f(x.get(b), 1, 3)})' if _ok(x.get(b)) else '')
+    return [_e(name), _f(x.get('position_m'), 1, 4) + ' m',
+            _f(x.get('roll_growth_i_units'), 1, 3),
+            lv('film_i_units', 'film_i_units_compliance_only'),
+            lv('flow_stress_i_units', 'flow_stress_i_units_compliance_only')
+            if x.get('flow_stress_i_units') is not None else 'missing',
+            _f(x.get('strip_temperature_i_units'), 1, 3)
+            if x.get('strip_temperature_i_units') is not None else 'missing',
+            _f(x.get('mechanical_net_at_weight_0_i_units'), 1, 3) + ' / '
+            + _f(x.get('mechanical_net_i_units'), 1, 3) + ' / '
+            + _f(x.get('mechanical_net_at_weight_1_i_units'), 1, 3),
+            _txt(x.get('net_sign_at_weight_0')) + ' / ' + _txt(x.get('net_sign')) + ' / '
+            + _txt(x.get('net_sign_at_weight_1')),
+            _f(x.get('as_measured_hot_i_units'), 1, 3)]
+
+
+def _local_block(w):
+    """SPEC19 packages 1 and 2: local state across the width and the local sources of a hot
+    stripe. Nothing is rendered without width_model.local_coupling."""
+    st, ls = w.get('local_state'), w.get('local_sources')
+    if not isinstance(st, dict) or st.get('not_supplied'):
+        return ''
+    out = ['<h3>A hot stripe: roll growth, oil film, softer metal, strip temperature</h3>']
+    if _bad(st):
+        out.append(_state_p('Local state across the width ' + _bad(st)))
+    else:
+        a = st.get('at_largest_change') or {}
+        cp = st.get('coupling') or {}
+        sup = st.get('supply') or {}
+        fs = a.get('flow_stress_change_fraction')
+        out.append(
+            '<p>Local state as differences from a healthy header '
+            f'({_e(st.get("roll_surface_temperature_basis"))}). At the largest roll surface '
+            f'difference, {_f(a.get("roll_surface_temperature_change_k"), 1, 3)} K at '
+            f'{_f(a.get("z_m"), 1, 4)} m: inlet oil {_f(a.get("inlet_temperature_change_k"), 1, 3)}'
+            f' K warmer (inlet weight {_f(cp.get("inlet_roll_temperature_weight"), 1, 3)}, '
+            'assumed), viscosity ratio '
+            f'{_f(a.get("viscosity_ratio"), 1, 6)}, film ratio {_f(a.get("film_ratio"), 1, 4)}, '
+            f'friction change {_f(a.get("friction_change"), 1, 3)} '
+            f'({_f(100 * (a.get("friction_change_fraction") or 0), 1, 3)} % of the pass '
+            'friction), flow stress change '
+            + (f'{_f(100 * fs, 1, 3)} %' if _ok(fs) else
+               'not evaluated (' + _e(st.get('flow_stress_change_reason')) + ')')
+            + ', strip exit temperature change '
+            f'{_f(a.get("strip_exit_temperature_change_k"), 1, 3)} K (strip-to-roll coupling '
+            f'{_f(cp.get("strip_roll_temperature_coupling"), 1, 3)}).'
+            + (' Oil supply of a healthy nozzle: a film of '
+               f'{_f(sup.get("healthy_supplied_film_m"), 1e6, 3)} µm, {_f(sup.get("ratio_to_smooth_film"), 1, 4)} times the smooth inlet film; '
+               'a nozzle starves the film below a level of '
+               f'{_f(sup.get("level_below_which_starved"), 1, 3)}.'
+               if not sup.get('not_supplied') and sup else '')
+            + '</p>')
+    if not isinstance(ls, dict) or _bad(ls):
+        out.append(_state_p('Local sources ' + (_bad(ls) or 'not computed')))
+        return ''.join(out)
+    out.append(_wide(_local_chart(ls)))
+    head = ['', 'position', 'roll growth', 'oil film (compliance only)',
+            'softer metal (compliance only)', 'strip temperature',
+            'mechanical net at inlet weight 0 / entered / 1', 'sign 0 / entered / 1',
+            'as measured hot']
+    rows = [_local_row('band of ' + _txt(b.get('band_of')), b) for b in ls.get('at_bands') or []]
+    if rows:
+        out.append('<p>At every band of the roll-growth term and of the mechanical net '
+                   '[I-units, + loose, - tight]:</p>' + _table(head, rows, 'wrapall'))
+    else:
+        out.append('<p>No band of the roll-growth term or of the mechanical net.</p>')
+    texts = [b.get('net_text') for b in ls.get('at_bands') or [] if b.get('net_text')]
+    erows = []
+    for e in ls.get('events') or []:
+        for key, what in (('at_20_s', 'after about 20 s'), ('at_peak', 'at its peak')):
+            x = e.get(key) or {}
+            erows.append(_local_row(f'{e.get("label")} {what} '
+                                    f'({_f(x.get("time_after_start_s"), 1, 3)} s)', x))
+            if x.get('net_text'):
+                texts.append(f'{e.get("label")} {what}: {x["net_text"]}')
+    if erows:
+        out.append('<p>Valve events, at the event\'s monitor position:</p>'
+                   + _table(head, erows, 'wrapall'))
+    out.append(_ul([_e(t) for t in texts]))
+    co = ls.get('compliance_only') or {}
+    out.append(f'<p>Transfer levels: the film term peaks at '
+               f'{_f(co.get("film_peak_i_units_with_feedback"), 1, 3)} I-units with the '
+               f'exit-tension feedback and {_f(co.get("film_peak_i_units"), 1, 3)} compliance '
+               'only; the softer-metal term at '
+               f'{_f(co.get("flow_stress_peak_i_units_with_feedback"), 1, 3)} and '
+               f'{_f(co.get("flow_stress_peak_i_units"), 1, 3)}. {_e(co.get("note"))}</p>')
+    sens = ls.get('sensitivities') or {}
+    sc = _get(ls, 'time_scales', 'model_scales') or {}
+    out.append(f'<p>Force sensitivities from the {_e(sens.get("sensitivity_bite_model"))} bite '
+               f'({_e(sens.get("basis"))}): load exponent '
+               f'{_f(sens.get("load_exponent_in_friction"), 1, 3)} in friction, '
+               f'{_f(sens.get("load_exponent_in_flow_stress"), 1, 3)} in flow stress. Time '
+               f'scales: roll growth follows the roll body ({_f(sc.get("bulk_s"), 1, 3)} s); '
+               'the film, softer-metal and strip-temperature terms follow the roll surface '
+               f'({_f(sc.get("surface_film_s"), 1, 3)} s).</p>')
+    out.append(f'<p class="note">{_e(ls.get("sign_note"))}</p>')
+    out.append('<p class="warn">The film term uses a friction law whose slope has no support '
+               'in data, and an oil temperature weight that was assumed. Read the signs, not '
+               'the digits.</p>')
     return ''.join(out)
 
 

@@ -14002,6 +14002,11 @@
       "Stripe detection by differencing against a healthy-header solution; the stripe threshold is an analyst choice.",
       "Not plant-validated."
     ],
+    "local_sources": {
+      "not_supplied": true,
+      "reason": "width_model.local_coupling is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "local_state": {
       "not_supplied": true,
       "reason": "width_model.local_coupling is null or absent",
@@ -18075,6 +18080,11 @@
           "level": 0.0,
           "local_htc_before_w_m2k": 3793.713477665377,
           "local_htc_during_w_m2k": 1921.8567388326885,
+          "local_sources": {
+            "not_supplied": true,
+            "reason": "width_model.local_coupling is null or absent",
+            "status": "NOT_SUPPLIED"
+          },
           "manifest_threshold_m": 2.230876079642318e-06,
           "monitor_position_m": 1.1099999999999999,
           "net_surface_flux_change_w_m2": 14804.953829204549,
@@ -21208,6 +21218,11 @@
           "level": 0.0,
           "local_htc_before_w_m2k": 2857.7851082490333,
           "local_htc_during_w_m2k": 1921.8567388326885,
+          "local_sources": {
+            "not_supplied": true,
+            "reason": "width_model.local_coupling is null or absent",
+            "status": "NOT_SUPPLIED"
+          },
           "manifest_threshold_m": 2.3170406978561895e-06,
           "monitor_position_m": 0.35600000000000004,
           "net_surface_flux_change_w_m2": 8184.736778167899,
