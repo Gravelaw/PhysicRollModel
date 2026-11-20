@@ -6,6 +6,7 @@ shared from there (coarse numerics, supplied bite for most cases).
 import copy
 from html import escape
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -733,6 +734,69 @@ class KinematicSlipOnlyTests(unittest.TestCase):
         self.assertEqual(r['signatures']['forward_slip_fraction_used'], -0.01)
         self.assertNotIn('FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS',
                          r['flags'])
+
+
+class ViscosityTableSectionTests(unittest.TestCase):
+    """SPEC18 package 5: a case with a viscosity table: the friction rows carry the law and
+    the flag; a two-point table equal to the exponential law changes no number. The operating
+    bite is the supplied one (fast)."""
+
+    def _section(self, lubricant_extra):
+        c = v2(**LONG)
+        c['tribology'] = copy.deepcopy(TRIBOLOGY)
+        c['tribology']['lubricant'].update(lubricant_extra)
+        case = validate_case(c)
+        from physicroll import band_diagnosis as bd
+        bite = bd._supplied_bite(case)
+
+        class Cache:
+            def get(self, bite_pass, model=None):
+                return bite
+        return bp.friction_section(case, case['tribology'], Cache(), bite)
+
+    def test_table_flags_and_identity(self):
+        lub = TRIBOLOGY['lubricant']
+        eta = [lub['viscosity_ref_pa_s'] * math.exp(
+            -lub['temperature_viscosity_coefficient_per_k'] * (t - lub['reference_temperature_k']))
+            for t in (293.15, 363.15)]
+        table = [{'temperature_k': 293.15, 'viscosity_pa_s': eta[0]},
+                 {'temperature_k': 363.15, 'viscosity_pa_s': eta[1]}]
+        plain = self._section({})
+        tab = self._section({'viscosity_table': table})
+        self.assertNotIn('VISCOSITY_FROM_TABLE', plain['flags'])
+        self.assertNotIn('viscosity_law', plain['operating'])
+        self.assertIn('VISCOSITY_FROM_TABLE', tab['flags'])
+        self.assertIn('viscosity table', tab['operating']['viscosity_law'])
+        for key in ('film_thickness_m', 'film_ratio', 'computed_friction_coefficient'):
+            a, b = plain['operating'][key], tab['operating'][key]
+            self.assertLessEqual(abs(b / a - 1), 1e-12, key)
+
+    def test_lubricant_keys_validate_and_default(self):
+        c = v2(**LONG)
+        c['tribology'] = copy.deepcopy(TRIBOLOGY)
+        v = validate_case(c)['tribology']['lubricant']
+        self.assertEqual(v['pressure_law'], 'barus')
+        for k in ('viscosity_table', 'roelands_z', 'eyring_stress_pa',
+                  'eyring_stress_pressure_coefficient', 'limiting_shear_stress_pa',
+                  'limiting_shear_pressure_coefficient'):
+            self.assertIsNone(v[k])
+        for key, bad, msg in (
+                ('viscosity_table', [{'temperature_k': 300.0, 'viscosity_pa_s': 1e-3}],
+                 'viscosity_table must be null or >= 2 points'),
+                ('pressure_law', 'wlf', 'pressure_law must be one of'),
+                ('limiting_shear_pressure_coefficient', 2.0,
+                 'limiting_shear_pressure_coefficient must be null or in')):
+            c2 = copy.deepcopy(c)
+            c2['tribology']['lubricant'][key] = bad
+            with self.assertRaisesRegex(ValueError, msg):
+                validate_case(c2)
+
+    def test_limiting_shear_below_the_published_bound_is_flagged(self):
+        sec = self._section({'limiting_shear_pressure_coefficient': 0.03})
+        self.assertIn('LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND', sec['flags'])
+        self.assertIn('0.045', sec['limitations'][0])
+        self.assertAlmostEqual(sec['operating']['limiting_shear_stress_over_mean_pressure'],
+                               0.03, places=12)
 
 
 if __name__ == '__main__':

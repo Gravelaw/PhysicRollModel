@@ -4707,11 +4707,18 @@
       "inlet_temperature_k": 318.15,
       "lubricant": {
         "conductivity_w_mk": null,
+        "eyring_stress_pa": null,
+        "eyring_stress_pressure_coefficient": null,
+        "limiting_shear_pressure_coefficient": null,
+        "limiting_shear_stress_pa": null,
         "name": "kerosene-based foil rolling oil (synthetic)",
+        "pressure_law": "barus",
         "pressure_viscosity_coefficient_per_pa": 1.2e-08,
         "reference_temperature_k": 313.15,
+        "roelands_z": null,
         "temperature_viscosity_coefficient_per_k": 0.015,
-        "viscosity_ref_pa_s": 0.0016
+        "viscosity_ref_pa_s": 0.0016,
+        "viscosity_table": null
       },
       "oil_flash_point_k": null,
       "oil_supply_temperature_cap_k": null,

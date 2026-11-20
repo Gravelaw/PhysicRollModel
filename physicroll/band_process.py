@@ -131,6 +131,54 @@ def int_list(where, value):
 LUBRICANT_KEYS = ('viscosity_ref_pa_s', 'reference_temperature_k',
                   'temperature_viscosity_coefficient_per_k',
                   'pressure_viscosity_coefficient_per_pa')
+# SPEC18 package 5: optional lubricant keys (absent -> None, or 'barus'); kept in every
+# validated case so the inputs block shows them
+LUBRICANT_OPTIONAL_P5 = ('viscosity_table', 'pressure_law', 'roelands_z', 'eyring_stress_pa',
+                         'eyring_stress_pressure_coefficient', 'limiting_shear_stress_pa',
+                         'limiting_shear_pressure_coefficient')
+_LUB_RANGES = {'roelands_z': ('(0, 2]', 0.0, 2.0, True),
+               'eyring_stress_pa': ('[1e4, 1e9] Pa', 1e4, 1e9, False),
+               'eyring_stress_pressure_coefficient': ('(0, 0.1]', 0.0, 0.1, True),
+               'limiting_shear_stress_pa': ('[1e4, 5e9] Pa', 1e4, 5e9, False),
+               'limiting_shear_pressure_coefficient': ('(0, 1]', 0.0, 1.0, True)}
+VISCOSITY_TABLE_MESSAGE = ('tribology.lubricant.viscosity_table must be null or >= 2 points with '
+                           'increasing temperature and non-increasing viscosity')
+
+
+def _lubricant_options(lub):
+    out = {}
+    table = lub.get('viscosity_table')
+    if table is None:
+        out['viscosity_table'] = None
+    else:
+        if not isinstance(table, list) or len(table) < 2:
+            raise ValueError(VISCOSITY_TABLE_MESSAGE)
+        pts = []
+        for pt in table:
+            if not isinstance(pt, dict) or set(pt) != {'temperature_k', 'viscosity_pa_s'} or \
+                    not _is_num(pt['temperature_k']) or not _is_num(pt['viscosity_pa_s']):
+                raise ValueError(VISCOSITY_TABLE_MESSAGE)
+            pts.append({'temperature_k': float(pt['temperature_k']),
+                        'viscosity_pa_s': float(pt['viscosity_pa_s'])})
+        try:
+            bt._table([(x['temperature_k'], x['viscosity_pa_s']) for x in pts])
+        except ValueError as exc:
+            raise ValueError(VISCOSITY_TABLE_MESSAGE) from exc
+        out['viscosity_table'] = pts
+    law = lub.get('pressure_law') or 'barus'
+    if law not in bt.PRESSURE_LAWS:
+        raise ValueError(f'tribology.lubricant.pressure_law must be one of {bt.PRESSURE_LAWS}')
+    out['pressure_law'] = law
+    for key, (text, lo, hi, open_lo) in _LUB_RANGES.items():
+        v = lub.get(key)
+        if v is not None:
+            if not _is_num(v) or (v <= lo if open_lo else v < lo) or v > hi:
+                raise ValueError(f'tribology.lubricant.{key} must be null or in {text}')
+            v = float(v)
+        out[key] = v
+    return out
+
+
 TRIBOLOGY_KEYS = ('lubricant', 'surface_finish', 'inlet_temperature_k',
                   'strip_entry_temperature_k', 'strip_heat_fraction', 'thermal_correction',
                   'use_computed_friction')
@@ -158,7 +206,8 @@ def _fire_limit(t, key):
 def validate_tribology(t):
     keys('tribology', t, TRIBOLOGY_KEYS, TRIBOLOGY_OPTIONAL)
     lub = t['lubricant']
-    keys('tribology.lubricant', lub, LUBRICANT_KEYS, ('conductivity_w_mk', 'name'))
+    keys('tribology.lubricant', lub, LUBRICANT_KEYS,
+         ('conductivity_w_mk', 'name') + LUBRICANT_OPTIONAL_P5)
     out_lub = {k: num(f'tribology.lubricant.{k}', lub[k]) for k in LUBRICANT_KEYS}
     out_lub['conductivity_w_mk'] = opt_num('tribology.lubricant.conductivity_w_mk',
                                            lub.get('conductivity_w_mk'), positive=True)
@@ -166,6 +215,7 @@ def validate_tribology(t):
     if not isinstance(name, str) or not name.strip():
         raise ValueError('tribology.lubricant.name must be a nonempty string')
     out_lub['name'] = name
+    out_lub.update(_lubricant_options(lub))
     fin = t['surface_finish']
     keys('tribology.surface_finish', fin, ('roll_roughness_rq_m', 'strip_roughness_rq_m'))
     out_fin = {k: num(f'tribology.surface_finish.{k}', fin[k], nonnegative=True) for k in fin}
@@ -204,7 +254,11 @@ def tribology_objects(t):
         reference_temperature_k=lub['reference_temperature_k'],
         temperature_viscosity_coefficient_per_k=lub['temperature_viscosity_coefficient_per_k'],
         pressure_viscosity_coefficient_per_pa=lub['pressure_viscosity_coefficient_per_pa'],
-        conductivity_w_mk=lub['conductivity_w_mk'], name=lub['name'])
+        conductivity_w_mk=lub['conductivity_w_mk'], name=lub['name'],
+        viscosity_table=(None if lub.get('viscosity_table') is None else tuple(
+            (x['temperature_k'], x['viscosity_pa_s']) for x in lub['viscosity_table'])),
+        **{k: lub.get(k) for k in LUBRICANT_OPTIONAL_P5[2:]},
+        pressure_law=lub.get('pressure_law', 'barus'))
     finish = bt.SurfaceFinish(**t['surface_finish'])
     closure = (bt.FrictionClosure() if t['friction_closure'] is None
                else bt.FrictionClosure(**t['friction_closure']))
@@ -570,9 +624,35 @@ def friction_section(case, trib, cache, op_bite=None):
                    'rejected': str(exc)}
         row['label'] = label
         rows.append(row)
+    lub = tribology_objects(trib)[0]
+    flags = [bt.PLACEHOLDER_FLAG]
+    if not lub.is_default_law():       # keys only then: default results unchanged
+        for row in rows:
+            row['viscosity_law'] = lub.viscosity_law_text()
+        flags += lub.viscosity_flags(trib['inlet_temperature_k'])
+    extra = {}
+    if lub.limiting_shear_stress_at(1.0) is not None:   # supplied: check against the bound
+        notes = []
+        for (label, src), row in zip(pass_rows(case), rows):
+            try:
+                bite = case_pass_bite(case, src, op_bite) or cache.get(bite_pass(case, src))
+            except ValueError:
+                continue
+            p_mean = bite.separating_force_n / (case['pass']['width_m'] * bite.contact_length_m)
+            f, sentences = lub.limiting_shear_check(p_mean)
+            row['limiting_shear_stress_over_mean_pressure'] = (
+                lub.limiting_shear_stress_at(p_mean) / p_mean)
+            if f:
+                row['lubricant_flags'] = f
+                notes += sentences
+                for x in f:
+                    if x not in flags:
+                        flags.append(x)
+        if notes:
+            extra['limitations'] = [notes[0]]
     return {'status': bt.STATUS_FRICTION, 'use_computed_friction': trib['use_computed_friction'],
-            'operating': rows[0], 'schedule': rows[1:],
-            'flags': [bt.PLACEHOLDER_FLAG],
+            'operating': rows[0], 'schedule': rows[1:], **extra,
+            'flags': flags,
             'note': ('PLACEHOLDER friction closure (not fitted): its end values 0.09 and 0.008 '
                      'match the one abstract on aluminium [BT-S6 AB], but it keeps friction '
                      'near 0.09 over most of the common industrial film-ratio window (0.01-0.5), '

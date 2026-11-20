@@ -67,6 +67,7 @@ import math
 import re
 
 from . import band_diagnosis as bd
+from . import bite_tribology as bt
 from . import band_process as bproc
 from . import band_signatures as bsig
 from . import band_products as bprod
@@ -264,6 +265,8 @@ BITE_MODEL_WORDS = {'hitchcock': 'Sheet roll-gap model (Hitchcock flattening)',
                     'auto': 'Choose by gauge (sheet model, foil model where it fails)',
                     'half_space': 'Half-space foil roll-gap model (reduced)',
                     'auto_half_space': 'Standard model, half-space model where it stops'}
+PRESSURE_LAW_WORDS = {'barus': 'Standard rule (exponential rise, default)',
+                      'roelands': 'Textbook rule (Roelands; did worse on the only data)'}
 THERMAL_SENS_WORDS = {'off': 'Off', 'partition': 'Heat share only (default)',
                       'full': 'Heat share and spray coefficient (slow)'}
 CONSTRAINT_WORDS = {'axially_free': 'Free to expand along the barrel',
@@ -758,6 +761,39 @@ MILL_QUESTIONS = (
        group='Rolling oil'),
     _m('oil_name', 'tribology.lubricant.name', 'text', 'Rolling-oil name', 'For the record.',
        group='Rolling oil'),
+    _m('oil_viscosity_table', 'tribology.lubricant.viscosity_table', 'list',
+       'Rolling-oil viscosity at several temperatures',
+       'Points from the oil supplier sheet, coldest first. With two or more points the '
+       'viscosity follows them instead of the single value and the rate above.',
+       fields=(Field('temperature_k', 'Temperature', unit='degc'),
+               Field('viscosity_pa_s', 'Viscosity', unit='mpa_s')),
+       unknown='null', group='Rolling oil'),
+    _m('oil_pressure_law', 'tribology.lubricant.pressure_law', 'choice',
+       'How the oil viscosity rises with pressure',
+       'Keep the standard rule. The other textbook rule did worse on the only foil oil with '
+       'published measurements.', choices=_choices(bt.PRESSURE_LAWS, PRESSURE_LAW_WORDS),
+       unknown='null', group='Rolling oil'),
+    _m('oil_roelands_z', 'tribology.lubricant.roelands_z', 'number',
+       'Pressure index of the textbook rule (if chosen)',
+       'Only with the textbook rule; leave unknown to take it from the pressure value above.',
+       unit='ratio', group='Rolling oil'),
+    _m('oil_eyring_stress', 'tribology.lubricant.eyring_stress_pa', 'number',
+       'Oil shear stress where it stops behaving like a simple liquid',
+       'From oil tests at high pressure only; no default. One published base oil gives 4.5 to '
+       '11.7 MPa.', unit='mpa', group='Rolling oil'),
+    _m('oil_eyring_coefficient', 'tribology.lubricant.eyring_stress_pressure_coefficient',
+       'number', 'Rise of that shear stress with pressure',
+       'A share of the pressure; from oil tests only, no default.', unit='ratio',
+       group='Rolling oil'),
+    _m('oil_limiting_shear', 'tribology.lubricant.limiting_shear_stress_pa', 'number',
+       'Largest shear stress the oil film can carry',
+       'No published value exists for rolling oils; enter one only from your own tests.',
+       unit='mpa', group='Rolling oil'),
+    _m('oil_limiting_shear_coefficient',
+       'tribology.lubricant.limiting_shear_pressure_coefficient', 'number',
+       'Largest oil shear stress as a share of the pressure',
+       'From your own tests only. One published base oil showed no limit up to 0.045.',
+       unit='ratio', group='Rolling oil'),
     _m('roll_roughness', 'tribology.surface_finish.roll_roughness_rq_m', 'number',
        'Work-roll roughness Rq', 'Measured on the roll.', unit='um', group='Rolling oil'),
     _m('strip_roughness', 'tribology.surface_finish.strip_roughness_rq_m', 'number',
@@ -1205,6 +1241,8 @@ def answer_to_si(q, value, origin_m=0.0):
         rows = [{f.name: _field_si(q, f, item.get(f.name), origin_m) for f in q.fields}
                 for item in value]
         return dict(defaults, **{arr: [r[name] for r in rows] for name, arr in arrays.items()})
+    if q.key == 'tribology.lubricant.viscosity_table' and not value:
+        return None                     # no points: the single viscosity value is used
     out = []
     for item in value:
         rec = {}

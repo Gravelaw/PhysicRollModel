@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the band test modules in four parallel groups plus the smoke script; print one line each.
+# Run the band test modules in five parallel groups plus the smoke script; print one line each.
 # Usage (from the repository root): verify_tests.sh [extra test modules...]
 S=/tmp/claude-0/-home-user-PhysicRollModel/2f99237c-57ca-5a74-a3d6-b1fb23e86cf7/scratchpad/vt
 mkdir -p "$S"
@@ -13,6 +13,12 @@ python -m unittest tests.test_band_lengthwise tests.test_band_diagnosis \
   tests.test_band_robustness > "$S/c.txt" 2>&1 &
 python -m unittest tests.test_band_survey tests.test_band_app tests.test_band_app_drawing \
   tests.test_band_app_reopen "$@" > "$S/d.txt" 2>&1 &
+python -m unittest tests.test_band_absent_inputs tests.test_band_sensors \
+  tests.test_band_sensors_gauge tests.test_band_strip_temperature \
+  tests.test_band_friction_stripes tests.test_band_roll_profile tests.test_halfspace_bite \
+  tests.test_halfspace_bite_cases tests.test_halfspace_bite_branch \
+  tests.test_halfspace_bite_sensitivity tests.test_halfspace_bite_modes \
+  tests.test_band_halfspace tests.test_band_halfspace_default > "$S/e.txt" 2>&1 &
 wait
-for f in a b c d; do echo "group $f: $(tail -n 3 "$S/$f.txt" | tr '\n' ' ')"; done
+for f in a b c d e; do echo "group $f: $(tail -n 3 "$S/$f.txt" | tr '\n' ' ')"; grep -h "^FAIL:\|^ERROR:" "$S/$f.txt"; done
 python scripts/smoke.py > "$S/smoke.txt" 2>&1; echo "smoke exit $?"

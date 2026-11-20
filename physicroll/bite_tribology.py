@@ -224,13 +224,97 @@ def temperature_viscosity_coefficient_per_k(viscosity_1, temperature_1_k, viscos
     return math.log(v1 / v2) / (t2 - t1)
 
 
+ROELANDS_REFERENCE_PRESSURE_PA = 196.2e6     # p_r = 2000 kgf/cm2 [E5 FT (L.1)-(L.3)]
+ROELANDS_LN_OFFSET = 9.67                    # (3 + 1.2)*ln 10 with eta in Pa s [E5 FT (L.3)]
+PRESSURE_LAWS = ('barus', 'roelands')
+LIMITING_SHEAR_LOWER_BOUND = 0.045           # tau_L/p not reached up to 0.045 [E6 FT, ch. 2]
+LIMITING_SHEAR_FLAG = 'LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND'
+LIMITING_SHEAR_SENTENCE = (
+    'No limiting shear stress was seen up to 0.045 of the pressure for a kerosine base oil at '
+    '40 C [E6 FT]; the entered cap is lower.')
+
+# Documentation and tests only, NEVER a default or a preset (SPEC18 package 5). Every entry
+# [E6 FT: Sutcliffe 1989 thesis, ch. 2, Table 2.1 (Amsterdam viscometer) and Fig. 2.7 keys
+# (disc machine), read on page images].
+EXAMPLE_KEROSINE_BASE_OIL = {
+    'name': ('Somentor 31, a mainly paraffinic kerosine mineral oil', '[E6 FT]'),
+    'note': ('no additives; a base oil, not a plant\'s rolling oil', '[E6 FT]'),
+    'viscosity_pa_s_at_0_mpa': ({'313.15': 1.409e-3, '333.15': 1.033e-3, '373.15': 0.632e-3},
+                                '[E6 FT, Table 2.1]'),
+    'viscosity_pa_s_at_100_mpa': ({'313.15': 3.985e-3, '333.15': 2.699e-3, '373.15': 1.625e-3},
+                                  '[E6 FT, Table 2.1]'),
+    'pressure_viscosity_coefficient_per_pa': ({'313.15': 10.40e-9, '333.15': 9.60e-9,
+                                               '373.15': 9.44e-9},
+                                              '[E6 FT, Table 2.1, 0-100 MPa]'),
+    'eyring_stress_pa_at_313_k': ({'625e6': 4.5e6, '945e6': 6.0e6, '1510e6': 11.7e6},
+                                  '[E6 FT, Fig. 2.7 keys; disc machine]'),
+    'viscosity_pa_s_at_313_k_disc_machine': ({'625e6': 2.5, '945e6': 15.0, '1510e6': 740.0},
+                                             '[E6 FT, Fig. 2.7 keys; disc machine]'),
+    'limiting_shear_lower_bound_over_pressure': (
+        LIMITING_SHEAR_LOWER_BOUND, '[E6 FT: none observed up to 68/1510 MPa = 0.045]'),
+    'conductivity_w_mk_ambient': (0.125, '[E6 FT: assumed equal to another oil by the source]'),
+    'conductivity_w_mk_in_nip': (0.25, '[E6 FT: allowing for the rise with pressure]'),
+}
+
+
+def _table(value):
+    """Validated viscosity table: tuple of (T [K], eta [Pa s]) pairs."""
+    msg = ('viscosity_table must be None or >= 2 points with increasing temperature in '
+           '[230, 700] K and non-increasing viscosity in (0, 10] Pa s')
+    if not isinstance(value, (tuple, list)) or len(value) < 2:
+        raise ValueError(msg)
+    out = []
+    for pt in value:
+        if not isinstance(pt, (tuple, list)) or len(pt) != 2:
+            raise ValueError(msg)
+        t, eta = pt
+        for v in (t, eta):
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                raise ValueError(msg)
+        if not 230.0 <= t <= 700.0 or not 0 < eta <= 10.0:
+            raise ValueError(msg)
+        out.append((float(t), float(eta)))
+    for (t1, e1), (t2, e2) in zip(out, out[1:]):
+        if not t2 > t1 or e2 > e1:
+            raise ValueError(msg)
+    return tuple(out)
+
+
 @dataclass(frozen=True)
 class Lubricant:
-    """Rolling oil: exponential temperature law and Barus pressure law.
+    """Rolling oil: temperature law (exponential, or a viscosity table) and pressure law
+    (Barus, or Roelands as an option).
 
     ``viscosity_ref_pa_s`` is the dynamic viscosity at ``reference_temperature_k`` and zero
     gauge pressure. ``conductivity_w_mk`` is optional; when None the thermal loading
     parameter uses ``DEFAULT_OIL_CONDUCTIVITY_W_MK`` [M] and says so.
+
+    ``viscosity_table`` (optional, SPEC18 package 5): data-sheet points (T [K], eta0 [Pa s]);
+    ``ln eta0`` is interpolated linearly in T between neighbouring points and continued with
+    the end segment's slope outside [D, SPEC18: piecewise exponential through data-sheet
+    points]. With a table the reference viscosity and the constant temperature coefficient are
+    not used for eta0.
+
+    ``pressure_law``: 'barus' (default) ``eta = eta0*exp(alpha*p)`` or 'roelands'
+    [E5 FT (L.3), product form; the source warns that one thesis prints a SUM of the pressure
+    and temperature terms, which is wrong]::
+
+        eta(T, p) = eta0(T)*exp{(ln eta0(T) + 9.67)*[(1 + p/p_r)^z - 1]},  p_r = 196.2 MPa
+        z = roelands_z, or p_r*alpha/(ln eta0(T) + 9.67)                    [E5 FT (4.194)]
+
+    eta0(T) from the table or the exponential law (the temperature factor of (L.3) is not
+    used). Without ``roelands_z`` the index is evaluated at the temperature of the call, so the
+    slope at zero pressure equals the entered Barus coefficient at every temperature
+    [D, SPEC18]. On the one foil oil with data Roelands with that index is low by a factor 12
+    to 30 at bite pressure (benchmark A9-PRESSURE-LAWS-KEROSINE): it is optional, never the
+    default. The inlet film formula always uses the Barus coefficient (its published closed
+    form).
+
+    Eyring stress ``tau_0(p) = eyring_stress_pa + eyring_stress_pressure_coefficient*p`` and
+    limiting shear stress ``tau_L(p) = limiting_shear_stress_pa +
+    limiting_shear_pressure_coefficient*p`` [D, SPEC18 forms]: supplied inputs, no default
+    (E6 FT data for one kerosine base oil: tau_0 4.5 / 6.0 / 11.7 MPa at 625 / 945 / 1510 MPa
+    and 40 C; no limiting shear stress up to 0.045 of the pressure; no source gives a value).
     """
     viscosity_ref_pa_s: float
     reference_temperature_k: float
@@ -238,6 +322,13 @@ class Lubricant:
     pressure_viscosity_coefficient_per_pa: float
     conductivity_w_mk: float | None = None
     name: str = 'rolling oil'
+    viscosity_table: tuple | None = None
+    pressure_law: str = 'barus'
+    roelands_z: float | None = None
+    eyring_stress_pa: float | None = None
+    eyring_stress_pressure_coefficient: float | None = None
+    limiting_shear_stress_pa: float | None = None
+    limiting_shear_pressure_coefficient: float | None = None
 
     def validate(self):
         _num('viscosity_ref_pa_s', self.viscosity_ref_pa_s, positive=True, hi=10.0)
@@ -249,18 +340,135 @@ class Lubricant:
         if self.conductivity_w_mk is not None:
             _num('conductivity_w_mk', self.conductivity_w_mk, positive=True, hi=10.0)
         _name('name', self.name)
+        if self.viscosity_table is not None:
+            _table(self.viscosity_table)
+        if self.pressure_law not in PRESSURE_LAWS:
+            raise ValueError(f'pressure_law must be one of {PRESSURE_LAWS}')
+        if self.roelands_z is not None:
+            z = _num('roelands_z', self.roelands_z)
+            if not 0 < z <= 2:
+                raise ValueError('roelands_z must be in (0, 2]')
+        for name, lo, hi, open_lo in (('eyring_stress_pa', 1e4, 1e9, False),
+                                      ('eyring_stress_pressure_coefficient', 0.0, 0.1, True),
+                                      ('limiting_shear_stress_pa', 1e4, 5e9, False),
+                                      ('limiting_shear_pressure_coefficient', 0.0, 1.0, True)):
+            v = getattr(self, name)
+            if v is None:
+                continue
+            v = _num(name, v)
+            if (v <= lo if open_lo else v < lo) or v > hi:
+                raise ValueError(f'{name} must be in {"(" if open_lo else "["}{lo:g}, {hi:g}]')
+
+    def _table_segment(self, t):
+        pts = _table(self.viscosity_table)
+        i = 0
+        while i < len(pts) - 2 and t >= pts[i + 1][0]:
+            i += 1
+        (t1, e1), (t2, e2) = pts[i], pts[i + 1]
+        slope = (math.log(e2) - math.log(e1)) / (t2 - t1)
+        return t1, math.log(e1), slope, not pts[0][0] <= t <= pts[-1][0]
+
+    def zero_pressure_viscosity_pa_s(self, temperature_k):
+        """eta0(T): from the table when given, else the exponential law."""
+        t = _temperature('temperature_k', temperature_k)
+        if self.viscosity_table is None:
+            return self.viscosity_ref_pa_s * math.exp(
+                -self.temperature_viscosity_coefficient_per_k * (t - self.reference_temperature_k))
+        t1, ln1, slope, _ = self._table_segment(t)
+        return math.exp(ln1 + slope * (t - t1))
+
+    def temperature_viscosity_coefficient_at(self, temperature_k):
+        """Local ``-d ln eta0/dT`` [1/K]: the table segment's, else the constant coefficient."""
+        t = _temperature('temperature_k', temperature_k)
+        if self.viscosity_table is None:
+            return float(self.temperature_viscosity_coefficient_per_k)
+        return -self._table_segment(t)[2]
+
+    def viscosity_table_extrapolated(self, temperature_k):
+        if self.viscosity_table is None:
+            return False
+        return self._table_segment(_temperature('temperature_k', temperature_k))[3]
+
+    def roelands_index(self, temperature_k):
+        """z: ``roelands_z`` or p_r*alpha/(ln eta0(T) + 9.67) [E5 FT (4.194)]."""
+        if self.roelands_z is not None:
+            return float(self.roelands_z)
+        lnv = math.log(self.zero_pressure_viscosity_pa_s(temperature_k)) + ROELANDS_LN_OFFSET
+        if lnv <= 0:
+            raise ValueError('Roelands law needs ln(eta0) + 9.67 > 0 (eta0 above 6.3e-5 Pa s)')
+        return ROELANDS_REFERENCE_PRESSURE_PA * self.pressure_viscosity_coefficient_per_pa / lnv
 
     def dynamic_viscosity_pa_s(self, temperature_k, pressure_pa=0.0):
-        """``eta = eta_ref*exp(-beta*(T - T_ref))*exp(alpha*p)``."""
+        """eta(T, p): exponential law or table for eta0, Barus or Roelands for pressure."""
         self.validate()
         t = _temperature('temperature_k', temperature_k)
         p = _num('pressure_pa', pressure_pa, nonnegative=True, hi=3e9)
-        exponent = (-self.temperature_viscosity_coefficient_per_k
-                    * (t - self.reference_temperature_k)
-                    + self.pressure_viscosity_coefficient_per_pa * p)
+        if self.viscosity_table is None and self.pressure_law == 'barus':
+            exponent = (-self.temperature_viscosity_coefficient_per_k
+                        * (t - self.reference_temperature_k)
+                        + self.pressure_viscosity_coefficient_per_pa * p)
+            if exponent > 700:
+                raise ValueError('viscosity exceeds numerical domain')
+            return self.viscosity_ref_pa_s * math.exp(exponent)
+        eta0 = self.zero_pressure_viscosity_pa_s(t)
+        if self.pressure_law == 'barus':
+            exponent = self.pressure_viscosity_coefficient_per_pa * p
+        else:
+            lnv = math.log(eta0) + ROELANDS_LN_OFFSET
+            if lnv <= 0:
+                raise ValueError('Roelands law needs ln(eta0) + 9.67 > 0 (eta0 above 6.3e-5 '
+                                 'Pa s)')
+            z = self.roelands_index(t)
+            exponent = lnv * ((1 + p / ROELANDS_REFERENCE_PRESSURE_PA) ** z - 1)
         if exponent > 700:
             raise ValueError('viscosity exceeds numerical domain')
-        return self.viscosity_ref_pa_s * math.exp(exponent)
+        return eta0 * math.exp(exponent)
+
+    def eyring_stress_at(self, pressure_pa):
+        """tau_0(p) [Pa], or None when neither Eyring field is supplied."""
+        if self.eyring_stress_pa is None and self.eyring_stress_pressure_coefficient is None:
+            return None
+        return (self.eyring_stress_pa or 0.0) + (self.eyring_stress_pressure_coefficient
+                                                 or 0.0) * pressure_pa
+
+    def limiting_shear_stress_at(self, pressure_pa):
+        """tau_L(p) [Pa], or None when neither limiting-stress field is supplied."""
+        if self.limiting_shear_stress_pa is None and \
+                self.limiting_shear_pressure_coefficient is None:
+            return None
+        return (self.limiting_shear_stress_pa or 0.0) + (
+            self.limiting_shear_pressure_coefficient or 0.0) * pressure_pa
+
+    def limiting_shear_check(self, mean_pressure_pa):
+        """(flags, sentences) of the limiting shear stress against the published lower bound."""
+        tau = self.limiting_shear_stress_at(mean_pressure_pa)
+        if tau is None or mean_pressure_pa <= 0:
+            return [], []
+        if tau / mean_pressure_pa < LIMITING_SHEAR_LOWER_BOUND:
+            return [LIMITING_SHEAR_FLAG], [LIMITING_SHEAR_SENTENCE]
+        return [], []
+
+    def viscosity_flags(self, temperature_k):
+        flags = []
+        if self.viscosity_table is not None:
+            flags.append('VISCOSITY_FROM_TABLE')
+            if self.viscosity_table_extrapolated(temperature_k):
+                flags.append('VISCOSITY_TABLE_EXTRAPOLATED')
+        if self.pressure_law == 'roelands':
+            flags.append('ROELANDS_PRESSURE_LAW')
+        return flags
+
+    def viscosity_law_text(self):
+        t = ('viscosity table (ln eta0 piecewise linear in T) [D, SPEC18]'
+             if self.viscosity_table is not None else
+             'exponential temperature law')
+        p = ('Roelands pressure law [E5 FT (L.3)] (low by 12 to 30 times at bite pressure on '
+             'the one foil oil with data)' if self.pressure_law == 'roelands'
+             else 'Barus pressure law')
+        return f'{t}; {p}'
+
+    def is_default_law(self):
+        return self.viscosity_table is None and self.pressure_law == 'barus'
 
     def effective_conductivity_w_mk(self):
         return (DEFAULT_OIL_CONDUCTIVITY_W_MK if self.conductivity_w_mk is None
@@ -327,13 +535,14 @@ def in_common_industrial_window(film_ratio):
 def _film_core(lub, ur, us, h0, h1, rc, yps, sb, t_in, thermal):
     theta = math.sqrt((h0 - h1) / rc)
     u_mean = 0.5 * (ur + us)
-    eta0 = lub.dynamic_viscosity_pa_s(t_in)
+    eta0 = (lub.dynamic_viscosity_pa_s(t_in) if lub.viscosity_table is None
+            else lub.zero_pressure_viscosity_pa_s(t_in))
     alpha = lub.pressure_viscosity_coefficient_per_pa
     p_entry = yps - sb
     h_iso = 6 * eta0 * alpha * u_mean / (theta * -math.expm1(-alpha * p_entry))
     h_yonly = 6 * eta0 * alpha * u_mean / (theta * -math.expm1(-alpha * yps))
     k = lub.effective_conductivity_w_mk()
-    load = eta0 * lub.temperature_viscosity_coefficient_per_k * u_mean ** 2 / k
+    load = eta0 * lub.temperature_viscosity_coefficient_at(t_in) * u_mean ** 2 / k
     phi = 3.94 / (3.94 + load ** 0.62)
     h = h_iso * phi if thermal else h_iso
     return {'theta': theta, 'u_mean': u_mean, 'eta0': eta0, 'p_entry': p_entry,
@@ -381,8 +590,10 @@ def inlet_film_thickness(lubricant, *, roll_surface_speed_m_s, strip_entry_speed
              else 'THERMAL_REDUCTION_FACTOR_APPLIED']
     if lub.conductivity_w_mk is None:
         flags.append('OIL_CONDUCTIVITY_DEFAULT_FROM_MEMORY')
-    if abs(t_in - lub.reference_temperature_k) > VISCOSITY_EXTRAPOLATION_WARN_K:
+    if lub.viscosity_table is None and \
+            abs(t_in - lub.reference_temperature_k) > VISCOSITY_EXTRAPOLATION_WARN_K:
         flags.append('VISCOSITY_TEMPERATURE_EXTRAPOLATED_OVER_60K')
+    flags += lub.viscosity_flags(t_in)
     if us > ur:
         flags.append('STRIP_ENTRY_FASTER_THAN_ROLL')
     reasons = [f'Inlet film {c["h"] * 1e9:.1f} nm at mean entrainment speed '
@@ -419,7 +630,12 @@ def inlet_film_thickness(lubricant, *, roll_surface_speed_m_s, strip_entry_speed
             'thermal_factor_form': '[M] Murch & Wilson form, quoted from memory',
             'oil_conductivity': ('[M] default 0.13 W/mK' if lub.conductivity_w_mk is None
                                  else 'supplied by caller'),
-            'viscosity_law': '[D] exponential temperature law with Barus pressure law'},
+            'viscosity_law': ('[D] exponential temperature law with Barus pressure law'
+                              if lub.is_default_law() else
+                              lub.viscosity_law_text() + (
+                                  '; the reference viscosity is not used for eta0'
+                                  if lub.viscosity_table is not None else '')
+                              + '; the film formula uses the Barus coefficient')},
         'reasons': reasons, 'flags': flags,
         'limitations': [
             'Smooth surfaces, Newtonian Barus oil, fully flooded inlet (no starvation).',

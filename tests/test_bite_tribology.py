@@ -322,5 +322,131 @@ class ValidationAndJsonTests(unittest.TestCase):
             self.assertTrue(all(f == f.upper() for f in r['flags']))
 
 
+class OilPropertyTests(unittest.TestCase):
+    """SPEC18 package 5: viscosity table, Roelands pressure law, Eyring and limiting stress.
+    Worked numbers of the planner's standard-library prototype (s23/v_p5.py), pinned."""
+
+    def setUp(self):
+        from physicroll import bite_tribology as bt
+        self.bt = bt
+        ex = bt.EXAMPLE_KEROSINE_BASE_OIL['viscosity_pa_s_at_0_mpa'][0]
+        self.table = tuple((float(k), v) for k, v in ex.items())
+
+    def rel(self, a, b, tol=1e-6):
+        self.assertLessEqual(abs(a / b - 1), tol, (a, b))
+
+    def test_table_interpolation_and_extrapolation(self):
+        lub = Lubricant(1.409e-3, C0 + 40, 0.015, 10.40e-9, viscosity_table=self.table)
+        for t, want, extrap in ((50, 1.206440e-3, False), (80, 8.07995e-4, False),
+                                (120, 4.94340e-4, True), (20, 1.921860e-3, True)):
+            self.rel(lub.zero_pressure_viscosity_pa_s(C0 + t), want)
+            self.assertEqual(lub.viscosity_table_extrapolated(C0 + t), extrap)
+        self.rel(lub.temperature_viscosity_coefficient_at(C0 + 50), 0.0155207, 5e-6)  # 6 digits
+        self.rel(lub.temperature_viscosity_coefficient_at(C0 + 80), 0.0122833, 5e-6)
+        nu = kinematic_cst_to_dynamic_viscosity_pa_s
+        sheet = ((C0 + 20, nu(3.0, 800.0)), (C0 + 70, nu(1.4, 800.0)), (C0 + 130, nu(0.7, 800.0)))
+        lub2 = Lubricant(1e-3, C0 + 40, 0.015, 1e-8, viscosity_table=sheet)
+        self.rel(lub2.zero_pressure_viscosity_pa_s(C0 + 40), 1.76935e-3)
+        self.rel(lub2.temperature_viscosity_coefficient_at(C0 + 40), 0.0152428, 5e-6)
+        self.rel(lub2.temperature_viscosity_coefficient_at(C0 + 100), 0.0115525, 5e-6)
+        for t in (C0 + 30, C0 + 65, C0 + 125):       # coefficient = -d ln eta0/dT
+            d = 1e-4
+            fd = -(math.log(lub.zero_pressure_viscosity_pa_s(t + d))
+                   - math.log(lub.zero_pressure_viscosity_pa_s(t - d))) / (2 * d)
+            self.rel(lub.temperature_viscosity_coefficient_at(t), fd, 1e-6)
+        self.assertEqual(FOIL_OIL.temperature_viscosity_coefficient_at(C0 + 70),
+                         FOIL_OIL.temperature_viscosity_coefficient_per_k)
+
+    def test_two_point_table_equals_the_exponential_law(self):
+        law = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        pts = tuple((t, law.dynamic_viscosity_pa_s(t)) for t in (C0 + 20, C0 + 90))
+        tab = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, viscosity_table=pts)
+        for t in (C0 + 10, C0 + 45, C0 + 120):
+            for p in (0.0, 50e6):
+                self.rel(tab.dynamic_viscosity_pa_s(t, p), law.dynamic_viscosity_pa_s(t, p), 1e-12)
+        kw = dict(roll_surface_speed_m_s=10.0, strip_entry_speed_m_s=7.0,
+                  entry_thickness_m=50e-6, exit_thickness_m=30e-6, contact_radius_m=0.135,
+                  plane_strain_yield_pa=200e6, back_tension_pa=35e6, inlet_temperature_k=C0 + 45,
+                  thermal_correction=True)
+        a, b = inlet_film_thickness(law, **kw), inlet_film_thickness(tab, **kw)
+        self.rel(b['film_thickness_m'], a['film_thickness_m'], 1e-12)
+        self.assertIn('VISCOSITY_FROM_TABLE', b['flags'])
+        self.assertNotIn('VISCOSITY_TABLE_EXTRAPOLATED', b['flags'])
+        self.assertNotIn('VISCOSITY_FROM_TABLE', a['flags'])
+        self.assertIn('reference viscosity is not used', b['basis']['viscosity_law'])
+        c = inlet_film_thickness(tab, **dict(kw, inlet_temperature_k=C0 + 120))
+        self.assertIn('VISCOSITY_TABLE_EXTRAPOLATED', c['flags'])
+
+    def test_table_validation(self):
+        for bad in (((300.0, 1e-3),), ((300.0, 1e-3), (300.0, 9e-4)),
+                    ((300.0, 1e-3), (320.0, 2e-3)), ((200.0, 1e-3), (320.0, 9e-4)),
+                    ((300.0, 0.0), (320.0, 0.0)), ((300.0, True), (320.0, 1e-3))):
+            with self.assertRaises(ValueError):
+                Lubricant(1e-3, 313.15, 0.015, 1e-8, viscosity_table=bad).validate()
+
+    def test_roelands_numbers_and_slope(self):
+        for t, eta0, alpha, z, rows in (
+                (40, 1.409e-3, 10.40e-9, 0.657133,
+                 ((100e6, 3.98637e-3, 3.69913e-3), (625e6, 0.937185, 0.180001),
+                  (945e6, 26.1311, 1.22828), (1510e6, 9312.6, 24.363))),
+                (60, 1.033e-3, 9.60e-9, 0.673959, ((100e6, 2.69788e-3, 2.52609e-3),))):
+            barus = Lubricant(eta0, C0 + t, 0.0155, alpha)
+            roel = Lubricant(eta0, C0 + t, 0.0155, alpha, pressure_law='roelands')
+            self.rel(roel.roelands_index(C0 + t), z, 1e-6)
+            for p, want_b, want_r in rows:
+                self.rel(barus.dynamic_viscosity_pa_s(C0 + t, p), want_b, 1e-5)  # quoted digits
+                self.rel(roel.dynamic_viscosity_pa_s(C0 + t, p), want_r, 1e-5)
+        roel = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, pressure_law='roelands')
+        for t in (C0 + 40, C0 + 80):                 # slope at p = 0 equals alpha
+            d = 1e3
+            fd = math.log(roel.dynamic_viscosity_pa_s(t, d)
+                          / roel.dynamic_viscosity_pa_s(t, 0.0)) / d
+            self.rel(fd, 1.2e-8, 1e-6)
+        fixed = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, pressure_law='roelands', roelands_z=0.6)
+        self.assertEqual(fixed.roelands_index(C0 + 80), 0.6)
+        with self.assertRaises(ValueError):       # ln(eta0) + 9.67 <= 0
+            Lubricant(5e-5, C0 + 40, 0.015, 1e-8,
+                      pressure_law='roelands').dynamic_viscosity_pa_s(C0 + 40, 1e8)
+        for bad in (dict(pressure_law='wlf'), dict(roelands_z=0.0), dict(roelands_z=2.5)):
+            with self.assertRaises(ValueError):
+                Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, **bad).validate()
+
+    def test_eyring_and_limiting_stress_are_supplied_only(self):
+        lub = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        for f in ('eyring_stress_pa', 'eyring_stress_pressure_coefficient',
+                  'limiting_shear_stress_pa', 'limiting_shear_pressure_coefficient'):
+            self.assertIsNone(getattr(lub, f))
+        self.assertIsNone(lub.eyring_stress_at(1e9))
+        self.assertIsNone(lub.limiting_shear_stress_at(1e9))
+        self.assertEqual(lub.limiting_shear_check(1e9), ([], []))
+        ey = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, eyring_stress_pa=1e6,
+                       eyring_stress_pressure_coefficient=0.007)
+        self.rel(ey.eyring_stress_at(1e9), 8e6)
+        low = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.03)
+        flags, notes = low.limiting_shear_check(1e9)
+        self.assertEqual(flags, ['LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND'])
+        self.assertIn('0.045', notes[0])
+        high = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.06)
+        self.assertEqual(high.limiting_shear_check(1e9), ([], []))
+        for bad in (dict(eyring_stress_pa=1e3), dict(eyring_stress_pressure_coefficient=0.0),
+                    dict(eyring_stress_pressure_coefficient=0.2),
+                    dict(limiting_shear_stress_pa=1e10),
+                    dict(limiting_shear_pressure_coefficient=1.5)):
+            with self.assertRaises(ValueError):
+                Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, **bad).validate()
+
+    def test_example_oil_is_tagged_and_not_a_default(self):
+        ex = self.bt.EXAMPLE_KEROSINE_BASE_OIL
+        for key, (value, tag) in ex.items():
+            self.assertIn('E6 FT', tag, key)
+        self.assertIn('not a plant', ex['note'][0])
+        self.assertEqual(ex['limiting_shear_lower_bound_over_pressure'][0], 0.045)
+        self.assertEqual(ex['eyring_stress_pa_at_313_k'][0],
+                         {'625e6': 4.5e6, '945e6': 6.0e6, '1510e6': 11.7e6})
+        lub = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        self.assertEqual(lub.pressure_law, 'barus')
+        self.assertIsNone(lub.viscosity_table)
+
+
 if __name__ == '__main__':
     unittest.main()

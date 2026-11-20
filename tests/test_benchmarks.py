@@ -248,7 +248,8 @@ class BenchmarkTests(unittest.TestCase):
                 if q['project_value'] is not None:   # every software pin, 1e-6 relative
                     self.assertRel(q['project_value'], q['recorded_project_value'])
                     self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1,
-                                                     bm.RECORDED_ON_SPEC18_P4))
+                                                     bm.RECORDED_ON_SPEC18_P4,
+                                                     bm.RECORDED_ON_SPEC18_P5))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -344,6 +345,40 @@ class BenchmarkTests(unittest.TestCase):
                                / 'band_diagnosis_template.json')
                 self.assertEqual(bm.main(['--bite-comparison', template]), 0)
         self.assertIn('rejected: r2', buf.getvalue())
+
+    def test_oil_and_film_cases(self):
+        """Software comparison of the film formula and of the two pressure laws with the
+        published values; the pressure-law case records that neither law carries the one foil
+        oil with data to bite pressure (Roelands low by 12 to 30 times)."""
+        film = self.cases['BT-G3-FILM-E6-T42']
+        self.assertEqual(film['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        for u, um, ratio in ((30, 0.3242, 1.004), (10, 0.1081, 1.001), (5, 0.0540, 1.001),
+                             (3, 0.0324, 1.013), (1, 0.0108, 0.983)):
+            q = _q(film, f'film_thickness_{u}_m_s_m')
+            self.assertAlmostEqual(q['project_value'] * 1e6, um, delta=5e-5)
+            self.assertAlmostEqual(q['ratio_project_to_reference'], ratio, delta=5e-4)
+        v4 = self.cases['BT-V4-FILM']
+        self.assertAlmostEqual(_q(v4, 'film_ratio_5_m_s')['project_value'], 0.2093, delta=5e-5)
+        self.assertAlmostEqual(_q(v4, 'film_ratio_40_m_s')['project_value'], 1.6748,
+                               delta=5e-4)
+        ids = {e['id']: e['reason'] for e in self.result['not_encoded']}
+        self.assertIn('BT-V4-FILM', ids['BT-V4'])
+        a9 = self.cases['A9-PRESSURE-LAWS-KEROSINE']
+        self.assertEqual(a9['verdict'], 'RECORDED_DISCREPANCY')
+        self.assertEqual(a9['reference_kind'], 'MEASUREMENT')
+        verdicts = {q['name']: (q['ratio_project_to_reference'], q['row_verdict'])
+                    for q in a9['quantities']}
+        self.assertEqual(verdicts['viscosity_barus_100_mpa_pa_s'][1], 'WITHIN_AGREEMENT_BAND')
+        for p_, rb, rr in ((625, 0.375, 0.072), (945, 1.742, 0.082), (1510, 12.6, 0.033)):
+            self.assertAlmostEqual(verdicts[f'viscosity_barus_{p_}_mpa_pa_s'][0], rb,
+                                   delta=0.05 * rb)
+            self.assertAlmostEqual(verdicts[f'viscosity_roelands_{p_}_mpa_pa_s'][0], rr,
+                                   delta=0.05 * rr)
+            self.assertEqual(verdicts[f'viscosity_roelands_{p_}_mpa_pa_s'][1],
+                             'RECORDED_DISCREPANCY')
+        # 100 MPa Roelands row: 0.928, inside the 0.9-1.1 band (the brief's text calls it a
+        # discrepancy; the rule "row verdicts by the band" gives the agreement word)
+        self.assertEqual(verdicts['viscosity_roelands_100_mpa_pa_s'][1], 'WITHIN_AGREEMENT_BAND')
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

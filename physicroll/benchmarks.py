@@ -87,10 +87,12 @@ NO_REFERENCE_VALUE = 'NO_REFERENCE_VALUE'
 REFERENCE_KINDS = ('MODEL_OUTPUT', 'MEASUREMENT', 'PUBLISHED_FORMULA', 'FIGURE_READ_BY_EYE')
 CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29',
             'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
-            'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS')
+            'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
+            'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
+RECORDED_ON_SPEC18_P5 = '2026-11-20, on commit 624f8e9 (SPEC18 package 5)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -201,11 +203,27 @@ RECORDED = {
                       'entry_gauge_r10_without_no_slip_zone_m': 2.8e-05,
                       'entry_gauge_r10_with_no_slip_zone_m': 2.6e-05},
     'BT-X29-LOAD-EXPONENT-HS': {'load_exponent_in_friction': 2.460861178126231},
+    # [run] at RECORDED_ON_SPEC18_P5 (oil and film)
+    'BT-G3-FILM-E6-T42': {'film_thickness_30_m_s_m': 3.242311812633797e-07,
+                          'film_thickness_10_m_s_m': 1.0807706042112656e-07,
+                          'film_thickness_5_m_s_m': 5.403853021056328e-08,
+                          'film_thickness_3_m_s_m': 3.242311812633797e-08,
+                          'film_thickness_1_m_s_m': 1.0807706042112656e-08},
+    'BT-V4-FILM': {'film_ratio_5_m_s': 0.20932790017290456,
+                   'film_ratio_40_m_s': 1.6746232013832365},
+    'A9-PRESSURE-LAWS-KEROSINE': {'viscosity_barus_100_mpa_pa_s': 0.003986366773221348,
+                                  'viscosity_barus_625_mpa_pa_s': 0.9371845609595059,
+                                  'viscosity_barus_945_mpa_pa_s': 26.1310680699495,
+                                  'viscosity_barus_1510_mpa_pa_s': 9312.612600414626,
+                                  'viscosity_roelands_100_mpa_pa_s': 0.003699132180218143,
+                                  'viscosity_roelands_625_mpa_pa_s': 0.18000092137559526,
+                                  'viscosity_roelands_945_mpa_pa_s': 1.2282814920250922,
+                                  'viscosity_roelands_1510_mpa_pa_s': 24.36294894144888},
 }
 
 NOT_ENCODED = (
-    {'id': 'BT-V4', 'reason': 'needs the friction closure of BT-G3; the figures must be '
-                              'digitised'},
+    {'id': 'BT-V4', 'reason': 'film ratio encoded as BT-V4-FILM; load and slip curves need '
+                              'digitising and a friction distribution through the bite'},
     {'id': 'BT-V9', 'reason': 'forward slip without load data; needs a friction value per row, '
                               'i.e. BT-G6'},
     {'id': 'SS-V1', 'reason': 'needs the buckling model of G4'},
@@ -899,6 +917,105 @@ def _bt_x29_load_exponent_hs():
                  ['INSIDE_READ_RANGE' if inside else 'OUTSIDE_READ_RANGE'])
 
 
+# ------------------------------------------------------- oil and film (SPEC18 package 5)
+E6_FILM_SPEEDS_M_S = (30.0, 10.0, 5.0, 3.0, 1.0)
+E6_FILM_UM = (0.323, 0.108, 0.054, 0.032, 0.011)     # h_w, MODEL_OUTPUT [E6 FT, Table 4.2]
+E6_INLET_SLOPE = 0.0058                              # published inlet slope [E6 FT]
+E6_STRIP_SPEED_FRACTION = 0.88                       # ASSUMED (note: 0.93-0.96 of u_r mean)
+
+
+def _pq(name, unit, project, rec_key, reference, label, verdict, case_id):
+    return _quantity(name, unit, project, RECORDED[case_id][rec_key], reference, label,
+                     row_verdict=verdict, recorded_on=RECORDED_ON_SPEC18_P5)
+
+
+def _bt_g3_film_e6():
+    from . import bite_tribology as bt
+    lub = bt.Lubricant(1.0e-3, 333.15, 0.015, 1.0e-8, name='thesis foil-case oil')
+    radius = 5e-6 / E6_INLET_SLOPE ** 2
+    q = []
+    for u, ref in zip(E6_FILM_SPEEDS_M_S, E6_FILM_UM):
+        res = bt.inlet_film_thickness(
+            lub, roll_surface_speed_m_s=u, strip_entry_speed_m_s=E6_STRIP_SPEED_FRACTION * u,
+            entry_thickness_m=20e-6, exit_thickness_m=15e-6, contact_radius_m=radius,
+            plane_strain_yield_pa=230e6, back_tension_pa=0.0, inlet_temperature_k=333.15)
+        key = f'film_thickness_{u:g}_m_s_m'
+        q.append(_pq(key, 'm', res['film_thickness_m'], key, ref * 1e-6,
+                     f'h_w at {u:g} m/s (MODEL_OUTPUT, E6 FT, Table 4.2)',
+                     'INDICATIVE_ASSUMED_INPUTS', 'BT-G3-FILM-E6-T42'))
+    notes = ['Oil 1.0e-3 Pa s at 60 C, 1.0e-8 /Pa, plane-strain yield 230 MPa, no tension; '
+             'contact radius 5e-6/0.0058^2 = 0.148633 m so that the inlet angle is the published '
+             'slope 0.0058 (E6 FT).',
+             'Strip entry speed 0.88 of the roll speed ASSUMED: the research note reproduces the '
+             'table with a mean speed of 0.93 to 0.96 of the roll speed.',
+             'Project: bite_tribology.inlet_film_thickness without the thermal factor.']
+    return _case('BT-G3-FILM-E6-T42', 'Inlet film of the thesis foil case (Table 4.2)',
+                 'Sutcliffe (1989) PhD thesis, Cambridge (E6)', 'E6', 'FT', 'MODEL_OUTPUT', {
+                     'viscosity_pa_s': 1.0e-3, 'pressure_viscosity_coefficient_per_pa': 1.0e-8,
+                     'plane_strain_yield_pa': 230e6, 'contact_radius_m': radius,
+                     'strip_entry_speed_fraction': E6_STRIP_SPEED_FRACTION}, notes, q,
+                 'INDICATIVE_ASSUMED_INPUTS', 'The smooth inlet film formula against the '
+                 'thesis table with one assumed speed ratio; a software comparison of the same '
+                 'closed form, not a check of the film physics.', ['ASSUMED_STRIP_SPEED_RATIO'])
+
+
+def _bt_v4_film():
+    from . import bite_tribology as bt
+    lub = bt.Lubricant(2.5e-3, 313.15, 0.015, 1.2e-8, name='E4 Table I oil')
+    q = []
+    for u, ref in ((5.0, 0.22), (40.0, 1.76)):
+        res = bt.inlet_film_thickness(
+            lub, roll_surface_speed_m_s=u, strip_entry_speed_m_s=0.5 * u,
+            entry_thickness_m=50e-6, exit_thickness_m=25e-6, contact_radius_m=0.135,
+            plane_strain_yield_pa=150e6, back_tension_pa=20e6, inlet_temperature_k=313.15)
+        key = f'film_ratio_{u:g}_m_s'
+        q.append(_pq(key, '1', res['film_thickness_m'] / 0.3e-6, key, ref,
+                     f'film ratio at {u:g} m/s (MODEL_OUTPUT, BT-S3 EX)',
+                     'INDICATIVE_ASSUMED_INPUTS', 'BT-V4-FILM'))
+    notes = ['50 -> 25 um, plane-strain yield 150 MPa, tensions 20 MPa, R 135 mm, oil 2.5e-3 Pa s '
+             'and 1.2e-8 /Pa, composite roughness 0.3 um [E4 EX, Table I].',
+             'Roll surface speed = the quoted speed, strip entry speed half of it, contact radius '
+             '= R, inlet 40 C: ASSUMED.']
+    return _case('BT-V4-FILM', 'Film ratio of the E4 foil pass (film only)',
+                 'Sutcliffe & Montmitonnet (2001) (E4 = BT-S3)', 'BT-S3 (= E4)', 'EX',
+                 'MODEL_OUTPUT', {'entry_thickness_m': 50e-6, 'exit_thickness_m': 25e-6,
+                                  'composite_roughness_m': 0.3e-6}, notes, q,
+                 'INDICATIVE_ASSUMED_INPUTS', 'Film ratio only; the load and slip curves of the '
+                 'source are not encoded.', ['ASSUMED_SPEEDS_AND_INLET_TEMPERATURE'])
+
+
+def _a9_pressure_laws():
+    from . import bite_tribology as bt
+    eta0, alpha, t = 1.409e-3, 10.40e-9, 313.15
+    laws = {'barus': bt.Lubricant(eta0, t, 0.0155, alpha),
+            'roelands': bt.Lubricant(eta0, t, 0.0155, alpha, pressure_law='roelands')}
+    measured = ((100e6, 3.985e-3, 'viscometer'), (625e6, 2.5, 'disc machine'),
+                (945e6, 15.0, 'disc machine'), (1510e6, 740.0, 'disc machine'))
+    q = []
+    for law, lub in laws.items():
+        for p, ref, how in measured:
+            v = lub.dynamic_viscosity_pa_s(t, p)
+            key = f'viscosity_{law}_{p / 1e6:g}_mpa_pa_s'
+            q.append(_pq(key, 'Pa s', v, key, ref,
+                         f'measured at {p / 1e6:g} MPa and 40 C, {how} (MEASUREMENT, E6 FT)',
+                         _band_verdict(v / ref), 'A9-PRESSURE-LAWS-KEROSINE'))
+    z = laws['roelands'].roelands_index(t)
+    notes = ['Somentor 31, a kerosine base oil without additives (not a plant\'s rolling oil), '
+             '40 C: eta0 1.409e-3 Pa s, alpha 10.40e-9 /Pa [E6 FT, Table 2.1].',
+             f'Roelands index from the low-pressure slope [E5 FT (4.194)]: z = {z:.6f} [run].']
+    note = ('Neither law carries this oil from the inlet to bite pressure: Barus is 0.37 to 12.6 '
+            'times the measured value above 100 MPa, Roelands with the index from the '
+            'low-pressure slope 0.03 to 0.08 times (low by a factor 12 to 30). Barus stays the '
+            'default; enter roelands_z or a Barus coefficient fitted at the pressure of interest '
+            'and read any valley friction as an order of magnitude.')
+    return _case('A9-PRESSURE-LAWS-KEROSINE', 'Viscosity against pressure: Barus and Roelands '
+                 'on a kerosine base oil', 'Sutcliffe (1989) thesis (E6); Boemer (2020) thesis '
+                 '(E5, Roelands form)', 'E6, E5', 'FT', 'MEASUREMENT',
+                 {'viscosity_pa_s': eta0, 'pressure_viscosity_coefficient_per_pa': alpha,
+                  'temperature_k': t}, notes, q, 'RECORDED_DISCREPANCY', note,
+                 ['ONE_OIL_WITH_DATA'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -906,7 +1023,9 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R89-HS': lambda: _bt_v2_hs('BT-V2-R89-HS', 0.089),
           'BT-V2-R135-HS': lambda: _bt_v2_hs('BT-V2-R135-HS', 0.135),
           'BT-V3-FIG1-140UM-HS': _bt_v3_fig1_hs, 'BT-V3-EQ29-HS': _bt_v3_eq29_hs,
-          'BT-X29-LOAD-EXPONENT-HS': _bt_x29_load_exponent_hs}
+          'BT-X29-LOAD-EXPONENT-HS': _bt_x29_load_exponent_hs,
+          'BT-G3-FILM-E6-T42': _bt_g3_film_e6, 'BT-V4-FILM': _bt_v4_film,
+          'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws}
 
 
 def run_case(case_id: str) -> dict:

@@ -4,19 +4,17 @@ the default left unchanged, and a solver failure inside diagnose.
 Coarse numerics as tests/test_band_halfspace.py. Software checks of the wiring only.
 """
 import copy
-import hashlib
+import json
 import unittest
 from pathlib import Path
 
 from physicroll import band_process as bp
 from physicroll import halfspace_bite as hb
-from physicroll.band_diagnosis import diagnose, load_case, result_json
+from physicroll.band_diagnosis import diagnose, load_case, result_json, validate_case
 
 SCEN = Path(__file__).resolve().parents[1] / 'scenarios'
 COARSE = {'axial_cell_m': 0.02, 'radial_cells': 6, 'time_step_s': 5.0}
-# sha256 of result_json(diagnose(template)) at commit ec2d7b4, before SPEC18 package 4; the
-# only change allowed by package 4 is the additive key 'bite_extras' (removed before hashing)
-TEMPLATE_SHA256_BEFORE = '30a6940eda2839ce00223e64ad4c8b84c89ec659be4c7a64416b4a2b2f21f400'
+HALF_SPACE_MARKERS = ('reduced_half_space', 'BITE_FROM_REDUCED_HALF_SPACE_MODEL')
 
 
 def coarse_battery(model, labels=('S3', 'F2')):
@@ -46,12 +44,23 @@ class AutoHalfSpaceTests(unittest.TestCase):
 
 class DefaultUnchangedTests(unittest.TestCase):
 
-    def test_template_result_unchanged_except_bite_extras(self):
-        r = diagnose(load_case(SCEN / 'band_diagnosis_template.json'))
+    def test_default_option_is_the_absent_option_and_never_half_space(self):
+        """The default path: a case without ``model_options.bite_model`` is the same case as one
+        with it set to its default 'hitchcock' (diagnose sees only the validated case, so the
+        two results are equal), and the result holds no half-space marker anywhere. That the
+        result is unchanged against the previous commit is proven by the artifact
+        regeneration and verify_additive, not here."""
+        raw = json.loads((SCEN / 'band_diagnosis_template.json').read_text())
+        absent = copy.deepcopy(raw)
+        absent['model_options'].pop('bite_model', None)
+        explicit = copy.deepcopy(raw)
+        explicit['model_options']['bite_model'] = 'hitchcock'
+        self.assertEqual(validate_case(absent), validate_case(explicit))
+        r = diagnose(absent)
         self.assertEqual(r['bite_extras']['status'], 'NOT_SUPPLIED')
-        del r['bite_extras']
-        digest = hashlib.sha256(result_json(r).encode()).hexdigest()
-        self.assertEqual(digest, TEMPLATE_SHA256_BEFORE)
+        text = result_json(r)
+        for marker in HALF_SPACE_MARKERS:
+            self.assertNotIn(marker, text)
 
 
 class FailureInsideDiagnoseTests(unittest.TestCase):
