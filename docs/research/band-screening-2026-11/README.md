@@ -1,8 +1,9 @@
 # Band screening research reports (November 2026)
 
-These are the nine literature reports written for the band screening work. They are kept as they
-were delivered: only file names in cross-references were changed when they were moved here. They
-are working research notes, not maintained documents. Where a later check corrected a statement,
+These are the nine literature reports written for the band screening work, and one later research
+note on the equations and constants they cite. They are kept as they were delivered: only file
+names in cross-references were changed when they were moved here. They are working research
+notes, not maintained documents. Where a later check corrected a statement,
 the maintained documents below carry the correction and the report does not.
 
 Maintained documents built from these reports:
@@ -26,6 +27,7 @@ Maintained documents built from these reports:
 | [gap-shape-stack-winding.md](gap-shape-stack-winding.md) | Gap study: strip shape, roll stack, web handling, winding, flatness control | `SS-` |
 | [gap-thermal-material-dynamics.md](gap-thermal-material-dynamics.md) | Gap study: thermal modelling and coolant, material behaviour, mill dynamics and control | `TM-` |
 | [gap-open-data-codes.md](gap-open-data-codes.md) | Open datasets, open-source codes, published benchmark data, validation plan | `OD-` |
+| [phase1-equations.md](phase1-equations.md) (2026-11-19) | Equations and constants the gap reports cite without giving | `E` (ids `E1`-`E19`) |
 
 Inside each report the sources carry the report's own numbering (for example `S12`, `G7`,
 `T25`). The maintained documents put the prefix above in front of that number.
@@ -38,6 +40,17 @@ Inside each report the sources carry the report's own numbering (for example `S1
   recollection, not literature values.
 - Nothing in these reports was checked on a mill. The screening tool itself has not been compared
   with plant data.
+
+Tags of [phase1-equations.md](phase1-equations.md), from its own list (never upgraded):
+
+- `FT`: full text read; the part read is stated.
+- `EX`: excerpt only.
+- `AB`: abstract or snippet only.
+- `VP`: vendor, trade or teaching page.
+- `CIT`: seen only as a citation inside another source.
+- `[derived]`: computed or inferred by the note's author, with the derivation or the script named.
+- `[from memory]`: recalled without a source, not verified.
+- "as printed": transcribed although it looks wrong, with the reason given beside it.
 
 ## Statements later corrected
 

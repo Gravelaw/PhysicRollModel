@@ -10,8 +10,10 @@ import io
 import json
 import math
 import unittest
+from unittest import mock
 
 from physicroll import benchmarks as bm
+from physicroll import chatter
 
 REL = 1e-6
 
@@ -109,18 +111,90 @@ class BenchmarkTests(unittest.TestCase):
                                places=12)
         self.assertEqual(ss3['verdict'], 'RECORDED_DISCREPANCY')
 
-    def test_tm_lc7_is_reference_only(self):
-        """Replace this test when the TM-LC7 mill parameters are recorded from the paper's
-        tables: the case will then carry inputs, project values and a verdict by the rule."""
+    def test_tm_lc7_runs_with_three_substitutions(self):
+        """Software pins and row verdicts of the steel chatter case run with three stated
+        substitutions (rigid rolls, equivalent Coulomb friction, stand 2 alone). Passing this
+        test does not validate the chatter screen: the frequency rows lie within the band, the
+        speed rows are indicative only (one of two readings of the reference speed, damping
+        heuristic)."""
         case = self.cases['TM-LC7']
-        self.assertEqual(case['verdict'], 'REFERENCE_ONLY_INPUTS_NOT_RECORDED')
-        self.assertEqual(case['inputs'], {})
-        refs = {(q['name'], q['reference_value']) for q in case['quantities']}
-        self.assertIn(('critical_exit_speed_m_s', 5.81), refs)
-        self.assertIn(('onset_frequency_hz', 124.6), refs)
-        for q in case['quantities']:
-            self.assertIsNone(q['project_value'])
-            self.assertIsNone(q['ratio_project_to_reference'])
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        nr, ok, ind = bm.NO_REFERENCE_VALUE, 'WITHIN_AGREEMENT_BAND', 'INDICATIVE_ASSUMED_INPUTS'
+        for name, reference, brief_value, verdict in (
+                ('equivalent_coulomb_friction', None, 0.026566, nr),
+                ('separating_force_n', None, 4.1044e6, nr),
+                ('forward_slip_fraction', None, 0.02936, nr),
+                ('contact_length_m', None, 5.1498e-3, nr),
+                ('strip_modulus_n_m', None, 2.00515e10, nr),
+                ('lower_loaded_symmetric_mode_hz', 124.6, 121.878, ok),
+                ('onset_frequency_hz', 124.6, 122.303, ok),
+                ('critical_exit_speed_m_s', 8.715, 8.1014, ind),
+                ('critical_exit_speed_m_s', 5.81, 8.1014, ind),
+                ('critical_exit_speed_without_bite_damping_m_s', None, 0.5177, nr),
+                ('onset_frequency_without_bite_damping_hz', None, 481.15, nr)):
+            q = _q(case, name, reference)
+            self.assertRel(q['project_value'], brief_value, 1e-4)
+            self.assertEqual(q['row_verdict'], verdict, name)
+            self.assertEqual(q['recorded_on'], bm.RECORDED_ON_SPEC18_P1)
+            self.assertIn('three substitutions', q['reference_label'])
+        self.assertAlmostEqual(_q(case, 'critical_exit_speed_m_s', 8.715)
+                               ['ratio_project_to_reference'], 0.930, places=3)
+        self.assertAlmostEqual(_q(case, 'critical_exit_speed_m_s', 5.81)
+                               ['ratio_project_to_reference'], 1.394, places=3)
+        self.assertAlmostEqual(bm.TM_LC7_SPEED_IF_INTERSTAND_M_S, 8.715, places=12)
+        notes = ' '.join(case['input_notes'])
+        for n in (1, 2, 3):
+            self.assertIn(f'Substitution {n}:', notes)
+        self.assertIn('1e14', notes)
+        self.assertIn('friction FACTOR m = 0.054', notes)
+        self.assertIn('stand 2 alone', notes)
+        self.assertIn('8.715 m/s [D]', notes)
+        self.assertIn('Both are recorded; neither is asserted.', notes)
+        self.assertEqual(case['inputs']['bite_pass']['friction_coefficient'],
+                         _q(case, 'equivalent_coulomb_friction')['project_value'])
+        for text in ('The frequency agrees because it is set by the stand and the strip '
+                     'stiffness.', '0.02 -> 5.731 m/s, 107.77 Hz', '0.03 -> 9.261 m/s, 128.41 Hz',
+                     '0.054 -> 16.980 m/s, 160.23 Hz', 'unstable at any speed in its upper mode',
+                     'indicative only', 'not a validation of the chatter screen'):
+            self.assertIn(text, case['note'])
+        unloaded = chatter.natural_frequencies(bm._stand(bm.TM_LC7_STAND))['symmetric_hz']
+        self.assertRel(unloaded[0], 13.3134, 1e-5)
+        self.assertRel(unloaded[1], 416.684, 1e-5)
+        with self.assertRaises(ValueError):
+            bm.equivalent_coulomb_friction(bm.TM_LC7_PASS, -0.054, 535.65e6)
+
+    def test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls(self):
+        """Substitution 1 is needed: with a 210 GPa roll the slab + Hitchcock bite rejects the
+        TM-LC7 pass at the equivalent friction (keeps anyone from 'simplifying' it away)."""
+        p = dict(bm.TM_LC7_PASS, friction_coefficient=0.026566)
+        with self.assertRaises(ValueError):
+            chatter.derive_bite_response(bm._bite_pass(p), roll_youngs_modulus_pa=210e9)
+
+    def test_bt_v1_reference_caveat(self):
+        """The reference record of BT-V1 says what the caption value rests on. The mattress
+        verdict against 118 is unchanged; nothing here judges the published value."""
+        case = self.cases['BT-V1']
+        self.assertIn(bm.BT_V1_REFERENCE_CAVEAT, case['note'])
+        self.assertIn('The caption value 118 is not a grid-independent number', case['note'])
+        self.assertIn('78 to 134', case['note'])
+        self.assertIn('peak about 7.7 at +0.41 mm', case['note'])
+        self.assertIn('REFERENCE_NOT_GRID_INDEPENDENT', bm.VERDICTS)
+        self.assertEqual(case['verdict'], 'RECORDED_DISCREPANCY')
+        caption = _q(case, 'w_bar', 118.0)
+        self.assertEqual(caption['row_verdict'], 'RECORDED_DISCREPANCY')
+        self.assertEqual(caption['recorded_on'], bm.RECORDED_ON)
+        contact = _q(case, 'contact_length_m', 2.14e-3)
+        self.assertRel(contact['project_value'], 1.474471e-3, 1e-5)
+        self.assertAlmostEqual(contact['ratio_project_to_reference'], 0.689, places=3)
+        self.assertEqual(contact['row_verdict'], 'RECORDED_DISCREPANCY')
+        self.assertEqual(contact['recorded_on'], bm.RECORDED_ON_SPEC18_P1)
+        self.assertIn('E6 FT', contact['reference_label'])
+        es = 'E_s* = 80 GPa enters only the longitudinal no-slip equations'
+        for case_id in ('BT-V1', 'BT-V2-R89', 'BT-V2-R135'):
+            self.assertTrue(any(es in n for n in self.cases[case_id]['input_notes']), case_id)
+        for case_id in ('BT-V2-R89', 'BT-V2-R135'):
+            self.assertTrue(any('confirmed by a second full reading' in n
+                                for n in self.cases[case_id]['input_notes']), case_id)
 
     def test_chatter_harness_reproduces_the_demo(self):
         """Software check of the harness on the project's own synthetic demo (not a
@@ -171,7 +245,7 @@ class BenchmarkTests(unittest.TestCase):
             for q in case['quantities']:
                 if q['project_value'] is not None:   # every software pin, 1e-6 relative
                     self.assertRel(q['project_value'], q['recorded_project_value'])
-                    self.assertEqual(q['recorded_on'], bm.RECORDED_ON)
+                    self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -179,21 +253,26 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(len(rows), sum(len(c['quantities']) for c in self.result['cases']))
         for case in self.result['cases']:   # row verdict: no reference -> NO_REFERENCE_VALUE
             for q in case['quantities']:
-                self.assertEqual(q['row_verdict'], bm.NO_REFERENCE_VALUE
-                                 if q['reference_value'] is None else case['verdict'])
+                self.assertIn(q['row_verdict'], bm.VERDICTS + (bm.NO_REFERENCE_VALUE,))
+                self.assertEqual(q['row_verdict'] == bm.NO_REFERENCE_VALUE,
+                                 q['reference_value'] is None)
         for r in rows:
             self.assertEqual(r['verdict'] == bm.NO_REFERENCE_VALUE, r['reference'] is None)
         slip = [r for r in rows if r['id'] == 'BT-V1' and r['quantity'] == 'forward_slip_fraction']
         self.assertEqual([(r['verdict'], r['case_verdict']) for r in slip],
                          [('NO_REFERENCE_VALUE', 'RECORDED_DISCREPANCY')])
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            self.assertEqual(bm.main(['--json']), 0)
-        self.assertEqual(json.loads(buf.getvalue())['status'], bm.STATUS)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            bm.main([])
+        # the command line prints the result already computed (run_all takes about 15 s)
+        with mock.patch.object(bm, 'run_all', return_value=self.result):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                self.assertEqual(bm.main(['--json']), 0)
+            self.assertEqual(json.loads(buf.getvalue())['status'], bm.STATUS)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                bm.main([])
         self.assertIn('RECORDED_DISCREPANCY', buf.getvalue())
+        for line in bm.TM_LC7_SUBSTITUTIONS:   # the substitutions wherever TM-LC7 is shown
+            self.assertIn(line, buf.getvalue())
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

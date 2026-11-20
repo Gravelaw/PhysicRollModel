@@ -2626,7 +2626,16 @@ published foil-bite case has every input stated: Fleck, Johnson, Mear & Zhang 19
 (BT-V1 [FT]: entry 20 um, 25 %, R 89 mm, `Y_s` 230 MPa, `E_R*` 230 GPa, friction 0.03, no
 tensions). On it the mattress bite returns `W_bar = W*E_R*/(R*Y_s^2)` = 49.77 [run], **0.42 of
 the half-space reference load** of 118 and 0.80 of the authors' own mattress value 62. This is
-a recorded discrepancy, not a validation; the model is not tuned towards 118.
+a recorded discrepancy, not a validation; the model is not tuned towards 118. The caption value
+118 is itself not a grid-independent number: the printed end conditions of the source (a
+pressure step at the exit with zero slope there) give 78 to 134 for end lengths of 40 to 2.5 um
+in two independent re-implementations [computed, re-implementation of E1; computed, SPEC18
+prototype]; 118 corresponds to about 5 um, and the element size the paper states (about 21 um)
+to 88-89. Against every member of that family the mattress value 49.8 is low by a factor 1.6 to
+2.7, so the verdict stays a recorded discrepancy. The contact length of the same published
+solution, 2.14 mm (`b/R` = 0.0241 [E6 FT, thesis p.54]), gives a second reference row: 1.474 mm
+[run], ratio 0.689. The source's strip modulus `E_s*` = 80 GPa enters only its longitudinal
+no-slip equations and none of its loads [E1 FT].
 `python -m physicroll.benchmarks` prints the encoded cases (`physicroll/benchmarks.py`, status
 `SOFTWARE_COMPARISON_WITH_PUBLISHED_VALUES_NOT_PHYSICAL_VALIDATION`; agreement band 0.9-1.1 on
 the ratio project / reference, an analyst choice [D]); the rows of `benchmarks.table_rows()`
@@ -2640,6 +2649,7 @@ recorded only; the case verdict is unchanged):
 | `BT-V1` | `W_bar` | 49.7724 | 62, Fleck-Johnson mattress (model output, FT) | 0.802781 | `RECORDED_DISCREPANCY` |
 | `BT-V1` | force per width [N/m] | 1.01884e6 | 2.42e6 [derived from 118] | 0.421009 | `RECORDED_DISCREPANCY` |
 | `BT-V1` | forward slip | 0.169779 | - | - | `NO_REFERENCE_VALUE` |
+| `BT-V1` | contact length [m] | 1.47447e-3 | 2.14e-3, same published solution (model output, E6 FT) | 0.689005 | `RECORDED_DISCREPANCY` |
 | `BT-V2-R89` | `W_bar` | 41.0688 | 58 measured (FT); radius 89 mm assumed | 0.708083 | `INDICATIVE_ASSUMED_INPUTS` |
 | `BT-V2-R135` | `W_bar` | 51.0529 | 58 measured (FT); radius 135 mm assumed | 0.880223 | `INDICATIVE_ASSUMED_INPUTS` |
 | `BT-V3-FIG1-140UM` | `W_bar` | 45.9683 | "about 50", Fig. 4 read by eye | 0.919367 | `REFERENCE_READ_BY_EYE` |
@@ -2653,17 +2663,32 @@ recorded only; the case verdict is unchanged):
 | `SS-V2` | critical I-units | 4.01693 | 8.92 clamped (FT) | 0.450329 | `INDICATIVE_ASSUMED_INPUTS` |
 | `SS-V2` | half-wave [m] | 0.15 | 0.06 measured (FT) | 2.5 | `INDICATIVE_ASSUMED_INPUTS` |
 | `SS-V3` | half-wave [m] | 0.105 | 0.0375 (half of about 75 mm measured, FT) | 2.8 | `RECORDED_DISCREPANCY` |
-| `TM-LC7` | critical speed [m/s] | - | 5.81 measured (EX); paper's model 6.42 / 6.57 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` |
-| `TM-LC7` | onset frequency [Hz] | - | 124.6 measured (EX); paper's model 129 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` |
+| `TM-LC7`* | equivalent Coulomb friction | 0.0265664 | - (substitution 2) | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | separating force [N] | 4.10437e6 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | forward slip | 0.0293589 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | contact length [m] | 5.14983e-3 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | strip modulus `Q_s` [N/m] | 2.00515e10 | - (2.1325e10 would put the mode at 124.6 Hz [D]) | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | lower loaded symmetric mode [Hz] | 121.878 | 124.6 measured (E9 FT) | 0.978157 | `WITHIN_AGREEMENT_BAND` |
+| `TM-LC7`* | onset frequency, bite damping 0.5 [Hz] | 122.303 | 124.6 measured (E9 FT); paper's model 129 / 132 | 0.981567 | `WITHIN_AGREEMENT_BAND` |
+| `TM-LC7`* | critical exit speed, bite damping 0.5 [m/s] | 8.10139 | 8.715, if 5.81 is the speed between the stands [D] | 0.929592 | `INDICATIVE_ASSUMED_INPUTS` |
+| `TM-LC7`* | critical exit speed, bite damping 0.5 [m/s] | 8.10139 | 5.81 measured (E9 FT), if it is stand 2's exit speed; paper's model 6.42 / 6.57 | 1.39439 | `INDICATIVE_ASSUMED_INPUTS` |
+| `TM-LC7`* | critical exit speed, no bite damping [m/s] | 0.517673 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | onset frequency, no bite damping [Hz] | 481.149 | - | - | `NO_REFERENCE_VALUE` |
+
+\* `TM-LC7` project values rest on three substitutions: (1) rigid rolls (roll modulus 1e14 Pa;
+the paper has no flattening, and Hitchcock flattening rejects this pass with real rolls);
+(2) a Coulomb coefficient with the same mean friction stress as the paper's friction factor
+0.054 on the shear yield stress; (3) stand 2 alone with its two spans instead of the paper's two
+stands with stress waves. Case verdict `INDICATIVE_ASSUMED_INPUTS`; the speed rows are
+indicative only (section 11.4).
 
 `BT-V3-EQ29` evaluates the regime boundary `h_0c = 12*R*r^0.5*mu^1.24*(Y_s/E_R*)^0.76` (eq. 29
 [FT]): 36.24 um for the BT-V1 mill (entry 20 um below it; the project's regime is `foil`) and
 51.25 um for the Fig. 1 case (entry 140 um above it; regime `conventional`), verdict
 `CONSISTENT_REGIME`; for the battery-foil demo mill 56.35 um (`Y_s` 175 MPa) and 62.86 um
 (175*2/sqrt(3) MPa), where the bite report gives "54-63 um" [derived] (its lower end is not
-reproduced with these inputs). The steel chatter onset `TM-LC7` is a reference record only: no
-mill parameter of the paper is in the repository; `benchmarks.chatter_onset_comparison` is the
-harness for it. In the foil regime the model gives large forward slip (flag
+reproduced with these inputs). The steel chatter onset `TM-LC7` is run with the paper's stand-2
+inputs and three substitutions; what it shows is in section 11.4. In the foil regime the model gives large forward slip (flag
 `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL`, above 0.15): that is what a constant
 Coulomb friction model with a no-slip zone gives (section 3.3); elastic strip zones are not
 the cause, they are negligible above 10 % reduction [BT-S1 FT]. Treat foil-regime numbers as order
@@ -2800,6 +2825,21 @@ interior neutral point).
   (4.06e-4 -> 8.34e-4 per um), and the free-expansion thermal gap-closure fraction of a 5 K
   stripe rises from 0.017 to 0.114; the bending strain `t/D` falls (yield-point bending marks
   become less likely at thin gauge).
+
+**The one measured chatter onset with mill parameters (`TM-LC7`, X31).** Niroomand, Forouzan &
+Salimi (2015) [E9 FT] give a two-stand steel mill with every structural input and a measured
+onset of 124.6 Hz and 5.81 m/s. Its stand structure is the one of `chatter.py`; its process
+model is not, so `benchmarks.py` runs stand 2 with three substitutions (rigid rolls; a Coulomb
+coefficient 0.026566 with the paper's mean friction stress; stand 2 alone) [run]. The frequency
+agrees (lower loaded symmetric mode 121.88 Hz, onset 122.30 Hz, ratio 0.98) because it is set by
+the stand and the strip stiffness. The critical speed does not settle anything: 8.10 m/s is 0.93
+of the reference if the paper's 5.81 m/s is the strip speed between the stands (stand 2 then
+exits at 8.715 m/s [D]) and 1.39 of it if 5.81 m/s is stand 2's exit speed; it moves from 5.73
+to 9.26 m/s for a Coulomb coefficient of 0.02 to 0.03 [run] and rests on the bite-damping
+heuristic: without it the model is unstable at any speed in its upper mode (from 0.52 m/s, at
+481 Hz). So the case checks the stand and strip-stiffness part of the screen on a steel mill; it
+does not check the speed at which chatter starts, and it is not a validation on an aluminium
+foil mill.
 
 ### 11.5 Levers and coolant for chatter
 
@@ -3035,7 +3075,7 @@ real mill.
 | `bite_tribology.py` / `tests/test_bite_tribology.py` | viscosity `beta` from the kerosene data points; film check case (62.8 nm, film ratio 0.209, within 5 % of the quoted 65 nm); film linear in speed and viscosity; closure limits and slope; friction falling monotonically with speed; pass heating check (49.35 K) and energy closure; Voce mean against quadrature; literature fits carry the warning; regime labels and window (`test_regime_labels_and_window`: 0.005, 0.01, 0.5, 0.99 `MIXED_SUBSTANTIAL_CONTACT` with the window false / true / true / false, 1.0 and 3.0 `MIXED_FIRST_CONTACT`, 3.01 `HYDRODYNAMIC`, no result contains `BOUNDARY`; SPEC17) |
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
 | `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of a 50 -> 25 um pass at a nominal friction of 0.10 (not the published case, where 0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]), the limiting gauge and a sticking exit; the large-slip flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL` (renamed in SPEC17); force trends; sensitivity signs match Hitchcock |
-| `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 as a reference record; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
+| `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`); heat-streak tribology item (`test_heat_streak_regime_item`, SPEC17): with tribology and no temperature limit `NEUTRAL`, with a limit below the modelled exit temperature `SUPPORTS` / weak, the planted case still leads |
 | `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`); speed margin beyond the 0.05-60 m/s scan (`SpeedMarginScanRangeTests`): the reviewer's case (supplied bite, damping 0.21, 100 m/s, scan `STABLE_OVER_SCANNED_RANGE`, operating point unstable) supports strongly with the basis named and the chatter score 5 instead of 0; 10 m/s with no crossing still contradicts as before; zero slip in the pitch kinematics only (`KinematicSlipOnlyTests`: a supplied slip of 0.6 gives a not-assessable screen showing 0.6 and no skidding support; a slip of -0.01 still skids); coverage band-risk stripes matched as intervals (`CoverageIntervalMatchTests`: the reviewer's 0.065 m band in the 0.06-0.14 m gap supports and agrees with the screen, a band 0.045 m from every interval contradicts, modelled point sources still match by centre); 100 m/s stable at the operating point (damping 0.6) contradicts with the new wording; supplied `shape_inputs` with a zero exit-tension force sensitivity (`ZeroFeedbackSensitivityTests`): the steady shape and the case-pass gauge-trend row are assessed, feedback-level numbers equal the compliance-only ones, no nan / inf, a negative value is rejected at validation; inlet angle of the film (`InletAngleTests`, SPEC17): a mattress operating bite has `film_inlet_radius_ratio` 1.0 and its film ratio times `sqrt(contact_radius_ratio)` equals the former call to 1e-9; a Hitchcock bite keeps `film_inlet_radius_ratio == contact_radius_ratio` and the lengthwise demo's film ratio 0.180115 |
@@ -3303,6 +3343,14 @@ Thin-gauge bite: Fleck & Johnson (1987) Int. J. Mech. Sci. 29:507 (poor OCR copy
 report "A simple model for the cold rolling of metal foil"; Stone (from memory); Fleck,
 Johnson, Mear & Zhang (1992) Cold rolling of foil, Proc. IMechE B 206:119-131 (full text, scan;
 read by the bite gap report, BT-S1; benchmark cases of `benchmarks.py`).
+
+Phase 1 equation note (`docs/research/band-screening-2026-11/phase1-equations.md`, prefix `E`;
+read tags as the note gives them): E1 Fleck, Johnson, Mear & Zhang (1992), the same paper as
+BT-S1 [FT, scan read as images; eqs (20), (30)-(32), (36), Appendix 3 and Fig. 9 re-read on
+enlarged crops]; E6 Sutcliffe (1989) Friction and lubrication in metal rolling, PhD thesis,
+Cambridge [FT for chapter 2, sections 3.2.1 (part), 3.3, 3.4, 4.2-4.3, 4.7-4.8, Tables 2.1, 4.1,
+4.2, Fig. 2.7]; E9 Niroomand, Forouzan & Salimi (2015) ISIJ Int. 55(3):637-646, the TM-LC7 mill
+[FT, sections 3-5 and all tables; section 2 skimmed].
 
 Battery foil (phase 3; labels as in the code's `FOIL_SOURCES`, read in a research pass for
 this project): [S3] alfoilworld.com, battery-foil rolling procedure

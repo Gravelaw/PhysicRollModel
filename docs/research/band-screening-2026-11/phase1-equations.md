@@ -2,8 +2,8 @@
 
 Written 2026-11-19 for the planner of SPEC18. Scope: the equations and constants that
 `gap-bite-tribology.md` and `gap-thermal-material-dynamics.md` cite without giving. Nothing under
-`/home/user/PhysicRollModel` was changed. Scratch scripts: `scratchpad/s24/scripts/`; downloaded
-files: `scratchpad/s24/dl_*`.
+`/home/user/PhysicRollModel` was changed. Scratch scripts: `../../dev/gap-implementation/prototypes/phase1-research/`; downloaded
+files: not kept in the repository.
 
 How to read the tags
 
@@ -496,7 +496,7 @@ What the source establishes (E1, FT):
 
 What the source does not establish: the size of each effect. It gives no solution without zone E.
 This was therefore tested numerically (check C4, section 7; own re-implementation of (22), (23)
-and the conditions of 1.8 in numpy, `s24/scripts/fleck_fig9*.py`; all of it `[derived]`):
+and the conditions of 1.8 in numpy, `../../dev/gap-implementation/prototypes/phase1-research/fleck_fig9*.py`; all of it `[derived]`):
 
 5. **Zone E does not change the load.** With and without zone E the load differs by less than
    0.3 % on every grid tried (for example 98.66 against 98.55). What zone E changes is
@@ -1183,7 +1183,7 @@ The thesis measurements [E6 ch. 5] are film thickness on an experimental mill at
 
 ## 7. Consistency checks run
 
-Scripts in `scratchpad/s24/scripts/`: `checks.py` (C1-C3, C5-C9), `fleck_fig9.py`,
+Scripts in `../../dev/gap-implementation/prototypes/phase1-research/`: `checks.py` (C1-C3, C5-C9), `fleck_fig9.py`,
 `fleck_fig9_endzone.py`, `fleck_fig9_triangles.py`, `fleck_fig9_profile.py` (C4). numpy only.
 
 | id | check | result |
