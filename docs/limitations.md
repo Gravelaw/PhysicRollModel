@@ -110,7 +110,7 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 |---|---|---|---|---|---|
 | L-SHAPE-01 | The flatness chain is elastic and local: half-space roll compliance, a linear exit-tension feedback with an approximate band-wise buckling cap (one scale factor, no iteration), no roll bending, no redistribution of entry tension, no relief after buckling; stresses above yield are indicative only. | Size not known. | `width.limitations`; `width.shape` | G1, G3 (Phase 2 and 3) | limitation |
 | L-SHAPE-02 | The exit-tension feedback that dominates every thin-gauge result is not supported or contradicted by the literature; the level without it (roll compliance only) is printed beside it and is about two orders of magnitude larger. One of the two comparison levels is not defined when the roll bump or the change reaches the gauge. | The size of a thin-gauge band depends on which level holds. | `RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE`, `COMPLIANCE_ONLY_LEVEL_NOT_DEFINED_CHANGE_REACHES_GAUGE` | a width-coupled strip model (G3) | limitation |
-| L-SHAPE-03 | Buckling uses one assumed mode with a coefficient of 4 from memory: an upper bound on the critical load for that mode family, no interaction between neighbouring bands, finite strip length ignored, no search over wavelength under tension. | The published local buckles are matched only indicatively; the half-wave is 2.8 times the measured one on one case (part 5). | `width.shape` onsets | G4 (Phase 2, package 6) | limitation |
+| L-SHAPE-03 | Buckling uses one assumed mode with a coefficient of 4 from memory: an upper bound on the critical load for that mode family, no interaction between neighbouring bands, finite strip length ignored, no search over wavelength under tension. These are the states the evidence uses; a wavelength search can be run beside them (L-SHAPE-16). | The published local buckles are matched only indicatively; the half-wave is 2.8 times the measured one on one case (part 5). | `width.shape` onsets | G4 (Phase 2, packages 6 and 7) | limitation |
 | L-SHAPE-04 | The after-release whole-sheet mode is an upper-bound indicator, not a band prediction (it scales with strip width and ignores the sheet's own weight); the local mode's width limit (2 × half-peak width) is an analyst choice; the released state assumes the residual stress is unchanged by coiling, slitting or levelling. | Over-states what shows after release. | `GLOBAL_BUCKLE_AFTER_RELEASE` state in `width.shape` | G4, G14 | limitation |
 | L-SHAPE-05 | After-release onsets limited by the reporting threshold are upper bounds. At the foil case pass they equal the 2 I-unit reporting onset (about 0.2 µm of stripe), so nearly any reportable stripe reads "visible after tension release". | A 20 s valve closure shows a band after release for 311 s in the battery demo. | `width.shape`, `width.thermal_events` | G4 | limitation |
 | L-SHAPE-06 | Sharp-edged stripes can lock the local released width onto an edge spike. | The tool may report flat where a smooth stripe of the same height buckles. | `width.shape` | G4 | limitation |
@@ -122,13 +122,14 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-SHAPE-12 | The friction-stripe screen is linear: the force change from a constant-friction roll gap (at foil gauge the experimental model, 0.42 of the reference load) times a supplied friction change, with the unestablished tension feedback; no film model across the width, no starvation, no coupling to the roll temperature, entry tension uniform; no evidence item. | The with-feedback level shows no gauge trend while the compliance-only level grows. | `FRICTION_STRIPE_SCREEN_APPLIED`, `FRICTION_STRIPE_LINEAR_FEEDBACK_NOT_SATURATED` | BT-G4 in full (Phase 2) | limitation |
 | L-SHAPE-13 | The local state across the width (oil film, friction, metal strength, strip temperature under a hot stripe) is one-way and rests on an assumed inlet weight: differences from the healthy header only; the share of a roll temperature difference that reaches the inlet oil (default 0.5) has not been measured; nothing returns to the roll temperature; no oil spreading or carry-over; friction heat change left out; strip entry temperature and roughness uniform; the roll surface temperature is the average around the roll. | It changes no other result. | `LOCAL_STATE_COMPUTED`, `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE`, `LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE` | a measured inlet temperature across the width (A2) | limitation |
 | L-SHAPE-14 | The local sources of a hot stripe (film, metal strength, strip temperature beside the roll growth) are linear and rest on the tension feedback: summed on the linear profile before any buckling cap; force sensitivities of a constant-friction roll gap; nothing feeds back; no evidence item reads them. | The sign of the film term against the roll growth, and so of the net band, depends on the assumed inlet weight in the first tens of seconds after a valve change. | `LOCAL_SOURCES_COMPUTED`, `LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT`, `LOCAL_SOURCES_REVERSE_A_BAND`, `LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED`, `LOCAL_NET_INCOMPLETE_TERM_MISSING`, `LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE` | a measured inlet weight; feedback to the roll temperature (A2, I1) | limitation |
+| L-SHAPE-16 | Buckling with a search over wavelengths (a case option) is a linear bifurcation of a flat, infinitely long strip with free edges, run on the modelled flatness profile (not a measured one) before the band-wise cap: one mode per profile, the most critical; longitudinal stress only, no lateral stress or shear; elastic; no wave height. After release the half-wave is searched up to the strip width (a square sample, an analyst choice) and the mode is nearly always a whole-sheet mode. It changes no band state or score; the standard states stay the ones the shortlist uses. | Tension raises the critical load and shortens and localises the waves, but the half-wave stays about 0.8 of the mode width against the measured 0.36 to 0.40 of the buckle width (part 5): about twice too long. When the mode waves, only the band it peaks in is decided; the other bands read "not decided (one mode)". | `BUCKLING_FE_REPORTED_BESIDE_SINE_MODE`, `BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE`, `BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE`; `width.shape.buckling_fe` | wave height and stress after buckling (G4, Phase 2 package 7); a measured stress profile and wavelength | limitation |
 | L-SHAPE-15 | The crown screens use one centre-minus-edge number (no profile shape or edge drop) and an empirical wide-strip criterion without alloy dependence (its source is inconsistent about the sign); lateral flow uses one constant; the spectrum treats the window as periodic. | Size not known. | `screens`, `width.shape` | G3, G15 | limitation |
 
 ### 2.6 Measurement (shapemeter, thickness gauge)
 
 | id | what the tool assumes or cannot do | what it means for a reader | how the result shows it | what would lift it | kind |
 |---|---|---|---|---|---|
-| L-MEAS-01 | Shapemeter readings are zone means of the modelled stress profile, not a forecast of the operator's screen: no roll wrap, noise, calibration, temperature compensation, dynamics or filter; the stress still evolves between roll gap and shapemeter; a buckled band no longer carries the stress the linear profile gives it. The readings never enter the evidence. | A narrow or weak band may not show in a zone. | `SHAPEMETER_OPERATOR_APPLIED`, `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD`, `SHAPEMETER_DOES_NOT_COVER_STRIP` | the vendor's own processing (G5) | limitation |
+| L-MEAS-01 | Shapemeter readings are zone means of the modelled stress profile, not a forecast of the operator's screen: no roll wrap, noise, calibration, temperature compensation, dynamics or filter; the stress still evolves between roll gap and shapemeter; a buckled band no longer carries the stress the linear profile gives it. The operator applies no flatness controller and does not predict what the plant's control would have done (the tool's own spray loop is a separate case option, L-LOOP-01). The readings never enter the evidence. | A narrow or weak band may not show in a zone. | `SHAPEMETER_OPERATOR_APPLIED`, `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD`, `SHAPEMETER_DOES_NOT_COVER_STRIP` | the vendor's own processing (G5) | limitation |
 | L-MEAS-02 | Spreading of a zone's signal to its neighbours is the tool's reading of one vendor sentence (at most 2 × 12.5 %); the vendor algorithm was not read; off by default. | Size not known. | `SHAPEMETER_NEIGHBOUR_SPREADING_APPLIED` | the vendor's description | analyst choice |
 | L-MEAS-03 | A shapemeter that corrects for strip temperature is taken to show the flatness without the temperature part; a specific vendor's compensation is not modelled. | Size not known. | `SHAPEMETER_TEMPERATURE_COMPENSATED` | G6 | limitation |
 | L-MEAS-04 | The thickness gauge keeps a fraction of a mark through a spot average and a first-order lag only; real gauges have other filters (scanning frames, digital filters, noise); no calibration; the accelerometer position and detection lead time are not built. | Size of the other filters not known. | `GAUGE_TRANSFER_APPLIED`, `GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK`, `LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE` | C7 in full | limitation |
@@ -295,6 +296,8 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `HILL_TOL` | 0.02 of the shear strength | half-space roll gap | friction-hill bounds | numerical |
 | `SPECTRUM_FLAG_FRACTION` | 0.05 | strip shape | short-wavelength flag | sets a flag |
 | `FEEDBACK_BASIS` | rule | strip shape | the planner's exit-tension feedback (L-SHAPE-02) | two orders of magnitude (part 3) |
+| `BASIS` (strip buckling) | rule | wavelength search | the energy, element and search method the project derived (no equations in the reports) | closed forms recovered (L-SHAPE-16) |
+| `RELEASED_SAMPLE_LENGTH_FACTOR` | 1 × strip width | wavelength search after release | the longest half-wave searched (a square sample) | the mode sits at this limit (L-SHAPE-16) |
 | `LOCAL_RELEASED_WIDTH_FACTOR` | 2 | after-release local mode | the local buckle's width limit (L-SHAPE-04) | not reported |
 
 Not caught by the search:
@@ -311,6 +314,7 @@ Not caught by the search:
 | `MARGINAL_FORWARD_SLIP` | 0.005 | forward-slip screen | a marginal slip | - |
 | `EDGE_OR_CENTRE_FRACTION` | 15 % | lengthwise rules | edge or centre band | - |
 | `PLATE_BUCKLING_COEFFICIENT` | 4 (from memory) | buckling | the buckle mode | L-SHAPE-03 |
+| `BF_MAX_EVENTS` | 4 | wavelength search | events searched besides the steady profile (run time) | later events are counted, not searched |
 | `FIXED_FREQUENCY_MIN_SLOPE`, `SPEED_INDEPENDENT_MAX_ABS_SLOPE` | 0.7, 0.3 | pitch-speed law | the pitch-exponent bands | - |
 | `POSITION_TOLERANCE_DEFAULT_M` | 10 mm | lengthwise rules | position match | - |
 | evidence weights | supports 3/2/1, contradictions 6/2/1 | every hypothesis | strong / moderate / weak | L-DATA-02 |
@@ -323,7 +327,7 @@ Not caught by the search:
 ## 5. Recorded discrepancies with published values
 
 <!-- BEGIN GENERATED BLOCK: discrepancies (python -m physicroll.limitations --write docs/limitations.md; do not edit by hand) -->
-The benchmark harness records 95 project values in 23 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 21 record a project value for which no published value exists. The other 68 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
+The benchmark harness records 115 project values in 26 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 27 record a project value for which no published value exists. The other 82 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
 
 | case | quantity | unit | project | reference | ratio | verdict | in plain words |
 |---|---|---|---|---|---|---|---|
@@ -395,13 +399,27 @@ The benchmark harness records 95 project values in 23 cases. 6 carry the verdict
 | SS-V8-LOOP | `final_largest_zone_residual` | I-units | 3.252 | 6 | 0.5419 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
 | A6-ZONE-TIME-CONSTANT | `time_constant_20s_test_roll_growth_only` | s | 43.43 | 20 | 2.171 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
 | A6-ZONE-TIME-CONSTANT | `time_constant_20s_test_as_measured_hot` | s | 34.47 | 20 | 1.724 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-LOCAL-PLATE | `critical_i_units_simply_supported` | I | 5.341 | 5.3 | 1.008 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-LOCAL-PLATE | `critical_i_units_clamped` | I | 8.649 | 8.92 | 0.9696 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-LOCAL-PLATE | `half_wave_simply_supported_m` | m | 0.1495 | 0.06 | 2.491 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-LOCAL-PLATE | `half_wave_clamped_m` | m | 0.09956 | 0.06 | 1.659 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-WIDE-STRIP | `critical_peak_i_units_10_mpa` | I | 12.3 | 7.5 | 1.64 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-WIDE-STRIP | `half_wave_m_10_mpa` | m | 0.1767 | 0.06 | 2.946 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-WIDE-STRIP | `half_wave_over_mode_width_10_mpa` | 1 | 0.8033 | 0.4 | 2.008 | `RECORDED_DISCREPANCY` | does not match the published value |
+| SS-V2-WIDE-STRIP | `critical_peak_i_units_30_mpa` | I | 27.22 | 7.5 | 3.629 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-WIDE-STRIP | `half_wave_m_30_mpa` | m | 0.1288 | 0.06 | 2.147 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V2-WIDE-STRIP | `half_wave_over_mode_width_30_mpa` | 1 | 0.8052 | 0.4 | 2.013 | `RECORDED_DISCREPANCY` | does not match the published value |
+| SS-V3-WIDE-STRIP | `half_wave_m_5_mpa` | m | 0.09165 | 0.0375 | 2.444 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V3-WIDE-STRIP | `half_wave_over_mode_width_5_mpa` | 1 | 0.7969 | 0.3571 | 2.231 | `RECORDED_DISCREPANCY` | does not match the published value |
+| SS-V3-WIDE-STRIP | `half_wave_m_15_mpa` | m | 0.06887 | 0.0375 | 1.837 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
+| SS-V3-WIDE-STRIP | `half_wave_over_mode_width_15_mpa` | 1 | 0.8102 | 0.3571 | 2.269 | `RECORDED_DISCREPANCY` | does not match the published value |
 
 Cases not encoded, with the reason:
 
 - BT-V4: film ratio encoded as BT-V4-FILM; load and slip curves need digitising and a friction distribution through the bite.
 - BT-V9: the published rows give forward slip without load, flow stress or tension values, so the friction identification of BT-G6 (force required) cannot give a friction per row.
-- SS-V1: needs the buckling model of G4.
-- SS-V4: needs the buckling model of G4.
+- SS-V1: geometry and temperatures are in the study; the bifurcation force is not, so there is nothing to compare.
+- SS-V4: needs the stress profile of the paper.
 - SS-V5: needs the roll profiles of the paper.
 - SS-V11: already encoded: physicroll/literature.py, tests/test_literature.py (cross-reference only).
 - A2-LOCAL-SOURCES: no published case of a film or flow-stress band exists (gap study, I2).
@@ -455,7 +473,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | G1 | The roll stack: deflection, roll-to-roll contact, bending, tilt, shifting, ground camber. | 3 |
 | G2 | The closed-gap (roll-kiss) shape path for foil. | 3 |
 | G3 | A strip model coupled across the width. | 2 and 3 |
-| G4 | Buckling with a wavelength search under tension, after buckling, and the stress cap. | 2 |
 | G7 | Thermal camber at the strip edge and edge actuators. | 3 |
 | G9 | A winding model beyond the linear stack. | 2 |
 | G10 | Air entrainment and the ironing roll. | 2 |
@@ -489,6 +506,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B4 | An anisotropic yield law in the roll gap. |
 | C4 | The amplitude of grinder marks on foil rolls; marks as a forced-response and wear problem. |
 | C7 | The accelerometer position and detection lead time; gauge filters beyond a spot and a lag. |
+| G4 | Wave height after buckling, the stress cap of a buckled band, the dead load on a table; interaction of several modes; lateral stress and shear. |
 | G5 | The plant's own flatness controller; bending, tilt and vendor rules; feed-forward; shapemeter dynamics and temperature compensation. |
 | G6 | A computed strip temperature; a vendor's temperature compensation. |
 | G8 | Published roll time constants to compare the model's own with. |
@@ -537,6 +555,9 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `BITE_MODEL_MATTRESS` | The experimental foil roll-gap model was chosen for every pass. | L-BITE-02 |
 | `BITE_RESPONSE_SUPPLIED` | The roll-gap values were supplied from outside. | informational |
 | `BITE_TEMPERATURE_NOT_AVAILABLE_REFERENCE_USED` | Without rolling-oil data the bite temperature is unknown; the reference temperature of your factor was used. | L-MAT-01 |
+| `BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE` | For at least one band the wavelength search and the standard rule disagree on whether the strip waves in the mill; the shortlist uses the standard rule. | L-SHAPE-16 |
+| `BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE` | For at least one band, or for the whole sheet, the wavelength search and the standard rule disagree on whether the strip waves after the tension is released; the shortlist uses the standard rule. | L-SHAPE-16 |
+| `BUCKLING_FE_REPORTED_BESIDE_SINE_MODE` | Beside the standard band states, the page shows at which band height the strip would start to wave and how long the waves would be, from a search over wavelengths on the modelled flatness; the standard states are the ones the shortlist uses. | L-SHAPE-16 |
 | `CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE` | The roll force the model finds for this pass lies outside the range reported for battery-foil passes, so its roll-gap results are not credible and are left out of the scoring. | L-BITE-14 |
 | `CASE_PASS_OUTSIDE_PUBLISHED_PRODUCT_RANGE` | A pass lies outside the published range for the chosen product. | L-DATA-05 |
 | `CASE_STRENGTH_BELOW_STANDARD_MINIMUM_FOR_GAUGE` | The strength entered is below the published minimum for this gauge. | L-DATA-05 |

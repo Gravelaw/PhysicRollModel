@@ -351,7 +351,8 @@ COOLANT_KEYS = ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_
                 'assumed_excess_temperature_k')
 OPTION_KEYS = ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
                'bite_response_override')
-OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity', 'shear_cap_factor')
+OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity', 'shear_cap_factor', 'buckling_model')
+BUCKLING_MODELS = bw.BUCKLING_MODELS
 OBS_KEYS = ('orientation', 'pitch_observations', 'faces', 'gauge_variation_detected',
             'gauge_variation_amplitude_m', 'first_seen', 'disappears_after_work_roll_change',
             'disappears_after_backup_roll_change', 'onset_above_exit_speed_m_s',
@@ -526,6 +527,10 @@ def validate_case(case):
             raise ValueError('model_options.thermal_sensitivity must be one of '
                              f'{band_thermal.MODES}')
         out['model_options']['thermal_sensitivity'] = o['thermal_sensitivity']
+    if 'buckling_model' in o:           # kept only when given (results without it unchanged)
+        if o['buckling_model'] not in BUCKLING_MODELS:
+            raise ValueError(f'model_options.buckling_model must be one of {BUCKLING_MODELS}')
+        out['model_options']['buckling_model'] = o['buckling_model']
     if 'shear_cap_factor' in o:         # kept only when given (results without it unchanged)
         cap = o['shear_cap_factor']
         if isinstance(cap, bool) or not isinstance(cap, (int, float)) or \

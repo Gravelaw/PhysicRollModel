@@ -287,6 +287,8 @@ VALLEY_MODEL_WORDS = {'constant': 'Constant (default)',
                                           'stress)'}
 PRESSURE_LAW_WORDS = {'barus': 'Standard rule (exponential rise, default)',
                       'roelands': 'Textbook rule (Roelands; did worse on the only data)'}
+BUCKLING_MODEL_WORDS = {'sine_mode': 'Standard',
+                        'sine_mode_and_fe': 'Standard plus wavelength search'}
 THERMAL_SENS_WORDS = {'off': 'Off', 'partition': 'Heat share only (default)',
                       'full': 'Heat share and spray coefficient (slow)'}
 CONSTRAINT_WORDS = {'axially_free': 'Free to expand along the barrel',
@@ -945,6 +947,12 @@ MILL_QUESTIONS = (
        'Flattening limit', 'Keep the default.', unit='ratio', group='Model settings'),
     _m('cells', 'model_options.cells', 'number', 'Roll-gap cells', 'Keep the default.',
        unit='count', group='Model settings'),
+    _m('buckling_model', 'model_options.buckling_model', 'choice',
+       'Also compute waves with a wavelength search?',
+       'Slower (about a second). Adds the band height at which the strip would start to wave '
+       'and the wavelength, in the mill and after release, beside the standard result; the '
+       'standard result is unchanged.',
+       choices=_choices(bd.BUCKLING_MODELS, BUCKLING_MODEL_WORDS), group='Model settings'),
     _m('thermal_sensitivity', 'model_options.thermal_sensitivity', 'choice',
        'Heat-share sensitivity table', 'How much is recomputed for the sensitivity table. The '
        'quick run turns it off.', choices=_choices(bthermal.MODES, THERMAL_SENS_WORDS),
@@ -2669,6 +2677,19 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'BUCKLING_FE_REPORTED_BESIDE_SINE_MODE': (
+        'Beside the standard band states, the page shows at which band height the strip would '
+        'start to wave and how long the waves would be, from a search over wavelengths on the '
+        'modelled flatness; the standard states are the ones the shortlist uses.',
+        'Compare the wavelength with the waves you see.'),
+    'BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE': (
+        'For at least one band the wavelength search and the standard rule disagree on whether '
+        'the strip waves in the mill; the shortlist uses the standard rule.',
+        'Read both; neither has been checked on a mill.'),
+    'BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE': (
+        'For at least one band, or for the whole sheet, the wavelength search and the standard '
+        'rule disagree on whether the strip waves after the tension is released; the shortlist '
+        'uses the standard rule.', 'Read both; neither has been checked on a sheet.'),
     'ZONE_STEP_TEST_EMULATED': (
         'The page shows which response time a test that switches one spray zone would give on '
         'this model, with and without the strip temperature and oil film effects, beside the '

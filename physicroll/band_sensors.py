@@ -60,8 +60,10 @@ HOT_LABEL_COMPENSATED = ("steady profile as measured hot: before the shapemeter'
                          'temperature compensation; a compensated system shows the mechanical '
                          'profile')
 HOT_LABEL = 'steady profile as measured hot: what the shapemeter shows'
-NO_CONTROLLER = ('NO flatness controller: the tool does not predict what the control would have '
-                 'done with these readings (gap G5, Phase 2).')
+NO_CONTROLLER = ('NO flatness controller in this section: the shapemeter operator applies no '
+                 "control and does not predict what the plant's control would have done with "
+                 'these readings. A spray-zone loop with the tool\'s own control law is a separate '
+                 'opt-in section (width.flatness_control, band-diagnosis section 7.12).')
 LIMITATIONS = (
     'Readings are zone means of the modelled far-field stress profile, not a prediction of the '
     "operator's screen.",

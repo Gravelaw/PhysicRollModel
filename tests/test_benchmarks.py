@@ -254,7 +254,8 @@ class BenchmarkTests(unittest.TestCase):
                                                      bm.RECORDED_ON_SPEC18_P7,
                                                      bm.RECORDED_ON_SPEC18_P9,
                                      bm.RECORDED_ON_SPEC19_P4,
-                                     bm.RECORDED_ON_SPEC19_P5))
+                                     bm.RECORDED_ON_SPEC19_P5,
+                                     bm.RECORDED_ON_SPEC19_P6))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -434,6 +435,57 @@ class BenchmarkTests(unittest.TestCase):
         for q in case['quantities']:
             if q['project_value'] is not None:
                 self.assertLess(abs(q['project_value'] / q['recorded_project_value'] - 1), 1e-6)
+
+    def test_ss_v2_local_plate_indicative_close_to_published_critical_values(self):
+        case = self.cases['SS-V2-LOCAL-PLATE']
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        ss = _q(case, 'critical_i_units_simply_supported')
+        cl = _q(case, 'critical_i_units_clamped')
+        self.assertEqual((ss['reference_value'], cl['reference_value']), (5.3, 8.92))
+        self.assertLess(abs(ss['project_value'] / 5.341 - 1), 5e-3)     # planner's numbers
+        self.assertLess(abs(cl['project_value'] / 8.649 - 1), 5e-3)
+        self.assertTrue(0.9 <= ss['ratio_project_to_reference'] <= 1.1)
+        self.assertTrue(0.9 <= cl['ratio_project_to_reference'] <= 1.1)
+        hs = _q(case, 'half_wave_simply_supported_m')
+        hc = _q(case, 'half_wave_clamped_m')
+        self.assertLess(abs(hs['project_value'] / 0.1494 - 1), 5e-3)
+        self.assertLess(abs(hc['project_value'] / 0.0994 - 1), 5e-3)
+        self.assertGreater(hs['ratio_project_to_reference'], 2.4)          # 2.49 x measured
+        self.assertGreater(hc['ratio_project_to_reference'], 1.6)          # 1.66 x measured
+
+    def test_ss_v2_wide_strip_recorded_discrepancy_half_wave_is_twice_the_measured_share(self):
+        case = self.cases['SS-V2-WIDE-STRIP']
+        self.assertEqual(case['verdict'], 'RECORDED_DISCREPANCY')
+        for tag, peak, half, width in (('10_mpa', 12.30, 0.1761, 0.220),
+                                       ('30_mpa', 27.22, 0.1286, 0.160)):
+            self.assertLess(abs(_q(case, f'critical_peak_i_units_{tag}')['project_value']
+                                / peak - 1), 5e-3)
+            self.assertLess(abs(_q(case, f'half_wave_m_{tag}')['project_value'] / half - 1),
+                            5e-3)
+            self.assertLess(abs(_q(case, f'mode_width_10_percent_m_{tag}')['project_value']
+                                / width - 1), 5e-3)
+            r = _q(case, f'half_wave_over_mode_width_{tag}')
+            self.assertEqual(r['row_verdict'], 'RECORDED_DISCREPANCY')
+            self.assertAlmostEqual(r['reference_value'], 0.4)
+            self.assertGreater(r['ratio_project_to_reference'], 1.9)       # about 2.0
+
+    def test_ss_v3_wide_strip_recorded_discrepancy_half_wave_share(self):
+        case = self.cases['SS-V3-WIDE-STRIP']
+        self.assertEqual(case['verdict'], 'RECORDED_DISCREPANCY')
+        for tag, peak, half, width in (('5_mpa', 18.85, 0.0919, 0.115),
+                                       ('15_mpa', 42.80, 0.0689, 0.085)):
+            self.assertLess(abs(_q(case, f'critical_peak_i_units_{tag}')['project_value']
+                                / peak - 1), 5e-3)
+            self.assertLess(abs(_q(case, f'half_wave_m_{tag}')['project_value'] / half - 1),
+                            5e-3)
+            self.assertLess(abs(_q(case, f'mode_width_10_percent_m_{tag}')['project_value']
+                                / width - 1), 5e-3)
+            r = _q(case, f'half_wave_over_mode_width_{tag}')
+            self.assertEqual(r['row_verdict'], 'RECORDED_DISCREPANCY')
+            self.assertGreater(r['ratio_project_to_reference'], 2.0)
+        reasons = {e['id']: e['reason'] for e in self.result['not_encoded']}
+        self.assertIn('bifurcation force is not', reasons['SS-V1'])
+        self.assertIn('stress profile of the paper', reasons['SS-V4'])
 
     def test_tm_la19_heat_split_inside_measured_range(self):
         case = self.cases['TM-LA19-HEAT-SPLIT']

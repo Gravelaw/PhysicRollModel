@@ -1347,6 +1347,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
 | `tribology.friction_closure.model: "load_sharing_curve"`, `contact_friction`, `valley_model`, `contact_ratio_curve`, `valley_film_curve` | the second friction law (section 8.1); the contact friction is REQUIRED with it; the curves default to the published foil pass | – | contact friction from your measured force, torque or slip, or a strip-drawing test; no default |
 | `tribology.lubricant.viscosity_table`, `pressure_law`, `roelands_z`, `eyring_stress_pa`, `eyring_stress_pressure_coefficient`, `limiting_shear_stress_pa`, `limiting_shear_pressure_coefficient` | oil viscosity at several temperatures (list of `{"temperature_k", "viscosity_pa_s"}`); the pressure law (`barus` default, `roelands` option); the oil's Eyring and limiting shear stress (no defaults) | K, Pa s, Pa, – | oil supplier data sheet; the shear stresses only from oil tests (section 8.1) |
+| `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
@@ -2261,9 +2262,10 @@ the positions it explains.
 `physicroll/band_sensors.py` (SPEC17 package 4; gap rows C7 zone part, G5 sensor part, X9).
 With the optional case section `measurement.shapemeter` the result gains
 `measurement.shapemeter`: what each zone of a flatness roll with that zone width **would show**
-for every modelled band. It is a measurement operator only: **no flatness controller** is
-modelled (no actuator fitting, no valve logic; G5, Phase 2), so the tool does not predict what
-the control would have done with these readings, and the readings are not a forecast of the
+for every modelled band. It is a measurement operator only: it applies **no flatness controller** (no actuator
+fitting, no valve logic), so it does not predict what the plant's control would have done with
+these readings (a spray-zone loop with the tool's own control law is the separate opt-in
+section `width.flatness_control`, section 7.12), and the readings are not a forecast of the
 operator's screen. No hypothesis reads the section.
 
 What the literature says about shapemeters [SS-S29, SS-S30 VP; SS-S31, SS-S32 EX]: zones of 26
@@ -2834,6 +2836,91 @@ against a published control band of 6 I-units on another foil mill [SS-S31 EX; M
 `INDICATIVE_ASSUMED_INPUTS`, order of magnitude only. Cost: about 6.5 s (battery-foil) and 9 s
 (lengthwise) per loop at full numerics, 0.7 s on the quick profile's grid (battery-foil
 diagnosis 17.1 s quick).
+
+### 7.13 Buckling with a wavelength search (`strip_buckling.py`)
+
+**Opt-in, beside the present states.** With `model_options.buckling_model: "sine_mode_and_fe"`
+the result gains `width.shape.buckling_fe` (absent otherwise; `"sine_mode"` gives a not-supplied
+section). The present band states (`state`, `state_after_tension_release`), onsets, gauge trend
+and every score are unchanged and stay the ones the evidence uses; the section says so in
+`used_by_the_evidence`. Post-buckling amplitude, saturated stress and dead load on a table are
+SPEC19 package 7 and are not built.
+
+**Model** `[D, re-derived in SPEC19]`; the reports describe the method [SS-S15 EX, SS-S12 AB] and
+give no equations. A long strip with a longitudinal pre-stress `sigma(z) = sigma_T +
+lambda*sigma_res(z)` across the width, mode `w = f(z)*cos(k*x)`, second variation of the plate
+energy
+
+    P(f, k) = D*Int[ f''^2 + k^4*f^2 - 2*nu*k^2*f*f'' + 2*(1 - nu)*k^2*f'^2 ] dz
+            + t*k^2*Int[ sigma(z)*f^2 ] dz
+
+The critical multiplier at one `k` is the smallest positive `lambda` of `A(k)*a =
+lambda*G(k)*a` (bending plus tension against the residual stress); the critical state is the
+minimum over `k`. Utilisation = 1/multiplier: at or above 1 the given profile waves.
+
+**Method** (standard library): Hermite cubic elements across the width (`f` and `f'` per node),
+exact 4-point Gauss integrals, free / simply supported / clamped edges, banded storage; the
+largest eigenvalue of `G*a = mu*A*a` by bisection on the inertia of `G - mu*A` (Sylvester,
+banded `L*D*L^T`), relative tolerance 1e-6; 14 wavenumbers geometric between `pi/L_long` and
+`pi/L_short`, then 10 golden-section steps in `ln k`; the mode by three inverse iterations. Cost
+one critical-mode search: 0.2-0.3 s at 120 nodes, 0.4-0.6 s at 200 nodes; in the engine
+0.25-0.3 s per profile and state (battery-foil demo with the option: 1.0 s for the steady
+profile and its event, lengthwise 1.8 s for the steady profile and two events; at most four
+events are searched).
+
+**Closed forms recovered** (`tests/test_strip_buckling.py`): uniform compression of a long plate
+with simply supported edges, `4*pi^2*D/(t*b^2)` = 8435559.3 Pa for steel 0.5 mm, 150 mm: 1.9e-7
+relative with 16 elements (8.8e-6 with 8), half-wave `b`; the same with 20 MPa tension, shifted by
+exactly the tension (7e-8); clamped edges, coefficient 6.971 and half-wave 0.661 `b` against the
+textbook 6.97 and 0.66 [M]; simply supported / free at a half-wave of 20 `b`, 0.42796 against
+`0.425 + (b/a)^2` = 0.4275 [M].
+
+**In the engine.** The profile is `i_units_linear_feedback` of the steady shape and of each
+event's peak shape (the modelled far-field profile before the band-wise saturation, not a
+measured one), `sigma_res = -E*1e-5*I` on a node grid of at least 10 mm, free strip edges. In
+the mill: the exit tension held fixed, half-waves from four node spacings to twice the strip
+width. After release: tension zero, half-waves up to the strip width (`RELEASED_SAMPLE_LENGTH_FACTOR`
+1.0, an analyst choice: a square sample). Per profile and state: utilisation, critical peak,
+half-wave and wavelength, mode peak, mode width at 10 % and 50 % of its peak, `LOCAL` or
+`WHOLE_SHEET`. Per present band: its sine-mode states beside what the search says. The search
+gives ONE mode, the most critical: when it waves, the band it peaks in is "waves" and the other
+bands are "not decided (one mode)"; when it does not, every band is flat. After release the mode
+is nearly always a whole-sheet mode at the longest half-wave searched; it is compared with the
+sine mode's whole-sheet indicator (`released_global_status`), not with a band. A disagreement
+is written per band ("the wavelength search says ..., the sine mode says ...; the evidence uses
+the sine mode") and flagged (`BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE`,
+`BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE`); `BUCKLING_FE_REPORTED_BESIDE_SINE_MODE` is
+always set.
+
+| demo (committed profiles) | in the mill | after release |
+|---|---|---|
+| battery-foil (30 µm, 40 MPa, peak 25.09 I-units) | utilisation 0.435, flat; half-wave 40 mm (the shortest searched), mode 30 mm wide at 0.623 m; the sine mode also says latent: agree | whole-sheet mode, utilisation 29810 (search limit 1.19 m); the sine mode's whole-sheet indicator also buckles |
+| lengthwise (0.21 mm, 30 MPa, peak 50.59) | utilisation 1.113, waves; half-wave 107 mm, mode 130 mm wide at 0.672 m, in the band the sine mode calls buckled: agree; the two tight bands are not decided | whole-sheet mode, utilisation 1800 (search limit 1.49 m) |
+
+**Finding (SPEC19 finding 3), unsoftened: linear buckling under tension does not reproduce the
+measured short wavelengths.** For SS-V2 (steel 0.5 x 1000 mm) and SS-V3 (aluminium 0.3 x
+270 mm) a Gaussian loose band in a free-edged strip under tension buckles with a half-wave of
+0.80 to 0.81 of the width over which the mode exceeds 10 % of its peak; the measurements are 0.40
+and 0.36 of the buckle width, the present sine mode 1.0. The model is closer, not close. As a
+LOCAL plate of the buckle width (150 mm) with a Gaussian compression of half-peak width 75 mm (an
+assumption), it gives 5.34 I-units simply supported and 8.65 clamped against the published 5.3
+and 8.92, with half-waves 2.49 and 1.66 times the measured one: the published critical values are
+local-plate values without tension. Without tension both wide strips buckle in the longest
+half-wave searched (a whole-sheet mode) at 0.7 and 1.6 I-units. No benchmark row supports
+replacing the present band states; the new model is reported beside them.
+
+| benchmark | inputs (ASSUMED where not in the reports) | project | reference | verdict |
+|---|---|---|---|---|
+| `SS-V2-LOCAL-PLATE` | steel 0.5 mm, E 210 GPa, nu 0.3 (ASSUMED), plate 150 mm, no tension, Gaussian compression of half-peak width 75 mm (ASSUMED), 60 elements | 5.341 / 8.649 I-units (simply supported / clamped); half-waves 149.5 / 99.6 mm | 5.3 / 8.92 computed [SS-S19 FT, formulas garbled]; half-wave 60 mm measured | `INDICATIVE_ASSUMED_INPUTS`; ratios 1.008 / 0.970; half-waves 2.49 / 1.66 times the measured |
+| `SS-V2-WIDE-STRIP` | the same strip 1000 mm wide, free edges, mean-free Gaussian loose band of half-peak width 75 mm, tension 10 / 30 MPa (ASSUMED), 200 elements | critical peak 12.30 / 27.22 I-units; half-wave 176.7 / 128.8 mm; mode width 220 / 160 mm; ratio 0.80 / 0.81 | waves at 7.5-8 I-units; half-wave 60 mm on a 150 mm buckle (0.40) | `RECORDED_DISCREPANCY` (ratio about 2.0 times the measured) |
+| `SS-V3-WIDE-STRIP` | aluminium 0.3 mm, E 70 GPa, nu 0.33, 270 mm wide, free edges, half-peak width 50 mm, tension 5 / 15 MPa (ASSUMED), 108 elements | critical peak 18.85 / 42.80 I-units; half-wave 91.6 / 68.9 mm; mode width 115 / 85 mm; ratio 0.80 / 0.81 | buckle width 105 mm, wavelength about 75 mm (0.357) | `RECORDED_DISCREPANCY` |
+
+`SS-V1` stays not encoded (geometry and temperatures are in the study; the bifurcation force is
+not); `SS-V4` needs the stress profile of the paper. Not used by any band state, onset, gauge
+trend row or evidence item. Limits: linear bifurcation of a flat, infinitely long strip; one
+mode; longitudinal pre-stress only (no lateral stress, no shear); elastic; the wavelength of a
+wave seen after buckling can differ from the critical one; no edge restraint "between simply
+supported and clamped" (the published one is not in the reports).
 
 ## 8. Process models
 
@@ -3504,6 +3591,10 @@ recorded only; the case verdict is unchanged):
 | `SS-V2` | critical I-units | 4.01693 | 8.92 clamped (FT) | 0.450329 | `INDICATIVE_ASSUMED_INPUTS` |
 | `SS-V2` | half-wave [m] | 0.15 | 0.06 measured (FT) | 2.5 | `INDICATIVE_ASSUMED_INPUTS` |
 | `SS-V3` | half-wave [m] | 0.105 | 0.0375 (half of about 75 mm measured, FT) | 2.8 | `RECORDED_DISCREPANCY` |
+| `SS-V2-LOCAL-PLATE` | critical I-units, simply supported / clamped | 5.34112 / 8.64894 | 5.3 / 8.92 (FT) | 1.00776 / 0.969612 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2-LOCAL-PLATE` | half-wave [m], simply supported / clamped | 0.149457 / 0.0995553 | 0.06 measured (FT) | 2.49095 / 1.65926 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2-WIDE-STRIP` | half-wave / mode width (10 %), 10 / 30 MPa | 0.803347 / 0.805223 | 0.4 measured (FT) | 2.00837 / 2.01306 | `RECORDED_DISCREPANCY` (critical peak 12.3003 / 27.2209 I-units against 7.5 and half-waves, `INDICATIVE_ASSUMED_INPUTS`; section 7.13) |
+| `SS-V3-WIDE-STRIP` | half-wave / mode width (10 %), 5 / 15 MPa | 0.796932 / 0.810249 | 0.357 measured (FT) | 2.23141 / 2.2687 | `RECORDED_DISCREPANCY` (section 7.13) |
 | `TM-LC7`* | equivalent Coulomb friction | 0.0265664 | - (substitution 2) | - | `NO_REFERENCE_VALUE` |
 | `TM-LC7`* | separating force [N] | 4.10437e6 | - | - | `NO_REFERENCE_VALUE` |
 | `TM-LC7`* | forward slip | 0.0293589 | - | - | `NO_REFERENCE_VALUE` |
@@ -4132,6 +4223,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
 | flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
 | grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
 | local sources / `tests/test_band_local_sources.py` | a single sinusoid of friction gives `-1e5*xi*G(lam)*M_mu*dmu/h` to 1e-9 with the feedback and compliance only (compliance only larger); signs (more friction tight, softer metal loose, hotter fibre loose); zero changes give zero terms and the net equals the roll term; sums; a missing term named and "the net is incomplete"; the sign words; on a coarse case with a valve event: the section, event rows with the key and not-supplied rows without it, event histories and every other result identical, the report block only with the key and without `nan`; the battery-foil artifact against the planner's peaks (15 %, the flow-stress term 20 %) and pinned to 1e-6 |
@@ -4224,6 +4316,12 @@ guide's own list.
   feedback with an approximate band-wise saturation step (one scale factor, no iteration), no
   roll bending, no entry-tension redistribution, no post-buckling relief, a single assumed
   buckle mode (Rayleigh quotient, k = 4 [M]), stresses above yield indicative only.
+- **Buckling with a wavelength search (opt-in, section 7.13) does not reproduce the measured
+  short wavelengths**: its half-wave is about 0.8 of the mode width against the measured 0.36 to
+  0.40 of the buckle width (`SS-V2-WIDE-STRIP`, `SS-V3-WIDE-STRIP`, recorded discrepancies); as a
+  local plate it gives 5.34 / 8.65 I-units against the published 5.3 / 8.92 with half-waves 2.5 /
+  1.7 times the measured one. One linear mode on the modelled (not measured) far-field profile,
+  no amplitude; reported beside the present states, which the evidence keeps using.
 - **After-release whole-sheet mode** is an upper-bound indicator, not a band prediction; the
   local mode's width limit (2 x half-peak width) is an analyst choice.
 - **Sharp-edged stripes** can lock the local released width onto an edge spike and report
@@ -4248,8 +4346,9 @@ guide's own list.
 - **Thickness gauge transfer** keeps about a fraction of a mark: a spot average and a
   first-order lag only; real gauges have other filters; the evidence is not changed when the
   gauge cannot resolve the observed pitch (flag only); no accelerometer model (section 11.6).
-- **Shapemeter readings are zone means of a model**: no flatness controller (the tool does not
-  predict what the control would have done), no shapemeter dynamics, filter, noise,
+- **Shapemeter readings are zone means of a model**: the shapemeter operator applies no flatness
+  controller (it does not predict what the plant's control would have done; the spray-zone loop
+  of section 7.12 is a separate opt-in section), no shapemeter dynamics, filter, noise,
   calibration or temperature compensation; neighbour spreading is an interpretation of one
   vendor sentence and off by default (section 7.6).
 - **Spray-coefficient basis not established**: the model's coefficient is a circumferential
@@ -4434,6 +4533,12 @@ Roll thermal: Yamaguchi et al. (2016) ISIJ Int., doi:10.2355/isijinternational.i
 Li et al. (2024) Metals 14(2):166; Dohmae & Okamura (2012) Trans. SICE 48(4),
 doi:10.9746/sicetr.48.193; Yin et al. (2003) (abstract only); Innoval roll-cooling blogs
 (coolant unspecified).
+
+Buckling with a wavelength search (section 7.13): Rammerstorfer, Fischer & Friedl (2001) J.
+Appl. Mech. 68:399 [SS-S12 AB]; Fischer, Rammerstorfer & Friedl (2003) J. Appl. Mech.,
+doi:10.1115/1.1532322 [SS-S13 AB]; Kpogan & Potier-Ferry (2014) Key Eng. Mater. 611-612:221
+[SS-S15 EX]; Dai, Zhang & Qin (2011) Engineering Mechanics 28(10):236 [SS-S19 FT, formulas
+garbled]; the closed-form coefficients 6.97 and 0.425 are textbook values [M].
 
 Strip shape: Johnson, Contact Mechanics s13.2 (second-hand); Qu et al. (2025) ISIJ Int. 65(9),
 doi:10.2355/isijinternational.isijint-2024-371; Li et al. (2022) Int. J. Adv. Manuf. Technol.,

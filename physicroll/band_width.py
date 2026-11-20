@@ -3992,6 +3992,187 @@ def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
                              'protocol is recorded]'},
             'flags': flags, 'limitations': list(ZT_LIMITATIONS)}
 
+# ======================================== buckling with a wavelength search (SPEC19 package 6, G4)
+BUCKLING_MODELS = ('sine_mode', 'sine_mode_and_fe')
+BF_STATUS = 'UNVALIDATED_LINEAR_BUCKLING_BESIDE_THE_SINE_MODE'
+BF_FLAG_BESIDE = 'BUCKLING_FE_REPORTED_BESIDE_SINE_MODE'
+BF_FLAG_MILL = 'BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE'
+BF_FLAG_RELEASED = 'BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE'
+BF_TOP_FLAGS = (BF_FLAG_BESIDE, BF_FLAG_MILL, BF_FLAG_RELEASED)
+RELEASED_SAMPLE_LENGTH_FACTOR = 1.0   # [D, analyst choice: a square sample] longest half-wave
+BF_MAX_EVENTS = 4                     # events with a peak shape searched (run-time budget)
+BF_USED_BY_EVIDENCE = ('the present (sine-mode) band states: state and '
+                       'state_after_tension_release of width.shape; this section changes no '
+                       'state, onset, gauge-trend row or score')
+BF_LIMITATIONS = (
+    'Linear bifurcation of a flat, infinitely long strip with free edges: critical load, '
+    'wavelength and mode only; no wave height and no stress after buckling (SPEC19 package 7).',
+    'One mode per profile and state: the most critical one. When it buckles, other bands are '
+    'not decided by this section.',
+    'The stress profile is the modelled far-field profile of the case pass (linear exit-tension '
+    'feedback, before the band-wise saturation), not a measured one; longitudinal stress only, '
+    'no lateral stress, no shear; elastic.',
+    'After release: tension zero and half-waves up to the strip width (a square sample, an '
+    'analyst choice); no dead load and no finite sample length. The mode is nearly always at '
+    'the longest half-wave searched (a whole-sheet mode).',
+    'On the published local buckles (SS-V2, SS-V3) the half-wave is about twice the measured '
+    'share of the buckle width (benchmarks SS-V2-WIDE-STRIP, SS-V3-WIDE-STRIP): not validated.',
+)
+
+
+def _bf_profile(prof):
+    """Nodes on a >= ONSET_GRID_M grid (every n-th sample) and the residual stress."""
+    z = prof['z_m']
+    iu = prof['i_units_linear_feedback']
+    step = max(1, int(math.ceil(ONSET_GRID_M / (z[1] - z[0]) - 1e-9))) if len(z) > 1 else 1
+    while len(z[::step]) > 400:
+        step += 1
+    return z[::step], iu[::step]
+
+
+def _bf_state(z, iu, sp, tension, longest, label):
+    from . import strip_buckling as sb
+    E = sp['strip_youngs_modulus_pa']
+    s = [-E * 1e-5 * v for v in iu]
+    spacing = min(b - a for a, b in zip(z, z[1:]))
+    r = sb.critical_mode(z, s, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                         poisson_ratio=sp['strip_poisson_ratio'], mean_tension_pa=tension,
+                         edges=('free', 'free'), half_wave_range_m=(4 * spacing, longest))
+    out = {'mean_tension_pa': tension, 'status': r['status'],
+           'critical_multiplier': r['critical_multiplier'], 'utilisation': r['utilisation'],
+           'state': ('NO_COMPRESSION' if r['critical_multiplier'] is None else
+                     'BUCKLES' if r['utilisation'] >= 1.0 else 'FLAT'),
+           'half_wave_range_m': r['half_wave_range_m'], 'flags': r['flags'],
+           'at_search_limit': r['at_search_limit']}
+    if r['critical_multiplier'] is None:
+        return out
+    lam = r['critical_multiplier']
+    i0 = min(range(len(s)), key=lambda i: s[i])
+    out.update({
+        'critical_profile_peak_loose_i_units': lam * max(iu),
+        'critical_net_stress_at_most_compressed_fibre_pa': tension + lam * s[i0],
+        'half_wavelength_m': r['half_wavelength_m'], 'wavelength_m': 2 * r['half_wavelength_m'],
+        'mode_peak_position_m': r['mode_peak_position_m'],
+        'mode_width_10_percent_m': r['mode_width_10_percent_m'],
+        'mode_width_50_percent_m': r['mode_width_50_percent_m'],
+        'half_wave_over_mode_width': r['half_wave_over_mode_width'],
+        'mode_localisation': ('LOCAL' if r['mode_width_10_percent_m'] < 0.5 * (z[-1] - z[0])
+                              else 'WHOLE_SHEET')})
+    return out
+
+
+def _bf_band_rows(bands, mill, rel):
+    """Per present band: its sine-mode states beside what the wavelength search says."""
+    rows = []
+    for b in bands:
+        row = {'start_m': b['start_m'], 'end_m': b['end_m'], 'peak_position_m': b.get(
+            'peak_position_m'), 'peak_i_units': b['peak_i_units'], 'sense': b.get('sense'),
+            'sine_mode_state': b['state'],
+            'sine_mode_state_after_tension_release': b['state_after_tension_release'],
+            'sine_mode_buckling_utilisation': b.get('buckling_utilisation')}
+        for key, st, present, manifest in (
+                ('in_mill', mill, b['state'], 'MANIFEST_BUCKLE'),
+                ('after_release', rel, b['state_after_tension_release'],
+                 'MANIFEST_AFTER_TENSION_RELEASE')):
+            governs = (st.get('mode_peak_position_m') is not None
+                       and b['start_m'] <= st['mode_peak_position_m'] <= b['end_m'])
+            if st['state'] in ('FLAT', 'NO_COMPRESSION'):
+                fe = 'FLAT'
+            elif st.get('mode_localisation') == 'WHOLE_SHEET':
+                fe = 'WHOLE_SHEET_MODE_NOT_A_BAND'   # compare released_global_status instead
+            elif governs:
+                fe = 'BUCKLES'
+            else:
+                fe = 'NOT_DECIDED_ONE_MODE'
+            agrees = None if fe in ('NOT_DECIDED_ONE_MODE', 'WHOLE_SHEET_MODE_NOT_A_BAND') else (
+                (fe == 'BUCKLES') == (present == manifest))
+            row[key] = {'wavelength_search_state': fe, 'mode_peaks_in_this_band': governs,
+                        'agrees_with_sine_mode': agrees}
+            if agrees is False:
+                row[key]['note'] = (
+                    f'the wavelength search says {fe.lower().replace("_", " ")}, the sine mode '
+                    f'says {present.lower().replace("_", " ")}; the evidence uses the sine '
+                    'mode')
+        rows.append(row)
+    return rows
+
+
+def _bf_one(prof, sp, label):
+    z, iu = _bf_profile(prof)
+    width = z[-1] - z[0]
+    mill = _bf_state(z, iu, sp, sp['mean_tension_pa'], 2 * width, label)
+    rel = _bf_state(z, iu, sp, 0.0, RELEASED_SAMPLE_LENGTH_FACTOR * width, label)
+    bands = (prof.get('levels') or {}).get('with_feedback', {}).get('bands') or []
+    out = {'label': label, 'nodes': len(z), 'node_spacing_m': z[1] - z[0],
+           'profile_peak_loose_i_units': max(iu), 'profile_peak_tight_i_units': min(iu),
+           'in_mill': mill, 'after_release': rel, 'bands': _bf_band_rows(bands, mill, rel),
+           'sine_mode_released_global_status': prof.get('released_global_status')}
+    g = prof.get('released_global_status')
+    if rel.get('mode_localisation') == 'WHOLE_SHEET' and g is not None:
+        out['after_release_whole_sheet_agrees_with_sine_mode'] = (
+            (rel['state'] == 'BUCKLES') == (g == 'GLOBAL_BUCKLE_AFTER_RELEASE'))
+    if rel.get('mode_localisation') == 'WHOLE_SHEET':
+        out['after_release_note'] = (
+            'after release the wavelength search finds a whole-sheet mode '
+            f'({rel["state"].lower()}, utilisation {rel["utilisation"]:.3g}); compare it with '
+            'the sine mode\'s whole-sheet indicator, not with a band')
+    return out
+
+
+def buckling_fe_section(shape, events, sp, option):
+    """SPEC19 package 6: linear buckling with a wavelength search (strip_buckling) for the
+    steady profile and each event's peak shape, BESIDE the present sine-mode states. Opt-in
+    (model_options.buckling_model = 'sine_mode_and_fe'); nothing reads it."""
+    if option != 'sine_mode_and_fe':
+        return not_supplied('model_options.buckling_model is sine_mode')
+    steady = shape.get('steady')
+    if sp is None or not isinstance(steady, dict) or 'i_units_linear_feedback' not in steady:
+        return not_assessable('needs the steady flatness profile of the case pass')
+    flags = [BF_FLAG_BESIDE]
+    profiles = [_bf_one(steady, sp, 'steady')]
+    skipped = 0
+    for ev in events or []:
+        ps = ev.get('peak_shape')
+        if not isinstance(ps, dict) or 'i_units_linear_feedback' not in ps:
+            continue
+        if len(profiles) > BF_MAX_EVENTS:
+            skipped += 1
+            continue
+        profiles.append(_bf_one(ps, sp, f'event {ev.get("index")}: {ev.get("label")}'))
+    for p in profiles:
+        for row in p['bands']:
+            if row['in_mill']['agrees_with_sine_mode'] is False and BF_FLAG_MILL not in flags:
+                flags.append(BF_FLAG_MILL)
+            if row['after_release']['agrees_with_sine_mode'] is False and \
+                    BF_FLAG_RELEASED not in flags:
+                flags.append(BF_FLAG_RELEASED)
+        if p.get('after_release_whole_sheet_agrees_with_sine_mode') is False and \
+                BF_FLAG_RELEASED not in flags:
+            flags.append(BF_FLAG_RELEASED)
+        for st in (p['in_mill'], p['after_release']):
+            flags += [f for f in st['flags'] if f not in flags]
+    out = {'status': BF_STATUS, 'used_by_the_evidence': BF_USED_BY_EVIDENCE,
+           'profiles': profiles,
+           'basis': {'model': 'strip_buckling.critical_mode: ' + _sb_basis(),
+                     'stress_profile': 'width.shape i_units_linear_feedback (the modelled '
+                                       'far-field profile before the band-wise saturation), '
+                                       'sigma_res = -E*1e-5*I, on a >= 10 mm node grid',
+                     'edges': 'free (the strip edges)',
+                     'in_mill': 'the exit tension of the case pass held fixed; half-waves '
+                                'from 4 node spacings to twice the strip width',
+                     'after_release': 'tension zero; half-waves from 4 node spacings to the '
+                                      'strip width [D, analyst choice: a square sample]'},
+           'flags': flags, 'limitations': list(BF_LIMITATIONS)}
+    if skipped:
+        out['events_not_searched'] = skipped
+    return out
+
+
+def _sb_basis():
+    from . import strip_buckling as sb
+    return sb.BASIS
+
+
 def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
@@ -4238,6 +4419,17 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             shape['ridges'].append(_ridge(case, w, sp, r, z, w['coil'], shape_reason))
         except ValueError as exc:
             shape['ridges'].append({'position_m': r['position_m'], 'rejected': str(exc)})
+    bm_opt = (case.get('model_options') or {}).get('buckling_model')
+    if bm_opt is not None:
+        # SPEC19 package 6: opt-in, beside the present states (key only when the option is set)
+        try:
+            shape['buckling_fe'] = buckling_fe_section(
+                shape, ((out.get('thermal_events') or {}).get('events') or []), sp, bm_opt)
+        except (ValueError, ArithmeticError) as exc:
+            shape['buckling_fe'] = failed('shape.buckling_fe', exc)
+            out['failures'].append(shape['buckling_fe']['error'])
+        flags += [f for f in (shape['buckling_fe'].get('flags') or [])
+                  if f in BF_TOP_FLAGS and f not in flags]
     out['shape'] = shape
     try:
         a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2

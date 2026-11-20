@@ -1353,7 +1353,55 @@ def _width_section(r):
     body += _local_block(w)
     body += _roll_profile_block(r, w)
     body += _surface_cycle_block(w)
+    body += _buckling_fe_block(w)
     return head + body + '</section>'
+
+
+FE_WORDS = {'FLAT': 'flat', 'BUCKLES': 'waves', 'NO_COMPRESSION': 'no compression',
+            'NOT_DECIDED_ONE_MODE': 'not decided (one mode)',
+            'WHOLE_SHEET_MODE_NOT_A_BAND': 'whole-sheet mode, not a band'}
+
+
+def _buckling_fe_block(w):
+    """SPEC19 package 6: buckling with a wavelength search, beside the sine-mode states (only
+    with model_options.buckling_model = 'sine_mode_and_fe')."""
+    bf = _get(w, 'shape', 'buckling_fe')
+    if not isinstance(bf, dict) or bf.get('not_supplied'):
+        return ''
+    head = '<h3>Waves with a wavelength search (beside the standard states)</h3>'
+    if _bad(bf):
+        return head + _state_p('Wavelength search ' + _bad(bf))
+    rows = []
+    for p in bf.get('profiles') or []:
+        for key, label in (('in_mill', 'in the mill'), ('after_release', 'after release')):
+            st = p.get(key) or {}
+            rows.append(f'<tr><td>{_e(p["label"])}</td><td>{label}</td>'
+                        f'<td>{_e(FE_WORDS.get(st.get("state"), str(st.get("state"))))}</td>'
+                        f'<td>{_f(st.get("utilisation"))}</td>'
+                        f'<td>{_mm2(st.get("half_wavelength_m"))}</td>'
+                        f'<td>{_mm2(st.get("mode_width_10_percent_m"))}</td>'
+                        f'<td>{_f(st.get("mode_peak_position_m"), 1e3, 4, "mm")}</td>'
+                        f'<td>{_e(str(st.get("at_search_limit") or "-").lower())}</td></tr>')
+    brow = []
+    for p in bf.get('profiles') or []:
+        for b in p.get('bands') or []:
+            std = _states(b['sine_mode_state'], b['sine_mode_state_after_tension_release'])
+            fe_m = FE_WORDS.get(b['in_mill']['wavelength_search_state'], '')
+            fe_r = FE_WORDS.get(b['after_release']['wavelength_search_state'], '')
+            brow.append(f'<tr><td>{_e(p["label"])}</td><td>{_mm2(b["start_m"])} to '
+                        f'{_mm2(b["end_m"])}</td><td>{_f(b["peak_i_units"])}</td>'
+                        f'<td>{std}</td><td>{_e(fe_m)}; {_e(fe_r)}</td></tr>')
+    return (head + '<p>Linear buckling of the modelled flatness profile (free strip edges, '
+            'exit tension in the mill, none after release) with a search over wavelengths. '
+            'Utilisation 1 or more means the profile waves. <strong>The standard result above '
+            'is the one the shortlist uses</strong>; this table changes no state or score.</p>'
+            '<table><tr><th>profile</th><th>state</th><th>result</th><th>utilisation</th>'
+            '<th>half-wave</th><th>mode width (10 %)</th><th>mode peak</th>'
+            '<th>search limit</th></tr>' + ''.join(rows) + '</table>'
+            '<table><tr><th>profile</th><th>band</th><th>peak I-units</th>'
+            '<th>standard states</th><th>wavelength search (mill; after release)</th></tr>'
+            + ''.join(brow) + '</table><p class="warn">'
+            + _e(' '.join(bf.get('limitations') or [])) + '</p>')
 
 
 def _surface_cycle_chart(rc):

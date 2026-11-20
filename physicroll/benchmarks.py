@@ -90,7 +90,8 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
             'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT',
-            'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP', 'A6-ZONE-TIME-CONSTANT')
+            'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP', 'A6-ZONE-TIME-CONSTANT',
+            'SS-V2-LOCAL-PLATE', 'SS-V2-WIDE-STRIP', 'SS-V3-WIDE-STRIP')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
@@ -100,6 +101,7 @@ RECORDED_ON_SPEC18_P7 = '2026-11-20, on commit a8160ae (SPEC18 package 7)'
 RECORDED_ON_SPEC18_P9 = '2026-11-20, on commit 42bd9c3 (SPEC18 package 9)'
 RECORDED_ON_SPEC19_P4 = '2026-11-20, on commit b4248c6 (SPEC19 package 4)'
 RECORDED_ON_SPEC19_P5 = '2026-11-20, on commit c73b7f5 (SPEC19 package 5)'
+RECORDED_ON_SPEC19_P6 = '2026-11-20, on commit 4eddda0 (SPEC19 package 6)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -247,6 +249,27 @@ RECORDED = {
     'TM-LA19-HEAT-SPLIT': {'perfect_contact': 0.16206930854116774,
                            'film_70nm_k0125': 0.22787082470045728,
                            'film_70nm_k025': 0.19523048285294492},
+    # [run] at RECORDED_ON_SPEC19_P6 (strip_buckling.critical_mode)
+    'SS-V2-LOCAL-PLATE': {'critical_i_units_simply_supported': 5.34111957201328,
+                          'critical_i_units_clamped': 8.648935850745435,
+                          'half_wave_simply_supported_m': 0.14945731009374366,
+                          'half_wave_clamped_m': 0.09955529052211513},
+    'SS-V2-WIDE-STRIP': {'critical_peak_i_units_10_mpa': 12.300305469261495,
+                         'half_wave_m_10_mpa': 0.17673633584484172,
+                         'mode_width_10_percent_m_10_mpa': 0.21999999999999997,
+                         'half_wave_over_mode_width_10_mpa': 0.803346981112917,
+                         'critical_peak_i_units_30_mpa': 27.220945683205056,
+                         'half_wave_m_30_mpa': 0.12883569942778858,
+                         'mode_width_10_percent_m_30_mpa': 0.15999999999999998,
+                         'half_wave_over_mode_width_30_mpa': 0.8052231214236788},
+    'SS-V3-WIDE-STRIP': {'critical_peak_i_units_5_mpa': 18.84549346286839,
+                         'half_wave_m_5_mpa': 0.09164717615400875,
+                         'mode_width_10_percent_m_5_mpa': 0.11500000000000002,
+                         'half_wave_over_mode_width_5_mpa': 0.7969319665565977,
+                         'critical_peak_i_units_15_mpa': 42.797197390495455,
+                         'half_wave_m_15_mpa': 0.06887118337417297,
+                         'mode_width_10_percent_m_15_mpa': 0.08500000000000002,
+                         'half_wave_over_mode_width_15_mpa': 0.8102492161667406},
 }
 
 NOT_ENCODED = (
@@ -255,8 +278,9 @@ NOT_ENCODED = (
     {'id': 'BT-V9', 'reason': 'the published rows give forward slip without load, flow stress '
                               'or tension values, so the friction identification of BT-G6 '
                               '(force required) cannot give a friction per row'},
-    {'id': 'SS-V1', 'reason': 'needs the buckling model of G4'},
-    {'id': 'SS-V4', 'reason': 'needs the buckling model of G4'},
+    {'id': 'SS-V1', 'reason': 'geometry and temperatures are in the study; the bifurcation force '
+                              'is not, so there is nothing to compare'},
+    {'id': 'SS-V4', 'reason': 'needs the stress profile of the paper'},
     {'id': 'SS-V5', 'reason': 'needs the roll profiles of the paper'},
     {'id': 'SS-V11', 'reason': 'already encoded: physicroll/literature.py, '
                                'tests/test_literature.py (cross-reference only)'},
@@ -1276,6 +1300,141 @@ def _a6_zone_time_constant():
                  'that this is what the plant measured.', ['ASSUMED_COUPLING_AND_FILTER'])
 
 
+# ------------------------------------------------- SPEC19 package 6: buckling under tension
+# Inputs marked ASSUMED are not in the reports (SS-S19 FT): steel E 210 GPa, nu 0.3 (as SS-V2),
+# the Gaussian half-peak widths and the tensions. Not tuned: recorded as the assumptions give.
+SSV2_GAUSS_HALF_PEAK_M = 0.075       # ASSUMED
+SSV3_GAUSS_HALF_PEAK_M = 0.050       # ASSUMED
+SSV2_WIDE_TENSIONS_PA = (10e6, 30e6)  # ASSUMED
+SSV3_WIDE_TENSIONS_PA = (5e6, 15e6)   # ASSUMED
+
+
+def _gauss_loose_band(z, centre, half_peak):
+    """Mean-free elongation (I-units per unit peak) of a loose Gaussian band."""
+    g = [math.exp(-4 * math.log(2) * ((x - centre) / half_peak) ** 2) for x in z]
+    width = z[-1] - z[0]
+    mean = sum(0.5 * (g[i] + g[i + 1]) * (z[i + 1] - z[i]) for i in range(len(z) - 1)) / width
+    return [v - mean for v in g]
+
+
+def _ss_v2_local_plate():
+    from . import strip_buckling as sb
+    t, b, e, nu, n = 0.5e-3, 0.150, 210e9, 0.3, 60
+    z = [b * i / n for i in range(n + 1)]
+    s = [-e * 1e-5 * math.exp(-4 * math.log(2) * ((x - b / 2) / SSV2_GAUSS_HALF_PEAK_M) ** 2)
+         for x in z]
+    res = {bc: sb.critical_mode(z, s, thickness_m=t, youngs_modulus_pa=e, poisson_ratio=nu,
+                                edges=(bc, bc), half_wave_range_m=(b / 8, 4 * b))
+           for bc in ('simply_supported', 'clamped')}
+    rec = RECORDED['SS-V2-LOCAL-PLATE']
+    q = [_quantity('critical_i_units_simply_supported', 'I',
+                   res['simply_supported']['critical_multiplier'],
+                   rec['critical_i_units_simply_supported'], 5.3,
+                   'computed critical, simply supported (SS-S19 FT, formulas garbled)',
+                   recorded_on=RECORDED_ON_SPEC19_P6),
+         _quantity('critical_i_units_clamped', 'I', res['clamped']['critical_multiplier'],
+                   rec['critical_i_units_clamped'], 8.92,
+                   'computed critical, clamped (SS-S19 FT)', recorded_on=RECORDED_ON_SPEC19_P6),
+         _quantity('half_wave_simply_supported_m', 'm',
+                   res['simply_supported']['half_wavelength_m'],
+                   rec['half_wave_simply_supported_m'], 0.060,
+                   'measured half wavelength 60 mm (MEASUREMENT, SS-S19 FT)',
+                   recorded_on=RECORDED_ON_SPEC19_P6),
+         _quantity('half_wave_clamped_m', 'm', res['clamped']['half_wavelength_m'],
+                   rec['half_wave_clamped_m'], 0.060,
+                   'measured half wavelength 60 mm (MEASUREMENT, SS-S19 FT)',
+                   recorded_on=RECORDED_ON_SPEC19_P6)]
+    notes = ['Local plate of the buckle width (150 mm) with both edges simply supported or '
+             'clamped, no tension, Gaussian compression of half-peak width 75 mm per I-unit '
+             '(ASSUMED); 60 elements; strip_buckling.critical_mode.',
+             'Steel E 210 GPa and nu 0.3 ASSUMED (as SS-V2). The published critical values are '
+             'local-plate values without tension.']
+    ratios = [x['ratio_project_to_reference'] for x in q]
+    note = (f'{q[0]["project_value"]:.3f} and {q[1]["project_value"]:.3f} I-units against the '
+            f'published 5.3 and 8.92 (ratios {ratios[0]:.3f}, {ratios[1]:.3f}); the half-waves '
+            f'are {ratios[2]:.2f} and {ratios[3]:.2f} times the measured one.')
+    return _case('SS-V2-LOCAL-PLATE', 'Local plate with a Gaussian compression, steel '
+                 '(industrial buckle)', SOURCE_SS_S19, 'SS-S19', 'FT (formulas garbled)',
+                 'MODEL_OUTPUT', {'thickness_m': t, 'plate_width_m': b, 'youngs_modulus_pa': e,
+                                  'poisson_ratio': nu,
+                                  'gauss_half_peak_width_m': SSV2_GAUSS_HALF_PEAK_M,
+                                  'elements': n}, notes, q, 'INDICATIVE_ASSUMED_INPUTS', note,
+                 ['ASSUMED_MODULUS_AND_POISSON_RATIO', 'ASSUMED_STRESS_PROFILE', 'STEEL_CASE'])
+
+
+def _wide_strip(case_id, title, t, width, e, nu, half_peak, tensions, n, ref_half_wave,
+                ref_ratio, ref_label, ref_waves, read_status, notes, flags):
+    from . import strip_buckling as sb
+    z = [width * i / n for i in range(n + 1)]
+    s = [-e * 1e-5 * v for v in _gauss_loose_band(z, width / 2, half_peak)]
+    rec = RECORDED[case_id]
+    q = []
+    for st in tensions:
+        r = sb.critical_mode(z, s, thickness_m=t, youngs_modulus_pa=e, poisson_ratio=nu,
+                             mean_tension_pa=st, edges=('free', 'free'),
+                             half_wave_range_m=(4 * width / n, 2 * width))
+        tag = f'{st / 1e6:g}_mpa'
+        vals = {'critical_peak_i_units': r['critical_multiplier'],
+                'half_wave_m': r['half_wavelength_m'],
+                'mode_width_10_percent_m': r['mode_width_10_percent_m'],
+                'half_wave_over_mode_width': r['half_wave_over_mode_width']}
+        refs = {'critical_peak_i_units': ref_waves, 'half_wave_m': (ref_half_wave, ref_label),
+                'mode_width_10_percent_m': None,
+                'half_wave_over_mode_width': (ref_ratio, 'measured half-wave over buckle width '
+                                              '(MEASUREMENT, SS-S19 FT)')}
+        for name, v in vals.items():
+            ref = refs[name]
+            key = f'{name}_{tag}'
+            unit = 'I' if name == 'critical_peak_i_units' else (
+                '1' if name == 'half_wave_over_mode_width' else 'm')
+            if ref is None:
+                q.append(_quantity(key, unit, v, rec.get(key), None, 'no published value',
+                                   recorded_on=RECORDED_ON_SPEC19_P6))
+            else:
+                verdict = None if name == 'half_wave_over_mode_width' else (
+                    'INDICATIVE_ASSUMED_INPUTS')
+                q.append(_quantity(key, unit, v, rec.get(key), ref[0], ref[1],
+                                   row_verdict=verdict, recorded_on=RECORDED_ON_SPEC19_P6))
+    ratios = [x['project_value'] for x in q if x['name'].startswith('half_wave_over')]
+    note = ('Half-wave over mode width (10 %) ' + ', '.join(f'{v:.3f}' for v in ratios)
+            + f' against the measured {ref_ratio:.3f}: the linear wavelength search does not '
+            'reproduce the measured short wavelength (recorded discrepancy, SPEC19 finding 3). '
+            'Without tension the strip buckles in the longest half-wave searched (a '
+            'whole-sheet mode).')
+    return _case(case_id, title, SOURCE_SS_S19, 'SS-S19', read_status, 'MEASUREMENT',
+                 {'thickness_m': t, 'strip_width_m': width, 'youngs_modulus_pa': e,
+                  'poisson_ratio': nu, 'gauss_half_peak_width_m': half_peak,
+                  'mean_tensions_pa': list(tensions), 'elements': n, 'edges': 'free'},
+                 notes, q, 'RECORDED_DISCREPANCY', note, flags)
+
+
+def _ss_v2_wide_strip():
+    return _wide_strip(
+        'SS-V2-WIDE-STRIP', 'Loose band in a wide free-edged steel strip under tension',
+        0.5e-3, 1.0, 210e9, 0.3, SSV2_GAUSS_HALF_PEAK_M, SSV2_WIDE_TENSIONS_PA, 200, 0.060,
+        0.060 / 0.150, 'measured half wavelength 60 mm (MEASUREMENT, SS-S19 FT)',
+        (7.5, 'waves seen at 7.5-8 I-units, none below 6 (SS-S19 FT); low end'),
+        'FT (formulas garbled)',
+        ['Steel 0.5 x 1000 mm, free edges, mean-free Gaussian loose band of half-peak width '
+         '75 mm at the centre (ASSUMED), tension 10 and 30 MPa (ASSUMED); 200 elements.',
+         'E 210 GPa and nu 0.3 ASSUMED. The critical peak is the band peak in I-units at which '
+         'the strip buckles at that tension.'],
+        ['ASSUMED_MODULUS_AND_POISSON_RATIO', 'ASSUMED_STRESS_PROFILE', 'ASSUMED_TENSION',
+         'STEEL_CASE'])
+
+
+def _ss_v3_wide_strip():
+    return _wide_strip(
+        'SS-V3-WIDE-STRIP', 'Loose band in a free-edged aluminium strip under tension',
+        0.3e-3, 0.27, 70e9, 0.33, SSV3_GAUSS_HALF_PEAK_M, SSV3_WIDE_TENSIONS_PA, 108, 0.075 / 2,
+        (0.075 / 2) / 0.105, 'half of the measured wavelength of about 75 mm (MEASUREMENT, '
+        'SS-S19 FT)', None, 'FT',
+        ['Aluminium 0.3 x 270 mm, free edges, mean-free Gaussian loose band of half-peak '
+         'width 50 mm at the centre (ASSUMED), tension 5 and 15 MPa (ASSUMED); 108 elements.',
+         'E 70 GPa, nu 0.33. The measured buckle width is 105 mm, the wavelength about 75 mm.'],
+        ['ASSUMED_STRESS_PROFILE', 'ASSUMED_TENSION'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1290,7 +1449,9 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-FRICTION-HS': _bt_v2_friction_hs,
           'TM-LA19-HEAT-SPLIT': _tm_la19_heat_split,
           'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit, 'SS-V8-LOOP': _ss_v8_loop,
-          'A6-ZONE-TIME-CONSTANT': _a6_zone_time_constant}
+          'A6-ZONE-TIME-CONSTANT': _a6_zone_time_constant,
+          'SS-V2-LOCAL-PLATE': _ss_v2_local_plate, 'SS-V2-WIDE-STRIP': _ss_v2_wide_strip,
+          'SS-V3-WIDE-STRIP': _ss_v3_wide_strip}
 
 
 def run_case(case_id: str) -> dict:

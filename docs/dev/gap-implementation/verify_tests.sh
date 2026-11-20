@@ -5,7 +5,8 @@ S=/tmp/claude-0/-home-user-PhysicRollModel/2f99237c-57ca-5a74-a3d6-b1fb23e86cf7/
 mkdir -p "$S"
 python -m unittest tests.test_band_v2_sections tests.test_band_v2_process_sections tests.test_benchmarks tests.test_bite_tribology \
   tests.test_band_signatures tests.test_chatter tests.test_foil_bite tests.test_strip_shape \
-  tests.test_roll_thermal tests.test_flatness_control > "$S/a.txt" 2>&1 &
+  tests.test_roll_thermal tests.test_flatness_control tests.test_strip_buckling \
+  tests.test_band_buckling_fe > "$S/a.txt" 2>&1 &
 python -m unittest tests.test_band_foil tests.test_band_plain tests.test_band_plain_partial \
   tests.test_band_thermal_check tests.test_band_process_temperatures \
   tests.test_band_robustness_v2_sweep tests.test_band_diagnosis_reports > "$S/b.txt" 2>&1 &

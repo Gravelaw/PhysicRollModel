@@ -6404,7 +6404,7 @@
       "No roll wrap, no measurement noise, no calibration, no temperature compensation, no dynamics or filter.",
       "The stress still evolves between the bite and the shapemeter [SS-S22 EX].",
       "A buckled (manifest) band no longer carries the stress the linear profile assigns to it.",
-      "NO flatness controller: the tool does not predict what the control would have done with these readings (gap G5, Phase 2)."
+      "NO flatness controller in this section: the shapemeter operator applies no control and does not predict what the plant's control would have done with these readings. A spray-zone loop with the tool's own control law is a separate opt-in section (width.flatness_control, band-diagnosis section 7.12)."
     ],
     "not_supplied": false,
     "shapemeter": {
@@ -6465,7 +6465,7 @@
         "No roll wrap, no measurement noise, no calibration, no temperature compensation, no dynamics or filter.",
         "The stress still evolves between the bite and the shapemeter [SS-S22 EX].",
         "A buckled (manifest) band no longer carries the stress the linear profile assigns to it.",
-        "NO flatness controller: the tool does not predict what the control would have done with these readings (gap G5, Phase 2)."
+        "NO flatness controller in this section: the shapemeter operator applies no control and does not predict what the plant's control would have done with these readings. A spray-zone loop with the tool's own control law is a separate opt-in section (width.flatness_control, band-diagnosis section 7.12)."
       ],
       "neighbour_spreading_basis": "[D] interpretation of \"max. 2 x 12.5 % force spreading to adjacent measurement zones\" [SS-S29 VP]; the vendor algorithm was not read; off by default",
       "neighbour_spreading_fraction": 0.0,
