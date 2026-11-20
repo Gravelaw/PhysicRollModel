@@ -13,7 +13,8 @@
     "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record.",
     "width_model.strip_temperature (SPEC17, synthetic): +3 K at the partly blocked nozzle, an assumption, not a model output; it shows how the strip-temperature term changes the flatness a shapemeter measures hot.",
     "width_model.local_coupling (SPEC19, synthetic): inlet temperature weight 0.5 (the mean of roll and strip surface, an assumption), softening 0.15 %/K (derived from 1100-H18 strengths at 20 and 100 C [PT-T31, PT-T39]) and 10 l/min of oil per nozzle (assumed); it shows the oil viscosity, film, friction, flow stress and strip exit temperature across the width as differences from a healthy header, and changes no score.",
-    "width_model.flatness_control (SPEC19, synthetic): a closed spray loop with valves in 5 % steps, 10 s minimum on and off times, a 2 I-unit dead band and 14 control zones of two nozzles, on the shapemeter above; an assumption, not a plant setting. It shows what such a loop would do on this model with the tool's own control law, not what the plant's controller does, and changes no score."
+    "width_model.flatness_control (SPEC19, synthetic): a closed spray loop with valves in 5 % steps, 10 s minimum on and off times, a 2 I-unit dead band and 14 control zones of two nozzles, on the shapemeter above; an assumption, not a plant setting. It shows what such a loop would do on this model with the tool's own control law, not what the plant's controller does, and changes no score.",
+    "width_model.zone_step_test (SPEC19, synthetic): the zone of the demo's valve event (nozzles 18-19) closed for 120 s, 2 m to the shapemeter and a 1 s display filter assumed; it shows which first-order time constant a plant step test of 20 to 120 s would fit on this model, with and without the strip-side terms, beside the published 20 s, and changes no score."
   ],
   "pass": {
     "entry_thickness_m": 5e-05,
@@ -383,6 +384,16 @@
       "display_time_constant_s": 0.0,
       "include_local_sources": false,
       "provenance": "synthetic: modulating valves in 5 % steps, 14 zones of two nozzles; an assumption, not a plant setting"
+    },
+    "zone_step_test": {
+      "nozzle_indices": [18, 19],
+      "level": 0.0,
+      "hold_s": 120.0,
+      "fit_windows_s": [20, 40, 60, 120],
+      "time_step_s": 0.5,
+      "shapemeter_distance_m": 2.0,
+      "display_time_constant_s": 1.0,
+      "provenance": "synthetic: the zone of the demo's valve event; 2 m to the shapemeter and a 1 s display filter assumed"
     }
   },
   "tribology": {

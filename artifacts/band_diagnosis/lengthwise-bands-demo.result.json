@@ -4606,7 +4606,8 @@
       },
       "spray_wetted_arc_rad": null,
       "strip_centre_m": null,
-      "strip_temperature": null
+      "strip_temperature": null,
+      "zone_step_test": null
     }
   },
   "leading_hypotheses": [
@@ -27655,6 +27656,11 @@
         "wrinkle_wavelength_m": 0.3948770094320911
       }
     },
-    "two_tone": null
+    "two_tone": null,
+    "zone_step_test": {
+      "not_supplied": true,
+      "reason": "width_model.zone_step_test is null or absent",
+      "status": "NOT_SUPPLIED"
+    }
   }
 }

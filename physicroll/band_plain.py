@@ -1757,12 +1757,13 @@ def case_from_answers(answers, preset):
     notes.append(NOTE_PREFIX + f'starting point {pre["id"]}; observations answered by the person: '
                  + (', '.join(person_obs) if person_obs else 'none') + '.')
     case['notes'] = notes
-    # SPEC19 package 4: the simulated flatness loop reads the shapemeter; without one (the
-    # person answered "don't know") the starting point's loop settings are left out
+    # SPEC19 packages 4 and 5: the simulated flatness loop and the step test read the
+    # shapemeter; without one (the person answered "don't know") their settings are left out
     wm = case.get('width_model')
-    if isinstance(wm, dict) and wm.get('flatness_control') is not None and \
-            not ((case.get('measurement') or {}).get('shapemeter')):
-        wm['flatness_control'] = None
+    if isinstance(wm, dict) and not ((case.get('measurement') or {}).get('shapemeter')):
+        for key in ('flatness_control', 'zone_step_test'):    # SPEC19 packages 4 and 5
+            if wm.get(key) is not None:
+                wm[key] = None
     case = json.loads(json.dumps(case, allow_nan=False))
     bd.validate_case(case)
     canonical_nozzles(case)                      # one set of nozzle marks, as the engine reads
@@ -2668,6 +2669,11 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'ZONE_STEP_TEST_EMULATED': (
+        'The page shows which response time a test that switches one spray zone would give on '
+        'this model, with and without the strip temperature and oil film effects, beside the '
+        'published 20 s; a match does not show what your mill measured.',
+        'Compare it with your own step test, entered with its length and filter.'),
     'FLATNESS_LOOP_SIMULATED': (
         'The page shows what a flatness control loop with the settings you entered would do '
         'on this model, with the tool\'s own control rule; it is not what your controller did '

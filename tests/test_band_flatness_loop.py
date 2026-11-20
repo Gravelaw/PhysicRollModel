@@ -180,6 +180,140 @@ class ShortRollTests(unittest.TestCase):
         self.assertIn('shape parameters', r['reason'])
 
 
+
+class FitTests(unittest.TestCase):
+    """SPEC19 package 5: flatness_control.fit_first_order_dead_time on synthetic data."""
+
+    T = [0.5 * i for i in range(241)]
+
+    def test_exact_first_order_plus_dead_time(self):
+        from physicroll import flatness_control as flc
+        y = [10 * (1 - math.exp(-(t - 2) / 20)) if t > 2 else 0.0 for t in self.T]
+        f = flc.fit_first_order_dead_time(self.T, y, 120.0)
+        self.assertEqual(f['status'], 'FITTED')
+        self.assertLess(abs(math.log(f['time_constant_s'] / 20)), math.log(1.08))
+        self.assertEqual(f['dead_time_s'], 2.0)
+        self.assertLess(f['rms_i_units'], 0.05)
+        self.assertAlmostEqual(f['gain_i_units'], 10.0, delta=0.05)
+        self.assertEqual(f['flags'], [])
+
+    def test_two_time_scales_and_ramp(self):
+        from physicroll import flatness_control as flc
+        y = [5 * (1 - math.exp(-t / 10)) + 5 * (1 - math.exp(-t / 200)) for t in self.T]
+        taus = [flc.fit_first_order_dead_time(self.T, y, w)['time_constant_s']
+                for w in (20.0, 60.0, 120.0)]
+        self.assertTrue(10 < taus[0] < taus[1] < taus[2] < 200, taus)
+        ramp = [min(t, 30.0) / 30.0 for t in self.T]          # a ramp to a plateau
+        for w in (60.0, 120.0):
+            f = flc.fit_first_order_dead_time(self.T, ramp, w)
+            self.assertNotIn(flc.FIT_FLAG_LIMIT, f['flags'])
+            self.assertTrue(10 < f['time_constant_s'] < 20, f)
+        slow = [1 - math.exp(-t / 1e5) for t in self.T]
+        f = flc.fit_first_order_dead_time(self.T, slow, 120.0)
+        self.assertIn(flc.FIT_FLAG_LIMIT, f['flags'])
+
+    def test_noise_and_short_record(self):
+        from physicroll import flatness_control as flc
+        noise = [0.2 * math.sin(7.3 * i) for i in range(len(self.T))]
+        y = [10 * (1 - math.exp(-t / 20)) + n for t, n in zip(self.T, noise)]
+        f = flc.fit_first_order_dead_time(self.T, y, 120.0)
+        self.assertLess(abs(f['time_constant_s'] / 20 - 1), 0.1)
+        self.assertNotIn(flc.FIT_FLAG_NOT_FIRST_ORDER, f['flags'])
+        f = flc.fit_first_order_dead_time(self.T, y, 200.0)
+        self.assertEqual(f['status'], flc.FIT_RECORD_TOO_SHORT)
+        self.assertIsNone(f['time_constant_s'])
+        f = flc.fit_first_order_dead_time([0.0, 1.0, 2.0], [0.0, 1.0, 1.5], 2.0)
+        self.assertEqual(f['status'], flc.FIT_RECORD_TOO_SHORT)
+
+
+class StepTestSectionTests(unittest.TestCase):
+    """The step-test section on the short roll (with and without the local sources)."""
+
+    @classmethod
+    def setUpClass(cls):
+        raw = _short(WEAK)
+        raw['width_model']['flatness_control'] = None
+        raw['width_model']['zone_step_test'] = {
+            'nozzle_indices': [4, 5], 'hold_s': 600.0, 'fit_windows_s': [20, 120, 300, 600],
+            'shapemeter_distance_m': 2.0, 'provenance': 'unit test'}
+        cls.raw = raw
+        case = bd.validate_case(raw)
+        w = case['width_model']
+        sp = bw.shape_params(case, None, w, None, supplied=w['shape_inputs'])
+        th = bw._Thermal(case, w, w['bite_heat_per_width_w_m'], w['roll_heat_fraction_per_roll'])
+        actual = th.steady(th.levels)
+        cls.plain = bw.zone_step_test_section(case, w, th, sp, actual)
+        cls.ctx = (case, w, th, sp, actual)
+
+    def test_section(self):
+        r = self.plain
+        self.assertEqual(r['status'], 'SCREENING_RESULT_NOT_PLANT_VALIDATED')
+        self.assertIn(bw.ZT_FLAG, r['flags'])
+        self.assertAlmostEqual(r['transport_delay_s'], 2.0 / 10.0, delta=1e-12)
+        taus = [f['time_constant_s'] for f in r['series']['roll_growth_only']['fits']]
+        self.assertLess(taus[1], taus[2])                    # grows over longer tests
+        self.assertLess(taus[2], taus[3])
+        self.assertTrue(r['window_dependence'])
+        for name in ('mechanical_net', 'as_measured_hot', 'roll_growth_plus_strip_temperature'):
+            self.assertTrue(r['series'][name]['not_supplied'], name)
+        self.assertIn('not evidence', r['finding'])
+        self.assertEqual(r['published']['time_constant_s'], 20.0)
+        self.assertIn('surface_film_s', r['time_scales']['model_scales'])
+        self.assertIn('not used in the step test', r['time_scales']['surface_path'])
+
+    def test_with_local_sources_hot_is_faster(self):
+        from physicroll import band_local as bl
+        from physicroll import band_process as bp
+        import types
+        case, w, th, sp, actual = self.ctx
+        trib = dict(TRIBOLOGY)
+        case = dict(case, tribology=bd.validate_case(dict(self.raw, tribology=trib))[
+            'tribology'])
+        w = dict(w, local_coupling=bl.validate_local_coupling(
+            {'provenance': 'unit test', 'strip_roll_temperature_coupling': 1.0,
+             'flow_stress_temperature_coefficient_per_k': 0.0015}))
+        lub, fin, clo = bp.tribology_objects(case['tribology'])
+        bite = types.SimpleNamespace(forward_slip_fraction=0.05, contact_length_m=0.008,
+                                     separating_force_n=3e6)
+        fr = {'film_ratio': 0.2, 'film_thickness_m': 8e-8}
+        params = bl.local_params(case, w, case['tribology'], lub, clo, fin, bite,
+                                 {'exit_temperature_k': 340.0}, fr, None)
+        sens = {'dforce_per_width_dfriction_n_m': 2e7, 'dforce_per_width_dflow_stress_m': 0.01,
+                'flow_stress_pa': case['pass']['mean_flow_stress_pa']}
+        r = bw.zone_step_test_section(case, w, th, sp, actual, {'params': params,
+                                                               'sens': sens}, bite)
+        hot = r['series']['as_measured_hot']['fits'][0]['time_constant_s']
+        roll = r['series']['roll_growth_only']['fits'][0]['time_constant_s']
+        self.assertLess(hot, roll)
+        self.assertEqual(len(r['ratio_to_published']), 4)
+
+    def test_validation(self):
+        def err(**kw):
+            raw = _short()
+            raw['width_model']['zone_step_test'] = dict(
+                {'nozzle_indices': [4, 5], 'provenance': 'x'}, **kw)
+            with self.assertRaises(ValueError) as cm:
+                bd.validate_case(raw)
+            return str(cm.exception)
+        self.assertIn('width_model.zone_step_test.hold_s must be in [10, 3600]', err(hold_s=5))
+        self.assertIn('fit_windows_s must be 1 to 6 increasing', err(fit_windows_s=[90]))
+        self.assertIn('nozzle index 9 out of range', err(nozzle_indices=[9]))
+        self.assertIn('level must be in [0, 1]', err(level=2))
+        raw = _short()
+        raw['width_model']['flatness_control'] = None
+        raw['width_model']['zone_step_test'] = {'nozzle_indices': [4], 'provenance': 'x'}
+        raw['measurement'] = None
+        with self.assertRaises(ValueError) as cm:
+            bd.validate_case(raw)
+        self.assertIn('width_model.zone_step_test needs measurement.shapemeter',
+                      str(cm.exception))
+        ok = bd.validate_case(dict(_short(), width_model=dict(
+            _short()['width_model'], zone_step_test={'nozzle_indices': [4],
+                                                     'provenance': 'x'})))
+        self.assertEqual(ok['width_model']['zone_step_test']['fit_windows_s'], [20.0, 40.0,
+                                                                                60.0])
+
+
 EVENT = [{'start_s': 0.0, 'duration_s': 20.0, 'nozzle_indices': [12], 'level': 0.0}]
 
 
@@ -214,7 +348,7 @@ class EngineTests(unittest.TestCase):
             if key not in ('inputs', 'width', 'flags'):
                 self.assertEqual(a[key], b[key], key)
         for key in a['width']:
-            if key != 'flatness_control':
+            if key not in ('flatness_control', 'zone_step_test'):
                 self.assertEqual(a['width'][key], b['width'][key], key)
         self.assertEqual(a['flags'], [f for f in b['flags'] if f not in bw.FC_TOP_FLAGS])
         ia, ib = copy.deepcopy(a['inputs']), copy.deepcopy(b['inputs'])

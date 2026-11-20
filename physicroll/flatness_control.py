@@ -445,3 +445,92 @@ def run_loop(advance, readings_of, controller, *, horizon_s, control_interval_s,
             'the low-order part is removed as if by ideal actuators.',
             'Fixed control interval and horizon; a loop that does not settle is reported, not '
             'corrected.']})
+
+
+# ============================================================================= step test fit
+FIT_TAU_GRID_S = tuple(1.08 ** k for k in range(100))   # 1 s to 2038 s [D, SPEC19]
+FIT_DEAD_TIME_MAX_S = 30.0                              # [D, SPEC19] theta <= min(window/2, 30)
+FIT_NOT_FIRST_ORDER_FRACTION = 0.05                     # rms above 5 % of the end value [D]
+FIT_MIN_POINTS = 4
+FIT_FLAG_LIMIT = 'FITTED_TIME_CONSTANT_AT_SEARCH_LIMIT'
+FIT_FLAG_NOT_FIRST_ORDER = 'STEP_RESPONSE_NOT_FIRST_ORDER'
+FIT_RECORD_TOO_SHORT = 'RECORD_TOO_SHORT_FOR_WINDOW'
+
+
+def fit_first_order_dead_time(time_s, values, window_s):
+    """First order plus dead time fitted to a step response over ``[0, window_s]``
+    [D, SPEC19: least squares on a fixed grid; no plant fitting protocol is recorded]:
+    ``y = K*(1 - exp(-(t - theta)/tau))`` for ``t > theta``, else 0; ``theta`` in steps of the
+    series time step from 0 to ``min(window/2, 30 s)``; ``tau = 1.08^k`` s, ``k = 0..99``; ``K``
+    by linear least squares for each pair; the pair with the smallest sum of squares (ties: the
+    smaller ``tau``, then the smaller ``theta``). A record that does not reach the window, or has
+    fewer than four points in it, returns ``status = RECORD_TOO_SHORT_FOR_WINDOW`` and no fit.
+
+    A response with several time scales gives a fitted constant between them that grows with
+    the window: the constant is a property of the test as much as of the plant."""
+    t = [_finite('time_s', v) for v in time_s]
+    y = [_finite('values', v) for v in values]
+    w = _finite('window_s', window_s)
+    if len(t) != len(y):
+        raise ValueError('time_s and values need the same length')
+    if any(b <= a for a, b in zip(t, t[1:])):
+        raise ValueError('time_s must be strictly increasing')
+    pts = [(a, b) for a, b in zip(t, y) if a <= w + 1e-9]
+    if not t or t[-1] < w - 1e-9 or len(pts) < FIT_MIN_POINTS:
+        return {'status': FIT_RECORD_TOO_SHORT, 'window_s': w,
+                'record_end_s': t[-1] if t else None, 'points_in_window': len(pts),
+                'gain_i_units': None, 'time_constant_s': None, 'dead_time_s': None,
+                'rms_i_units': None, 'value_at_end_i_units': None,
+                'time_to_63_percent_of_end_s': None, 'flags': [FIT_RECORD_TOO_SHORT]}
+    tt, yy = [p[0] for p in pts], [p[1] for p in pts]
+    n = len(tt)
+    dt = (tt[-1] - tt[0]) / (n - 1)
+    theta_max = min(w / 2, FIT_DEAD_TIME_MAX_S)
+    thetas = [k * dt for k in range(int(theta_max / dt + 1e-9) + 1)]
+    y2 = math.fsum(v * v for v in yy)
+    # first index with t > theta, per theta
+    first = []
+    for th in thetas:
+        i = 0
+        while i < n and tt[i] <= th + 1e-12:
+            i += 1
+        first.append(i)
+    best = None
+    for tau in FIT_TAU_GRID_S:
+        e = [math.exp(-x / tau) for x in tt]
+        # suffix sums from index i: count, sum e, sum e^2, sum y, sum e*y
+        se, se2, sy, sey = [0.0] * (n + 1), [0.0] * (n + 1), [0.0] * (n + 1), [0.0] * (n + 1)
+        for i in range(n - 1, -1, -1):
+            se[i] = se[i + 1] + e[i]
+            se2[i] = se2[i + 1] + e[i] * e[i]
+            sy[i] = sy[i + 1] + yy[i]
+            sey[i] = sey[i + 1] + e[i] * yy[i]
+        for th, i in zip(thetas, first):
+            if i >= n:
+                continue
+            c = math.exp(th / tau)
+            gg = (n - i) - 2 * c * se[i] + c * c * se2[i]
+            if gg <= 1e-300:
+                continue
+            gy = sy[i] - c * sey[i]
+            sse = max(0.0, y2 - gy * gy / gg)
+            if best is None or sse < best[0] * (1 - 1e-12) - 1e-30:
+                best = (sse, gy / gg, tau, th)
+    if best is None:
+        return {'status': FIT_RECORD_TOO_SHORT, 'window_s': w, 'record_end_s': t[-1],
+                'points_in_window': n, 'gain_i_units': None, 'time_constant_s': None,
+                'dead_time_s': None, 'rms_i_units': None, 'value_at_end_i_units': None,
+                'time_to_63_percent_of_end_s': None, 'flags': [FIT_RECORD_TOO_SHORT]}
+    sse, k, tau, th = best
+    rms = math.sqrt(sse / n)
+    yend = yy[-1]
+    t63 = next((a for a, b in zip(tt, yy) if abs(b) >= 0.632 * abs(yend)), None) \
+        if yend else None
+    flags = []
+    if tau in (FIT_TAU_GRID_S[0], FIT_TAU_GRID_S[-1]):
+        flags.append(FIT_FLAG_LIMIT)
+    if rms > FIT_NOT_FIRST_ORDER_FRACTION * abs(yend):
+        flags.append(FIT_FLAG_NOT_FIRST_ORDER)
+    return {'status': 'FITTED', 'window_s': w, 'points_in_window': n, 'gain_i_units': k,
+            'time_constant_s': tau, 'dead_time_s': th, 'rms_i_units': rms,
+            'value_at_end_i_units': yend, 'time_to_63_percent_of_end_s': t63, 'flags': flags}

@@ -129,7 +129,9 @@ WIDTH_DEFAULTS = {
     # SPEC19 package 1 (A2 inputs, BT-G12, A1 computed): local state across the width
     'local_coupling': None,
     # SPEC19 package 4 (G5): a closed spray loop with the tool's own control law
-    'flatness_control': None}
+    'flatness_control': None,
+    # SPEC19 package 5 (A6): emulation of a plant zone step test
+    'zone_step_test': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -395,10 +397,81 @@ def validate_flatness_control(fc, local_coupling=None):
     return out
 
 
+ZT_WHERE = 'width_model.zone_step_test'
+ZT_DEFAULT_WINDOWS_S = (20.0, 40.0, 60.0)
+
+
+def _zt_num(key, value, lo, hi, lo_open=False):
+    where = f'{ZT_WHERE}.{key}'
+    words = f'in {"(" if lo_open else "["}{lo:g}, {hi:g}]'
+    try:
+        v = num(where, value)
+    except ValueError:
+        raise ValueError(f'{where} must be a number {words}') from None
+    if (v <= lo if lo_open else v < lo) or v > hi:
+        raise ValueError(f'{where} must be {words}')
+    return v
+
+
+def validate_zone_step_test(st):
+    """``width_model.zone_step_test`` (SPEC19 package 5), or None."""
+    if st is None:
+        return None
+    w = ZT_WHERE
+    keys(w, st, ('nozzle_indices', 'provenance'),
+         ('level', 'hold_s', 'fit_windows_s', 'time_step_s', 'shapemeter_distance_m',
+          'display_time_constant_s'))
+    idx = st['nozzle_indices']
+    if not isinstance(idx, list) or not idx:
+        raise ValueError(f'{w}.nozzle_indices must be a non-empty list of nozzle indices')
+    idx = int_list(f'{w}.nozzle_indices', idx)
+    out = {'nozzle_indices': idx,
+           'level': _zt_num('level', st.get('level', 0.0), 0.0, 1.0),
+           'hold_s': _zt_num('hold_s', st.get('hold_s', 60.0), 10.0, 3600.0),
+           'time_step_s': _zt_num('time_step_s', st.get('time_step_s', 0.5), 0.1, 5.0),
+           'shapemeter_distance_m': None,
+           'display_time_constant_s': _zt_num('display_time_constant_s',
+                                              st.get('display_time_constant_s', 1.0), 0.0,
+                                              60.0)}
+    if st.get('shapemeter_distance_m') is not None:
+        out['shapemeter_distance_m'] = _zt_num('shapemeter_distance_m',
+                                               st['shapemeter_distance_m'], 0.0, 20.0, True)
+    wins = st.get('fit_windows_s')
+    if wins is None:
+        wins = [x for x in ZT_DEFAULT_WINDOWS_S if x <= out['hold_s']] or [out['hold_s']]
+    else:
+        wm = (f'{w}.fit_windows_s must be 1 to 6 increasing values in [10, hold_s '
+              f'({out["hold_s"]:g} s)]')
+        if not isinstance(wins, list) or not 1 <= len(wins) <= 6:
+            raise ValueError(wm)
+        try:
+            wins = [num(f'{w}.fit_windows_s[{i}]', v, lo=10.0, hi=out['hold_s'])
+                    for i, v in enumerate(wins)]
+        except ValueError:
+            raise ValueError(wm) from None
+        if any(b <= a for a, b in zip(wins, wins[1:])):
+            raise ValueError(wm)
+    out['fit_windows_s'] = [float(x) for x in wins]
+    pv = st['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    out['provenance'] = pv
+    return out
+
+
 def check_flatness_control_zones(w, shapemeter):
     """Zone-count checks of ``width_model.flatness_control`` against the shapemeter and the
     header (called by the case validation once both sections are validated)."""
+    zt = w.get('zone_step_test')
+    if zt is not None:
+        count = len(_header(w).nozzle_positions(w['roll']['barrel_length_m']))
+        if max(zt['nozzle_indices']) >= count:
+            raise ValueError(f'{ZT_WHERE}.nozzle_indices: nozzle index '
+                             f'{max(zt["nozzle_indices"])} out of range (header has {count} '
+                             'nozzles)')
     fc = w['flatness_control']
+    if fc is None:
+        return
     n = shapemeter['zone_count']
     if fc['target_i_units'] is not None and len(fc['target_i_units']) != n:
         raise ValueError(f'{FC_WHERE}.target_i_units must be one value in [-200, 200] per '
@@ -454,6 +527,7 @@ def validate_width_model(w, pass_):
     out['local_coupling'] = band_local.validate_local_coupling(w.get('local_coupling'))
     out['flatness_control'] = validate_flatness_control(w.get('flatness_control'),
                                                         out['local_coupling'])
+    out['zone_step_test'] = validate_zone_step_test(w.get('zone_step_test'))
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -3290,6 +3364,13 @@ FC_WHAT_IT_IS = ('What such a loop would do with these settings on this model: t
                  'within the model, never as did.')
 FC_UNSETTLED_NOTE = ('The loop has not settled: its end state is one moment of a loop that keeps '
                      'switching, not the flatness the mill would have.')
+FC_SENSITIVITY_NOTE = (
+    'Whether such a loop settles or keeps trimming is sensitive to choices of the control law '
+    'nobody has measured: how the shapemeter zones are weighted (here by their coverage of the '
+    'strip) and when the first valve change is allowed (here one dwell time after the start). '
+    'On the battery-foil demo the planner\'s variant (every covered zone weighted equally, the '
+    'first change at once) settles after 1382 s, this one keeps trimming [run, '
+    'tests/test_band_flatness_demos.py].')
 FC_STATUS_WORDS = {'SETTLED': 'The valves stop moving after {t} s.',
                    'TRIMMING_WITHIN_BAND': 'The valves keep stepping; the zone error stays below '
                                            '{x} I-units.',
@@ -3447,7 +3528,8 @@ def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
     ref = (healthy if healthy_levels(u0) == [1.0] * th.count
            else th.steady(healthy_levels(u0)))
     z = start['z_m']
-    idx = _inside(z, sp['strip_centre_m'], sp['strip_width_m'])
+    idx = (list(local['idx']) if fc['include_local_sources'] and local is not None
+           else _inside(z, sp['strip_centre_m'], sp['strip_width_m']))
     zs = [z[i] for i in idx]
     a0 = sp['strip_centre_m'] - sp['strip_width_m'] / 2
     a1 = sp['strip_centre_m'] + sp['strip_width_m'] / 2
@@ -3665,9 +3747,250 @@ def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
         'low_order': {'coefficients_start': lo_e, 'coefficients_end': fin_e,
                       'edge_to_centre_i_units': edge_centre,
                       'sentence': FC_LOW_ORDER_SENTENCE},
+        'outcome_sensitivity': (FC_SENSITIVITY_NOTE if out['status'] in (
+            'SETTLED', 'TRIMMING_WITHIN_BAND') else None),
         'status_vocabulary': list(flc.LOOP_STATUSES), 'model_status': FC_STATUS,
         'flags': flags, 'limitations': list(FC_LIMITATIONS) + list(out['limitations'])})
     return out
+
+
+# ======================================== zone step test emulation (SPEC19 package 5, A6; X5)
+ZT_FLAG = 'ZONE_STEP_TEST_EMULATED'
+ZT_PUBLISHED_TIME_CONSTANT_S = 20.0     # [Dohmae & Okamura 2012, as cited by the project]
+ZT_SERIES = ('roll_growth_only', 'roll_growth_plus_strip_temperature', 'mechanical_net',
+             'as_measured_hot')
+ZT_SERIES_MEANING = {
+    'roll_growth_only': 'roll growth alone (the roll body; bulk_s)',
+    'roll_growth_plus_strip_temperature': 'roll growth plus the strip temperature term read '
+                                          'hot (the roll body and the roll surface)',
+    'mechanical_net': 'roll growth plus the film and flow-stress terms (the roll body and the '
+                      'roll surface)',
+    'as_measured_hot': 'all four terms read hot (the roll body and the roll surface)'}
+ZT_NOT_EVIDENCE = ('A match with the published 20 s is not evidence that this is what the plant '
+                   'measured: the coupling factor, the inlet weight and the display filter are '
+                   'assumptions, and no plant test protocol is recorded.')
+ZT_WINDOW_SENTENCE = ('A first-order fit to a response with several time scales gives a constant '
+                      'that depends on the test length and grows over longer tests: the '
+                      'constant belongs to the test as much as to the mill.')
+ZT_LIMITATIONS = (
+    'The strip-to-roll coupling, the inlet weight and the display filter are assumptions.',
+    'The fit depends on the window, which is the point of the emulation.',
+    'Over a short test the fitted dead time and time constant trade off against each other: a '
+    'small change of the transport delay or the display filter can move the fitted constant '
+    'markedly; read the constants of the longer windows beside it.',
+    'One spray header on one work roll; no controller acting during the test.',
+    'The surface temperature is the circumferential mean of the bulk model; the per-revolution '
+    'layer of width.roll_surface_cycle is not used here.',
+    'The fit is the tool\'s own least squares on a fixed grid [D, SPEC19]; no plant fitting '
+    'protocol is recorded.')
+
+
+def _delayed(times, values, delay):
+    if delay <= 0:
+        return list(values)
+    out = []
+    for t in times:
+        tt = t - delay
+        out.append(0.0 if tt <= times[0] else _interp(times, values, tt))
+    return out
+
+
+def _filtered(times, values, tau):
+    if tau <= 0:
+        return list(values)
+    out = [values[0]]
+    for i in range(1, len(values)):
+        dt = times[i] - times[i - 1]
+        out.append(out[-1] + dt / (tau + dt) * (values[i] - out[-1]))
+    return out
+
+
+def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
+    """``width.zone_step_test`` (SPEC19 package 5): one spray zone switched from the case's
+    steady state, the reading of the shapemeter zone under it, delayed and filtered, and a first
+    order plus dead time fitted per window (``flatness_control.fit_first_order_dead_time``).
+    ``local``: ``{'params', 'sens'}`` of the local sources (series with the strip, film and
+    flow-stress terms only then). Reported beside the width section; never evidence."""
+    from . import band_sensors as bsn
+    from . import flatness_control as flc
+    from . import roll_skin
+    zt = w.get('zone_step_test')
+    if zt is None:
+        return not_supplied('width_model.zone_step_test is null or absent')
+    sm = (case.get('measurement') or {}).get('shapemeter')
+    if sm is None:
+        return not_assessable('needs measurement.shapemeter')
+    if actual is None:
+        return not_assessable('needs the steady roll thermal solution')
+    if sp is None:
+        return not_assessable('needs the shape parameters of the case pass')
+    z = actual['z_m']
+    # the strip samples of the local state when its terms are used (the same samples as its
+    # supply profile), else those of the shape chain
+    idx = (list(local['idx']) if local is not None and local.get('idx') is not None
+           else _inside(z, sp['strip_centre_m'], sp['strip_width_m']))
+    zs = [z[i] for i in idx]
+    a0 = sp['strip_centre_m'] - sp['strip_width_m'] / 2
+    a1 = sp['strip_centre_m'] + sp['strip_width_m'] / 2
+    centre = sm['centre_m'] if sm['centre_m'] is not None else th.centre
+    edges = bsn.zone_edges(centre, sm['zone_width_m'], sm['zone_count'],
+                           sm['edge_zone_width_m'], sm['edge_zone_count_per_side'])
+    spread = sm['neighbour_spreading_fraction']
+    op = _ReadingOperator(zs, sp, a0, a1, edges, spread)
+    x = sum(th.positions[i] for i in zt['nozzle_indices']) / len(zt['nozzle_indices'])
+    j = bsn.zone_of(edges, x)
+    if j is None or op.m[j] is None:
+        return not_assessable('the switched nozzles are under no shapemeter zone over the strip')
+    lv = list(th.levels)
+    for i in zt['nozzle_indices']:
+        lv[i] = zt['level']
+    ts = zt['time_step_s']
+    n = max(1, int(round(zt['hold_s'] / ts)))
+    run = rt.ControlledRun(th.roll, th.header, th.segment(lv), initial=actual, **th.kw)
+    base_g = [actual['radius_growth_m'][i] for i in idx]
+    base_s = [actual['surface_temperature_k'][i] for i in idx]
+    rows_w = bsn.zone_weight_rows(zs, a0, a1, edges)
+    have_local = local is not None
+    if have_local:
+        from . import band_local
+        force_rows = [None if r is None else [v * 1e3 for v in band_local._force_i_units(
+            zs, [q * 1e-3 for q in r], sp, True)] for r, _ in rows_w]
+        lp, ls_ = local['params'], local['sens']
+    cov = [c for _, c in rows_w]
+
+    def reading(means):
+        return bsn.readings(list(zip(means, cov)), edges, spread)[0][j]
+    times = [0.0]
+    ser = {k: [0.0] for k in ZT_SERIES}
+    surf, surf_rel = [0.0], [0.0]
+    for k in range(1, n + 1):
+        st = run.advance(lv, ts, ts)
+        dev = [st['radius_growth_m'][i] - g for i, g in zip(idx, base_g)]
+        dtr = [st['surface_temperature_k'][i] - b for i, b in zip(idx, base_s)]
+        r_roll = reading(op.means(dev))
+        times.append(k * ts)
+        ser['roll_growth_only'].append(r_roll)
+        wz = rows_w[j][0]
+        surf.append(math.fsum(a * b for a, b in zip(wz, dtr)))
+        sm_ = [None if r is None else math.fsum(a * b for a, b in zip(r, dtr))
+               for r, _ in rows_w]
+        surf_rel.append(bsn.readings(list(zip(sm_, cov)), edges, 0.0)[1][j])
+        if have_local:
+            ch = band_local.local_changes(zs, dtr, lp)
+            dp = [ls_['dforce_per_width_dfriction_n_m'] * d for d in ch['friction_change']]
+            if ch.get('flow_stress_change_fraction') is not None:
+                dp = [a + ls_['dforce_per_width_dflow_stress_m'] * ls_['flow_stress_pa'] * b
+                      for a, b in zip(dp, ch['flow_stress_change_fraction'])]
+            r_ff = reading([None if r is None else math.fsum(a * b for a, b in zip(r, dp))
+                            for r in force_rows])
+            r_t = 0.0
+            if ch.get('strip_exit_temperature_k') is not None:
+                it = ss.thermal_flatness_term(zs, ch['strip_exit_temperature_k'])['i_units']
+                r_t = reading([m for m, _ in bsn.zone_means(zs, it, a0, a1, edges)])
+            ser['roll_growth_plus_strip_temperature'].append(r_roll + r_t)
+            ser['mechanical_net'].append(r_roll + r_ff)
+            ser['as_measured_hot'].append(r_roll + r_ff + r_t)
+    u = case['pass']['exit_speed_m_s']
+    delay = 0.0 if zt['shapemeter_distance_m'] is None else zt['shapemeter_distance_m'] / u
+    tau_f = zt['display_time_constant_s']
+    stride = max(1, int(math.ceil(len(times) / HISTORY_MAX_POINTS)))
+    keep = list(range(0, len(times), stride))
+    if keep[-1] != len(times) - 1:
+        keep = (keep if len(keep) < HISTORY_MAX_POINTS else keep[:-1]) + [len(times) - 1]
+    series, ratios = {}, {}
+    names = ZT_SERIES if have_local else ZT_SERIES[:1]
+    for name in names:
+        y = _filtered(times, _delayed(times, ser[name], delay), tau_f)
+        fits = [flc.fit_first_order_dead_time(times, y, wd) for wd in zt['fit_windows_s']]
+        series[name] = {'meaning': ZT_SERIES_MEANING[name],
+                        'time_s': [times[i] for i in keep],
+                        'reading_i_units': [y[i] for i in keep], 'fits': fits}
+        ratios[name] = [None if f['time_constant_s'] is None else
+                        f['time_constant_s'] / ZT_PUBLISHED_TIME_CONSTANT_S for f in fits]
+    for name in ZT_SERIES:
+        if name not in series:
+            series[name] = not_supplied('needs width_model.local_coupling (local sources)')
+    # the window dependence (a test twice as long, where the windows contain the pair)
+    wins = zt['fit_windows_s']
+    pairs = []
+    for name in names:
+        fits = {f['window_s']: f for f in series[name]['fits']}
+        for wd in wins:
+            f1, f2 = fits.get(wd), fits.get(2 * wd)
+            if f1 and f2 and f1['time_constant_s'] and f2['time_constant_s']:
+                pairs.append({'series': name, 'window_s': wd, 'time_constant_s':
+                              f1['time_constant_s'], 'twice_as_long_window_s': 2 * wd,
+                              'twice_as_long_time_constant_s': f2['time_constant_s']})
+    first = wins[0]
+
+    def tau_of(name):
+        f = series[name]['fits'][0] if isinstance(series[name], dict) and \
+            'fits' in series[name] else None
+        return None if f is None else f['time_constant_s']
+    t1, t2 = tau_of('roll_growth_only'), tau_of('as_measured_hot')
+    finding = (f'A test of {first:g} s would fit {t1:.3g} s from roll growth alone'
+               + (f' and {t2:.3g} s as measured hot' if t2 is not None else
+                  ' (the strip-side terms need width_model.local_coupling)')
+               + f'; the published value is {ZT_PUBLISHED_TIME_CONSTANT_S:g} s.')
+    roll_pairs = [q for q in pairs if q['series'] == 'roll_growth_only']
+    if roll_pairs:
+        p0 = roll_pairs[-1]                   # the longest pair of the roll-growth series
+        finding += (f' A test twice as long ({p0["twice_as_long_window_s"]:g} s instead of '
+                    f'{p0["window_s"]:g} s) fits {p0["twice_as_long_time_constant_s"]:.3g} s '
+                    f'instead of {p0["time_constant_s"]:.3g} s ({p0["series"].replace("_", " ")}'
+                    '). ' + ZT_WINDOW_SENTENCE)
+    finding += ' ' + ZT_NOT_EVIDENCE
+    v_r = u / (1 + (bite.forward_slip_fraction if bite is not None else 0.0))
+    roll, hdr = th.roll, th.header
+    scales = roll_skin.time_scales(
+        conductivity_w_mk=roll.conductivity_w_mk,
+        volumetric_heat_capacity_j_m3k=roll.density_kg_m3 * roll.specific_heat_j_kgk,
+        revolution_time_s=2 * math.pi * roll.radius_m / v_r, radius_m=roll.radius_m,
+        mean_htc_w_m2k=hdr.background_htc_w_m2k + hdr.spray_mean_htc_w_m2k,
+        event_durations_s=[zt['hold_s']])
+    flags = [ZT_FLAG] + sorted({fl for nm in names for f in series[nm]['fits']
+                                for fl in f['flags']})
+    return {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+            'provenance': zt['provenance'], 'nozzle_indices': zt['nozzle_indices'],
+            'level': zt['level'], 'hold_s': zt['hold_s'], 'time_step_s': ts,
+            'shapemeter_zone_index': j, 'nozzle_mean_position_m': x,
+            'transport_delay_s': delay,
+            'transport_delay_basis': ('shapemeter_distance_m / exit speed'
+                                      if zt['shapemeter_distance_m'] is not None
+                                      else 'no shapemeter distance given: no delay'),
+            'display_time_constant_s': tau_f, 'fit_windows_s': list(wins),
+            'series': series,
+            'surface_temperature_change_k': {'time_s': [times[i] for i in keep],
+                                             'zone_mean_k': [surf[i] for i in keep],
+                                             'zone_mean_minus_roll_mean_k':
+                                                 [surf_rel[i] for i in keep]},
+            'published': {'time_constant_s': ZT_PUBLISHED_TIME_CONSTANT_S,
+                          'source': rt.SOURCES['dohmae_2012'],
+                          'note': 'first-order flatness response to one cooling zone, '
+                                  'identified on a plant; test length, zone width and filter '
+                                  'not recorded in the project'},
+            'ratio_to_published': ratios, 'window_dependence': pairs,
+            'finding': finding, 'not_evidence_note': ZT_NOT_EVIDENCE,
+            'time_scales': {
+                'model_scales': {k_: scales[k_] for k_ in ('per_revolution_s', 'surface_film_s',
+                                                           'bulk_s', 'mean_htc_w_m2k')},
+                'scale_meaning': scales['scale_meaning'],
+                'test_over_scales': scales['events'][0],
+                'surface_path': ('circumferential-mean surface of the bulk model (the '
+                                 'per-revolution layer of width.roll_surface_cycle is not used '
+                                 'in the step test)'),
+                'roll_surface_speed_basis': ('exit speed / (1 + forward slip) of the case-pass '
+                                             'bite' if bite is not None else
+                                             'exit speed (no bite: forward slip not known)')},
+            'basis': {'reading': 'the reading of the shapemeter zone over the switched nozzles '
+                                 '(zone mean minus roll mean, the operator of the flatness '
+                                 'loop), of the difference from the starting steady state',
+                      'local_terms': 'film and flow-stress terms through the force transfer, '
+                                     'strip temperature term read hot (width.local_sources '
+                                     'formulas) of the surface change at each step',
+                      'fit': '[D, SPEC19: least squares on a fixed grid; no plant fitting '
+                             'protocol is recorded]'},
+            'flags': flags, 'limitations': list(ZT_LIMITATIONS)}
 
 def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
@@ -3885,6 +4208,16 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['failures'].append(out['flatness_control']['error'])
     flags += [f for f in (out['flatness_control'].get('flags') or [])
               if f in FC_TOP_FLAGS and f not in flags]
+    # SPEC19 package 5: zone step test emulation (never evidence)
+    try:
+        lz = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
+              if local_ctx and local_sens is not None else None)
+        out['zone_step_test'] = zone_step_test_section(case, w, th, sp, actual, lz, bite)
+    except (ValueError, ArithmeticError) as exc:
+        out['zone_step_test'] = failed('zone_step_test', exc)
+        out['failures'].append(out['zone_step_test']['error'])
+    if ZT_FLAG in (out['zone_step_test'].get('flags') or []) and ZT_FLAG not in flags:
+        flags.append(ZT_FLAG)
     try:
         if local_reason is not None:
             out['local_sources'] = band_local.not_assessable(local_reason)

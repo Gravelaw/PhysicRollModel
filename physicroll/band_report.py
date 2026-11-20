@@ -3375,6 +3375,87 @@ def _flatness_loop_block(r):
     return ''.join(out)
 
 
+STEP_COLOURS = {'roll_growth_only': C_FB, 'roll_growth_plus_strip_temperature': C_EVENT,
+                'mechanical_net': C_THR, 'as_measured_hot': C_ACT}
+
+
+def _step_test_block(r):
+    """SPEC19 package 5: the zone step test emulation (only with width_model.zone_step_test)."""
+    zt = _get(r, 'width', 'zone_step_test')
+    if not isinstance(zt, dict) or zt.get('not_supplied'):
+        return ''
+    head = '<h3>A zone step test, emulated</h3>'
+    if _bad(zt):
+        return head + _state_p('Zone step test ' + _bad(zt))
+    ser = {k: v for k, v in (zt.get('series') or {}).items()
+           if isinstance(v, dict) and 'fits' in v}
+    lines = []
+    for name, v in ser.items():
+        f = next((x for x in v['fits'] if x['window_s'] == 60.0), v['fits'][-1])
+        lines.append((name, v, f))
+    key_parts, rows = _key2([(n.replace('_', ' '), STEP_COLOURS.get(n, C_OBS), '', 'line')
+                             for n, _, _ in lines] + [('first-order fit (60 s or the longest '
+                                                       'window)', C_HEALTHY, '4 2', 'line')])
+    top = 14 + 15 * rows + 10
+    bot = top + 180
+    t_end = max(v['time_s'][-1] for _, v, _ in lines)
+    sx = _Axis(0.0, t_end, ML, W - MR)
+    vals = [y for _, v, _ in lines for y in v['reading_i_units'] if _ok(y)] + [0.0]
+    lo, hi = min(vals), max(vals)
+    pad = 0.08 * (hi - lo or 1.0)
+    sy = _Axis(lo - pad, hi + pad, bot, top)
+    c = [f'<svg viewBox="0 0 {W} {bot + MB}" role="img" xmlns="http://www.w3.org/2000/svg" '
+         'class="chart" aria-label="emulated zone step test"><title>Reading of the shapemeter '
+         'zone after one spray zone is switched</title>',
+         f'<rect x="{ML}" y="{top}" width="{W - ML - MR}" height="{bot - top}" '
+         'fill="#fbfcfe" stroke="#9aa5b8"/>']
+    for v in sy.ticks():
+        c.append(f'<line x1="{ML}" y1="{sy(v):.1f}" x2="{W - MR}" y2="{sy(v):.1f}" '
+                 'stroke="#d8dee8"/>')
+        c.append(f'<text x="{ML - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for v in sx.ticks():
+        c.append(f'<text x="{sx(v):.1f}" y="{bot + 16}" text-anchor="middle" class="tick">'
+                 f'{_e(_tick_label(v))}</text>')
+    for name, v, f in lines:
+        col = STEP_COLOURS.get(name, C_OBS)
+        c.append(f'<polyline points="{_pts(v["time_s"], v["reading_i_units"], sx, sy)}" '
+                 f'fill="none" stroke="{col}" stroke-width="2"/>')
+        if f.get('time_constant_s'):
+            ts_ = [x for x in v['time_s'] if x <= f['window_s'] + 1e-9]
+            fit = [0.0 if x <= f['dead_time_s'] else f['gain_i_units'] * (
+                1 - math.exp(-(x - f['dead_time_s']) / f['time_constant_s'])) for x in ts_]
+            c.append(f'<polyline points="{_pts(ts_, fit, sx, sy)}" fill="none" stroke="{col}" '
+                     'stroke-width="1.2" stroke-dasharray="4 2"/>')
+    cy = (top + bot) / 2
+    c.append(f'<text x="14" y="{cy:.1f}" text-anchor="middle" transform="rotate(-90 14 '
+             f'{cy:.1f})" class="axis">zone reading [I-units]</text>')
+    c.append(f'<text x="{(ML + W - MR) / 2:.1f}" y="{bot + 34}" text-anchor="middle" '
+             'class="axis">time after the switch [s]</text>')
+    c += key_parts
+    c.append('</svg>')
+    wins = zt.get('fit_windows_s') or []
+    rows_t = []
+    for name, v, _ in lines:
+        rows_t.append([_e(v['meaning'])] + [
+            (_f(f['time_constant_s'], 1, 3) + ' s' if f.get('time_constant_s') else
+             _e(str(f.get('status')).lower().replace('_', ' '))) for f in v['fits']])
+    return (head + f'<p>Nozzles {_e(", ".join(str(i) for i in zt["nozzle_indices"]))} to level '
+            f'{_f(zt["level"], 1, 3)} for {_f(zt["hold_s"], 1, 4)} s, read at shapemeter zone '
+            f'{_f(zt["shapemeter_zone_index"])}; transport delay '
+            f'{_f(zt["transport_delay_s"], 1, 3)} s, display filter '
+            f'{_f(zt["display_time_constant_s"], 1, 3)} s. Source: {_e(zt["provenance"])}.</p>'
+            + _wide(''.join(c))
+            + _table(['series', *[f'fitted constant, {_f(w_, 1, 4)} s test' for w_ in wins]],
+                     rows_t, 'wrapall')
+            + f'<p>{_e(zt.get("finding"))}</p>'
+            + f'<p class="note">Time scales of this roll model: one revolution '
+              f'{_f(_get(zt, "time_scales", "model_scales", "per_revolution_s"), 1, 3)} s, the '
+              f'surface film {_f(_get(zt, "time_scales", "model_scales", "surface_film_s"), 1, 3)}'
+              f' s, the roll body {_f(_get(zt, "time_scales", "model_scales", "bulk_s"), 1, 3)} '
+              f's; {_e(_get(zt, "time_scales", "surface_path"))}.</p>')
+
+
 def _measurement_section(r):
     """SPEC17 package 4: what a shapemeter would show (zone means of the model profile)."""
     m = r.get('measurement')
@@ -3452,6 +3533,7 @@ def _measurement_section(r):
                'stress, not a forecast of the operator\'s screen: a band below the threshold '
                'would probably not show, and it can still be on the strip.</p>')
     out.append(_flatness_loop_block(r))
+    out.append(_step_test_block(r))
     out.append(_gauge_html(m))
     out.append('</section>')
     return ''.join(out)

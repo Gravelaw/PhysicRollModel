@@ -1495,6 +1495,11 @@ roll-stack model; not modelled here), `horizon_s`, `shapemeter_distance_m`,
 `display_time_constant_s`, `include_local_sources` and `provenance`. The valve steps, dead band
 and minimum times are in the flatness control system's parameter list or commissioning report;
 the grouping of nozzles into zones in the coolant piping drawing.
+`width_model.zone_step_test` (SPEC19 package 5, section 7.1; null = none; needs
+`measurement.shapemeter`): describe the plant's own test: `nozzle_indices` (the zone switched),
+`level`, `hold_s` (the test length), `fit_windows_s`, `time_step_s`, `shapemeter_distance_m`
+(from the roll gap to the shapemeter; the line drawing) and `display_time_constant_s` (the
+shapemeter display or controller input filter, from its parameter list) and `provenance`.
 `width_model.local_coupling` (SPEC19 package 1, section 7.11; null = none):
 `inlet_roll_temperature_weight` ([0, 1], default 0.5: the share of a roll surface temperature
 difference that reaches the oil at the inlet; an assumption, no measurement exists),
@@ -1817,8 +1822,43 @@ build-up of the radial one. Plant time constants themselves were not found (abst
 for this demo's inputs: a comparison, not a resolution). Possible causes, none modelled: bite heat that depends
 on the roll surface temperature, emulsion-level heat transfer, per-revolution effects. The
 literature adds two candidates (gap study X5): the surface time scale of the roll, and the
-strip-temperature term in measured flatness (section 7.7; a hot fibre reads loose while hot);
-neither is tested here.
+strip-temperature term in measured flatness (section 7.7; a hot fibre reads loose while hot).
+
+**The emulated step test (SPEC19 package 5, `width.zone_step_test`; finding 2).** With
+`width_model.zone_step_test` the tool emulates the plant's test: one zone switched from the
+steady state, the reading of the shapemeter zone over it (the operator of 7.12), a transport
+delay `distance/speed` and a display filter, and a first order plus dead time fitted per test
+length [D, SPEC19: least squares on a fixed grid of time constants with ratio 1.08; no plant
+fitting protocol is recorded]. It fits each combination of terms: roll growth alone (the roll
+body), roll growth plus the strip temperature term read hot, roll growth plus the film and
+flow-stress terms (`mechanical_net`), and all four (`as_measured_hot`); the surface terms
+follow the roll surface (the circumferential mean of the bulk model; the per-revolution layer
+of 7.10 is not used in the test). Battery-foil, nozzles 18-19, shapemeter zone 17, no delay,
+1 s filter (`tests/test_band_step_test_demos.py`, the planner's table reproduced exactly):
+
+| series | 20 s test | 40 s | 60 s | 120 s | 600 s |
+|---|---|---|---|---|---|
+| roll growth alone | 63.8 s | 63.8 | 74.4 | 101.3 | 173.5 |
+| + strip temperature, coupling 1.0 | 16.0 | 25.3 | 34.5 | 59.1 | 137.8 |
+| + strip temperature, coupling 0.5 | 23.5 | 34.5 | 46.9 | 68.9 | - |
+| lengthwise demo, nozzles 20-21, roll growth alone | 109.4 | 93.8 | 93.8 | 118.1 | - |
+| lengthwise, + strip temperature, coupling 1.0 | 29.6 | 43.4 | 59.1 | 86.8 | - |
+
+What this shows: the fitted constant depends on the test length (a first-order fit to a
+response with several time scales: it grows over longer tests) and on which physics is on. Roll
+growth alone gives about a minute or more; the plant's 20 s lies inside the range only with the
+strip-temperature term on and a test of 20 to 40 s. What it does not show: that this is what the
+plant measured. The coupling factor (0.84 computed on the battery-foil pass, 0.51 on the sheet
+pass), the inlet weight and the display filter are assumptions; no plant protocol is recorded.
+The fit over a short test is also ill-conditioned: dead time and constant trade off, and the
+demo's own 2 m to the shapemeter (0.15 s at 13 m/s) moves the 20 s roll-growth fit from 63.8 to
+43.4 s (the demo artifact: 43.4 s roll growth alone, 18.6 s with the strip term at the computed
+coupling 0.84, 34.5 s as measured hot with the film and flow-stress terms; 60 s: 74.4, 37.2 and
+63.8 s). The film term of the battery-foil pass opposes the roll path and makes the mechanical
+net response not first order (flagged). This supports the reading of gaps A6 and X5; it is not a
+resolution. Benchmark `A6-ZONE-TIME-CONSTANT` records both 20 s ratios
+(`INDICATIVE_ASSUMED_INPUTS`). Cost: about 3 s per test of 120 s at full numerics, 1.0 s on the
+quick grid.
 
 Not modelled: the per-revolution surface temperature cycle, the bite contact conductance
 and roll-strip temperature coupling (`q` is supplied or computed from the pass, not coupled
@@ -2099,7 +2139,8 @@ after-release onset, reporting threshold, all as stripe heights from the peak pr
 scaled), the time above the in-mill threshold (`visible_time_s`), the fade time after the
 event, and the band life (event duration plus the time after the event to fall below the
 manifest threshold). Valve events can now also be predicted by a simulated flatness loop
-(section 7.12); only the typed `width_model.events` drive this section and the evidence.
+(section 7.12), and a zone step test emulated (7.1); only the typed `width_model.events` drive
+this section and the evidence.
 With `width_model.local_coupling` each event row also carries
 `local_sources` (section 7.11): the film, flow-stress and strip-temperature terms beside the
 roll-growth term at the snapshot nearest `start + min(20 s, duration)` (the fast path,
@@ -3900,6 +3941,7 @@ case". Sections of the lengthwise demo report
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
 | Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
 | What the flatness control would do (SPEC19 package 4) | at the end of the shapemeter section, only with `width_model.flatness_control`: the statement that this is what such a loop would do with the tool's own law on this model, the set-up, the status sentence, the end-state warning for an unsettled loop, the repeating pattern, a chart of the largest zone error against time with the dead band, a valve map, the zone outcomes ("could the control" remove, make or leave a band), the first ten predicted events and the low-order sentence |
+| A zone step test, emulated (SPEC19 package 5) | after the flatness-control block, only with `width_model.zone_step_test`: the test set-up, the reading of the zone for each series with its 60 s fit, the table of fitted constants per series and test length, the finding with the window dependence and the statement that a match is not evidence, the model's three time scales |
 | Measured roll profile (SPEC20 additions) | inside the width section: the bands with de-trending orders 2 and 4 and the largest difference, the warning "subtract the grinder's target curve before entering the profile, or state the curve" with `ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER`, and "this profile cannot show a mark narrower than X mm" with `ROLL_PROFILE_GRID_TOO_COARSE`; `GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA` appears in the flag list when a work-roll pitch fits no simple count but a grinder pattern |
 | A hot stripe: roll growth, oil film, softer metal, strip temperature | only with `width_model.local_coupling` (inside the width section, after the friction-stripe block): the local state at the largest roll surface difference and the oil supply, a chart of the four terms and both sums, the band and event tables (both transfer levels, the net at inlet weights 0 / entered / 1 and the sign words), one sentence per row, the force sensitivities with their bite model and time scales, the sign note, and the warning "Read the signs, not the digits." |
 | Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 7.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
@@ -4088,6 +4130,7 @@ real mill.
 | `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
+| step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
 | flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
 | grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
@@ -4163,7 +4206,10 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   computed for a 260 mm roll [PT-T25]) and the lengthwise demo's events fade over about a
   minute (half-decay 57 s and 84 s). The 20 s is of the order of the local time scale, not of
   the steady build-up; plant time constants were not found (only an abstract, [PT-T26]).
-  Partly open. The strip-temperature term in measured flatness (section 7.7) is one of two
+  Partly open; the emulated step test (7.1, `width.zone_step_test`) puts the plant's 20 s
+  inside the model's range only with the strip-temperature term on and a test of 20-40 s, with
+  an assumed coupling and filter: a consistent reading, not evidence.
+  The strip-temperature term in measured flatness (section 7.7) is one of two
   candidate causes the literature adds (X5); it is not tested here.
 - **The roll thermal model** is circumferentially averaged, with top-hat footprints (the
   nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
@@ -4287,6 +4333,10 @@ At battery-foil gauge, in addition (each checked against the code and
   100 MPa (Roelands low by a factor 12 to 30); no source gives a limiting shear stress for a
   rolling oil (only a lower bound 0.045 of the pressure for one base oil); the Eyring stress
   is known for one base oil without additives (section 8.1).
+- **The emulated step test fits a constant that belongs to the test** (section 7.1): it
+  grows with the test length, depends on which terms are on, and over a short test trades off
+  against the dead time (a 0.15 s delay moves it by a third); the coupling, inlet weight and
+  display filter are assumptions and no plant protocol is recorded.
 - **The simulated flatness loop is the tool's own law on this model** (section 7.12): one
   header on one roll, spray zones only, the low-order part assumed removed by bending and tilt
   (not modelled), linear readings, no feed-forward; whether it settles depends on analyst

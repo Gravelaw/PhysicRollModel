@@ -253,7 +253,8 @@ class BenchmarkTests(unittest.TestCase):
                                                      bm.RECORDED_ON_SPEC18_P6,
                                                      bm.RECORDED_ON_SPEC18_P7,
                                                      bm.RECORDED_ON_SPEC18_P9,
-                                     bm.RECORDED_ON_SPEC19_P4))
+                                     bm.RECORDED_ON_SPEC19_P4,
+                                     bm.RECORDED_ON_SPEC19_P5))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -425,6 +426,14 @@ class BenchmarkTests(unittest.TestCase):
         if q['project_value'] is not None:          # read from the committed artifact
             self.assertLess(abs(q['project_value'] / q['recorded_project_value'] - 1), 1e-6)
         self.assertNotIn('SS-V8', {e['id'] for e in self.result['not_encoded']})
+
+    def test_a6_zone_time_constant_indicative_both_ratios(self):
+        case = self.cases['A6-ZONE-TIME-CONSTANT']
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        self.assertEqual([q['reference_value'] for q in case['quantities']], [20.0, 20.0])
+        for q in case['quantities']:
+            if q['project_value'] is not None:
+                self.assertLess(abs(q['project_value'] / q['recorded_project_value'] - 1), 1e-6)
 
     def test_tm_la19_heat_split_inside_measured_range(self):
         case = self.cases['TM-LA19-HEAT-SPLIT']

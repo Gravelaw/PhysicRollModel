@@ -90,7 +90,7 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
             'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT',
-            'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP')
+            'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP', 'A6-ZONE-TIME-CONSTANT')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
@@ -99,6 +99,7 @@ RECORDED_ON_SPEC18_P6 = '2026-11-20, on commit f494de6 (SPEC18 package 6)'
 RECORDED_ON_SPEC18_P7 = '2026-11-20, on commit a8160ae (SPEC18 package 7)'
 RECORDED_ON_SPEC18_P9 = '2026-11-20, on commit 42bd9c3 (SPEC18 package 9)'
 RECORDED_ON_SPEC19_P4 = '2026-11-20, on commit b4248c6 (SPEC19 package 4)'
+RECORDED_ON_SPEC19_P5 = '2026-11-20, on commit c73b7f5 (SPEC19 package 5)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -241,6 +242,8 @@ RECORDED = {
                           'forward_slip_r135': 0.25941949751226545},
     # [run] at RECORDED_ON_SPEC18_P9 (computed heat partition)
     'SS-V8-LOOP': {'final_largest_zone_residual': 3.2516997182169973},
+    'A6-ZONE-TIME-CONSTANT': {'roll_growth_only': 43.42741899373273,
+                              'as_measured_hot': 34.47408534151673},
     'TM-LA19-HEAT-SPLIT': {'perfect_contact': 0.16206930854116774,
                            'film_70nm_k0125': 0.22787082470045728,
                            'film_70nm_k025': 0.19523048285294492},
@@ -1238,6 +1241,41 @@ def _ss_v8_loop():
                  ['ANALYST_CONTROL_LAW', 'SYNTHETIC_MILL'])
 
 
+def _a6_zone_time_constant():
+    """The battery-foil demo's emulated zone step test (committed artifact): the first-order
+    constant a 20 s test would fit, roll growth alone and as measured hot, against the
+    published 20 s. Order of magnitude only (synthetic mill, assumed coupling and filter)."""
+    import json
+    from pathlib import Path
+    path = (Path(__file__).resolve().parents[1] / 'artifacts' / 'band_diagnosis'
+            / 'battery-foil-demo.result.json')
+    vals, src = {}, 'artifact not present (installed package): project values not read'
+    if path.is_file():
+        zt = (json.loads(path.read_text(encoding='utf-8')).get('width') or {}).get(
+            'zone_step_test') or {}
+        for name in ('roll_growth_only', 'as_measured_hot'):
+            fits = ((zt.get('series') or {}).get(name) or {}).get('fits') or []
+            f = next((x for x in fits if x.get('window_s') == 20.0), None)
+            vals[name] = None if f is None else f.get('time_constant_s')
+        src = 'width.zone_step_test of the committed battery-foil artifact, 20 s window'
+    rec = RECORDED['A6-ZONE-TIME-CONSTANT']
+    q = [_quantity(f'time_constant_20s_test_{name}', 's', vals.get(name), rec[name], 20.0,
+                   f'{label} against the plant-identified first-order flatness response of '
+                   '20 s [Dohmae & Okamura 2012, as cited by the project]',
+                   recorded_on=RECORDED_ON_SPEC19_P5)
+         for name, label in (('roll_growth_only', 'roll growth alone'),
+                             ('as_measured_hot', 'as measured hot (roll growth, film, flow '
+                                                 'stress and strip temperature terms)'))]
+    notes = [src, 'Synthetic mill; the strip-to-roll coupling (computed), the inlet weight, the '
+                  'shapemeter distance and the display filter are assumptions; no plant test '
+                  'protocol (length, zone, filter) is recorded. Order of magnitude only.']
+    return _case('A6-ZONE-TIME-CONSTANT', 'Emulated zone step test against the published 20 s',
+                 'Dohmae & Okamura 2012, as cited by the project', 'A6', 'AS_CITED',
+                 'MEASUREMENT', {'demo': 'battery_foil', 'test_s': 20.0}, notes, q,
+                 'INDICATIVE_ASSUMED_INPUTS', 'Both ratios recorded; a match is not evidence '
+                 'that this is what the plant measured.', ['ASSUMED_COUPLING_AND_FILTER'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1251,7 +1289,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws,
           'BT-V2-FRICTION-HS': _bt_v2_friction_hs,
           'TM-LA19-HEAT-SPLIT': _tm_la19_heat_split,
-          'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit, 'SS-V8-LOOP': _ss_v8_loop}
+          'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit, 'SS-V8-LOOP': _ss_v8_loop,
+          'A6-ZONE-TIME-CONSTANT': _a6_zone_time_constant}
 
 
 def run_case(case_id: str) -> dict:
