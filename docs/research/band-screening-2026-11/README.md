@@ -28,6 +28,7 @@ Maintained documents built from these reports:
 | [gap-thermal-material-dynamics.md](gap-thermal-material-dynamics.md) | Gap study: thermal modelling and coolant, material behaviour, mill dynamics and control | `TM-` |
 | [gap-open-data-codes.md](gap-open-data-codes.md) | Open datasets, open-source codes, published benchmark data, validation plan | `OD-` |
 | [phase1-equations.md](phase1-equations.md) (2026-11-19) | Equations and constants the gap reports cite without giving | `E` (ids `E1`-`E19`) |
+| [roll-grinding.md](roll-grinding.md) (2026-11-20) | Roll grinding for foil and thin-strip mills: ground camber, accuracy and roughness, grinding marks that print, wear, open data | `RG` (ids `RG1`-`RG51`) |
 
 Inside each report the sources carry the report's own numbering (for example `S12`, `G7`,
 `T25`). The maintained documents put the prefix above in front of that number.
