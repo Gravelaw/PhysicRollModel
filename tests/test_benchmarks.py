@@ -250,7 +250,8 @@ class BenchmarkTests(unittest.TestCase):
                     self.assertIn(q['recorded_on'], (bm.RECORDED_ON, bm.RECORDED_ON_SPEC18_P1,
                                                      bm.RECORDED_ON_SPEC18_P4,
                                                      bm.RECORDED_ON_SPEC18_P5,
-                                                     bm.RECORDED_ON_SPEC18_P6))
+                                                     bm.RECORDED_ON_SPEC18_P6,
+                                                     bm.RECORDED_ON_SPEC18_P7))
         ids = {e['id'] for e in self.result['not_encoded']}
         self.assertTrue({'BT-V4', 'BT-V9', 'SS-V1', 'SS-V4', 'SS-V5', 'SS-V11'} <= ids)
         self.assertFalse(ids & {'BT-V1', 'BT-V2', 'BT-V3', 'SS-V2', 'SS-V3'})
@@ -398,6 +399,20 @@ class BenchmarkTests(unittest.TestCase):
                            ('w_wilson_sheu_fit_a050_p10', 8.17),
                            ('w_wilson_sheu_fit_a050_p06', 3.52)):
             self.assertAlmostEqual(ratios[name], want, delta=0.005 * want + 0.003, msg=name)
+
+    def test_friction_identified_from_bt_v2_load(self):
+        case = self.cases['BT-V2-FRICTION-HS']
+        self.assertEqual(case['verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+        # SPEC18 package 7 worked numbers: 0.03064 (slip 0.1966) and 0.02488 (slip 0.2594);
+        # ratios to the source's 0.026: 1.178 and 0.957 (secant tolerance 1e-4 in force)
+        for mm, mu, slip, ratio in ((89, 0.03064, 0.1966, 1.178), (135, 0.02488, 0.2594, 0.957)):
+            q = _q(case, f'friction_from_force_r{mm}')
+            self.assertAlmostEqual(q['project_value'], mu, delta=2e-4 * mu)
+            self.assertAlmostEqual(q['ratio_project_to_reference'], ratio, delta=5e-4)
+            self.assertEqual(q['row_verdict'], 'INDICATIVE_ASSUMED_INPUTS')
+            q = _q(case, f'forward_slip_at_friction_r{mm}')
+            self.assertAlmostEqual(q['project_value'], slip, delta=1e-4)
+            self.assertEqual(q['row_verdict'], bm.NO_REFERENCE_VALUE)
 
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):

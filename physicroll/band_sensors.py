@@ -43,7 +43,7 @@ from . import band_process as bp
 from .band_width import spray_layout
 
 STATUS = 'SCREENING_RESULT_NOT_PLANT_VALIDATED'
-MEASUREMENT_KEYS = ('shapemeter', 'thickness_gauge')
+MEASUREMENT_KEYS = ('shapemeter', 'thickness_gauge', 'pass_records')
 SHAPEMETER_REQUIRED = ('zone_width_m', 'zone_count', 'provenance')
 SHAPEMETER_DEFAULTS = {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
                        'centre_m': None, 'neighbour_spreading_fraction': 0.0,
@@ -153,11 +153,74 @@ def validate_shapemeter(s):
 
 
 def validate_measurement(m):
-    """Strict keys; ``shapemeter`` and ``thickness_gauge`` optional (null = not supplied)."""
+    """Strict keys; ``shapemeter``, ``thickness_gauge`` and ``pass_records`` (SPEC18 package 7)
+    optional (null = not supplied)."""
     bp.keys('measurement', m, (), MEASUREMENT_KEYS)
-    sm, tg = m.get('shapemeter'), m.get('thickness_gauge')
+    sm, tg, pr = m.get('shapemeter'), m.get('thickness_gauge'), m.get('pass_records')
     return {'shapemeter': None if sm is None else validate_shapemeter(sm),
-            'thickness_gauge': None if tg is None else validate_thickness_gauge(tg)}
+            'thickness_gauge': None if tg is None else validate_thickness_gauge(tg),
+            'pass_records': None if pr is None else validate_pass_records(pr)}
+
+
+# ------------------------------------------------- pass records (SPEC18 package 7, BT-G6)
+PASS_RECORD_REQUIRED = ('label', 'separating_force_n', 'provenance')
+PASS_RECORD_PASS_KEYS = ('exit_speed_m_s', 'entry_thickness_m', 'exit_thickness_m',
+                         'entry_tension_pa', 'exit_tension_pa', 'mean_flow_stress_pa')
+PASS_RECORD_OPTIONAL = (('forward_slip_fraction', 'torque_per_work_roll_nm')
+                        + PASS_RECORD_PASS_KEYS + tuple(bp.PASS_RECORD_UNCERTAINTY_DEFAULTS))
+PASS_RECORDS_MAX = 8
+
+
+def _record_num(where, value, lo, hi, lo_open, hi_open, text, allow_none=False):
+    if value is None and allow_none:
+        return None
+    ok = (not isinstance(value, bool) and isinstance(value, (int, float))
+          and math.isfinite(value) and (value > lo if lo_open else value >= lo)
+          and (value < hi if hi_open else value <= hi))
+    if not ok:
+        raise ValueError(f'{where} must be {text}')
+    return float(value)
+
+
+def validate_pass_records(records):
+    """1 to 8 records of a measured pass: force (required), forward slip and torque (optional),
+    the pass values that differ from the case pass (null = the case pass), the uncertainties
+    (defaults ``band_process.PASS_RECORD_UNCERTAINTY_DEFAULTS``, analyst choices [D])."""
+    if not isinstance(records, list) or not 1 <= len(records) <= PASS_RECORDS_MAX:
+        raise ValueError(f'measurement.pass_records must be null or a list of 1 to '
+                         f'{PASS_RECORDS_MAX} records')
+    out = []
+    inf = float('inf')
+    for i, r in enumerate(records):
+        w = f'measurement.pass_records[{i}]'
+        bp.keys(w, r, PASS_RECORD_REQUIRED, PASS_RECORD_OPTIONAL)
+        rec = {}
+        for k in ('label', 'provenance'):
+            if not isinstance(r[k], str) or not r[k].strip():
+                raise ValueError(f'{w}.{k} must be a nonempty string')
+            rec[k] = r[k]
+        rec['separating_force_n'] = _record_num(f'{w}.separating_force_n',
+                                                r['separating_force_n'], 0, inf, True, True,
+                                                '> 0 N')
+        rec['forward_slip_fraction'] = _record_num(
+            f'{w}.forward_slip_fraction', r.get('forward_slip_fraction'), -0.2, 1, True, True,
+            'in (-0.2, 1) or null', True)
+        rec['torque_per_work_roll_nm'] = _record_num(
+            f'{w}.torque_per_work_roll_nm', r.get('torque_per_work_roll_nm'), 0, inf, True, True,
+            '> 0 N m or null', True)
+        rec['exit_speed_m_s'] = _record_num(f'{w}.exit_speed_m_s', r.get('exit_speed_m_s'), 0,
+                                            inf, True, True, '> 0 m/s or null', True)
+        for k in ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa'):
+            rec[k] = _record_num(f'{w}.{k}', r.get(k), 0, inf, True, True, '> 0 or null', True)
+        for k in ('entry_tension_pa', 'exit_tension_pa'):
+            rec[k] = _record_num(f'{w}.{k}', r.get(k), 0, inf, False, True, '>= 0 or null', True)
+        for k, hi in (('force_uncertainty_fraction', 0.5), ('slip_uncertainty_absolute', 0.2),
+                      ('torque_uncertainty_fraction', 0.5)):
+            v = r.get(k)
+            rec[k] = (bp.PASS_RECORD_UNCERTAINTY_DEFAULTS[k] if v is None else
+                      _record_num(f'{w}.{k}', v, 0, hi, True, False, f'in (0, {hi:g}]'))
+        out.append(rec)
+    return out
 
 
 GAUGE_REQUIRED = ('spot_length_m', 'time_constant_s', 'provenance')

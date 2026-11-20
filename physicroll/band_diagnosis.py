@@ -80,10 +80,12 @@ from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_s
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
 from .chatter import BITE_MIN_EXIT_THICKNESS_M as chatter_BITE_MIN_EXIT_THICKNESS_M
+from .chatter import HITCHCOCK_MIN_EXIT_THICKNESS_M
+from .chatter import _converged_bite as chatter_converged_bite
 from .chatter import REDUCTION_EXTENDED_FLAG
 from .foil_bite import (EXTENDED_GAUGE_FLAG, EXTENDED_GAUGE_LIMITATION,
                         EXTENDED_REDUCTION_LIMITATION, LARGE_SLIP_EXPLANATION,
-                        derive_bite_response_mattress)
+                        derive_bite_response_mattress, solve_mattress_bite)
 from . import halfspace_bite
 
 CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
@@ -617,6 +619,12 @@ def _validate_v2_sections(case, out):
             and tg['position_m'] > res['width_model']['roll']['barrel_length_m']):
         raise ValueError('measurement.thickness_gauge.position_m must be on the barrel '
                          '(in [0, 10] m and not beyond the barrel length) or null')
+    for i, rec in enumerate((res['measurement'] or {}).get('pass_records') or []):
+        h0 = rec['entry_thickness_m'] or out['pass']['entry_thickness_m']
+        h1 = rec['exit_thickness_m'] or out['pass']['exit_thickness_m']
+        if not h1 < h0:
+            raise ValueError(f'measurement.pass_records[{i}].exit_thickness_m must be below its '
+                             'entry_thickness_m (null = the case pass value)')
     w = res['width_model']
     if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
         raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
@@ -712,6 +720,7 @@ class _BiteCache:
         self.derivations = 0
         self.fallbacks = {}
         self.states = {}
+        self.nominal_solutions = []
 
     def _mattress(self, bite_pass):
         s, o = self.case['stand'], self.case['model_options']
@@ -756,6 +765,88 @@ class _BiteCache:
             if st['response'] is bite:
                 return st
         return None
+
+    def state(self, bite_pass, model=None):
+        """ONE nominal solve of ``bite_pass`` (no sensitivities), cached by the key of ``get``:
+        ``{'force_n', 'forward_slip_fraction', 'torque_per_work_roll_nm' (or None),
+        'contact_length_m', 'contact_radius_ratio', 'flags'}`` (SPEC18 package 7: an inversion
+        costs solves, not derivations). ValueError when the model rejects the pass."""
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        model = o['bite_model'] if model is None else model
+        key = ('state', bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'],
+               o['cells'], o['max_radius_ratio'], model, o.get('shear_cap_factor', 1.0))
+        if key not in self.store:
+            try:
+                if bite_pass.exit_thickness_m < BITE_FLOOR_M:
+                    raise ValueError(BITE_FLOOR_REASON.format(bite_pass.exit_thickness_m * 1e6))
+                bite_pass.validate()
+                self.store[key] = self._state(bite_pass, model)
+            except ValueError as exc:
+                self.store[key] = exc
+        value = self.store[key]
+        if isinstance(value, Exception):
+            raise ValueError(str(value))
+        return value
+
+    def _state(self, bp_, model):
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        e, nu = s['roll_youngs_modulus_pa'], s['roll_poisson_ratio']
+        args = (bp_.entry_thickness_m, bp_.exit_thickness_m, bp_.width_m, bp_.work_roll_radius_m,
+                bp_.mean_flow_stress_pa, bp_.friction_coefficient, bp_.entry_tension_pa,
+                bp_.exit_tension_pa)
+        if model == 'mattress':
+            r = solve_mattress_bite(*args, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+                                    cells=max(o['cells'], MATTRESS_MIN_CELLS))
+            return {'force_n': r['separating_force_n'],
+                    'forward_slip_fraction': r['forward_slip_fraction'],
+                    'torque_per_work_roll_nm': r['torque_per_work_roll_nm'],
+                    'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': 1.0,
+                    'flags': list(r['flags']), 'model': 'experimental_mattress'}
+        if model == 'half_space':
+            warm = self._nearest_nominal(bp_)
+            r, sol = halfspace_bite.solve_half_space_bite(
+                *args, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+                strip_plane_strain_modulus_pa=(m['youngs_modulus_pa']
+                                               / (1 - bw.STRIP_POISSON_RATIO ** 2)),
+                shear_cap_factor=o.get('shear_cap_factor', 1.0), warm_start=warm,
+                with_solution=True)
+            self.nominal_solutions.append((bp_, sol))
+            return {'force_n': r['separating_force_n'],
+                    'forward_slip_fraction': r['forward_slip_fraction'],
+                    'torque_per_work_roll_nm': r['torque_per_work_roll_nm'],
+                    'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': 1.0,
+                    'flags': list(r['flags']), 'model': 'reduced_half_space'}
+        if bp_.exit_thickness_m < HITCHCOCK_MIN_EXIT_THICKNESS_M:
+            raise ValueError(f'slab/Hitchcock bite domain requires exit thickness >= '
+                             f'{HITCHCOCK_MIN_EXIT_THICKNESS_M:g} m')
+        compliance = 16 * (1 - nu ** 2) / (math.pi * e)
+        try:
+            r, ratio = chatter_converged_bite(bp_, bp_.exit_thickness_m, bp_.entry_thickness_m,
+                                              bp_.entry_tension_pa, bp_.exit_tension_pa,
+                                              o['cells'], compliance, o['max_radius_ratio'])
+        except (ArithmeticError, TypeError) as exc:
+            raise ValueError(f'slab evaluation failed: {exc}') from exc
+        return {'force_n': r['separating_force_n'],
+                'forward_slip_fraction': r['forward_slip_fraction'],
+                'torque_per_work_roll_nm': r.get('torque_per_work_roll_nm'),
+                'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': ratio,
+                'flags': list(r.get('flags') or []), 'model': 'hitchcock'}
+
+    def _nearest_nominal(self, bite_pass):
+        best, best_d = None, HALF_SPACE_WARM_START_DISTANCE
+        cands = list(self.nominal_solutions) + [(k[0], st['solution'])
+                                                for k, st in self.states.items()]
+        for q, sol in cands:
+            y = bite_pass.mean_flow_stress_pa
+            d = (abs(math.log(bite_pass.entry_thickness_m / q.entry_thickness_m))
+                 + abs(math.log(bite_pass.exit_thickness_m / q.exit_thickness_m))
+                 + abs(math.log(y / q.mean_flow_stress_pa))
+                 + abs(math.log(bite_pass.friction_coefficient / q.friction_coefficient))
+                 + (abs(bite_pass.entry_tension_pa - q.entry_tension_pa)
+                    + abs(bite_pass.exit_tension_pa - q.exit_tension_pa)) / y)
+            if d < best_d:
+                best, best_d = sol, d
+        return best
 
     def get(self, bite_pass, model=None):
         """Bite of ``bite_pass`` with the case's bite model, or with ``model`` ('hitchcock' /
@@ -826,6 +917,9 @@ class _ModelCache:
 
     def state_for(self, bite):
         return self.cache.state_for(bite)
+
+    def state(self, bite_pass, model=None):
+        return self.cache.state(bite_pass, model=model or self.model)
 
 
 def _opts(beta):
@@ -3435,6 +3529,19 @@ def diagnose(case):
     else:
         process.update(status=STATUS, not_supplied=False)
         result['process'] = process
+    # SPEC18 package 7: friction identified from entered pass records, REPORTED only (no pass,
+    # lever or evidence item uses it); not supplied without records
+    records = (eff['measurement'] or {}).get('pass_records')
+    if records:
+        try:
+            fid = bp.friction_identification(eff, records, cache, bite,
+                                             perturbed_bite_model(eff, bite))
+            flags.extend(f for f in fid['flags'] if f not in flags)
+        except ValueError as exc:
+            fid = bp.failed('process.friction_identification', exc)
+    else:
+        fid = bp.not_supplied('measurement.pass_records is null or absent')
+    result['process']['friction_identification'] = fid
     ctx.process = result['process']
 
     # perturbed bites of the sensitivities: same bite model as the operating bite (a supplied

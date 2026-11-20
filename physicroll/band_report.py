@@ -2310,7 +2310,67 @@ def _process_section(r):
                                'strip exit temperature', 'limit', 'heat to each work roll'),
                               rows, 'num'))
     out.append(_speed_consistent_block(r))
+    out.append(_friction_identification_block(r))
     return head + ''.join(out) + '</section>'
+
+
+def _ident_cell(x):
+    """One identified value with its first-order interval, or the outcome."""
+    if not isinstance(x, dict):
+        return 'n/a'
+    if x.get('value') is None:
+        st = x.get('status') or ''
+        return f'<em>{_txt(st)}</em>' + (f': {_e(x["reason"])}' if x.get('reason') else '')
+    iv = (x.get('uncertainty') or {}).get('interval') or []
+    text = _f(x['value'], digits=4) + (f' ({_f(iv[0], digits=3)} to {_f(iv[1], digits=3)})'
+                                       if len(iv) == 2 else '')
+    if x.get('weakly_determined'):
+        text += ' <em>weakly determined</em>'
+    if x.get('multiple_roots'):
+        text += ' <em>several roots</em>'
+    return text
+
+
+def _friction_identification_block(r):
+    """SPEC18 package 7: friction from the entered pass records (nothing without records)."""
+    fid = (r.get('process') or {}).get('friction_identification')
+    if not isinstance(fid, dict) or fid.get('not_supplied'):
+        return ''
+    out = ['<h3>Friction from your pass records</h3>']
+    if _bad(fid):
+        return ''.join(out) + _state_p(_bad(fid))
+    out.append('<p class="warn"><strong>Not applied.</strong> '
+               + _e(fid.get('how_to_use') or '') + '. Bite model: '
+               + _txt(fid.get('bite_model')) + '; calibrated: no.</p>')
+    rows = []
+    for x in fid.get('rows') or []:
+        j = x.get('friction_joint') or {}
+        ag = x.get('agreement') or {}
+        rows.append([_e(x.get('label', '')), _f(x.get('exit_speed_m_s'), unit='m/s'),
+                     _ident_cell(x.get('friction_from_force')),
+                     _ident_cell(x.get('friction_from_slip')),
+                     _ident_cell(x.get('friction_from_torque')),
+                     _f(j.get('value'), digits=4) if j.get('value') is not None
+                     else _ident_cell(j),
+                     _txt(ag.get('outcome')),
+                     f'{_f(x.get("load_exponent_in_friction"), digits=3)} / '
+                     f'{_f(x.get("slip_exponent_in_friction"), digits=3)}'])
+    out.append(_table(('record', 'exit speed', 'from force', 'from slip', 'from torque',
+                       'joint', 'agreement', 'load / slip exponent'), rows, 'num'))
+    out.append(f'<p>{_e((fid.get("summary") or {}).get("sentence") or "")} Intervals: '
+               'first-order propagation of the entered uncertainties.</p>')
+    sc = fid.get('suggested_contact_friction')
+    if isinstance(sc, dict) and not _bad(sc):
+        out.append(f'<p>Contact friction implied by the load-sharing closure: '
+                   f'{_f(sc.get("contact_friction"), digits=4)}'
+                   + (f', spread {_f(sc.get("spread"), digits=3)}' if sc.get('spread') else '')
+                   + (f', slope {_f(sc.get("slope_per_ln_film_ratio"), digits=3)} per unit '
+                      'ln(film ratio)' if sc.get('slope_per_ln_film_ratio') is not None else '')
+                   + f'. {_e(sc.get("note") or "")}</p>')
+    flags = fid.get('flags') or []
+    if flags:
+        out.append(f'<p>Flags: {_e(", ".join(flags))}.</p>')
+    return ''.join(out)
 
 
 def _speed_consistent_block(r):

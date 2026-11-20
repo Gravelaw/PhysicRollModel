@@ -89,12 +89,13 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
-            'BT-G3-CRUSHING-LAWS')
+            'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
 RECORDED_ON_SPEC18_P5 = '2026-11-20, on commit 624f8e9 (SPEC18 package 5)'
 RECORDED_ON_SPEC18_P6 = '2026-11-20, on commit f494de6 (SPEC18 package 6)'
+RECORDED_ON_SPEC18_P7 = '2026-11-20, on commit a8160ae (SPEC18 package 7)'
 REL_TOL = 1e-6                # software pin, relative
 
 # ---------------------------------------------------------------- published inputs
@@ -230,6 +231,11 @@ RECORDED = {
                             'w_marsault_form_a050_p06': 0.5832,
                             'w_wilson_sheu_fit_a050_p10': 5.471148310128523,
                             'w_wilson_sheu_fit_a050_p06': 1.1258163257085319},
+    # [run] at RECORDED_ON_SPEC18_P7 (friction identified from load)
+    'BT-V2-FRICTION-HS': {'friction_r89': 0.030634856980508354,
+                          'forward_slip_r89': 0.1965339747892556,
+                          'friction_r135': 0.02487972694190181,
+                          'forward_slip_r135': 0.25941949751226545},
 }
 
 NOT_ENCODED = (
@@ -1062,6 +1068,65 @@ def _bt_g3_crushing_laws():
                  'model.', ['NOT_ASSEMBLED_INTO_A_MODEL'])
 
 
+# ------------------------------------------- friction identified (SPEC18 package 7, BT-G6)
+BT_V2_MEASURED_W_BAR = 58.0     # measured W_bar, AA1100 third foil pass [E1 FT, Fig. 8]
+
+
+def _bt_v2_friction_hs():
+    """BT-V2 inverted: the friction with which the reduced half-space bite reproduces the
+    measured W_bar 58, for the two assumed roll radii [run, band_process.identify_record]."""
+    from . import band_process as bproc
+    from .halfspace_bite import solve_half_space_bite
+    h0 = 73e-6
+    h1 = h0 * (1 - 0.57)
+    tb, tf = 0.107 * FLECK_YS_PA, 0.132 * FLECK_YS_PA
+    y = FLECK_YS_PA * math.sqrt(3) / 2
+    rec, q, parts = RECORDED['BT-V2-FRICTION-HS'], [], []
+    for radius in (0.089, 0.135):
+        mm = round(radius * 1e3)
+        warm = [None]
+
+        def solve(mu, scale, radius=radius, warm=warm):
+            res, sol = solve_half_space_bite(
+                h0, h1, SOLVER_WIDTH_M, radius, y * scale, mu, tb, tf,
+                roll_youngs_modulus_pa=FLECK_ER_STAR_PA * (1 - ROLL_NU_FOR_SOLVER ** 2),
+                roll_poisson_ratio=ROLL_NU_FOR_SOLVER,
+                strip_plane_strain_modulus_pa=HS_STRIP_MODULUS_PA, warm_start=warm[0],
+                with_solution=True)
+            warm[0] = sol
+            return {'force_n': res['separating_force_n'],
+                    'forward_slip_fraction': res['forward_slip_fraction'],
+                    'torque_per_work_roll_nm': res['torque_per_work_roll_nm'],
+                    'zone_structure': res['zone_structure']}
+        solver = bproc._Solver(solve)
+        force = BT_V2_MEASURED_W_BAR * radius * FLECK_YS_PA ** 2 / FLECK_ER_STAR_PA
+        found = bproc._secant_force(solver, 0.026, force)
+        mu = found['value']
+        st = solver(mu)
+        q.append(_quantity(f'friction_from_force_r{mm}', '1', mu, rec[f'friction_r{mm}'], 0.026,
+                           'friction the source infers with its own model from the same '
+                           'measured load (MODEL_OUTPUT, E1 FT); "about 0.03" from mill tests',
+                           row_verdict='INDICATIVE_ASSUMED_INPUTS',
+                           recorded_on=RECORDED_ON_SPEC18_P7))
+        q.append(_quantity(f'forward_slip_at_friction_r{mm}', '1', st['forward_slip_fraction'],
+                           rec[f'forward_slip_r{mm}'], None, 'no published value',
+                           recorded_on=RECORDED_ON_SPEC18_P7))
+        parts.append(f'R {mm} mm: mu_F {mu:.5f} ({st["zone_structure"]}, forward slip '
+                     f'{st["forward_slip_fraction"]:.4f}, {found["solves"]} solves)')
+    notes = ['Inputs as BT-V2-R89-HS / BT-V2-R135-HS (73 -> 31.39 um, tensions 0.107 and 0.132 '
+             'Y_s, Y_s 230 MPa, E_R* 230 GPa, E_s* 80 GPa); the measured W_bar 58 is the target; '
+             'the roll radius is ASSUMED (89 or 135 mm).',
+             'Secant in ln(mu) from 0.026, tolerance 1e-4 relative in force '
+             '(band_process.identify_record, step 1).',
+             'The source\'s 0.026 comes from its own model on the same load: the comparison is '
+             'model to model, not a measurement of friction.'] + _HS_NOTES
+    return _case('BT-V2-FRICTION-HS', 'Friction identified from the measured BT-V2 load, '
+                 'reduced half-space bite', SOURCE_BT_S1, 'BT-S1 (= E1)', 'FT', 'MODEL_OUTPUT',
+                 _fleck_inputs(h0, h1, 0.089, 0.026, tb=tb, tf=tf), notes, q,
+                 'INDICATIVE_ASSUMED_INPUTS', '; '.join(parts) + '; indicative only (assumed '
+                 'radius).', ['ASSUMED_ROLL_RADIUS', 'MODEL_TO_MODEL_REFERENCE'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1072,7 +1137,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-X29-LOAD-EXPONENT-HS': _bt_x29_load_exponent_hs,
           'BT-G3-FILM-E6-T42': _bt_g3_film_e6, 'BT-V4-FILM': _bt_v4_film,
           'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws,
-          'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws}
+          'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws,
+          'BT-V2-FRICTION-HS': _bt_v2_friction_hs}
 
 
 def run_case(case_id: str) -> dict:

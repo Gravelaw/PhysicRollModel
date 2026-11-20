@@ -4125,6 +4125,11 @@
     "status": "NOT_SUPPLIED"
   },
   "process": {
+    "friction_identification": {
+      "not_supplied": true,
+      "reason": "measurement.pass_records is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "not_supplied": true,
     "reason": "tribology and hardening are null or absent",
     "status": "NOT_SUPPLIED"

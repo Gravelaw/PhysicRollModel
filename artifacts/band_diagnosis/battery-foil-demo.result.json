@@ -4535,6 +4535,7 @@
       "youngs_modulus_pa": 70000000000.0
     },
     "measurement": {
+      "pass_records": null,
       "shapemeter": {
         "centre_m": null,
         "edge_zone_count_per_side": 0,
@@ -7606,6 +7607,11 @@
       ],
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
       "use_computed_friction": false
+    },
+    "friction_identification": {
+      "not_supplied": true,
+      "reason": "measurement.pass_records is null or absent",
+      "status": "NOT_SUPPLIED"
     },
     "friction_speed_curve": {
       "contact_radius_m": 0.135,

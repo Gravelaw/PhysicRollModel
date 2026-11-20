@@ -431,6 +431,10 @@ unknown, and the spread between the models measures what is not known. The half-
 is not the default: its published reference value is itself not a defined number (section
 10.3), and switching would move every foil force, stiffness, slip and heat.
 
+Measured roll force, forward slip and torque of your own passes can narrow the friction:
+section 8.5 identifies it from entered pass records with any of the three bite models, reports
+which measurement carries the information at these gauges, and applies nothing.
+
 ### 3.4 What still runs without a roll bite, and supplying shape inputs
 
 When neither roll-bite model solves the case pass (a rejection, an exit gauge below
@@ -1292,7 +1296,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 |---|---|---|---|
 | `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
 | `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
-| `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model |
+| `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model; enter measured passes in `measurement.pass_records` and the tool reports the friction they imply (section 8.5) |
 | `stand.work_roll_mass_kg`, `stand.backup_roll_mass_kg` | moving mass of one work-roll and one backup-roll assembly (roll, necks, chocks, bearings) | kg | roll and chock drawings |
 | `stand.work_backup_contact_stiffness_n_m` | stiffness of the work-roll / backup-roll contact | N/m | stand designer's data, or a roll-contact calculation |
 | `stand.housing_stiffness_n_m` | stiffness of housing, screws or cylinders: the mill modulus | N/m | mill-modulus (stretch) test at commissioning, the AGC setup |
@@ -2561,6 +2565,99 @@ and without bite damping, so no speed-consistent critical speed is given (fixed 
 0.03: 13.85 m/s, beta 0.5; 5.16 m/s, beta 0). Before the fix those slow scan speeds fell back
 to the mattress model and gave 13.30 and 8.79 m/s, mixing the two bite models.
 
+### 8.5 Friction from load, torque and forward slip
+
+`measurement.pass_records` (case schema v2, null by default; no demo has records) takes 1 to 8
+records of a measured pass: `label`, `separating_force_n` and `provenance` (required),
+`forward_slip_fraction` (-0.2 to 1) and `torque_per_work_roll_nm` (optional), the pass values
+that differ from the case pass (`exit_speed_m_s`, gauges, tensions, `mean_flow_stress_pa`; null
+takes the case pass) and three uncertainties: force 5 %, slip 0.01 absolute and torque 10 % by
+default (analyst choices [D], stated in the result). The result is
+`process.friction_identification`; it is REPORTED only: no pass, lever, sensitivity or evidence
+item uses it, and `declaration.calibrated` stays false because the tool cannot verify the
+entered numbers. To use a value, enter it as `pass.friction_coefficient`.
+
+**Method.** Each record is solved with the bite model of the operating bite (Hitchcock, the
+experimental mattress bite or the reduced half-space bite; `bite_model` in the result), one
+nominal solve at a time (`_BiteCache.state`, no sensitivities):
+
+1. `friction_from_force`: the friction whose model force equals the measured force (secant in
+   `ln mu` from the case friction, tolerance 1e-4 relative in force, at most 12 solves, inside
+   0.003 to 0.3; otherwise `NOT_FOUND` with the reason).
+2. `friction_from_slip`, `friction_from_torque`: the same for the measured slip and torque, on a
+   9-point scan from 0.4 to 2.5 times the friction from force, the root nearest it refined by
+   regula falsi; `multiple_roots` when the scan holds several.
+3. `friction_joint`: the minimiser of the sum of squared normalised residuals (force and torque
+   in `ln`, slip absolute, each divided by its uncertainty) over the scan, refined by repeated
+   parabolas; `consistent` when every normalised residual is at most 2 in magnitude. (One
+   parabola through the scan points, as first specified, lands 6 % off on exact half-space data
+   and is repeated until it moves less than 1e-4 in `ln mu`.)
+4. `friction_and_flow_stress`: with force and slip, the pair (friction, flow-stress scale)
+   that reproduces both exactly (Newton, scale 0.5 to 2) - two unknowns from two numbers: there
+   is no redundancy to check them.
+5. `load_exponent_in_friction`, `slip_exponent_in_friction` (and the torque exponent) at the
+   friction from force, by central differences at +-1 %.
+
+Every single-quantity value carries a first-order interval `mu*exp(+-u)`, `u` = the entered
+uncertainty divided by the local sensitivity `|d(quantity)/d ln mu|` [D, first-order
+propagation]. `agreement.outcome` names the result: `MEASUREMENTS_AGREE` (joint fit
+consistent and every pair within twice its combined uncertainty), `MEASUREMENTS_CONTRADICT`,
+`SINGLE_MEASUREMENT` or `FORCE_NOT_MATCHED`.
+
+**What a disagreement means.** The three values come from one constant-friction bite. When they
+disagree, either a measurement is off or the bite cannot reproduce the pass with one friction
+value: foil forward slip is over-estimated by constant friction, and a friction varying
+through the bite is the published remedy [BT-S5 AB] (not built). A slip residual above 2 at the
+friction from force gives `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`. An
+identified friction also absorbs the bite model's own error: on the published foil case the
+printed model gives W_bar 78 to 134 depending on an unstated end length, about 12 % in a
+friction from load and 30 % in one from slip.
+
+**Which measurement carries the friction information.** It depends on the regime (reduced
+half-space bite [run], `tests/test_band_friction_identification.py`):
+
+| case | structure | load exponent | forward-slip exponent |
+|---|---|---|---|
+| published foil case, 20 -> 15 um, friction 0.03, strip spring 80 GPa | A B F | 2.461 | 0.378 |
+| same, strip rigid in thickness | A B E F | 2.455 | 0.436 |
+| BT-V2, 73 -> 31.39 um, friction 0.026, R 89 mm | A F | 1.570 | 2.473 |
+
+With a no-slip zone the forward slip hardly depends on friction; the force is the better
+indicator there (flag `FORWARD_SLIP_INSENSITIVE_TO_FRICTION_IN_THIS_REGIME` when the slip
+exponent is below 0.5, and the slip value is marked `weakly_determined`: its interval is several
+times wider than the force-based one). Without a no-slip zone the slip is the sharper indicator.
+The forward slip of the reduced half-space bite is defined to elastic order only (section 10);
+records whose bite carries `NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT` add that limitation.
+
+**BT-V2 inverted** (benchmark `BT-V2-FRICTION-HS`): the reduced half-space bite reproduces the
+measured W_bar 58 with friction 0.03063 for an assumed roll radius of 89 mm (forward slip
+0.1965; 4 solves) and 0.02488 for 135 mm (slip 0.2594; 5 solves), ratios 1.178 and 0.957 to the
+0.026 the source infers with its own model ("about 0.03" from mill tests [BT-S1 FT]); verdict
+`INDICATIVE_ASSUMED_INPUTS`. (The root itself is 0.030636; the secant stops at 1e-4 in force.)
+
+**Summary and contact friction.** `summary` lists the frictions from force, their median and
+spread, and with two or more exit speeds the least-squares slope `d mu / d ln(u)`; the flag
+`IDENTIFIED_FRICTION_DIFFERS_FROM_CASE_FRICTION` marks a median more than 20 % from the case
+friction. With `tribology`, each record gets the film ratio of the bite at its friction, the
+contact ratio `A` of the closure's curve (the published one by default, section 8.1) and the
+contact friction `mu_c = (mu - (1 - A)*mu_v)/A` (constant valley friction, 0.008 by default;
+null below `A` 0.05) [D, SPEC18: package 6's load sharing solved for the contact friction]: for
+example friction 0.03 at film ratio 0.380072 gives `A` 0.6695 and `mu_c` 0.04086.
+`suggested_contact_friction` is their median, with the slope against `ln(Lambda)` when the film
+ratios differ by more than 20 % (one value does not fit a speed range, E7 FT); entering it in
+`tribology.friction_closure.contact_friction` is your choice.
+
+**Cost.** One record with force, slip and torque: 18 solves, 0.4 s with the mattress bite on the
+battery-foil case pass; 21 solves, 5.4 s with the half-space bite (budget 42 solves, 3 s and
+10 s). The app does not ask for records yet.
+
+**How to log a record.** Take a steady window of 5-10 s at constant speed and tensions; average
+the roll force (both sides) and the motor torque per work roll net of losses; measure forward
+slip from the exit strip speed (laser velocimeter) and the work-roll surface speed to 0.1 %
+absolute; note the gauges, tensions, speed and coil, and the oil temperature; see section 7.4
+of the [coverage study](simulation-coverage-gaps.md) for the measurements the gap rows ask
+for.
+
 ## 9. Mill dynamics (`mill_dynamics.py`)
 
 Status `UNVALIDATED_LINEAR_MILL_DYNAMICS_SCREEN`; wraps `chatter.py` without changing it.
@@ -3207,7 +3304,7 @@ case". Sections of the lengthwise demo report
 | How the result changes with gauge | a generated direction sentence, then the gauge-trend text, two charts and the table of 7.3 |
 | Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
 | Transverse-band (chatter) screening: supporting detail | Key model numbers, What the model predicts on the strip, Chatter stability, Pass-schedule sweep, Frequency-speed map, Forced response and time trace, Levers (with coolant spray coverage and other screens) |
-| Process: friction, flow stress, pass heating | section 8: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed |
+| Process: friction, flow stress, pass heating | section 8: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed; with pass records, the block "Friction from your pass records" (section 8.5: one row per record with the friction from force, slip and torque and their first-order intervals, the joint value, the agreement, the load and slip exponents; the summary sentence; the implied contact friction; a warning that nothing is applied) |
 | Gauge control, drive and incoming variation | section 9 |
 | Limitations and sources | result limitations, known disagreements in the literature, sources |
 
@@ -3365,6 +3462,7 @@ real mill.
 | friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
 | `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
 | `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`); heat-streak tribology item (`test_heat_streak_regime_item`, SPEC17): with tribology and no temperature limit `NEUTRAL`, with a limit below the modelled exit temperature `SUPPORTS` / weak, the planted case still leads |
@@ -3400,6 +3498,12 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **Friction from pass records is reported, never applied** (section 8.5): it is identified
+  with a constant friction through the bite (a friction distribution is the published remedy
+  for foil slip and is not built), it absorbs the bite model's own error (12 % from load and
+  30 % from slip on the published case), the flow stress is taken as entered, the entered
+  numbers are not verified (`calibrated` false), and with a no-slip zone the slip carries
+  little friction information.
 - **Placeholder friction closure**: absolute friction values are placeholders; only the
   slope with speed is used.
 - **Alloy and temper selection is a literature synthesis.** The grade table by gauge band

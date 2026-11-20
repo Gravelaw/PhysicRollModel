@@ -1289,3 +1289,597 @@ def supplied_bite_mix(bite):
 
 def replace_bite_flags(bite, extra):
     return replace(bite, flags=tuple(bite.flags) + tuple(f for f in extra if f not in bite.flags))
+
+
+# ============================================ friction identification (SPEC18 package 7, BT-G6)
+# Inversion of a constant-friction bite to entered pass records (force, and where measured
+# forward slip and torque). Every number below is the brief's (SPEC18 package 7) [D].
+IDENT_STATUS = 'IDENTIFIED_FROM_ENTERED_RECORDS_NOT_VERIFIED'
+IDENT_BRACKET = (0.003, 0.3)
+IDENT_REL_TOL = 1e-4               # relative, in the matched quantity
+IDENT_MAX_SOLVES = 12              # secant of mu_F
+IDENT_REFINE_SOLVES = 8            # refinement of a scan root (slip, torque) [D]
+IDENT_SCAN = (0.4, 2.5, 9)         # geometric scan around mu_F
+IDENT_EXPONENT_STEP = 0.01         # mu_F*(1 +- 0.01)
+IDENT_CONSISTENT_LIMIT = 2.0       # |normalised residual|
+IDENT_WEAK_SLIP_EXPONENT = 0.5
+IDENT_Y_SCALE = (0.5, 2.0)
+IDENT_NEWTON_ITERATIONS = 8
+IDENT_PARABOLA_STEPS = 6           # repeated parabola of the joint fit [D, deviation]
+IDENT_PARABOLA_TOL = 1e-4          # in ln mu [D]
+IDENT_DIFFERS_FRACTION = 0.20
+IDENT_MIN_CONTACT_RATIO = 0.05
+IDENT_FILM_RATIO_SPREAD = 0.20
+IDENT_DEFAULT_VALLEY_FRICTION = 0.008
+PASS_RECORD_UNCERTAINTY_DEFAULTS = {'force_uncertainty_fraction': 0.05,
+                                    'slip_uncertainty_absolute': 0.01,
+                                    'torque_uncertainty_fraction': 0.10}   # [D] analyst choices
+IDENT_FLAG = 'FRICTION_IDENTIFIED_FROM_ENTERED_RECORDS'
+IDENT_WEAK_SLIP_FLAG = 'FORWARD_SLIP_INSENSITIVE_TO_FRICTION_IN_THIS_REGIME'
+IDENT_SLIP_NOT_REPRODUCED_FLAG = 'MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE'
+IDENT_DIFFERS_FLAG = 'IDENTIFIED_FRICTION_DIFFERS_FROM_CASE_FRICTION'
+IDENT_FLAGS = (IDENT_FLAG, IDENT_WEAK_SLIP_FLAG, IDENT_SLIP_NOT_REPRODUCED_FLAG, IDENT_DIFFERS_FLAG)
+IDENT_WEAK_SLIP_SENTENCE = ('with a no-slip zone the forward slip hardly depends on friction; the '
+                            'force is the better indicator here')
+IDENT_TWO_UNKNOWNS_NOTE = 'two unknowns from two numbers: there is no redundancy to check them'
+IDENT_HOW_TO_USE = ('to use a value, enter it as pass.friction_coefficient; nothing is applied '
+                    'automatically')
+IDENT_UNCERTAINTY_BASIS = ('[D, first-order propagation] u = (entered uncertainty of the '
+                           'quantity)/|d(quantity)/d ln(mu)| at mu_F (force and torque in ln, '
+                           'slip absolute); interval mu*exp(-u) to mu*exp(+u)')
+IDENT_LIMITATIONS = [
+    'Constant friction through the bite: a friction distribution is the published remedy for '
+    'foil forward slip [BT-S5 AB]; it is not built.',
+    'The bite model\'s own status enters the identified value: on the published foil case the '
+    'mattress bite gives W_bar 49.8 and the reduced half-space bite 88.9 to 92.9, while the '
+    'printed model gives 78 to 134 depending on an unstated end length; an identified friction '
+    'absorbs that spread, by about 12 % from load and 30 % from slip on that case.',
+    'Flow stress is taken as entered (the force-and-slip pair also returns a flow-stress scale, '
+    'with no redundancy to check it).',
+    'Forward slip of the reduced half-space bite is defined to elastic order only (the no-slip '
+    'zone creeps by up to 0.6 %, which is 1 to 2.5 % of the slip; SPEC18 package 2, item 4).',
+    'Simple forward-slip formulas are reported as unreliable [BT-S37 SN]; none is used.',
+    'No closed-gap load share.',
+    'The entered numbers are not verified: calibrated stays false.']
+
+
+def _quantity_of(state, name):
+    return {'force': state['force_n'], 'slip': state['forward_slip_fraction'],
+            'torque': state.get('torque_per_work_roll_nm')}[name]
+
+
+class _Solver:
+    """Counts the distinct solves of one record; ``solve(mu, y_scale)`` -> state or None."""
+
+    def __init__(self, fun):
+        self.fun, self.seen, self.errors = fun, {}, {}
+
+    def __call__(self, mu, y_scale=1.0):
+        key = (mu, y_scale)
+        if key not in self.seen:
+            try:
+                self.seen[key] = self.fun(mu, y_scale)
+            except ValueError as exc:
+                self.seen[key] = None
+                self.errors[key] = str(exc)
+        return self.seen[key]
+
+    @property
+    def solves(self):
+        return len(self.seen)
+
+
+def _residual(name, state, meas, unc):
+    """Normalised residual of one quantity: ln for force and torque, absolute for slip."""
+    v = _quantity_of(state, name)
+    if v is None or (name != 'slip' and v <= 0):
+        return None
+    if name == 'slip':
+        return (v - meas) / unc
+    return math.log(v / meas) / unc
+
+
+def _match_error(name, value, meas, unc):
+    """g(mu) of a root search: ln ratio for force/torque, difference for slip; and the test."""
+    if name == 'slip':
+        return value - meas, abs(value - meas) <= IDENT_REL_TOL * max(abs(meas), unc)
+    return math.log(value / meas), abs(value / meas - 1) <= IDENT_REL_TOL
+
+
+def _not_found(reason, **extra):
+    return dict({'status': 'NOT_FOUND', 'value': None, 'reason': reason}, **extra)
+
+
+def _secant_force(solver, mu0, meas):
+    """Step 1: mu with F_model(mu) = F_meas (secant in ln mu from the case friction and
+    mu*(F_meas/F_model)^(1/2); <= 12 solves; bracket [0.003, 0.3])."""
+    lo, hi = (math.log(x) for x in IDENT_BRACKET)
+    x0 = min(max(math.log(mu0), lo), hi)
+    st = solver(math.exp(x0))
+    if st is None:
+        return _not_found('the bite model rejected the pass at the case friction: '
+                          + solver.errors[(math.exp(x0), 1.0)])
+    g0, ok = _match_error('force', st['force_n'], meas, 0.0)
+    if ok:
+        return {'status': 'FOUND', 'value': math.exp(x0), 'solves': 1}
+    x1 = x0 - 0.5 * g0
+    used = 1
+    while used < IDENT_MAX_SOLVES:
+        at_edge = False
+        if x1 < lo or x1 > hi:
+            edge = lo if x1 < lo else hi
+            if x0 == edge:
+                return _not_found(f'no friction in [{IDENT_BRACKET[0]:g}, {IDENT_BRACKET[1]:g}] '
+                                  f'reproduces the force (the model force at {math.exp(edge):.4g} '
+                                  f'is {st["force_n"]:.4g} N against {meas:.4g} N)',
+                                  solves=used)
+            x1, at_edge = edge, True
+        mu1 = math.exp(x1)
+        st1 = solver(mu1)
+        used += 1
+        if st1 is None:
+            return _not_found(f'the bite model rejected the pass at friction {mu1:.4g}: '
+                              + solver.errors[(mu1, 1.0)], solves=used)
+        g1, ok = _match_error('force', st1['force_n'], meas, 0.0)
+        if ok:
+            return {'status': 'FOUND', 'value': mu1, 'solves': used}
+        if g1 == g0:
+            return _not_found('the force does not change with friction here', solves=used)
+        x2 = x1 - g1 * (x1 - x0) / (g1 - g0)
+        if at_edge and (x2 - x1) * (x1 - x0) > 0:
+            return _not_found(f'no friction in [{IDENT_BRACKET[0]:g}, {IDENT_BRACKET[1]:g}] '
+                              f'reproduces the force (the model force at {mu1:.4g} is '
+                              f'{st1["force_n"]:.4g} N against {meas:.4g} N)', solves=used)
+        x0, g0, st, x1 = x1, g1, st1, x2
+    return _not_found(f'secant not converged in {IDENT_MAX_SOLVES} solves', solves=used)
+
+
+def _scan(solver, center):
+    lo_f, hi_f, n = IDENT_SCAN
+    mus = [center * lo_f * (hi_f / lo_f) ** (i / (n - 1)) for i in range(n)]
+    mus[(n - 1) // 2] = center
+    return [(m, solver(m)) for m in mus
+            if IDENT_BRACKET[0] <= m <= IDENT_BRACKET[1]]
+
+
+def _scan_root(solver, scan, name, meas, unc, center):
+    """Step 2: the root of quantity ``name`` on the scan nearest ``center``, refined by
+    Illinois regula falsi in ln mu."""
+    pts = []
+    for m, st in scan:
+        v = None if st is None else _quantity_of(st, name)
+        if v is not None and (name == 'slip' or v > 0):
+            pts.append((m, _match_error(name, v, meas, unc)))
+    if not pts:
+        return _not_found('the model returns no value of this quantity on the scan')
+    for m, (g, ok) in pts:
+        if ok and m == center:
+            return {'status': 'FOUND', 'value': m, 'multiple_roots': False, 'roots_on_scan': 1}
+    brackets = [(a, ga, b, gb) for (a, (ga, _)), (b, (gb, _)) in zip(pts, pts[1:])
+                if ga == 0 or ga * gb < 0]
+    if not brackets:
+        vals = [_quantity_of(st, name) for _, st in scan if st is not None]
+        return _not_found(f'no friction between {scan[0][0]:.4g} and {scan[-1][0]:.4g} reproduces '
+                          f'the measured value {meas:.4g} (model range {min(vals):.4g} to '
+                          f'{max(vals):.4g})')
+    a, ga, b, gb = min(brackets, key=lambda t: abs(math.log(math.sqrt(t[0] * t[2]) / center)))
+    la, lb, side = math.log(a), math.log(b), 0
+    value = None
+    for _ in range(IDENT_REFINE_SOLVES):
+        lc = (la * gb - lb * ga) / (gb - ga) if gb != ga else 0.5 * (la + lb)
+        mc = math.exp(lc)
+        st = solver(mc)
+        v = None if st is None else _quantity_of(st, name)
+        if v is None or (name != 'slip' and v <= 0):
+            return _not_found(f'the bite model rejected the pass at friction {mc:.4g}')
+        gc, ok = _match_error(name, v, meas, unc)
+        if ok:
+            value = mc
+            break
+        if (gc > 0) == (gb > 0):
+            lb, gb = lc, gc
+            if side == 1:
+                ga /= 2
+            side = 1
+        else:
+            la, ga = lc, gc
+            if side == -1:
+                gb /= 2
+            side = -1
+    if value is None:
+        return _not_found(f'refinement not converged in {IDENT_REFINE_SOLVES} solves '
+                          f'(between {math.exp(la):.5g} and {math.exp(lb):.5g})')
+    return {'status': 'FOUND', 'value': value, 'multiple_roots': len(brackets) > 1,
+            'roots_on_scan': len(brackets)}
+
+
+def _objective(st, meas, unc):
+    rs = [r for r in (_residual(n, st, meas[n], unc[n]) for n in meas) if r is not None]
+    return sum(r * r for r in rs) if len(rs) == len(meas) else None
+
+
+def _joint(solver, scan, meas, unc):
+    """Step 3: minimiser of the sum of squared normalised residuals over the scan, refined by a
+    parabola in ln mu through the best three points."""
+    pts = [(m, _objective(st, meas, unc)) for m, st in scan if st is not None]
+    pts = [(m, j) for m, j in pts if j is not None]
+    if not pts:
+        return _not_found('no scan point returns every measured quantity')
+    i = min(range(len(pts)), key=lambda k: pts[k][1])
+    at_edge = i in (0, len(pts) - 1)
+    mu, first, steps = pts[i][0], None, 0
+    if not at_edge:
+        # three points bracketing the minimum, in ln mu; the parabola's vertex replaces the
+        # worst-placed point and the parabola is repeated (successive parabolic interpolation,
+        # SPEC18 package 7 deviation: one parabola on the 9-point scan is 6 % off on exact data
+        # of the half-space bite) until the vertex moves less than 1e-4 in ln mu
+        tri = [(math.log(m), j) for m, j in pts[i - 1:i + 2]]
+        for steps in range(1, IDENT_PARABOLA_STEPS + 1):
+            (x0, j0), (x1, j1), (x2, j2) = tri
+            den = (x0 - x1) * (x0 - x2) * (x1 - x2)
+            a = (x2 * (j1 - j0) + x1 * (j0 - j2) + x0 * (j2 - j1)) / den
+            b = (x2 * x2 * (j0 - j1) + x1 * x1 * (j2 - j0) + x0 * x0 * (j1 - j2)) / den
+            if not a > 0:
+                break
+            xv = min(max(-b / (2 * a), x0), x2)
+            if first is None:
+                first = math.exp(xv)
+            moved = abs(xv - math.log(mu))
+            mu = math.exp(xv)
+            if moved < IDENT_PARABOLA_TOL or xv in (x0, x1, x2):
+                break
+            stv = solver(mu)
+            jv = None if stv is None else _objective(stv, meas, unc)
+            if jv is None:
+                break
+            # keep the bracket (lowest point in the middle)
+            pts3 = sorted(tri + [(xv, jv)])
+            k = min(range(1, 3), key=lambda q: pts3[q][1])
+            tri = pts3[k - 1:k + 2]
+            mu = math.exp(tri[1][0]) if tri[1][1] <= jv else mu
+    st = solver(mu)
+    if st is None:
+        return _not_found(f'the bite model rejected the pass at friction {mu:.4g}')
+    res = {n: _residual(n, st, meas[n], unc[n]) for n in meas}
+    return {'status': 'FOUND', 'value': mu, 'at_scan_edge': at_edge,
+            'first_parabola_value': first, 'parabola_steps': steps,
+            'normalised_residuals': res,
+            'consistent': all(r is not None and abs(r) <= IDENT_CONSISTENT_LIMIT
+                              for r in res.values())}
+
+
+def _friction_and_flow_stress(solver, mu0, meas, unc, first_jacobian):
+    """Step 4: (mu, Y scale) reproducing force and slip exactly; Newton in (ln mu, ln s)."""
+    lo, hi = (math.log(x) for x in IDENT_BRACKET)
+    slo, shi = (math.log(x) for x in IDENT_Y_SCALE)
+    x, y = math.log(mu0), 0.0
+    jac = first_jacobian
+    for it in range(IDENT_NEWTON_ITERATIONS + 1):
+        st = solver(math.exp(x), math.exp(y))
+        if st is None:
+            return _not_found(f'the bite model rejected the pass at friction {math.exp(x):.4g}, '
+                              f'flow-stress scale {math.exp(y):.4g}')
+        r1, ok1 = _match_error('force', st['force_n'], meas['force'], 0.0)
+        r2, ok2 = _match_error('slip', st['forward_slip_fraction'], meas['slip'], unc['slip'])
+        if ok1 and ok2:
+            return {'status': 'FOUND', 'friction_coefficient': math.exp(x),
+                    'flow_stress_scale': math.exp(y), 'iterations': it,
+                    'note': IDENT_TWO_UNKNOWNS_NOTE}
+        if it == IDENT_NEWTON_ITERATIONS:
+            break
+        h = math.log1p(IDENT_EXPONENT_STEP)
+        if jac is None:
+            sx = solver(math.exp(x + h), math.exp(y))
+            if sx is None:
+                return _not_found('a derivative solve was rejected')
+            jac = [[math.log(sx['force_n'] / st['force_n']) / h, None],
+                   [(sx['forward_slip_fraction'] - st['forward_slip_fraction']) / h, None]]
+        sy = solver(math.exp(x), math.exp(y + h))
+        if sy is None:
+            return _not_found('a derivative solve was rejected')
+        jac[0][1] = math.log(sy['force_n'] / st['force_n']) / h
+        jac[1][1] = (sy['forward_slip_fraction'] - st['forward_slip_fraction']) / h
+        det = jac[0][0] * jac[1][1] - jac[0][1] * jac[1][0]
+        if det == 0:
+            return _not_found('force and slip respond alike to friction and flow stress here')
+        dx = -(r1 * jac[1][1] - r2 * jac[0][1]) / det
+        dy = -(jac[0][0] * r2 - jac[1][0] * r1) / det
+        nx, ny = x + dx, y + dy
+        if not (lo <= nx <= hi and slo <= ny <= shi):
+            if (x in (lo, hi) and not lo <= nx <= hi) or (y in (slo, shi) and not slo <= ny <= shi):
+                return _not_found(f'the pair leaves friction [{IDENT_BRACKET[0]:g}, '
+                                  f'{IDENT_BRACKET[1]:g}] or flow-stress scale '
+                                  f'[{IDENT_Y_SCALE[0]:g}, {IDENT_Y_SCALE[1]:g}]')
+            nx, ny = min(max(nx, lo), hi), min(max(ny, slo), shi)
+        x, y, jac = nx, ny, None
+    return _not_found(f'Newton not converged in {IDENT_NEWTON_ITERATIONS} iterations')
+
+
+def friction_exponents(solver, mu):
+    """``d ln(.)/d ln(mu)`` of force, forward slip and torque at ``mu`` (central difference with
+    mu*(1 +- 0.01)) and ``d f/d ln(mu)``; values None where a solve is rejected."""
+    lo, hi = solver(mu * (1 - IDENT_EXPONENT_STEP)), solver(mu * (1 + IDENT_EXPONENT_STEP))
+    out = {'load_exponent_in_friction': None, 'slip_exponent_in_friction': None,
+           'torque_exponent_in_friction': None, 'dslip_dln_friction': None}
+    if lo is None or hi is None:
+        return out
+    d = math.log((1 + IDENT_EXPONENT_STEP) / (1 - IDENT_EXPONENT_STEP))
+    out['load_exponent_in_friction'] = math.log(hi['force_n'] / lo['force_n']) / d
+    f_lo, f_hi = lo['forward_slip_fraction'], hi['forward_slip_fraction']
+    out['dslip_dln_friction'] = (f_hi - f_lo) / d
+    if f_lo > 0 and f_hi > 0:
+        out['slip_exponent_in_friction'] = math.log(f_hi / f_lo) / d
+    t_lo, t_hi = lo.get('torque_per_work_roll_nm'), hi.get('torque_per_work_roll_nm')
+    if t_lo and t_hi and t_lo > 0 and t_hi > 0:
+        out['torque_exponent_in_friction'] = math.log(t_hi / t_lo) / d
+    return out
+
+
+def _uncertainty(value, u):
+    if value is None or u is None:
+        return None
+    return {'ln_half_width': u, 'interval': [value * math.exp(-u), value * math.exp(u)],
+            'basis': IDENT_UNCERTAINTY_BASIS}
+
+
+def identify_record(solve, mu0, meas, unc):
+    """Identification of one record (steps 1-5 of SPEC18 package 7).
+
+    ``solve(mu, y_scale)`` -> state dict (``force_n``, ``forward_slip_fraction``,
+    ``torque_per_work_roll_nm``) or ValueError; ``mu0`` the case friction; ``meas`` {'force',
+    'slip', 'torque'} (None when not measured); ``unc`` the three uncertainties (force and
+    torque fractions, slip absolute)."""
+    solver = _Solver(solve)
+    measured = {k: v for k, v in meas.items() if v is not None}
+    row = {'friction_from_force': _secant_force(solver, mu0, meas['force'])}
+    mu_f = row['friction_from_force']['value']
+    center = mu_f if mu_f is not None else mu0
+    ex = friction_exponents(solver, center)
+    row['exponents_at'] = center
+    row.update(ex)
+    st_f = solver(center)
+    scan = _scan(solver, center)
+    for name, key in (('slip', 'friction_from_slip'), ('torque', 'friction_from_torque')):
+        if meas.get(name) is None:
+            row[key] = {'status': 'NOT_MEASURED', 'value': None}
+        elif st_f is not None and _quantity_of(st_f, name) is None:
+            row[key] = {'status': 'NOT_RETURNED_BY_MODEL', 'value': None}
+        else:
+            row[key] = _scan_root(solver, scan, name, meas[name], unc[name], center)
+    # uncertainty of each identified value from the entered uncertainty [D, first order]
+    e_f, e_t = ex['dslip_dln_friction'], ex['torque_exponent_in_friction']
+    e_load = ex['load_exponent_in_friction']
+    us = {'friction_from_force': unc['force'] / abs(e_load) if e_load else None,
+          'friction_from_slip': unc['slip'] / abs(e_f) if e_f else None,
+          'friction_from_torque': unc['torque'] / abs(e_t) if e_t else None}
+    for key, u in us.items():
+        if row[key].get('value') is not None:
+            row[key]['uncertainty'] = _uncertainty(row[key]['value'], u)
+    weak = (ex['slip_exponent_in_friction'] is not None
+            and abs(ex['slip_exponent_in_friction']) < IDENT_WEAK_SLIP_EXPONENT)
+    row['slip_weakly_determined'] = weak
+    if weak and meas.get('slip') is not None:
+        row['friction_from_slip']['weakly_determined'] = True
+        row['friction_from_slip']['note'] = IDENT_WEAK_SLIP_SENTENCE
+    row['normalised_residuals_at_friction_from_force'] = (
+        {n: _residual(n, st_f, measured[n], unc[n]) for n in measured}
+        if mu_f is not None and st_f is not None else None)
+    row['friction_joint'] = _joint(solver, scan, measured, {n: unc[n] for n in measured})
+    if meas.get('slip') is not None:
+        jac = None
+        if ex['load_exponent_in_friction'] is not None and mu_f is not None:
+            jac = [[ex['load_exponent_in_friction'], None], [ex['dslip_dln_friction'], None]]
+        row['friction_and_flow_stress'] = _friction_and_flow_stress(
+            solver, center, meas, unc, jac)
+    else:
+        row['friction_and_flow_stress'] = {'status': 'NOT_MEASURED',
+                                           'reason': 'needs force and forward slip'}
+    row['agreement'] = _agreement(row, us)
+    row['solves'] = solver.solves
+    row['state_at_friction_from_force'] = st_f if mu_f is not None else None
+    return row
+
+
+def _agreement(row, us):
+    """Pairwise agreement of the single-quantity values (difference in ln mu against twice the
+    combined first-order uncertainty) and the outcome name."""
+    keys = [k for k in ('friction_from_force', 'friction_from_slip', 'friction_from_torque')
+            if row[k].get('value') is not None]
+    pairs = []
+    for i, a in enumerate(keys):
+        for b in keys[i + 1:]:
+            d = math.log(row[b]['value'] / row[a]['value'])
+            ua, ub = us[a], us[b]
+            comb = math.sqrt(ua * ua + ub * ub) if ua is not None and ub is not None else None
+            pairs.append({'pair': [a, b], 'difference_in_ln_friction': d,
+                          'combined_uncertainty': comb,
+                          'within_two_uncertainties': (None if comb is None else
+                                                       abs(d) <= IDENT_CONSISTENT_LIMIT * comb)})
+    joint = row['friction_joint']
+    if row['friction_from_force']['status'] != 'FOUND':
+        outcome = 'FORCE_NOT_MATCHED'
+    elif len(keys) == 1 and all(row[k]['status'] in ('NOT_MEASURED', 'NOT_RETURNED_BY_MODEL')
+                                for k in ('friction_from_slip', 'friction_from_torque')):
+        outcome = 'SINGLE_MEASUREMENT'
+    elif joint.get('consistent') and all(p['within_two_uncertainties'] is not False
+                                         for p in pairs) and len(keys) > 1:
+        outcome = 'MEASUREMENTS_AGREE'
+    else:
+        outcome = 'MEASUREMENTS_CONTRADICT'
+    return {'outcome': outcome, 'pairs': pairs,
+            'basis': 'joint fit consistent (every |normalised residual| <= 2) and every pair '
+                     'within twice its combined uncertainty'}
+
+
+def _median(xs):
+    s = sorted(xs)
+    n = len(s)
+    return None if not n else (s[n // 2] if n % 2 else 0.5 * (s[n // 2 - 1] + s[n // 2]))
+
+
+def _ls_slope(xs, ys):
+    n = len(xs)
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    return None if sxx == 0 else sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+
+
+def record_source(case, rec):
+    """The pass dict of a record: the case pass with the record's entered values."""
+    src = dict(case['pass'])
+    for k in ('exit_speed_m_s', 'entry_thickness_m', 'exit_thickness_m', 'entry_tension_pa',
+              'exit_tension_pa', 'mean_flow_stress_pa'):
+        if rec.get(k) is not None:
+            src[k] = rec[k]
+    return src
+
+
+def implied_contact_friction(trib, case, src, state, mu, foil):
+    """Contact friction mu_c = (mu - (1 - A)*mu_v)/A at the film ratio of the bite at mu
+    [D, SPEC18: package 6's load sharing solved for the contact friction]."""
+    _, _, clo = tribology_objects(trib)
+    radius = case['pass']['work_roll_radius_m']
+    ratio = 1.0 if foil else state['contact_radius_ratio']
+    p_mean = state['force_n'] / (case['pass']['width_m'] * state['contact_length_m'])
+    res = friction_at(trib, dict(src, friction_coefficient=mu), radius, ratio,
+                      state['forward_slip_fraction'], src['exit_speed_m_s'], p_mean)
+    lam = res['film_ratio']
+    curve = clo.contact_curve()
+    a, _, held = bt.contact_ratio_at(lam, curve)
+    mu_v = clo.mu_v if trib.get('friction_closure') is not None else IDENT_DEFAULT_VALLEY_FRICTION
+    out = {'film_ratio': lam, 'contact_area_ratio': a, 'valley_friction': mu_v,
+           'curve_is_published_default': clo.contact_ratio_curve is None,
+           'outside_curve_end_value_held': held,
+           'basis': '[D, SPEC18: package 6\'s load sharing solved for the contact friction] '
+                    'mu_c = (mu - (1 - A)*mu_v)/A, constant valley friction'}
+    if a < IDENT_MIN_CONTACT_RATIO:
+        out.update(contact_friction=None,
+                   reason=f'contact ratio {a:.3g} below {IDENT_MIN_CONTACT_RATIO:g}: the '
+                          'contact areas carry too little of the load to identify their friction')
+    else:
+        out['contact_friction'] = (mu - (1 - a) * mu_v) / a
+    return out
+
+
+def friction_identification(case, records, cache, op_bite, perturbed_model):
+    """``process.friction_identification`` (SPEC18 package 7): friction identified from entered
+    pass records with the bite model ``perturbed_model`` (that of the operating bite
+    ``op_bite``); REPORTED only, never applied (``calibrated`` false)."""
+    foil = perturbed_model in ('mattress', 'half_space')
+    if not records:
+        return not_supplied('measurement.pass_records is null or absent')
+    trib = case['tribology']
+    mu_case = case['pass']['friction_coefficient']
+    rows, flags, extra_lims = [], [IDENT_FLAG], []
+    for i, rec in enumerate(records):
+        src = record_source(case, rec)
+        base = bite_pass(case, src)
+
+        def solve(mu, y_scale, base=base):
+            return cache.state(replace(base, friction_coefficient=mu,
+                                       mean_flow_stress_pa=base.mean_flow_stress_pa * y_scale),
+                               model=perturbed_model)
+        unc = {'force': rec['force_uncertainty_fraction'],
+               'slip': rec['slip_uncertainty_absolute'],
+               'torque': rec['torque_uncertainty_fraction']}
+        meas = {'force': rec['separating_force_n'], 'slip': rec['forward_slip_fraction'],
+                'torque': rec['torque_per_work_roll_nm']}
+        row = identify_record(solve, mu_case, meas, unc)
+        st = row.pop('state_at_friction_from_force')
+        row = dict({'label': rec['label'], 'exit_speed_m_s': src['exit_speed_m_s'],
+                    'measured': meas, 'uncertainties': unc}, **row)
+        row['model_at_friction_from_force'] = (None if st is None else {
+            'force_n': st['force_n'], 'forward_slip_fraction': st['forward_slip_fraction'],
+            'torque_per_work_roll_nm': st.get('torque_per_work_roll_nm'),
+            'contact_length_m': st['contact_length_m'], 'flags': st['flags']})
+        if st is not None and 'NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT' in st['flags']:
+            row['creep_limitation'] = True
+            if 'creep' not in extra_lims:
+                extra_lims.append('creep')
+        if row['slip_weakly_determined'] and meas['slip'] is not None and \
+                IDENT_WEAK_SLIP_FLAG not in flags:
+            flags.append(IDENT_WEAK_SLIP_FLAG)
+        res_f = row['normalised_residuals_at_friction_from_force']
+        if res_f and res_f.get('slip') is not None and abs(res_f['slip']) > \
+                IDENT_CONSISTENT_LIMIT or (meas['slip'] is not None and
+                                           row['friction_from_slip']['status'] == 'NOT_FOUND'):
+            row['slip_not_reproduced'] = True
+            if IDENT_SLIP_NOT_REPRODUCED_FLAG not in flags:
+                flags.append(IDENT_SLIP_NOT_REPRODUCED_FLAG)
+        if trib is not None and st is not None:
+            try:
+                row['contact_friction_implied'] = implied_contact_friction(
+                    trib, case, src, st, row['friction_from_force']['value'], foil)
+            except ValueError as exc:
+                row['contact_friction_implied'] = failed('contact friction implied', exc)
+        else:
+            row['contact_friction_implied'] = not_supplied(
+                'needs tribology and the friction from force' if trib is None
+                else 'the friction from force was not found')
+        rows.append(row)
+    mu_fs = [r['friction_from_force']['value'] for r in rows
+             if r['friction_from_force']['value'] is not None]
+    summary = {'friction_from_force': mu_fs, 'median': _median(mu_fs),
+               'spread': (max(mu_fs) - min(mu_fs)) if mu_fs else None,
+               'case_friction_coefficient': mu_case, 'slope_per_ln_exit_speed': None}
+    pts = [(math.log(r['exit_speed_m_s']), r['friction_from_force']['value']) for r in rows
+           if r['friction_from_force']['value'] is not None]
+    if len({x for x, _ in pts}) >= 2:
+        summary['slope_per_ln_exit_speed'] = _ls_slope([x for x, _ in pts], [y for _, y in pts])
+    med = summary['median']
+    if med is not None and abs(med / mu_case - 1) > IDENT_DIFFERS_FRACTION:
+        flags.append(IDENT_DIFFERS_FLAG)
+    summary['sentence'] = _ident_sentence(summary, rows)
+    if trib is None:
+        suggested = not_supplied('needs tribology')
+    else:
+        cs = [(r['contact_friction_implied']['film_ratio'],
+               r['contact_friction_implied']['contact_friction']) for r in rows
+              if r['contact_friction_implied'].get('contact_friction') is not None]
+        suggested = {'contact_friction': _median([c for _, c in cs]),
+                     'values': [c for _, c in cs],
+                     'spread': (max(c for _, c in cs) - min(c for _, c in cs)) if cs else None,
+                     'slope_per_ln_film_ratio': None,
+                     'note': 'the published observation is that one contact friction does not '
+                             'fit a speed range (E7 FT); enter a value as '
+                             'tribology.friction_closure.contact_friction only by choice'}
+        lams = [lam for lam, _ in cs]
+        if len(cs) >= 2 and max(lams) > (1 + IDENT_FILM_RATIO_SPREAD) * min(lams):
+            suggested['slope_per_ln_film_ratio'] = _ls_slope([math.log(x) for x in lams],
+                                                             [c for _, c in cs])
+    joints = [r['friction_joint']['value'] for r in rows
+              if r['friction_joint'].get('value') is not None]
+    lims = list(IDENT_LIMITATIONS)
+    if extra_lims:
+        from .halfspace_bite import CREEP_LIMITATION
+        lims.append(CREEP_LIMITATION)
+    if IDENT_SLIP_NOT_REPRODUCED_FLAG in flags:
+        from .foil_bite import LARGE_SLIP_EXPLANATION
+        lims.append(LARGE_SLIP_EXPLANATION)
+    return {'status': IDENT_STATUS,
+            'bite_model': {'mattress': 'experimental_mattress',
+                           'half_space': 'reduced_half_space'}.get(perturbed_model, 'hitchcock'),
+            'uncertainty_defaults': dict(PASS_RECORD_UNCERTAINTY_DEFAULTS,
+                                         basis='[D] analyst choices'),
+            'rows': rows, 'summary': summary, 'suggested_contact_friction': suggested,
+            'declaration': {'coefficient': _median(joints),
+                            'fit_uses_force_torque_slip': all(
+                                r['measured']['slip'] is not None
+                                and r['measured']['torque'] is not None for r in rows),
+                            'calibrated': False, 'source': 'identified from entered pass records'},
+            'how_to_use': IDENT_HOW_TO_USE, 'flags': flags, 'limitations': lims}
+
+
+def _ident_sentence(summary, rows):
+    mu = summary['friction_from_force']
+    if not mu:
+        return ('No friction reproduces the entered force of any record; see the reasons per '
+                'record.')
+    text = (f'Friction from force: {", ".join(f"{m:.4g}" for m in mu)} (median '
+            f'{summary["median"]:.4g}, case value {summary["case_friction_coefficient"]:.4g})')
+    if len(mu) > 1:
+        text += f', spread {summary["spread"]:.3g}'
+    if summary['slope_per_ln_exit_speed'] is not None:
+        text += (f'; slope with exit speed {summary["slope_per_ln_exit_speed"]:.3g} per unit '
+                 'ln(u)')
+    return text + '. Reported only: nothing is applied.'

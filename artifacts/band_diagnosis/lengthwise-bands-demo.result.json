@@ -5035,6 +5035,11 @@
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
       "use_computed_friction": false
     },
+    "friction_identification": {
+      "not_supplied": true,
+      "reason": "measurement.pass_records is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "friction_speed_curve": {
       "contact_radius_m": 0.2972050691709215,
       "flags": [

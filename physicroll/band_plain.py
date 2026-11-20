@@ -1053,7 +1053,7 @@ SECTIONS = {
     'tribology.friction_closure': ('the placeholder friction law', ('mu_b', 'mu_v', 'lambda0'),
                                    {}),
     'measurement': ('a flatness or gauge measurement', (),
-                    {'shapemeter': None, 'thickness_gauge': None}),
+                    {'shapemeter': None, 'thickness_gauge': None, 'pass_records': None}),
     'measurement.shapemeter': ('the shapemeter', ('zone_width_m', 'zone_count'),
                                {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
                                 'centre_m': None, 'neighbour_spreading_fraction': 0.0,
@@ -2462,6 +2462,22 @@ FLAGS = {
     'NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT': (
         'In the half-space model the strip creeps a little where it should move with the '
         'roll; the forward slip is less exact than usual.', 'Read forward slip as rough.'),
+    'FRICTION_IDENTIFIED_FROM_ENTERED_RECORDS': (
+        'A friction value was worked out from the roll force (and slip or torque where '
+        'entered) of your pass records; it is shown only and used nowhere.',
+        'To use it, enter it as the pass friction yourself.'),
+    'FORWARD_SLIP_INSENSITIVE_TO_FRICTION_IN_THIS_REGIME': (
+        'With a no-slip zone the forward slip hardly depends on friction; the force is the '
+        'better indicator here.', 'Trust the friction from force more than the one from slip.'),
+    'MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE': (
+        'The entered forward slip does not fit the roll-gap model at the friction that matches '
+        'the force: a model with one constant friction value over-estimates foil slip, and '
+        'mill trials found friction varying through the bite.',
+        'Check the slip measurement; read the friction from slip as rough.'),
+    'IDENTIFIED_FRICTION_DIFFERS_FROM_CASE_FRICTION': (
+        'The friction worked out from your pass records differs by more than 20 % from the '
+        'friction entered for the pass.',
+        'Check the entered friction, flow stress and gauges against the records.'),
     'COLD_START_BY_FRICTION_CONTINUATION': (
         'The half-space model reached the entered friction from a lower friction, because the '
         'simpler foil model could not start at it.', 'No action.'),
