@@ -2509,6 +2509,15 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'ROLL_SURFACE_CYCLE_COMPUTED': (
+        'The roll surface temperature within one revolution was computed from the angular '
+        'layout of bite and sprays you entered; it changes no other result.', 'No action.'),
+    'CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED': (
+        'With the sprays on one arc the averaged cooling of the roll model differs by more than '
+        '5 % from the cooling the surface really gets.', 'Read the stripe heights as rough.'),
+    'ROLL_ENTRY_TEMPERATURE_FROM_SURFACE_CYCLE': (
+        'The roll surface temperature entering the roll gap came from the surface cycle.',
+        'No action.'),
     'FRICTION_IDENTIFIED_FROM_ENTERED_RECORDS': (
         'A friction value was worked out from the roll force (and slip or torque where '
         'entered) of your pass records; it is shown only and used nowhere.',

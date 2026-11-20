@@ -1351,7 +1351,62 @@ def _width_section(r):
     body += _strip_temperature_block(r, w)
     body += _friction_stripe_block(w)
     body += _roll_profile_block(r, w)
+    body += _surface_cycle_block(w)
     return head + body + '</section>'
+
+
+def _surface_cycle_chart(rc):
+    cols = (C_FB, C_ACT, C_THR)
+    cyc = [c for c in rc.get('cycles') or [] if c.get('surface_temperature_k')]
+    if not cyc:
+        return ''
+    key = [(f'{c["station"]} (z {_f(c["z_m"], digits=4)} m)', col, '', 'line')
+           for c, col in zip(cyc, cols)]
+    c2 = _Chart2('Roll surface temperature within one revolution', key, 300)
+    ys = [t for c in cyc for t in c['surface_temperature_k']]
+    lo, hi = min(ys), max(ys)
+    pad = 0.05 * (hi - lo or 1.0)
+    c2.axes(_Axis(0.0, 360.0, ML, W - MR), _Axis(lo - pad, hi + pad, c2.h - MB, c2.mt),
+            'angle from the bite exit, direction of rotation [deg]', 'surface temperature [K]')
+    for c, col in zip(cyc, cols):
+        pts = sorted(zip(c['angle_from_bite_exit_deg'], c['surface_temperature_k']))
+        c2.poly(pts, col, '', 1.8)
+    return _wide(c2.render('skin'))
+
+
+def _surface_cycle_block(w):
+    """SPEC18 package 10: "Roll surface within one revolution" (nothing without a layout)."""
+    rc = w.get('roll_surface_cycle')
+    if not isinstance(rc, dict) or rc.get('not_supplied'):
+        return ''
+    out = ['<h3>Roll surface within one revolution</h3>']
+    if _bad(rc):
+        return ''.join(out) + _state_p(_bad(rc))
+    out.append('<p class="note">One-way skin layer on top of the circumferential-mean roll '
+               'temperature: it changes no stripe, shape or score. Layout used (angles from the '
+               'bite exit in the direction of rotation; ' + _e(rc.get('layout_provenance') or '')
+               + '): ' + _e('; '.join(f'{x["region"]} {x["start_deg"]:.1f} to '
+                                      f'{x["end_deg"]:.1f} deg'
+                                      for x in rc.get('layout_used') or [])) + '.</p>')
+    out.append(_surface_cycle_chart(rc))
+    rows = [[_e(c['station']), _f(c['z_m'], digits=4, unit='m'),
+             _f(c['bite_entry_temperature_k'], digits=5, unit='K'),
+             _f(c['bite_exit_temperature_k'], digits=5, unit='K'),
+             _f(c['minimum_temperature_k'], digits=5, unit='K'),
+             _f(c['mean_surface_temperature_k'], digits=5, unit='K'),
+             _f(c['mean_model_surface_temperature_k'], digits=5, unit='K')]
+            for c in rc.get('cycles') or []]
+    out.append(_table(('station', 'z', 'before the bite', 'after the bite', 'lowest', 'mean',
+                       'mean of the model'), rows, 'num'))
+    ts = rc.get('time_scales') or {}
+    out.append(f'<p>Time scales of this model: one revolution {_f(ts.get("per_revolution_s"))} '
+               f's (skin depth {_f(ts.get("skin_depth_m"), 1e3, 3, "mm")}), surface film '
+               f'{_f(ts.get("surface_film_s"))} s, roll body {_f(ts.get("bulk_s"))} s. The '
+               'published flatness response to one cooling zone is about 20 s [Dohmae & Okamura '
+               '2012]: a comparison, not an explanation.</p>')
+    if rc.get('bias_sentence'):
+        out.append(f'<p class="warn">{_e(rc["bias_sentence"])}</p>')
+    return ''.join(out)
 
 
 def _roll_profile_block(r, w):

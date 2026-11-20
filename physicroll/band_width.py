@@ -121,7 +121,10 @@ WIDTH_DEFAULTS = {
     # SPEC17 BT-G4 (screening version): friction / film stripes as a second band source
     'friction_stripe_screen': None,
     # SPEC17 G13: a measured roll ground profile (radius deviation) through the existing transfer
-    'roll_ground_profile': None}
+    'roll_ground_profile': None,
+    # SPEC18 package 10 (A4, G8): angular layout of sprays and backup contact for the roll
+    # surface cycle within one revolution
+    'circumferential_layout': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -187,6 +190,75 @@ def validate_shape_inputs(si):
             'provenance': prov}
 
 
+LAYOUT_WHERE = 'width_model.circumferential_layout'
+LAYOUT_MAX_SPRAY_ARCS = 6
+LAYOUT_ARC_TOL_RAD = 1e-6
+
+
+def _layout_region(where, r, extra=()):
+    keys(where, r, ('start_rad', 'arc_rad') + tuple(extra))
+    start = num(f'{where}.start_rad', r['start_rad'])
+    arc = num(f'{where}.arc_rad', r['arc_rad'])
+    if not 0 <= start < 2 * math.pi:
+        raise ValueError(f'{where}.start_rad must be in [0, 2*pi)')
+    if not arc > 0:
+        raise ValueError(f'{where}.arc_rad must be > 0')
+    if start + arc > 2 * math.pi + 1e-12:
+        raise ValueError(f'{where}: start_rad + arc_rad ({start + arc:.6g} rad) exceeds one '
+                         'revolution (2*pi): the region would pass the bite')
+    return {'start_rad': start, 'arc_rad': arc}
+
+
+def validate_circumferential_layout(lay, wetted_arc=None):
+    """SPEC18 package 10: ``{"spray_arcs": [{"start_rad", "arc_rad"}], "backup_contact": null |
+    {"start_rad", "arc_rad", "conductance_w_m2k", "backup_surface_temperature_k"},
+    "provenance"}``; angles in the direction of rotation from the bite exit, in [0, 2*pi);
+    regions sorted, not overlapping one another (the bite is checked against the case-pass
+    bite in the section)."""
+    if lay is None:
+        return None
+    w = LAYOUT_WHERE
+    keys(w, lay, ('spray_arcs', 'provenance'), ('backup_contact',))
+    prov = lay['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    arcs = lay['spray_arcs']
+    if not isinstance(arcs, list) or not 1 <= len(arcs) <= LAYOUT_MAX_SPRAY_ARCS:
+        raise ValueError(f'{w}.spray_arcs must be a list of 1 to {LAYOUT_MAX_SPRAY_ARCS} arcs')
+    sprays = [_layout_region(f'{w}.spray_arcs[{i}]', a) for i, a in enumerate(arcs)]
+    regions = [(f'spray arc {i}', r) for i, r in enumerate(sprays)]
+    bc = lay.get('backup_contact')
+    backup = None
+    if bc is not None:
+        where = f'{w}.backup_contact'
+        backup = _layout_region(where, bc, ('conductance_w_m2k', 'backup_surface_temperature_k'))
+        backup['conductance_w_m2k'] = num(f'{where}.conductance_w_m2k', bc['conductance_w_m2k'],
+                                          positive=True)
+        if backup['conductance_w_m2k'] > 1e9:
+            raise ValueError(f'{where}.conductance_w_m2k must be <= 1e9 W/m2K')
+        backup['backup_surface_temperature_k'] = num(
+            f'{where}.backup_surface_temperature_k', bc['backup_surface_temperature_k'],
+            lo=200.0, hi=700.0)
+        regions.append(('backup contact', backup))
+    for i in range(len(sprays) - 1):
+        if sprays[i + 1]['start_rad'] < sprays[i]['start_rad']:
+            raise ValueError(f'{w}.spray_arcs must be sorted by start_rad')
+    for i, (na, a) in enumerate(regions):
+        for nb, b in regions[i + 1:]:
+            lo = max(a['start_rad'], b['start_rad'])
+            hi = min(a['start_rad'] + a['arc_rad'], b['start_rad'] + b['arc_rad'])
+            if hi > lo + 1e-12:
+                raise ValueError(
+                    f'{w}: {na} ({a["start_rad"]:.4g} to {a["start_rad"] + a["arc_rad"]:.4g} '
+                    f'rad) overlaps {nb} ({b["start_rad"]:.4g} to '
+                    f'{b["start_rad"] + b["arc_rad"]:.4g} rad)')
+    total = sum(r['arc_rad'] for r in sprays)
+    if wetted_arc is not None and abs(total - wetted_arc) > LAYOUT_ARC_TOL_RAD:
+        raise ValueError(f'{w}: the spray arcs must add up to width_model.spray_wetted_arc_rad '
+                         f'({total:.6g} rad against {wetted_arc:.6g} rad)')
+    return {'spray_arcs': sprays, 'backup_contact': backup, 'provenance': prov}
+
+
 def validate_width_model(w, pass_):
     if not isinstance(w, dict):
         raise ValueError('width_model must be a JSON object or null')
@@ -222,6 +294,8 @@ def validate_width_model(w, pass_):
                                                               roll['barrel_length_m'])
     out['roll_ground_profile'] = _validate_roll_profile(w.get('roll_ground_profile'),
                                                         roll['barrel_length_m'])
+    out['circumferential_layout'] = validate_circumferential_layout(
+        w.get('circumferential_layout'), arc)
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -2679,6 +2753,238 @@ MATTRESS_FLAG = 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL'
 HALF_SPACE_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
 
 
+# ================================================ roll surface cycle (SPEC18 package 10, A4, G8)
+SURFACE_CYCLE_WEIGHTS = 9            # unit solutions spanning the spray-weight range [D]
+SURFACE_CYCLE_TOLERANCE_K = 1e-4     # periodicity of the unit solutions [D]
+MEAN_COEFFICIENT_BIAS = 0.05         # flag when a mean_coefficient_ratio differs from 1 by more
+CYCLE_FLAG = 'ROLL_SURFACE_CYCLE_COMPUTED'
+CYCLE_BIAS_FLAG = 'CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED'
+
+
+def _deep_temperature(field, depth, radius):
+    """Steady bulk temperature at radius R - depth for every axial station (linear in r
+    between the cell centres of the circumferential-mean field)."""
+    r = radius - depth
+    rs = field['r_m']
+    rows = field['temperature_k']
+    if r <= rs[0]:
+        return list(rows[0])
+    i = max(k for k in range(len(rs)) if rs[k] <= r)
+    if i >= len(rs) - 1:
+        return list(rows[-1])
+    f = (r - rs[i]) / (rs[i + 1] - rs[i])
+    return [a + f * (b - a) for a, b in zip(rows[i], rows[i + 1])]
+
+
+def surface_cycle_layout(w, radius, contact_length):
+    """The arcs (time fractions from bite entry) of the layout and the table of the layout used
+    (angles from the bite exit in the direction of rotation). ValueError naming the region
+    when a region overlaps the bite."""
+    lay = w['circumferential_layout']
+    theta_b = contact_length / radius
+    fb = contact_length / (2 * math.pi * radius)
+    regions = [('spray', f'spray arc {i}', r) for i, r in enumerate(lay['spray_arcs'])]
+    if lay['backup_contact'] is not None:
+        regions.append(('backup', 'backup contact', lay['backup_contact']))
+    regions.sort(key=lambda t: t[2]['start_rad'])
+    table = [{'region': 'bite', 'start_rad': 2 * math.pi - theta_b, 'arc_rad': theta_b,
+              'start_deg': math.degrees(2 * math.pi - theta_b),
+              'end_deg': 360.0, 'basis': 'contact length of the case-pass bite'}]
+    limit = 2 * math.pi - theta_b
+    for kind, name, r in regions:
+        if r['start_rad'] + r['arc_rad'] > limit + 1e-12:
+            raise ValueError(f'{LAYOUT_WHERE}: {name} ({r["start_rad"]:.4g} to '
+                             f'{r["start_rad"] + r["arc_rad"]:.4g} rad) overlaps the bite '
+                             f'({limit:.4g} to {2 * math.pi:.4g} rad before the bite exit)')
+        table.append({'region': name, 'start_rad': r['start_rad'], 'arc_rad': r['arc_rad'],
+                      'start_deg': math.degrees(r['start_rad']),
+                      'end_deg': math.degrees(r['start_rad'] + r['arc_rad'])})
+    arcs, pos = [('bite', 0.0, fb, None)], fb
+    for kind, name, r in regions:
+        a = fb + r['start_rad'] / (2 * math.pi)
+        b = fb + (r['start_rad'] + r['arc_rad']) / (2 * math.pi)
+        if a > pos + 1e-12:
+            arcs.append(('air', pos, a, None))
+        arcs.append((kind, a, b, r))
+        pos = b
+    if pos < 1 - 1e-12:
+        arcs.append(('air', pos, 1.0, None))
+    arcs[-1] = arcs[-1][:2] + (1.0,) + arcs[-1][3:]
+    return arcs, table, fb
+
+
+def _skin_arcs(pattern, h_spray, background, coolant, bite_flux):
+    out = []
+    for kind, a, b, r in pattern:
+        if kind == 'bite':
+            out.append({'kind': 'bite', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': bite_flux, 'htc_w_m2k': 0.0,
+                        'sink_temperature_k': None})
+        elif kind == 'spray':
+            out.append({'kind': 'spray', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': h_spray,
+                        'sink_temperature_k': coolant})
+        elif kind == 'backup':
+            out.append({'kind': 'backup', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': r['conductance_w_m2k'],
+                        'sink_temperature_k': r['backup_surface_temperature_k']})
+        else:
+            out.append({'kind': 'air', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': background,
+                        'sink_temperature_k': coolant})
+    return out
+
+
+def roll_surface_cycle_section(case, w, th, actual, bite, steady):
+    """``width.roll_surface_cycle`` (SPEC18 package 10): the per-revolution surface layer on top
+    of the steady circumferential-mean field, per axial station (one-way)."""
+    from . import roll_skin
+    lay = w['circumferential_layout']
+    if lay is None:
+        return not_supplied('width_model.circumferential_layout is null or absent')
+    if actual is None:
+        return not_assessable('needs the steady thermal solution')
+    if bite is None:
+        return not_assessable('needs the case-pass bite (contact length and forward slip)')
+    roll, hdr = th.roll, th.header
+    radius = roll.radius_m
+    k = roll.conductivity_w_mk
+    rho_c = roll.density_kg_m3 * roll.specific_heat_j_kgk
+    tc = w['coolant_temperature_k']
+    u = case['pass']['exit_speed_m_s']
+    v_r = u / (1 + bite.forward_slip_fraction)
+    t_rev = 2 * math.pi * radius / v_r
+    ld = bite.contact_length_m
+    pattern, table, fb = surface_cycle_layout(w, radius, ld)
+    phi = sum(r['arc_rad'] for r in lay['spray_arcs'])
+    bg, hm = hdr.background_htc_w_m2k, hdr.spray_mean_htc_w_m2k
+    z, weights = actual['z_m'], actual['spray_weight']
+    qmean = actual['heat_flux_w_m2']
+    depth = roll_skin.LAYER_DEPTH_FACTOR * math.sqrt(k / rho_c * t_rev)
+    t_deep = _deep_temperature(actual['field'], depth, radius)
+    t_bk = lay['backup_contact']['backup_surface_temperature_k'] if lay['backup_contact'] \
+        else None
+    wl, wh = min(weights), max(weights)
+    grid = sorted({wl + (wh - wl) * i / (SURFACE_CYCLE_WEIGHTS - 1)
+                   for i in range(SURFACE_CYCLE_WEIGHTS)} | ({0.0} if 0.0 in weights else set()))
+
+    def h_spray(wt):
+        return bg + hm * wt * 2 * math.pi / phi
+    units = []
+    for wt in grid:
+        units.append(roll_skin.unit_solutions(
+            conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c, revolution_time_s=t_rev,
+            arcs=_skin_arcs(pattern, h_spray(wt), bg, tc, 1.0), coolant_temperature_k=tc,
+            tolerance_k=SURFACE_CYCLE_TOLERANCE_K))
+    tf = units[0]['time_fraction']
+    dts = [b - a for a, b in zip([0.0] + tf[:-1], tf)]
+    kinds = []      # (kind, arc) per step
+    arcs0 = _skin_arcs(pattern, 0.0, bg, tc, 1.0)
+    for f in tf:
+        a = next(x for x in arcs0 if x['start_fraction'] < f <= x['end_fraction'] + 1e-12)
+        kinds.append(a)
+
+    def unit_at(wt, key):
+        if len(grid) == 1:
+            return units[0][key]
+        i = max(0, min(len(grid) - 2, max(j for j in range(len(grid)) if grid[j] <= wt)
+                       if wt >= grid[0] else 0))
+        f = (wt - grid[i]) / (grid[i + 1] - grid[i])
+        a, b = units[i][key], units[i + 1][key]
+        return None if a is None else [x + f * (y - x) for x, y in zip(a, b)]
+    rows = {'bite_entry_temperature_k': [], 'bite_exit_temperature_k': [],
+            'minimum_temperature_k': [], 'mean_surface_temperature_k': [], 'swing_k': [],
+            'mean_coefficient_ratio': [], 'mean_model_surface_temperature_k': [],
+            'mean_minus_mean_model_k': []}
+    histories = []
+    bite_last = max(i for i, a in enumerate(kinds) if a['kind'] == 'bite')
+    for j, (wt, qm, td) in enumerate(zip(weights, qmean, t_deep)):
+        qb = qm * 2 * math.pi * radius / ld
+        ua, ub = unit_at(wt, 'per_unit_bite_flux_k_per_w_m2'), unit_at(wt, 'per_unit_deep_excess')
+        uc = unit_at(wt, 'per_unit_backup_excess')
+        ts = [tc + qb * x + (td - tc) * y for x, y in zip(ua, ub)]
+        if uc is not None:
+            ts = [t + (t_bk - tc) * c for t, c in zip(ts, uc)]
+        mean = sum(t * d for t, d in zip(ts, dts))
+        hs = [h_spray(wt) if a['kind'] == 'spray' else a['htc_w_m2k'] for a in kinds]
+        sinks = [tc if a['sink_temperature_k'] is None else a['sink_temperature_k']
+                 for a in kinds]
+        mean_h = sum(h * d for h, d in zip(hs, dts))
+        hq = sum(h * (t - s_) * d for h, t, s_, d in zip(hs, ts, sinks, dts))
+        ratio = (hq / (mean - tc)) / mean_h if mean != tc and mean_h > 0 else None
+        rows['bite_entry_temperature_k'].append(ts[-1])
+        rows['bite_exit_temperature_k'].append(ts[bite_last])
+        rows['minimum_temperature_k'].append(min(ts))
+        rows['mean_surface_temperature_k'].append(mean)
+        rows['swing_k'].append(max(ts) - min(ts))
+        rows['mean_coefficient_ratio'].append(ratio)
+        mm = actual['surface_temperature_k'][j]
+        rows['mean_model_surface_temperature_k'].append(mm)
+        rows['mean_minus_mean_model_k'].append(mean - mm)
+        histories.append(ts)
+    # the three stations
+    stations = [('strip centre', th.centre)]
+    stripes = (steady or {}).get('stripes') or []
+    if stripes:
+        big = max(stripes, key=lambda s_: abs(s_['peak_deviation_m']))
+        stations.append(('largest steady stripe', big['peak_position_m']))
+    healthy = [x for x, lv in zip(th.positions, th.levels) if lv == 1.0]
+    if healthy:
+        stations.append(('first station under a healthy nozzle', healthy[0]))
+    angle = [math.degrees((f - fb) * 2 * math.pi) % 360.0 for f in tf]
+    cycles = []
+    for name, x in stations:
+        j = min(range(len(z)), key=lambda i: abs(z[i] - x))
+        cycles.append({'station': name, 'z_m': z[j], 'angle_from_bite_exit_deg': angle,
+                       'time_fraction_from_bite_entry': tf,
+                       'surface_temperature_k': histories[j],
+                       'bite_entry_temperature_k': rows['bite_entry_temperature_k'][j],
+                       'bite_exit_temperature_k': rows['bite_exit_temperature_k'][j],
+                       'minimum_temperature_k': rows['minimum_temperature_k'][j],
+                       'mean_surface_temperature_k': rows['mean_surface_temperature_k'][j],
+                       'mean_model_surface_temperature_k':
+                           rows['mean_model_surface_temperature_k'][j]})
+    scales = roll_skin.time_scales(
+        conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c, revolution_time_s=t_rev,
+        radius_m=radius, mean_htc_w_m2k=bg + hm,
+        event_durations_s=[e['duration_s'] for e in w['events']])
+    flags = [CYCLE_FLAG]
+    ratios = [r for r in rows['mean_coefficient_ratio'] if r is not None]
+    worst = max(ratios, key=lambda r: abs(r - 1)) if ratios else None
+    bias = None
+    if worst is not None and abs(worst - 1) > MEAN_COEFFICIENT_BIAS:
+        flags.append(CYCLE_BIAS_FLAG)
+    if worst is not None:
+        bias = (f'The effective mean cooling coefficient of this layout is {worst:.3f} of the '
+                f'circumferential mean at the most affected station: the mean model '
+                + ('over' if worst < 1 else 'under') + f'-states the cooling by '
+                f'{abs(1 - worst) * 100:.1f} %. Reported only; the bulk model is not corrected.')
+    return {'status': roll_skin.STATUS, 'not_supplied': False, 'z_m': z, **rows,
+            'cycles': cycles, 'layout_used': table, 'layout_provenance': lay['provenance'],
+            'revolution_time_s': t_rev, 'roll_surface_speed_m_s': v_r,
+            'bite_fraction_of_revolution': fb, 'layer_depth_m': depth,
+            'deep_temperature_k': t_deep,
+            'unit_solution_weights': grid, 'time_scales': scales, 'bias_sentence': bias,
+            'worst_mean_coefficient_ratio': worst,
+            'basis': {'model': '[D, re-derived in SPEC18] periodic 1D layer under the surface '
+                               '(roll_skin), deep boundary at 6*sqrt(a*t_rev) held at the '
+                               'steady circumferential-mean temperature; linear in the bite '
+                               'flux, the deep and the backup excess, interpolated linearly '
+                               f'in the spray weight between {len(grid)} unit solutions [D]',
+                      'spray_coefficient': 'background + spray_mean_htc*weight*2*pi/phi on the '
+                                           'spray arcs (the footprint identity of SPEC17 '
+                                           'package 3: the angular mean equals the mean model)',
+                      'bite_flux': 'circumferential-mean flux of the steady model x 2*pi*R/l_d '
+                                   'under the strip, no cooling in the bite',
+                      'time_scale_kinds': scales['scale_meaning']},
+            'flags': flags, 'limitations': list(roll_skin.LIMITATIONS) + [
+                'One-dimensional layer per axial station: no axial conduction inside the layer '
+                '(the bulk field carries it). With sprays all round on the template case the '
+                'layer mean departs from the mean model by up to about 0.4 K at the nozzle scale '
+                'and 0.5 K at the strip edges; averaged over a nozzle pitch, by less than 1 % of '
+                'the surface excess in the strip interior [run].']}
+
+
 def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
@@ -2783,6 +3089,14 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         except ValueError as exc:
             out['thermal_steady'] = failed('thermal_steady', exc)
             out['failures'].append(out['thermal_steady']['error'])
+    # SPEC18 package 10: the roll surface within one revolution (one-way, key only additive)
+    try:
+        out['roll_surface_cycle'] = roll_surface_cycle_section(case, w, th, actual, bite, steady)
+        if out['roll_surface_cycle'].get('status') == 'UNVALIDATED_ROLL_SURFACE_CYCLE':
+            out['flags'] += [f for f in out['roll_surface_cycle']['flags']
+                             if f not in out['flags']]
+    except ValueError as exc:
+        out['roll_surface_cycle'] = not_assessable(str(exc))
     shape = {'steady': None, 'nozzle_pattern_ripple': None, 'crown': None, 'ridges': []}
     if steady is not None and sp is None:
         shape['steady'] = not_assessable(shape_reason)

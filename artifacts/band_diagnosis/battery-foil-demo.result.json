@@ -4743,6 +4743,7 @@
     "width_model": {
       "bite_heat_per_width_w_m": null,
       "blocked_nozzle_indices": [],
+      "circumferential_layout": null,
       "coil": {
         "compaction_factor": 0.5,
         "inner_radius_m": 0.15,
@@ -18916,6 +18917,11 @@
     "roll_profile": {
       "not_supplied": true,
       "reason": "width_model.roll_ground_profile is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
+    "roll_surface_cycle": {
+      "not_supplied": true,
+      "reason": "width_model.circumferential_layout is null or absent",
       "status": "NOT_SUPPLIED"
     },
     "shape": {

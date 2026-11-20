@@ -1298,6 +1298,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 |---|---|---|---|
 | `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
 | `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
+| `width_model.circumferential_layout` | optional: where the sprays (and a backup-roll contact) sit around the work roll, as angles in the direction of rotation measured from the bite exit (section 7.10); a wrong arc changes the surface cycle, so the layout used is printed in the result | rad | header position and fan width on the stand drawing (angle of the header centre from the bite exit, fan opening angle at the roll), the direction of rotation of the top work roll |
 | `tribology.interface_conductance_w_m2k`, `tribology.use_computed_heat_partition` | optional: a heat-transfer coefficient between strip and roll in the bite (else oil conductivity over film thickness), and whether the computed heat share replaces the entered one (section 8.2) | W/(m2 K), - | leave empty unless measured |
 | `hardening.rate_temperature` | optional strain-rate and temperature factor of the flow stress (section 8.3); no default number; enter the rate and temperature terms together or not at all | – | rate-jump and warm tensile tests on your stock |
 | `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model; enter measured passes in `measurement.pass_records` and the tool reports the friction they imply (section 8.5) |
@@ -1664,7 +1665,8 @@ The lengthwise result (`result['width']`) is built in this order: steady roll te
 and radius with the actual and with a healthy spray header (7.1); the difference between
 the two gives the stripes; each stripe goes through the strip-shape chain to thickness,
 elongation, flatness and buckling (7.2); the same stripe shape is carried through every
-pass of the schedule (7.3); switching events are simulated in time (7.4). Integration code:
+pass of the schedule (7.3); switching events are simulated in time (7.4); with an angular
+layout the roll surface within one revolution is added on top (7.10). Integration code:
 `physicroll/band_width.py`; equations: `physicroll/roll_thermal.py`,
 `physicroll/strip_shape.py`.
 
@@ -1756,7 +1758,8 @@ peak in 9.25 s in the battery demo). The literature's computed time scales are a
 axial decay of a 52 mm stripe and 4-7 min radially for a 260 mm roll [PT-T18, PT-T25,
 computed]: the plant's 20 s is of the order of the axial (local) scale, the model's steady
 build-up of the radial one. Plant time constants themselves were not found (abstract only,
-[PT-T26]). Partly open. Possible causes, none modelled: bite heat that depends
+[PT-T26]). Partly open (the per-revolution layer of 7.10 gives a surface-film scale of 15.9 s
+for this demo's inputs: a comparison, not a resolution). Possible causes, none modelled: bite heat that depends
 on the roll surface temperature, emulsion-level heat transfer, per-revolution effects. The
 literature adds two candidates (gap study X5): the surface time scale of the roll, and the
 strip-temperature term in measured flatness (section 7.7; a hot fibre reads loose while hot);
@@ -2347,6 +2350,68 @@ Limits: one roll's ground shape, measured cold and off the mill; marks narrower 
 grid cells or than 4a are smoothed; no wear growth during the campaign; no barrel-position
 modulation by roll bending (G1). `roll_surface_band` and `grinding_feed_marks` stay rule-based
 and do not read the section; it is never evidence.
+
+### 7.10 Roll surface within one revolution
+
+The roll model of 7.1 is a circumferential mean: the temperature the oil and the strip see at
+the bite is the surface value after the last spray, not the mean (gap rows A4, G8). With
+`width_model.circumferential_layout` (null by default; no demo has one, because no plant value
+of the angles exists) `width.roll_surface_cycle` adds a periodic surface layer per axial
+station (`physicroll/roll_skin.py`) [D, re-derived in SPEC18; the reports name a Fourier method
+and a "phase shift" method without equations]: one-dimensional conduction under the surface,
+curvature neglected, the deep boundary at `D = 6*sqrt(a*t_rev)` held at the steady
+circumferential-mean temperature; the revolution `t_rev = 2*pi*R/V_r` is a sequence of arcs:
+the bite (the roll's share of the bite heat over the contact length, no cooling), the spray
+arcs (coefficient `background + spray_mean_htc*weight*2*pi/phi`, so that its angular mean is
+the mean model's), an optional backup-roll contact (entered conductance and backup
+temperature) and air (background coefficient). 24 geometric cells, backward Euler, at least 8
+steps per arc, revolutions marched until the history changes by less than 1e-3 K. The scheme
+is linear, so per station `T_s - T_c = q_b*A + (T_D - T_c)*B` (+ the backup term), with `A`
+and `B` computed for 9 spray weights and interpolated [D].
+
+**Layout input.** `{"spray_arcs": [{"start_rad", "arc_rad"}], "backup_contact": null | {...},
+"provenance"}`: angles in the direction of rotation measured from the bite exit; 1 to 6 spray
+arcs, sorted, overlapping neither each other, the backup contact nor the bite (the bite's arc
+is the case-pass contact length over the radius); a region crossing the bite or one revolution
+is rejected with a message naming the two regions; when `spray_wetted_arc_rad` is entered the
+spray arcs must add up to it. The result tabulates the layout used (`layout_used`) and the
+report draws the three cycles against the angle.
+
+**Checks** (`tests/test_roll_skin.py`; k 40 W/mK, `rho*c` 7850*470, R 0.135 m, 10 m/s:
+`t_rev` 0.0848230 s, `e` 12148.25, skin depth 0.5410 mm): a flux `q1*cos(omega*t)` gives the
+half-space amplitude `q1/(e*sqrt(omega))` = 0.95643 K for 1e5 W/m2 to 0.13 % with a lag of
+45.2 degrees; a constant flux 1e7 W/m2 for 0.2 ms raises the surface by 13.154 K against the
+exact 13.136 K (13.136 with 48 cells); after a step in `h` the surface covers 0.57264 of its
+change at `t* = k*rho*c/h^2` (12.766 s at 3400 W/m2K) against the exact 0.5724. Cycle with a
+2 mm bite at 1e7 W/m2, one spray arc from 90 to 150 degrees at 20450 W/m2K, background 50,
+coolant 313.15 K, deep 330 K: 327.154 K before the bite, 340.545 K after it, lowest 325.05 K,
+mean 327.06 K, mean flux -20533 W/m2 (the deep flux within 0.74 %), 60 revolutions; mean
+coefficient 3450 W/m2K, effective `<h*(T_s - T_c)>/(<T_s> - T_c)` 3171.2 W/m2K, ratio 0.919:
+**the circumferential-mean model over-states the cooling of this layout by 8 %**.
+Superposition: `313.15 + 0.713895*16.85 + 1.966099 = 327.145 K` (converged cycle 327.145 K).
+With sprays all round, averaged over a nozzle pitch, the layer mean equals the mean model
+within 1 % of the surface excess in the strip interior (pointwise up to 0.4 K at the nozzle
+scale and 0.5 K at the strip edges: the layer has no axial conduction).
+
+**What it says about X3 and the "20 s" question.** The bias of the mean coefficient
+(`mean_coefficient_ratio`, flag `CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED` beyond 5 %) is the
+error of the circumferential averaging for a given layout; the bulk model is not corrected with
+it. The section's `time_scales` are the model's own three: one revolution (`per_revolution_s`,
+the skin cycle), the surface film `k*rho*c/h_mean^2` (`surface_film_s`, a step in the spray
+coefficient reaches 0.57 of its surface change) and the roll body `rho*c*R/(2*h_mean)`
+(`bulk_s`), each event's duration divided by each. The published "three thermal effects" have
+no numbers in the abstract read [TM-LA9 AB]. For the demos' own inputs the surface-film scale
+of this model is **15.9 s** (lengthwise demo, `h_mean` 3050 W/m2K; body 121 s, revolution
+0.11 s) and **12.4 s** (battery demo, 3450 W/m2K; body 72 s, revolution 0.078 s) [run, with a
+scratch layout]: of the order of the plant's 20 s, as a comparison, not an explanation; the
+emulation of the plant's step test that could support a claim (A6) is not built.
+
+The case pass's computed heat partition (8.2) takes its roll entry temperature from the cycle
+at the strip centre when the section exists (one pass, no iteration; flag
+`ROLL_ENTRY_TEMPERATURE_FROM_SURFACE_CYCLE`; reported values only). Nothing else uses the
+cycle: not the bulk, the stripes, the shape, the viscosity, the film or the flow stress. Cost:
+about 2.0 s (lengthwise demo) and 1.6 s (battery demo) per diagnosis with a layout; nothing
+without one.
 
 ## 8. Process models
 
@@ -3452,7 +3517,7 @@ case". Sections of the lengthwise demo report
 | Which family of causes | the `family_summary` text, the observed family and the family of the leading hypothesis, the number of non-contradicted hypotheses per family, and a one-line summary of the key observations as entered |
 | Leading hypotheses | each `CONSISTENT_LEADING` hypothesis with the criteria that support and contradict it; up to three other `CONSISTENT` hypotheses of the observed family with theirs |
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
-| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines |
+| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
 | Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 7.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
 | How the result changes with gauge | a generated direction sentence, then the gauge-trend text, two charts and the table of 7.3 |
 | Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
@@ -3615,6 +3680,7 @@ real mill.
 | friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| roll surface cycle / `tests/test_roll_skin.py` | the half-space closed forms (sinusoid amplitude within 0.5 % and lag within 1 degree; constant flux within 4 % and 1.5 % with 48 cells; step in `h` 0.5724 within 0.5 %); the planner's cycle (before / after the bite, lowest, mean, flux, 60 revolutions, mean coefficient and its ratio); energy (deep flux within 1.5 %); superposition to 2e-3 K; nine unit solutions within the 3 s budget; layout validation messages naming the two regions and the wetted-arc consistency; in the engine (template case, supplied bite) the section, `not_supplied` without a layout, every other width result, the bite and the hypotheses identical with and without it, the reduction to the mean model with sprays all round (pitch-averaged, 1 % of the surface excess) and the report block |
 | heat partition / `tests/test_bite_tribology.py` (`HeatPartitionTests`), `tests/test_band_heat_partition.py` | the closed form against the scheme (1e-5) and its asymptotic branch; the worked numbers of section 8.2 (1e-4); energy balance to 1e-9; zero conductance gives share 1, zero heat changes nothing, a hotter roll gives a share above 1 and the flag; in the engine the heating rows carry the block, with the option absent the result without the new keys equals the result with the partition switched off, with it set pass heating and the width model's roll heat fraction follow; the report line; `tests/test_benchmarks.py`: `TM-LA19-HEAT-SPLIT` |
 | flow stress law forms / `tests/test_bite_tribology.py` (`FlowStressRateTemperatureTests`), `tests/test_band_rate_temperature.py` | the worked numbers of section 8.3 (1e-6); `m(T)` and its floor; factor limits; a negative late slope accepted with the positivity rule and its flag; the Tome form against a hand value (169999724 Pa to 1 Pa) and Simpson against 512 panels; the fit recovers a Voce law from 6 exact points (1e-3, positive and negative slope), flags 4 points and refuses 2; in the engine the rows carry the factor, `use_rate_temperature` needs computed flow stress, with it false nothing else differs, `chatter.rate_sensitivity_damping` equals the formula, and the worked damping share 0.046375 |
 | friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
@@ -3653,6 +3719,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **The roll surface cycle is one-way** (section 7.10): it never changes the bulk field, the
+  stripes or the shape; one-dimensional per axial station (no axial conduction in the layer);
+  uniform flux in the bite; no backup contact unless entered; wipers and oil carry-over not
+  modelled; the layout angles are entered, not measured by the tool; its time scales are a
+  comparison with the plant's 20 s, not an explanation (A6 not built).
 - **The computed heat partition is a reduced interface model** (section 8.2): lumped strip,
   uniform heat over the contact, roll curvature neglected, no asperity conduction (no formula
   in the reports), film from the smooth inlet formula, roll entry temperature assumed, not

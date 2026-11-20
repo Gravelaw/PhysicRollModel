@@ -3642,6 +3642,33 @@ def diagnose(case):
     except ValueError as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
+    # SPEC18 package 10 -> 9: the case pass's heat partition takes the roll surface at bite
+    # entry from the surface cycle (strip centre; one pass, no iteration; reported values only)
+    rsc = (result['width'] or {}).get('roll_surface_cycle') if isinstance(
+        result.get('width'), dict) else None
+    op_heat = ((proc.get('heating') or {}).get('operating') if isinstance(
+        proc.get('heating'), dict) else None)
+    if isinstance(rsc, dict) and rsc.get('status') == 'UNVALIDATED_ROLL_SURFACE_CYCLE' and \
+            isinstance(op_heat, dict) and isinstance(op_heat.get('heat_partition'), dict) and \
+            op_heat['heat_partition'].get('status') == 'UNVALIDATED_COMPUTED_HEAT_PARTITION':
+        try:
+            centre = rsc['cycles'][0]
+            old = op_heat['heat_partition']
+            new = bp.pass_heat_partition(
+                eff, p, bite, trib, op_heat['plastic_power_per_width_w_m'],
+                op_heat['friction_power_per_width_w_m'], fr_row,
+                roll_entry=(centre['bite_entry_temperature_k'],
+                            'width.roll_surface_cycle bite_entry_temperature_k at the strip '
+                            'centre (one pass, no iteration)'))
+            if bp.use_computed_heat_partition(trib):
+                new['strip_heat_fraction_used_by_pass_heating'] = old[
+                    'strip_heat_fraction_computed']
+            op_heat['heat_partition'] = new
+            if 'supplied_minus_computed_strip_heat_fraction' in op_heat:
+                op_heat['supplied_minus_computed_strip_heat_fraction'] = (
+                    trib['strip_heat_fraction'] - new['strip_heat_fraction_computed'])
+        except (ValueError, KeyError, IndexError) as exc:
+            op_heat['heat_partition_surface_cycle_error'] = str(exc)
     try:
         band_thermal.attach_per_pass(result)
     except (ValueError, KeyError, TypeError, ArithmeticError) as exc:

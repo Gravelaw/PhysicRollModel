@@ -1115,7 +1115,11 @@ def _roll_thermal_inputs(case):
             'defaults of roll_thermal.RollThermalProperties (no width_model.roll)')
 
 
-def pass_heat_partition(case, src, bite, trib, plastic_power, friction_power, friction_row):
+SURFACE_CYCLE_ENTRY_FLAG = 'ROLL_ENTRY_TEMPERATURE_FROM_SURFACE_CYCLE'
+
+
+def pass_heat_partition(case, src, bite, trib, plastic_power, friction_power, friction_row,
+                        roll_entry=None):
     """``heat_partition`` of one pass (SPEC18 package 9), or ``not_supplied`` with the reason.
     Reported beside the supplied share; it drives pass heating and the width model's default
     roll heat fraction only with ``tribology.use_computed_heat_partition``."""
@@ -1131,7 +1135,9 @@ def pass_heat_partition(case, src, bite, trib, plastic_power, friction_power, fr
                             'tribology.interface_conductance_w_m2k')
     k_r, rho_r, c_r, roll_basis = _roll_thermal_inputs(case)
     w = case.get('width_model')
-    if w is not None:
+    if roll_entry is not None:                      # SPEC18 package 10
+        t_r0, t_basis = roll_entry
+    elif w is not None:
         t_r0, t_basis = w['coolant_temperature_k'], 'width_model.coolant_temperature_k'
     else:
         t_r0, t_basis = trib['inlet_temperature_k'], 'tribology.inlet_temperature_k'
@@ -1165,7 +1171,8 @@ def pass_heat_partition(case, src, bite, trib, plastic_power, friction_power, fr
     out['roll_properties_basis'] = roll_basis
     out['roll_entry_surface_temperature_k'] = t_r0
     out['roll_entry_surface_temperature_basis'] = t_basis
-    out['flags'] = list(res['flags']) + [ROLL_ENTRY_ASSUMED_FLAG]
+    out['flags'] = list(res['flags']) + [ROLL_ENTRY_ASSUMED_FLAG if roll_entry is None
+                                         else SURFACE_CYCLE_ENTRY_FLAG]
     out['supplied_strip_heat_fraction'] = trib['strip_heat_fraction']
     out['measured_strip_share_foil_mill'] = {
         'range': list(bt.MEASURED_FOIL_STRIP_SHARE),

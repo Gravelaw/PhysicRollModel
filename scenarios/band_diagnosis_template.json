@@ -210,7 +210,8 @@
     "spray_wetted_arc_rad": null,
     "strip_temperature": null,
     "friction_stripe_screen": null,
-    "roll_ground_profile": null
+    "roll_ground_profile": null,
+    "circumferential_layout": null
   },
   "tribology": {
     "lubricant": {
