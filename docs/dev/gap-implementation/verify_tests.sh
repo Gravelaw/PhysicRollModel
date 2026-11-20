@@ -11,7 +11,7 @@ python -m unittest tests.test_band_foil tests.test_band_plain tests.test_band_pl
   tests.test_band_robustness_v2_sweep tests.test_band_diagnosis_reports > "$S/b.txt" 2>&1 &
 python -m unittest tests.test_band_lengthwise tests.test_band_diagnosis \
   tests.test_package_resources tests.test_band_products tests.test_band_extended_domain \
-  tests.test_band_robustness > "$S/c.txt" 2>&1 &
+  tests.test_band_robustness tests.test_band_local > "$S/c.txt" 2>&1 &
 python -m unittest tests.test_band_survey tests.test_band_app tests.test_band_app_drawing \
   tests.test_band_app_reopen tests.test_band_lengthwise_events tests.test_band_foil_demo \
   tests.test_band_plain_phase1 "$@" > "$S/d.txt" 2>&1 &

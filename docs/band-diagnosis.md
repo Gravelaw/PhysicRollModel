@@ -1462,6 +1462,15 @@ roughness or coating map, an oil-flow or oil-temperature map per zone.
 `provenance`; from a roll grinder's profile report of the work roll in the mill.
 `measurement.shapemeter.temperature_compensated` (true / false / null) says
 whether the shapemeter corrects for strip temperature.
+`width_model.local_coupling` (SPEC19 package 1, section 7.11; null = none):
+`inlet_roll_temperature_weight` ([0, 1], default 0.5: the share of a roll surface temperature
+difference that reaches the oil at the inlet; an assumption, no measurement exists),
+`flow_stress_temperature_coefficient_per_k` ([0, 0.01] /K or null = the coefficient of
+`hardening.rate_temperature` when that is given, else no flow-stress change; from tensile tests
+of your alloy at 20 and 100 C), `strip_roll_temperature_coupling` ([0, 1.5] or null = computed
+from the bite heat partition), `oil_flow_per_nozzle_m3_s` ((0, 0.1] m3/s or null = no supply
+check; the oil flow per zone from the coolant system display divided by the nozzles of the
+zone), `oil_capture_fraction` ((0, 1], default 1) and `provenance`. It changes no score.
 
 ## 6. Hypotheses and evidence rules
 
@@ -2471,6 +2480,81 @@ at the strip centre when the section exists (one pass, no iteration; flag
 cycle: not the bulk, the stripes, the shape, the viscosity, the film or the flow stress. Cost:
 about 2.0 s (lengthwise demo) and 1.6 s (battery demo) per diagnosis with a layout; nothing
 without one.
+
+### 7.11 What a hot roll stripe does besides growing the roll: local state
+
+SPEC19 package 1 (gap rows A2 inputs, BT-G12, A1 / G6 computed; `physicroll/band_local.py`).
+A roll stripe that is hotter than its neighbours does more than grow the roll: the oil at that
+width position is warmer and thinner, the film and the friction change, the metal is softer,
+and the strip leaves the bite hotter. SPEC18 built the single-station pieces (viscosity law,
+friction closure, heat partition, roll surface cycle); with the optional
+`width_model.local_coupling` the result gains `width.local_state`, which evaluates them at every
+strip sample of the steady thermal grid. **It makes no band** (SPEC19 package 2 turns the
+changes into I-units) and feeds nothing back into the bite, the heat row or the roll
+temperature.
+
+**Difference method.** Every quantity is a difference from the healthy header at the same pass,
+as the radius stripes are (section 7.1): a healthy header gives zero everywhere, and the levels
+(the pass friction, the inlet temperature, the film of the friction row) stay those of the pass.
+
+The nine formulas, per strip sample `z` (`ref` = healthy header):
+
+| # | formula | tag |
+|---|---|---|
+| 1 | `dT_r = T_r,actual - T_r,healthy`: the roll surface the bite meets, from `width.roll_surface_cycle` (bite entry minus the new `healthy_bite_entry_temperature_k`, same unit solutions) when a layout is entered, else the circumferential-mean surface (flag `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE`) | [D, SPEC19] |
+| 2 | `T_in = tribology.inlet_temperature_k + w_in*dT_r` | `w_in` [D, SPEC19: analyst choice] |
+| 3 | `v = eta0(T_in)/eta0(T_in,ref)` with the oil's temperature law (exponential or table) | SPEC18 |
+| 4 | `h_s = h_s,ref*v`, `Lambda_s = Lambda_ref*v` (the inlet film is proportional to `eta0`) | [BT-S9 EX eq. 4.1 as coded] |
+| 5 | `h_sup = Q*capture*weight/(pitch*u_bar)`, `u_bar = (V_r + u_entry)/2`; `h = min(h_s, h_sup)`, `Lambda = Lambda_s*h/h_s`, starved where `h_sup < h_s` | [D, re-derived in SPEC19: volume balance] |
+| 6 | `dmu = mu_cl(Lambda) - mu_cl(Lambda_ref)` with the case's closure (placeholder or load sharing); `Lambda <= 0` evaluated at 1e-6 | closure as section 8.1 |
+| 7 | `dY_rel = -c_T*dT_b`, `dT_b = 0.5*eta_x*dT_r` | form: gap A2; mid-bite temperature as SPEC18 |
+| 8 | `eta_x = T_x(T_r0 + 1 K) - T_x(T_r0)` from the case pass's heat partition (section 8.2); exact, the model is linear in `T_r0` | [D, SPEC19] |
+| 9 | `dT_x = eta_x*dT_r`, `T_x = T_x,ref + dT_x` (`T_x,ref` the pass heating exit temperature); the change of friction heat with `dmu` is left out (second order) | [D, SPEC19] |
+
+**The inlet weight is an assumption.** The film forms between the roll and the strip; the strip
+enters at one temperature across the width, so `w_in = 0.5` is the mean of the two surfaces and
+`w_in = 1` is the bound the bite report uses ("a roll surface that is locally hotter thins the
+film at once", gap BT-G4 [derived]). Nobody has measured the oil temperature at the inlet
+across the width; package 2 always evaluates 0, the entered value and 1.
+
+**Oil supply (BT-G12) is a volume balance, not a starvation model.** Oil arriving per unit
+barrel length `q' = Q*capture*weight/pitch` cannot form a film thicker than `q'/u_bar`. On the
+battery-foil demo (10 l/min per nozzle, assumed) a healthy nozzle delivers a film of 3.42e-4 m,
+3602 times the smooth inlet film (95.0 nm): a nozzle is a film band by supply only when its
+level falls below 2.78e-4, that is when it is practically dry; the weak nozzle at 0.45 is not
+starved (2.62e-4 m supplied under it). A fully blocked nozzle gives zero supplied film because
+the model has no spreading or carry-over (flag
+`ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL`); no inlet meniscus position is
+computed. So gap BT-G12 reduces to a flag (SPEC19 finding 9).
+
+**Strip temperature (A1 computed).** `strip_exit_temperature_k` across the width goes through
+the strip-temperature term of section 7.7 (`thermal_flatness`, about 2.4 I-units per K); the
+supplied-scan section `width.strip_temperature` is not changed or replaced.
+
+**Battery-foil demo** (synthetic `local_coupling`: weight 0.5, softening 0.15 %/K from the
+1100-H18 strengths at 20 and 100 C [PT-T31, PT-T39; coefficient derived], 10 l/min per nozzle
+assumed; no circumferential layout, so the circumferential-mean surface is used): the largest
+`dT_r` is 2.358 K at 0.6225 m (the weak nozzle). There the inlet oil is 1.179 K warmer, the
+viscosity ratio 0.982469, the film ratio 0.373409 (from 0.380072), the friction 3.7487e-4
+higher (1.25 % of the pass friction 0.03, placeholder closure, flag
+`LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE`), the flow stress 0.149 % lower; the
+strip-to-roll coupling is 0.8442 (contact time 0.218 ms, `C_s` 43.4 J/m2K, film conductance
+1.37e6 W/m2K) and the strip leaves 1.991 K hotter (335.42 K against 333.43 K). The
+strip-temperature term of this computed profile peaks at 4.06 I-units at 0.6225 m (mean
+removed; -0.64 elsewhere). Planner's prototype (s25/local.py, eta.py): 2.358 K, 0.982470,
+0.373410, +3.748e-4, 0.844, -1.49e-3; with weight 1.0 the ratio is 0.965246 and the friction
+change +7.45e-4 (both reproduced in `tests/test_band_local.py`). Lengthwise demo (not carried by its scenario; run with a
+scratch key): 1.664 K at 0.6675 m, coupling 0.510. Cost: about 0.06 s per diagnosis.
+
+Limits: differences from the healthy header only; the inlet weight is an assumption; one-way
+(the local force, slip and heat changes do not return to the roll temperature: loop I1 stays
+open); friction heat change left out; no lateral spreading or carry-over of oil; roughness
+uniform across the barrel (a rougher or coated zone is entered through the friction stripe
+screen of section 7.8); the strip entry temperature is uniform. Flags (also on the top-level
+list): `LOCAL_STATE_COMPUTED`, `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE`,
+`LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE`, `OIL_SUPPLY_BELOW_SMOOTH_FILM` (a starved
+station under a nozzle whose level is above 0), `ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL`,
+`LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE`.
 
 ## 8. Process models
 
@@ -3762,6 +3846,7 @@ real mill.
 | `strip_shape.thermal_flatness_term`, `band_width.strip_temperature_section` / `tests/test_band_strip_temperature.py` | a 1 K step over half the strip gives 2.36 I-units (1e-9), a custom coefficient scales linearly, the default sets the flag; a uniform temperature gives zero and equal profiles; on the committed battery-foil profile with the demo scan: 2.36 I-units/K, mean 353.416125 K, deviation 2.332175 K, thermal +5.5039 / -0.6281 (alone one band 0.560-0.685 m, peak 5.5039 at 0.6025 m), mechanical bands and states equal to the width section's, as measured hot 30.4694 at 0.6175 m (0.495-0.745 m) and tight -5.8106 / -5.8524, held-flat bound -5.5039, no state change, shapemeter zone 9 29.8136 hot against 24.4912; the committed section equals a fresh one; without a mechanical profile the thermal term alone with its flag; a hand case where the term lifts a 1.5 I-unit band above the threshold is a reported state change; a scan not covering the strip holds its end values and reports 0.6 m; every validation message; a small case with and without a scan differs only in `width.strip_temperature`, `measurement`, `inputs` and flags, hypotheses identical; the report renders |
 | `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
+| local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
 
 `tests/test_band_diagnosis.py` also checks that twenty hypotheses are evaluated for every
@@ -3957,6 +4042,13 @@ At battery-foil gauge, in addition (each checked against the code and
   100 MPa (Roelands low by a factor 12 to 30); no source gives a limiting shear stress for a
   rolling oil (only a lower bound 0.045 of the pressure for one base oil); the Eyring stress
   is known for one base oil without additives (section 8.1).
+- **The local state across the width is one-way and rests on an assumed inlet weight**
+  (section 7.11): differences from the healthy header only; the share of a roll temperature
+  difference that reaches the inlet oil (default 0.5) has not been measured; the local friction,
+  force and heat changes do not return to the roll temperature (loop I1 open); no oil spreading
+  or carry-over, no inlet meniscus position (the oil supply is a volume balance); the friction
+  heat change is left out; the strip entry temperature and the roughness are uniform across the
+  width.
 - **The reduced half-space bite (`halfspace_bite.py`) is opt-in** (`model_options.bite_model`)
   and unvalidated: it leaves out the longitudinal elastic equations of its source, closes
   the bite ends by contact zones where the source uses a pressure step (the published loads

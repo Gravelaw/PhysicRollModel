@@ -4543,6 +4543,7 @@
       "heredity_coefficient": null,
       "incoming_ridges": [],
       "lateral_compressive_stress_pa": null,
+      "local_coupling": null,
       "nozzle_levels": [
         1.0,
         1.0,
@@ -14001,6 +14002,11 @@
       "Stripe detection by differencing against a healthy-header solution; the stripe threshold is an analyst choice.",
       "Not plant-validated."
     ],
+    "local_state": {
+      "not_supplied": true,
+      "reason": "width_model.local_coupling is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "not_supplied": false,
     "positions": {
       "observed_gaps_basis": "gaps between observed band positions",

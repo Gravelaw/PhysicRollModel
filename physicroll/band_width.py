@@ -71,6 +71,7 @@ closed-gap (roll-kissing) rolling; any physical model of foil tension lines.
 import math
 import sys
 
+from . import band_local
 from . import band_products
 from . import roll_thermal as rt
 from . import strip_shape as ss
@@ -124,7 +125,9 @@ WIDTH_DEFAULTS = {
     'roll_ground_profile': None,
     # SPEC18 package 10 (A4, G8): angular layout of sprays and backup contact for the roll
     # surface cycle within one revolution
-    'circumferential_layout': None}
+    'circumferential_layout': None,
+    # SPEC19 package 1 (A2 inputs, BT-G12, A1 computed): local state across the width
+    'local_coupling': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -296,6 +299,7 @@ def validate_width_model(w, pass_):
                                                         roll['barrel_length_m'])
     out['circumferential_layout'] = validate_circumferential_layout(
         w.get('circumferential_layout'), arc)
+    out['local_coupling'] = band_local.validate_local_coupling(w.get('local_coupling'))
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -2835,9 +2839,26 @@ def _skin_arcs(pattern, h_spray, background, coolant, bite_flux):
     return out
 
 
-def roll_surface_cycle_section(case, w, th, actual, bite, steady):
+def _cycle_unit_at(grid, units, wt, key):
+    """Unit solution at spray weight ``wt``: linear in the weight between the unit solutions of
+    ``grid`` (continued with the end interval's slope outside it)."""
+    if len(grid) == 1:
+        return units[0][key]
+    i = max(0, min(len(grid) - 2, max(j for j in range(len(grid)) if grid[j] <= wt)
+                   if wt >= grid[0] else 0))
+    f = (wt - grid[i]) / (grid[i + 1] - grid[i])
+    a, b = units[i][key], units[i + 1][key]
+    return None if a is None else [x + f * (y - x) for x, y in zip(a, b)]
+
+
+def roll_surface_cycle_section(case, w, th, actual, bite, steady, healthy=None):
     """``width.roll_surface_cycle`` (SPEC18 package 10): the per-revolution surface layer on top
-    of the steady circumferential-mean field, per axial station (one-way)."""
+    of the steady circumferential-mean field, per axial station (one-way).
+
+    ``healthy`` (SPEC19 package 1, additive key ``healthy_bite_entry_temperature_k``): the
+    healthy-header steady solution; its bite entry temperature comes from the same unit
+    solutions (unit solutions are added only at healthy weights outside the actual grid, which
+    leaves every value inside it unchanged) with the healthy weight, flux and deep field."""
     from . import roll_skin
     lay = w['circumferential_layout']
     if lay is None:
@@ -2885,13 +2906,7 @@ def roll_surface_cycle_section(case, w, th, actual, bite, steady):
         kinds.append(a)
 
     def unit_at(wt, key):
-        if len(grid) == 1:
-            return units[0][key]
-        i = max(0, min(len(grid) - 2, max(j for j in range(len(grid)) if grid[j] <= wt)
-                       if wt >= grid[0] else 0))
-        f = (wt - grid[i]) / (grid[i + 1] - grid[i])
-        a, b = units[i][key], units[i + 1][key]
-        return None if a is None else [x + f * (y - x) for x, y in zip(a, b)]
+        return _cycle_unit_at(grid, units, wt, key)
     rows = {'bite_entry_temperature_k': [], 'bite_exit_temperature_k': [],
             'minimum_temperature_k': [], 'mean_surface_temperature_k': [], 'swing_k': [],
             'mean_coefficient_ratio': [], 'mean_model_surface_temperature_k': [],
@@ -2922,6 +2937,30 @@ def roll_surface_cycle_section(case, w, th, actual, bite, steady):
         rows['mean_model_surface_temperature_k'].append(mm)
         rows['mean_minus_mean_model_k'].append(mean - mm)
         histories.append(ts)
+    if healthy is not None:
+        # SPEC19 package 1: the healthy header's bite entry temperature on the same z_m
+        hw = healthy['spray_weight']
+        extra = sorted({x for x in (min(hw), max(hw)) if x < grid[0] or x > grid[-1]})
+        hgrid, hunits = list(grid), list(units)
+        for wt in extra:
+            u_ = roll_skin.unit_solutions(
+                conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c,
+                revolution_time_s=t_rev, arcs=_skin_arcs(pattern, h_spray(wt), bg, tc, 1.0),
+                coolant_temperature_k=tc, tolerance_k=SURFACE_CYCLE_TOLERANCE_K)
+            j = sum(1 for g_ in hgrid if g_ < wt)
+            hgrid.insert(j, wt)
+            hunits.insert(j, u_)
+        h_deep = _deep_temperature(healthy['field'], depth, radius)
+        h_entry = []
+        for wt, qm, td in zip(hw, healthy['heat_flux_w_m2'], h_deep):
+            qb = qm * 2 * math.pi * radius / ld
+            ua = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_bite_flux_k_per_w_m2')
+            ub = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_deep_excess')
+            uc = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_backup_excess')
+            te = tc + qb * ua[-1] + (td - tc) * ub[-1]
+            if uc is not None:
+                te += (t_bk - tc) * uc[-1]
+            h_entry.append(te)
     # the three stations
     stations = [('strip centre', th.centre)]
     stripes = (steady or {}).get('stripes') or []
@@ -2959,6 +2998,8 @@ def roll_surface_cycle_section(case, w, th, actual, bite, steady):
                 f'circumferential mean at the most affected station: the mean model '
                 + ('over' if worst < 1 else 'under') + f'-states the cooling by '
                 f'{abs(1 - worst) * 100:.1f} %. Reported only; the bulk model is not corrected.')
+    if healthy is not None:          # key only then (SPEC19 package 1)
+        rows['healthy_bite_entry_temperature_k'] = h_entry
     return {'status': roll_skin.STATUS, 'not_supplied': False, 'z_m': z, **rows,
             'cycles': cycles, 'layout_used': table, 'layout_provenance': lay['provenance'],
             'revolution_time_s': t_rev, 'roll_surface_speed_m_s': v_r,
@@ -3100,12 +3141,23 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             out['failures'].append(out['thermal_steady']['error'])
     # SPEC18 package 10: the roll surface within one revolution (one-way, key only additive)
     try:
-        out['roll_surface_cycle'] = roll_surface_cycle_section(case, w, th, actual, bite, steady)
+        out['roll_surface_cycle'] = roll_surface_cycle_section(case, w, th, actual, bite, steady,
+                                                               healthy=healthy)
         if out['roll_surface_cycle'].get('status') == 'UNVALIDATED_ROLL_SURFACE_CYCLE':
             out['flags'] += [f for f in out['roll_surface_cycle']['flags']
                              if f not in out['flags']]
     except ValueError as exc:
         out['roll_surface_cycle'] = not_assessable(str(exc))
+    # SPEC19 package 1: local state across the width (one-way; NOT_SUPPLIED without the key)
+    try:
+        out['local_state'] = band_local.local_state_section(
+            case, w, th, steady, trib, bite, heat_row, friction_row,
+            out['roll_surface_cycle'])
+    except (ValueError, ArithmeticError) as exc:
+        out['local_state'] = failed('local_state', exc)
+        out['failures'].append(out['local_state']['error'])
+    flags += [f for f in (out['local_state'].get('flags') or [])
+              if f in band_local.TOP_LEVEL_FLAGS and f not in flags]
     shape = {'steady': None, 'nozzle_pattern_ripple': None, 'crown': None, 'ridges': []}
     if steady is not None and sp is None:
         shape['steady'] = not_assessable(shape_reason)

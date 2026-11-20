@@ -2647,6 +2647,27 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'LOCAL_STATE_COMPUTED': (
+        'The oil film, friction, metal strength and strip temperature across the width were '
+        'worked out as differences from a healthy spray header; they change no other result.',
+        'Read them as rough estimates beside the roll stripe.'),
+    'LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE': (
+        'The roll surface temperature used for the oil and the strip is the average around '
+        'the roll, not the value just before the roll gap.',
+        'Enter how the roll is cooled around its circumference for the value before the gap.'),
+    'LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE': (
+        'The friction change across the width uses a friction law whose slope is a rough '
+        'stand-in, not fitted to measurements.', 'Read the friction change by its sign only.'),
+    'OIL_SUPPLY_BELOW_SMOOTH_FILM': (
+        'Under at least one working nozzle less oil arrives than the film in the roll gap '
+        'would carry.', 'Check the oil flow of the nozzles near that position.'),
+    'ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL': (
+        'Under a fully blocked nozzle no oil arrives in this estimate; oil that spreads from '
+        'the neighbours is not counted.', 'Check that nozzle; read the film there as a lower '
+        'bound.'),
+    'LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE': (
+        'Somewhere across the width the friction changes by more than a fifth; the straight-'
+        'line estimate built on it is then rough.', 'Read that part as a rough indication.'),
     'ROLL_SURFACE_CYCLE_COMPUTED': (
         'The roll surface temperature within one revolution was computed from the angular '
         'layout of bite and sprays you entered; it changes no other result.', 'No action.'),

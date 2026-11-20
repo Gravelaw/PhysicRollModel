@@ -48,7 +48,8 @@
     "measurement (optional, v2; null = not supplied): {\"shapemeter\": {zone_width_m, zone_count, edge_zone_width_m, edge_zone_count_per_side, centre_m, neighbour_spreading_fraction, resolution_i_units, provenance}, \"thickness_gauge\": null}. The shapemeter block gives what each zone of a flatness roll with that zone width would read for every modelled band (zone means of the model profile; no flatness controller is modelled). Zone width, count and edge zones come from the shapemeter data sheet or the level-2 configuration; leave neighbour_spreading_fraction at 0 unless the vendor states it, and resolution_i_units null unless the vendor gives one.",
     "width_model.strip_temperature (optional, null = not supplied): a measured or assumed strip temperature scan across the width, {positions_m (>= 3, increasing, on the barrel), temperature_k (one per position, 250-700 K), expansion_coefficient_per_k (null = 23.6e-6 /K, a textbook value), provenance}. It is not computed by the tool. The result then shows flatness as a shapemeter measures it hot (model flatness plus about 2.4 I-units per kelvin) beside the flatness after the coil has cooled.",
     "width_model.friction_stripe_screen (optional, null = not supplied): {reference_half_peak_width_m (null = 0.1 m), stripes: [{position_m, half_peak_width_m, friction_change_fraction (relative change of the pass friction, -0.9 to 5, not 0), label}]}. A screening estimate of a local friction or oil-film difference across the width as a band source: I-units per 1 % friction per pass (with and without the exit-tension feedback) and the flatness of each supplied stripe; the list may be empty. It never changes a score.",
-    "width_model.roll_ground_profile (optional, null = not supplied): a measured roll profile from a grinder report, {positions_m (>= 5, increasing, on the barrel, from the barrel end where the spray header starts), radius_deviation_m (RADIUS, half a diameter deviation, positive = larger roll, one per position), detrend_order (default 2: the crown is removed; null = none), rolls_carrying (1 or 2), provenance}. It goes through the same transfer as a thermal stripe; it never changes a score."
+    "width_model.roll_ground_profile (optional, null = not supplied): a measured roll profile from a grinder report, {positions_m (>= 5, increasing, on the barrel, from the barrel end where the spray header starts), radius_deviation_m (RADIUS, half a diameter deviation, positive = larger roll, one per position), detrend_order (default 2: the crown is removed; null = none), rolls_carrying (1 or 2), provenance}. It goes through the same transfer as a thermal stripe; it never changes a score.",
+    "width_model.local_coupling (optional, null = not supplied): {inlet_roll_temperature_weight (share of a roll surface temperature difference that reaches the oil at the inlet, [0, 1], default 0.5 = the mean of roll and strip, an assumption), flow_stress_temperature_coefficient_per_k (softening per kelvin, [0, 0.01], null = hardening.rate_temperature when given), strip_roll_temperature_coupling (strip exit temperature change per kelvin of roll surface, [0, 1.5], null = computed from the bite heat partition), oil_flow_per_nozzle_m3_s ((0, 0.1], null = no supply check), oil_capture_fraction ((0, 1], default 1), provenance}. Oil viscosity, film, friction, flow stress and strip exit temperature across the width as differences from a healthy header (width.local_state); it never changes a score."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -211,7 +212,8 @@
     "strip_temperature": null,
     "friction_stripe_screen": null,
     "roll_ground_profile": null,
-    "circumferential_layout": null
+    "circumferential_layout": null,
+    "local_coupling": null
   },
   "tribology": {
     "lubricant": {
