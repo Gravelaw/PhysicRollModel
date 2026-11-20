@@ -1317,6 +1317,32 @@ def _row_job(job):
     return survey_row(bp.product(pid), _WORKER_MILLS[key], index, override, override_source)
 
 
+def _parallel_rows(chosen, overrides, override_source, foil_mill, sheet_mill, workers):
+    """Rows in ``workers`` processes started by SPAWN on every platform (what runs here is
+    what runs on Windows and macOS): the worker is the module-level ``_row_job``, its
+    arguments (product id, index, override dict, strings or paths) and results (JSON-safe
+    dicts) are picklable, and it builds its own mills (no state inherited from the parent).
+    Fail soft: when the pool cannot start or a worker dies, None is returned and the caller
+    computes the rows serially; the result is the same either way (a RuntimeWarning says so,
+    nothing is added to the result, so the committed artifact stays byte-identical)."""
+    import multiprocessing
+    import pickle
+    import warnings
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+    jobs = [(p.id, i, overrides.get(p.id), override_source,
+             None if foil_mill is None else str(foil_mill),
+             None if sheet_mill is None else str(sheet_mill)) for i, p in chosen]
+    try:
+        ctx = multiprocessing.get_context('spawn')
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
+            return list(ex.map(_row_job, jobs))
+    except (BrokenProcessPool, OSError, pickle.PicklingError) as exc:
+        warnings.warn(f'band_survey: process pool failed ({exc!r}); rows computed serially',
+                      RuntimeWarning, stacklevel=3)
+        return None
+
+
 def survey_with_mills(products=None, foil_mill=None, sheet_mill=None, overrides=None,
                       override_source='overrides file', workers=None):
     """Run the survey. ``products``: ids to keep (None: all); ``foil_mill`` / ``sheet_mill``:
@@ -1331,13 +1357,11 @@ def survey_with_mills(products=None, foil_mill=None, sheet_mill=None, overrides=
                             load_mill_file(sheet_mill, 'sheet'))}
     overrides = overrides or {}
     chosen = select_products(products)
+    rows = None
     if workers is not None and workers > 1:
-        from concurrent.futures import ProcessPoolExecutor
-        jobs = [(p.id, i, overrides.get(p.id), override_source, foil_mill, sheet_mill)
-                for i, p in chosen]
-        with ProcessPoolExecutor(max_workers=workers) as ex:
-            rows = list(ex.map(_row_job, jobs))
-    else:
+        rows = _parallel_rows(chosen, overrides, override_source, foil_mill, sheet_mill,
+                              workers)
+    if rows is None:
         rows = [survey_row(p, mills, i, overrides.get(p.id), override_source)
                 for i, p in chosen]
     ranks = rankings(rows)

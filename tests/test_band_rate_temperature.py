@@ -26,7 +26,7 @@ RT = {'rate_sensitivity': 0.027, 'reference_strain_rate_per_s': 1e-3,
 
 def _case():
     """The bearing-order demo as a v2 case with a hardening law (fastest demo, Hitchcock)."""
-    with open(os.path.join(ROOT, 'scenarios', 'band_diagnosis_bearing_order.json')) as fh:
+    with open(os.path.join(ROOT, 'scenarios', 'band_diagnosis_bearing_order.json'), encoding='utf-8') as fh:
         raw = json.load(fh)
     raw['case_schema'] = bd.CASE_SCHEMA_V2
     for key in bd.bw.OBS_V2_KEYS:

@@ -28,7 +28,7 @@ class SprayCalibrationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        with open(CASE_FILE) as fh:
+        with open(CASE_FILE, encoding='utf-8') as fh:
             cls.case = json.load(fh)
         t0 = time.perf_counter()
         cls.eff, cls.row, _ = bd.case_pass_heat_row(cls.case)
@@ -160,7 +160,7 @@ class SprayCalibrationTests(unittest.TestCase):
         cal = self.twin('thermal_camber')
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, 'cal.json')
-            with open(path, 'w') as fh:
+            with open(path, 'w', encoding='utf-8') as fh:
                 json.dump(cal, fh)
             before = sorted(os.listdir(tmp))
             out = subprocess.run([sys.executable, '-m', 'physicroll.band_cli', CASE_FILE,

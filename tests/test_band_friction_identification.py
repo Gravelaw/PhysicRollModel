@@ -23,7 +23,7 @@ UNC = {'force': 0.05, 'slip': 0.01, 'torque': 0.10}
 
 
 def _scenario(name):
-    with open(os.path.join(ROOT, 'scenarios', f'band_diagnosis_{name}.json')) as fh:
+    with open(os.path.join(ROOT, 'scenarios', f'band_diagnosis_{name}.json'), encoding='utf-8') as fh:
         return json.load(fh)
 
 

@@ -19,10 +19,10 @@ NEW_TRIBOLOGY_KEYS = ('interface_conductance_w_m2k', 'use_computed_heat_partitio
 
 
 def _case():
-    with open(os.path.join(ROOT, 'scenarios', 'band_diagnosis_template.json')) as fh:
+    with open(os.path.join(ROOT, 'scenarios', 'band_diagnosis_template.json'), encoding='utf-8') as fh:
         raw = json.load(fh)
     with open(os.path.join(ROOT, 'artifacts', 'band_diagnosis',
-                           'lengthwise-bands-demo.result.json')) as fh:
+                           'lengthwise-bands-demo.result.json'), encoding='utf-8') as fh:
         bite = json.load(fh)['bite']
     raw['model_options']['bite_response_override'] = {
         k: v for k, v in bite.items() if k not in ('source', 'flags', 'strip_modulus_n_m')}

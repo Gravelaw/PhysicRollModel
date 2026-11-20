@@ -91,7 +91,7 @@ def _fit_hardening(argv):
     parser.add_argument('--fit-hardening', type=Path, required=True, metavar='FILE.json')
     args = parser.parse_args(argv)
     try:
-        data = json.loads(args.fit_hardening.read_text())
+        data = json.loads(args.fit_hardening.read_text(encoding='utf-8'))
         if not isinstance(data, dict) or set(data) - set(FIT_KEYS) or \
                 not {'gauges_m', 'strengths_pa', 'reference_thickness_m'} <= set(data):
             raise ValueError(f'the file must be a JSON object with keys {list(FIT_KEYS)} '
@@ -124,7 +124,7 @@ def _calibrate_spray(argv):
     args = parser.parse_args(argv)
     try:
         case = load_case(args.case)
-        cal = json.loads(args.calibrate_spray.read_text())
+        cal = json.loads(args.calibrate_spray.read_text(encoding='utf-8'))
         res = band_thermal.calibrate_spray_coefficient(case, cal, numerics=args.numerics)
     except (ValueError, TypeError, OSError) as exc:
         parser.error(str(exc))
