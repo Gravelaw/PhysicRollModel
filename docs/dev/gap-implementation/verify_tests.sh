@@ -7,12 +7,13 @@ python -m unittest tests.test_band_v2_sections tests.test_band_v2_process_sectio
   tests.test_band_signatures tests.test_chatter tests.test_foil_bite tests.test_strip_shape \
   tests.test_roll_thermal > "$S/a.txt" 2>&1 &
 python -m unittest tests.test_band_foil tests.test_band_plain tests.test_band_plain_partial \
-  tests.test_band_thermal_check tests.test_band_process_temperatures > "$S/b.txt" 2>&1 &
+  tests.test_band_thermal_check tests.test_band_process_temperatures \
+  tests.test_band_robustness_v2_sweep tests.test_band_diagnosis_reports > "$S/b.txt" 2>&1 &
 python -m unittest tests.test_band_lengthwise tests.test_band_diagnosis \
   tests.test_package_resources tests.test_band_products tests.test_band_extended_domain \
   tests.test_band_robustness > "$S/c.txt" 2>&1 &
 python -m unittest tests.test_band_survey tests.test_band_app tests.test_band_app_drawing \
-  tests.test_band_app_reopen "$@" > "$S/d.txt" 2>&1 &
+  tests.test_band_app_reopen tests.test_band_lengthwise_events tests.test_band_foil_demo "$@" > "$S/d.txt" 2>&1 &
 python -m unittest tests.test_band_absent_inputs tests.test_band_sensors \
   tests.test_band_sensors_gauge tests.test_band_strip_temperature \
   tests.test_band_friction_stripes tests.test_band_roll_profile tests.test_halfspace_bite \
@@ -20,7 +21,8 @@ python -m unittest tests.test_band_absent_inputs tests.test_band_sensors \
   tests.test_halfspace_bite_sensitivity tests.test_halfspace_bite_modes \
   tests.test_band_halfspace tests.test_band_halfspace_default \
   tests.test_asperity_contact tests.test_band_friction_identification \
-  tests.test_band_rate_temperature tests.test_band_heat_partition tests.test_roll_skin > "$S/e.txt" 2>&1 &
+  tests.test_band_rate_temperature tests.test_band_heat_partition tests.test_roll_skin \
+  tests.test_band_spray_calibration > "$S/e.txt" 2>&1 &
 wait
 for f in a b c d e; do echo "group $f: $(tail -n 3 "$S/$f.txt" | tr '\n' ' ')"; grep -h "^FAIL:\|^ERROR:" "$S/$f.txt"; done
 python scripts/smoke.py > "$S/smoke.txt" 2>&1; echo "smoke exit $?"

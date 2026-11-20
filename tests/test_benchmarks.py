@@ -429,6 +429,14 @@ class BenchmarkTests(unittest.TestCase):
                 self.assertTrue(0.11 <= q['project_value'] <= 0.33)
                 self.assertEqual(q['row_verdict'], 'INDICATIVE_ASSUMED_INPUTS')
 
+    def test_tm_la8_spray_fit_reference_only(self):
+        case = self.cases['TM-LA8-SPRAY-FIT']
+        self.assertEqual(case['verdict'], 'REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+        self.assertEqual([q['reference_value'] for q in case['quantities']], [17500.0, 22000.0])
+        for q in case['quantities']:
+            self.assertIsNone(q['project_value'])
+            self.assertIsNone(q['ratio_project_to_reference'])
+
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):
             bm.run_case('BT-V99')

@@ -1295,24 +1295,51 @@ def select_products(ids):
 
 
 def survey(products=None, foil_mill=None, sheet_mill=None, overrides=None,
-           override_source='overrides file'):
+           override_source='overrides file', workers=None):
     """The survey result (see ``survey_with_mills``)."""
-    return survey_with_mills(products, foil_mill, sheet_mill, overrides, override_source)[0]
+    return survey_with_mills(products, foil_mill, sheet_mill, overrides, override_source,
+                             workers=workers)[0]
+
+
+_WORKER_MILLS = {}
+
+
+def _row_job(job):
+    """One survey row in a worker process (its own mills, built once per process)."""
+    pid, index, override, override_source, foil_mill, sheet_mill = job
+    key = (foil_mill, sheet_mill)
+    if key not in _WORKER_MILLS:
+        _WORKER_MILLS[key] = {
+            'foil': _Mill('foil', None if foil_mill is None else
+                          load_mill_file(foil_mill, 'foil')),
+            'sheet': _Mill('sheet', None if sheet_mill is None else
+                           load_mill_file(sheet_mill, 'sheet'))}
+    return survey_row(bp.product(pid), _WORKER_MILLS[key], index, override, override_source)
 
 
 def survey_with_mills(products=None, foil_mill=None, sheet_mill=None, overrides=None,
-                      override_source='overrides file'):
+                      override_source='overrides file', workers=None):
     """Run the survey. ``products``: ids to keep (None: all); ``foil_mill`` / ``sheet_mill``:
     paths of v2 case files whose machine keys replace the demo mills; ``overrides``: validated
     per-product overrides (``validate_overrides``). Without options the result equals the
-    committed artifact."""
+    committed artifact. ``workers`` (> 1): rows computed in that many processes (each row is
+    independent of the others; the result is the same, used by the test module to stay within
+    its time limit)."""
     mills = {'foil': _Mill('foil', None if foil_mill is None else
                            load_mill_file(foil_mill, 'foil')),
              'sheet': _Mill('sheet', None if sheet_mill is None else
                             load_mill_file(sheet_mill, 'sheet'))}
     overrides = overrides or {}
-    rows = [survey_row(p, mills, i, overrides.get(p.id), override_source)
-            for i, p in select_products(products)]
+    chosen = select_products(products)
+    if workers is not None and workers > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        jobs = [(p.id, i, overrides.get(p.id), override_source, foil_mill, sheet_mill)
+                for i, p in chosen]
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            rows = list(ex.map(_row_job, jobs))
+    else:
+        rows = [survey_row(p, mills, i, overrides.get(p.id), override_source)
+                for i, p in chosen]
     ranks = rankings(rows)
     for rk in ranks:
         rk['gauge_rank_correlation'] = gauge_correlation(rk)

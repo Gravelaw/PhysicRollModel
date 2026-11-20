@@ -964,6 +964,11 @@ literature statements, not model outputs.
 | Hot edge spray | Oil up to 120 °C in 25 mm zones. [PT-T21, PT-T5] | - |
 | Work-roll surface and bulk | Not found measured; a cold-mill model uses 50 °C surface with 35 °C oil. [PT-T18] | Thermal load 40–50 kcal/m²s of roll surface (167–209 kW/m², computed by the report). [PT-T4] |
 
+**Fitting the spray coefficient to your roll.** With a roll surface temperature scan after a
+stop or a measured thermal camber, `--calibrate-spray` fits the circumferential-mean spray
+coefficient of this model for your mill (section 7.1); the value is entered by hand, and it is
+not comparable with the published coefficients above, whose basis is not established.
+
 **How cooling becomes a band in this tool** (one chain, section 7 for the physics): bite heat
 per width (plastic work plus interface slip, section 8.2) -> the share that goes into each work
 roll, `(1 - strip share) / 2` -> the spray header (nozzle footprints, flow level of each
@@ -1133,7 +1138,12 @@ python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json -
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli my_case.json --out my_output_dir
 python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis   # section 3.10
+python -m physicroll.band_cli my_case.json --calibrate-spray my_scan.json        # section 7.1
+python -m physicroll.band_cli --fit-hardening my_strengths.json                   # section 8.3
 ```
+
+`--calibrate-spray` and `--fit-hardening` only print a JSON result; they never write into a
+case, and `diagnose` never runs them.
 
 Each run validates the case, writes `<case-name-slug>.result.json` (deterministic: sorted
 keys, no timestamps) and `<case-name-slug>.report.html` atomically, and prints the ranked
@@ -1320,7 +1330,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `tribology.lubricant.viscosity_table`, `pressure_law`, `roelands_z`, `eyring_stress_pa`, `eyring_stress_pressure_coefficient`, `limiting_shear_stress_pa`, `limiting_shear_pressure_coefficient` | oil viscosity at several temperatures (list of `{"temperature_k", "viscosity_pa_s"}`); the pressure law (`barus` default, `roelands` option); the oil's Eyring and limiting shear stress (no defaults) | K, Pa s, Pa, – | oil supplier data sheet; the shear stresses only from oil tests (section 8.1) |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
-| `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map |
+| `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
 | `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
 
 **(b) The product and the pass.** `pass` gauges (`entry_thickness_m`, `exit_thickness_m`),
@@ -1672,6 +1682,9 @@ layout the roll surface within one revolution is added on top (7.10). Integratio
 
 ### 7.1 Roll thermal model (`roll_thermal.py`)
 
+*Calibrating the spray coefficient* (SPEC18 package 11, gap row A5): see the end of this
+section.
+
 Circumferentially averaged, axisymmetric conduction in a solid work roll of radius `R` and
 barrel length `B`; `z` along the barrel, `r` radial [V: Yamaguchi et al. 2016; Li et al.
 2024]:
@@ -1772,6 +1785,52 @@ neck and chock losses, axial mechanical coupling of the expansion, roll wear, be
 flattening. No measured spray heat-transfer coefficient for kerosene-based coolant was found
 (planner estimate 0.5-2 kW/m2K [D]; an Innoval blog gives 4.65-5.5 kW/m2K overall for an
 unspecified coolant); the coefficients are inputs.
+
+**Fitting the spray coefficient to a measurement (A5).**
+`python -m physicroll.band_cli my_case.json --calibrate-spray my_scan.json [--numerics case]`
+(`band_thermal.calibrate_spray_coefficient`) fits the ONE coefficient
+`width_model.spray_header.spray_mean_htc_w_m2k` of the case's steady roll thermal problem
+(built exactly as the width section builds it, `band_width.thermal_heat_inputs` and
+`_Thermal`) to an entered measurement: `kind` `roll_surface_temperature_after_stop` (a barrel
+surface temperature scan `seconds_after_stop` after the mill stopped; the model then runs that
+long with sprays off and no bite heat) or `thermal_camber` (radius growth; both profiles
+reduced by their own mean, because the reference of a measured camber is unknown [D]);
+`positions_m` (at least 5, on the barrel), `values` (K or m), `provenance`, optionally
+`search_range_w_m2k` (default 500-20000) and `uncertainty` (one standard deviation of a
+measured value). Search: 9 geometric values, then golden section in `ln h` until the bracket
+is within 2 % (at most 12 more evaluations) [D, SPEC18]. **The fitted value is the
+circumferential-mean coefficient of this model for this mill** (top-hat footprints, the case's
+background coefficient, heat share and bite heat), not a jet-zone value; it is not compared with
+published spray coefficients, whose basis is not established (X3); with
+`spray_wetted_arc_rad` the result also gives the footprint equivalent
+`background + h*2*pi/arc`.
+
+*What it holds fixed, and how to read the result.* The background coefficient, the coolant
+temperature, the roll properties, the heat share and the bite heat come from the case
+(`assumed_inputs`), so their errors go into the fitted value; `heat_share_sensitivity` refits
+with a 10 % higher roll heat fraction and gives the exponent `d ln h / d ln(heat fraction)`
+(about 0.95 for a camber and 1.08 for a scan 30 s after a stop on the battery-foil roll [run]:
+a heat share 10 % too high gives a coefficient about 10 % too high, and the stripe heights
+scale with that heat share). `misfit_curve` lists every evaluation; a flat curve means the
+measurement does not determine the coefficient. With `uncertainty` the result gives
+`range_within_measurement_uncertainty_w_m2k`, the coefficients whose RMS misfit stays within
+`sqrt(minimum^2 + u^2)` [D]. Refusals, with a named `outcome` and no number: `TOO_FEW_POINTS`
+(fewer than 5), `NO_CONTRAST` (a profile that spans no more than the entered uncertainty),
+`NOT_DETERMINED_FLAT_MISFIT` (the misfit within 10 % of its minimum over the whole range, e.g.
+the header was off), `AT_SEARCH_LIMIT` (the minimum at an end of the range: widen the range or
+check the inputs). Twin tests (the model at 3400 W/m2K as the measurement) recover 3390
+W/m2K with both kinds (the 2 % bracket), and with noise of the stated uncertainty the true value
+lies inside the reported interval. Cost on the battery-foil roll: 5 s for the case-pass bite
+heat, then 37 evaluations of 0.012-0.016 s with quick numerics (20 mm cells, 6 radial cells) or
+0.20-0.26 s on the case grid. The grid matters by a few per cent (3390 quick against 3269
+W/m2K on the case grid for the same camber): fit with `--numerics case` for the value you enter.
+*To use it*, enter the value by hand as `width_model.spray_header.spray_mean_htc_w_m2k`;
+nothing is changed automatically.
+
+*How to take the scan* (gap study 7.4): a barrel surface temperature scan at 25-50 mm pitch
+within 60 s of roll-out, with the preceding 30 min of spray-zone states, flows and oil
+temperature logged, the time after the stop noted; or the roll's thermal camber measured after
+a pass.
 
 ### 7.2 Strip shape and flatness (`strip_shape.py`)
 
@@ -3681,6 +3740,7 @@ real mill.
 | oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
 | half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
 | roll surface cycle / `tests/test_roll_skin.py` | the half-space closed forms (sinusoid amplitude within 0.5 % and lag within 1 degree; constant flux within 4 % and 1.5 % with 48 cells; step in `h` 0.5724 within 0.5 %); the planner's cycle (before / after the bite, lowest, mean, flux, 60 revolutions, mean coefficient and its ratio); energy (deep flux within 1.5 %); superposition to 2e-3 K; nine unit solutions within the 3 s budget; layout validation messages naming the two regions and the wetted-arc consistency; in the engine (template case, supplied bite) the section, `not_supplied` without a layout, every other width result, the bite and the hypotheses identical with and without it, the reduction to the mean model with sprays all round (pitch-averaged, 1 % of the surface excess) and the report block |
+| spray calibration / `tests/test_band_spray_calibration.py` | twin tests on the battery-foil roll (quick numerics): both kinds recover 3400 W/m2K within 2 % and the misfit curve has its minimum there; with noise of the stated uncertainty the true value lies inside the reported interval; footprint equivalent with a wetted arc; a measurement beyond the range gives `AT_SEARCH_LIMIT`, a header-off scan an hour after the stop `NOT_DETERMINED_FLAT_MISFIT`; the refusals `TOO_FEW_POINTS` and `NO_CONTRAST`; validation messages; the CLI prints and writes nothing; `tests/test_benchmarks.py`: `TM-LA8-SPRAY-FIT` (reference only) |
 | heat partition / `tests/test_bite_tribology.py` (`HeatPartitionTests`), `tests/test_band_heat_partition.py` | the closed form against the scheme (1e-5) and its asymptotic branch; the worked numbers of section 8.2 (1e-4); energy balance to 1e-9; zero conductance gives share 1, zero heat changes nothing, a hotter roll gives a share above 1 and the flag; in the engine the heating rows carry the block, with the option absent the result without the new keys equals the result with the partition switched off, with it set pass heating and the width model's roll heat fraction follow; the report line; `tests/test_benchmarks.py`: `TM-LA19-HEAT-SPLIT` |
 | flow stress law forms / `tests/test_bite_tribology.py` (`FlowStressRateTemperatureTests`), `tests/test_band_rate_temperature.py` | the worked numbers of section 8.3 (1e-6); `m(T)` and its floor; factor limits; a negative late slope accepted with the positivity rule and its flag; the Tome form against a hand value (169999724 Pa to 1 Pa) and Simpson against 512 panels; the fit recovers a Voce law from 6 exact points (1e-3, positive and negative slope), flags 4 points and refuses 2; in the engine the rows carry the factor, `use_rate_temperature` needs computed flow stress, with it false nothing else differs, `chatter.rate_sensitivity_damping` equals the formula, and the worked damping share 0.046375 |
 | friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
@@ -3719,6 +3779,11 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **The spray calibration fits one number of this model** (section 7.1): a circumferential-mean
+  coefficient for the whole header, with the background coefficient, heat share, bite heat,
+  coolant temperature and roll properties taken from the case (their errors go into the fit);
+  end effects not modelled; the after-stop phase uses the background coefficient only; the
+  grid changes the value by a few per cent; command line only, never applied.
 - **The roll surface cycle is one-way** (section 7.10): it never changes the bulk field, the
   stripes or the shape; one-dimensional per axial station (no axial conduction in the layer);
   uniform flux in the bite; no backup contact unless entered; wipers and oil carry-over not

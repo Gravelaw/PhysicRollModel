@@ -3295,6 +3295,29 @@ def merge_band_positions(positions, tol=POSITION_MERGE_TOLERANCE_M):
     return [sum(g) / len(g) for g in groups], len(srt) - len(groups)
 
 
+def case_pass_heat_row(case):
+    """(effective case, case-pass heating row or None, reason) built exactly as ``diagnose``
+    builds them (process inputs, bite, pass heating) without the rest of the diagnosis: the
+    bite heat of the steady thermal problem for ``band_thermal.calibrate_spray_coefficient``."""
+    case = validate_case(case)
+    eff = copy.deepcopy(case)
+    cache = _BiteCache(eff)
+    flags = []
+    supplied = _supplied_bite(eff)
+    process = _process_inputs(eff, cache, flags, supplied)
+    bite, bite_error = _section_bite(eff, cache, flags, supplied)
+    if bite is None:
+        return eff, None, bite_error
+    s_ = eff['stand']
+    state = cache.state_for(bite) if bp.is_half_space(bite) else None
+    fr = process.get('friction')
+    fr_row = fr.get('operating') if isinstance(fr, dict) and 'operating' in fr else None
+    row = bp.heating_row(eff, eff['pass'], bite, eff['tribology'],
+                         eff['model_options']['cells'], s_['roll_youngs_modulus_pa'],
+                         s_['roll_poisson_ratio'], state, fr_row)
+    return eff, row, None
+
+
 def diagnose(case):
     """Run the band screening on a case dict (validated here). Returns a JSON-safe dict."""
     case = validate_case(case)

@@ -89,7 +89,8 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'SS-V2', 'SS-V3', 'TM-LC7', 'BT-V1-HS', 'BT-V2-R89-HS', 'BT-V2-R135-HS',
             'BT-V3-FIG1-140UM-HS', 'BT-V3-EQ29-HS', 'BT-X29-LOAD-EXPONENT-HS',
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
-            'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT')
+            'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT',
+            'TM-LA8-SPRAY-FIT')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
@@ -1174,6 +1175,28 @@ def _tm_la19_heat_split():
                  'conductivity are assumed.', ['ASSUMED_FILM_AND_CONDUCTIVITY'])
 
 
+# ---------------------------------------- spray coefficient calibration (SPEC18 package 11)
+def _tm_la8_spray_fit():
+    """Reference record only: published spray coefficients fitted to measured cambers; the
+    inputs of that fit are not recorded, so nothing is run."""
+    q = [_quantity(f'fitted_spray_htc_{end}_w_m2k', 'W/m2K', None, None, ref,
+                   f'{end} end of 17.5-22 kW/m2K fitted to measured thermal cambers of a hot '
+                   'aluminium mill, water or emulsion (MODEL_OUTPUT of a fit, TM-LA8 EX); basis '
+                   'of the coefficient (circumferential mean or jet zone) not established',
+                   row_verdict='REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+         for end, ref in (('low', 17500.0), ('high', 22000.0))]
+    notes = ['The routine band_thermal.calibrate_spray_coefficient fits the circumferential-mean '
+             'coefficient of this model for one mill; the published fit is of another model, '
+             'mill and coolant, with inputs not recorded: nothing to run, no comparison.']
+    return _case('TM-LA8-SPRAY-FIT', 'Spray coefficient fitted to measured thermal cambers '
+                 '(reference only)', 'Spray coefficient calibration on a hot aluminium mill '
+                 '[TM-LA8 EX]', 'TM-LA8', 'EX', 'MODEL_OUTPUT', {}, notes, q,
+                 'REFERENCE_ONLY_INPUTS_NOT_RECORDED',
+                 'Reference only: the published fit\'s inputs are not recorded and its basis is '
+                 'not established; the project value is not computed.',
+                 ['INPUTS_NOT_RECORDED', 'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED'])
+
+
 _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'BT-V2-R135': lambda: _bt_v2('BT-V2-R135', 0.135),
           'BT-V3-FIG1-140UM': _bt_v3_fig1, 'BT-V3-EQ29': _bt_v3_eq29, 'SS-V2': _ss_v2,
@@ -1186,7 +1209,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'A9-PRESSURE-LAWS-KEROSINE': _a9_pressure_laws,
           'BT-G3-CRUSHING-LAWS': _bt_g3_crushing_laws,
           'BT-V2-FRICTION-HS': _bt_v2_friction_hs,
-          'TM-LA19-HEAT-SPLIT': _tm_la19_heat_split}
+          'TM-LA19-HEAT-SPLIT': _tm_la19_heat_split,
+          'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit}
 
 
 def run_case(case_id: str) -> dict:

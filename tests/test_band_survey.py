@@ -24,7 +24,10 @@ FEW = ['battery_pouch_laminate_foil', 'household_foil', 'litho_sheet']
 class ProductSurveyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.r = bs.survey()
+        # rows in 4 processes (band_survey.survey(workers=...)): the same result, asserted
+        # against the committed artifact in test_determinism_and_committed_artifacts; serial
+        # it takes about 55 s, above the module time limit
+        cls.r = bs.survey(workers=4)
         cls.html = bs.render_survey_report(cls.r)
         cls.rows = {x['product_id']: x for x in cls.r['rows']}
 

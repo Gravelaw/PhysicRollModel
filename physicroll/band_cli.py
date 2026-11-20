@@ -4,6 +4,10 @@
     python -m physicroll.band_cli --product-survey --out DIR [survey options]
         (physicroll.band_survey: --mill, --foil-mill, --sheet-mill, --products,
          --overrides, --write-cases)
+    python -m physicroll.band_cli CASE.json --calibrate-spray FILE.json
+        (band_thermal.calibrate_spray_coefficient: the spray coefficient fitted to a measured
+         roll surface temperature scan after a stop or a thermal camber; prints the JSON
+         result, writes nothing into a case; ``--numerics case`` for the case's own grid)
     python -m physicroll.band_cli --fit-hardening FILE.json
         (bite_tribology.fit_voce_to_pass_strengths on {"gauges_m", "strengths_pa",
          "reference_thickness_m", "prior_equivalent_strain"}; prints the JSON result, writes
@@ -40,6 +44,8 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if '--fit-hardening' in argv:
         return _fit_hardening(argv)
+    if '--calibrate-spray' in argv:
+        return _calibrate_spray(argv)
     if '--product-survey' in argv:
         # every other argument belongs to the survey (it validates them itself)
         from . import band_survey
@@ -100,6 +106,28 @@ def _fit_hardening(argv):
         print(json.dumps({'status': 'NOT_FITTED', 'outcome': outcome, 'reason': text},
                          indent=1))
         sys.exit(2)
+    print(json.dumps(res, indent=1))
+
+
+def _calibrate_spray(argv):
+    """SPEC18 package 11: print the spray-coefficient calibration of a case to a measurement
+    file. Nothing is written into the case."""
+    import json
+    from . import band_thermal
+    parser = argparse.ArgumentParser(description='Fit the spray coefficient of a case to a '
+                                     'measured roll temperature scan or thermal camber')
+    parser.add_argument('case', type=Path, help='band case JSON (v2, with a width_model)')
+    parser.add_argument('--calibrate-spray', type=Path, required=True, metavar='FILE.json',
+                        help='the measurement: kind, positions_m, values, seconds_after_stop, '
+                             'search_range_w_m2k, uncertainty, provenance')
+    parser.add_argument('--numerics', choices=('quick', 'case'), default='quick')
+    args = parser.parse_args(argv)
+    try:
+        case = load_case(args.case)
+        cal = json.loads(args.calibrate_spray.read_text())
+        res = band_thermal.calibrate_spray_coefficient(case, cal, numerics=args.numerics)
+    except (ValueError, TypeError, OSError) as exc:
+        parser.error(str(exc))
     print(json.dumps(res, indent=1))
 
 

@@ -1106,3 +1106,348 @@ def thermal_measurements(case):
     if case['pass']['exit_thickness_m'] < SHEET_FROM_M or (pid and pid in bp.GRADE_TABLES):
         return list(THERMAL_MEASUREMENTS)
     return []
+
+
+# ============================================ spray coefficient calibration (SPEC18 package 11)
+CALIBRATION_STATUS = 'CALIBRATION_FIT_TO_ENTERED_MEASUREMENT_NOT_VALIDATED'
+CALIBRATION_REFUSED = 'CALIBRATION_NOT_FITTED'
+CALIBRATION_KINDS = ('roll_surface_temperature_after_stop', 'thermal_camber')
+CALIBRATION_KEYS = ('kind', 'positions_m', 'values', 'provenance')
+CALIBRATION_OPTIONAL = ('seconds_after_stop', 'search_range_w_m2k', 'uncertainty')
+CALIBRATION_MIN_POINTS = 5
+CALIBRATION_DEFAULT_RANGE = (500.0, 20000.0)
+CALIBRATION_SCAN = 9                  # geometric start values [D, SPEC18]
+CALIBRATION_BRACKET_RATIO = 1.02      # golden section stops below this bracket ratio
+CALIBRATION_GOLDEN_MAX = 12
+CALIBRATION_NEAR_MINIMUM = 1.10       # range within 10 % of the minimum misfit
+CALIBRATION_QUICK = {'axial_cell_m': 0.02, 'radial_cells': 6, 'time_step_s': 5.0}
+CALIBRATION_HEAT_SHARE_STEP = 0.10    # +10 % roll heat fraction for the sensitivity [D]
+CALIBRATION_HOW_TO_USE = ('enter the value as width_model.spray_header.spray_mean_htc_w_m2k; '
+                          'nothing is changed automatically')
+CALIBRATION_BASIS = (
+    'circumferential mean under a healthy header; see the spray basis statement of the thermal '
+    'check: the fitted number is the circumferential-mean spray coefficient of THIS model '
+    '(top-hat footprints, the case\'s background coefficient, heat share and bite heat) for '
+    'THIS mill, not a jet-zone or footprint coefficient; published spray coefficients are '
+    'quoted on bases that are not established (gap X3), so the fitted value is not compared '
+    'with them')
+CALIBRATION_LIMITATIONS = [
+    'One coefficient for the whole header.',
+    'Background coefficient, heat share and bite heat are taken from the case, so their errors '
+    'go into the fit (the result gives the shift of the fit for a 10 % higher roll heat '
+    'fraction).',
+    'End effects (necks, chocks) are not modelled.',
+    'The after-stop phase uses the background coefficient only (sprays off, no bite heat).',
+    'The thermal camber is compared with both profiles reduced by their own mean over the '
+    'positions (the reference of a measured camber is unknown) [D].',
+    'The fitted value depends on the grid: quick numerics (20 mm axial cells, 6 radial cells) '
+    'and the case\'s grid differ by a few per cent (a camber made with the quick grid on the '
+    'battery-foil roll fits 3390 W/m2K quick and 3269 W/m2K on the case grid) [run]; fit '
+    'with numerics \'case\' for the value you enter.']
+GOLDEN = (math.sqrt(5) - 1) / 2
+
+
+def validate_calibration(cal, barrel_length_m):
+    """The calibration measurement (SPEC18 package 11). Raises ValueError for malformed input;
+    too few points is a named outcome of the routine, not an error."""
+    where = 'calibration'
+    if not isinstance(cal, dict):
+        raise ValueError(f'{where} must be a JSON object')
+    missing = set(CALIBRATION_KEYS) - set(cal)
+    unknown = set(cal) - set(CALIBRATION_KEYS) - set(CALIBRATION_OPTIONAL)
+    if missing or unknown:
+        raise ValueError(f'{where}: missing keys {sorted(missing)}, unknown keys '
+                         f'{sorted(unknown)}')
+    kind = cal['kind']
+    if kind not in CALIBRATION_KINDS:
+        raise ValueError(f'{where}.kind must be one of {CALIBRATION_KINDS}')
+    prov = cal['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty string')
+
+    def nums(key, lo, hi, text):
+        v = cal[key]
+        if not isinstance(v, list) or not all(
+                isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+                and lo <= x <= hi for x in v):
+            raise ValueError(f'{where}.{key} must be a list of numbers in {text}')
+        return [float(x) for x in v]
+    pos = nums('positions_m', 0.0, barrel_length_m, f'[0, {barrel_length_m:g}] m (the barrel)')
+    if any(b <= a for a, b in zip(pos, pos[1:])):
+        raise ValueError(f'{where}.positions_m must be strictly increasing')
+    if kind == 'thermal_camber':
+        vals = nums('values', -1e-3, 1e-3, '[-1e-3, 1e-3] m (radius growth)')
+    else:
+        vals = nums('values', 250.0, 700.0, '[250, 700] K')
+    if len(vals) != len(pos):
+        raise ValueError(f'{where}.values must have the same length as positions_m')
+    t = cal.get('seconds_after_stop')
+    if kind == 'roll_surface_temperature_after_stop':
+        if t is None or isinstance(t, bool) or not isinstance(t, (int, float)) or \
+                not 0 <= t <= 3600:
+            raise ValueError(f'{where}.seconds_after_stop must be in [0, 3600] s for '
+                             'roll_surface_temperature_after_stop')
+        t = float(t)
+    elif t is not None:
+        raise ValueError(f'{where}.seconds_after_stop is only for '
+                         'roll_surface_temperature_after_stop')
+    rng = cal.get('search_range_w_m2k')
+    if rng is None:
+        rng = list(CALIBRATION_DEFAULT_RANGE)
+    elif (not isinstance(rng, list) or len(rng) != 2
+          or not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in rng)
+          or not 100 <= rng[0] < rng[1] <= 1e5):
+        raise ValueError(f'{where}.search_range_w_m2k must be two numbers, 100 <= lo < hi '
+                         '<= 1e5')
+    u = cal.get('uncertainty')
+    if u is not None:
+        hi = 1e-3 if kind == 'thermal_camber' else 100.0
+        if isinstance(u, bool) or not isinstance(u, (int, float)) or not 0 < u <= hi:
+            raise ValueError(f'{where}.uncertainty must be in (0, {hi:g}] '
+                             + ('m' if kind == 'thermal_camber' else 'K')
+                             + ' (one standard deviation of a measured value) or null')
+        u = float(u)
+    return {'kind': kind, 'positions_m': pos, 'values': vals, 'seconds_after_stop': t,
+            'search_range_w_m2k': [float(rng[0]), float(rng[1])], 'uncertainty': u,
+            'provenance': prov}
+
+
+def _calibration_model(case, w, heat, fraction, numerics):
+    """evaluate(h) -> model values at the measurement positions (the steady problem exactly as
+    band_width builds it, with spray_mean_htc_w_m2k = h)."""
+    from . import band_width as bwm
+
+    def evaluate(h, cal, frac=fraction):
+        wt = dict(w, spray_header=dict(w['spray_header'], spray_mean_htc_w_m2k=h),
+                  numerics=numerics)
+        th = bwm._Thermal(case, wt, heat, frac)
+        steady = th.steady(th.levels)
+        z = steady['z_m']
+        if cal['kind'] == 'thermal_camber':
+            prof = steady['radius_growth_m']
+        elif cal['seconds_after_stop'] == 0:
+            prof = steady['surface_temperature_k']
+        else:
+            seg = rt.ThermalSegment(duration_s=cal['seconds_after_stop'],
+                                    bite_heat_per_width_w_m=0.0,
+                                    roll_heat_fraction_per_roll=frac,
+                                    strip_width_m=th.width, strip_centre_m=th.centre,
+                                    coolant_temperature_k=w['coolant_temperature_k'],
+                                    nozzle_levels=[0.0] * th.count)
+            sim = rt.simulate(th.roll, th.header, [seg], initial=steady,
+                              time_step_s=numerics['time_step_s'],
+                              axial_cell_m=numerics['axial_cell_m'],
+                              radial_cells=numerics['radial_cells'],
+                              record_times_s=[cal['seconds_after_stop']],
+                              expansion_constraint=w['roll']['expansion_constraint'])
+            prof = sim['snapshots'][-1]['surface_temperature_k']
+        return [rt._interp(z, prof, x) for x in cal['positions_m']]
+    return evaluate
+
+
+def _misfit(model, cal):
+    meas = cal['values']
+    if cal['kind'] == 'thermal_camber':
+        mm, ms = sum(model) / len(model), sum(meas) / len(meas)
+        model, meas = [x - mm for x in model], [x - ms for x in meas]
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(model, meas)) / len(meas))
+
+
+def _search(fun, lo, hi):
+    """9 geometric values, then golden section in ln h inside the best bracket (ratio < 1.02,
+    at most 12 more evaluations). Returns (best h, best misfit, curve, at_limit)."""
+    curve = {}
+
+    def f(h):
+        if h not in curve:
+            curve[h] = fun(h)
+        return curve[h]
+    hs = [lo * (hi / lo) ** (i / (CALIBRATION_SCAN - 1)) for i in range(CALIBRATION_SCAN)]
+    vals = [f(h) for h in hs]
+    i = min(range(len(hs)), key=lambda k: vals[k])
+    if i in (0, len(hs) - 1):
+        return hs[i], vals[i], curve, True
+    a, b = math.log(hs[i - 1]), math.log(hs[i + 1])
+    c, d = b - GOLDEN * (b - a), a + GOLDEN * (b - a)
+    fc, fd = f(math.exp(c)), f(math.exp(d))
+    n = 2
+    while b - a > math.log(CALIBRATION_BRACKET_RATIO) and n < CALIBRATION_GOLDEN_MAX:
+        if fc < fd:
+            b, d, fd = d, c, fc
+            c = b - GOLDEN * (b - a)
+            fc = f(math.exp(c))
+        else:
+            a, c, fc = c, d, fd
+            d = a + GOLDEN * (b - a)
+            fd = f(math.exp(d))
+        n += 1
+    h_best = min(curve, key=curve.get)
+    return h_best, curve[h_best], curve, False
+
+
+def _range_below(curve, level):
+    """[lo, hi] of h where the misfit curve (linear in ln h between evaluations) is at or
+    below ``level``, around its minimum; an end of the searched range is returned as it is."""
+    pts = sorted(curve.items())
+    k = min(range(len(pts)), key=lambda i: pts[i][1])
+
+    def cross(i, j):
+        (h1, m1), (h2, m2) = pts[i], pts[j]
+        if m1 == m2:
+            return h1
+        t = (level - m1) / (m2 - m1)
+        return math.exp(math.log(h1) + t * (math.log(h2) - math.log(h1)))
+    lo = pts[0][0]
+    for i in range(k, 0, -1):
+        if pts[i - 1][1] > level:
+            lo = cross(i, i - 1)
+            break
+    hi = pts[-1][0]
+    for i in range(k, len(pts) - 1):
+        if pts[i + 1][1] > level:
+            hi = cross(i, i + 1)
+            break
+    return [lo, hi]
+
+
+def calibrate_spray_coefficient(case, calibration, *, numerics='quick', heat_row=None):
+    """Fit the circumferential-mean spray coefficient of the case's header to an entered roll
+    surface temperature scan after a stop or a thermal camber (SPEC18 package 11; command line
+    only, ``python -m physicroll.band_cli CASE.json --calibrate-spray FILE.json``).
+
+    ``numerics``: 'quick' (20 mm axial cells, 6 radial cells, 5 s steps) or 'case' (the case's
+    width numerics). ``heat_row``: the case-pass heating row (default: built as ``diagnose``
+    builds it). Returns the fit, or a refusal with a named ``outcome`` and no number."""
+    import time as _time
+    from . import band_diagnosis as bdm
+    from . import band_width as bwm
+    t0 = _time.perf_counter()
+    if heat_row is None:
+        eff, heat_row, bite_error = bdm.case_pass_heat_row(case)
+    else:
+        eff, bite_error = bdm.validate_case(case), None
+    w = eff.get('width_model')
+    if w is None:
+        raise ValueError('the spray calibration needs a case with a width_model')
+    cal = validate_calibration(calibration, w['roll']['barrel_length_m'])
+    if numerics == 'quick':
+        num = dict(CALIBRATION_QUICK)
+    elif numerics == 'case':
+        num = dict(bwm.DEFAULT_NUMERICS, **(w['numerics'] or {}))
+    else:
+        raise ValueError("numerics must be 'quick' or 'case'")
+    fraction, fbasis, heat, hbasis, _ = bwm.thermal_heat_inputs(w, eff['tribology'], heat_row)
+    unit = 'm' if cal['kind'] == 'thermal_camber' else 'K'
+    base = {'status': CALIBRATION_STATUS, 'kind': cal['kind'], 'provenance': cal['provenance'],
+            'case_spray_mean_htc_w_m2k': w['spray_header']['spray_mean_htc_w_m2k'],
+            'basis': CALIBRATION_BASIS, 'numerics': num, 'misfit_unit': unit,
+            'search_range_w_m2k': cal['search_range_w_m2k'],
+            'how_to_use': CALIBRATION_HOW_TO_USE, 'limitations': list(CALIBRATION_LIMITATIONS),
+            'assumed_inputs': {
+                'roll_heat_fraction_per_roll': fraction, 'roll_heat_fraction_basis': fbasis,
+                'bite_heat_per_width_w_m': heat, 'bite_heat_basis': hbasis,
+                'background_htc_w_m2k': w['spray_header']['background_htc_w_m2k'],
+                'coolant_temperature_k': w['coolant_temperature_k'],
+                'roll': {k: w['roll'][k] for k in ('conductivity_w_mk', 'density_kg_m3',
+                                                    'specific_heat_j_kgk')},
+                'effect_if_wrong': (
+                    'the fitted coefficient absorbs the error of each: see '
+                    'heat_share_sensitivity for the roll heat fraction (the stripe height '
+                    'scales with it); a wrong coolant temperature shifts every modelled '
+                    'temperature and is absorbed by the fit of an absolute temperature scan '
+                    '(a camber reduced by its mean is not affected by a uniform shift); '
+                    'roll conductivity and heat capacity set the after-stop decay')}}
+
+    def refuse(outcome, reason, **extra):
+        out = dict(base, status=CALIBRATION_REFUSED, outcome=outcome, reason=reason,
+                   fitted_spray_mean_htc_w_m2k=None, **extra)
+        out['wall_time_s'] = _time.perf_counter() - t0
+        return out
+    if len(cal['positions_m']) < CALIBRATION_MIN_POINTS:
+        return refuse('TOO_FEW_POINTS', f'{len(cal["positions_m"])} positions; at least '
+                      f'{CALIBRATION_MIN_POINTS} are needed to fit one coefficient with a '
+                      'residual to check it')
+    span = max(cal['values']) - min(cal['values'])
+    if span == 0 or (cal['uncertainty'] is not None and span <= cal['uncertainty']):
+        return refuse('NO_CONTRAST', f'the measured values span {span:.4g} {unit}'
+                      + (f', not more than the entered uncertainty {cal["uncertainty"]:g}'
+                         if cal['uncertainty'] is not None else '')
+                      + ': a profile without contrast cannot determine the coefficient')
+    if heat is None:
+        return refuse('NO_BITE_HEAT', 'bite heat per width not supplied and not computable'
+                      + (f' ({bite_error})' if bite_error else ''))
+    evaluate = _calibration_model(eff, w, heat, fraction, num)
+    evals = [0]
+
+    def fun(h, frac=fraction):
+        evals[0] += 1
+        return _misfit(evaluate(h, cal, frac), cal)
+    lo, hi = cal['search_range_w_m2k']
+    h_fit, m_fit, curve, at_limit = _search(fun, lo, hi)
+    out = dict(base)
+    out['misfit_curve'] = [{'spray_mean_htc_w_m2k': h, 'misfit_rms': m}
+                           for h, m in sorted(curve.items())]
+    out['evaluations'] = evals[0]
+    near = _range_below(curve, CALIBRATION_NEAR_MINIMUM * m_fit)
+    out['range_within_10_percent_of_minimum_w_m2k'] = near
+    out['misfit_rms'] = m_fit
+    flags = ['FIT_TO_ENTERED_MEASUREMENT_NOT_VERIFIED']
+    if near[0] <= lo * (1 + 1e-12) and near[1] >= hi * (1 - 1e-12):
+        out.update(status=CALIBRATION_REFUSED, outcome='NOT_DETERMINED_FLAT_MISFIT',
+                   fitted_spray_mean_htc_w_m2k=None, minimum_at_w_m2k=h_fit,
+                   reason='the misfit stays within 10 % of its minimum over the whole search '
+                          'range: the measurement does not determine the coefficient (the '
+                          'header was off, or the scan holds no contrast the sprays set)')
+        out['flags'] = flags + ['NOT_DETERMINED_FLAT_MISFIT']
+        out['wall_time_s'] = _time.perf_counter() - t0
+        return out
+    if at_limit:
+        out.update(status=CALIBRATION_REFUSED, outcome='AT_SEARCH_LIMIT',
+                   fitted_spray_mean_htc_w_m2k=None,
+                   minimum_at_w_m2k=h_fit,
+                   reason='the smallest misfit lies at an end of the search range: not a fit')
+        out['flags'] = flags + ['AT_SEARCH_LIMIT']
+        out['wall_time_s'] = _time.perf_counter() - t0
+        return out
+    out['outcome'] = 'FITTED'
+    out['fitted_spray_mean_htc_w_m2k'] = h_fit
+    out['ratio_fitted_to_case'] = h_fit / base['case_spray_mean_htc_w_m2k']
+    model = evaluate(h_fit, cal)
+    meas = cal['values']
+    if cal['kind'] == 'thermal_camber':
+        mm, ms = sum(model) / len(model), sum(meas) / len(meas)
+        res = [(a - mm) - (b - ms) for a, b in zip(model, meas)]
+    else:
+        res = [a - b for a, b in zip(model, meas)]
+    out['residuals'] = res
+    out['model_at_fit'] = model
+    if cal['uncertainty'] is not None:
+        u = cal['uncertainty']
+        out['range_within_measurement_uncertainty_w_m2k'] = _range_below(
+            curve, math.sqrt(m_fit ** 2 + u ** 2))
+        out['uncertainty_basis'] = (
+            '[D] the coefficients whose RMS misfit is at most sqrt(minimum^2 + u^2), u the '
+            'entered uncertainty of one measured value (linear in ln h between evaluations)')
+    # heat share: refit with a 10 % higher roll heat fraction (narrowed search)
+    frac2 = fraction * (1 + CALIBRATION_HEAT_SHARE_STEP)
+    if frac2 <= 1:
+        lo2, hi2 = max(lo, h_fit / 3), min(hi, h_fit * 3)
+        h2, _, _, lim2 = _search(lambda h: fun(h, frac2), lo2, hi2)
+        out['heat_share_sensitivity'] = {
+            'roll_heat_fraction_per_roll': frac2, 'fitted_spray_mean_htc_w_m2k': h2,
+            'at_search_limit': lim2,
+            'dln_fitted_over_dln_roll_heat_fraction': (math.log(h2 / h_fit)
+                                                       / math.log(1 + CALIBRATION_HEAT_SHARE_STEP)),
+            'note': 'refit with a 10 % higher roll heat fraction: a wrong heat share moves the '
+                    'fitted coefficient by about this exponent times its relative error'}
+    arc = w.get('spray_wetted_arc_rad')
+    if arc is not None:
+        out['footprint_equivalent_w_m2k'] = footprint_equivalent_htc(
+            h_fit, w['spray_header']['background_htc_w_m2k'], arc)
+        out['footprint_equivalent_basis'] = ('h_fp = background_htc + fitted * 2*pi/'
+                                             'spray_wetted_arc_rad [D, SPEC17]')
+    out['evaluations'] = evals[0]
+    out['flags'] = flags
+    out['wall_time_s'] = _time.perf_counter() - t0
+    out['time_per_evaluation_s'] = out['wall_time_s'] / max(1, evals[0])
+    return out

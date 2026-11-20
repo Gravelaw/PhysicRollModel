@@ -2989,6 +2989,32 @@ def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
 
+def thermal_heat_inputs(w, trib, heat_row):
+    """(roll heat fraction per roll, its basis, bite heat per width, its basis, computed strip
+    share or None) of the steady thermal problem: the ONE place the width section and the spray
+    calibration (band_thermal.calibrate_spray_coefficient) take them from."""
+    f_c = ((heat_row or {}).get('heat_partition') or {}).get('strip_heat_fraction_computed')
+    if w['roll_heat_fraction_per_roll'] is not None:
+        fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
+    elif use_computed_heat_partition(trib) and f_c is not None:
+        # SPEC18 package 9: the case pass's computed share (clipped to [0, 1])
+        fraction = (1 - min(1.0, max(0.0, f_c))) / 2
+        fbasis = ('computed: (1 - strip share of the bite heat partition of the case pass)/2 '
+                  '(tribology.use_computed_heat_partition)')
+    else:
+        fraction = (1 - trib['strip_heat_fraction']) / 2
+        fbasis = '(1 - tribology.strip_heat_fraction)/2'
+    if w['bite_heat_per_width_w_m'] is not None:
+        heat, hbasis = w['bite_heat_per_width_w_m'], 'supplied'
+    elif heat_row is not None and 'bite_heat_per_width_w_m' in heat_row:
+        heat = heat_row['bite_heat_per_width_w_m']
+        hbasis = 'computed: plastic work + interface slip dissipation of the pass (' + \
+            heat_row['friction_power_basis'] + ')'
+    else:
+        heat, hbasis = None, None
+    return fraction, fbasis, heat, hbasis, f_c
+
+
 def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                   friction_sensitivity=None, friction_row=None, friction_get_bite=None):
     """The ``width`` result section (SPEC6 6.2). ``get_bite(src)`` returns the bite of a
@@ -3039,26 +3065,9 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                              'troughs', 'coil ridge build-up and critical ridge height',
                              'positions', 'two_tone', 'grinding_feed_pitch_m',
                              'shape.crown (Shohet-Townsend window)']}
-    f_c = ((heat_row or {}).get('heat_partition') or {}).get('strip_heat_fraction_computed')
-    if w['roll_heat_fraction_per_roll'] is not None:
-        fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
-    elif use_computed_heat_partition(trib) and f_c is not None:
-        # SPEC18 package 9: the case pass's computed share (clipped to [0, 1])
-        fraction = (1 - min(1.0, max(0.0, f_c))) / 2
-        fbasis = ('computed: (1 - strip share of the bite heat partition of the case pass)/2 '
-                  '(tribology.use_computed_heat_partition)')
-    else:
-        fraction = (1 - trib['strip_heat_fraction']) / 2
-        fbasis = '(1 - tribology.strip_heat_fraction)/2'
+    fraction, fbasis, heat, hbasis, f_c = thermal_heat_inputs(w, trib, heat_row)
     thermal_reason = None
-    if w['bite_heat_per_width_w_m'] is not None:
-        heat, hbasis = w['bite_heat_per_width_w_m'], 'supplied'
-    elif heat_row is not None and 'bite_heat_per_width_w_m' in heat_row:
-        heat = heat_row['bite_heat_per_width_w_m']
-        hbasis = 'computed: plastic work + interface slip dissipation of the pass (' + \
-            heat_row['friction_power_basis'] + ')'
-    else:
-        heat, hbasis = None, None
+    if heat is None:
         thermal_reason = ('bite heat per width not supplied (width_model.bite_heat_per_width_w_m) '
                           'and not computable' + (' without a bite' if bite is None else ''))
         flags.append('WIDTH_THERMAL_NOT_ASSESSABLE_NO_BITE_HEAT')
