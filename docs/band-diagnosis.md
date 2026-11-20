@@ -2671,6 +2671,53 @@ the threshold), `LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED`,
 `LOCAL_NET_INCOMPLETE_TERM_MISSING`. No published case of a film or flow-stress band exists
 (benchmarks `NOT_ENCODED` `A2-LOCAL-SOURCES`).
 
+### 7.12 Flatness control loop (parts)
+
+SPEC19 package 3 (gap row G5 core; `roll_thermal.ControlledRun`, `physicroll/flatness_control.py`).
+Nothing in the diagnosis uses these parts yet; SPEC19 package 4 wires them into the width
+section. **The control law is the tool's own** [D, SPEC19: analyst design]: the reports give the
+structure of a flatness controller in words only (least squares on actuator influence vectors,
+dead bands, valve minimum on / off times, a target curve [SS-S34 EX, SS-S33 EX, SS-S31 EX]) and
+no law. What the loop does is therefore what this tool simulates, not what a vendor's system or
+the plant's controller does.
+
+**Thermal run with changing valves.** `ControlledRun(roll, header, base_segment, initial=...)`
+steps the roll temperature field with the operators of `simulate`; `advance(levels, duration,
+time_step)` may change the nozzle levels at every call. The first step after a change is the
+start-up of `simulate` (two backward-Euler half steps), the others Peaceman-Rachford steps.
+Driven with the levels of a list of segments it reproduces `simulate` bit for bit (the test asks
+1e-12 K and m and the energy ledger to 1e-9). Cost on the battery-foil roll (300 x 16 cells):
+about 1.9 ms per step, 0.11 s per simulated minute at 1 s steps [run], against 12 ms for each
+call of `simulate`.
+
+**Control law** (per control zone: a demand, a valve level, the time of its last change):
+
+1. zone error `e = reading - target` (zones without strip left out);
+2. supplied actuators (the interface for the bender and tilt of Phase 3; not modelled here):
+   their least-squares part is removed, settings clipped to their limits;
+3. the low-order part (order 2: mean, tilt, parabola) is removed "as if by ideal bending and
+   tilt"; its coefficients are reported, never controlled;
+4. correction `d = G*rho`, `G = (B^T W B + lam*I)^-1 B^T W` with the influence matrix `B` of
+   the spray zones (one-sided difference of steady readings per unit level; the diagonal is
+   negative: more cooling, smaller roll, tight fibre) and `lam = 0.01 x max diag(B^T W B)`;
+5. dead band: a correction whose largest reading change is within the dead band is dropped;
+6. demand `u* <- clip(u* - 0.1*d, lowest, highest level)`;
+7. the valve takes the allowed level nearest the demand only if it is closer by more than 0.1 of
+   the step between the levels and the valve has held its level for the minimum on time (after
+   going up) or off time (after going down).
+
+The three analyst constants (integral gain 0.1, hysteresis 0.1, regularisation 0.01) are
+[D, SPEC19: analyst choice] and are named in the result's `basis`. The loop runs on a fixed
+control interval over a fixed horizon (no adaptive step, no wall-clock limit) with an optional
+transport delay and display filter; its status is `SETTLED` (no valve change in the last
+window), `TRIMMING_WITHIN_BAND` (changes, but the largest residual there within 3 x the dead
+band) or `NOT_SETTLED`, with the flags `CONTROL_INCREASES_RESIDUAL` and `CONTROL_ZONE_AT_LIMIT`.
+A loop that does not settle is a result, never an error, and the dwell times bound the valve
+changes by horizon / dwell per zone. On a synthetic first-order plant (four zones, diagonal
+influence -10 I-units per unit level, time constant 20 s, a demand of 0.5) valves in 5 % steps
+settle and two-level valves switch at the dwell bound without settling
+(`tests/test_flatness_control.py`); the mill numbers are those of package 4.
+
 ## 8. Process models
 
 Integration code: `physicroll/band_process.py`; equations: `physicroll/bite_tribology.py`.
@@ -3964,6 +4011,7 @@ real mill.
 | `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
 | `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
+| flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
 | grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
 | local sources / `tests/test_band_local_sources.py` | a single sinusoid of friction gives `-1e5*xi*G(lam)*M_mu*dmu/h` to 1e-9 with the feedback and compliance only (compliance only larger); signs (more friction tight, softer metal loose, hotter fibre loose); zero changes give zero terms and the net equals the roll term; sums; a missing term named and "the net is incomplete"; the sign words; on a coarse case with a valve event: the section, event rows with the key and not-supplied rows without it, event histories and every other result identical, the report block only with the key and without `nan`; the battery-foil artifact against the planner's peaks (15 %, the flow-stress term 20 %) and pinned to 1e-6 |
 | absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |

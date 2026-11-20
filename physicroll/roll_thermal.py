@@ -963,6 +963,149 @@ def simulate(roll, header, segments, *, initial='uniform_coolant', time_step_s=1
                     SOURCES['lloyd_2010'], SOURCES['tucker_2006']]})
 
 
+
+class ControlledRun:
+    """A transient roll-temperature run whose nozzle levels may change at every call
+    (SPEC19 package 3; the stepping of ``simulate``, not a new scheme).
+
+    ``base_segment`` gives bite heat, heat fraction, strip and coolant (its levels and duration
+    are ignored). ``advance(levels, duration_s, time_step_s)`` steps the field for
+    ``duration_s`` in ``n = max(1, ceil(duration_s/min(time_step_s, cap)))`` equal steps (``cap``
+    the internal step cap of ``simulate``); the first step after the levels CHANGED (and the
+    very first step) is the start-up of ``simulate`` (two backward-Euler half steps), every
+    other step a Peaceman-Rachford step, exactly as ``simulate`` steps a segment. Driven with
+    the levels and durations of a list of segments (different levels in consecutive segments,
+    no record times) it reproduces ``simulate`` to float rounding. The energy ledger is the
+    one of ``simulate``. Operators are cached per level set (rounded to 6 decimals), the
+    oldest dropped beyond ``max_cached_level_sets``. ``result()`` returns what ``simulate``
+    returns at its end, without snapshots, monitors and wall time.
+    """
+
+    def __init__(self, roll, header, base_segment, *, initial, axial_cell_m=0.005,
+                 radial_cells=16, expansion_constraint='axially_free',
+                 reference_temperature_k=None, max_cached_level_sets=512):
+        grid, factor = _common(roll, header, axial_cell_m, radial_cells, expansion_constraint)
+        if not isinstance(base_segment, ThermalSegment):
+            raise ValueError('base_segment must be ThermalSegment')
+        base_segment.validate()
+        cap = _int('max_cached_level_sets', max_cached_level_sets, lo=1, hi=100000)
+        self._roll, self._header, self._base = roll, header, base_segment
+        self._grid, self._factor, self._cap = grid, factor, cap
+        self._constraint = expansion_constraint
+        tc0 = base_segment.coolant_temperature_k
+        self._t_ref = (tc0 if reference_temperature_k is None else
+                       _num('reference_temperature_k', reference_temperature_k, lo=200.0,
+                            hi=600.0))
+        self._rows = _initial_rows(initial, grid, tc0)
+        a_z = roll.conductivity_w_mk / (roll.density_kg_m3 * roll.specific_heat_j_kgk)
+        self._step_cap = ADI_AXIAL_STEP_FACTOR * grid.dz ** 2 / a_z
+        self._cache = {}             # key -> (problem, stepper), insertion order = age
+        self._key = None             # level set of the last step
+        self._prob = self._entry(base_segment.nozzle_levels)[0]
+        self._stored0 = _stored_energy_j(self._prob, self._rows)
+        self._heat_in = self._heat_out = 0.0
+        self._steps = self._startup = 0
+        self._flags = set(_base_flags(self._prob, header))
+        self._last_dt_max = None
+        self._subdivided = False
+        self.z_m = list(grid.z)
+        self.time_s = 0.0
+
+    def _entry(self, levels):
+        n = len(self._header.nozzle_positions(self._roll.barrel_length_m))
+        lv = _levels(levels, n)
+        key = tuple(round(v, 6) for v in lv)
+        if key in self._cache:
+            ent = self._cache.pop(key)          # re-insert: most recently used last
+        else:
+            seg = ThermalSegment(
+                duration_s=1.0, bite_heat_per_width_w_m=self._base.bite_heat_per_width_w_m,
+                roll_heat_fraction_per_roll=self._base.roll_heat_fraction_per_roll,
+                strip_width_m=self._base.strip_width_m,
+                coolant_temperature_k=self._base.coolant_temperature_k,
+                strip_centre_m=self._base.strip_centre_m, nozzle_levels=list(lv))
+            prob = _Problem(self._roll, self._header, seg, self._grid)
+            ent = (prob, _Stepper(prob))
+            while len(self._cache) >= self._cap:
+                self._cache.pop(next(iter(self._cache)))
+        self._cache[key] = ent
+        return ent[0], ent[1], key
+
+    @property
+    def cached_level_sets(self):
+        return len(self._cache)
+
+    def advance(self, nozzle_levels, duration_s, time_step_s):
+        """Step ``duration_s`` with ``nozzle_levels``; returns ``time_s``, ``radius_growth_m``
+        and ``surface_temperature_k`` at the end of the interval."""
+        span = _num('duration_s', duration_s, positive=True, hi=1e7)
+        dt_max = _num('time_step_s', time_step_s, positive=True, hi=1e5)
+        prob, stepper, key = self._entry(nozzle_levels)
+        self._flags.update(_base_flags(prob, self._header))
+        dt_step = min(dt_max, self._step_cap)
+        self._last_dt_max = dt_max
+        self._subdivided = self._subdivided or dt_max > self._step_cap
+        n = max(1, int(math.ceil(span / dt_step - 1e-9)))
+        dt = span / n
+        area = 2 * math.pi * self._roll.radius_m * self._grid.dz
+        q_rate = area * sum(prob.q)
+        rows = self._rows
+        for _ in range(n):
+            if key != self._key:
+                sub = dt / STARTUP_SUBSTEPS
+                for _ in range(STARTUP_SUBSTEPS):
+                    rows, star = stepper.be_step(rows, sub)
+                    _, hout = prob.heat_rates(star)
+                    self._heat_in += sub * q_rate
+                    self._heat_out += sub * hout
+                self._startup += 1
+                self._key = key
+            else:
+                rows, star = stepper.pr_step(rows, dt)
+                _, hout = prob.heat_rates(star)
+                self._heat_in += dt * q_rate
+                self._heat_out += dt * hout
+            self._steps += 1
+        self._rows, self._prob = rows, prob
+        self.time_s += span
+        _, growth, surface = _profiles(prob, rows, self._t_ref, self._factor, self._roll)
+        return {'time_s': self.time_s, 'radius_growth_m': growth,
+                'surface_temperature_k': surface}
+
+    def result(self):
+        """What ``simulate`` returns at its end (no snapshots, monitors or wall time)."""
+        prob, rows, grid = self._prob, self._rows, self._grid
+        mean, growth, surface = _profiles(prob, rows, self._t_ref, self._factor, self._roll)
+        stored = _stored_energy_j(prob, rows) - self._stored0
+        residual = stored - (self._heat_in - self._heat_out)
+        scale = max(abs(stored), abs(self._heat_in), abs(self._heat_out), 1e-300)
+        flags = sorted(self._flags)
+        if self._subdivided:
+            flags.append('TIME_STEP_SUBDIVIDED_FOR_ADI_DAMPING')
+        crown = _crown(grid.z, growth, prob.strip_centre, prob.strip_width)
+        return _checked({
+            'status': STATUS_TRANSIENT, 'end_time_s': self.time_s,
+            'z_m': list(grid.z), 'surface_temperature_k': surface, 'mean_temperature_k': mean,
+            'radius_growth_m': growth, 'htc_w_m2k': list(prob.h),
+            'heat_flux_w_m2': list(prob.q), 'nozzle_levels': list(prob.levels),
+            'thermal_crown_m': crown, 'reference_temperature_k': self._t_ref,
+            'expansion_constraint': self._constraint, 'expansion_factor': self._factor,
+            'stored_j': stored, 'heat_in_j': self._heat_in, 'heat_out_j': self._heat_out,
+            'residual_j': residual, 'relative_energy_residual': residual / scale,
+            'field': _field(grid, rows), 'grid': grid.describe(),
+            'solver': {'method': 'PEACEMAN_RACHFORD_ADI_WITH_BACKWARD_EULER_STARTUP',
+                       'time_step_s': self._last_dt_max,
+                       'internal_time_step_cap_s': self._step_cap,
+                       'time_step_subdivided': self._subdivided, 'steps': self._steps,
+                       'startup_steps': self._startup, 'startup_substeps': STARTUP_SUBSTEPS,
+                       'cached_level_sets': len(self._cache)},
+            'reasons': [f'{self.time_s:g} s simulated in {self._steps} steps with changing '
+                        f'nozzle levels; final thermal crown {crown:.3e} m.'],
+            'flags': flags, 'limitations': list(_LIMITATIONS),
+            'threshold_basis': _threshold_basis(),
+            'sources': [SOURCES['yamaguchi_2016'], SOURCES['li_2024'], SOURCES['dohmae_2012'],
+                        SOURCES['lloyd_2010'], SOURCES['tucker_2006']]})
+
 def _legendre(x, order):
     out = [1.0, x]
     for n in range(1, order):

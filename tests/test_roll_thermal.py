@@ -573,5 +573,95 @@ class PerformanceTests(unittest.TestCase):
         self.assertLess(t_transient, 20.0)
 
 
+class ControlledRunTests(unittest.TestCase):
+    """SPEC19 package 3: ControlledRun reproduces simulate when driven with the same levels."""
+
+    @classmethod
+    def setUpClass(cls):
+        from physicroll import roll_thermal as rt
+        cls.rt = rt
+        cls.roll = rt.RollThermalProperties(radius_m=0.135, barrel_length_m=0.6)
+        cls.hdr = rt.SprayHeader(nozzle_pitch_m=0.052, standoff_m=0.2, spray_angle_rad=0.8,
+                                 spray_mean_htc_w_m2k=3400.0, offset_angle_rad=0.17)
+        n = len(cls.hdr.nozzle_positions(0.6))
+        cls.lv0 = [1.0] * n
+        cls.lv1 = list(cls.lv0)
+        cls.lv1[4] = cls.lv1[5] = 0.0
+        cls.kw = dict(axial_cell_m=0.02, radial_cells=6)
+        cls.steady = rt.steady_state(cls.roll, cls.hdr, cls.seg(cls.lv0, 1.0), **cls.kw)
+
+    @classmethod
+    def seg(cls, lv, d):
+        return cls.rt.ThermalSegment(duration_s=d, bite_heat_per_width_w_m=8e4,
+                                     roll_heat_fraction_per_roll=0.39, strip_width_m=0.5,
+                                     coolant_temperature_k=318.15, nozzle_levels=lv)
+
+    def run_(self, **kw):
+        return self.rt.ControlledRun(self.roll, self.hdr, self.seg(self.lv0, 1.0),
+                                     initial=self.steady, **dict(self.kw, **kw))
+
+    def test_equals_simulate(self):
+        a = self.rt.simulate(self.roll, self.hdr, [self.seg(self.lv1, 20.0),
+                                                   self.seg(self.lv0, 60.0)],
+                             initial=self.steady, time_step_s=1.0, **self.kw)
+        run = self.run_()
+        run.advance(self.lv1, 20.0, 1.0)
+        out = run.advance(self.lv0, 60.0, 1.0)
+        b = run.result()
+        for key in ('radius_growth_m', 'surface_temperature_k'):
+            for x, y in zip(a[key], b[key]):
+                self.assertLessEqual(abs(x - y), 1e-12, key)
+        self.assertEqual(out['radius_growth_m'], b['radius_growth_m'])
+        for key in ('stored_j', 'heat_in_j', 'heat_out_j'):
+            self.assertLessEqual(abs(a[key] - b[key]), 1e-9 * abs(a[key]), key)
+        self.assertEqual((b['solver']['steps'], b['solver']['startup_steps']),
+                         (a['solver']['steps'], a['solver']['startup_steps']))
+        self.assertEqual(out['time_s'], 80.0)
+        self.assertNotIn('wall_time_s', b['solver'])
+        self.assertNotIn('wall', json.dumps(b))
+        json.dumps(b, allow_nan=False)
+
+    def test_constant_levels_stay_steady(self):
+        run = self.run_()
+        for _ in range(20):
+            out = run.advance(self.lv0, 100.0, 5.0)
+        # radius to 1e-11 m; the surface temperature to the steady solver's own tolerance
+        # (STEADY_TOLERANCE_K = 1e-6 K; this steady state is converged to 4.5e-7 K, and
+        # simulate drifts by the same 1.0e-7 K): 1e-9 K is below what the steady state holds
+        for x, y in zip(out['radius_growth_m'], self.steady['radius_growth_m']):
+            self.assertLessEqual(abs(x - y), 1e-11)
+        for x, y in zip(out['surface_temperature_k'], self.steady['surface_temperature_k']):
+            self.assertLessEqual(abs(x - y), self.rt.STEADY_TOLERANCE_K)
+        sim = self.rt.simulate(self.roll, self.hdr, [self.seg(self.lv0, 2000.0)],
+                               initial=self.steady, time_step_s=5.0, **self.kw)
+        for x, y in zip(out['surface_temperature_k'], sim['surface_temperature_k']):
+            self.assertLessEqual(abs(x - y), 1e-12)
+        self.assertEqual(run.result()['solver']['startup_steps'], 1)
+
+    def test_one_startup_per_change_and_cache_cap(self):
+        run = self.run_(max_cached_level_sets=2)
+        run.advance(self.lv0, 10.0, 1.0)
+        run.advance(self.lv0, 10.0, 1.0)
+        self.assertEqual(run.result()['solver']['startup_steps'], 1)
+        run.advance(self.lv1, 10.0, 1.0)
+        self.assertEqual(run.result()['solver']['startup_steps'], 2)
+        lv2 = list(self.lv0)
+        lv2[2] = 0.5
+        run.advance(lv2, 10.0, 1.0)
+        self.assertEqual(run.cached_level_sets, 2)
+        run.advance(self.lv0, 10.0, 1.0)          # evicted, rebuilt: still one start-up each
+        self.assertEqual(run.result()['solver']['startup_steps'], 4)
+        self.assertEqual(run.cached_level_sets, 2)
+
+    def test_cost(self):
+        run = self.rt.ControlledRun(self.roll, self.hdr, self.seg(self.lv0, 1.0),
+                                    initial='uniform_coolant')       # 5 mm, 16 radial cells
+        run.advance(self.lv0, 1.0, 1.0)
+        t0 = time.perf_counter()
+        run.advance(self.lv1, 60.0, 1.0)
+        per_minute = time.perf_counter() - t0
+        self.assertLess(per_minute, 5.0)   # about 0.5 s per simulated minute here (60 steps)
+
+
 if __name__ == '__main__':
     unittest.main()
