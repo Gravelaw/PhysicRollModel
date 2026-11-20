@@ -6,10 +6,12 @@ for the operating pass, a schedule pass rejected, a width model whose thermal pa
 assessable, a v2 case with sections not supplied, a v1 case, a foil case with a bite that is not
 credible, and the case template. Software verification of the plain layer only.
 """
+import copy
 import json
 import unittest
 
 from physicroll import band_plain as bpl
+from physicroll import band_sensors as bsensors
 from tests import band_partial_cases as P
 from tests.test_band_plain import engine_token_problems, reader_texts
 
@@ -36,6 +38,39 @@ class PartialResultTest(unittest.TestCase):
                 self.assertEqual(s['trust']['level'], 'LOW')     # synthetic inputs everywhere
                 self.assertEqual(len(s['causes']), 20)
                 self.assertEqual(s['roll_gap_failed'], bool(r['bite_error']))
+
+    def test_sensor_views_are_unavailable_without_their_sections(self):
+        def good(sec):
+            return isinstance(sec, dict) and sec.get('status') not in (
+                'NOT_ASSESSABLE', 'FAILED', 'NOT_SUPPLIED')
+
+        for name in P.CASES:
+            with self.subTest(case=name):
+                s, r = summary(name)
+                m, w = r.get('measurement') or {}, r.get('width') or {}
+                expect = {'shapemeter_view': good(m.get('shapemeter')),
+                          'gauge_sensor_view': good(m.get('thickness_gauge')),
+                          'temperature_flatness_view': good(w.get('strip_temperature')),
+                          'friction_view': good(w.get('friction_stripes')),
+                          'roll_profile_view': good(w.get('roll_profile'))}
+                for v, want in expect.items():
+                    self.assertEqual(s[v]['available'], want, v)
+                if name != 'foil_not_credible':           # the battery-foil scenario carries
+                    self.assertFalse(any(expect.values()))   # a shapemeter and a scan
+        # a shapemeter on a pass with no roll bite: the engine's own section is not
+        # assessable (no modelled flatness), and the page shows no zone readings
+        case, result = P.result('no_bite_width')
+        case, result = copy.deepcopy(case), copy.deepcopy(result)
+        case['measurement'] = {'shapemeter': {
+            'zone_width_m': 0.052, 'zone_count': 24, 'edge_zone_width_m': None,
+            'edge_zone_count_per_side': 0, 'centre_m': None, 'neighbour_spreading_fraction': 0.0,
+            'resolution_i_units': None, 'temperature_compensated': None,
+            'provenance': 'test'}, 'thickness_gauge': None}
+        result['measurement'] = bsensors.measurement_section(case, result)
+        self.assertEqual(result['measurement']['shapemeter']['status'], 'NOT_ASSESSABLE')
+        s = bpl.plain_summary(result, case)
+        self.assertFalse(s['shapemeter_view']['available'])
+        self.assertEqual(engine_token_problems(reader_texts(s)), [])
 
     def test_operating_pass_without_a_roll_bite(self):
         for name in ('no_bite', 'no_bite_width'):

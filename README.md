@@ -71,7 +71,10 @@ the default answer, runs the screening, and shows the shortlist of causes that f
 bands sit against the coolant nozzles, and what to check next. Answering one of the checks
 updates the shortlist and shows what changed. The result is a screening shortlist from a model
 that has not been compared with plant data, and its trust level stays low until your own mill
-values are entered. See [the band app guide](docs/band-app.md).
+values are entered. If you have them, it also takes your flatness roll, thickness gauge, a
+strip temperature scan, a grinder roll profile and known friction differences, and says what each
+would show (for example what each shapemeter zone would read). See
+[the band app guide](docs/band-app.md).
 
 ### Use it on your own case
 

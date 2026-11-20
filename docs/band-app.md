@@ -143,6 +143,28 @@ and a backup-roll change did; and whether the marks are on one face or both.
   list under the drawing takes any flow level from 0 to 1. Until you mark a nozzle the state is
   "Don't know" (the model then uses full flow for every nozzle). Nozzles of a known valve event
   have a dotted ring.
+- **Flatness and gauge measurement** (folded, optional; 16 questions). Answer only what you have.
+  None of these answers is "ask first", none changes the shortlist or the trust level, and each
+  stays "Don't know" (not described) until you answer it:
+  - your **flatness roll (shapemeter)**: the width of one measuring zone and the number of zones
+    (both needed), narrower edge zones if any, the share of a zone's signal that spreads to each
+    neighbour (only if your vendor states it; otherwise none), the smallest flatness difference
+    your system shows (otherwise the tool's own 2 I-unit band level), and whether it corrects for
+    strip temperature. From the shapemeter data sheet or its configuration. Once width and count
+    are answered, the strip drawing shows the zone boundaries as dashed lines just above the strip,
+    placed by the same engine code the run uses (centred where the tool puts the strip centre),
+    with the zones and the nozzles under each one in words and as a list beside the drawing;
+  - your **thickness gauge**: spot length along the strip, response time, time between readings,
+    where it sits across the strip and its spot width;
+  - a **strip temperature scan** across the width after the roll gap (a pyrometer or probe
+    reading; at least three points, positions from the strip edge, °C). The tool uses the scan as
+    given and never works out a strip temperature itself;
+  - a **measured roll profile** from the grinder report: the deviation of the radius (half of a
+    diameter deviation), in µm, at positions from the barrel end where nozzle 1 is (at least five
+    points). The tool removes the smooth crown and keeps the local marks;
+  - **places where the oil film or roll surface is known to differ**: position, half-peak width
+    and how much higher or lower the friction is there, as a share of the pass friction;
+  - **how much of the roll circumference the sprays wet** (an angle).
 - Under "More details": everything else of section 5.3 of the guide (stand masses and stiffnesses,
   spans, bearings and gears, rolling oil, gauge control, drive, coil, grinder, model settings).
 
@@ -264,6 +286,38 @@ Each block starts with a one-line "How to read this".
 7. **Temperature.** The modelled strip temperature leaving each pass, as bars against the
    published coil limit when the product has one. A strip exit temperature is not a coil
    temperature; read the bars as indicators.
+   **What your flatness roll would show** (when you described a flatness roll and the model has
+   a flatness profile across the width). One bar per zone on the same scale across the width as
+   the strip picture: the average of the modelled flatness over that zone; the line is the
+   modelled flatness itself; the dashed lines are the band level (the resolution you gave, or the
+   tool's own 2 I-units). Under it one sentence per modelled band, for example (battery-foil
+   example) "At 472 mm the model has a band of 25.1 I-units; a zone of 52 mm would read 24.5: it
+   would show on the flatness display", or, for a narrow ground mark of a roll profile, "At 348 mm
+   the model has a band of 3.13 I-units; a zone of 52 mm would read 1.07, below 2: the flatness
+   display would probably not show it". What these mean: zone averages of a model, what a flatness roll with those zones
+   would show; not a forecast of your flatness display. What they do not mean: "would probably not
+   show" is a statement about the display, not that the band is not there or about which cause it
+   is. The card always ends with "The tool does not model what the flatness control would do with
+   these readings." This card is part of the printed page.
+   **Flatness measured hot and after cooling** (with a temperature scan): "Measured hot the band
+   reads 30.5 I-units, after the coil has cooled 25.1", always with "The temperature profile was
+   supplied as an input (entered), not computed by the tool."
+   **A friction or oil-film stripe** (when the case carries the friction estimate, as the
+   battery-foil example does): the friction difference at one place that would make a 2 I-unit
+   band, said together with both levels of the model for 1 % more friction (with the exit-tension
+   feedback, and without it: roll and strip compliance alone) and a table of both for every pass.
+   They differ greatly (-3.1 against -390 I-units in the battery-foil example) and neither is
+   checked on a mill; read them together, never one alone. Your own stripes are listed with their state. It never changes the scores.
+   **Your measured roll profile**: the bands the profile makes in the model, with what your
+   flatness roll would show of them (a narrow ground mark is diluted by wide zones).
+   **What the thickness gauge keeps**: for each mark spacing you measured, about how much of it
+   the gauge keeps (spot size and response time only); when you saw no gauge variation but the
+   gauge could not show these marks, the card says that answer tells little and that the scores
+   were not changed.
+   For foil tension lines the cause detail adds **A candidate spacing (not evidence)**: the
+   wrinkle spacing that air trapped while winding would give for the rolls and coil of the case.
+   Almost any foil coil gives a spacing inside the published 5 to 20 mm, so a match proves
+   nothing; the detail says how to test it (the spacing at two coil sizes and two gauges).
 8. **How far to trust this.** The tool's notes on this case in plain words with what to do about
    each, what could not be assessed and why, and what is always true (one stand of a four-high
    mill; no closed-gap rolling; nothing compared with plant data; the score is a tally, not a
@@ -278,12 +332,16 @@ and trust level; updates and what-ifs are listed under the run they came from.
 
 ## 5. Quick and detailed runs
 
-**Quick** is the default. It leaves out three things:
+**Quick** is the default. It leaves out up to four things:
 
 - the heat-share and spray-coefficient sensitivity table;
 - the fine roll-temperature grid: it uses 20 mm cells, 6 radial cells and a 5 s step instead of
   5 mm, 16 and 1 s (only when the case does not set its own grid);
-- the fine roll-gap grid: 128 cells instead of 256 (foil roll-gap models keep at least 200).
+- the fine roll-gap grid: 128 cells instead of 256 (foil roll-gap models keep at least 200);
+- the friction stripe estimate per pass, when the case carries it (the battery-foil example
+  does). The friction card then says the quick run left it out and offers "Run in detail". When
+  you entered friction stripes yourself it is kept: the tool works out your stripes only
+  together with the per-pass table. Leaving it out changes no score, standing or other value.
 
 **Detailed** runs the case as entered with the engine's own settings. Every result says which
 kind produced it and what quick left out, and offers "Run in detail".
@@ -361,6 +419,10 @@ by deleting its folder while the app is stopped.
   modelled, and the tool assumes an open gap.
 - Nothing in the tool has been compared with plant data. The typical mills, the worked examples
   and the product values are synthetic or literature values.
+- The printed summary fits on one A4 page for a result like the lengthwise worked example
+  printed from a desktop-size window. A long shortlist of tied causes (for example the typical
+  foil mill with nothing answered) or the battery-foil example takes two pages, and so does any
+  print made from a phone-size window.
 - The guide `docs/band-diagnosis.md` (section 14) lists the model limitations in full.
 
 ## 10. Troubleshooting

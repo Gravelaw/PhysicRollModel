@@ -353,6 +353,11 @@ svg .spray{opacity:.11}
 .noz .valve{fill:none;stroke:var(--blue);stroke-width:1.5;stroke-dasharray:2 2}
 .notice.moved{border-left-color:var(--blue)}
 .notice-slot:empty{display:none}
+.zones line{stroke:var(--blue);stroke-width:1.2;stroke-dasharray:3 3}
+.zbar{fill:var(--soft);stroke:var(--ink);stroke-width:.6}
+.zbar.shows{fill:var(--ink)}
+.warnline{border-left:4px solid var(--amber);padding:.3rem .6rem;margin:.5rem 0}
+@media print{#shapemeter{display:none!important}.stripcard{display:flow-root}.smprint{display:block!important;float:right;width:44%;margin:0 0 2px 8px}.smprint-h,.smprint-w{font-size:7.5pt;margin:0;line-height:1.25}.smprint svg{width:100%;height:auto}}
 '''
 
 APP_JS = r''''use strict';
@@ -881,6 +886,16 @@ APP_JS = r''''use strict';
         s += '<text x="' + X(n.pos) + '" y="' + (yN + r + 15) + '" font-size="13" font-weight="600" text-anchor="middle">' + n.number + '</text>';
       }
     });
+    // shapemeter zones (from the server's model): dashed boundaries just above the strip
+    if (o.zones && o.zones.length) {
+      var yZ = yTop - 7;
+      s += '<g class="zones" aria-hidden="true"><line x1="' + X(o.zones[0].start_m) + '" x2="' + X(o.zones[o.zones.length - 1].end_m) + '" y1="' + yZ + '" y2="' + yZ + '"/>';
+      o.zones.forEach(function (z, k) {
+        s += '<line x1="' + X(z.start_m) + '" x2="' + X(z.start_m) + '" y1="' + (yZ - 6) + '" y2="' + (yTop + 6) + '"/>';
+        if (k === o.zones.length - 1) { s += '<line x1="' + X(z.end_m) + '" x2="' + X(z.end_m) + '" y1="' + (yZ - 6) + '" y2="' + (yTop + 6) + '"/>'; }
+      });
+      s += '</g>';
+    }
     // thermal profile of the roll (result only)
     if (hasTh) {
       var z = res.thermal_profile.z_m, d = res.thermal_profile.local_deviation_m;
@@ -986,6 +1001,20 @@ APP_JS = r''''use strict';
     return m.bands.positions_m.map(function (x) { return {x: x, w: withWidth && isNum(bw) ? bw : null}; });
   }
   function stripArgs(m) { return {barrel: m.strip.barrel_length_m, edge: m.strip.edge_m, width: m.strip.width_m}; }
+  function zonesOf(m) { return m.shapemeter ? m.shapemeter.zones : null; }
+  // the shapemeter zones in words, beside the drawing (the drawing's zone lines are not focusable)
+  function zonesNote(m) {
+    var sm = m.shapemeter;
+    if (!sm) { return ''; }
+    var edge = m.strip.edge_m, z = sm.zones;
+    var counts = {}; z.forEach(function (x) { var n = x.nozzle_numbers.length; counts[n] = (counts[n] || 0) + 1; });
+    var per = Object.keys(counts).sort().map(function (n) { return counts[n] + ' zone' + (counts[n] > 1 ? 's' : '') + ' with ' + n + ' nozzle' + (n === '1' ? '' : 's'); }).join(', ');
+    return '<p class="small">Shapemeter: ' + sm.zone_count + ' zones (dashed lines just above the strip) from ' + mmInt(z[0].start_m - edge) + ' to ' + mmInt(z[z.length - 1].end_m - edge) +
+      ' from the strip edge; ' + per + '.' + (sm.uncovered_strip_width_m > 0.0005 ? ' The zones do not cover ' + mmInt(sm.uncovered_strip_width_m) + ' of the strip.' : '') + '</p>' +
+      '<details class="more"><summary>The zones as a list</summary><ul class="small">' + z.map(function (x) {
+        return '<li>Zone ' + (x.index + 1) + ': ' + mmInt(x.start_m - edge) + ' to ' + mmInt(x.end_m - edge) + ' from the strip edge' + (x.nozzle_numbers.length ? ', nozzle ' + x.nozzle_numbers.join(', ') : ', no nozzle') + '</li>';
+      }).join('') + '</ul></details>';
+  }
 
   function bandsInput(q, ctx) { return '<div data-view="bands">' + VIEWS.bands() + '</div>'; }
   function bandsView() {
@@ -994,7 +1023,7 @@ APP_JS = r''''use strict';
     var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-input', label: 'Top view of the strip. Click or tap on the strip to add a band; drag a band to move it; with the keyboard use the arrow keys on a band, Delete removes it.',
       barrel: a.barrel, edge: a.edge, width: a.width,
-      nozzles: nozzlesOf(m), bands: bandsOf(m, true), interactive: 'bands'});
+      nozzles: nozzlesOf(m), bands: bandsOf(m, true), interactive: 'bands', zones: zonesOf(m)});
     var list = '<ol class="poslist" aria-label="Band positions">' + pos.map(function (mm, i) {
       return '<li><label for="bp-' + i + '">Band ' + (i + 1) + '</label><input type="number" step="1" id="bp-' + i + '" data-bandpos="' + i +
         '" value="' + esc(mm) + '"><span class="unit">mm</span><button type="button" class="btn" data-band-del="' + i +
@@ -1016,7 +1045,7 @@ APP_JS = r''''use strict';
     var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-nozzles', label: 'Spray header over the strip. Click a nozzle to cycle healthy, weak and blocked; with the keyboard press Enter or Space on a nozzle.',
       barrel: a.barrel, edge: a.edge, width: a.width,
-      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles'});
+      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles', zones: zonesOf(m)});
     var known = h.levels_known, lst = '';
     if (known) {
       lst = '<details class="more"' + (S.nozListOpen ? ' open' : '') + ' data-nozlist="1"><summary>Nozzle list (flow level of each nozzle, 1 = full, 0 = blocked)</summary><div class="nozlist">' +
@@ -1033,7 +1062,7 @@ APP_JS = r''''use strict';
       '<p class="small" aria-live="polite" data-nozstatus="1">' + (known ? (h.weak + ' weak, ' + h.blocked + ' blocked of ' + h.nozzles.length +
       ' nozzles. <button type="button" class="btn link" data-noz-reset="1">Set back to "Don\'t know"</button>') :
       'Nozzle state: "Don\'t know" (nobody has checked; the model uses full flow). Click a nozzle to mark it; the others then count as healthy.') + '</p>' +
-      (known ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + ev + lst + '</div>';
+      (known ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + ev + zonesNote(m) + lst + '</div>';
   }
 
   // "Blocked nozzles (by number)": a view of the level-0 nozzles of the drawing that edits them
@@ -1362,7 +1391,12 @@ APP_JS = r''''use strict';
     h += M.questions.filter(function (q) { return q.step === 'mill' && q.ask_first && q.kind !== 'nozzles' && shown(q); })
       .map(function (q) { return renderQ(q); }).join('');
     h += '<h3>Spray header</h3>' + renderQ(Q.nozzle_levels);
-    var rest = M.questions.filter(function (q) { return q.step === 'mill' && !q.ask_first && shown(q); });
+    var MEAS = 'Flatness and gauge measurement';
+    var meas = M.questions.filter(function (q) { return q.step === 'mill' && q.group === MEAS; });
+    h += '<details class="more" data-more="measure"' + (S.openMore && S.openMore.measure ? ' open' : '') + '><summary>' + MEAS + ' (' + meas.length + ' questions, optional)</summary>' +
+      '<p class="howto">Only if you have them: your flatness roll, thickness gauge, a strip temperature scan, a grinder report of the roll, or a known friction difference. None of them changes the shortlist; they add what each would show.</p>' +
+      meas.map(function (q) { return renderQ(q); }).join('') + '</details>';
+    var rest = M.questions.filter(function (q) { return q.step === 'mill' && !q.ask_first && q.group !== MEAS && shown(q); });
     h += '<details class="more" data-more="mill"' + (S.openMore && S.openMore.mill ? ' open' : '') + '><summary>More details (' + rest.length + ' more values)</summary>' +
       groupBy(rest).map(function (g) { return '<h4>' + esc(g.group) + '</h4>' + g.qs.map(function (q) { return renderQ(q); }).join(''); }).join('') + '</details>';
     h += '<div class="q"><label class="w" for="casename">Name for this case</label><input type="text" class="wide" id="casename" value="' + esc(S.answers.name || '') +
@@ -1522,7 +1556,8 @@ APP_JS = r''''use strict';
       '<p>' + esc(c.description) + '</p><p>' + standWords(c) + ' <span class="num small">score ' + c.score + ', place ' + c.rank + ' of 20</span></p></div></div>' +
       '<div class="cols"><div><h4>What fits</h4>' + evidList(c.fits_because, 'Nothing entered speaks for it yet.') + '</div>' +
       '<div><h4>What speaks against it</h4>' + evidList(c.speaks_against, 'Nothing entered speaks against it.') + '</div></div>' +
-      '<h4>Not looked at yet</h4>' + nl + '<h4>How to check on the floor</h4><p>' + esc(c.how_to_check) + '</p></div>';
+      '<h4>Not looked at yet</h4>' + nl + '<h4>How to check on the floor</h4><p>' + esc(c.how_to_check) + '</p>' +
+      (c.candidate_pitch ? '<h4>A candidate spacing (not evidence)</h4><p>' + esc(c.candidate_pitch.text) + '</p><ul class="small">' + c.candidate_pitch.rows.map(function (r) { return '<li>' + esc(r.text) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
   }
 
   // inline answers for the check-and-update loop (edits pending changes of the shown run)
@@ -1606,6 +1641,92 @@ APP_JS = r''''use strict';
     return '<div class="fig">' + svg + '</div>' + legend(items) + '<details><summary>The same as a list</summary><ul class="small">' + (listRows || '<li>No band positions entered.</li>') + '</ul></details>';
   }
 
+  // ------------------------------------------------------------------ flatness roll and the other measurements
+  function shapemeterSvg(v) {
+    W = drawW();
+    var barrel = v.barrel_length_m || (v.strip_end_m + v.strip_start_m);
+    var sx = (W - ML - MR) / barrel;
+    function X(m) { return ML + m * sx; }
+    var t = v.threshold_i_units, mx = t;
+    v.zones.forEach(function (z) { if (isNum(z.reading_i_units)) { mx = Math.max(mx, Math.abs(z.reading_i_units)); } });
+    v.profile.i_units.forEach(function (y) { mx = Math.max(mx, Math.abs(y)); });
+    var top = 18, hh = 150, y0 = top + hh / 2, k = (hh / 2 - 6) / mx, H = top + hh + 40;
+    function Y(val) { return y0 - val * k; }
+    var edge = v.strip_start_m;
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="What each shapemeter zone would read, with the modelled flatness as a line">';
+    s += '<rect x="' + X(v.strip_start_m) + '" y="' + top + '" width="' + ((v.strip_end_m - v.strip_start_m) * sx) + '" height="' + hh + '" fill="var(--strip)" opacity=".45"/>';
+    s += '<line class="tick" x1="' + X(0) + '" x2="' + X(barrel) + '" y1="' + y0 + '" y2="' + y0 + '"/>';
+    [t, -t].forEach(function (y) { s += '<line x1="' + X(0) + '" x2="' + X(barrel) + '" y1="' + Y(y) + '" y2="' + Y(y) + '" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="6 4"/>'; });
+    s += '<text x="' + (X(barrel) - 2) + '" y="' + (Y(t) - 4) + '" font-size="11" text-anchor="end">± ' + sig(t, 3) + ' I-units: band level</text>';
+    v.zones.forEach(function (z) {
+      var r = z.reading_i_units, x0 = X(z.start_m) + 1, wpx = Math.max(1, (z.end_m - z.start_m) * sx - 2);
+      var where = 'Zone ' + (z.index + 1) + ' (' + mmInt(z.start_m - edge) + ' to ' + mmInt(z.end_m - edge) + ' from the strip edge)';
+      if (!isNum(r)) {
+        s += '<g class="mark" tabindex="0" aria-label="' + esc(where + ': does not cover the strip') + '" data-tip="' + esc(where + ': does not cover the strip') + '"><rect x="' + x0 + '" y="' + (y0 - 2) + '" width="' + wpx + '" height="4" fill="none" stroke="var(--soft)"/></g>';
+        return;
+      }
+      var shows = Math.abs(r) >= t;
+      var words = where + ' would read ' + sig(r, 3) + ' I-units: ' + (shows ? 'would show' : 'would probably not show');
+      s += '<g class="mark" tabindex="0" aria-label="' + esc(words) + '" data-tip="' + esc(words) + '"><rect class="zbar' + (shows ? ' shows' : '') + '" x="' + x0 + '" y="' + Math.min(Y(r), y0) + '" width="' + wpx + '" height="' + Math.max(1, Math.abs(Y(r) - y0)) + '"/></g>';
+    });
+    var pts = [];
+    v.profile.z_m.forEach(function (z, i) { pts.push(X(z).toFixed(1) + ',' + Y(v.profile.i_units[i]).toFixed(1)); });
+    if (pts.length) { s += '<polyline class="thermal" points="' + pts.join(' ') + '"/>'; }
+    s += '<text x="' + X(v.strip_start_m) + '" y="' + (top + hh + 16) + '" font-size="12" class="softtext">0</text><text x="' + X(v.strip_end_m) + '" y="' + (top + hh + 16) + '" font-size="12" text-anchor="end" class="softtext">' + mmInt(v.strip_end_m - v.strip_start_m) + '</text>';
+    s += '<text x="' + X(v.strip_start_m) + '" y="' + (top + hh + 32) + '" font-size="12" class="softtext">mm from the strip edge nearest nozzle 1; up = longer (loose), down = shorter (tight)</text>';
+    return s + '</svg>';
+  }
+  function shapemeterCard(sum) {
+    var v = sum.shapemeter_view;
+    if (!v || !v.available) { return ''; }
+    return '<section class="card" id="shapemeter"><h2>What your flatness roll would show</h2><p class="howto">How to read this: each bar is the average of the modelled flatness over one zone of the flatness roll you described, on the same scale across the width as the picture above; the line is the modelled flatness itself; the dashed lines are the level from which a band shows.</p>' +
+      '<div class="fig">' + shapemeterSvg(v) + '</div>' +
+      legend([{icon: '<rect x="8" y="2" width="14" height="12" class="zbar shows"/>', text: 'A zone that would show the band'}, {icon: '<rect x="8" y="2" width="14" height="12" class="zbar"/>', text: 'A zone that would probably not show it'},
+        {icon: '<path d="M2 12q8 0 13-8q5 8 13 8" fill="none" stroke="var(--orange)" stroke-width="2"/>', text: 'Modelled flatness'}, {icon: '<line x1="2" x2="28" y1="8" y2="8" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 3"/>', text: 'Band level'}]) +
+      '<p class="small pr-hide">' + esc(v.setup_text) + ' ' + esc(v.what_words) + '</p>' +
+      '<ul>' + v.bands.map(function (b) { return '<li>' + esc(b.text) + '</li>'; }).join('') + '</ul>' +
+      '<p class="warnline">' + esc(v.caveat) + '</p>' +
+      (v.other_profiles.length ? '<details class="more pr-hide"><summary>Other modelled profiles read by the same zones</summary><ul class="small">' + v.other_profiles.map(function (p) {
+        return '<li>' + esc(p.label) + ': largest zone reading ' + (isNum(p.max_reading_i_units) ? sig(p.max_reading_i_units, 3) : '–') + ' I-units (the profile itself ' + (isNum(p.profile_max_i_units) ? sig(p.profile_max_i_units, 3) : '–') + ')</li>';
+      }).join('') + '</ul></details>' : '') + '</section>';
+  }
+  // the printed page: the flatness roll chart beside the strip picture (the page has room there)
+  function shapemeterPrint(sum) {
+    var v = sum.shapemeter_view;
+    if (!v || !v.available) { return ''; }
+    return '<div class="printonly smprint"><p class="smprint-h"><strong>What your flatness roll would show</strong> (bars: zone readings; line: modelled flatness; dashed: band level)</p>' +
+      shapemeterSvg(v) + '<p class="smprint-w">' + esc(v.caveat) + '</p></div>';
+  }
+  function measureCards(sum) {
+    var h = '', tv = sum.temperature_flatness_view, fv = sum.friction_view, rv = sum.roll_profile_view, gv = sum.gauge_sensor_view;
+    if (tv && tv.available) {
+      h += '<section class="card noprint" id="hotcold"><h2>Flatness measured hot and after cooling</h2><p>' + esc(tv.text) + '</p>' + (tv.state_text ? '<p>' + esc(tv.state_text) + '</p>' : '') + '</section>';
+    }
+    if (fv && fv.left_out && S.run) {
+      h += '<section class="card noprint" id="friction"><h2>A friction or oil-film stripe</h2><p>' + esc(fv.text) + '</p>' +
+        '<button type="button" class="btn" data-rerun="' + S.run.id + '" data-profile="detailed">Run in detail</button></section>';
+    }
+    if (fv && fv.available) {
+      h += '<section class="card noprint" id="friction"><h2>A friction or oil-film stripe</h2><p>' + esc(fv.text) + '</p>' +
+        (fv.rows.length ? '<div class="scrollbox"><table class="small"><thead><tr><th scope="col">Pass</th><th scope="col">Exit gauge</th><th scope="col">I-units per 1 % friction, with the exit-tension feedback</th><th scope="col">without it (compliance alone)</th></tr></thead><tbody>' +
+          fv.rows.map(function (r) { return '<tr' + (r.credible ? '' : ' class="soft"') + '><td>' + esc(r.label) + (r.credible ? '' : ' (not credible)') + '</td><td>' + gauge(r.exit_thickness_m) + '</td><td>' + sig(r.with_feedback, 2) + '</td><td>' + sig(r.compliance_only, 2) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '') +
+        (fv.stripes.length ? '<ul>' + fv.stripes.map(function (x) { return '<li>' + esc(x.text) + '</li>'; }).join('') + '</ul>' : '') +
+        '<details class="more"><summary>Thinner or thicker, and the sign</summary><p class="small">' + esc(fv.trend_words) + '</p><p class="small">' + esc(fv.sign_words) + '</p></details><p class="small soft">' + esc(fv.caveat) + '</p></section>';
+    }
+    if (rv && rv.available) {
+      h += '<section class="card noprint" id="rollprofile"><h2>Your measured roll profile</h2><p>' + esc(rv.text) + '</p>' +
+        (rv.bands.length ? '<ul>' + rv.bands.map(function (b) { return '<li>' + esc(b.text) + '</li>'; }).join('') + '</ul>' : '') +
+        (rv.shapemeter && rv.shapemeter.length ? '<p class="small">On your flatness roll:</p><ul class="small">' + rv.shapemeter.map(function (b) { return '<li>' + esc(b.text) + '</li>'; }).join('') + '</ul>' : '') +
+        '<p class="small soft">' + esc(rv.caveat) + '</p></section>';
+    }
+    if (gv && gv.available) {
+      h += '<section class="card noprint" id="gaugesensor"><h2>What the thickness gauge keeps</h2><p>' + esc(gv.text) + '</p>' +
+        (gv.rows.length ? '<ul>' + gv.rows.map(function (r) { return '<li>' + esc(r.text) + '</li>'; }).join('') + '</ul>' : '') +
+        (gv.not_detected_words ? '<p class="warnline">' + esc(gv.not_detected_words) + '</p>' : '') + '<p class="small soft">' + esc(gv.caveat) + '</p></section>';
+    }
+    return h;
+  }
+
   function nextChecks(sum) {
     if (!sum.next_checks.length) { return '<p class="empty">No further checks listed.</p>'; }
     var more = sum.next_checks.length - 3;
@@ -1686,9 +1807,10 @@ APP_JS = r''''use strict';
       h += '<section class="card"><h2>Along the strip</h2><p class="howto">How to read this: the top strip shows the mark spacing you measured, the bottom one the spacing of the best-fitting candidate with a spacing.</p>' +
         (sum.along_view.available ? '<div class="fig">' + alongSvg(sum.along_view) + '</div>' : '<p class="empty">No spacing measured yet: measure the mark spacing at two speeds to see this picture.</p>') + '</section>';
     } else {
-      h += '<section class="card"><h2>Where across the width</h2><p class="howto">How to read this: the strip seen from above with the spray header over it. Solid bars are the bands you saw; outlined boxes with a letter are where the model puts a candidate; the line above shows where the roll grows. Hover, tap or tab to a mark for its position.</p>' +
-        stripResult(sum) + '</section>';
+      h += '<section class="card stripcard"><h2>Where across the width</h2><p class="howto">How to read this: the strip seen from above with the spray header over it. Solid bars are the bands you saw; outlined boxes with a letter are where the model puts a candidate; the line above shows where the roll grows. Hover, tap or tab to a mark for its position.</p>' +
+        shapemeterPrint(sum) + stripResult(sum) + '</section>';
     }
+    h += shapemeterCard(sum) + measureCards(sum);
     h += '<section class="card"><h2>What to check next</h2><p class="howto">How to read this: measurements that would narrow the shortlist. Tick one you have done, answer it, and update the result.</p>' + nextChecks(sum) + pendingBar() + '</section>';
     h += '<section class="card noprint"><h2>What if</h2>' + whatIfCard() + '</section>';
     if (sum.gauge_view.available && sum.gauge_view.passes.length < 2) {

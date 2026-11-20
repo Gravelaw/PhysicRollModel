@@ -12,6 +12,7 @@ import unittest
 
 from physicroll import band_diagnosis as bd
 from tests.test_band_app import ROOT, ServerCase, fake_engine
+from tests.test_band_app_drawing import Api, model_zones
 
 REBUILT_FIELDS = ('provenance', 'notes')
 
@@ -261,3 +262,45 @@ class DependentAnswersTest(ServerCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ShapemeterRunTest(ServerCase):
+    """SPEC17 package 9: a run with a shapemeter stores it, the result card shows the zones the
+    page drew before the run (the zones the engine reports), and the run reopens with it."""
+    engine = None                                   # the real engine (quick profile)
+
+    def test_shapemeter_run_stores_draws_and_reopens(self):
+        api = Api(self)
+        lv = [1.0] * 28
+        lv[11] = 0.0
+        api.answers['values'].update(shapemeter_zone_width=52.0, shapemeter_zone_count=24,
+                                     nozzle_levels=lv)
+        st, out = api.check()
+        self.assertEqual(st, 200, out)
+        drawn = model_zones(out)
+        self.assertEqual(len(drawn), 24)
+        st, run = self.client.json('POST', '/api/runs', api.body(profile='quick'))
+        self.assertEqual(st, 202, run)
+        done, _ = self.wait(run['id'])
+        self.assertEqual(done['run']['status'], 'done', done['run'].get('error'))
+        rid = run['id']
+        case = json.loads((self.tmp / rid / 'case.json').read_text())
+        self.assertEqual((case['measurement']['shapemeter']['zone_width_m'],
+                          case['measurement']['shapemeter']['zone_count']), (0.052, 24))
+        result = json.loads((self.tmp / rid / 'result.json').read_text())
+        sm = result['measurement']['shapemeter']
+        self.assertEqual([(z['start_m'], z['end_m'], [i + 1 for i in z['nozzle_indices']])
+                          for z in sm['zones']], drawn)
+        sv = done['summary']['shapemeter_view']
+        self.assertTrue(sv['available'])
+        self.assertEqual([(z['start_m'], z['end_m']) for z in sv['zones']],
+                         [(a, b) for a, b, _ in drawn])
+        st, ro = self.client.json('GET', f'/api/runs/{rid}/reopen')
+        self.assertEqual(st, 200, ro)
+        self.assertEqual((ro['answers']['values']['shapemeter_zone_width'],
+                          ro['answers']['values']['shapemeter_zone_count']), (52.0, 24))
+        st, chk = self.client.json('POST', '/api/case/check',
+                                   {'preset': ro['preset'], 'answers': ro['answers']})
+        self.assertEqual(st, 200, chk)
+        self.assertEqual(chk['case']['measurement'], case['measurement'])
+        self.assertEqual(model_zones(chk), drawn)

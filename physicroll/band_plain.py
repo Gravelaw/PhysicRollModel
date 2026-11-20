@@ -70,6 +70,7 @@ from . import band_diagnosis as bd
 from . import band_process as bproc
 from . import band_signatures as bsig
 from . import band_products as bprod
+from . import band_sensors as bsensors
 from . import band_survey as bsurvey
 from . import band_thermal as bthermal
 from . import band_width as bw
@@ -108,6 +109,8 @@ UNITS = {
     'count': ('', 1.0, 1.0, 0.0), 'nozzle_no': ('', 1.0, 1.0, -1.0),
     'kw_m': ('kW/m', 1e3, 1.0, 0.0), 'n_m_pa': ('m', 1.0, 1.0, 0.0),
     'pos_mm': ('mm from the strip edge', 1.0, 1e3, 0.0),
+    'i_units': ('I-units', 1.0, 1.0, 0.0), 'ms': ('ms', 1.0, 1e3, 0.0),
+    'um_radius': ('µm on radius', 1.0, 1e6, 0.0),
 }
 INTEGER_UNITS = ('count', 'nozzle_no')
 
@@ -837,8 +840,110 @@ MILL_QUESTIONS = (
        group='Model settings'),
 )
 
+MEASURE_GROUP = 'Flatness and gauge measurement'
+
+
+def _meas(id_, key, kind, wording, help_, **kw):
+    kw.setdefault('unknown', 'null')
+    return _q(id_, 'mill', MEASURE_GROUP, key, kind, wording, help_, **kw)
+
+
+SHAPEMETER_HELP = (' From the shapemeter data sheet or its configuration. Published examples: '
+                   'flatness rolls with zones of 26 or 52 mm, rotors of 25 to 100 mm (vendor '
+                   'figures, not checked by the tool).')
+MEASUREMENT_QUESTIONS = (
+    _meas('shapemeter_zone_width', 'measurement.shapemeter.zone_width_m', 'number',
+          'How wide is one measuring zone of your flatness roll?',
+          'The width of one zone across the strip.' + SHAPEMETER_HELP, unit='mm'),
+    _meas('shapemeter_zone_count', 'measurement.shapemeter.zone_count', 'number',
+          'How many zones does it have?',
+          'All zones across the roll, edge zones included. The zones are centred where the '
+          'tool puts the strip centre.' + SHAPEMETER_HELP, unit='count'),
+    _meas('shapemeter_edge_zone_width', 'measurement.shapemeter.edge_zone_width_m', 'number',
+          'Narrower zones at the strip edges: their width',
+          'Only if the zones at both ends are narrower than the others. Leave it at "Don\'t '
+          'know" when all zones are the same.', unit='mm'),
+    _meas('shapemeter_edge_zone_count', 'measurement.shapemeter.edge_zone_count_per_side',
+          'number', 'Narrower zones at the strip edges: how many at each side',
+          'The number of narrower zones at each end (0 when all zones are the same).',
+          unit='count'),
+    _meas('shapemeter_spreading', 'measurement.shapemeter.neighbour_spreading_fraction',
+          'number', "Share of a zone's signal that spreads to each neighbour",
+          'Only if your vendor states it (one vendor quotes at most 12.5 % to each side). Leave '
+          'it empty or at 0 otherwise: the tool then assumes no spreading.', unit='percent'),
+    _meas('shapemeter_resolution', 'measurement.shapemeter.resolution_i_units', 'number',
+          'Smallest flatness difference your system shows',
+          'From the vendor or your level-2 settings. Without it the tool uses its own 2 I-unit '
+          'level for a band (a vendor figure of about 0.5 I-units is quoted in the guide, never '
+          'used as a default).', unit='i_units'),
+    _meas('shapemeter_temperature_compensated', 'measurement.shapemeter.temperature_compensated',
+          'yesno', 'Does it correct for strip temperature?',
+          'Some flatness systems remove the effect of a temperature difference across the '
+          'strip. Only matters when you also give a strip temperature scan.'),
+    _meas('gauge_spot_length', 'measurement.thickness_gauge.spot_length_m', 'number',
+          'The thickness gauge: spot length along the strip',
+          'The length of strip the gauge looks at, along the rolling direction. From the gauge '
+          'data sheet.', unit='mm'),
+    _meas('gauge_time_constant', 'measurement.thickness_gauge.time_constant_s', 'number',
+          'The thickness gauge: response time',
+          'The time constant of its signal (foil gauges respond in under about 10 ms, a vendor '
+          'figure). From the data sheet or the gauge settings.', unit='ms'),
+    _meas('gauge_sample_interval', 'measurement.thickness_gauge.sample_interval_s', 'number',
+          'The thickness gauge: time between readings',
+          'How often the recorded gauge signal is stored. Leave it at "Don\'t know" if not '
+          'known.', unit='ms'),
+    _meas('gauge_position', 'measurement.thickness_gauge.position_m', 'number',
+          'The thickness gauge: where it sits across the strip',
+          'Measured from the strip edge nearest the first coolant nozzle. "Don\'t know" means '
+          'the strip centre.', unit='pos_mm'),
+    _meas('gauge_spot_width', 'measurement.thickness_gauge.spot_width_m', 'number',
+          'The thickness gauge: spot width across the strip',
+          'The width the gauge looks at across the strip. "Don\'t know" treats it as a point.',
+          unit='mm'),
+    _meas('strip_temperature_scan', 'width_model.strip_temperature', 'list',
+          'Strip temperature across the width, measured after the roll gap',
+          'A line-scan pyrometer or contact probe reading across the strip (aluminium is hard '
+          'to read with a pyrometer: check the emissivity setting). At least three points. The '
+          'tool uses it as you give it; it does not work out the strip temperature itself.',
+          fields=(Field('position', 'Position', unit='pos_mm'),
+                  Field('temperature', 'Temperature', unit='degc'))),
+    _meas('roll_profile_scan', 'width_model.roll_ground_profile', 'list',
+          'Measured roll profile from the grinder',
+          'From the grinder report of the work roll: the deviation of the RADIUS from the '
+          'intended shape (half of a diameter deviation; positive = a larger roll), at least '
+          'five points. Positions from the barrel end where nozzle 1 is. The tool removes the '
+          'smooth crown and keeps the local marks.',
+          fields=(Field('position', 'Position from the barrel end at nozzle 1', unit='mm'),
+                  Field('deviation', 'Radius deviation', unit='um_radius'))),
+    _meas('friction_stripes', 'width_model.friction_stripe_screen.stripes', 'list',
+          'A place where the oil film or roll surface is known to differ',
+          'For example a worn or coated band of the roll, or a blocked oil nozzle: where it is, '
+          'how wide (half-peak width), and how much higher (+) or lower (-) the friction is '
+          'there, as a share of the friction of the pass. A rough estimate only; it never '
+          'changes the scores.',
+          fields=(Field('position_m', 'Position', unit='pos_mm'),
+                  Field('half_peak_width_m', 'Width', unit='mm'),
+                  Field('friction_change_fraction', 'Friction change', unit='percent'),
+                  Field('label', 'Note', kind='text')), unknown='empty'),
+    _meas('spray_wetted_arc', 'width_model.spray_wetted_arc_rad', 'number',
+          'How much of the roll circumference do the sprays wet?',
+          'The angle of the roll surface the coolant sprays cover, from the header drawing. '
+          'Used only to state what kind of spray cooling value you entered.', unit='deg'),
+)
+MEASUREMENT_SECTIONS = ('measurement.shapemeter', 'measurement.thickness_gauge')
+# list questions stored as parallel arrays of one case object: key -> ({field: array}, defaults)
+PARALLEL_LISTS = {
+    'width_model.strip_temperature': ({'position': 'positions_m', 'temperature': 'temperature_k'},
+                                      {'expansion_coefficient_per_k': None,
+                                       'provenance': 'entered in the band app'}),
+    'width_model.roll_ground_profile': ({'position': 'positions_m',
+                                         'deviation': 'radius_deviation_m'},
+                                        {'detrend_order': 2, 'rolls_carrying': 1,
+                                         'provenance': 'entered in the band app'}),
+}
+
 QUESTIONS = tuple(q.validate() for q in OBSERVATION_QUESTIONS + PASS_QUESTIONS + FAULT_QUESTIONS
-                  + MILL_QUESTIONS)
+                  + MILL_QUESTIONS + MEASUREMENT_QUESTIONS)
 QUESTION_BY_ID = {q.id: q for q in QUESTIONS}
 if len(QUESTION_BY_ID) != len(QUESTIONS):
     raise RuntimeError('duplicate question id')
@@ -866,6 +971,19 @@ SECTIONS = {
                                  {'provenance': 'entered in the band app'}),
     'tribology.friction_closure': ('the placeholder friction law', ('mu_b', 'mu_v', 'lambda0'),
                                    {}),
+    'measurement': ('a flatness or gauge measurement', (),
+                    {'shapemeter': None, 'thickness_gauge': None}),
+    'measurement.shapemeter': ('the shapemeter', ('zone_width_m', 'zone_count'),
+                               {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
+                                'centre_m': None, 'neighbour_spreading_fraction': 0.0,
+                                'resolution_i_units': None, 'temperature_compensated': None,
+                                'provenance': 'entered in the band app'}),
+    'measurement.thickness_gauge': ('the thickness gauge', ('spot_length_m', 'time_constant_s'),
+                                    {'sample_interval_s': None, 'position_m': None,
+                                     'spot_width_m': None,
+                                     'provenance': 'entered in the band app'}),
+    'width_model.friction_stripe_screen': ('the friction stripe estimate', (),
+                                           {'reference_half_peak_width_m': None, 'stripes': []}),
 }
 SECTION_NAMES = {'width_model': 'a roll thermal model (width model)',
                  'tribology': 'rolling-oil data (tribology)', 'lubrication': 'a simple oil film '
@@ -1009,7 +1127,7 @@ def _num_si(q, label, value, unit, origin):
 
 def _num_display(value, unit, origin):
     if unit == 'pos_mm':
-        return _r12((value - origin) * 1e3)
+        return _r12(round((value - origin) * 1e3, 9))      # 1e-9 mm: drop binary noise
     return from_si(value, unit)
 
 
@@ -1074,6 +1192,13 @@ def answer_to_si(q, value, origin_m=0.0):
     # list of records
     if not isinstance(value, list) or not all(isinstance(x, dict) for x in value):
         raise AnswerError(f'"{q.wording}" must be a list of entries', q.id)
+    if q.key in PARALLEL_LISTS:                 # rows -> one object of parallel arrays
+        if not value:
+            return None
+        arrays, defaults = PARALLEL_LISTS[q.key]
+        rows = [{f.name: _field_si(q, f, item.get(f.name), origin_m) for f in q.fields}
+                for item in value]
+        return dict(defaults, **{arr: [r[name] for r in rows] for name, arr in arrays.items()})
     out = []
     for item in value:
         rec = {}
@@ -1099,6 +1224,12 @@ def answer_from_si(q, value, origin_m=0.0):
         return _num_display(value, q.unit, origin_m)
     if q.kind in ('positions', 'numbers', 'nozzles'):
         return [_num_display(v, q.unit, origin_m) for v in value]
+    if q.kind == 'list' and q.key in PARALLEL_LISTS:
+        arrays = PARALLEL_LISTS[q.key][0]
+        fields = {f.name: f for f in q.fields}
+        n = len(value[next(iter(arrays.values()))])
+        return [{name: _field_display(fields[name], value[arr][i], origin_m)
+                 for name, arr in arrays.items()} for i in range(n)]
     if q.kind == 'list':
         return [{f.name: _field_display(f, item.get(f.name), origin_m) for f in q.fields}
                 for item in value]
@@ -1336,10 +1467,11 @@ def case_from_answers(answers, preset):
         sec = _get(case, path)
         lack = [r for r in required if sec.get(r) is None]
         if lack:
-            qs = [QUESTION_BY_KEY[f'{path}.{r}'].wording for r in lack
+            qs = [QUESTION_BY_KEY[f'{path}.{r}'].wording.rstrip('?') for r in lack
                   if f'{path}.{r}' in QUESTION_BY_KEY]
             raise AnswerError(f'To use {label}, also answer: ' + '; '.join(qs) + '.',
                               QUESTION_BY_KEY.get(f'{path}.{lack[0]}', QUESTIONS[0]).id)
+    _tidy_measurement(case, values)
     if case.get('hardening') is not None:
         law = case['hardening'].get('law')
         if law not in bproc.HARDENING_LAW_KEYS:
@@ -1382,6 +1514,35 @@ def case_from_answers(answers, preset):
     canonical_nozzles(case)                      # one set of nozzle marks, as the engine reads
     bd.validate_case(case)
     return case
+
+
+def _tidy_measurement(case, values):
+    """A shapemeter or thickness gauge whose questions are all "Don't know" is not described
+    (the section becomes null, and ``measurement`` too when it is left empty); a described one
+    needs its required answers, and its unanswered optional keys take the engine defaults."""
+    m = case.get('measurement')
+    if not isinstance(m, dict):
+        return
+    for path in MEASUREMENT_SECTIONS:
+        name = path.split('.')[1]
+        sec = m.get(name)
+        if not isinstance(sec, dict):
+            continue
+        qs = [q for q in QUESTIONS if q.key.startswith(path + '.')]
+        if all(values.get(q.id) is None for q in qs):
+            m[name] = None
+            continue
+        label, required, defaults = SECTIONS[path]
+        lack = [r for r in required if sec.get(r) is None]
+        if lack:
+            raise AnswerError(f'To use {label}, also answer: ' + '; '.join(
+                QUESTION_BY_KEY[f'{path}.{r}'].wording.rstrip('?') for r in lack) + '.',
+                QUESTION_BY_KEY[f'{path}.{lack[0]}'].id)
+        for k, d in defaults.items():
+            if sec.get(k) is None and d is not None:
+                sec[k] = d
+    if all(m.get(k) is None for k in m):
+        case['measurement'] = None
 
 
 def value_origins(case):
@@ -1820,7 +1981,25 @@ def drawing_model(case, starting_point=None):
                     'band_width_m': obs.get('band_width_m')}
     out['route'] = _route_model(case)
     out['side'] = _side_model(case, edge, starting_point)
+    out['shapemeter'] = _shapemeter_layout(case)
     return out
+
+
+def _shapemeter_layout(case):
+    """The shapemeter zones of a built case, placed by the engine's own measurement code
+    (``band_sensors.shapemeter_section`` before any result exists: zone edges, coverage of the
+    strip and the nozzles under each zone), or None when no shapemeter is described."""
+    m = case.get('measurement')
+    if not isinstance(m, dict) or not isinstance(m.get('shapemeter'), dict):
+        return None
+    norm = bsensors.validate_measurement(m)
+    sec = bsensors.shapemeter_section(dict(case, measurement=norm), {})
+    return {'zones': [{'index': z['index'], 'start_m': z['start_m'], 'end_m': z['end_m'],
+                       'coverage_fraction': z['coverage_fraction'],
+                       'nozzle_numbers': [i + 1 for i in z['nozzle_indices'] or []]}
+                      for z in sec['zones']],
+            'zone_count': sec['zone_layout']['zone_count'],
+            'uncovered_strip_width_m': sec['zone_layout']['uncovered_strip_width_m']}
 
 
 # ============================================================================= run profiles
@@ -1835,7 +2014,8 @@ PROFILES = {
                            'radial cells and a 5 s time step instead of 5 mm, 16 and 1 s (only '
                            'when the case does not set its own grid)',
                            'the fine roll-gap grid: 128 cells instead of 256 (foil roll-gap '
-                           'models keep at least 200)']},
+                           'models keep at least 200)',
+                           'the friction stripe estimate per pass; run in detail to see it']},
     'detailed': {'label': 'Detailed', 'description': 'The case as entered, with the engine\'s '
                  'own settings (slower: up to a few minutes).', 'left_out': []},
 }
@@ -1857,6 +2037,14 @@ def apply_profile(case, profile):
         if out['model_options']['cells'] > QUICK_CELLS:
             out['model_options']['cells'] = QUICK_CELLS
             changed.append(PROFILES['quick']['left_out'][2])
+        # the friction stripe estimate per pass (about 8 s of the battery-foil example) is left
+        # out, unless the person entered stripes: the engine computes stripes only together with
+        # the per-pass table, so then the whole estimate is kept and nothing is left out
+        w = out.get('width_model')
+        fs = w.get('friction_stripe_screen') if isinstance(w, dict) else None
+        if isinstance(fs, dict) and not fs.get('stripes'):
+            w['friction_stripe_screen'] = None
+            changed.append(PROFILES['quick']['left_out'][3])
     return out, changed
 
 
@@ -2376,6 +2564,9 @@ FLAG_FALLBACK = 'no plain description yet'
 
 GLOSSARY = {
     'span': 'The free length of strip between the roll gap and the next roll.',
+    'flatness roll zone': 'One measuring section of a flatness (shapemeter) roll across the '
+                          'strip; it shows the average flatness over its width.',
+    'I-unit': 'The unit of flatness: a length difference of 1 in 100 000 between strip fibres.',
     'chatter': 'A vibration of the roll stack that prints marks across the strip.',
     'onset': 'The point where something starts to happen, for example the stripe height at '
              'which a band starts to buckle.',
@@ -2685,7 +2876,8 @@ def _cause(h):
             'speaks_against': [_evidence_item(e) for e in ev if e['verdict'] == 'CONTRADICTS'],
             'neutral': [_evidence_item(e) for e in ev if e['verdict'] == 'NEUTRAL'],
             'not_looked_at': nl, 'how_to_check': words(h['confirming_test']),
-            'levers': [clean(x) for x in h.get('levers', [])]}
+            'levers': [clean(x) for x in h.get('levers', [])],
+            'candidate_pitch': _candidate_pitch(h)}
 
 
 def _join_names(names):
@@ -2985,6 +3177,275 @@ def _temperature_view(result):
             'engine_texts': [clean(t) for t in tc.get('texts') or []]}
 
 
+def _f3(x):
+    return _fixed(x, 3)
+
+
+def _mm_from(position_m, start_m):
+    """A barrel position as mm from the strip edge for a sentence (binary noise dropped)."""
+    return _f3(round((position_m - start_m) * 1000, 6))
+
+
+def _zone_sentence(position_text, peak, reading, zone_width_mm, threshold):
+    head = f'At {position_text} mm the model has a band of {_f3(peak)} I-units; '
+    if reading is None or zone_width_mm is None:
+        return head + 'no zone covers it: the flatness display would probably not show it.'
+    if abs(reading) >= threshold:
+        return (head + f'a zone of {_f3(zone_width_mm)} mm would read {_f3(reading)}: it would '
+                'show on the flatness display.')
+    return (head + f'a zone of {_f3(zone_width_mm)} mm would read {_f3(reading)}, below '
+            f'{_f3(threshold)}: the flatness display would probably not show it.')
+
+
+SHAPEMETER_NO_CONTROLLER = ('The tool does not model what the flatness control would do with '
+                            'these readings.')
+SHAPEMETER_WHAT = ('Zone averages of the modelled flatness, as a flatness roll with these zones '
+                   'would show them: what it would show, not a forecast of your flatness display.')
+
+
+def _shapemeter_block(result):
+    m = result.get('measurement')
+    s = m.get('shapemeter') if isinstance(m, dict) else None
+    if not _good(s) or not s.get('zones') or not isinstance(s.get('profiles'), list):
+        return None
+    return s
+
+
+def _profile_bands(s, profile):
+    start = s['zone_layout']['strip_start_m']
+    zones, thr = s['zones'], s['threshold_i_units']
+    out = []
+    for b in profile.get('bands') or []:
+        j = b.get('zone_index')
+        w = zones[j]['width_m'] if j is not None else None
+        r = b.get('zone_reading_i_units')
+        out.append({'position_m': b['peak_position_m'], 'model_peak_i_units': b['peak_i_units'],
+                    'reading_i_units': r, 'zone_index': j, 'shows': b.get('reads_above_threshold'),
+                    'text': _zone_sentence(_mm_from(b['peak_position_m'], start),
+                                           b['peak_i_units'], r,
+                                           None if w is None else w * 1000, thr)})
+    return out
+
+
+def _shapemeter_view(result):
+    s = _shapemeter_block(result)
+    steady = next((p for p in s['profiles'] if p.get('name') == 'steady'), None) if s else None
+    if steady is None:
+        return {'available': False}
+    zl = s['zone_layout']
+    sh = ((result.get('width') or {}).get('shape') or {}).get('steady') or {}
+    widths = sorted({_f3(z['width_m'] * 1000) for z in s['zones']}, key=float)
+    return {'available': True,
+            'strip_start_m': zl['strip_start_m'], 'strip_end_m': zl['strip_end_m'],
+            'barrel_length_m': (result.get('width') or {}).get('barrel_length_m'),
+            'threshold_i_units': s['threshold_i_units'],
+            'zones': [{'index': z['index'], 'start_m': z['start_m'], 'end_m': z['end_m'],
+                       'width_m': z['width_m'],
+                       'reading_i_units': steady['readings_i_units'][z['index']]}
+                      for z in s['zones']],
+            'profile': {'z_m': sh.get('z_m') or [],
+                        'i_units': sh.get('i_units_with_feedback') or []},
+            'bands': _profile_bands(s, steady),
+            'other_profiles': [{'label': words(p.get('label') or p['name']),
+                                'max_reading_i_units': p.get('max_abs_reading_i_units'),
+                                'profile_max_i_units': p.get('profile_max_abs_i_units')}
+                               for p in s['profiles'] if p.get('name') != 'steady'],
+            'setup_text': (f'{zl["zone_count"]} zones of '
+                           + ' and '.join(f'{w} mm' for w in widths)
+                           + (f'; a band shows when a zone reads at least '
+                              f'{_f3(s["threshold_i_units"])} I-units'
+                              + (' (the resolution you gave)' if s.get('threshold_basis', '')
+                                 .startswith('resolution') else
+                                 " (the tool's own band level)")) + '.'),
+            'what_words': SHAPEMETER_WHAT, 'caveat': SHAPEMETER_NO_CONTROLLER}
+
+
+def _temperature_flatness_view(result):
+    st = (result.get('width') or {}).get('strip_temperature')
+    if not _good(st) or not isinstance(st.get('profiles'), dict):
+        return {'available': False}
+    hot = [c for c in st.get('state_changes') or [] if c.get('profile') == 'as_measured_hot']
+    supplied = ('The temperature profile was supplied as an input (entered), not computed by '
+                'the tool.')
+    out = {'available': True, 'i_units_per_kelvin': st.get('i_units_per_kelvin'),
+           'max_temperature_deviation_k': st.get('max_temperature_deviation_k'),
+           'caveat': supplied}
+    if hot:
+        big = max(hot, key=lambda c: abs(c['peak_i_units']))
+        out.update(position_m=big['peak_position_m'], hot_peak_i_units=big['peak_i_units'],
+                   cold_peak_i_units=big.get('other_peak_i_units'))
+        cold = big.get('other_peak_i_units')
+        out['text'] = (f'Measured hot the band reads {_f3(big["peak_i_units"])} I-units'
+                       + (f', after the coil has cooled {_f3(cold)}.' if cold is not None else
+                          '; there is no modelled flatness for this pass to compare after '
+                          'cooling.') + ' ' + supplied)
+    else:
+        hp = st['profiles'].get('as_measured_hot') or {}
+        out['text'] = ('Measured hot the strip shows no band above the reporting level. '
+                       + supplied)
+        out['hot_max_i_units'] = hp.get('max_i_units')
+    if any(c.get('state_differs') for c in st.get('state_changes') or []):
+        out['state_text'] = ('The temperature difference changes whether a band shows in the '
+                             'mill or after release.')
+    return out
+
+
+FRICTION_LEFT_OUT = ('The quick run left out the friction stripe estimate per pass (it takes '
+                     'several seconds); run in detail to see it.')
+
+
+def _friction_view(result, case=None):
+    fs = (result.get('width') or {}).get('friction_stripes')
+    if not _good(fs) or not isinstance(fs.get('reference'), dict):
+        asked = ((case or {}).get('width_model') or {}).get('friction_stripe_screen')
+        if isinstance(asked, dict) and isinstance(fs, dict) and fs.get('not_supplied'):
+            return {'available': False, 'left_out': True, 'text': FRICTION_LEFT_OUT}
+        return {'available': False}
+    ref = fs['reference']
+    frac = ref.get('friction_change_fraction_for_reporting_threshold')
+    wf = ref.get('i_units_per_percent_friction_with_feedback')
+    co = ref.get('i_units_per_percent_friction_compliance_only')
+    text = ''
+    if frac is not None:
+        text = (f'In this model a {_fixed(frac * 100, 1)} % difference in friction at one place '
+                'is enough for a 2 I-unit band. This rests on the least certain part of the '
+                'model. ')
+    if wf is not None and co is not None:
+        text += (f'For 1 % more friction at one place the model gives {_fixed(wf, 2)} I-units '
+                 f'with the exit-tension feedback and {_fixed(co, 2)} I-units without it (roll '
+                 'and strip compliance alone). Read the two together: neither is checked on a '
+                 'mill.')
+    rows = [{'label': r.get('label'), 'exit_thickness_m': r.get('exit_thickness_m'),
+             'with_feedback': r.get('i_units_per_percent_friction_with_feedback'),
+             'compliance_only': r.get('i_units_per_percent_friction_compliance_only'),
+             'credible': r.get('bite_credibility') != 'FORCE_OUTSIDE_REPORTED_RANGE'}
+            for r in fs.get('per_pass') or [] if not r.get('rejected')]
+    start = (result.get('width') or {}).get('thermal_steady', {}).get('strip_start_m') \
+        if isinstance((result.get('width') or {}).get('thermal_steady'), dict) else None
+    stripes = []
+    for k, st in enumerate(fs.get('stripes') or []):
+        band = st.get('band') or {}
+        pos = st.get('position_m')
+        stripes.append({'position_m': pos, 'friction_change_fraction':
+                        st.get('friction_change_fraction'), 'peak_i_units': st.get('peak_i_units'),
+                        'text': (f'Stripe {k + 1}'
+                                 + (f' at {_mm_from(pos, start)} mm' if pos is not None
+                                    and start is not None else '')
+                                 + f': {_f3(st["peak_i_units"])} I-units, '
+                                 + STATE_WORDS.get(st.get('state'), 'state not known') + ', '
+                                 + STATE_WORDS.get(st.get('state_after_tension_release'),
+                                                   'not known after release') + '.')
+                        if st.get('peak_i_units') is not None else f'Stripe {k + 1}: no value.'})
+    return {'available': True, 'text': text, 'rows': rows, 'stripes': stripes,
+            'trend_words': words(fs.get('trend_text') or ''),
+            'sign_words': words(fs.get('sign_note') or ''),
+            'caveat': 'A rough linear estimate from the roll-gap model; it never changes the '
+                      'scores.'}
+
+
+def _roll_profile_view(result):
+    rp = (result.get('width') or {}).get('roll_profile')
+    if not _good(rp):
+        return {'available': False}
+    lv = ((rp.get('levels') or {}).get('with_feedback') or {}).get('bands') or []
+    ts = (result.get('width') or {}).get('thermal_steady')
+    start = ts.get('strip_start_m') if isinstance(ts, dict) else None
+    bands = [{'position_m': b['peak_position_m'], 'peak_i_units': b['peak_i_units'],
+              'text': (f'A band of {_f3(b["peak_i_units"])} I-units'
+                       + (f' at {_mm_from(b["peak_position_m"], start)} mm'
+                          if start is not None else '') + ': '
+                       + STATE_WORDS.get(b.get('state'), 'state not known') + ', '
+                       + STATE_WORDS.get(b.get('state_after_tension_release'),
+                                         'not known after release') + '.')}
+             for b in lv]
+    s = _shapemeter_block(result)
+    prof = next((p for p in s['profiles'] if p.get('name') == 'roll_ground_profile'),
+                None) if s else None
+    out = {'available': True, 'bands': bands,
+           'removed_crown_m': rp.get('removed_polynomial_peak_to_peak_m'),
+           'text': ('The measured roll profile, without its smooth crown, put through the same '
+                    'model as a heat stripe on the roll.' if bands else
+                    'The measured roll profile, without its smooth crown, makes no band above '
+                    'the reporting level in this model.'),
+           'caveat': 'A grinder profile is measured cold and off the mill, on one roll.'}
+    if prof is not None:
+        out['shapemeter'] = _profile_bands(s, prof)
+    return out
+
+
+GAUGE_SOURCE_WORDS = {'measured_vibration_hz': 'the vibration frequency you measured',
+                      'chatter.with_bite_damping.onset_frequency_hz':
+                          'the modelled chatter frequency'}
+
+
+def _gauge_sensor_view(result):
+    m = result.get('measurement')
+    g = m.get('thickness_gauge') if isinstance(m, dict) else None
+    if not _good(g) or not isinstance(g.get('rows'), list):
+        return {'available': False}
+    rows = []
+    for r in g['rows']:
+        src = r['source']
+        what = GAUGE_SOURCE_WORDS.get(src, 'a mark spacing you measured')
+        keep = r['combined_gain'] * 100
+        rows.append({'pitch_m': r['pitch_m'], 'exit_speed_m_s': r['exit_speed_m_s'],
+                     'combined_gain': r['combined_gain'], 'resolvable': r['resolvable'],
+                     'aliased': r.get('aliased'),
+                     'text': (f'{what[0].upper() + what[1:]} ({_f3(r["pitch_m"] * 1000)} mm at '
+                              f'{_f3(r["exit_speed_m_s"] * 60)} m/min): the gauge keeps about '
+                              f'{_fixed(keep, 2)} % of it'
+                              + ('' if r['resolvable'] else
+                                 ' — less than half, so a small gauge reading does not mean a '
+                                 'small mark')
+                              + (' (the recording is too slow for it)' if r.get('aliased')
+                                 else '') + '.')})
+    srp = g.get('shortest_resolvable_pitch_m')
+    out = {'available': True, 'rows': rows, 'shortest_resolvable_pitch_m': srp,
+           'text': (f'At the operating speed the gauge keeps at least half of marks spaced more '
+                    f'than about {_f3(srp * 1000)} mm apart.' if srp is not None else
+                    'At the operating speed the gauge keeps less than half of any mark spacing.'),
+           'caveat': 'Spot size and response time only; real gauges have other filters.'}
+    if g.get('not_detected_note'):
+        out['not_detected_words'] = ('You saw no gauge variation, but the gauge could not show '
+                                     'these marks anyway, so that answer tells little. The '
+                                     'scores were not changed.')
+    return out
+
+
+TENSION_RADIUS_WORDS = (('width_model.deflector_roll_radius_m', 'the deflector roll'),
+                        ('width_model.coil.inner_radius_m', 'the coil, inside'),
+                        ('width_model.coil.outer_radius_m', 'the coil, outside'),
+                        ('kinematics.deflector_roll_diameters_m', 'a deflector roll'),
+                        ('kinematics.exit_coil_diameter_m', 'the exit coil'))
+
+
+def _candidate_pitch(h):
+    """The tension-line candidate pitch of the engine, in plain words: a candidate, never
+    evidence."""
+    cp = (h.get('model_prediction') or {}).get('candidate_shell_buckling_pitch') \
+        if isinstance(h.get('model_prediction'), dict) else None
+    if not isinstance(cp, dict) or cp.get('status') != 'CANDIDATE_NOT_ESTABLISHED':
+        return None
+    rows = []
+    for r in cp.get('rows') or []:
+        where = next((w for k, w in TENSION_RADIUS_WORDS if str(r.get('where', '')).startswith(k)),
+                     'a roll or coil')
+        rows.append({'where_words': where, 'radius_m': r['radius_m'], 'pitch_m': r['pitch_m'],
+                     'text': f'{where[0].upper() + where[1:]} (radius {_f3(r["radius_m"] * 1000)} '
+                             f'mm): {_f3(r["pitch_m"] * 1000)} mm'})
+    lo, hi = (cp.get('pitch_range_m') or [None, None])[:2]
+    return {'rows': rows, 'pitch_range_m': cp.get('pitch_range_m'),
+            'text': ('A candidate, not evidence: air trapped while winding can wrinkle foil at a '
+                     'spacing of about '
+                     + (f'{_f3(lo * 1000)} to {_f3(hi * 1000)} mm' if lo is not None else
+                        'a few millimetres')
+                     + ' for the rolls and coil you gave. Almost any foil coil gives a spacing '
+                       'inside the published 5 to 20 mm, so a match proves nothing. To test it, '
+                       'measure the spacing at two coil sizes and two gauges: this candidate '
+                       'predicts a spacing that grows with the square root of radius times '
+                       'gauge.')}
+
+
 SECTION_WORDS = {'chatter': 'Chatter (roll-stack vibration) checks',
                  'levers': 'What-would-change table for chatter',
                  'gauge_control': 'Gauge control', 'drive': 'Drive train',
@@ -3134,6 +3595,11 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
         'along_view': _along_view(result, names),
         'gauge_view': _gauge_view(result),
         'temperature_view': _temperature_view(result),
+        'shapemeter_view': _shapemeter_view(result),
+        'temperature_flatness_view': _temperature_flatness_view(result),
+        'friction_view': _friction_view(result, case),
+        'roll_profile_view': _roll_profile_view(result),
+        'gauge_sensor_view': _gauge_sensor_view(result),
         'not_assessable': _not_assessable(result, causes),
         'roll_gap_failed': bool(result.get('bite_error')),
         'limitations': list(STANDING_LIMITATIONS),
