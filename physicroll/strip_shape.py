@@ -170,6 +170,8 @@ SOURCES = {
     'jacques_2007': 'Jacques et al. (2007) J. Mater. Process. Technol. (strip creasing)',
     'eafa_2020': 'EAFA (2020) (foil grooves)',
     'en_12258_1': 'EN 12258-1 (grinding streak)',
+    'walker_2011': 'Walker, Cole, Zagar & Quass (2011) IWEB, "Wrinkling of foils", '
+                   'hdl:11244/321981 [SS-S55 EX] (foil factor 15, copper 7-10)',
 }
 
 GAMMA_EULER = 0.5772156649015329
@@ -1596,6 +1598,205 @@ def tension_trough_screen(thickness_m, span_length_m, tension_stress_pa, strip_w
                         NOT_VALIDATED],
         'sources': [SOURCES['cerda_2003'], SOURCES['panaitescu'], SOURCES['good_2009'],
                     SOURCES['jacques_2007'], SOURCES['aa_qca1'], SOURCES['eafa_2020']]})
+
+
+# --------------------------------------------------------------------------- SPEC19 package 12
+# Lateral stress in spans (G11) [D, re-derived in SPEC19]. The span between two rollers is a
+# beam bending in its own plane: length a, strip width W, thickness t, I = t*W^3/12, lateral
+# deflection v(x), v'''' = 0 (tension stiffening neglected, see SPAN_TENSION_STIFFENING_LIMIT).
+# - Misaligned downstream roller, in-plane angle theta: v(0) = v'(0) = 0 (the strip leaves the
+#   upstream roller straight), v'(a) = theta (enters the downstream roller normal to its axis),
+#   v''(a) = 0 (no moment there in the steady state). Then
+#   v = theta*x^2/a - theta*x^3/(3*a^2), shear force V = -E*I*v''' = 2*E*I*theta/a^2 (in
+#   magnitude), mean shear stress tau = V/(W*t) = E*W^2*theta/(6*a^2). Shear deformation does
+#   not change V under these four conditions (both slope conditions are on the total slope).
+# - Tapered roller, radius difference dR over the strip width on radius R: the surface speed
+#   varies by m = dR/(R*W) per metre of width, a curvature of the strip at the roller:
+#   v'(a) = 0, v''(a) = m give |V| = 2*E*I*m/a, the shear of a misalignment theta_eq = m*a.
+# - Lateral compression: sigma_2 = sigma_x/2 - sqrt(sigma_x^2/4 + tau^2), evaluated as
+#   -tau^2/(sigma_x/2 + sqrt(sigma_x^2/4 + tau^2)) (the same number without cancellation;
+#   about -tau^2/sigma_x). Troughs when -sigma_2 reaches the trough threshold s_tr of the
+#   span, wrinkles on the roller at the roller-wrinkle threshold. Critical angle
+#   theta_cr = (6*a^2/(E*W^2))*sqrt(s*(sigma_x + s)), s the threshold magnitude.
+# - Roller deflection: uniformly loaded, simply supported tube, q = 2*T*sin(wrap/2) (T tension
+#   per width), I_r = pi*(D^4 - (D - 2*w)^4)/64; curvature at mid length q*L^2/(8*E_r*I_r),
+#   end slope q*L^3/(24*E_r*I_r), mid deflection 5*q*L^4/(384*E_r*I_r). Beam quantities
+#   only: NO lateral stress is derived from them.
+# - Foil: wrinkles on wide aluminium foil below 25 um needed about 15 times the misalignment
+#   the isolated-span model predicts, copper 7-10 times [SS-S55 EX]; quoted beside the
+#   critical angles, never applied to a threshold.
+SPAN_TENSION_STIFFENING_LIMIT = 0.5      # analyst choice: flag K*a above this
+SPAN_FOIL_FACTOR_ALUMINIUM = 15.0        # [SS-S55 EX] aluminium foil below 25 um, wide
+SPAN_FOIL_FACTOR_COPPER = (7.0, 10.0)    # [SS-S55 EX] copper foil
+SPAN_FOIL_FACTOR_GAUGE_M = 25e-6         # the trials' gauge bound [SS-S55 EX]
+SPAN_ALIGNMENT_BASIS = (
+    '[D, re-derived in SPEC19] the span as a beam bending in its own plane (I = t*W^3/12): '
+    'misalignment theta gives tau = E*W^2*theta/(6*a^2); a taper dR over the width on radius '
+    'R gives the shear of a misalignment m*a, m = dR/(R*W); the two angles add in magnitude '
+    '(worst case); sigma_2 = sigma_x/2 - sqrt(sigma_x^2/4 + tau^2), compared with the trough '
+    'and roller-wrinkle thresholds of tension_trough_screen [Good 2009].')
+SPAN_ALIGNMENT_LIMITATIONS = (
+    'Beam model of an isolated span (two rollers, nothing upstream or downstream).',
+    'Misalignment and taper only: no roller deflection, tension drop over a driven roller, '
+    'bent coil or baggy lane as a source of lateral stress.',
+    'No moment transfer to the next span, no slack edge, no traction limit on the rollers.',
+    'Isolated-span theory over-predicts wrinkling of wide aluminium foil by about 15 times '
+    '(copper 7-10) [SS-S55 EX]: a computed stress above a threshold is a screening result, '
+    'not a prediction that the foil wrinkles.',
+    NOT_VALIDATED)
+SPAN_FLAG_STIFFENING = 'SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE'
+SPAN_FLAG_SHORT = 'SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE'
+
+
+def _span_geometry(span_length_m, strip_width_m):
+    return (_num('span_length_m', span_length_m, positive=True, hi=100.0),
+            _num('strip_width_m', strip_width_m, positive=True, hi=10.0))
+
+
+def misalignment_shear_stress_pa(misalignment_rad, span_length_m, strip_width_m,
+                                 youngs_modulus_pa=ALUMINIUM_E_PA):
+    """Mean shear stress ``tau = E*W^2*theta/(6*a^2)`` of a span whose downstream roller is
+    misaligned by ``theta`` in the strip plane (magnitude) [D, re-derived in SPEC19]."""
+    th = _num('misalignment_rad', misalignment_rad, nonnegative=True, hi=0.1)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    e = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    return e * w * w * th / (6 * a * a)
+
+
+def taper_equivalent_misalignment_rad(radius_difference_m, roller_radius_m, strip_width_m,
+                                      span_length_m):
+    """Misalignment with the shear of a roller taper: ``m*a``, ``m = dR/(R*W)``
+    [D, re-derived in SPEC19]."""
+    dr = _num('radius_difference_m', radius_difference_m, nonnegative=True, hi=1e-3)
+    r = _num('roller_radius_m', roller_radius_m, positive=True, hi=5.0)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    return dr / (r * w) * a
+
+
+def second_principal_stress_pa(tension_stress_pa, shear_stress_pa):
+    """``sigma_x/2 - sqrt(sigma_x^2/4 + tau^2)`` (<= 0), written without cancellation."""
+    sx = _num('tension_stress_pa', tension_stress_pa, positive=True, hi=5e9)
+    tau = abs(_num('shear_stress_pa', shear_stress_pa, lo=-5e9, hi=5e9))
+    return -tau * tau / (sx / 2 + math.sqrt(sx * sx / 4 + tau * tau))
+
+
+def critical_misalignment_rad(threshold_stress_pa, tension_stress_pa, span_length_m,
+                              strip_width_m, youngs_modulus_pa=ALUMINIUM_E_PA):
+    """Misalignment at which ``-sigma_2`` reaches the threshold magnitude ``s``:
+    ``(6*a^2/(E*W^2))*sqrt(s*(sigma_x + s))``."""
+    s = abs(_num('threshold_stress_pa', threshold_stress_pa, lo=-5e9, hi=5e9))
+    sx = _num('tension_stress_pa', tension_stress_pa, positive=True, hi=5e9)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    e = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    return 6 * a * a / (e * w * w) * math.sqrt(s * (sx + s))
+
+
+def roller_deflection(outer_diameter_m, wall_thickness_m, face_length_m, youngs_modulus_pa,
+                      wrap_angle_rad, tension_per_width_n_m):
+    """Beam quantities of a roller tube under the strip load (simply supported, uniformly
+    loaded over its face). No lateral stress in the strip is derived from them."""
+    d = _num('outer_diameter_m', outer_diameter_m, positive=True, hi=5.0)
+    wt = _num('wall_thickness_m', wall_thickness_m, positive=True, hi=d / 2)
+    length = _num('face_length_m', face_length_m, positive=True, hi=20.0)
+    er = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    wrap = _num('wrap_angle_rad', wrap_angle_rad, positive=True, hi=math.pi)
+    t = _num('tension_per_width_n_m', tension_per_width_n_m, nonnegative=True, hi=1e7)
+    q = 2 * t * math.sin(wrap / 2)
+    i_r = math.pi * (d ** 4 - (d - 2 * wt) ** 4) / 64
+    ei = er * i_r
+    slope = q * length ** 3 / (24 * ei)
+    return _checked({
+        'load_per_length_n_m': q, 'second_moment_m4': i_r,
+        'mid_length_curvature_per_m': q * length * length / (8 * ei),
+        'end_slope_rad': slope, 'end_slope_mm_per_m': slope * 1e3,
+        'mid_deflection_m': 5 * q * length ** 4 / (384 * ei),
+        'basis': '[D] simply supported tube under a uniform load q = 2*T*sin(wrap/2): '
+                 'curvature q*L^2/(8*E*I), end slope q*L^3/(24*E*I), mid deflection '
+                 '5*q*L^4/(384*E*I), I = pi*(D^4 - (D - 2*w)^4)/64',
+        'note': 'Beam quantities only: no lateral stress in the strip is derived from the '
+                'roller deflection (a model of how a bent roller spreads or gathers the strip '
+                'is not in the tool).'})
+
+
+def span_lateral_stress(thickness_m, span_length_m, tension_stress_pa, strip_width_m,
+                        misalignment_rad=None, taper_radius_difference_m=None,
+                        roller_radius_m=None, roller=None, youngs_modulus_pa=ALUMINIUM_E_PA,
+                        poisson_ratio=ALUMINIUM_NU):
+    """Width-direction compressive stress that roller misalignment and taper put into a span
+    (SPEC19 package 12, G11), with the critical misalignments for troughs and roller wrinkles.
+
+    ``roller_radius_m`` is the radius of the downstream roller (needed for a taper and for the
+    wrinkle threshold); ``roller`` an optional dict ``{outer_diameter_m, wall_thickness_m,
+    face_length_m, youngs_modulus_pa, wrap_angle_rad}`` whose deflection is reported as beam
+    quantities only. The misalignment and the taper-equivalent angle add in magnitude (worst
+    case). The model and its limits are in the comment block above.
+    """
+    t, a, sx, e, nu = _trough_inputs(thickness_m, span_length_m, tension_stress_pa,
+                                     youngs_modulus_pa, poisson_ratio)
+    w = _num('strip_width_m', strip_width_m, positive=True, hi=10.0)
+    th = _opt('misalignment_rad', misalignment_rad, nonnegative=True, hi=0.1)
+    dr = _opt('taper_radius_difference_m', taper_radius_difference_m, nonnegative=True,
+              hi=1e-3)
+    rr = _opt('roller_radius_m', roller_radius_m, positive=True, hi=5.0)
+    if dr is not None and rr is None:
+        raise ValueError('a roller taper needs the roller radius (roller_radius_m)')
+    taper_eq = None if dr is None else taper_equivalent_misalignment_rad(dr, rr, w, a)
+    total = None
+    if th is not None or taper_eq is not None:
+        total = (th or 0.0) + (taper_eq or 0.0)
+    tau = None if total is None else misalignment_shear_stress_pa(total, a, w, e)
+    s2 = None if tau is None else second_principal_stress_pa(sx, tau)
+    trough = trough_critical_lateral_stress_pa(t, a, sx, e, nu)
+    wrinkle = None if rr is None else roller_wrinkle_critical_lateral_stress_pa(t, rr, e, nu)
+    th_tr = critical_misalignment_rad(trough, sx, a, w, e)
+    th_w = None if wrinkle is None else critical_misalignment_rad(wrinkle, sx, a, w, e)
+    ka = (a / w) * math.sqrt(12 * sx / e)
+    flags = []
+    if ka > SPAN_TENSION_STIFFENING_LIMIT:
+        flags.append(SPAN_FLAG_STIFFENING)
+    if a < w:
+        flags.append(SPAN_FLAG_SHORT)
+    defl = None
+    if roller is not None:
+        keys = ('outer_diameter_m', 'wall_thickness_m', 'face_length_m', 'youngs_modulus_pa',
+                'wrap_angle_rad')
+        if not isinstance(roller, dict) or set(roller) != set(keys):
+            raise ValueError(f'roller must be a dict with exactly the keys {list(keys)}')
+        defl = roller_deflection(*(roller[k] for k in keys), tension_per_width_n_m=sx * t)
+    gauge_in = t < SPAN_FOIL_FACTOR_GAUGE_M
+    foil = {
+        'aluminium_factor': SPAN_FOIL_FACTOR_ALUMINIUM,
+        'copper_factor_range': list(SPAN_FOIL_FACTOR_COPPER),
+        'critical_misalignment_wrinkles_times_aluminium_factor_rad':
+            None if th_w is None else SPAN_FOIL_FACTOR_ALUMINIUM * th_w,
+        'gauge_within_trials': gauge_in,
+        'note': ('Wrinkles on aluminium foil below 25 um wider than 0.6-1 m needed about 15 '
+                 'times the misalignment the isolated-span model predicts, copper 7-10 times '
+                 '[SS-S55 EX]; quoted for context, not applied to any threshold'
+                 + ('' if gauge_in else f'; this gauge ({t * 1e6:.4g} um) is outside the '
+                                        'gauges of those trials') + '.')}
+    return _checked({
+        'thickness_m': t, 'span_length_m': a, 'tension_stress_pa': sx, 'strip_width_m': w,
+        'misalignment_rad': th, 'taper_radius_difference_m': dr, 'roller_radius_m': rr,
+        'taper_equivalent_misalignment_rad': taper_eq,
+        'combined_misalignment_rad': total,
+        'combination': 'misalignment and taper-equivalent angle added in magnitude (worst '
+                       'case)',
+        'shear_stress_pa': tau, 'second_principal_stress_pa': s2,
+        'computed_lateral_compressive_stress_pa': None if s2 is None else -s2,
+        'trough_critical_lateral_stress_pa': trough,
+        'roller_wrinkle_critical_lateral_stress_pa': wrinkle,
+        'critical_shear_stress_troughs_pa': math.sqrt(-trough * (sx - trough)),
+        'critical_shear_stress_wrinkles_pa':
+            None if wrinkle is None else math.sqrt(-wrinkle * (sx - wrinkle)),
+        'critical_misalignment_troughs_rad': th_tr,
+        'critical_misalignment_wrinkles_rad': th_w,
+        'foil_factor_context': foil,
+        'tension_stiffening_parameter': ka,
+        'roller_deflection': defl,
+        'flags': flags, 'basis': SPAN_ALIGNMENT_BASIS,
+        'limitations': list(SPAN_ALIGNMENT_LIMITATIONS),
+        'sources': [SOURCES['good_2009'], SOURCES['walker_2011']]})
 
 
 # --------------------------------------------------------------------------- W2.5

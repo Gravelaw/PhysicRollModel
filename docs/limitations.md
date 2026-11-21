@@ -162,7 +162,7 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-COIL-01 | The coil ridge is a linear stack with a constant compaction factor (default 0.5, an analyst choice): uniform winding tension, a perfectly registered ridge, no interlayer pressure, slip or tension loss. | Size not known. | `width.coil` | G9 (Phase 2) | analyst choice |
 | L-COIL-02 | Without a roll gap the exit ridge height uses the proportional limit (exit change = gauge ratio × entry change), an estimate, not a bound. | Its coil result supports only weakly. | `width.coil` | a roll-gap result | limitation |
 | L-COIL-03 | The ridge thresholds rest on a steel context (hot-band ridge above about 6 to 7 µm on 0.35 mm strip). | Size not known for aluminium foil. | `width.coil` | G9 | limitation |
-| L-COIL-04 | Troughs and wrinkles: the lateral stress in the spans is an input; the wrinkle formula assumes a thin, wide, long span far above threshold with clamped ends; isotropic sheet; roll friction, crown and misalignment are not computed; creases are not predicted, only their elastic precursors; earlier strips are assumed on the same centre line. | Below the trough threshold the amplitude is zero. | `width.troughs` | G11 (Phase 2) | limitation |
+| L-COIL-04 | Troughs and wrinkles: the lateral stress in the spans is an input, or computed from an entered roller alignment survey for misalignment and taper only (L-COIL-13); the wrinkle formula assumes a thin, wide, long span far above threshold with clamped ends; isotropic sheet; roll friction and crown are not computed; creases are not predicted, only their elastic precursors; earlier strips are assumed on the same centre line. | Below the trough threshold the amplitude is zero. | `width.troughs` | G11 (Phase 2) | limitation |
 | L-COIL-05 | A trough spacing needs a stated band spacing or at least two regular gaps; one gap, or irregular gaps, between bands that may have different sources give at most weak support. | Two or more equal gaps between bands of different sources would still count as a spacing. | the troughs item in the evidence | - | limitation |
 | L-COIL-06 | Tension lines have no established model: a rule set with analyst weights on a published description; one candidate pitch (shell buckling of the wound lap) is reported for comparison only, never as evidence; no onset condition, air film or winding model. | Size not known. | `foil_tension_lines` model prediction | G12, G10, G9 | analyst choice |
 | L-COIL-07 | The published battery-foil limits are coil temperatures and the process check compares strip exit temperatures. The coil temperature after winding can be estimated (a case option): it starts from the modelled strip exit temperature of the case pass, an upper bound at winding; the surface coefficient, the ambient temperature, the strip conductivity and the gap between laps (or the winding model's air gap) are inputs; no heat from the next laps, no radiation beyond the coefficient, a uniform gap. A thermal-stress estimate between lanes is an upper bound. No creep of the hoop stress and no recovery of the foil in the coil (Phase 3). The process check's verdicts are unchanged; the computed coil temperature is shown beside them. | The strip exit comparison is indicative; the coil estimate is high at winding by the unknown loss before the coil, and its cooling time scales rest on the supplied surface coefficient and gap (radial time scale about 18 h with an oil gap of 0.5 µm, about 330 h with an air gap of 2 µm, on a 0.15 to 0.6 m coil at 8 W/m²K). | `MODELLED_EXIT_TEMPERATURE_ABOVE_BATTERY_COIL_LIMIT`, `COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND`, `COIL_COOLING_STRESS_REACHES_YIELD`; `width.coil_temperature`, `thermal_check.coil_temperature_beside` | a coil surface temperature against time with a contact probe; creep and recovery (A8, B7, Phase 3) | limitation |
@@ -172,6 +172,9 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-COIL-11 | Winding by lanes (a case option, beside the present coil check): the exit profile of the case pass is wound lane by lane, the tension shared by a re-derived strain allocation between lanes, with elastic-perfectly plastic laps; perfectly registered lanes, no axial stress, the case-pass profile constant along the coil, plastic thinning and creep left out. Where a new layer's strain is taken (mid layer, the specification, or layer top, the planner's prototype) is an analyst choice. Nothing in the tally reads it; the length difference after unwinding is an additional profile. The other allocation point is run beside the chosen one: a lane whose yield verdict differs reads "not decided: depends on the allocation point", and a lane within 5 % of the yield stress without yielding reads "close to yield, not decided" (an analyst choice). | For one lane 0.1 µm thicker the coil takes up 0.77, 0.12, 0.07 or 0.02 of laps × thickness difference with a stiff, a hundred times softer or two assumed pressure-dependent stacks; a lane 1 µm thicker yields the strip by about 400 laps with every stack but the softest, where the two allocation points disagree on whether it yields at all (peak 158 against 165 MPa). | `COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION`, `WINDING_LANE_YIELDS`, `WINDING_LANE_SLACK`, `WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION`; `width.coil_winding` | a press test of the stack; a measured coil diameter profile across the width (G9) | limitation |
 | L-COIL-12 | An ironing roll adds a wound-in tension through a traction coefficient that is an input; how much air the nip squeezes out is not known (no nip film formula is in the reports), so the winding is computed for two bounds: the nip removes all the air, and it removes none (the full entrained film in every lap). | The winding results lie between the two bounds; the softer, air-filled bound gives lower stack pressures. | `AIR_CASES_BRACKET_THE_NIP_EFFECT`, `WOUND_IN_TENSION_CAPPED_AT_YIELD`; `width.coil_winding.air_cases`, `nip` | a coil diameter profile across the width, or a measured air content of the wound coil; a nip film model (G10) | limitation |
 
+| L-COIL-13 | Lateral stress in the spans from a roller alignment survey (a case option): only roller misalignment and taper are computed, for a beam model of an isolated span (re-derived; the two angles added in magnitude, a worst case). Roller deflection is reported as beam quantities (load, curvature, end slope, deflection) and no lateral stress is derived from it; a tension drop over a driven roller, a bent coil and a baggy lane as a source of troughs, moment transfer to the next span, a slack edge and the traction limit on the rollers are not modelled. | The computed stress is a lower estimate of the acting one: generators that are not computed add to it. | `width.troughs.<span>.generators`, `lateral_stress_basis`; `SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE`, `SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE` | a lateral stress model of roller deflection, moment transfer and slack edges (G11); a baggy-lane source (I13) | limitation |
+| L-COIL-14 | Isolated-span theory over-predicts wrinkling of wide foil: on aluminium foil below 25 µm, wider than 0.6-1 m, wrinkles needed about 15 times the misalignment the model predicts, copper 7-10 times [SS-S55 EX]. The factor is quoted beside the critical misalignments and applied to no threshold; the trials' tension and geometry are not in the reports. | On the battery-foil exit span troughs need 0.61 mm/m and roller wrinkles 12.2 mm/m by the model, 183 mm/m with the factor; a computed stress above a threshold is a screening result, not a prediction that the foil wrinkles. | `foil_factor_context` in `width.troughs.<span>.generators`; benchmark `SS-V14` (reference only) | the trials' inputs, or a wrinkling test on the plant's spans | limitation |
+| L-COIL-15 | Evidence rule for a computed lateral stress (the one evidence branch of this phase): a trough status from a stress computed from the entered roller alignment supports the trough hypothesis only weakly and a "below the threshold" from it is neutral, never a contradiction (the computed stress covers two of the generators, and at foil gauge the isolated-span model over-predicts). A supplied plant stress keeps the rule of before (moderate support, weak contradiction) and drives the screen; the computed one is shown beside it with the status it would give. | One point at most from an alignment survey. | the trough-status item in the evidence ("lateral stress computed from the entered roller alignment"), `generators.supplied_vs_computed` | a measured lateral stress | analyst choice |
 ### 2.9 Mill dynamics and chatter
 
 | id | what the tool assumes or cannot do | what it means for a reader | how the result shows it | what would lift it | kind |
@@ -330,6 +333,7 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `TABLE_BASIS` | rule | table criterion | the gravity criterion in place of the gap row's foundation | L-SHAPE-18 |
 | `RELEASED_SAMPLE_LENGTH_FACTOR` | 1 × strip width | wavelength search after release | the longest half-wave searched (a square sample) | the mode sits at this limit (L-SHAPE-16) |
 | `LOCAL_RELEASED_WIDTH_FACTOR` | 2 | after-release local mode | the local buckle's width limit (L-SHAPE-04) | not reported |
+| `SPAN_TENSION_STIFFENING_LIMIT` | 0.5 | lateral stress in spans | the tension-stiffening parameter `K*a` above which the beam model of a span is flagged (0.19-0.21 in the demos) | sets the flag only (L-COIL-13) |
 
 Not caught by the search:
 
@@ -373,7 +377,7 @@ Not caught by the search:
 ## 5. Recorded discrepancies with published values
 
 <!-- BEGIN GENERATED BLOCK: discrepancies (python -m physicroll.limitations --write docs/limitations.md; do not edit by hand) -->
-The benchmark harness records 115 project values in 26 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 27 record a project value for which no published value exists. The other 82 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
+The benchmark harness records 118 project values in 27 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 27 record a project value for which no published value exists. The other 85 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
 
 | case | quantity | unit | project | reference | ratio | verdict | in plain words |
 |---|---|---|---|---|---|---|---|
@@ -459,6 +463,9 @@ The benchmark harness records 115 project values in 26 cases. 6 carry the verdic
 | SS-V3-WIDE-STRIP | `half_wave_over_mode_width_5_mpa` | 1 | 0.7969 | 0.3571 | 2.231 | `RECORDED_DISCREPANCY` | does not match the published value |
 | SS-V3-WIDE-STRIP | `half_wave_m_15_mpa` | m | 0.06887 | 0.0375 | 1.837 | `INDICATIVE_ASSUMED_INPUTS` | indicative: some inputs were assumed |
 | SS-V3-WIDE-STRIP | `half_wave_over_mode_width_15_mpa` | 1 | 0.8102 | 0.3571 | 2.269 | `RECORDED_DISCREPANCY` | does not match the published value |
+| SS-V14 | `aluminium_foil_factor` | 1 | - | 15 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
+| SS-V14 | `copper_foil_factor_low` | 1 | - | 7 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
+| SS-V14 | `copper_foil_factor_high` | 1 | - | 10 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
 
 Cases not encoded, with the reason:
 
@@ -469,6 +476,7 @@ Cases not encoded, with the reason:
 - SS-V5: needs the roll profiles of the paper.
 - SS-V11: already encoded: physicroll/literature.py, tests/test_literature.py (cross-reference only).
 - A2-LOCAL-SOURCES: no published case of a film or flow-stress band exists (gap study, I2).
+- SS-V15: polyester troughs and wrinkles against taper and misalignment [SS-S54 EX]: critical values not quoted in the reports.
 - SS-S14-TABLE: no wave height or table measurement with its stress profile is in the reports (dead load on a table, SPEC19 package 7).
 - BT-V5: needs a model of a later phase or data not in the repository.
 - BT-V6: needs a model of a later phase or data not in the repository.
@@ -488,8 +496,6 @@ Cases not encoded, with the reason:
 - SS-V10: needs a model of a later phase or data not in the repository.
 - SS-V12: needs a model of a later phase or data not in the repository.
 - SS-V13: needs a model of a later phase or data not in the repository.
-- SS-V14: needs a model of a later phase or data not in the repository.
-- SS-V15: needs a model of a later phase or data not in the repository.
 - SS-V16: needs a model of a later phase or data not in the repository.
 - SS-V17: needs a model of a later phase or data not in the repository.
 - SS-V18: needs a model of a later phase or data not in the repository.
@@ -519,7 +525,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | G1 | The roll stack: deflection, roll-to-roll contact, bending, tilt, shifting, ground camber. | 3 |
 | G2 | The closed-gap (roll-kiss) shape path for foil. | 3 |
 | G7 | Thermal camber at the strip edge and edge actuators. | 3 |
-| G11 | A computed lateral stress in the spans. | 2 |
 | G14 | Downstream steps: slitting, separating, annealing. | 3 |
 | G15 | Edge drop. | 3 |
 | BT-G2 | The closed-gap load path across the width. | 3 |
@@ -557,6 +562,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | G8 | Published roll time constants to compare the model's own with. |
 | G9 | A measured radial stack law for oily aluminium foil; axial stress; a spool model; V-buckle and telescoping margins; creep in the coil. |
 | G10 | A nip film formula; side leakage and roughness venting; a measured traction coefficient. |
+| G11 | A lateral stress from roller deflection; moment transfer, slack edge and the traction limit; a baggy lane as a source of troughs (I13); a foil-specific correction. |
 | G12 | An onset condition for tension lines; air film and winding model. |
 | G13 | Roll-bending modulation of the barrel position; wear growth. |
 | G16 | The other strip-shape benchmark cases; an uncertainty statement for the chain. |
@@ -720,6 +726,8 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `SHAPE_INPUTS_SUPPLIED` | Strip-shape inputs were supplied from a plant model. | informational |
 | `SHEAR_CAP_ACTIVE` | Friction reached the shear strength of the metal somewhere in the contact; the model caps it there. | L-BITE-11 |
 | `SIGNATURES_SECTION_FAILED` | The mark-spacing checks could not be computed. | L-DATA-10 |
+| `SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE` | The span is shorter than the strip is wide, so the beam model of the lateral stress from the roller alignment is indicative only. | L-COIL-13 |
+| `SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE` | In the lateral stress from the roller alignment the span is long and tense enough that tension stiffening, which the beam model leaves out, is not small. | L-COIL-13 |
 | `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE` | The spray cooling value is an average around the roll; the published value is an average over the sprayed patch of one cooling zone, so the two are not comparable. | L-HEAT-03 |
 | `SPRAY_FLOW_EXPONENT_APPLIED` | The cooling of a nozzle was taken to fall less than its flow (flow to a power below one), as published for water sprays and one oil simulation. | L-HEAT-15 |
 | `STEADY_STATE_NOT_CONVERGED` | The roll temperature model did not fully settle. | L-HEAT-01 |

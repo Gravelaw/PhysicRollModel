@@ -91,7 +91,7 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
             'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT',
             'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP', 'A6-ZONE-TIME-CONSTANT',
-            'SS-V2-LOCAL-PLATE', 'SS-V2-WIDE-STRIP', 'SS-V3-WIDE-STRIP')
+            'SS-V2-LOCAL-PLATE', 'SS-V2-WIDE-STRIP', 'SS-V3-WIDE-STRIP', 'SS-V14')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
@@ -286,6 +286,8 @@ NOT_ENCODED = (
                                'tests/test_literature.py (cross-reference only)'},
     {'id': 'A2-LOCAL-SOURCES', 'reason': 'no published case of a film or flow-stress band '
                                          'exists (gap study, I2)'},
+    {'id': 'SS-V15', 'reason': 'polyester troughs and wrinkles against taper and misalignment '
+                               '[SS-S54 EX]: critical values not quoted in the reports'},
     {'id': 'SS-S14-TABLE', 'reason': 'no wave height or table measurement with its stress '
                                      'profile is in the reports (dead load on a table, SPEC19 '
                                      'package 7)'},
@@ -293,8 +295,7 @@ NOT_ENCODED = (
     {'id': i, 'reason': 'needs a model of a later phase or data not in the repository'}
     for i in ('BT-V5', 'BT-V6', 'BT-V7', 'BT-V8', 'BT-V10', 'BT-V11', 'BT-V12', 'BT-V13',
               'BT-V14', 'BT-V15', 'BT-V16', 'BT-V17', 'SS-V6', 'SS-V7', 'SS-V9',
-              'SS-V10', 'SS-V12', 'SS-V13', 'SS-V14', 'SS-V15', 'SS-V16', 'SS-V17', 'SS-V18',
-              'SS-V19'))
+              'SS-V10', 'SS-V12', 'SS-V13', 'SS-V16', 'SS-V17', 'SS-V18', 'SS-V19'))
 
 LIMITATIONS = [
     'Software comparison only: a published model-to-model value or one measurement read from a '
@@ -1231,6 +1232,30 @@ def _tm_la8_spray_fit():
                  ['INPUTS_NOT_RECORDED', 'SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE'])
 
 
+# ------------------------------------- foil wrinkling factor (SPEC19 package 12, G11)
+def _ss_v14_foil_factor():
+    """Reference record only: the ratio of the measured critical misalignment to the
+    isolated-span prediction for wide foil; the tension and geometry of the trials are not in
+    the reports, so the project's critical misalignment is not computed for them."""
+    q = [_quantity(name, '1', None, None, ref, label,
+                   row_verdict='REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+         for name, ref, label in (
+             ('aluminium_foil_factor', 15.0, 'measured / isolated-span critical misalignment, '
+              'aluminium foil below 25 um wider than 0.6-1 m (MEASUREMENT, SS-S55 EX)'),
+             ('copper_foil_factor_low', 7.0, 'low end of 7-10, copper foil (SS-S55 EX)'),
+             ('copper_foil_factor_high', 10.0, 'high end of 7-10, copper foil (SS-S55 EX)'))]
+    notes = ['strip_shape.span_lateral_stress quotes these factors beside the critical '
+             'misalignments (foil_factor_context) and applies them to no threshold; the '
+             'tension, span and roller geometry of the trials are not in the reports: nothing to '
+             'run, no comparison.']
+    return _case('SS-V14', 'Foil wrinkling against roller misalignment (reference only)',
+                 'Walker, Cole, Zagar & Quass (2011), wrinkling of foils [SS-S55 EX]', 'SS-S55',
+                 'EX', 'MEASUREMENT', {}, notes, q, 'REFERENCE_ONLY_INPUTS_NOT_RECORDED',
+                 'Reference only: the isolated-span model under-predicts the misalignment that '
+                 'wrinkles wide foil by these factors; trial inputs not recorded.',
+                 ['INPUTS_NOT_RECORDED'])
+
+
 # ------------------------------------------------ flatness loop (SPEC19 package 4, G5)
 SS_V8_PUBLISHED_BAND_I_UNITS = 6.0    # "within 6 I-units around a 30 I-unit target at steady
 #                                       speed", 2 x 6.5 um foil [SS-S31 EX; MEASUREMENT]
@@ -1454,7 +1479,7 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit, 'SS-V8-LOOP': _ss_v8_loop,
           'A6-ZONE-TIME-CONSTANT': _a6_zone_time_constant,
           'SS-V2-LOCAL-PLATE': _ss_v2_local_plate, 'SS-V2-WIDE-STRIP': _ss_v2_wide_strip,
-          'SS-V3-WIDE-STRIP': _ss_v3_wide_strip}
+          'SS-V3-WIDE-STRIP': _ss_v3_wide_strip, 'SS-V14': _ss_v14_foil_factor}
 
 
 def run_case(case_id: str) -> dict:

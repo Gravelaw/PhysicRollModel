@@ -422,6 +422,132 @@ class WideFoilTroughNoteTests(unittest.TestCase):
             self.assertEqual(json.loads(json.dumps(tr[span])), want)
 
 
+class SpanAlignmentEvidenceTests(unittest.TestCase):
+    """SPEC19 package 12 (G11): a lateral stress computed from an entered roller alignment
+    survey gives SUPPORTS weak or NEUTRAL on the trough hypothesis, nothing else; a supplied
+    plant stress keeps driving the screen and the evidence as before."""
+    CRIT = 'model trough status (either span)'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = {}
+        for key, sa, lat in (
+                ('none', None, None), ('null', 'null', None),
+                ('1', {'exit_span': {'misalignment_m_per_m': 1e-3}}, None),
+                ('0.1', {'exit_span': {'misalignment_m_per_m': 1e-4}}, None),
+                ('1_supplied_low', {'exit_span': {'misalignment_m_per_m': 1e-3}}, 1e3),
+                ('supplied_low', None, 1e3),
+                ('1_supplied_high', {'exit_span': {'misalignment_m_per_m': 1e-3}}, 1e6),
+                ('supplied_high', None, 1e6),
+                ('nulls', {'entry_span': None, 'exit_span': None}, None)):
+            c = foil_case(schedule=False, appearance='crease_or_flute',
+                          changes_with_tension=True)
+            if sa == 'null':
+                c['width_model']['span_alignment'] = None
+            elif sa is not None:
+                c['width_model']['span_alignment'] = dict(sa, provenance='unit test survey')
+            if lat is not None:
+                c['width_model']['lateral_compressive_stress_pa'] = lat
+            cls.r[key] = diagnose(c)
+
+    def _item(self, key):
+        h = {x['id']: x for x in self.r[key]['hypotheses']}['tension_troughs_or_creases']
+        return [e for e in h['evidence'] if e['criterion'] == self.CRIT][0], h
+
+    def test_computed_expected_supports_weak(self):
+        tr = self.r['1']['width']['troughs']['exit_span']
+        self.assertEqual(tr['status'], 'TROUGHS_EXPECTED')
+        self.assertEqual(tr['lateral_stress_basis'], bw.SPAN_LATERAL_BASIS_COMPUTED)
+        self.assertEqual(tr['lateral_compressive_stress_pa'],
+                         tr['generators']['computed_lateral_compressive_stress_pa'])
+        item, h = self._item('1')
+        self.assertEqual((item['verdict'], item['weight'], item['basis']),
+                         ('SUPPORTS', 'weak', 'model'))
+        self.assertIn('(lateral stress computed from the entered roller alignment)',
+                      item['observed'])
+        _, h0 = self._item('none')
+        self.assertEqual(h['score'], h0['score'] + 1)        # one weak point
+
+    def test_computed_below_is_neutral_never_contradicts(self):
+        tr = self.r['0.1']['width']['troughs']['exit_span']
+        self.assertEqual(tr['status'], 'BELOW_TROUGH_THRESHOLD')
+        item, h = self._item('0.1')
+        self.assertEqual((item['verdict'], item['basis']), ('NEUTRAL', 'model'))
+        self.assertIn('BELOW_TROUGH_THRESHOLD (lateral stress computed', item['observed'])
+        self.assertEqual(h['score'], self._item('none')[1]['score'])
+
+    def test_supplied_stress_branches_as_today(self):
+        for with_sa, without in (('1_supplied_low', 'supplied_low'),
+                                 ('1_supplied_high', 'supplied_high')):
+            a, ha = self._item(with_sa)
+            b, hb = self._item(without)
+            self.assertEqual(a, b)
+            self.assertEqual(ha['score'], hb['score'])
+            ta = self.r[with_sa]['width']['troughs']['exit_span']
+            tb = self.r[without]['width']['troughs']['exit_span']
+            self.assertEqual(ta['lateral_stress_basis'], 'supplied')
+            self.assertEqual({k: v for k, v in ta.items() if k != 'generators'},
+                             {k: v for k, v in tb.items() if k != 'generators'})
+        self.assertEqual(self._item('supplied_low')[0]['verdict'], 'CONTRADICTS')
+        self.assertEqual(self._item('supplied_high')[0]['verdict'], 'SUPPORTS')
+        self.assertEqual(self._item('supplied_high')[0]['weight'], 'moderate')
+        # the computed value is reported beside the supplied one and compared
+        sc = self.r['1_supplied_low']['width']['troughs']['exit_span']['generators'][
+            'supplied_vs_computed']
+        self.assertEqual((sc['supplied_pa'], sc['status_from_supplied'],
+                          sc['status_from_computed'], sc['statuses_agree']),
+                         (1e3, 'BELOW_TROUGH_THRESHOLD', 'TROUGHS_EXPECTED', False))
+
+    def test_without_the_key_identical(self):
+        base = result_json(self.r['none'])
+        self.assertEqual(result_json(self.r['null']), base)
+        for key in ('none', 'nulls'):
+            for span in ('entry_span', 'exit_span'):
+                g = self.r[key]['width']['troughs'][span]['generators']
+                self.assertTrue(g['not_supplied'])
+                self.assertIsNone(self.r[key]['width']['troughs'][span][
+                    'lateral_stress_basis'])
+        strip = json.loads(result_json(self.r['nulls']))
+        want = json.loads(base)
+        for d in (strip, want):
+            d.pop('inputs', None)
+            for span in ('entry_span', 'exit_span'):
+                d['width']['troughs'][span].pop('generators')
+        self.assertEqual(strip['hypotheses'], want['hypotheses'])
+        self.assertEqual(strip['width']['troughs'], want['width']['troughs'])
+
+    def test_report_columns_and_lines(self):
+        html = render_band_report(self.r['1'])
+        self.assertIn('lateral compression from the roller alignment', html)
+        self.assertIn('critical misalignment (troughs)', html)
+        self.assertIn('Exit span, roller alignment (unit test survey)', html)
+        self.assertIn('0.6078 mm/m', html)
+        self.assertIn('not applied to any threshold', html)
+
+    def test_validation_messages_in_mm_per_metre(self):
+        for sa, words in (
+                ({'exit_span': {'misalignment_m_per_m': 0.5}}, 'mm per metre'),
+                ({'exit_span': {'misalignment_m_per_m': -1e-3}}, '0.5 mm/m is entered as'),
+                ({'exit_span': {'taper_radius_difference_m': 2e-3}}, 'roller grinding report'),
+                ({'exit_span': {'misalignment_rad': 1e-3}}, 'unknown keys'),
+                ({'exit_span': {'roller': {'outer_diameter_m': 0.25}}}, 'missing keys')):
+            c = foil_case(schedule=False)
+            c['width_model']['span_alignment'] = dict(sa, provenance='unit test')
+            with self.assertRaises(ValueError) as cm:
+                validate_case(c)
+            self.assertIn(words, str(cm.exception))
+        c = foil_case(schedule=False)
+        c['width_model']['span_alignment'] = {'exit_span': None}
+        with self.assertRaisesRegex(ValueError, 'provenance'):
+            validate_case(c)
+        c = foil_case(schedule=False)
+        c['width_model']['deflector_roll_radius_m'] = None
+        c['width_model']['span_alignment'] = {
+            'provenance': 'unit test', 'exit_span': {'taper_radius_difference_m': 1e-5}}
+        with self.assertRaisesRegex(ValueError, 'needs the roller radius'):
+            validate_case(c)
+
+
 class TensionLinesPlantedTruthTests(unittest.TestCase):
     def test_tension_lines_lead(self):
         # 50 -> 25 um battery foil, regular 10 mm lines, worse at low tension, react to the

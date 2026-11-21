@@ -146,7 +146,9 @@ WIDTH_DEFAULTS = {
     # SPEC19 package 10 (G9): the exit profile wound lane by lane (needs width_model.coil)
     'coil_winding': None,
     # SPEC19 package 11: deflector roll roughness (traction) and the coil temperature
-    'deflector_roll_roughness_rq_m': None, 'coil_thermal': None}
+    'deflector_roll_roughness_rq_m': None, 'coil_thermal': None,
+    # SPEC19 package 12 (G11): roller alignment survey of the two spans (misalignment, taper)
+    'span_alignment': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -636,6 +638,8 @@ def validate_width_model(w, pass_):
     out['deflector_roll_roughness_rq_m'] = opt_num('width_model.deflector_roll_roughness_rq_m',
                                                    w.get('deflector_roll_roughness_rq_m'),
                                                    positive=True, hi=1e-4)
+    out['span_alignment'] = validate_span_alignment(w.get('span_alignment'),
+                                                    out['deflector_roll_radius_m'])
     out['shape_inputs'] = validate_shape_inputs(w.get('shape_inputs'))
     out['previous_strip_widths_m'] = num_list('width_model.previous_strip_widths_m',
                                               w.get('previous_strip_widths_m', []),
@@ -661,6 +665,80 @@ def validate_width_model(w, pass_):
         raise ValueError(f'width_model.nozzle_levels needs one level per nozzle ({count})')
     if out['rolls_carrying_stripe'] not in (1, 2):
         raise ValueError('width_model.rolls_carrying_stripe must be 1 or 2')
+    return out
+
+
+SPAN_ALIGNMENT_SPAN_KEYS = ('misalignment_m_per_m', 'taper_radius_difference_m',
+                            'roller_radius_m', 'roller')
+SPAN_ROLLER_KEYS = ('outer_diameter_m', 'wall_thickness_m', 'face_length_m',
+                    'youngs_modulus_pa', 'wrap_angle_rad')
+SPAN_LATERAL_BASIS_COMPUTED = 'computed from span_alignment (misalignment and taper only)'
+SPAN_LATERAL_BASIS_SUPPLIED = 'supplied'
+SPAN_COMPUTED_OBSERVED_NOTE = '(lateral stress computed from the entered roller alignment)'
+
+
+def validate_span_alignment(sa, deflector_radius):
+    """``width_model.span_alignment`` (SPEC19 package 12): None, or ``{"entry_span": S |
+    null, "exit_span": S | null, "provenance"}`` from a roller alignment survey. Misalignment
+    in m per m (a survey reading in mm per metre divided by 1000), taper as the roller radius
+    difference over the strip width."""
+    if sa is None:
+        return None
+    where = 'width_model.span_alignment'
+    if not isinstance(sa, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, sa, ('provenance',), ('entry_span', 'exit_span'))
+    prov = sa['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text (e.g. the date and '
+                         'method of the roller alignment survey)')
+    out = {'provenance': prov}
+    for name in ('entry_span', 'exit_span'):
+        sp = sa.get(name)
+        if sp is None:
+            out[name] = None
+            continue
+        ws = f'{where}.{name}'
+        keys(ws, sp, (), SPAN_ALIGNMENT_SPAN_KEYS)
+        m = sp.get('misalignment_m_per_m')
+        if m is not None:
+            if isinstance(m, bool) or not isinstance(m, (int, float)) or not math.isfinite(m) \
+                    or not 0 <= m <= 0.1:
+                raise ValueError(f'{ws}.misalignment_m_per_m is the roller misalignment in m '
+                                 'per m: 0 to 0.1 (0 to 100 mm per metre; a survey reading '
+                                 'of 0.5 mm/m is entered as 0.0005)')
+            m = float(m)
+        dr = sp.get('taper_radius_difference_m')
+        if dr is not None:
+            if isinstance(dr, bool) or not isinstance(dr, (int, float)) \
+                    or not math.isfinite(dr) or not 0 <= dr <= 1e-3:
+                raise ValueError(f'{ws}.taper_radius_difference_m is the roller radius '
+                                 'difference across the strip width: 0 to 0.001 m (0 to 1 mm; '
+                                 'a 10 um taper from the roller grinding report is 1e-05)')
+            dr = float(dr)
+        rr = opt_num(f'{ws}.roller_radius_m', sp.get('roller_radius_m'), positive=True,
+                     hi=5.0)
+        if dr is not None and rr is None and deflector_radius is None:
+            raise ValueError(f'{ws}.taper_radius_difference_m needs the roller radius: give '
+                             f'{ws}.roller_radius_m or width_model.deflector_roll_radius_m')
+        roller = sp.get('roller')
+        if roller is not None:
+            keys(f'{ws}.roller', roller, SPAN_ROLLER_KEYS)
+            wr_ = f'{ws}.roller'
+            d = num(f'{wr_}.outer_diameter_m', roller['outer_diameter_m'], positive=True,
+                    hi=5.0)
+            roller = {'outer_diameter_m': d,
+                      'wall_thickness_m': num(f'{wr_}.wall_thickness_m',
+                                              roller['wall_thickness_m'], positive=True,
+                                              hi=d / 2),
+                      'face_length_m': num(f'{wr_}.face_length_m', roller['face_length_m'],
+                                           positive=True, hi=20.0),
+                      'youngs_modulus_pa': num(f'{wr_}.youngs_modulus_pa',
+                                               roller['youngs_modulus_pa'], lo=1e9, hi=1e13),
+                      'wrap_angle_rad': num(f'{wr_}.wrap_angle_rad', roller['wrap_angle_rad'],
+                                            positive=True, hi=math.pi)}
+        out[name] = {'misalignment_m_per_m': m, 'taper_radius_difference_m': dr,
+                     'roller_radius_m': rr, 'roller': roller}
     return out
 
 
@@ -2703,9 +2781,67 @@ def _troughs(case, w, obs):
                 'observed_spacing_consistent', 'flags')}
             if h < FOIL_GAUGE_M:
                 out[name]['wide_foil_note'] = WIDE_FOIL_TROUGH_NOTE
+            _span_generators(case, w, name, h, length, tension, out[name], obs)
         except ValueError as exc:
             out[name] = {'status': 'REJECTED', 'error': str(exc)}
     return out
+
+
+def _span_generators(case, w, name, h, length, tension, row, obs):
+    """SPEC19 package 12 (G11): the lateral stress that the entered roller misalignment and
+    taper put into this span. A supplied plant stress keeps driving the screen exactly as
+    before; the computed one is then reported beside it and compared. Without a supplied
+    stress, a computed one drives the screen (``lateral_stress_basis``)."""
+    supplied = w['lateral_compressive_stress_pa']
+    row['lateral_stress_basis'] = None if supplied is None else SPAN_LATERAL_BASIS_SUPPLIED
+    sa = w.get('span_alignment')
+    sp = None if sa is None else sa.get(name)
+    if sp is None:
+        row['generators'] = not_supplied(
+            'no width_model.span_alignment' if sa is None else
+            f'no width_model.span_alignment.{name}')
+        return
+    p, e = case['pass'], case['material']['youngs_modulus_pa']
+    rr = sp['roller_radius_m']
+    rr_src = f'width_model.span_alignment.{name}.roller_radius_m'
+    if rr is None:
+        rr, rr_src = w['deflector_roll_radius_m'], 'width_model.deflector_roll_radius_m'
+    if rr is None:
+        rr_src = 'not given'
+    try:
+        g = ss.span_lateral_stress(
+            h, length, tension, p['width_m'], misalignment_rad=sp['misalignment_m_per_m'],
+            taper_radius_difference_m=sp['taper_radius_difference_m'], roller_radius_m=rr,
+            roller=sp['roller'], youngs_modulus_pa=e, poisson_ratio=STRIP_POISSON_RATIO)
+    except ValueError as exc:
+        row['generators'] = failed('span_alignment', exc)
+        return
+    g = {k: v for k, v in g.items() if k != 'sources'}
+    g.update({'status': 'COMPUTED', 'not_supplied': False, 'roller_radius_source': rr_src,
+              'provenance': sa['provenance']})
+    row['generators'] = g
+    lat = g['computed_lateral_compressive_stress_pa']
+    if lat is None:
+        return
+    screen = ss.tension_trough_screen(
+        h, length, tension, p['width_m'], roller_radius_m=rr, lateral_compressive_stress_pa=lat,
+        observed_spacing_m=obs['band_spacing_m'], youngs_modulus_pa=e,
+        poisson_ratio=STRIP_POISSON_RATIO)
+    if supplied is None:
+        row.update({'status': screen['status'], 'lateral_compressive_stress_pa': lat,
+                    'roller_radius_m': rr,
+                    'roller_wrinkle_critical_lateral_stress_pa':
+                        screen['roller_wrinkle_critical_lateral_stress_pa'],
+                    'flags': screen['flags'],
+                    'lateral_stress_basis': SPAN_LATERAL_BASIS_COMPUTED})
+        return
+    g['supplied_vs_computed'] = {
+        'supplied_pa': supplied, 'computed_pa': lat,
+        'computed_over_supplied': None if supplied == 0 else lat / supplied,
+        'status_from_supplied': row['status'], 'status_from_computed': screen['status'],
+        'statuses_agree': row['status'] == screen['status'],
+        'note': 'the supplied plant value drives the screen and the evidence; the computed '
+                'value is shown beside it'}
 
 
 def position_tolerance(obs, nozzle_pitch):
@@ -6288,7 +6424,19 @@ def _h_troughs(f):
     crit = 'model trough status (either span)'
     sts = [tr[n]['status'] for n in ('entry_span', 'exit_span') if isinstance(tr.get(n), dict)]
     valid = [s for s in sts if s != 'REJECTED']
-    if any(s in ('TROUGHS_EXPECTED', 'ROLLER_WRINKLE_EXPECTED') for s in valid):
+    # SPEC19 package 12: statuses from a stress computed from span_alignment (no supplied
+    # plant stress) count only a little and never against troughs
+    computed = [tr[n]['status'] for n in ('entry_span', 'exit_span')
+                if isinstance(tr.get(n), dict)
+                and tr[n].get('lateral_stress_basis') == SPAN_LATERAL_BASIS_COMPUTED]
+    expected = ('TROUGHS_EXPECTED', 'ROLLER_WRINKLE_EXPECTED')
+    if computed:
+        txt = f'{", ".join(sts)} {SPAN_COMPUTED_OBSERVED_NOTE}'
+        if any(s in expected for s in computed):
+            e.append(ev(crit, txt, 'TROUGHS_EXPECTED', 'SUPPORTS', 'weak', 'model'))
+        else:
+            e.append(ev(crit, txt, 'TROUGHS_EXPECTED', 'NEUTRAL', basis='model'))
+    elif any(s in expected for s in valid):
         e.append(ev(crit, ', '.join(sts), 'TROUGHS_EXPECTED', 'SUPPORTS', 'moderate', 'model'))
     elif valid and all(s == 'BELOW_TROUGH_THRESHOLD' for s in valid):
         e.append(ev(crit, ', '.join(sts), 'TROUGHS_EXPECTED', 'CONTRADICTS', 'weak', 'model'))

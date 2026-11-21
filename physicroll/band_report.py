@@ -1214,30 +1214,84 @@ def _match_tables(pos):
     return ''.join(out)
 
 
+def _span_alignment_line(name, t, g):
+    """SPEC19 package 12: one line per span with an alignment survey (taper, roller
+    deflection, foil factor; the comparison with a supplied plant stress)."""
+    parts = [f'<strong>{_e(name.replace("_", " ").capitalize())}, roller alignment '
+             f'({_e(g.get("provenance"))}):</strong> ']
+    mis, teq = g.get('misalignment_rad'), g.get('taper_equivalent_misalignment_rad')
+    parts.append('misalignment ' + ('not entered' if mis is None else
+                                    f'{_f(mis, 1e3, 4)} mm/m') + '; taper ')
+    if teq is None:
+        parts.append('not entered')
+    else:
+        parts.append(f'{_f(g.get("taper_radius_difference_m"), 1e6, 4)} um radius difference '
+                     f'on a {_f(g.get("roller_radius_m"), 1, 4)} m roller, equivalent to '
+                     f'{_f(teq, 1e3, 4)} mm/m')
+    sh = g.get('shear_stress_pa')
+    if sh is not None:
+        parts.append(f'; combined {_f(g.get("combined_misalignment_rad"), 1e3, 4)} mm/m (added '
+                     f'in magnitude, worst case), shear {_mpa(sh)}, lateral compression '
+                     f'{_mpa(g.get("computed_lateral_compressive_stress_pa"))}')
+    cw = g.get('critical_misalignment_wrinkles_rad')
+    parts.append(f'. Critical misalignment {_f(g.get("critical_misalignment_troughs_rad"), 1e3, 4)}'
+                 ' mm/m for troughs, '
+                 + ('roller wrinkles not assessed (no roller radius)' if cw is None else
+                    f'{_f(cw, 1e3, 4)} mm/m for roller wrinkles') + '. ')
+    rd = g.get('roller_deflection')
+    if isinstance(rd, dict):
+        parts.append(f'Roller deflection: load {_f(rd["load_per_length_n_m"], 1, 5)} N/m, '
+                     f'mid-length curvature {_f(rd["mid_length_curvature_per_m"], 1, 4)} 1/m, '
+                     f'end slope {_f(rd["end_slope_mm_per_m"], 1, 3)} mm/m, mid deflection '
+                     f'{_f(rd["mid_deflection_m"], 1e6, 4)} um; no lateral stress is derived '
+                     'from it. ')
+    ff = g.get('foil_factor_context') or {}
+    parts.append(_e(ff.get('note', '')))
+    sc = g.get('supplied_vs_computed')
+    if isinstance(sc, dict):
+        parts.append(f' The supplied plant stress {_mpa(sc["supplied_pa"])} drives the screen '
+                     f'({_txt(sc["status_from_supplied"])}); the stress computed from the '
+                     f'alignment, {_mpa(sc["computed_pa"])}, would give '
+                     f'{_txt(sc["status_from_computed"])}'
+                     + (' (the same).' if sc['statuses_agree'] else ' (they differ).'))
+    return '<p>' + ''.join(parts) + '</p>'
+
+
 def _other_width_results(w):
     out = []
     tr = w.get('troughs')
     if isinstance(tr, dict) and tr:
-        rows = []
+        rows, span_lines = [], []
         for name in ('entry_span', 'exit_span'):
             t = tr.get(name)
             if not isinstance(t, dict):
                 continue
             if 'error' in t:
                 rows.append([_e(name.replace('_', ' ')), f'<em>{_e(t["error"])}</em>', '', '', '',
-                             '', ''])
+                             '', '', '', ''])
                 continue
             ratio = t.get('observed_spacing_to_wavelength_ratio')
+            g = t.get('generators') if isinstance(t.get('generators'), dict) else {}
+            computed = g.get('status') == 'COMPUTED'
+            lat = g.get('computed_lateral_compressive_stress_pa') if computed else None
             rows.append([_e(name.replace('_', ' ')), _txt(t.get('status')),
                          _mm2(t.get('wrinkle_wavelength_m'), 4),
                          _f(t.get('expected_trough_count_across_width'), digits=3),
                          _mpa(t.get('trough_critical_lateral_stress_pa')),
                          _mpa(t.get('roller_wrinkle_critical_lateral_stress_pa')),
-                         'not observed' if ratio is None else _f(ratio, digits=3)])
+                         'not observed' if ratio is None else _f(ratio, digits=3),
+                         'no alignment survey' if lat is None else _mpa(lat),
+                         'no alignment survey' if not computed else
+                         _f(g.get('critical_misalignment_troughs_rad'), 1e3, 4) + ' mm/m'])
+            if computed:
+                span_lines.append(_span_alignment_line(name, t, g))
         out.append('<h3>Tension troughs (span wrinkling)</h3>'
                    + _table(('span', 'status', 'wrinkle wavelength', 'expected troughs across '
                              'the width', 'trough onset lateral stress', 'roller wrinkle lateral '
-                             'stress', 'observed spacing / wavelength'), rows))
+                             'stress', 'observed spacing / wavelength',
+                             'lateral compression from the roller alignment',
+                             'critical misalignment (troughs)'), rows))
+        out += span_lines
         notes = {t.get('wide_foil_note') for t in tr.values()
                  if isinstance(t, dict) and t.get('wide_foil_note')}
         for n in sorted(notes):      # SPEC17 X12

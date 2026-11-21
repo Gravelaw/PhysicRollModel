@@ -2725,6 +2725,14 @@ FLAGS = {
         'The lane-by-lane winding and the standard coil check disagree on whether a ridge '
         'stretches the strip in the coil; the shortlist uses the standard check.',
         'A coil diameter profile and a press test of the stack would decide it.'),
+    'SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE': (
+        'In the lateral stress from the roller alignment the span is long and tense enough '
+        'that tension stiffening, which the beam model leaves out, is not small.',
+        'Read the computed lateral stress of that span as indicative.'),
+    'SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE': (
+        'The span is shorter than the strip is wide, so the beam model of the lateral stress '
+        'from the roller alignment is indicative only.',
+        'Read the computed lateral stress of that span as indicative.'),
     'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT': (
         'For at least one lane the lane-by-lane winding says "yields" with one numerical '
         'choice and "does not yield" with the other; that lane is not decided.',

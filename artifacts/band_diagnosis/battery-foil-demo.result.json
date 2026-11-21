@@ -4892,6 +4892,7 @@
       "rolls_carrying_stripe": 1,
       "shape_disturbing_coefficient": null,
       "shape_inputs": null,
+      "span_alignment": null,
       "spray_header": {
         "background_htc_w_m2k": 50.0,
         "nozzle_pitch_m": 0.052,
@@ -47731,7 +47732,13 @@
         "flags": [
           "FORMULAS_RECONSTRUCTED_CROSS_CHECKED"
         ],
+        "generators": {
+          "not_supplied": true,
+          "reason": "no width_model.span_alignment",
+          "status": "NOT_SUPPLIED"
+        },
         "lateral_compressive_stress_pa": null,
+        "lateral_stress_basis": null,
         "observed_spacing_consistent": null,
         "observed_spacing_to_wavelength_ratio": null,
         "roller_radius_m": 0.125,
@@ -47750,7 +47757,13 @@
         "flags": [
           "FORMULAS_RECONSTRUCTED_CROSS_CHECKED"
         ],
+        "generators": {
+          "not_supplied": true,
+          "reason": "no width_model.span_alignment",
+          "status": "NOT_SUPPLIED"
+        },
         "lateral_compressive_stress_pa": null,
+        "lateral_stress_basis": null,
         "observed_spacing_consistent": null,
         "observed_spacing_to_wavelength_ratio": null,
         "roller_radius_m": 0.125,

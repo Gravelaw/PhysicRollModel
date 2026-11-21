@@ -509,6 +509,18 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIsNone(q['project_value'])
             self.assertIsNone(q['ratio_project_to_reference'])
 
+    def test_ss_v14_foil_factor_reference_only(self):
+        # SPEC19 package 12: the factors are recorded, the trials' inputs are not
+        case = self.cases['SS-V14']
+        self.assertEqual(case['verdict'], 'REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+        self.assertEqual([q['reference_value'] for q in case['quantities']], [15.0, 7.0, 10.0])
+        for q in case['quantities']:
+            self.assertIsNone(q['project_value'])
+            self.assertEqual(q['row_verdict'], 'REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+        reasons = {e['id']: e['reason'] for e in self.result['not_encoded']}
+        self.assertNotIn('SS-V14', reasons)
+        self.assertIn('critical values not quoted in the reports', reasons['SS-V15'])
+
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):
             bm.run_case('BT-V99')

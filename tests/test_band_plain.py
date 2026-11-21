@@ -1275,5 +1275,17 @@ class SummaryTest(unittest.TestCase):
             bpl.plain_summary(survey)
 
 
+class SpanAlignmentPlainTest(unittest.TestCase):
+    """SPEC19 package 12: the trough-status criterion keeps its string and its plain words;
+    the two new span flags have a sentence."""
+
+    def test_criterion_and_flags(self):
+        self.assertIn('model trough status (either span)', bpl.CRITERIA)
+        self.assertEqual(bpl.CRITERIA['model trough status (either span)'][0],
+                         'whether the model expects troughs in a span')
+        for flag in ('SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE',
+                     'SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE'):
+            self.assertIn(flag, bpl.FLAGS)
+
 if __name__ == '__main__':
     unittest.main()
