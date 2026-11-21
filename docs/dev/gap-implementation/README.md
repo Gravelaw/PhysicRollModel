@@ -20,6 +20,7 @@ study. Whether this folder stays in the final pull request is to be decided when
 | `SPEC22.md` | One inserted package: spray header step 1 (nozzle footprint, pattern width, flow exponent, a realistic-header demo), from `docs/research/band-screening-2026-11/spray-nozzles.md`. |
 | `research_phase1_equations.md` | Literature research for Phase 1 (source prefix `E`). Moved by Phase 1 package 1 to [phase1-equations.md](../../research/band-screening-2026-11/phase1-equations.md); no longer in this folder. |
 | `prototypes/` | The planners' and the researcher's scratch scripts. Prototypes, not specifications; where they differ from a brief, the brief holds. Inside the briefs they are named by their original scratch folders: `s21` is `prototypes/phase0`, `s23` is `prototypes/phase1`, `s24` is `prototypes/phase1-research`, `s25` is `prototypes/phase2`. |
+| `app-page-sources/` | The guided app's page sources (script parts `0*.js`, `app.css`) and `build.py`, which joins them into `physicroll/band_app_assets.py` (needs `node` for a syntax check). The built file is what the package ships; change the sources and rebuild, do not edit the built file. |
 | `verify_additive.py` | Compares the working-tree artifacts with the last commit and reports added, grown, changed and removed paths. Run from the repository root. |
 | `verify_tests.sh` | Runs the band test modules in five parallel groups and the smoke script. Run from the repository root. |
 

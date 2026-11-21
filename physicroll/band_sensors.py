@@ -316,29 +316,57 @@ def gauge_row(source, pitch_m, exit_speed_m_s, g):
             'resolvable': combined >= GAUGE_RESOLVABLE_GAIN and not aliased}
 
 
-def shortest_resolvable_pitch_m(g, exit_speed_m_s, lo=1e-4, hi=10.0):
-    """Largest root of G(p) = 0.5 in [lo, hi] (pitches above it are resolvable); None when
-    G(hi) < 0.5 or G never falls below 0.5 in the range."""
+PITCH_SEARCH_UPPER_M = 10.0     # the longest pitch the threshold is looked for up to
+PITCH_FOUND = 'FOUND'
+PITCH_NONE_IN_RANGE = 'NONE_IN_SEARCH_RANGE'
+PITCH_LIMIT_GAIN = 'spot_and_time_constant'
+PITCH_LIMIT_SAMPLING = 'sampling'
+
+
+def resolvable_pitch(g, exit_speed_m_s, hi=PITCH_SEARCH_UPPER_M):
+    """The shortest resolvable pitch in the sense of ``gauge_row``: every pitch at or above it
+    (up to ``hi``) is resolvable and every shorter one is not.
+
+    The gain ``G(p) = |sinc(pi*L/p)|*lag(u/p)`` is monotone in ``p`` on ``p >= L`` (``x = pi*L/p``
+    in (0, pi]: ``|sin x/x|`` falls, the lag falls with frequency), it is 0 at ``p = L`` and
+    below ``1/pi < 0.5`` for every shorter pitch (the side lobes of the sinc never return to
+    0.5; checked numerically: after the half-amplitude point x = 1.8955 the largest value is
+    below 0.5). So ``G = 0.5`` has exactly one root, found by bisection on [L, hi] with no lower
+    search bound (a 50 um spot: 83 um). With a sample interval the pitch must also be at
+    least ``2*u*dt`` (``gauge_row``: aliased when ``f > 1/(2*dt)``); the threshold is the larger
+    of the two, and ``limited_by`` names which. ``status``: ``FOUND``, or
+    ``NONE_IN_SEARCH_RANGE`` when even ``hi`` is not resolvable (``pitch_m`` null; ``hi`` given
+    as ``search_upper_m``)."""
+    u = exit_speed_m_s
+
     def gain(p):
-        return spot_gain(g['spot_length_m'], p) * time_constant_gain(g['time_constant_s'],
-                                                                     exit_speed_m_s / p)
-    if gain(hi) < GAUGE_RESOLVABLE_GAIN:
-        return None
-    n = 4000
-    prev = hi
-    for k in range(1, n + 1):
-        p = hi * (lo / hi) ** (k / n)
-        if gain(p) < GAUGE_RESOLVABLE_GAIN:
-            a, b = p, prev               # gain(a) < 0.5 <= gain(b)
-            for _ in range(200):
-                m = 0.5 * (a + b)
-                if gain(m) < GAUGE_RESOLVABLE_GAIN:
-                    a = m
-                else:
-                    b = m
-            return 0.5 * (a + b)
-        prev = p
-    return None
+        return spot_gain(g['spot_length_m'], p) * time_constant_gain(g['time_constant_s'], u / p)
+    dt = g.get('sample_interval_s')
+    p_samp = None if dt is None else 2 * u * dt
+    out = {'search_upper_m': hi, 'sampling_limit_m': p_samp}
+    p_gain = None
+    if gain(hi) >= GAUGE_RESOLVABLE_GAIN:
+        a, b = g['spot_length_m'], hi            # gain(a) = 0 < 0.5 <= gain(b)
+        for _ in range(200):
+            m = 0.5 * (a + b)
+            if gain(m) < GAUGE_RESOLVABLE_GAIN:
+                a = m
+            else:
+                b = m
+        p_gain = b                              # the resolvable end of the bracket
+    out['gain_limit_m'] = p_gain
+    if p_gain is None or (p_samp is not None and p_samp > hi):
+        return dict(out, status=PITCH_NONE_IN_RANGE, pitch_m=None,
+                    limited_by=PITCH_LIMIT_GAIN if p_gain is None else PITCH_LIMIT_SAMPLING)
+    if p_samp is not None and p_samp > p_gain:
+        return dict(out, status=PITCH_FOUND, pitch_m=p_samp, limited_by=PITCH_LIMIT_SAMPLING)
+    return dict(out, status=PITCH_FOUND, pitch_m=p_gain, limited_by=PITCH_LIMIT_GAIN)
+
+
+def shortest_resolvable_pitch_m(g, exit_speed_m_s, hi=PITCH_SEARCH_UPPER_M):
+    """``resolvable_pitch(...)['pitch_m']``: a number, or None only when no pitch up to ``hi``
+    is resolvable."""
+    return resolvable_pitch(g, exit_speed_m_s, hi)['pitch_m']
 
 
 def thickness_gauge_section(case, result):
@@ -397,6 +425,7 @@ def thickness_gauge_section(case, result):
                  for b in prof['bands'] if b['start_m'] <= pos + half and b['end_m'] >= pos - half]
         if not under:
             flags.append(GAUGE_FLAG_BANDS)
+    rp = resolvable_pitch(g, u_op)
     out = {'status': STATUS, 'not_supplied': False, 'provenance': g['provenance'],
            'spot_length_m': g['spot_length_m'], 'time_constant_s': g['time_constant_s'],
            'sample_interval_s': g['sample_interval_s'], 'position_m': pos,
@@ -405,7 +434,11 @@ def thickness_gauge_section(case, result):
                                     'amplitude below it',
            'operating_exit_speed_m_s': u_op,
            'averaging_length_time_constant_m': u_op * g['time_constant_s'],
-           'shortest_resolvable_pitch_m': shortest_resolvable_pitch_m(g, u_op),
+           'shortest_resolvable_pitch_m': rp['pitch_m'],
+           'shortest_resolvable_pitch_status': rp['status'],
+           'shortest_resolvable_pitch_limited_by': rp['limited_by'],
+           'shortest_resolvable_pitch_search_upper_m': rp['search_upper_m'],
+           'shortest_resolvable_pitch_gain_limit_m': rp['gain_limit_m'],
            'rows': rows,
            'bands_under_gauge': under if bands_exist else None,
            'basis': {'transfer': '[D, re-derived in SPEC17] spot average |sin(pi*L/p)/(pi*L/p)| '

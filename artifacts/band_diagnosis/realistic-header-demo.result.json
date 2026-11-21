@@ -18607,7 +18607,8 @@
           "friction_coefficient": 0.03,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
           "mean_flow_stress_pa": 185000000.0,
-          "rejected": "elongation[46] must be <= 0.5",
+          "rejected": "at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it",
+          "rejected_outside_model_range": true,
           "roller_wrinkle_critical_lateral_stress_entry_span_pa": -8562571.016595691,
           "roller_wrinkle_critical_lateral_stress_exit_span_pa": -4110034.0879659317,
           "shohet_townsend_half_width_i_units": 0.0030071234017636306,
@@ -18618,7 +18619,7 @@
           "trough_critical_lateral_stress_pa": -13178.308803700442
         }
       ],
-      "text": "Same 6.83 um roll stripe on every pass, 0.135 mm -> 0.018 mm: linear-feedback I-units 333 -> 25.4 (x0.08; rigid bound x7.50). In the mill this stripe buckles on 4 of 6 passes (utilisation 1e+05 -> 0); after tension release on 6 of 6 (utilisation 5.3e+04 -> 3.7e+03). State changes along the schedule at ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed): LATENT_UNDER_TENSION / MANIFEST_AFTER_TENSION_RELEASE. Onset stripe height, model stripe: in the mill 1.14 um -> 16.4 um, after release 0.0418 um (reporting-threshold limited) -> 0.541 um (reporting-threshold limited). Onset stripe height, Gaussian reference: in the mill 1.11 um -> 16.2 um, after release 0.0415 um (reporting-threshold limited) -> 0.537 um (reporting-threshold limited). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.07 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.068 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed), ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed), F2 0.030->0.018 mm (plant pass 2, final) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.00639 I-units. Not assessable (excluded from the trend): ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (elongation[46] must be <= 0.5)."
+      "text": "Same 6.83 um roll stripe on every pass, 0.135 mm -> 0.018 mm: linear-feedback I-units 333 -> 25.4 (x0.08; rigid bound x7.50). In the mill this stripe buckles on 4 of 6 passes (utilisation 1e+05 -> 0); after tension release on 6 of 6 (utilisation 5.3e+04 -> 3.7e+03). State changes along the schedule at ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed): LATENT_UNDER_TENSION / MANIFEST_AFTER_TENSION_RELEASE. Onset stripe height, model stripe: in the mill 1.14 um -> 16.4 um, after release 0.0418 um (reporting-threshold limited) -> 0.541 um (reporting-threshold limited). Onset stripe height, Gaussian reference: in the mill 1.11 um -> 16.2 um, after release 0.0415 um (reporting-threshold limited) -> 0.537 um (reporting-threshold limited). For the model stripe the onsets RISE toward the thin pass (thick/thin ratio 0.07 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. For the Gaussian reference the onsets RISE toward the thin pass (thick/thin ratio 0.068 in the mill, 0.077 after release): in this model the stripe is LESS likely to show at thinner gauge, so the model does not reproduce \"worse at thinner gauge\" for it. After-release onsets on S1 0.260->0.135 mm (assumed stock route), S2 0.135->0.085 mm (assumed stock route), S3 0.085->0.050 mm (assumed stock route), F1 0.050->0.030 mm (plant pass 1; 30 um assumed), ALT1 0.050->0.025 mm (thinnest product, alternative first pass; 25 um assumed), F2 0.030->0.018 mm (plant pass 2, final) are limited by the 2 I-unit reporting threshold (a band must first be reported), so they are upper bounds of the buckling onset. Flatness dead band half-width 0.271 -> 0.00639 I-units. Not assessable (excluded from the trend): ALT2 0.025->0.012 mm (thinnest product, alternative final pass) (at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it)."
     },
     "grinding_feed_pitch_m": null,
     "inputs_used": {
@@ -34070,7 +34071,7 @@
           "exit_thickness_m": 1.2e-05,
           "in_mill_onset_height_m": null,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
-          "not_assessable_reason": "gauge trend: elongation[46] must be <= 0.5",
+          "not_assessable_reason": "gauge trend: at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it",
           "onset_shape_basis": "the case-share steady stripe (gauge trend, its isolated shape at each pass)",
           "ratio_stripe_to_after_release_onset": null,
           "ratio_stripe_to_in_mill_onset": null,
@@ -34087,7 +34088,7 @@
           "exit_thickness_m": 1.2e-05,
           "in_mill_onset_height_m": null,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
-          "not_assessable_reason": "gauge trend: elongation[46] must be <= 0.5",
+          "not_assessable_reason": "gauge trend: at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it",
           "onset_shape_basis": "the case-share steady stripe (gauge trend, its isolated shape at each pass)",
           "ratio_stripe_to_after_release_onset": null,
           "ratio_stripe_to_in_mill_onset": null,
@@ -34104,7 +34105,7 @@
           "exit_thickness_m": 1.2e-05,
           "in_mill_onset_height_m": null,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
-          "not_assessable_reason": "gauge trend: elongation[46] must be <= 0.5",
+          "not_assessable_reason": "gauge trend: at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it",
           "onset_shape_basis": "the case-share steady stripe (gauge trend, its isolated shape at each pass)",
           "ratio_stripe_to_after_release_onset": null,
           "ratio_stripe_to_in_mill_onset": null,
@@ -34121,7 +34122,7 @@
           "exit_thickness_m": 1.2e-05,
           "in_mill_onset_height_m": null,
           "label": "ALT2 0.025->0.012 mm (thinnest product, alternative final pass)",
-          "not_assessable_reason": "gauge trend: elongation[46] must be <= 0.5",
+          "not_assessable_reason": "gauge trend: at this gauge the strip would stretch unevenly across its width by 54.3 %, more than the 50 % the strip-shape model covers: outside the model's range, so this screen does not cover it",
           "onset_shape_basis": "the case-share steady stripe (gauge trend, its isolated shape at each pass)",
           "ratio_stripe_to_after_release_onset": null,
           "ratio_stripe_to_in_mill_onset": null,

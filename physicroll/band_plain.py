@@ -3113,6 +3113,11 @@ FLAGS = {
         'At this gauge the work rolls may touch outside the strip; that contact is not '
         'modelled and was taken as zero.',
         'Read the gauge sensitivities as open-gap values.'),
+    'STRIP_SHAPE_OUTSIDE_MODEL_RANGE': (
+        'The roll would grow, or the strip would be stretched, by more than the strip-shape '
+        'model covers (for example with the sprays off or nearly off): the strip shape and the '
+        'parts that build on it were not assessed.',
+        'Check the spray levels and the roll heat you entered.'),
     'UNSTABLE_LOOP_SETTINGS': (
         'The entered gauge-loop settings are unstable; the loop was not simulated.',
         'Lower the loop gain or check the gauge distance and speed.'),
@@ -4176,13 +4181,15 @@ def _gauge_view(result):
     passes = []
     for r in rows:
         cred = r.get('bite_credibility')
-        mark = 'no roll-gap result' if 'rejected' in r else CREDIBILITY_WORDS.get(
-            cred, cred)
+        outside = bool(r.get('rejected_outside_model_range'))   # the bite ran, the shape not
+        mark = ('outside the model\'s range' if outside else 'no roll-gap result'
+                if 'rejected' in r else CREDIBILITY_WORDS.get(cred, cred))
         passes.append({'label': r.get('label'), 'exit_thickness_m': r.get('exit_thickness_m'),
                        'entry_thickness_m': r.get('entry_thickness_m'),
                        'credibility': cred, 'credibility_words': mark,
                        'not_credible': cred == 'FORCE_OUTSIDE_REPORTED_RANGE',
-                       'no_bite': 'rejected' in r,
+                       'no_bite': 'rejected' in r and not outside,
+                       'outside_model_range': outside,
                        'rejected': r.get('rejected'),
                        'values': {k: r.get(k) for k, *_ in GAUGE_QUANTITIES},
                        'released_limited': r.get('released_onset_limited_by_reporting_'
@@ -4313,8 +4320,13 @@ def _temperature_flatness_view(result):
         out.update(position_m=big['peak_position_m'], hot_peak_i_units=big['peak_i_units'],
                    cold_peak_i_units=big.get('other_peak_i_units'))
         cold = big.get('other_peak_i_units')
+        mech = (st['profiles'].get('mechanical') or {}).get('available')
+        # a null "other" peak means either no mechanical profile (nothing to compare) or a
+        # mechanical profile without a band at that position (the band goes away on cooling)
         out['text'] = (f'Measured hot the band reads {_f3(big["peak_i_units"])} I-units'
                        + (f', after the coil has cooled {_f3(cold)}.' if cold is not None else
+                          '; after the coil has cooled no band is left at that position '
+                          '(it comes from the temperature difference alone).' if mech else
                           '; there is no modelled flatness for this pass to compare after '
                           'cooling.') + ' ' + supplied)
     else:
@@ -4438,10 +4450,23 @@ def _gauge_sensor_view(result):
                               + (' (the recording is too slow for it)' if r.get('aliased')
                                  else '') + '.')})
     srp = g.get('shortest_resolvable_pitch_m')
+    hi = g.get('shortest_resolvable_pitch_search_upper_m') or 10.0
+    by_sampling = g.get('shortest_resolvable_pitch_limited_by') == 'sampling'
+    if srp is not None:
+        text = (f'At the operating speed the gauge shows marks spaced more than about '
+                f'{_f3(srp * 1000)} mm apart; closer marks are lost because the recording '
+                'samples too slowly for them.' if by_sampling else
+                f'At the operating speed the gauge keeps at least half of marks spaced more '
+                f'than about {_f3(srp * 1000)} mm apart.')
+    elif by_sampling:
+        text = (f'At the operating speed the recording samples too slowly to show any mark '
+                f'spacing up to {_f3(hi)} m.')
+    else:
+        text = (f'At the operating speed the gauge keeps less than half of any mark spacing up '
+                f'to {_f3(hi)} m.')
     out = {'available': True, 'rows': rows, 'shortest_resolvable_pitch_m': srp,
-           'text': (f'At the operating speed the gauge keeps at least half of marks spaced more '
-                    f'than about {_f3(srp * 1000)} mm apart.' if srp is not None else
-                    'At the operating speed the gauge keeps less than half of any mark spacing.'),
+           'shortest_resolvable_pitch_status': g.get('shortest_resolvable_pitch_status'),
+           'text': text,
            'caveat': 'Spot size and response time only; real gauges have other filters.'}
     if g.get('not_detected_note'):
         out['not_detected_words'] = ('You saw no gauge variation, but the gauge could not show '
@@ -4913,7 +4938,8 @@ def _coil_view(result):
             'times': [{'hours': c['time_s'] / 3600, 'hottest_c': c['hottest_k'] - 273.15}
                       for c in cool if c.get('hottest_k') is not None],
             'limits': [{'label': LIMIT_WORDS.get(r['limit'], r['limit']),
-                        'c': r['limit_k'] - 273.15, 'at_winding': r.get('at_winding')}
+                        'c': r['limit_k'] - 273.15, 'at_winding': r.get('at_winding'),
+                        'fall_text': _fall_below_words(r)}
                        for r in ct.get('limit_rows') or []],
             'text': (f'The coil is wound at no more than '
                      f'{_f3(ct["winding_temperature_k"] - 273.15)}'
@@ -4922,6 +4948,21 @@ def _coil_view(result):
                                     f'{_f3(cool[-1]["time_s"] / 3600)} h.' if cool else
                                     'an unknown value.'))}
     return out
+
+
+def _fall_below_words(r):
+    """When the hottest lap falls below a coil limit, in plain words (one per outcome)."""
+    t, st = r.get('time_to_fall_below_s'), r.get('time_to_fall_below_status')
+    if st == 'BELOW_AT_WINDING' or (st is None and t == 0):
+        return 'The coil is already below this limit when it is wound.'
+    if isinstance(t, (int, float)):
+        return f'The hottest lap falls below this limit after about {_f3(t / 3600)} h.'
+    if st == 'LIMIT_BELOW_AMBIENT':
+        return ('The limit is below the surrounding temperature, so the coil never gets '
+                'there.')
+    hold = r.get('longest_hold_time_s')
+    return ('The hottest lap does not fall below this limit within the longest hold time you '
+            'entered' + (f' ({_f3(hold / 3600)} h).' if isinstance(hold, (int, float)) else '.'))
 
 
 LIMIT_WORDS = {'entering_final_pass': 'published limit entering the final pass',
@@ -4963,16 +5004,39 @@ def _gauge_loop_view(result):
             (f'per MPa of exit tension', pc.get('exit_tension_percent_per_mpa')),
             (f'per % of friction', pc.get('friction_percent_per_percent'))]
     rows = [{'label': a, 'value': b} for a, b in rows if isinstance(b, (int, float))]
-    step = ((fg.get('step_response') or {}).get('linear_no_limits') or {})
+    sr = fg.get('step_response') or {}
+    step = sr.get('linear_no_limits') or {}
     reel = ((fg.get('reels') or {}).get('entry') or {})
     flags = set(fg.get('flags') or [])
+    lp = fg.get('loop') or {}
+    coil_rows = [r for r in lp.get('sensitivity_at') or []
+                 if str(r.get('name', '')).endswith('coil_1x')]
+    if 'LOOP_AMPLIFIES_COIL_FREQUENCY' in flags:
+        loop_text = ('The simulated loop makes a once-per-revolution disturbance of a coil '
+                     'larger.')
+    elif coil_rows:
+        loop_text = ('The simulated loop does not make a coil\'s once-per-revolution '
+                     'disturbance larger.')
+    else:
+        # no coil diameter entered: the coil frequency was not checked (absence of the flag
+        # is not a "no")
+        loop_text = ('The coil\'s once-per-revolution frequency was not checked: no coil '
+                     'diameter was entered.')
+    if sr.get('not_run'):
+        settled_text = ('The 1 % entry gauge step was not simulated: '
+                        + clean(sr.get('reason') or 'no time run') + '.')
+    elif step.get('status') == 'SETTLED' and isinstance(step.get('settling_time_s'),
+                                                         (int, float)):
+        settled_text = ('A 1 % entry gauge step is corrected within the tension trim in about '
+                        f'{_f3(step["settling_time_s"])} s.')
+    else:
+        settled_text = ('A 1 % entry gauge step needs no more than the allowed tension trim, '
+                        'but the simulated loop does not settle it within the '
+                        f'{_f3(step.get("horizon_s") or 20)} s run.')
     return {'available': True, 'rows': rows,
             'text': ('The gauge changes by ' + '; '.join(
                 f'{_f3(r["value"])} % {r["label"]}' for r in rows) + '.') if rows else '',
-            'loop_text': ('The simulated loop makes a once-per-revolution disturbance of a coil '
-                          'larger.' if 'LOOP_AMPLIFIES_COIL_FREQUENCY' in flags else
-                          'The simulated loop does not make a coil\'s once-per-revolution '
-                          'disturbance larger.'),
+            'loop_text': loop_text,
             'trim_text': ('There is no entry tension to trim: the tension trim cannot correct '
                           'a 1 % entry gauge step.'
                           if 'FOIL_GAUGE_NO_TENSION_TRIM_RANGE' in flags else
@@ -4980,9 +5044,7 @@ def _gauge_loop_view(result):
                           if 'FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE' in flags else
                           'A 1 % entry gauge step needs more than the allowed tension trim.'
                           if 'TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE' in flags else
-                          'A 1 % entry gauge step is corrected within the tension trim'
-                          + (f' in about {_f3(step["settling_time_s"])} s.' if isinstance(
-                              step.get('settling_time_s'), (int, float)) else '.')),
+                          settled_text),
             'reel_text': (f'The entry coil turns {_f3(reel["once_per_revolution_hz"])} times a '
                           'second at the start; its run-out makes a tension ripple of '
                           f'{_f3(reel["tension_ripple_pa"] / 1e3)} kPa.') if isinstance(
@@ -5508,8 +5570,10 @@ def _phase2_cards(views):
                  [_ref_at(f'limit{k}', x['label'], x['c']) for k, x in enumerate(t['limits'])],
                  meaning='from the winding temperature (an upper bound) down over the hold '
                          'times'),
-            [t['text']], [f'after {_f3(x["hours"])} h: {_f3(x["hottest_c"])} °C'
-                          for x in t['times']],
+            [t['text']] + [f'{x["label"][0].upper() + x["label"][1:]} '
+                           f'({_f3(x["c"])} °C): {x["fall_text"]}' for x in t['limits']
+                           if x.get('fall_text')],
+            [f'after {_f3(x["hours"])} h: {_f3(x["hottest_c"])} °C' for x in t['times']],
             caveat='An upper bound: the coil is taken at the strip exit temperature.'))
     v = views['alignment_view']
     if v.get('available'):

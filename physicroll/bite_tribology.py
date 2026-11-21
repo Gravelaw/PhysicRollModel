@@ -1513,6 +1513,8 @@ FIT_CHARACTERISTIC_STRAINS = (0.05, 5.0, 60)    # geometric scan of eps_c [D, SP
 FIT_STRENGTH_KINDS = ('as_rolled_tensile', 'flow_stress')
 FIT_UNDERDETERMINED = 'UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS'
 FIT_SINGULAR = 'UNDERDETERMINED_SINGULAR_NORMAL_EQUATIONS'
+FIT_EC_NOT_DETERMINED = 'FIT_CHARACTERISTIC_STRAIN_NOT_DETERMINED'
+FIT_FLAT_RELATIVE = 1e-9               # |d| at most this share of the strengths: no Voce rise
 FIT_PARABOLA_STEPS = 8              # [D] repeated parabola (deviation, see the fit)
 FIT_PARABOLA_TOL = 1e-6             # [D] in ln(eps_c)
 
@@ -1643,6 +1645,17 @@ def fit_voce_to_pass_strengths(gauges_m, strengths_pa, *, reference_thickness_m,
         valid = None
     except ValueError as exc:
         valid = str(exc)
+    ec_reason = None
+    if abs(d) <= FIT_FLAT_RELATIVE * max(abs(y) for y in ys):
+        # no rise between initial and saturation stress: the exponential term is absent and
+        # every characteristic strain fits equally well (identical strengths)
+        params['characteristic_strain'] = None
+        first = None
+        flags.append(FIT_EC_NOT_DETERMINED)
+        ec_reason = ('the fitted saturation stress equals the initial stress (no hardening '
+                     'between the entered strengths), so the characteristic strain has no effect '
+                     'and is not determined')
+        valid = valid or ec_reason
     return _checked({
         'status': 'FITTED_TO_ENTERED_STRENGTHS_NOT_VERIFIED', 'law': 'voce',
         'parameters': params, 'equivalent_strains': eps, 'residuals_pa': res,
@@ -1652,6 +1665,7 @@ def fit_voce_to_pass_strengths(gauges_m, strengths_pa, *, reference_thickness_m,
         'stage_iv_slope_fixed_to_zero': not with_slope,
         'parabola_steps': refined, 'first_parabola_characteristic_strain': first,
         'law_rejected_by_validation': valid,
+        **({'characteristic_strain_reason': ec_reason} if ec_reason else {}),
         'strength_is': strength_is,
         'formula': 'sigma = s0 + d*(1 - exp(-eps/eps_c)) + th4*eps; eps = prior + '
                    '(2/sqrt(3))*ln(h_ref/h)',

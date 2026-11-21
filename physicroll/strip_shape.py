@@ -427,6 +427,11 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     a uniform elongation does not redistribute the reel-controlled mean tension.
     """
     z = _grid(z_m, min_len=4)
+    _in_domain('local_radius_deviation_m', local_radius_deviation_m,
+               SHAPE_RADIUS_DEVIATION_RANGE_M,
+               'the roll would grow locally by {mm:.4g} mm, more than the {bound_mm:g} mm the '
+               'strip-shape model covers (too little cooling for this roll heat): outside the '
+               'model\'s range, so this screen does not cover it')
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
                lo=-1e-3, hi=1e-3)
     if len(dr) != len(z):
@@ -976,6 +981,10 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     no compression at its samples, or no positive U, gets U = 0 (LATENT / FLAT).
     """
     z = _grid(z_m)
+    _in_domain('elongation', elongation, SHAPE_ELONGATION_RANGE,
+               'at this gauge the strip would stretch unevenly across its width by '
+               '{pct:.3g} %, more than the {bound_pct:g} % the strip-shape model covers: '
+               'outside the model\'s range, so this screen does not cover it')
     eps = _list('elongation', elongation, min_len=2, lo=-0.5, hi=0.5)
     if len(eps) != len(z):
         raise ValueError('elongation must have the same length as z_m')
@@ -1182,6 +1191,36 @@ def _signed_peak(values):
     return max(values, key=abs)
 
 
+SHAPE_RADIUS_DEVIATION_RANGE_M = 1e-3   # the largest local roll radius deviation the chain takes
+SHAPE_ELONGATION_RANGE = 0.5            # the largest differential elongation it takes
+
+
+class ShapeDomainError(ValueError):
+    """A roll profile or elongation outside the range the strip-shape chain covers (a
+    physical domain limit of the screen, not an input error). ``str()`` is the message of the
+    range check it replaces (results that quote it are unchanged); ``plain`` is the sentence
+    for a reader, which the shape section reports."""
+
+    def __init__(self, message, plain):
+        super().__init__(message)
+        self.plain = plain
+
+
+def _in_domain(name, values, bound, words):
+    vals = list(values) if isinstance(values, (list, tuple)) else None
+    if vals and all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                    for v in vals):
+        i = next((k for k, v in enumerate(vals) if abs(v) > bound), None)
+        if i is not None:
+            peak = max(vals, key=abs)
+            v = float(vals[i])
+            message = (f'{name}[{i}] must be >= {-bound}' if v < -bound
+                       else f'{name}[{i}] must be <= {bound}')
+            raise ShapeDomainError(message, words.format(
+                peak=peak, bound=bound, mm=abs(peak) * 1e3, bound_mm=bound * 1e3,
+                pct=abs(peak) * 100, bound_pct=bound * 100))
+
+
 STRIP_EDGE_REL_TOL = 1e-12             # a sample within this share of the half width of the
                                        # strip edge counts as on the strip (rounding of a grid)
 
@@ -1220,6 +1259,11 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     value); the band's samples are scaled by the peak ratio and flatness recomputed.
     """
     z = _grid(z_m, min_len=4)
+    _in_domain('local_radius_deviation_m', local_radius_deviation_m,
+               SHAPE_RADIUS_DEVIATION_RANGE_M,
+               'the roll would grow locally by {mm:.4g} mm, more than the {bound_mm:g} mm the '
+               'strip-shape model covers (too little cooling for this roll heat): outside the '
+               'model\'s range, so this screen does not cover it')
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
                lo=-1e-3, hi=1e-3)
     if len(dr) != len(z):

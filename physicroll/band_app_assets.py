@@ -1292,9 +1292,9 @@ APP_JS = r''''use strict';
       function Y(v) { return t + (hi - v) / (hi - lo) * (h - t - b); }
       var s = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(qt.label + ' for each pass, thickest on the left, thinnest on the right') + '">';
       ps.forEach(function (p, i) {
-        if (p.not_credible || p.no_bite) {
+        if (p.not_credible || p.no_bite || p.outside_model_range) {
           s += '<rect x="' + (X(i) - 14) + '" y="' + t + '" width="28" height="' + (h - t - b) + '" fill="url(#mh)" opacity=".7"/>' +
-            '<text x="' + X(i) + '" y="' + (t + 12) + '" font-size="9" text-anchor="middle">' + (p.not_credible ? 'not credible' : 'no result') + '</text>';
+            '<text x="' + X(i) + '" y="' + (t + 12) + '" font-size="9" text-anchor="middle">' + (p.not_credible ? 'not credible' : p.outside_model_range ? 'outside range' : 'no result') + '</text>';
         }
       });
       s += '<defs><pattern id="mh" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="6" fill="var(--soft)"/></pattern></defs>';

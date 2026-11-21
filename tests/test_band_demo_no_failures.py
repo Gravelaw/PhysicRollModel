@@ -42,6 +42,37 @@ class CommittedDemosHaveNoFailedSection(unittest.TestCase):
             self.assertEqual([f for f in r.get('flags') or [] if FAILED_FLAG.search(f)], [],
                              name)
 
+    def test_no_internal_range_check_text(self):
+        # a plant reader must not see an internal array bound such as "elongation[46] must be
+        # <= 0.5" (the realistic-header demo's thinnest pass before round three)
+        pat = re.compile(r'\w+\[\d+\] must be (<=|>=|<|>)')
+
+        def strings(x):
+            if isinstance(x, dict):
+                for v in x.values():
+                    yield from strings(v)
+            elif isinstance(x, list):
+                for v in x:
+                    yield from strings(v)
+            elif isinstance(x, str):
+                yield x
+        for name in DEMOS:
+            r = json.loads((ART / f'{name}.result.json').read_text(encoding='utf-8'))
+            self.assertEqual([t for t in strings(r) if pat.search(t)], [], name)
+            html = (ART / f'{name}.report.html').read_text(encoding='utf-8')
+            self.assertIsNone(pat.search(html.replace('&lt;', '<').replace('&gt;', '>')), name)
+
+    def test_pass_outside_the_shape_range_is_not_called_a_missing_bite(self):
+        from physicroll import band_plain as bpl
+        r = json.loads((ART / 'realistic-header-demo.result.json').read_text(encoding='utf-8'))
+        rows = [x for x in r['width']['gauge_trend']['rows'] if 'rejected' in x]
+        self.assertTrue(rows and all(x.get('rejected_outside_model_range') for x in rows))
+        v = bpl._gauge_view(r)
+        bad = [p for p in v['passes'] if p['rejected']]
+        self.assertTrue(bad and all(p['outside_model_range'] and not p['no_bite'] for p in bad))
+        html = (ART / 'realistic-header-demo.report.html').read_text(encoding='utf-8')
+        self.assertIn('not assessed: at this gauge the strip would stretch unevenly', html)
+
     def test_the_check_sees_a_failed_section(self):
         r = {'width': {'zone_step_test': {'status': 'FAILED', 'error': 'zone_step_test: '
                                           'TypeError: x'}, 'failures': ['zone_step_test: x']}}

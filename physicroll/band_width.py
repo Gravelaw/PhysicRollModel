@@ -2771,6 +2771,11 @@ def _troughs(case, w, obs):
              p['entry_tension_pa']),
             ('exit_span', p['exit_thickness_m'], spans['exit_span_length_m'],
              p['exit_tension_pa'])):
+        if not tension > 0:
+            out[name] = not_assessable('no span tension entered, so trough onset cannot be '
+                                       'assessed (the trough and wrinkle thresholds scale with '
+                                       'the span tension)')
+            continue
         try:
             r = ss.tension_trough_screen(
                 h, length, tension, p['width_m'], roller_radius_m=w['deflector_roll_radius_m'],
@@ -3063,6 +3068,9 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 for name, k in keys_.items():
                     if f'{name}_domain_limit' in o:      # keys only then (no onset)
                         row[k[:-2] + '_domain_limit_m'] = o[f'{name}_domain_limit'] * height
+        except ss.ShapeDomainError as exc:
+            row['rejected'] = exc.plain             # a plant reader's reason, no array bound
+            row['rejected_outside_model_range'] = True    # the bite ran; the shape did not
         except ValueError as exc:
             row['rejected'] = str(exc)
         h1 = src['exit_thickness_m']
@@ -3720,6 +3728,7 @@ def _predicted_events(timeline, groups, initial, dt, horizon):
     return rows
 
 
+SHAPE_FLAG_OUTSIDE_RANGE = 'STRIP_SHAPE_OUTSIDE_MODEL_RANGE'
 FC_MIN_ZONES = 2      # a zone reading is relative to the strip mean: one zone reads zero
 
 
@@ -4930,11 +4939,18 @@ def coil_temperature_section(case, result):
             above = t_wind > lim_k
             tfall = (None if not above or theta is None or theta <= 0 else
                      wr.time_to_fall_below(cool['hottest_history'], theta))
+            # the null time has two meanings: the coil never gets below a limit under the
+            # surrounding temperature, or not within the longest hold time computed
+            fall_status = ('BELOW_AT_WINDING' if not above else
+                           'LIMIT_BELOW_AMBIENT' if theta is None or theta <= 0 else
+                           'FOUND' if tfall is not None else 'NOT_REACHED_WITHIN_LONGEST_HOLD')
             st = srcs.get(key)
             limit_rows.append({'limit': key, 'limit_k': lim_k,
                                'source': None if st is None else list(st.sources),
                                'at_winding': 'ABOVE' if above else 'BELOW',
-                               'time_to_fall_below_s': 0.0 if not above else tfall})
+                               'time_to_fall_below_s': 0.0 if not above else tfall,
+                               'time_to_fall_below_status': fall_status,
+                               'longest_hold_time_s': max(ct['hold_times_s'])})
     lane_stress, per_lane = None, None
     ls = width.get('local_state') if isinstance(width.get('local_state'), dict) else {}
     lanes = cws.get('lanes') if cws else None
@@ -5587,6 +5603,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     flags += [f for f in (out['local_state'].get('flags') or [])
               if f in band_local.TOP_LEVEL_FLAGS and f not in flags]
     shape = {'steady': None, 'nozzle_pattern_ripple': None, 'crown': None, 'ridges': []}
+    shape_domain_reason = None
     if steady is not None and sp is None:
         shape['steady'] = not_assessable(shape_reason)
         shape['nozzle_pattern_ripple'] = not_assessable(shape_reason)
@@ -5595,6 +5612,10 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             lv = shape_levels(steady['z_m'], steady['local_deviation_m'], sp)
             shape['steady'] = lv
             shape['steady_stripe_table'] = steady_stripe_table(steady, lv, sp)
+        except ss.ShapeDomainError as exc:
+            shape_domain_reason = exc.plain
+            shape['steady'] = dict(not_assessable(shape_domain_reason), outside_model_range=True)
+            flags.append(SHAPE_FLAG_OUTSIDE_RANGE)
         except SECTION_ERRORS as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])
@@ -5769,9 +5790,13 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     # SPEC14 Part 3: heat partition and spray coefficient sensitivity of the stripe result
     try:
         from . import band_thermal
+        if shape_domain_reason is not None:
+            raise ss.ShapeDomainError(shape_domain_reason, shape_domain_reason)
         out['thermal_sensitivity'] = band_thermal.thermal_sensitivity(
             case, w, th, sp, steady, actual, out['thermal_events'], sys.modules[__name__],
             shape.get('steady_stripe_table') if isinstance(shape, dict) else None)
+    except ss.ShapeDomainError as exc:
+        out['thermal_sensitivity'] = not_assessable(f'not assessed: {exc.plain}')
     except SECTION_ERRORS as exc:
         # an optional block: no error inside it may abort the diagnosis
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
@@ -6482,7 +6507,7 @@ def _h_troughs(f):
                    ('SUPPORTS', 'strong'), ('CONTRADICTS', 'strong')))
     crit = 'model trough status (either span)'
     sts = [tr[n]['status'] for n in ('entry_span', 'exit_span') if isinstance(tr.get(n), dict)]
-    valid = [s for s in sts if s != 'REJECTED']
+    valid = [s for s in sts if s not in ('REJECTED', 'NOT_ASSESSABLE')]
     # SPEC19 package 12: statuses from a stress computed from span_alignment (no supplied
     # plant stress) count only a little and never against troughs
     computed = [tr[n]['status'] for n in ('entry_span', 'exit_span')

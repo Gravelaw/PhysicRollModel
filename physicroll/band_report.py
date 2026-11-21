@@ -600,6 +600,64 @@ PITCH_NAMES = {'nozzle_pitch_m': 'nozzle pitch', 'cooling_zone_pitch_m': 'coolin
                'trough_wavelength_exit_span_m': 'trough wavelength, exit span'}
 
 
+def attenuation_text(lp):
+    """The band the foil gauge loop reduces (``foil_gauge_control.loop``), one phrase per
+    outcome: an edge, no amplification anywhere in the scan, or an edge below the scan not
+    found."""
+    a = lp.get('attenuates_below_hz')
+    if _ok(a):
+        return f'disturbances are reduced below {_f(a, digits=3)} Hz'
+    if lp.get('attenuation_edge_below_scan_start'):
+        return ('the frequency below which disturbances are reduced was not found (it lies '
+                'below the scan)')
+    from . import foil_gauge
+    top = foil_gauge.scan_frequencies()[-1] / (2 * math.pi)
+    return ('the loop does not amplify a disturbance at any frequency of the scan (up to '
+            f'{_f(top, digits=3)} Hz): it reduces or keeps every one')
+
+
+def fall_below_text(r):
+    """When the hottest point of the coil falls below a limit, one phrase per outcome of
+    ``width.coil_temperature.limit_rows[*].time_to_fall_below_status``."""
+    t, st = r.get('time_to_fall_below_s'), r.get('time_to_fall_below_status')
+    if _ok(t) and (st in (None, 'FOUND') or t > 0):
+        return f'falls below after {_f(t / 3600, digits=3)} h'
+    if st == 'BELOW_AT_WINDING' or (_ok(t) and t == 0):
+        return 'already below at winding'
+    if st == 'LIMIT_BELOW_AMBIENT':
+        return ('the limit is below the surrounding temperature, so the coil never gets '
+                'there')
+    hold = r.get('longest_hold_time_s')
+    return ('not reached within the longest hold time entered'
+            + (f' ({_f(hold / 3600, digits=3)} h)' if _ok(hold) else ''))
+
+
+def gauge_pitch_sentence(tg):
+    """The shortest resolvable pitch of ``measurement.thickness_gauge`` in words, one sentence
+    per outcome (``shortest_resolvable_pitch_status`` and ``_limited_by``; a result without the
+    status is read as before)."""
+    sp = tg.get('shortest_resolvable_pitch_m')
+    st = tg.get('shortest_resolvable_pitch_status')
+    hi = tg.get('shortest_resolvable_pitch_search_upper_m') or 10.0
+    if _ok(sp):
+        if tg.get('shortest_resolvable_pitch_limited_by') == 'sampling':
+            return (f'Shortest pitch it shows at the operating speed: {_mm2(sp, 3)}, set by the '
+                    'sample interval (a shorter pitch is aliased; the spot and time constant '
+                    'alone would keep half down to '
+                    f'{_mm2(tg.get("shortest_resolvable_pitch_gain_limit_m"), 3)}).'
+                    if _ok(tg.get('shortest_resolvable_pitch_gain_limit_m')) else
+                    f'Shortest pitch it shows at the operating speed: {_mm2(sp, 3)}, set by the '
+                    'sample interval (a shorter pitch is aliased).')
+        return (f'Shortest pitch it keeps at least half of at the operating speed: '
+                f'{_mm2(sp, 3)}.')
+    if st == 'NONE_IN_SEARCH_RANGE' and \
+            tg.get('shortest_resolvable_pitch_limited_by') == 'sampling':
+        return (f'No pitch up to {_f(hi, 1, 3)} m is shown at the operating speed: the sample '
+                'interval aliases every one of them.')
+    return (f'No pitch up to {_f(hi, 1, 3)} m is kept at half its amplitude at the operating '
+            'speed.')
+
+
 def _ok(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
@@ -1266,8 +1324,9 @@ def _other_width_results(w):
             t = tr.get(name)
             if not isinstance(t, dict):
                 continue
-            if 'error' in t:
-                rows.append([_e(name.replace('_', ' ')), f'<em>{_e(t["error"])}</em>', '', '', '',
+            if 'error' in t or t.get('status') == 'NOT_ASSESSABLE':
+                rows.append([_e(name.replace('_', ' ')),
+                             f'<em>{_e(t.get("error") or t.get("reason"))}</em>', '', '', '',
                              '', '', '', ''])
                 continue
             ratio = t.get('observed_spacing_to_wavelength_ratio')
@@ -1450,9 +1509,7 @@ def _coil_temperature_block(w):
                    for r in ct.get('cooling') or [])
     lims = ''.join(f'<li>{_e(r["limit"].replace("_", " "))} {_f(r["limit_k"] - 273.15)} °C '
                    f'[{_e(", ".join(r["source"] or []))}]: {_e(r["at_winding"].lower())} at '
-                   f'winding; falls below after '
-                   f'{_f(None if r["time_to_fall_below_s"] is None else r["time_to_fall_below_s"] / 3600)}'
-                   ' h</li>' for r in ct.get('limit_rows') or [])
+                   f'winding; {_e(fall_below_text(r))}</li>' for r in ct.get('limit_rows') or [])
     return (head + f'<p>Winding temperature {_f(ct["winding_temperature_k"] - 273.15)} °C: the '
             'modelled strip exit temperature of the case pass, an upper bound (no loss between '
             'the roll gap and the coil). Radial conductivity '
@@ -1960,12 +2017,18 @@ def _local_block(w):
                    + _table(head, erows, 'wrapall'))
     out.append(_ul([_e(t) for t in texts]))
     co = ls.get('compliance_only') or {}
-    out.append(f'<p>Transfer levels: the film term peaks at '
-               f'{_f(co.get("film_peak_i_units_with_feedback"), 1, 3)} I-units with the '
-               f'exit-tension feedback and {_f(co.get("film_peak_i_units"), 1, 3)} compliance '
-               'only; the softer-metal term at '
-               f'{_f(co.get("flow_stress_peak_i_units_with_feedback"), 1, 3)} and '
-               f'{_f(co.get("flow_stress_peak_i_units"), 1, 3)}. {_e(co.get("note"))}</p>')
+    miss = ls.get('missing_terms') if isinstance(ls.get('missing_terms'), dict) else {}
+
+    def level(term, words):
+        a, b = co.get(f'{term}_peak_i_units_with_feedback'), co.get(f'{term}_peak_i_units')
+        if _ok(a) and _ok(b):
+            return (f'{words} peaks at {_f(a, 1, 3)} I-units with the exit-tension feedback '
+                    f'and {_f(b, 1, 3)} compliance only' if term == 'film' else
+                    f'{words} at {_f(a, 1, 3)} and {_f(b, 1, 3)}')
+        why = miss.get(term)
+        return f'{words} is not computed' + (f' ({_e(why)})' if why else '')
+    out.append(f'<p>Transfer levels: {level("film", "the film term")}; '
+               f'{level("flow_stress", "the softer-metal term")}. {_e(co.get("note"))}</p>')
     sens = ls.get('sensitivities') or {}
     sc = _get(ls, 'time_scales', 'model_scales') or {}
     out.append(f'<p>Force sensitivities from the {_e(sens.get("sensitivity_bite_model"))} bite '
@@ -2590,15 +2653,18 @@ def _gauge_section(r):
         lead = [_e(x.get('label', '')) + mark, _mm2(x.get('exit_thickness_m')),
                 _mpa(x.get('exit_tension_pa'))]
         if 'rejected' in x:
+            outside = bool(x.get('rejected_outside_model_range'))
             cells, first = [], True
             for name, fn in cols:
                 if name in free:
                     cells.append(fn(x))
                 elif first:
-                    cells.append(f'<em>no roll-bite result: {_e(x["rejected"])}</em>')
+                    cells.append(f'<em>{"not assessed" if outside else "no roll-bite result"}'
+                                 f': {_e(x["rejected"])}</em>')
                     first = False
                 else:
-                    cells.append('<em>no roll-bite result</em>')
+                    cells.append(f'<em>{"not assessed" if outside else "no roll-bite result"}'
+                                 '</em>')
             body.append(lead + cells)
             continue
         body.append(lead + [fn(x) for _, fn in cols])
@@ -3115,8 +3181,7 @@ def _foil_gauge_block(s):
     out.append(f'<p>Loop: dead time {_f(lp.get("dead_time_s"), digits=4)} s, crossover '
                f'{_f(lp.get("crossover_rad_s"), digits=4)} rad/s ({_e(lp.get("crossover_source"))}), '
                f'phase margin {_f(lp.get("phase_margin_deg"), digits=3)} degrees, gain margin '
-               f'{_f(lp.get("gain_margin"), digits=3)}; disturbances are reduced below '
-               f'{_f(lp.get("attenuates_below_hz"), digits=3)} Hz; peak amplification '
+               f'{_f(lp.get("gain_margin"), digits=3)}; {_e(attenuation_text(lp))}; peak amplification '
                f'{_f(lp.get("peak_sensitivity"), digits=3)} at '
                f'{_f(lp.get("peak_sensitivity_hz"), digits=3)} Hz.</p>')
     rows = [[_e(x['name']), _f(x['frequency_hz'], digits=4), _f(x['magnitude'], digits=4),
@@ -3141,8 +3206,11 @@ def _foil_gauge_block(s):
         out.append(_state_p(st.get('reason', '')))
     else:
         lin, lim = st.get('linear_no_limits') or {}, st.get('with_limits') or {}
-        out.append(f'<p>1 % entry gauge step: without limits within 5 % after '
-                   f'{_f(lin.get("settling_time_s"), digits=3)} s, overshoot '
+        settle = (f'within 5 % after {_f(lin["settling_time_s"], digits=3)} s'
+                  if _ok(lin.get('settling_time_s')) else
+                  f'not within 5 % by the end of the {_f(lin.get("horizon_s") or 20, digits=3)} '
+                  's run')
+        out.append(f'<p>1 % entry gauge step: without limits {settle}, overshoot '
                    f'{_f(lin.get("overshoot_fraction"), 100, 2, "%")}; with the trim limit: '
                    f'{_txt(lim.get("status"))}.</p>')
     out.append(_reel_lines(s.get('reels'), s.get('pass_chain')))
@@ -3934,11 +4002,7 @@ def _gauge_html(m):
     if rows:
         out.append(_table(['source', 'pitch', 'exit speed [m/s]', 'frequency [Hz]', 'spot',
                            'time constant', 'kept (combined)', 'aliased', 'resolvable'], rows))
-    sp = tg.get('shortest_resolvable_pitch_m')
-    out.append('<p>' + (f'Shortest pitch it keeps at least half of at the operating speed: '
-                        f'{_mm2(sp, 3)}.' if _ok(sp) else
-                        'No pitch up to 10 m is kept at half its amplitude at the operating '
-                        'speed.') + '</p>')
+    out.append('<p>' + _e(gauge_pitch_sentence(tg)) + '</p>')
     if tg.get('not_detected_note'):
         out.append(f'<p class="warn">{_e(tg["not_detected_note"])}</p>')
     if tg.get('bands_under_gauge') is not None:

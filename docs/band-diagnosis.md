@@ -3365,7 +3365,9 @@ times are asked for (`COOLING_STEPS`; with one hold time, 400 equal steps to it)
 outer surface at mid width; `limit_rows` against the published coil limits read from
 `thermal_check.coil_limits_c` (75 C entering the final pass, 80 C leaving it, 90 C elongation
 decay, with their sources): above or below at winding and the time for the hottest point to fall
-below. `thermal_check` gains `coil_temperature_beside` with these rows; its verdicts, which
+below, with `time_to_fall_below_status` (`FOUND`, `BELOW_AT_WINDING`, `LIMIT_BELOW_AMBIENT`: the
+limit is under the surrounding temperature and is never reached, `NOT_REACHED_WITHIN_LONGEST_HOLD`
+beside `longest_hold_time_s`), each worded on its own in the report and the app. `thermal_check` gains `coil_temperature_beside` with these rows; its verdicts, which
 compare the strip exit temperature, are unchanged. Stress between lanes on cooling to a common
 temperature: `E*alpha*(T_j - mean T)` (1.652 MPa per K), added to the lane's hoop stress of the
 winding section and compared with yield (`COIL_COOLING_STRESS_REACHES_YIELD`), an upper bound.
@@ -3714,7 +3716,10 @@ RMS, the sign of the late slope and flags (`FIT_TO_ENTERED_STRENGTHS_NOT_VERIFIE
 `FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS`, `TENSILE_STRENGTH_USED_AS_FLOW_STRESS`: an
 as-rolled tensile strength of a hard temper is taken as the flow stress at that strain [D]);
 with fewer than 3 points it refuses (`NOT_FITTED`, outcome
-`UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS`) and returns no number. Nothing is written into
+`UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS`) and returns no number. When the fitted saturation
+stress equals the initial one (identical strengths: no rise) the characteristic strain has no
+effect: it is null, flag `FIT_CHARACTERISTIC_STRAIN_NOT_DETERMINED` with
+`characteristic_strain_reason`, and `law_rejected_by_validation` says so. Nothing is written into
 a case.
 
 ### 8.4 Speed-consistent chatter critical speed
@@ -4609,7 +4614,14 @@ speed, about how much of a mark of that pitch the gauge keeps [D, re-derived in 
 `|sin(pi*L/p)/(pi*L/p)|`, a first-order response with time constant `tau` keeps
 `1/sqrt(1 + (2*pi*f*tau)^2)` (an averaging length `u*tau`); sampling at `dt` aliases when
 `f > 1/(2*dt)`. A pitch is resolvable when the product is at least 0.5 (analyst choice [D])
-and it is not aliased; the shortest resolvable pitch at the operating speed is given. With
+and it is not aliased; the shortest resolvable pitch at the operating speed is given in the same
+sense: every pitch at or above it is resolvable, every shorter one is not
+(`band_sensors.resolvable_pitch`: the one root of `G = 0.5` on `[L, 10 m]`, exact by bisection,
+since `G` rises monotonically with the pitch there and the side lobes of the spot average stay
+below 0.5; with a sample interval at least `2*u*dt`). `shortest_resolvable_pitch_status` is
+`FOUND` or `NONE_IN_SEARCH_RANGE` (no pitch up to 10 m), `shortest_resolvable_pitch_limited_by`
+names the limit (`spot_and_time_constant` or `sampling`), and the report and the app word each
+outcome on its own. With
 `gauge_variation_amplitude_m` each row gives the amplitude before the gauge, a lower bound of
 the true amplitude if the mark has that pitch; below a gain of 0.01 (`GAUGE_AMPLITUDE_MIN_GAIN`,
 analyst choice [D]: near a zero of the spot average the ratio grows without bound) it is null

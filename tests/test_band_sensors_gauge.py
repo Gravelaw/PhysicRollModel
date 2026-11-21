@@ -22,6 +22,11 @@ G = {'spot_length_m': 0.010, 'time_constant_s': 0.005, 'sample_interval_s': 0.00
      'position_m': None, 'spot_width_m': None, 'provenance': 'unit test gauge <x>'}
 
 
+def dt_limits(g, u, r):
+    dt = g['sample_interval_s']
+    return dt is not None and 2 * u * dt > r['gain_limit_m']
+
+
 class GainTests(unittest.TestCase):
 
     def test_closed_form_gains(self):
@@ -55,6 +60,73 @@ class GainTests(unittest.TestCase):
             self.assertGreaterEqual(bs.gauge_row('x', q, 16.0, G)['combined_gain'], 0.5)
         self.assertIsNone(bs.shortest_resolvable_pitch_m(dict(G, time_constant_s=10.0), 16.0))
         self.assertAlmostEqual(10.0 * 0.005, 0.05)          # u*tau at 10 m/s
+
+    def test_threshold_agrees_with_gauge_row(self):
+        # every pitch at or above the threshold resolvable, just below it not, with and
+        # without sampling (before: the gain alone, 16.6 mm against 2 m of sampling)
+        gauges = [dict(spot_length_m=L, time_constant_s=tau, sample_interval_s=dt)
+                  for L in (5e-5, 0.01, 0.2) for tau in (0.0, 0.005, 0.05)
+                  for dt in (None, 1e-3, 0.1)]
+        for g in gauges:
+            for u in (2.0, 10.0):
+                r = bs.resolvable_pitch(g, u)
+                p = r['pitch_m']
+                if p is None:
+                    self.assertEqual(r['status'], bs.PITCH_NONE_IN_RANGE)
+                    self.assertFalse(bs.gauge_row('x', 10.0, u, g)['resolvable'])
+                    continue
+                self.assertEqual(r['status'], bs.PITCH_FOUND)
+                for q in [p * (1 + 1e-9)] + [p * 1.25 ** k for k in range(1, 30)
+                                             if p * 1.25 ** k <= 10.0]:
+                    self.assertTrue(bs.gauge_row('x', q, u, g)['resolvable'], (g, u, p, q))
+                self.assertFalse(bs.gauge_row('x', p * (1 - 1e-6), u, g)['resolvable'],
+                                 (g, u, p))
+                want = 'sampling' if dt_limits(g, u, r) else 'spot_and_time_constant'
+                self.assertEqual(r['limited_by'], want)
+        g = dict(spot_length_m=0.01, time_constant_s=0.0, sample_interval_s=0.1)
+        r = bs.resolvable_pitch(g, 10.0)                       # the reviewer's case
+        self.assertEqual((r['pitch_m'], r['limited_by']), (2.0, 'sampling'))
+        self.assertAlmostEqual(r['gain_limit_m'], 0.016574, delta=1e-6)
+
+    def test_short_spot_resolves_below_the_old_search_range(self):
+        # a 50 um spot, no lag: None before (read as "no spacing kept"); the exact threshold
+        # is the sinc half-amplitude point x = 1.8955, p = pi*L/1.8955 = 82.9 um
+        g = dict(spot_length_m=50e-6, time_constant_s=0.0, sample_interval_s=None)
+        r = bs.resolvable_pitch(g, 10.0)
+        self.assertEqual(r['status'], bs.PITCH_FOUND)
+        self.assertAlmostEqual(r['pitch_m'], math.pi * 50e-6 / 1.8954942670, delta=1e-12)
+        self.assertTrue(bs.gauge_row('x', 1e-3, 10.0, g)['resolvable'])
+        # side lobes: once below 0.5 after the first crossing the sinc never returns to it
+        xs = [1.8955 + 1e-4 * i for i in range(1, 300000)]
+        self.assertLess(max(abs(math.sin(x) / x) for x in xs), 0.5)
+
+    def test_sentences_for_each_outcome(self):
+        from physicroll import band_plain as bpl
+        from physicroll import band_report as brp
+        base = {'status': bs.STATUS, 'not_supplied': False, 'rows': [],
+                'shortest_resolvable_pitch_search_upper_m': 10.0}
+        cases = (
+            (dict(base, shortest_resolvable_pitch_m=8.287e-5, shortest_resolvable_pitch_status=
+                  'FOUND', shortest_resolvable_pitch_limited_by='spot_and_time_constant'),
+             'keeps at least half of marks spaced more than about 0.0829 mm',
+             'keeps at least half of at the operating speed: 0.0829 mm'),
+            (dict(base, shortest_resolvable_pitch_m=2.0, shortest_resolvable_pitch_status=
+                  'FOUND', shortest_resolvable_pitch_limited_by='sampling',
+                  shortest_resolvable_pitch_gain_limit_m=0.016574),
+             'samples too slowly', 'set by the sample interval'),
+            (dict(base, shortest_resolvable_pitch_m=None, shortest_resolvable_pitch_status=
+                  'NONE_IN_SEARCH_RANGE',
+                  shortest_resolvable_pitch_limited_by='spot_and_time_constant'),
+             'keeps less than half of any mark spacing up to 10 m',
+             'No pitch up to 10 m is kept at half its amplitude'),
+            (dict(base, shortest_resolvable_pitch_m=None, shortest_resolvable_pitch_status=
+                  'NONE_IN_SEARCH_RANGE', shortest_resolvable_pitch_limited_by='sampling'),
+             'samples too slowly to show any mark spacing up to 10 m',
+             'the sample interval aliases every one of them'))
+        for tg, app, report in cases:
+            v = bpl._gauge_sensor_view({'measurement': {'thickness_gauge': tg}})
+            self.assertIn(app, v['text'])
+            self.assertIn(report, brp.gauge_pitch_sentence(tg))
 
     def test_validation(self):
         for key, value, msg in (('spot_length_m', 0.0, 'spot_length_m must be in (0, 1] m'),
