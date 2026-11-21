@@ -2262,12 +2262,16 @@ HEAT_STRIP_SHARE = _r(11, 33, '%', 'PT-T16', 'measured foil-mill heat partition,
 HEAT_ROLL_SHARE = _r(67, 89, '%', 'PT-T16', 'measured foil-mill heat partition, roll share '
                      '(abstract only; net balance); the roll share rises with cooling')
 SPRAY_ROLL = _r(2.5, 4.3, 'kW/m2K', 'PT-T18', 'kerosene spray on a work roll, SIMULATED (1800 mm '
-                'cold mill, 34 nozzles at 52 mm, roll 50 °C), 200–700 kPa')
-SPRAY_JET = _r(3.0, 4.0, 'kW/m2K', 'PT-T18', 'jet zone at 500 kPa, simulated')
+                'cold mill, two rows of 34 nozzles at 52 mm per work roll, entry side only, '
+                'kerosene [SN14 FT], roll 50 °C), 200–700 kPa; an average over the roll-wall '
+                'patch of one cooling zone [SN14 FT]')
+SPRAY_JET = _r(3.0, 4.0, 'kW/m2K', 'PT-T18', 'at 500 kPa, simulated: the value rises from 3.0 to '
+               '4.0 in time as the coolant spreads over the wall, not across space [SN14 FT]')
 SPRAY_MODEL_OVERALL = _r(4.65, 5.5, 'kW/m2K', 'PT-T20', 'overall value in a cold-mill model '
                          'example; coolant not named')
 OIL_VS_WATER = _r(3, 6, 'ratio', 'PT-T19', 'water spray coefficient over oil at equal impingement '
-                  'density (measured on a steel plate)')
+                  'density (measured on a steel plate); the text says 3-6, the conclusions '
+                  '"about 3-5 times" [SN16 FT]')
 SPRAY_PLATE = Range(_q(31e3 / 6), _q(38e3 / 3), 'W/m^2K', ('PT-T19',), 'computed: water about '
                     '31–38 kW/m²K at 5 bar divided by 3–6 (steel plate at 25–250 °C, not a roll)',
                     'span', 'computed', 'kW/m2K')
@@ -2478,12 +2482,15 @@ PT_SIMULATION = (
     _s('Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with '
        'cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; '
        'a net balance.', 'PT-T16', HEAT_STRIP_SHARE, HEAT_ROLL_SHARE, topic='heat_partition'),
-    _s('Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at '
-       '500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll '
+    _s('Spray coefficient, kerosene on a work roll: at 500 kPa it rises from 3.0 to 4.0 kW/m²K in '
+       'time as the coolant spreads over the wall (not across space); 2.5–4.3 over 200–700 kPa, '
+       'an average over the roll-wall patch of one cooling zone. Simulated (1800 mm cold mill, '
+       'two rows of 34 nozzles at 52 mm per work roll, entry side only, kerosene [SN14 FT]; roll '
        '50 °C); viscosity ranks first among spray factors.', 'PT-T18 PT-T17', SPRAY_ROLL,
        SPRAY_JET, topic='spray_coefficient'),
-    _s('Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a '
-       'steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about '
+    _s('Oil against water spray: oil 3–6 times lower at equal impingement density (the text; the '
+       'conclusions say "about 3–5 times" [SN16 FT]) (measured on a steel plate, full-cone '
+       'nozzle); water about 31–38 kW/m²K at 5 bar, so oil about '
        '5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll).', 'PT-T19', OIL_VS_WATER,
        SPRAY_PLATE, topic='oil_vs_water'),
     _s('Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll.',

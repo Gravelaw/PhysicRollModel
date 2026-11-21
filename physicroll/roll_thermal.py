@@ -19,9 +19,14 @@ Li et al. 2024]::
   edges) [D]: ``q = roll_heat_fraction_per_roll*bite_heat_per_width_w_m/(2*pi*R)``.
 - Heat-transfer coefficient (circumferential mean) [D]:
   ``h = background_htc + spray_mean_htc*weight(z,t)``. Nozzle ``i`` at ``z_i`` with
-  along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)`` [V: Lloyd 2010;
-  Tucker 2006] and level ``s_i`` in [0, 1] adds ``s_i*pitch/W_eff`` inside
-  ``[z_i - W_eff/2, z_i + W_eff/2]`` (top-hat footprint; a healthy header averages to 1).
+  along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)`` [D] geometric;
+  neither paper prints it [SN1 FT; SN3 FT]; catalogue widths are 6-14 % larger [SN5 VP;
+  computed] (``footprint_width_m`` supplies the pattern width as built instead) and level
+  ``s_i`` in [0, 1] adds ``s_i**n*pitch/W_eff`` inside ``[z_i - W_eff/2, z_i + W_eff/2]``
+  (top-hat footprint by default; ``footprint_profile='parabolic'`` uses the density
+  ``1.5*(1 - (2x/W)**2)``, a stand-in: parabolic is the makers' word [SN2 FT; SN5 VP], no
+  measured profile is published; ``n = htc_flow_exponent``, 1 by default; a healthy header
+  averages to 1).
   Default layout as ``band_signatures.spray_coverage``: ``n = floor(B/pitch)`` nozzles
   centred on the barrel.
 - Thermal radius growth per axial station [V factor 1: Yamaguchi 2016; V factor 2(1+nu):
@@ -112,8 +117,9 @@ _LIMITATIONS = [
     'Bite heat flux, roll heat fraction and spray heat-transfer coefficients are caller '
     'inputs; no measured value for kerosene-based coolant sprays was found (planner estimate '
     '0.5-2 kW/m2K [D]).',
-    'Top-hat nozzle footprints: real fans have a tapered flow distribution, so the nozzle-'
-    'pitch variation of h for a healthy header is an artefact of this idealisation.',
+    'Top-hat nozzle footprints by default: the nozzle-pattern ripple is of unknown size: with '
+    'a parabolic profile a healthy header still ripples by about -12 % / +7 % at 1.43 pitches '
+    'and about +/-5 % at 3.2 [computed]; the top-hat value is not representative.',
     'Barrel ends adiabatic (neck and chock losses ignored); constant properties.',
     'Thermal expansion per axial station (no axial mechanical coupling); the expansion factor '
     'differs between sources (1 axially free vs 1+nu plane strain).',
@@ -178,6 +184,21 @@ def _overlap(a, b, c, d):
     return max(0.0, min(b, d) - max(a, c))
 
 
+def _parabola_integral(a, b, x, w):
+    """Exact integral of ``1.5*(1 - (2u/w)**2)`` over ``[a, b]`` intersected with the footprint
+    ``[x - w/2, x + w/2]`` (u = z - x); the integral over the whole footprint is ``w``."""
+    lo, hi = max(a, x - w / 2) - x, min(b, x + w / 2) - x
+    if hi <= lo:
+        return 0.0
+    f = lambda u: 1.5 * (u - 4 * u ** 3 / (3 * w * w))  # noqa: E731
+    return f(hi) - f(lo)
+
+
+FOOTPRINT_PROFILES = ('tophat', 'parabolic')
+FOOTPRINT_STAND_IN_BASIS = ('parabolic is the makers\' word [SN2 FT; SN5 VP]; the function '
+                            '1.5*(1 - (2x/W)**2) is a stand-in, no measured profile is published')
+
+
 # --------------------------------------------------------------------------- inputs
 @dataclass(frozen=True)
 class RollThermalProperties:
@@ -216,12 +237,26 @@ class SprayHeader:
     offset_angle_rad: float = 0.0
     first_nozzle_position_m: float | None = None
     background_htc_w_m2k: float = 50.0
+    # SPEC22: opt-in header options; the defaults reproduce the earlier numbers bit for bit
+    footprint_profile: str = 'tophat'
+    footprint_width_m: float | None = None
+    htc_flow_exponent: float = 1.0
 
     def validate(self):
         _num('nozzle_pitch_m', self.nozzle_pitch_m, positive=True, hi=10.0)
         _num('standoff_m', self.standoff_m, positive=True, hi=5.0)
         _num('spray_angle_rad', self.spray_angle_rad, positive=True, hi=math.radians(170))
-        _num('offset_angle_rad', self.offset_angle_rad, nonnegative=True, hi=math.radians(60))
+        # 70 degrees: catalogue nozzles are sold with a 70 degree offset [SN5 VP]
+        _num('offset_angle_rad', self.offset_angle_rad, nonnegative=True, hi=math.radians(70))
+        if self.footprint_profile not in FOOTPRINT_PROFILES:
+            raise ValueError('footprint_profile must be "tophat" or "parabolic"')
+        if self.footprint_width_m is not None:
+            if isinstance(self.footprint_width_m, bool) or not isinstance(
+                    self.footprint_width_m, (int, float)) or not math.isfinite(
+                    self.footprint_width_m) or not 0 < self.footprint_width_m <= 5.0:
+                raise ValueError('footprint_width_m (the pattern width along the barrel) must '
+                                 'be > 0 and <= 5 m')
+        _num('htc_flow_exponent', self.htc_flow_exponent, lo=0.5, hi=1.0)
         if self.first_nozzle_position_m is not None:
             _num('first_nozzle_position_m', self.first_nozzle_position_m, nonnegative=True,
                  hi=10.0)
@@ -230,11 +265,30 @@ class SprayHeader:
         return self
 
     @property
-    def effective_footprint_width_m(self):
-        """Along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)``."""
+    def geometric_footprint_width_m(self):
+        """Geometric along-barrel footprint ``2*standoff*tan(angle/2)*cos(offset)`` [D]."""
         self.validate()
         return (2 * self.standoff_m * math.tan(self.spray_angle_rad / 2)
                 * math.cos(self.offset_angle_rad))
+
+    @property
+    def effective_footprint_width_m(self):
+        """Along-barrel footprint: ``footprint_width_m`` when supplied (the pattern width as
+        built), else the geometric value. Every reader of the header takes the width here."""
+        if self.footprint_width_m is not None:
+            self.validate()
+            return float(self.footprint_width_m)
+        return self.geometric_footprint_width_m
+
+    @property
+    def footprint_width_source(self):
+        return 'geometric' if self.footprint_width_m is None else 'supplied'
+
+    def nozzle_weight(self, level):
+        """A nozzle's cooling weight at flow level ``level``: ``level**n`` (``level`` itself
+        for the default n = 1, so that code path and numbers are unchanged)."""
+        n = self.htc_flow_exponent
+        return level if n == 1.0 else level ** n
 
     def nozzle_positions(self, barrel_length_m):
         """Nozzle positions [m] along the barrel (same default layout as spray_coverage)."""
@@ -274,12 +328,17 @@ class SprayHeader:
         lv = _levels(levels, len(positions))
         w_eff = self.effective_footprint_width_m
         height = self.nozzle_pitch_m / w_eff
+        wts = [self.nozzle_weight(s) for s in lv]
+        parabolic = self.footprint_profile == 'parabolic'
         out = []
         for a, b in zip(edges, edges[1:]):
             acc = 0.0
-            for x, s in zip(positions, lv):
+            for x, s in zip(positions, wts):
                 if s > 0:
-                    acc += s * _overlap(a, b, x - w_eff / 2, x + w_eff / 2)
+                    if parabolic:
+                        acc += s * _parabola_integral(a, b, x, w_eff)
+                    else:
+                        acc += s * _overlap(a, b, x - w_eff / 2, x + w_eff / 2)
             out.append(height * acc / (b - a))
         return out
 
@@ -688,7 +747,7 @@ def _base_flags(prob, header):
         flags.append('NOZZLES_REDUCED_OR_OFF')
     w_eff = header.effective_footprint_width_m
     ratio = w_eff / header.nozzle_pitch_m
-    if abs(ratio - round(ratio)) > 1e-6:
+    if header.footprint_profile == 'tophat' and abs(ratio - round(ratio)) > 1e-6:
         flags.append('TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC')
     if w_eff < header.nozzle_pitch_m:
         flags.append('NO_NOMINAL_OVERLAP_GAPS_BETWEEN_FANS')

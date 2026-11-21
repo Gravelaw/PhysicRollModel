@@ -688,11 +688,17 @@ def _k_to_c(k):
 
 
 # --------------------------------------------------------------------------- SPEC17 A5 / X3
-SPRAY_BASIS_FLAG = 'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED'
+SPRAY_BASIS_FLAG = 'SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE'
 SPRAY_VALUE_BASIS = ('circumferential mean under a healthy header (model definition, '
                      'roll_thermal.py)')
-SPRAY_PUBLISHED_BASIS = ("jet zone, as the project's note of PT-T18 reads it (full text from a "
-                         'garbled mirror; not re-read)')
+SPRAY_PUBLISHED_BASIS = ('jet zone: the published kerosene value is the CFD average over the '
+                         'roll-wall patch of one cooling zone with two nozzles [SN14 FT, garbled '
+                         'mirror; = PT-T18]')
+SPRAY_NOT_COMPARABLE_REASON = (
+    'the published value is an average over the roll-wall patch of one cooling zone [SN14 FT], '
+    "not a circumferential mean like the model's coefficient, so the two are not comparable; "
+    'converting it needs the wetted arc of the plant: for arcs of 20 to 90 degrees its '
+    'circumferential mean is 0.14 to 1.07 kW/m2K [computed]')
 
 
 def footprint_equivalent_htc(spray_mean_htc_w_m2k, background_htc_w_m2k, wetted_arc_rad):
@@ -711,7 +717,10 @@ def spray_basis(w, prod):
     """Basis keys of the spray-coefficient finding; the verdict itself is not changed."""
     h = w['spray_header']
     out = {'value_basis': SPRAY_VALUE_BASIS, 'published_basis': SPRAY_PUBLISHED_BASIS,
-           'basis_comparable': 'NOT_ESTABLISHED'}
+           'basis_comparable': 'NOT_COMPARABLE',
+           'basis_comparable_reason': SPRAY_NOT_COMPARABLE_REASON,
+           'basis_comparable_source': 'SN14 FT (= PT-T18); docs/research/band-screening-2026-11/'
+                                      'spray-nozzles.md, section 3 (c)'}
     arc = w.get('spray_wetted_arc_rad')
     if arc is not None:
         h_fp = footprint_equivalent_htc(h['spray_mean_htc_w_m2k'], h['background_htc_w_m2k'],
@@ -885,8 +894,8 @@ def thermal_check(result, case):
     ov = cov.get('overlap_fraction') if isinstance(cov, dict) else None
     if ov is None and w is not None:
         h = w['spray_header']
-        wf = 2 * h['standoff_m'] * math.tan(h['spray_angle_rad'] / 2) * math.cos(
-            h['offset_angle_rad'])
+        from .band_width import _header      # SPEC22: the one footprint-width property
+        wf = _header(w).effective_footprint_width_m
         ov = (wf - h['nozzle_pitch_m']) / wf if wf > 0 else None
     if ov is not None:
         o_rng, o_max = bp.SPRAY_OVERLAP.values[0], bp.SPRAY_OVERLAP.values[1]
@@ -897,8 +906,10 @@ def thermal_check(result, case):
             'item': 'spray_footprint_overlap', 'value': ov, 'published_low': o_rng.low,
             'published_high': o_rng.high, 'unit': 'fraction', 'verdict': v,
             'basis': ('footprint overlap (W_eff - pitch) / W_eff of the spray screen against the '
-                      'published 10-30 %, never above 50 % [PT-T22, PT-T21]; the spray screen '
-                      'itself has no overlap threshold (it only flags gaps between fans)'),
+                      'published 10-30 %, never above 50 % [PT-T22, PT-T21]; the definition '
+                      'varies between sources: 10-30 % or 10-50 % of the pattern width [PT-T21; '
+                      'PT-T22; SN7; SN13]; the spray screen itself has no overlap threshold (it '
+                      'only flags gaps between fans)'),
             'sources': list(bp.SPRAY_OVERLAP.sources),
             'read_status': bp.SPRAY_OVERLAP.effective_read_status(), 'note': ''})
     # ---- outputs: strip exit temperature per pass (reused from thermal_sensitivity.per_pass)

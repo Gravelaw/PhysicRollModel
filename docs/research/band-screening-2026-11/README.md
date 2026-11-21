@@ -76,6 +76,23 @@ Tags of [phase1-equations.md](phase1-equations.md), from its own list (never upg
 - **"At least five positions" for a measured roll profile**: a 21-station report cannot carry a
   20-30 mm stripe; the section now reports the smallest resolvable width and flags a coarse grid
   (roll-grinding report 3.4; guide 7.9).
+- **Footprint formula tag** `[V: Lloyd 2010; Tucker 2006]`: neither paper prints
+  `2*standoff*tan(angle/2)*cos(offset)`; it is geometric [D], and catalogue widths are 6-14 %
+  larger (spray-nozzle report 2.5, 3 (e) 1; guide 7.1).
+- **"The nozzle-pattern ripple is an artefact"**: with a parabolic fan a healthy header still
+  ripples by about -12 % / +7 % at 1.43 pitches and about +/-5 % at 3.2; its size is unknown
+  (spray-nozzle report 3 (a), 3 (e) 2; guide 7.1).
+- **Overlap 10-30 %, never above 50 %**: the definition varies between sources; 10-30 % or
+  10-50 % of the pattern width (spray-nozzle report 3 (e) 3; guide 3.12).
+- **Basis of the published kerosene spray coefficient (PT-T18)**: an average over the roll-wall
+  patch of one cooling zone, so not comparable with the model's circumferential mean; the mill
+  has two rows of 34 nozzles at 52 mm per work roll, entry side only, and the rise from 3.0 to
+  4.0 kW/m2K is in time, not across space (spray-nozzle report 3 (c), 3 (e) 4; flag renamed
+  `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE`; guide 3.12).
+- **"The spray coefficient is about linear in flow"**: between flow to the power 0.5 and 1.0, for
+  water and one kerosene CFD (spray-nozzle report 3 (e) 5; gap study A5).
+- **"Oil 3-6 times lower" (PT-T19)**: the same paper's conclusions say about 3-5 times; both are
+  cited (spray-nozzle report 3 (e) 6; products guide).
 - **Disagreements between the gap reports** (the size of the elastic strip zones at foil gauge,
   the share of load carried outside the strip in a closed gap, which gap best explains "worse at
   thin gauge") are listed in the merged gap study and were not resolved.

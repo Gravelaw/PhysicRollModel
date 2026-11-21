@@ -1096,7 +1096,9 @@ diameter 20 revolutions after a zone change [PT-T18]) because a partly blocked n
 permanent, not a 20-revolution, disturbance; the thermal crown is inside the 30 um maximum
 measured on a foil mill [PT-T25] (whether that is on diameter or radius is not stated). The
 spray footprint overlap of the demo header, 69 %, is above the published 10-30 % (never above
-50 %) [PT-T22, PT-T21]; the tool's spray screen has no overlap threshold (it flags only gaps
+50 %) [PT-T22, PT-T21]; the definition varies between sources: 10-30 % or 10-50 % of the
+pattern width [PT-T21; PT-T22; SN7; SN13], and the demo verdict stands under every reading
+(0.69, 2.2 or 3.2 [SN; computed]); the tool's spray screen has no overlap threshold (it flags only gaps
 between fans) and is left as it is. The oil viscosity is not compared: the case gives a dynamic
 viscosity, the literature a kinematic one, and the density is not a case input. Growth: the short event reaches half its peak in 9.25 s (axial decay time constant of a 52 mm stripe about 23 s, computed); the steady stripe builds up to 50 % in 116 s and to 90 % in 551 s (radial time constant 4-7 min computed for a 260 mm roll). A plant-identified flatness response of about 20 s is of the order of the short local (axial) time scale and of an event's rise, not of the minutes a steady stripe needs to build.
 `thermal_check.quarter_barrel_note` is a positional note only (bands at 1/5-1/4 of the barrel from
@@ -1107,12 +1109,17 @@ thermal model uses the first, pass heating the second); leave it null to derive 
 
 **Basis of the spray coefficient (SPEC17 A5, X3).** The model applies
 `spray_mean_htc_w_m2k` as a mean around the roll circumference (`roll_thermal.py`). The
-published 2.5-4.3 kW/m2K [PT-T18, simulated; full text from a garbled mirror] is read by the
-project's earlier note as a value inside the jet zone; PT-T18 has not been re-read, so whether
-the two are on the same basis is not established. The spray finding of `thermal_check` keeps
-its verdict word and carries `value_basis`, `published_basis` and
-`basis_comparable: NOT_ESTABLISHED`, with the flag `SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED`;
-the report prints "The two are not on the same basis". Conversion [D, re-derived in SPEC17]: a
+published 2.5-4.3 kW/m2K [PT-T18, simulated; = SN14 FT, read from a garbled mirror] is the CFD
+average over the roll-wall patch of one cooling zone with two nozzles (a sprayed-area basis;
+the mill has two rows of 34 nozzles at 52 mm per work roll, entry side only, and the rise from
+3.0 to 4.0 kW/m2K is in time, not across space) [SN14 FT]: since SPEC22 the basis is settled as
+far as the sources allow, and the two are NOT comparable. The spray finding of `thermal_check`
+keeps its verdict word (which must not be read as agreement) and carries `value_basis`,
+`published_basis`, `basis_comparable: NOT_COMPARABLE`, `basis_comparable_reason` and
+`basis_comparable_source`, with the flag `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE` (renamed from
+`SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED`); the report prints "The two are not on the same basis
+and are not comparable". For arcs of 20 to 90 degrees the circumferential mean of the published
+value is 0.14 to 1.07 kW/m2K [computed]. Conversion [D, re-derived in SPEC17]: a
 spray wetting an arc `phi` of the circumference with `h_fp` and leaving the rest at `h_bg` has
 the mean `h_bg + (h_fp - h_bg)*phi/(2pi)`; the model writes `h_bg + spray_mean_htc`, so
 `h_fp = h_bg + spray_mean_htc*2pi/phi`. With the optional `width_model.spray_wetted_arc_rad`
@@ -1357,6 +1364,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
+| `width_model.spray_header.footprint_profile` (`"tophat"` default / `"parabolic"`), `footprint_width_m` (null = geometric), `htc_flow_exponent` (0.5 to 1.0, default 1) | SPEC22 opt-in header options: the fan profile (parabolic is a stand-in, no measured profile is published), the pattern width along the barrel as built, how cooling follows flow (section 7.1) | –, m, – | nozzle data sheet: the catalogue spray width at your standoff; leave the profile and the exponent at their defaults unless a pressure-film print or a measurement says otherwise |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
 | `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
 
@@ -1753,9 +1761,28 @@ h = background_htc + spray_mean_htc * weight(z,t)                        [D]
 ```
 
 Spray header: nozzle `i` at `z_i` with flow level `s_i` in [0, 1] adds `s_i*pitch/W_eff`
-to `weight` inside its footprint, `W_eff = 2*standoff*tan(angle/2)*cos(offset)` [V: Lloyd
-2010; Tucker 2006]. The footprint is a top hat, so a healthy header averages to 1 away from
-the barrel ends. Default layout: `n = floor(B/pitch)` nozzles centred on the barrel, index 0
+to `weight` inside its footprint, `W_eff = 2*standoff*tan(angle/2)*cos(offset)` [D] geometric;
+neither paper prints it [SN1 FT; SN3 FT]; catalogue widths are 6-14 % larger [SN5 VP; computed].
+The footprint is a top hat by default, so a healthy header averages to 1 away from the barrel
+ends. Three opt-in header keys (SPEC22; defaults reproduce the earlier numbers bit for bit):
+`footprint_profile: "parabolic"` uses the density `1.5*(1 - (2x/W)^2)` on `[-W/2, W/2]` (same
+total as the top hat; cell averages by the exact integral): "parabolic" is the makers' word
+[SN2 FT; SN5 VP], the function is a STAND-IN, no measured profile is published (flag
+`FOOTPRINT_PROFILE_STAND_IN`); `footprint_width_m` is the pattern width along the barrel as
+built (the catalogue width at the standoff) in place of the geometric one; `htc_flow_exponent`
+`n` (0.5 to 1.0) makes a nozzle at level `s` cool as `s^n` (flag `SPRAY_FLOW_EXPONENT_APPLIED`;
+published exponents are 0.5 to 1.0, for water and one kerosene CFD [computed from SN4, SN16,
+SN14]). Every reader of the header takes the width from one property
+(`SprayHeader.effective_footprint_width_m`): the bulk model, the surface layer, the controlled
+run and its influence matrix, the spray coverage check, the spray layout, the nozzle map and
+the app's drawing. `width.thermal_steady` and the spray layout report `footprint_profile`,
+`footprint_width_source`, `footprint_width_over_pitch` and `htc_flow_exponent`; a footprint
+wider than 1.5 nozzle pitches sets `FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE` ("fans overlap more
+than makers recommend (1.1 to 1.5 nozzle pitches [SN2; SN7; SN13]); a blocked nozzle is
+smoothed more than on such a header"): the four older demos' headers have 3.2 and carry it. With
+`n = 1` and a nozzle level strictly between 0 and 1 the section notes that the stripe of that
+partly blocked nozzle would be 7 to 45 % smaller with the published exponents [computed]. The
+offset angle may reach 70 degrees (catalogue nozzles [SN5 VP]). Default layout: `n = floor(B/pitch)` nozzles centred on the barrel, index 0
 nearest the header start. A blocked nozzle is level 0, a partly blocked one a level between
 0 and 1 (`nozzle_levels`), and a switching event sets the listed nozzles to `level` for
 `duration_s`.
@@ -1784,13 +1811,42 @@ de-trended.
 
 **Nozzle-pattern ripple.** With idealised top-hat footprints, a healthy header gives a
 heat-transfer coefficient that varies at the nozzle pitch whenever the overlap is not a
-whole number of pitches. Real fans have a tapered flow distribution, so this ripple is an
-artefact of the idealisation. It is reported separately (healthy growth minus its moving
+whole number of pitches. The ripple is of unknown size: with a parabolic profile a healthy
+header still ripples by about -12 % / +7 % at 1.43 pitches and about +/-5 % at 3.2 [computed];
+the top-hat value is not representative. It is reported separately (healthy growth minus its moving
 average over one nozzle pitch) and fed through the shape chain so that its size can be
 judged, but it is never counted as a band. In the lengthwise demo it is 0.242 um peak to
 peak in radius, 6.48 I-units with the exit-tension feedback (58.8 compliance only, 70.6
 rigid bound), 35 latent bands above the 2 I-unit reporting threshold, flat after tension
 release (`width.shape.nozzle_pattern_ripple`).
+
+**Realistic-header demo (SPEC22).** `scenarios/band_diagnosis_realistic_header.json` is the
+battery-foil demo with one change, the spray header: pitch 0.052 m, spray angle 30 degrees and
+offset 15 degrees (catalogue values [SN5 VP]), standoff 0.1306 m so that the geometric footprint
+is 1.300 nozzle pitches (vendor practice 1.1 to 1.5), the parabolic stand-in profile, exponent
+1.0, the same partly blocked nozzle 11 (level 0.45) and the same valve event (the flatness loop,
+step test and friction screen are left out and the heat-share table uses its default; the
+observations are the battery-foil demo's, generated for its header). The header is synthetic:
+chosen to match vendor overlap practice, not a mill specification. Blocked-nozzle results of
+the two artifacts (`artifacts/band_diagnosis/*.result.json`; cooling deficit = (background +
+spray mean - `htc_w_m2k`) / spray mean around nozzle 11):
+
+| quantity (nozzle 11, level 0.45) | battery-foil demo (top hat, 3.21 pitches) | realistic-header demo (parabolic, 1.30 pitches) |
+|---|---|---|
+| cooling deficit peak, of the spray mean | 0.236 | 0.599 |
+| cooling deficit half-width | 135 mm | 45 mm |
+| steady stripe height (radius) | 2.96 um | 6.83 um |
+| stripe half-peak width | 180 mm | 90 mm |
+| band, linear feedback | 25.1 I-units | 63.4 I-units |
+| band, with feedback (after the band-wise saturation) | 25.1 I-units | 772 I-units |
+| 52 mm shapemeter zone reading / band peak | 0.976 | 0.985 |
+| state in the mill; after release | latent; visible after release | buckled in the mill; visible after release |
+
+The wide-overlap headers of the older demos smooth a blocked nozzle: on the realistic header
+the same partly blocked nozzle gives a deficit 2.5 times deeper and a third as wide, a stripe
+2.3 times higher and half as wide, and a band that buckles in the mill. The zone reading of
+this band stays near its peak (98.5 %) because the band is still wider than one 52 mm zone; a
+narrower source would read less (the dilution table of section 7.6).
 
 Numerics: conservative finite volumes (uniform axial cells, geometric radial cells refined
 toward the surface), Peaceman-Rachford ADI with a backward-Euler start-up after each
@@ -4002,7 +4058,8 @@ Other screens: bending strain `t/D` against the yield-point window
 `[t/(eps_y+eps_L), t/(eps_y - sigma_t/E)]` [V sources: QCA-1; Choi, Jin & Kang 1998; de Codes
 et al. 2011]; herringbone pitch about the arc of contact at reduction >= 0.40 [V: Komori 1996;
 Szucs et al. 2020]; forward slip <= 0 skidding [V: Reid & Schey 1978]; inlet film [M] (8.1);
-flat-fan coverage `W = 2*s*tan(angle/2)`, `W_eff = W*cos(offset)` [V: Lloyd 2010; Tucker 2006];
+flat-fan coverage `W = 2*s*tan(angle/2)`, `W_eff = W*cos(offset)` [D] geometric (neither Lloyd
+2010 nor Tucker 2006 prints it [SN1 FT; SN3 FT]; a supplied pattern width replaces it);
 free thermal growth `dR = alpha*R*dT` (upper bound) and gap closure `2*dR/h_exit` [D]. In v2
 cases with a `width_model` the solved roll temperature field (7.1) replaces the free-growth
 screen for the lengthwise hypotheses.
@@ -4362,6 +4419,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
 | width coupling / `tests/test_strip_shape.py` (`WidthCouplingKernelTests`), `tests/test_band_width_coupling.py` | the three closures' `chi` in closed form and from the stress function (the closure condition zero to 1e-9 of the stress scale); both demo rows to 1e-3; the limits (`f_se = 0`, `chi = 1`; `f_sx -> -inf`); `xi` scaling; a negative denominator reported, not clipped; the development fraction (0 at the bite, 0.95 at `kappa*x = 3.94`, monotonic); a supplied stiffness equal to `N_x'*E*xi/h` reproduces the pointwise transfer to 1e-12; in the engine the demo sections (stiffnesses 0.1 %, kernel-level peak ratios 1.41 and 9.2 within 15 % of the planner's), the plain words and the level the tally uses, and with the kernel stubbed every other key equal |
 | wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; package 7: top-hat self-check (wave formula and saturated stress `-sigma_cr` to 1e-6), amplitude zero below and growing as the square root above the critical state, mean saturated stress equals the tension, lift scale above the weightless multiplier, the lift condition `Pi_t = 0`, `dPi_t/da = 0` (1e-6), heavier or thicker sheet raises the limit, table height below the weightless height, the planner's two demo rows (2 %), the saturated profile as an additional shapemeter reading only; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
 | flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
@@ -4448,8 +4506,9 @@ guide's own list.
   an assumed coupling and filter: a consistent reading, not evidence.
   The strip-temperature term in measured flatness (section 7.7) is one of two
   candidate causes the literature adds (X5); it is not tested here.
-- **The roll thermal model** is circumferentially averaged, with top-hat footprints (the
-  nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
+- **The roll thermal model** is circumferentially averaged, with top-hat footprints by default
+  (the nozzle-pattern ripple is of unknown size; a parabolic profile is a stand-in), one row of
+  identical nozzles per roll (several rows, valve types and hot-edge sprays are Phase 3), adiabatic barrel ends, constant properties, per-station
   expansion with a source-dependent factor (1 or 1 + nu), and no coupling of roll temperature
   back into the bite heat.
 - **The tension feedback is not checked** (section 7.14): the literature neither supports nor
@@ -4501,11 +4560,12 @@ guide's own list.
   of section 7.12 is a separate opt-in section), no shapemeter dynamics, filter, noise,
   calibration or temperature compensation; neighbour spreading is an interpretation of one
   vendor sentence and off by default (section 7.6).
-- **Spray-coefficient basis not established**: the model's coefficient is a circumferential
-  mean, the published 2.5-4.3 kW/m2K is read as a jet-zone value; until PT-T18 is re-read the
-  `thermal_check` verdict compares two possibly different bases (flag
-  `SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED`; section 3.12). If it is a jet-zone value the demos'
-  coefficient would be several times too high and the modelled stripes too low.
+- **Spray-coefficient basis not comparable**: the model's coefficient is a circumferential
+  mean, the published 2.5-4.3 kW/m2K is an average over the roll-wall patch of one cooling zone
+  [SN14 FT]; the `thermal_check` verdict compares two different bases (flag
+  `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE`; section 3.12). For arcs of 20-90 degrees the published
+  value is a circumferential mean of 0.14-1.07 kW/m2K [computed]: the demos' coefficient would
+  then be several times too high and the modelled stripes too low.
 - **Fire limits are a rule check**: no oil-mist or vapour model; the limits are the user's and
   the modelled strip exit temperature is not a coil temperature (inflated at foil gauge by the
   mattress slip).

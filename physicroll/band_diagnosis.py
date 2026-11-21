@@ -1237,7 +1237,8 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
     if c is not None:
         cov = bs.spray_coverage(c['barrel_length_m'], c['nozzle_pitch_m'], c['standoff_m'],
                                 c['spray_angle_rad'], c['offset_angle_rad'],
-                                tuple(c['blocked_nozzle_indices']))
+                                tuple(c['blocked_nozzle_indices']),
+                                footprint_width_m=_coverage_width(case))
         risk = [s for s in cov['stripes']
                 if s['cause'] == 'BLOCKED_NOZZLE' or (s['kind'] == 'UNCOVERED'
                                                       and not s['at_barrel_edge'])]
@@ -1303,6 +1304,18 @@ def _failed_screens(case, exc, slip, contact_length, flags, no_bite=False):
                                                   'sources': []},
             'film': None, 'film_regime': None, 'spray_coverage': None, 'thermal': None,
             'band_position_match': None, 'coverage_profile': None, 'band_risk_stripes': None}
+
+
+def _coverage_width(case):
+    """SPEC22: a supplied pattern width of the width model's header, when the coverage check's
+    header is the same physical header (same pitch, standoff, angle and offset); else None."""
+    w, c = case.get('width_model'), case.get('coolant')
+    h = (w or {}).get('spray_header') or {}
+    if c is None or h.get('footprint_width_m') is None:
+        return None
+    same = all(abs(h[k] - c[k]) <= 1e-12 for k in ('nozzle_pitch_m', 'standoff_m',
+                                                    'spray_angle_rad', 'offset_angle_rad'))
+    return h['footprint_width_m'] if same else None
 
 
 def _coverage_profile(cov, length):

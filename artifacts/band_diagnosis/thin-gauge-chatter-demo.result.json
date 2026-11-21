@@ -5057,6 +5057,7 @@
         1.6039999999999999,
         1.656
       ],
+      "overlap_definition_note": "overlap (W_eff - pitch)/W_eff; the definition varies between sources: 10-30 % or 10-50 % of the pattern width [PT-T21; PT-T22; SN7; SN13]",
       "overlap_fraction": 0.43146488893448176,
       "reasons": [
         "32 of 32 nozzles active; effective footprint 0.0915 m vs pitch 0.0520 m (overlap fraction 0.431).",

@@ -493,14 +493,19 @@ stock passes and stays hidden on the foil passes); see section 3 of the doc.
 
 ### Demos
 
-Four synthetic demos; their committed outputs are in `artifacts/band_diagnosis/`:
+Five synthetic demos; their committed outputs are in `artifacts/band_diagnosis/`:
 
 ```bash
 python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_realistic_header.json --out artifacts/band_diagnosis
 ```
+
+The fifth (SPEC22) is the battery-foil demo with a spray header chosen to match nozzle makers'
+overlap practice (footprint 1.3 nozzle pitches, a parabolic stand-in fan profile); it shows how
+much a wide-overlap header smooths a blocked nozzle (`docs/band-diagnosis.md`, section 7.1).
 
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); the steps are

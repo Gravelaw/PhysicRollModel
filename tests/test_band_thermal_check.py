@@ -181,7 +181,10 @@ class SprayBasisAndFireLimitTests(unittest.TestCase):
     def test_spray_basis_keys_flag_and_unchanged_verdict(self):
         f = by_item(self.r['thermal_check']['inputs'])['spray_heat_transfer_coefficient']
         self.assertEqual(f['verdict'], 'WITHIN_PUBLISHED_RANGE')
-        self.assertEqual(f['basis_comparable'], 'NOT_ESTABLISHED')
+        self.assertEqual(f['basis_comparable'], 'NOT_COMPARABLE')
+        self.assertIn('roll-wall patch of one cooling zone', f['basis_comparable_reason'])
+        self.assertIn('0.14 to 1.07 kW/m2K', f['basis_comparable_reason'])
+        self.assertEqual(bt.SPRAY_BASIS_FLAG, 'SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE')
         self.assertIn('circumferential mean', f['value_basis'])
         self.assertIn('jet zone', f['published_basis'])
         self.assertNotIn('footprint_equivalent_w_m2k', f)

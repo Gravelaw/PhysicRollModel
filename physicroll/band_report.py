@@ -3174,8 +3174,8 @@ def _thermal_block(r):
     if sp is not None:
         # SPEC17 A5 / X3: the bases of the model and published coefficients
         line = ('The model\'s spray coefficient is an average around the roll. The published '
-                '2.5-4.3 kW/m²K is read as a value inside the jet zone. The two are not on the '
-                'same basis')
+                '2.5-4.3 kW/m²K is an average over the roll-wall patch of one cooling zone '
+                '[SN14]. The two are not on the same basis and are not comparable')
         if _ok(sp.get('footprint_equivalent_w_m2k')):
             line += (f'; with a wetted arc of {_f(math.degrees(sp["spray_wetted_arc_rad"]))} '
                      f'degrees the model value corresponds to '

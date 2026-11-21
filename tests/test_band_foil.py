@@ -773,7 +773,8 @@ class SchemaCompatibilityTests(unittest.TestCase):
         for name in ('band_diagnosis_template.json', 'band_diagnosis_thin_gauge_chatter.json',
                      'band_diagnosis_bearing_order.json',
                      'band_diagnosis_lengthwise_bands.json',
-                     'band_diagnosis_battery_foil.json'):
+                     'band_diagnosis_battery_foil.json',
+                     'band_diagnosis_realistic_header.json'):
             case = load_case(SCEN / name)
             for k in bw.OBS_FOIL_BOOL:
                 self.assertIn(k, case['observation'])

@@ -104,6 +104,17 @@ ROLL_KEYS = ('barrel_length_m', 'conductivity_w_mk', 'density_kg_m3', 'specific_
              'expansion_coefficient_per_k', 'poisson_ratio', 'expansion_constraint')
 HEADER_KEYS = ('nozzle_pitch_m', 'standoff_m', 'spray_angle_rad', 'offset_angle_rad',
                'spray_mean_htc_w_m2k', 'background_htc_w_m2k')
+HEADER_OPTIONAL = ('footprint_profile', 'footprint_width_m', 'htc_flow_exponent')   # SPEC22
+VENDOR_OVERLAP_MAX_WIDTH_OVER_PITCH = 1.5   # 1.1 to 1.5 nozzle pitches [SN2; SN7; SN13]
+FP_FLAG_STAND_IN = 'FOOTPRINT_PROFILE_STAND_IN'
+FP_FLAG_EXPONENT = 'SPRAY_FLOW_EXPONENT_APPLIED'
+FP_FLAG_WIDE = 'FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE'
+FP_TOP_FLAGS = (FP_FLAG_STAND_IN, FP_FLAG_EXPONENT, FP_FLAG_WIDE)
+FP_WIDE_NOTE = ('fans overlap more than makers recommend (1.1 to 1.5 nozzle pitches [SN2; SN7; '
+                'SN13]); a blocked nozzle is smoothed more than on such a header')
+FP_EXPONENT_NOTE = ('cooling is taken as proportional to flow; published exponents are 0.5 to '
+                    '1.0, with which the stripe of this partly blocked nozzle would be 7 to 45 % '
+                    'smaller [computed]')
 WIDTH_REQUIRED = ('roll', 'spray_header', 'coolant_temperature_k')
 WIDTH_DEFAULTS = {
     'strip_centre_m': None, 'roll_heat_fraction_per_roll': None,
@@ -500,9 +511,28 @@ def validate_width_model(w, pass_):
                          f'{rt.EXPANSION_CONSTRAINTS}')
     roll['expansion_constraint'] = w['roll']['expansion_constraint']
     out['roll'] = roll
-    keys('width_model.spray_header', w['spray_header'], HEADER_KEYS)
+    keys('width_model.spray_header', w['spray_header'], HEADER_KEYS, HEADER_OPTIONAL)
     out['spray_header'] = {k: num(f'width_model.spray_header.{k}', w['spray_header'][k])
                            for k in HEADER_KEYS}
+    # SPEC22: optional header keys, kept in the validated case only when given
+    hs = w['spray_header']
+    if hs.get('footprint_profile') is not None:
+        if hs['footprint_profile'] not in rt.FOOTPRINT_PROFILES:
+            raise ValueError('width_model.spray_header.footprint_profile must be "tophat" or '
+                             '"parabolic"')
+        out['spray_header']['footprint_profile'] = hs['footprint_profile']
+    if hs.get('footprint_width_m') is not None:
+        v = hs['footprint_width_m']
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) \
+                or not 0 < v <= 5.0:
+            raise ValueError('width_model.spray_header.footprint_width_m (the pattern width '
+                             'along the barrel) must be > 0 and <= 5 m')
+        out['spray_header']['footprint_width_m'] = float(v)
+    if hs.get('htc_flow_exponent') is not None:
+        v = hs['htc_flow_exponent']
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.5 <= v <= 1.0:
+            raise ValueError('width_model.spray_header.htc_flow_exponent must be in [0.5, 1.0]')
+        out['spray_header']['htc_flow_exponent'] = float(v)
     out['coolant_temperature_k'] = num('width_model.coolant_temperature_k',
                                        w['coolant_temperature_k'])
     for k in ('strip_centre_m', 'roll_heat_fraction_per_roll', 'bite_heat_per_width_w_m',
@@ -642,7 +672,34 @@ def _header(w):
                           spray_angle_rad=h['spray_angle_rad'],
                           offset_angle_rad=h['offset_angle_rad'],
                           spray_mean_htc_w_m2k=h['spray_mean_htc_w_m2k'],
-                          background_htc_w_m2k=h['background_htc_w_m2k'])
+                          background_htc_w_m2k=h['background_htc_w_m2k'],
+                          **header_options(h))
+
+
+def header_options(h):
+    """The SPEC22 header options of a validated ``spray_header`` dict (only those given)."""
+    return {k: h[k] for k in HEADER_OPTIONAL if h.get(k) is not None}
+
+
+def header_description(header):
+    """The footprint keys reported with the thermal section and the spray layout."""
+    return {'footprint_profile': header.footprint_profile,
+            'footprint_width_source': header.footprint_width_source,
+            'footprint_width_over_pitch': header.effective_footprint_width_m
+            / header.nozzle_pitch_m,
+            'htc_flow_exponent': header.htc_flow_exponent}
+
+
+def header_flags(header):
+    flags = []
+    if header.footprint_profile != 'tophat':
+        flags.append(FP_FLAG_STAND_IN)
+    if header.htc_flow_exponent != 1.0:
+        flags.append(FP_FLAG_EXPONENT)
+    if header.effective_footprint_width_m / header.nozzle_pitch_m > \
+            VENDOR_OVERLAP_MAX_WIDTH_OVER_PITCH:
+        flags.append(FP_FLAG_WIDE)
+    return flags
 
 
 # ============================================================================= helpers
@@ -1243,7 +1300,7 @@ def spray_layout(case):
             'effective_footprint_width_m': th.header.effective_footprint_width_m,
             'barrel_length_m': th.length, 'strip_centre_m': th.centre,
             'strip_width_m': th.width, 'strip_start_m': th.centre - th.width / 2,
-            'strip_end_m': th.centre + th.width / 2}
+            'strip_end_m': th.centre + th.width / 2, **header_description(th.header)}
 
 
 def _steady_section(th, sp):
@@ -1293,6 +1350,20 @@ def _steady_section(th, sp):
         'relative_energy_residual': actual['relative_energy_residual'],
         'expansion_factor': actual['expansion_factor'],
         'flags': actual['flags']}
+    # SPEC22: footprint description, flags and notes (keys added after the earlier ones)
+    out.update(header_description(th.header))
+    hf = header_flags(th.header)
+    if hf:
+        out['flags'] = list(out['flags']) + [f for f in hf if f not in out['flags']]
+    notes = []
+    if FP_FLAG_STAND_IN in hf:
+        notes.append(rt.FOOTPRINT_STAND_IN_BASIS)
+    if FP_FLAG_WIDE in hf:
+        notes.append(FP_WIDE_NOTE)
+    if th.header.htc_flow_exponent == 1.0 and any(0.0 < v < 1.0 for v in th.levels):
+        notes.append(FP_EXPONENT_NOTE)
+    if notes:
+        out['footprint_notes'] = notes
     return out, healthy, actual, dev
 
 
@@ -4568,6 +4639,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             steady, healthy, actual, dev = _steady_section(th, sp)
             out['thermal_steady'] = steady
             out['flags'] += [f for f in steady['flags'] if f not in out['flags']]
+            flags += [f for f in steady['flags'] if f in FP_TOP_FLAGS and f not in flags]
         except ValueError as exc:
             out['thermal_steady'] = failed('thermal_steady', exc)
             out['failures'].append(out['thermal_steady']['error'])

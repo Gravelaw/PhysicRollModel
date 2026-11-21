@@ -488,8 +488,8 @@ Literature statements, not model outputs: the tool has no roll-wear model and no
 ### Numbers for simulation
 
 - Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; a net balance. [PT-T16]
-- Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at 500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll 50 °C); viscosity ranks first among spray factors. [PT-T18, PT-T17]
-- Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about 5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll). [PT-T19]
+- Spray coefficient, kerosene on a work roll: at 500 kPa it rises from 3.0 to 4.0 kW/m²K in time as the coolant spreads over the wall (not across space); 2.5–4.3 over 200–700 kPa, an average over the roll-wall patch of one cooling zone. Simulated (1800 mm cold mill, two rows of 34 nozzles at 52 mm per work roll, entry side only, kerosene [SN14 FT]; roll 50 °C); viscosity ranks first among spray factors. [PT-T18, PT-T17]
+- Oil against water spray: oil 3–6 times lower at equal impingement density (the text; the conclusions say "about 3–5 times" [SN16 FT]) (measured on a steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about 5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll). [PT-T19]
 - Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll. [PT-T25]
 - Zone-cooling authority: ±3.6 to ±4.2 µm on diameter 20 revolutions after a change; grows linearly with rolled length; halves from 100 to 300 m/min (simulated, 1100 alloy). [PT-T18]
 - Bite contact conductance: 25–40 kW/m²K in aluminium models; measurements span 7–800. [PT-T34]

@@ -24,7 +24,7 @@ from physicroll import roll_thermal as rt
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / 'artifacts' / 'band_diagnosis'
 DIAGNOSIS_ARTIFACTS = ('battery-foil-demo', 'bearing-order-demo', 'lengthwise-bands-demo',
-                       'thin-gauge-chatter-demo')
+                       'thin-gauge-chatter-demo', 'realistic-header-demo')
 
 # The two plant dry-run results (SPEC15, kept outside the repository) are reproduced here by
 # the features the plain layer reads: their flag lists, their tied leaders and scores, their

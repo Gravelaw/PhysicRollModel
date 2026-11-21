@@ -45,8 +45,11 @@ a roll imprint), mixed with first contact 1-3, hydrodynamic above 3 (Sutcliffe 2
 EX); common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX). No boundary-regime threshold.
 
 Coolant sprays (Lloyd, Lechler 2010; Tucker, Lechler 2006): flat-fan footprint
-``W = 2*s*tan(angle/2)``; along-header width ``W_eff = W*cos(offset)``; overlap
-``(W_eff - pitch)/W_eff``; free thermal radius growth ``dR = alpha*R*dT`` (upper bound);
+``W = 2*s*tan(angle/2)`` [D] geometric; neither paper prints it [SN1 FT; SN3 FT]; catalogue
+widths are 6-14 % larger [SN5 VP; computed]; along-header width ``W_eff = W*cos(offset)``, taken
+from ``roll_thermal.SprayHeader.effective_footprint_width_m`` (a supplied pattern width replaces
+it); overlap ``(W_eff - pitch)/W_eff`` (definition varies between sources; 10-30 % or 10-50 %
+of the pattern width [PT-T21; PT-T22; SN7; SN13]); free thermal radius growth ``dR = alpha*R*dT`` (upper bound);
 local gap closure fraction ``2*dR/h_exit`` (both work rolls grow).
 
 NOT modelled: roll-stack dynamics (see ``physicroll.chatter``), strip wave propagation,
@@ -904,7 +907,7 @@ def flat_fan_footprint_width_m(standoff_m, spray_angle_rad):
 
 def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
                    offset_angle_rad=0.0, blocked_nozzle_indices=(), first_nozzle_position_m=None,
-                   resolution_m=0.002):
+                   resolution_m=0.002, footprint_width_m=None):
     """Overlap count of flat fans along a header; under-covered stripes -> lengthwise bands.
 
     Positions are along the barrel from 0 to L. Default layout: n = floor(L/pitch) nozzles
@@ -917,7 +920,7 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         raise ValueError('nozzle_pitch_m must not exceed barrel_length_m')
     width = flat_fan_footprint_width_m(standoff_m, spray_angle_rad)
     offset = _num('offset_angle_rad', offset_angle_rad, nonnegative=True,
-                  hi=math.radians(60))
+                  hi=math.radians(70))
     res = _num('resolution_m', resolution_m, positive=True, hi=0.1 * length)
     if first_nozzle_position_m is None:
         count = max(1, int(math.floor(length / pitch + 1e-9)))
@@ -931,7 +934,12 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         raise ValueError('blocked_nozzle_indices must be a tuple of ints')
     blocked = sorted({_int('blocked nozzle index', i, lo=0, hi=count - 1)
                       for i in blocked_nozzle_indices})
-    w_eff = width * math.cos(offset)
+    # SPEC22: the width from the ONE property of the header (geometric unless supplied)
+    from .roll_thermal import SprayHeader
+    w_eff = SprayHeader(nozzle_pitch_m=pitch, standoff_m=standoff_m,
+                        spray_angle_rad=spray_angle_rad, offset_angle_rad=offset,
+                        spray_mean_htc_w_m2k=0.0,
+                        footprint_width_m=footprint_width_m).effective_footprint_width_m
     active = [x for i, x in enumerate(positions) if i not in blocked]
     cuts = {0.0, length}
     for x in active:
@@ -1009,6 +1017,9 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         'nozzle_positions_m': positions, 'blocked_nozzle_indices': blocked,
         'footprint_width_m': width, 'effective_footprint_width_m': w_eff,
         'overlap_fraction': (w_eff - pitch) / w_eff,
+        'overlap_definition_note': ('overlap (W_eff - pitch)/W_eff; the definition varies '
+                                    'between sources: 10-30 % or 10-50 % of the pattern width '
+                                    '[PT-T21; PT-T22; SN7; SN13]'),
         'min_coverage_count': min(counts), 'max_coverage_count': max(counts),
         'modal_coverage_count': modal, 'fully_covered': min(counts) >= 1,
         'stripes': stripes, 'resolution_m': res,

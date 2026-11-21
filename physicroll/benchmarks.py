@@ -1228,7 +1228,7 @@ def _tm_la8_spray_fit():
                  'REFERENCE_ONLY_INPUTS_NOT_RECORDED',
                  'Reference only: the published fit\'s inputs are not recorded and its basis is '
                  'not established; the project value is not computed.',
-                 ['INPUTS_NOT_RECORDED', 'SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED'])
+                 ['INPUTS_NOT_RECORDED', 'SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE'])
 
 
 # ------------------------------------------------ flatness loop (SPEC19 package 4, G5)
