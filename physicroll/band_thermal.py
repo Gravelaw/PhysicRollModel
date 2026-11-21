@@ -173,6 +173,19 @@ def thermal_shape_off_case_share(case, th, steady, bw):
     return None
 
 
+LINEARITY_ROUNDING_LEVEL = 1e-9
+
+
+def _linearity_words(lin):
+    """The linearity check's difference in words. Below the rounding level the number itself is
+    noise that changes with the platform's floating-point summation, so the note does not print
+    it (the value stays in ``linearity_check_max_relative_difference``)."""
+    if lin < LINEARITY_ROUNDING_LEVEL:
+        return 'below 1e-9 (rounding level)'
+    return f'{lin:.2g}'
+
+
+
 def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_table=None):
     """The sensitivity block (see the module docstring). ``bw`` is ``band_width``."""
     mode = case['model_options'].get('thermal_sensitivity', DEFAULT_MODE)
@@ -362,7 +375,7 @@ def thermal_sensitivity(case, w, th, sp, steady, actual, events_out, bw, stripe_
         'linearity_note': ('stripe and event histories scaled with the roll heat share for a '
                            'fixed spray coefficient (linear roll thermal model, coolant '
                            'temperature as the zero); checked by one direct solve: maximum '
-                           f'relative difference {lin:.2g}' if lin is not None else
+                           'relative difference ' + _linearity_words(lin) if lin is not None else
                            'linearity not checked (no stripe in the direct solve)'),
         'literature_check_of_case_inputs': check,
         'note': ('The heat partition [PT-T16] was read as an abstract only and is a net balance '

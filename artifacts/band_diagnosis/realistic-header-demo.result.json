@@ -33643,7 +33643,7 @@
         "used_by_the_rows_above": false
       },
       "linearity_check_max_relative_difference": 2.1959959666442888e-13,
-      "linearity_note": "stripe and event histories scaled with the roll heat share for a fixed spray coefficient (linear roll thermal model, coolant temperature as the zero); checked by one direct solve: maximum relative difference 2.2e-13",
+      "linearity_note": "stripe and event histories scaled with the roll heat share for a fixed spray coefficient (linear roll thermal model, coolant temperature as the zero); checked by one direct solve: maximum relative difference below 1e-9 (rounding level)",
       "literature_check_of_case_inputs": [
         {
           "basis": "strip share of the heat against the only measured foil-mill partition (abstract only; a net balance, not necessarily the split inside the bite) [PT-T16]",
