@@ -945,3 +945,135 @@ class TransferForceProfileTests(unittest.TestCase):
         a = ss.transfer_radius_profile(z, dr, **self.KW)
         b = ss.transfer_radius_profile(z, dr, **self.KW)
         self.assertEqual(a, b)
+
+
+class WidthCouplingKernelTests(unittest.TestCase):
+    """SPEC19 package 8: the width-coupling kernel (a second estimate of the tension feedback)."""
+
+    # bite sensitivities of the committed demos (artifacts/band_diagnosis/*.result.json, 'bite')
+    LENGTHWISE = dict(width=1.5, h=0.21e-3, Q=None, F_h=None)
+
+    @staticmethod
+    def _bite(name):
+        from pathlib import Path
+        p = (Path(__file__).resolve().parents[1] / 'artifacts' / 'band_diagnosis'
+             / f'{name}.result.json')
+        r = json.loads(p.read_text(encoding='utf-8'))
+        return r['bite'], r['inputs']['pass']['exit_thickness_m'], r['inputs']['pass']['width_m']
+
+    def _kernel(self, name, closure):
+        b, h, w = self._bite(name)
+        return ss.width_coupling_kernel(
+            strip_stiffness_per_width_pa=b['strip_modulus_n_m'] / w,
+            exit_tension_force_sensitivity_per_width_m=-b['dforce_dexit_tension_m2'] / w,
+            entry_tension_force_sensitivity_per_width_m=-b['dforce_dentry_tension_m2'] / w,
+            dslip_dexit_thickness_per_m=b['dslip_dexit_thickness_per_m'],
+            dslip_dexit_tension_per_pa=b['dslip_dexit_tension_per_pa'],
+            dslip_dentry_tension_per_pa=b['dslip_dentry_tension_per_pa'], exit_thickness_m=h,
+            strip_youngs_modulus_pa=70e9, strip_poisson_ratio=0.33, closure=closure)
+
+    def test_span_strain_ratio_closed_forms_and_conditions(self):
+        nu = 0.33
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'no_lateral_velocity'),
+                               (3 - nu) * (1 + nu) / (3 + nu), places=12)
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'no_lateral_velocity'), 1.066396, 6)
+        self.assertEqual(ss.span_strain_ratio(nu, 'uniaxial'), 1.0)
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'shear_free'), 1 - nu, places=12)
+        for closure, key in (('no_lateral_velocity', 'e_duz_dx'), ('uniaxial', 'sigma_zz'),
+                             ('shear_free', 'sigma_xz')):
+            f = ss.closure_field_at_bite(nu, closure, kappa=30.0)
+            self.assertLess(abs(f[key]), 1e-9 * abs(f['sigma_xx']))
+            self.assertAlmostEqual(f['chi'], ss.span_strain_ratio(nu, closure), places=12)
+        with self.assertRaises(ValueError):
+            ss.span_strain_ratio(nu, 'clamped')
+
+    def test_lengthwise_row(self):
+        k = self._kernel('lengthwise-bands-demo', 'no_lateral_velocity')
+        self.assertLess(abs(k['strip_stiffness_per_width_pa'] / 1.186e10 - 1), 1e-3)
+        self.assertLess(abs(k['pointwise_feedback_stiffness_per_width_pa'] / 1.009e12 - 1), 1e-3)
+        self.assertLess(abs(k['feedback_stiffness_per_width_pa'] / 6.957e11 - 1), 1e-3)
+        self.assertAlmostEqual(k['ratio_to_pointwise'], 0.690, delta=1e-3)
+        self.assertAlmostEqual(k['exit_stress_per_thickness_over_e_per_h'], 0.260, delta=1e-3)
+        self.assertAlmostEqual(k['entry_stress_per_thickness_over_e_per_h'], 0.198, delta=1e-3)
+        u = self._kernel('lengthwise-bands-demo', 'uniaxial')
+        self.assertLess(abs(u['feedback_stiffness_per_width_pa'] / 2.432e11 - 1), 1e-3)
+        sf = self._kernel('lengthwise-bands-demo', 'shear_free')
+        self.assertLess(abs(sf['feedback_stiffness_per_width_pa'] / -3.446e12 - 1), 1e-3)
+        self.assertFalse(sf['defined'])
+
+    def test_battery_foil_row(self):
+        k = self._kernel('battery-foil-demo', 'no_lateral_velocity')
+        self.assertLess(abs(k['strip_stiffness_per_width_pa'] / 7.389e10 - 1), 1e-3)
+        self.assertLess(abs(k['pointwise_feedback_stiffness_per_width_pa'] / 1.472e13 - 1), 1e-3)
+        self.assertLess(abs(k['feedback_stiffness_per_width_pa'] / 1.500e12 - 1), 1e-3)
+        self.assertAlmostEqual(k['ratio_to_pointwise'], 0.102, delta=1e-3)
+        self.assertAlmostEqual(k['exit_stress_per_thickness_over_e_per_h'], 0.0864, delta=1e-4)
+        self.assertAlmostEqual(k['entry_stress_per_thickness_over_e_per_h'], 0.0241, delta=1e-4)
+        u = self._kernel('battery-foil-demo', 'uniaxial')
+        self.assertLess(abs(u['feedback_stiffness_per_width_pa'] / 1.280e11 - 1), 1e-3)
+        sf = self._kernel('battery-foil-demo', 'shear_free')
+        self.assertLess(abs(sf['feedback_stiffness_per_width_pa'] / -1.074e13 - 1), 1e-3)
+        self.assertFalse(sf['defined'])
+
+    def _plain(self, **kw):
+        base = dict(strip_stiffness_per_width_pa=1e10,
+                    exit_tension_force_sensitivity_per_width_m=0.01,
+                    entry_tension_force_sensitivity_per_width_m=0.005,
+                    dslip_dexit_thickness_per_m=-500.0, dslip_dexit_tension_per_pa=2e-12,
+                    dslip_dentry_tension_per_pa=-5e-12, exit_thickness_m=0.2e-3,
+                    strip_youngs_modulus_pa=70e9, strip_poisson_ratio=0.33)
+        base.update(kw)
+        return ss.width_coupling_kernel(**base)
+
+    def test_limits_and_xi_scaling(self):
+        h, E = 0.2e-3, 70e9
+        k = self._plain(dslip_dentry_tension_per_pa=0.0, closure='uniaxial')
+        ax = (-500.0 + 1 / h) / (1 / E - 2e-12)
+        self.assertLess(abs(k['exit_stress_per_thickness_pa_m'] / ax - 1), 1e-12)
+        self.assertLess(abs(k['entry_stress_per_thickness_pa_m'] / ax - 1), 1e-12)
+        far = self._plain(dslip_dexit_tension_per_pa=-1e-3)
+        self.assertLess(abs(far['exit_stress_per_thickness_pa_m']), 1e-3 * abs(ax))
+        # xi scales every term linearly with f_h = 0
+        a = self._plain(dslip_dexit_thickness_per_m=0.0, xi=1.0)
+        b = self._plain(dslip_dexit_thickness_per_m=0.0, xi=0.5)
+        self.assertAlmostEqual(b['feedback_stiffness_per_width_pa']
+                               / a['feedback_stiffness_per_width_pa'], 0.5, places=12)
+        self.assertAlmostEqual(b['ratio_to_pointwise'], a['ratio_to_pointwise'], places=12)
+
+    def test_sign_reversal_reported_never_clipped(self):
+        k = self._plain(dslip_dexit_tension_per_pa=1e-9)    # denominator negative
+        self.assertFalse(k['defined'])
+        self.assertIsNone(k['feedback_stiffness_per_width_pa'])
+        self.assertIn('denominator', k['reason'])
+
+    def test_stress_development_fraction(self):
+        lam, nu = 0.2, 0.33
+        self.assertEqual(ss.stress_development_fraction(0.0, lam, nu), 0.0)
+        x95 = 3.94 / (2 * math.pi / lam)
+        self.assertAlmostEqual(ss.stress_development_fraction(x95, lam, nu), 0.95, delta=1e-3)
+        prev = -1.0
+        for i in range(50):
+            f = ss.stress_development_fraction(i * 0.01, lam, nu)
+            self.assertGreater(f, prev)
+            prev = f
+        d = ss.distance_to_development(0.95, lam, nu)
+        self.assertAlmostEqual(ss.stress_development_fraction(d, lam, nu), 0.95, places=9)
+        self.assertAlmostEqual(d / lam, 0.627, delta=0.005)        # about 0.63 wavelengths
+
+    def test_supplied_feedback_equals_the_pointwise_call(self):
+        z = [0.005 * i for i in range(64)]
+        dr = [1e-6 * math.exp(-((x - 0.16) / 0.03) ** 2) for x in z]
+        kw = dict(bite_half_length_m=0.003, strip_stiffness_per_width_pa=1.2e10,
+                  roll_radius_m=0.2, n_rolls=1)
+        nx, h, E, xi = 0.0128, 0.21e-3, 70e9, 1.0
+        a = ss.transfer_radius_profile(z, dr, exit_tension_force_sensitivity_per_width_m=nx,
+                                       exit_thickness_m=h, strip_youngs_modulus_pa=E, xi=xi,
+                                       **kw)
+        b = ss.transfer_radius_profile(z, dr, feedback_stiffness_per_width_pa=nx * E * xi / h,
+                                       **kw)
+        for u, v in zip(a['local_thickness_change_m'], b['local_thickness_change_m']):
+            self.assertLessEqual(abs(u - v), 1e-12 * max(abs(u), 1e-30))
+        with self.assertRaises(ValueError):
+            ss.transfer_radius_profile(z, dr, exit_tension_force_sensitivity_per_width_m=nx,
+                                       exit_thickness_m=h, feedback_stiffness_per_width_pa=1e11,
+                                       **kw)

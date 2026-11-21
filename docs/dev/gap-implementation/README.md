@@ -17,6 +17,7 @@ study. Whether this folder stays in the final pull request is to be decided when
 | `SPEC19.md` | Phase 2 brief: fifteen packages. |
 | `SPEC20.md` | One inserted package: four corrections of the grinding rules, from `docs/research/band-screening-2026-11/roll-grinding.md`. |
 | `SPEC21.md` | One inserted package: the register of limitations and exceptions, `docs/limitations.md`, with its generator and tests. |
+| `SPEC22.md` | One inserted package: spray header step 1 (nozzle footprint, pattern width, flow exponent, a realistic-header demo), from `docs/research/band-screening-2026-11/spray-nozzles.md`. |
 | `research_phase1_equations.md` | Literature research for Phase 1 (source prefix `E`). Moved by Phase 1 package 1 to [phase1-equations.md](../../research/band-screening-2026-11/phase1-equations.md); no longer in this folder. |
 | `prototypes/` | The planners' and the researcher's scratch scripts. Prototypes, not specifications; where they differ from a brief, the brief holds. Inside the briefs they are named by their original scratch folders: `s21` is `prototypes/phase0`, `s23` is `prototypes/phase1`, `s24` is `prototypes/phase1-research`, `s25` is `prototypes/phase2`. |
 | `verify_additive.py` | Compares the working-tree artifacts with the last commit and reports added, grown, changed and removed paths. Run from the repository root. |

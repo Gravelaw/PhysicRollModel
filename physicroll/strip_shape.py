@@ -410,8 +410,13 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
                             roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU,
                             exit_tension_force_sensitivity_per_width_m=None,
                             exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA,
-                            xi=1.0):
+                            xi=1.0, feedback_stiffness_per_width_pa=None):
     """Apply ``T(lam)`` per DFT component of a de-trended local radius deviation [D].
+
+    ``feedback_stiffness_per_width_pa`` (SPEC19 package 8): a feedback stiffness per width given
+    directly (the width-coupling kernel), used exactly where the pointwise term
+    ``N_x'*E*xi/h`` is used otherwise; not together with
+    ``exit_tension_force_sensitivity_per_width_m``.
 
     ``z_m`` must be uniformly spaced (the window is treated as one period). Components with
     ``lam < 4a`` use ``T(4a)``, with ``lam > R`` (and the mean) use ``T(R)``. Short content is
@@ -436,8 +441,18 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     n_r = _n_rolls(n_rolls)
     e = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
     nu = _poisson('roll_poisson_ratio', roll_poisson_ratio)
-    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
-                         strip_youngs_modulus_pa, xi)
+    if feedback_stiffness_per_width_pa is not None:
+        if exit_tension_force_sensitivity_per_width_m is not None:
+            raise ValueError('give feedback_stiffness_per_width_pa or '
+                             'exit_tension_force_sensitivity_per_width_m, not both')
+        q_fb = _num('feedback_stiffness_per_width_pa', feedback_stiffness_per_width_pa,
+                    lo=-1e15, hi=1e15)
+        if q + q_fb <= 0:
+            raise ValueError('feedback_stiffness_per_width_pa makes Q_eff non-positive')
+        nx = None
+    else:
+        nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                             strip_youngs_modulus_pa, xi)
     q_eff = q + q_fb
     lam_short = SHORT_WAVELENGTH_FACTOR * a
     if radius <= lam_short:
@@ -474,6 +489,8 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
     if nx:
         flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
+    if feedback_stiffness_per_width_pa is not None:
+        flags.append('FEEDBACK_STIFFNESS_SUPPLIED')
     if f_short > SPECTRUM_FLAG_FRACTION:
         flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
     if f_long > LONG_WAVELENGTH_FLAG_FRACTION:
@@ -1688,3 +1705,146 @@ def match_positions(predicted_positions_m, observed_positions_m, tolerance_m):
         'flags': [] if pred else ['NO_PREDICTED_POSITIONS'],
         'limitations': ['Positions must share one coordinate; tracking offsets are the '
                         "caller's to remove."], 'sources': []})
+
+
+# ------------------------------------------- width-coupling kernel (SPEC19 package 8, G3, X17)
+# [D, re-derived in SPEC19] Per Fourier component across the width, cos(kappa*z), small
+# perturbations of a uniform pass. Unknowns: dh exit thickness, ds_x, ds_e exit and entry
+# tensile stress AT the bite, d_x, d_e relative exit and entry speed.
+#  (K1) dF' = -Q*dh - N_x'*ds_x - N_e'*ds_e,  N_e' = -F_se/width
+#  (K2) d_x = f_h*dh + f_sx*ds_x + f_se*ds_e  (roll speed uniform)
+#  (K3) d_e = d_x + xi*dh/h  (mass flow with the shape-disturbing coefficient)
+#  (K4) exit span: far downstream s_inf = -E*e, e = -xi*dh/h (the pointwise value); near the
+#       bite a decaying plane-stress field phi = (a + b*x)*exp(-kappa*x)*cos(kappa*z) is added,
+#       and in a steady flow the speed excess equals the total strain: d_x = chi*(ds_x - s_inf)/E
+#  (K5) entry span (flat incoming strip): d_e = chi*ds_e/E
+# chi = E*eps_xx/sigma_xx of that field at x = 0 depends on how the strip is held laterally at
+# the bite (the LATERAL CLOSURE, an analyst choice [D]). No wavenumber remains in the stiffness
+# (a half-infinite span has no length but 1/kappa): for bands the kernel is a FACTOR on the
+# feedback, not a wavenumber-dependent kernel; kappa only sets where the far field is reached.
+LATERAL_CLOSURES = ('no_lateral_velocity', 'uniaxial', 'shear_free')
+KERNEL_CLOSURE = 'no_lateral_velocity'   # [D, SPEC19: analyst choice] closure of the kernel level
+CLOSURE_WORDS = {'no_lateral_velocity': 'the strip leaves the roll gap moving straight '
+                                        '(no lateral velocity change)',
+                 'uniaxial': 'no lateral stress at the roll gap exit',
+                 'shear_free': 'no shear stress at the roll gap exit'}
+KERNEL_BASIS = ('[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the '
+                'pass, mass flow with xi, half-infinite exit and entry spans with a decaying '
+                'plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + '
+                'f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + '
+                "(E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e")
+
+
+def _closure_c(poisson_ratio, closure):
+    nu = poisson_ratio
+    if closure == 'no_lateral_velocity':
+        return (1 + nu) / (3 + nu)
+    if closure == 'uniaxial':
+        return 0.5
+    if closure == 'shear_free':
+        return 1.0
+    raise ValueError(f'closure must be one of {LATERAL_CLOSURES}')
+
+
+def span_strain_ratio(poisson_ratio, closure) -> float:
+    """``chi = E*eps_xx/sigma_xx`` at the bite plane: (3 - nu)*(1 + nu)/(3 + nu), 1 or 1 - nu."""
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    c = _closure_c(nu, closure)
+    # sigma_xx = -kappa^2*a, sigma_zz = kappa^2*a*(1 - 2*c): chi = 1 - nu*sigma_zz/sigma_xx
+    return 1 + nu * (1 - 2 * c)
+
+
+def closure_field_at_bite(poisson_ratio, closure, kappa=1.0, a=1.0):
+    """The stress-function field at x = 0 (self-check): amplitudes of sigma_xx, sigma_zz,
+    sigma_xz and E*d(u_z)/dx, and chi."""
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    b = _closure_c(nu, closure) * kappa * a
+    sxx = -kappa ** 2 * a
+    szz = kappa ** 2 * a - 2 * b * kappa
+    sxz = kappa * (b - kappa * a)
+    # E*u_z = ((1 + nu)*kappa*(a + b*x) - 2*b)*exp(-kappa*x)*sin(kappa*z)
+    duz = (1 + nu) * kappa * b - kappa * ((1 + nu) * kappa * a - 2 * b)
+    return {'sigma_xx': sxx, 'sigma_zz': szz, 'sigma_xz': sxz, 'e_duz_dx': duz,
+            'chi': (sxx - nu * szz) / sxx}
+
+
+def width_coupling_kernel(*, strip_stiffness_per_width_pa,
+                          exit_tension_force_sensitivity_per_width_m,
+                          entry_tension_force_sensitivity_per_width_m,
+                          dslip_dexit_thickness_per_m, dslip_dexit_tension_per_pa,
+                          dslip_dentry_tension_per_pa, exit_thickness_m,
+                          strip_youngs_modulus_pa=ALUMINIUM_E_PA,
+                          strip_poisson_ratio=ALUMINIUM_NU, xi=1.0,
+                          closure=KERNEL_CLOSURE) -> dict:
+    """Feedback stiffness per width of the width-coupling kernel beside the pointwise value.
+
+    N_x' = -F_sx/width and N_e' = -F_se/width (positive when tension lowers the force).
+    ``defined`` is False when the denominator or ``Q + K`` is not positive (no linear steady
+    state for that closure): reported, never clipped.
+    """
+    q = _num('strip_stiffness_per_width_pa', strip_stiffness_per_width_pa, positive=True,
+             hi=1e14)
+    nx = _num('exit_tension_force_sensitivity_per_width_m',
+              exit_tension_force_sensitivity_per_width_m, lo=-10.0, hi=10.0)
+    ne = _num('entry_tension_force_sensitivity_per_width_m',
+              entry_tension_force_sensitivity_per_width_m, lo=-10.0, hi=10.0)
+    fh = _num('dslip_dexit_thickness_per_m', dslip_dexit_thickness_per_m, lo=-1e9, hi=1e9)
+    fsx = _num('dslip_dexit_tension_per_pa', dslip_dexit_tension_per_pa, lo=-1.0, hi=1.0)
+    fse = _num('dslip_dentry_tension_per_pa', dslip_dentry_tension_per_pa, lo=-1.0, hi=1.0)
+    h = _thickness('exit_thickness_m', exit_thickness_m)
+    e = _modulus('strip_youngs_modulus_pa', strip_youngs_modulus_pa)
+    x = _num('xi', xi, lo=0.0, hi=1.0, lo_open=True)
+    chi = span_strain_ratio(strip_poisson_ratio, closure)
+    den = chi / e - fsx - fse
+    pointwise = nx * e * x / h
+    out = {'closure': closure, 'closure_words': CLOSURE_WORDS[closure],
+           'span_strain_ratio': chi, 'denominator_per_pa': den,
+           'pointwise_feedback_stiffness_per_width_pa': pointwise,
+           'strip_stiffness_per_width_pa': q, 'basis': KERNEL_BASIS}
+    if den <= 0:
+        out.update(defined=False, reason='the denominator chi/E - f_sx - f_se is not positive',
+                   exit_stress_per_thickness_pa_m=None, entry_stress_per_thickness_pa_m=None,
+                   feedback_stiffness_per_width_pa=None, ratio_to_pointwise=None,
+                   effective_stiffness_over_strip_stiffness=None)
+        return out
+    ax = (fh + chi * x / h + fse * (e * x / h) * (1 - chi) / chi) / den
+    ae = ax + (e * x / h) * (1 - chi) / chi
+    k = nx * ax + ne * ae
+    defined = q + k > 0
+    out.update(defined=defined,
+               exit_stress_per_thickness_pa_m=ax, entry_stress_per_thickness_pa_m=ae,
+               exit_stress_per_thickness_over_e_per_h=ax * h / e,
+               entry_stress_per_thickness_over_e_per_h=ae * h / e,
+               feedback_stiffness_per_width_pa=k,
+               ratio_to_pointwise=(k / pointwise if pointwise else None),
+               effective_stiffness_over_strip_stiffness=(q + k) / q)
+    if not defined:
+        out['reason'] = 'Q + K is not positive: no linear steady state for this closure'
+    return out
+
+
+def stress_development_fraction(distance_m, wavelength_m, poisson_ratio,
+                                closure=KERNEL_CLOSURE) -> float:
+    """Share of the far-field change reached ``distance_m`` after the bite for a component of
+    wavelength ``wavelength_m``: 1 - (1 + c*kappa*x)*exp(-kappa*x), c = b/(kappa*a)."""
+    d = _num('distance_m', distance_m, lo=0.0, hi=1e3)
+    lam = _num('wavelength_m', wavelength_m, positive=True, hi=1e3)
+    c = _closure_c(_poisson('poisson_ratio', poisson_ratio), closure)
+    kx = 2 * math.pi / lam * d
+    return 1 - (1 + c * kx) * math.exp(-kx)
+
+
+def distance_to_development(fraction, wavelength_m, poisson_ratio, closure=KERNEL_CLOSURE):
+    """Distance after the bite at which ``fraction`` of the far-field change is reached."""
+    lo, hi = 0.0, 1.0
+    while stress_development_fraction(hi * wavelength_m, wavelength_m, poisson_ratio,
+                                      closure) < fraction:
+        hi *= 2
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if stress_development_fraction(mid * wavelength_m, wavelength_m, poisson_ratio,
+                                       closure) < fraction:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi) * wavelength_m

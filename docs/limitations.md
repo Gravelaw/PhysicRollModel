@@ -109,7 +109,8 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | id | what the tool assumes or cannot do | what it means for a reader | how the result shows it | what would lift it | kind |
 |---|---|---|---|---|---|
 | L-SHAPE-01 | The flatness chain is elastic and local: half-space roll compliance, a linear exit-tension feedback with an approximate band-wise buckling cap (one scale factor, no iteration), no roll bending, no redistribution of entry tension, no relief after buckling; stresses above yield are indicative only. | Size not known. | `width.limitations`; `width.shape` | G1, G3 (Phase 2 and 3) | limitation |
-| L-SHAPE-02 | The exit-tension feedback that dominates every thin-gauge result is not supported or contradicted by the literature; the level without it (roll compliance only) is printed beside it and is about two orders of magnitude larger. One of the two comparison levels is not defined when the roll bump or the change reaches the gauge. | The size of a thin-gauge band depends on which level holds. | `RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE`, `COMPLIANCE_ONLY_LEVEL_NOT_DEFINED_CHANGE_REACHES_GAUGE` | a width-coupled strip model (G3) | limitation |
+| L-SHAPE-02 | The exit-tension feedback that dominates every thin-gauge result is not supported or contradicted by the literature; the level without it (roll compliance only) is printed beside it and is about two orders of magnitude larger. One of the two comparison levels is not defined when the roll bump or the change reaches the gauge. | The size of a thin-gauge band depends on which level holds; a second estimate of the feedback lies between them (L-SHAPE-19). | `RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE`, `COMPLIANCE_ONLY_LEVEL_NOT_DEFINED_CHANGE_REACHES_GAUGE` | a width-coupled strip model (G3) | limitation |
+| L-SHAPE-19 | A second estimate of the tension feedback, always computed beside the standard levels: a re-derived model of how the exit and entry spans respond across the width, using the roll gap's own force and slip sensitivities, half-infinite spans and an assumed way the strip is held sideways at the roll gap (three are printed; the kernel level uses "leaves the roll gap moving straight", an analyst choice). For bands it turns out to be a factor on the feedback, not a wavenumber-dependent kernel. The literature neither supports nor contradicts the feedback; this estimate is a re-derivation, not a check against a mill. The tally, every band state, onset, screen, local source, the loop and the step test use the standard (pointwise) feedback. | The second estimate gives 0.69 of the feedback at sheet gauge and 0.10 at foil gauge in the demos (0.24 and 0.009 with another closure; no steady answer with the third). A smaller feedback holds a band down less: with it the steady band reads 71.6 instead of 50.7 I-units (sheet demo) and 230 instead of 25.1 (foil demo). The rigid bound, the compliance-only level, this level and the standard level bracket the answer. | `WIDTH_COUPLING_KERNEL_REPORTED`, `KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE`, `KERNEL_CLOSURES_DISAGREE_IN_SIGN`, `KERNEL_STEADY_STATE_NOT_DEFINED`; `width.shape.width_coupling` | a roll stack with a closed gap, a strip-element model with lateral flow (G3, Phase 3), or a plant test with a known roll stripe | limitation |
 | L-SHAPE-03 | Buckling uses one assumed mode with a coefficient of 4 from memory: an upper bound on the critical load for that mode family, no interaction between neighbouring bands, finite strip length ignored, no search over wavelength under tension. These are the states the evidence uses; a wavelength search can be run beside them (L-SHAPE-16). | The published local buckles are matched only indicatively; the half-wave is 2.8 times the measured one on one case (part 5). | `width.shape` onsets | G4 (Phase 2, packages 6 and 7) | limitation |
 | L-SHAPE-04 | The after-release whole-sheet mode is an upper-bound indicator, not a band prediction (it scales with strip width and ignores the sheet's own weight); the local mode's width limit (2 × half-peak width) is an analyst choice; the released state assumes the residual stress is unchanged by coiling, slitting or levelling. | Over-states what shows after release. | `GLOBAL_BUCKLE_AFTER_RELEASE` state in `width.shape` | G4, G14 | limitation |
 | L-SHAPE-05 | After-release onsets limited by the reporting threshold are upper bounds. At the foil case pass they equal the 2 I-unit reporting onset (about 0.2 µm of stripe), so nearly any reportable stripe reads "visible after tension release". | A 20 s valve closure shows a band after release for 311 s in the battery demo. | `width.shape`, `width.thermal_events` | G4 | limitation |
@@ -228,9 +229,12 @@ These are the results whose answer, not only whose size, turns on something nobo
 - **Stripe heights** (L-HEAT-02, L-HEAT-03): they scale with the roll heat share and fall with the
   spray coefficient; the only measured share is an abstract's net balance, and the basis of the
   published spray coefficient (under the jet or around the roll) is not established.
-- **The friction-stripe size** (L-SHAPE-02, L-SHAPE-12): the two levels, with and without the
-  exit-tension feedback, are two orders of magnitude apart, and the literature neither supports
-  nor contradicts the feedback.
+- **The friction-stripe size and every thin-gauge band height** (L-SHAPE-02, L-SHAPE-12,
+  L-SHAPE-19): the two levels, with and without the exit-tension feedback, are two orders of
+  magnitude apart, and the literature neither supports nor contradicts the feedback. A second
+  estimate of the feedback (the width-coupling kernel, with an assumed lateral hold at the roll
+  gap) gives 0.10 of it at foil gauge and 0.69 at sheet gauge in the demos, so at foil gauge a
+  band may be about nine times the standard level; the tally uses the standard level.
 - **The foil roll-gap reference load** (L-BITE-06): the published loads depend on an end length
   the paper does not state (78 to 134 against the model's 88.9 to 92.9).
 - **The grinder chatter pitch test** (L-GRIND-02): without the grinder's speeds a grinder
@@ -297,6 +301,8 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `FIT_NOT_FIRST_ORDER_FRACTION` | 5 % | step-test fit | when a response is "not first order" | sets a flag |
 | `HILL_TOL` | 0.02 of the shear strength | half-space roll gap | friction-hill bounds | numerical |
 | `SPECTRUM_FLAG_FRACTION` | 0.05 | strip shape | short-wavelength flag | sets a flag |
+| `KERNEL_CLOSURE` | the strip leaves the roll gap moving straight | width-coupling kernel level | how the strip is held sideways at the roll gap | 0.69 against 0.24 (sheet demo), 0.10 against 0.009 (foil demo) with the uniaxial hold (L-SHAPE-19) |
+| `KERNEL_BASIS` | rule | width-coupling kernel | the re-derived span model (no equations in the reports) | L-SHAPE-19 |
 | `FEEDBACK_BASIS` | rule | strip shape | the planner's exit-tension feedback (L-SHAPE-02) | two orders of magnitude (part 3) |
 | `BASIS` (strip buckling) | rule | wavelength search | the energy, element and search method the project derived (no equations in the reports) | closed forms recovered (L-SHAPE-16) |
 | `AMPLITUDE_BASIS` | rule | wave height | the one-mode estimate in place of the gap row's expansion | upper estimate (L-SHAPE-17) |
@@ -479,7 +485,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | C8 | Marks carried over from the previous pass or coil. | 2 |
 | G1 | The roll stack: deflection, roll-to-roll contact, bending, tilt, shifting, ground camber. | 3 |
 | G2 | The closed-gap (roll-kiss) shape path for foil. | 3 |
-| G3 | A strip model coupled across the width. | 2 and 3 |
 | G7 | Thermal camber at the strip edge and edge actuators. | 3 |
 | G9 | A winding model beyond the linear stack. | 2 |
 | G10 | Air entrainment and the ironing roll. | 2 |
@@ -513,6 +518,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B4 | An anisotropic yield law in the roll gap. |
 | C4 | The amplitude of grinder marks on foil rolls; marks as a forced-response and wear problem. |
 | C7 | The accelerometer position and detection lead time; gauge filters beyond a spot and a lag. |
+| G3 | Lateral metal flow and a strip-element model across the width; a non-uniform entry profile; finite spans; the roll stack and closed gap; which lateral hold at the roll gap is right. |
 | G4 | Interaction of several modes; lateral stress and shear; the path from mill tension to none; a finite sample; a measured wave height, table index or stress profile to compare with. |
 | G5 | The plant's own flatness controller; bending, tilt and vendor rules; feed-forward; shapemeter dynamics and temperature compensation. |
 | G6 | A computed strip temperature; a vendor's temperature compensation. |
@@ -615,6 +621,9 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `HITCHCOCK_RATIO_BEYOND_REVIEWED_ENVELOPE` | The rolls flatten more than the reviewed range of the sheet roll-gap model. | L-BITE-01 |
 | `HYPOTHESIS_EVALUATION_FAILED` | One or more causes could not be evaluated and are shown as "cannot tell". | L-DATA-10 |
 | `IDENTIFIED_FRICTION_DIFFERS_FROM_CASE_FRICTION` | The friction worked out from your pass records differs by more than 20 % from the friction entered for the pass. | L-FRIC-04 |
+| `KERNEL_CLOSURES_DISAGREE_IN_SIGN` | Depending on how the strip is assumed to be held at the roll gap, the second estimate changes sign: the tension effect is not known even in direction for one of the assumptions. | L-SHAPE-19 |
+| `KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE` | The second estimate gives less than half the tension effect the standard level uses, so the band would be larger than shown by the standard level. | L-SHAPE-19 |
+| `KERNEL_STEADY_STATE_NOT_DEFINED` | For at least one assumption about how the strip is held at the roll gap the second estimate has no steady answer. | L-SHAPE-19 |
 | `LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE` | None of the modelled lengthwise bands passes under the thickness gauge. | L-MEAS-04 |
 | `LIGHT_REDUCTION_ELASTIC_STRIP_ZONES_NOT_MODELLED` | The reduction is light (below 10 %), where the short elastic zones the model leaves out matter more. | L-BITE-09 |
 | `LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE` | Somewhere across the width the friction changes by more than a fifth; the straight-line estimate built on it is then rough. | L-SHAPE-14 |
@@ -689,6 +698,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `THERMAL_SENSITIVITY_PER_PASS_FAILED` | The per-pass heat-share table could not be computed. | L-DATA-10 |
 | `THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN` | The pass is thinner than the range the sheet roll-gap model was reviewed for. | L-BITE-01 |
 | `USER_SUPPLIED_INPUTS_NOT_VERIFIED` | The values were entered by a person and have not been checked by the tool. | L-DATA-03 |
+| `WIDTH_COUPLING_KERNEL_REPORTED` | Beside the standard flatness levels, the page shows a second estimate of how much the strip tension holds a band down, from a model of how the strip is held across the width; the shortlist uses the standard level. | L-SHAPE-19 |
 | `WIDTH_SECTION_PARTIAL_FAILURE` | Part of the across-the-width model could not be computed. | L-DATA-10 |
 | `WIDTH_SHAPE_CHAIN_NOT_ASSESSABLE_NO_BITE` | Without a roll-gap result the strip-shape part of the width model is not assessed. | L-BITE-13 |
 | `WIDTH_THERMAL_NOT_ASSESSABLE_NO_BITE_HEAT` | Without the roll-gap heat the roll temperature model could not run. | L-BITE-13 |

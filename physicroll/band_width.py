@@ -773,7 +773,15 @@ def shape_params(case, bite, w, src=None, supplied=None):
             'yield_stress_pa': case['material']['yield_stress_pa'],
             'exit_tension_force_sensitivity_per_width_m': nx,
             'entry_force_sensitivity_per_width_pa': (None if bite is None else
-                                                     bite.dforce_dentry_thickness_n_m / width)}
+                                                     bite.dforce_dentry_thickness_n_m / width),
+            # SPEC19 package 8: the bite's slip sensitivities for the width-coupling kernel
+            # (None with supplied shape inputs: they describe a stiffness, not a bite)
+            'kernel_inputs': (None if bite is None or supplied is not None else {
+                'entry_tension_force_sensitivity_per_width_m':
+                    -bite.dforce_dentry_tension_m2 / width,
+                'dslip_dexit_thickness_per_m': bite.dslip_dexit_thickness_per_m,
+                'dslip_dexit_tension_per_pa': bite.dslip_dexit_tension_per_pa,
+                'dslip_dentry_tension_per_pa': bite.dslip_dentry_tension_per_pa})}
 
 
 def _tsf(z, dev, sp, feedback=True):
@@ -2784,6 +2792,7 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
                 tension_feedback_stiffness_per_width_pa=lv[
                     'tension_feedback_stiffness_per_width_pa'],
+                kernel_feedback_ratio_to_pointwise=kernel_ratio(sp),
                 bite_half_length_m=sp['bite_half_length_m'],
                 transfer_factor_with_feedback=lv['peak_transfer_ratio_with_feedback'],
                 transfer_factor_compliance_only=lv['compliance_only_peak_transfer_ratio'],
@@ -3992,6 +4001,168 @@ def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
                              'protocol is recorded]'},
             'flags': flags, 'limitations': list(ZT_LIMITATIONS)}
 
+# ======================================== width-coupling kernel (SPEC19 package 8, G3; X17)
+WC_STATUS = 'SECOND_ESTIMATE_OF_THE_TENSION_FEEDBACK_NOT_VALIDATED'
+WC_FLAG = 'WIDTH_COUPLING_KERNEL_REPORTED'
+WC_FLAG_BELOW_HALF = 'KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE'
+WC_FLAG_SIGN = 'KERNEL_CLOSURES_DISAGREE_IN_SIGN'
+WC_FLAG_UNDEFINED = 'KERNEL_STEADY_STATE_NOT_DEFINED'
+WC_TOP_FLAGS = (WC_FLAG, WC_FLAG_BELOW_HALF, WC_FLAG_SIGN, WC_FLAG_UNDEFINED)
+WC_USED_BY_EVIDENCE = ('the with-feedback level (pointwise exit-tension feedback): every band '
+                       'state, onset, gauge-trend row, screen and evidence item uses it; the '
+                       'kernel level is a second estimate beside it and enters no tally')
+WC_LIMITATIONS = (
+    'Linear, small perturbations of a uniform pass; half-infinite spans (a span shorter than '
+    'about half a band wavelength is not covered).',
+    'The lateral closure (how the strip is held at the roll gap) is an analyst choice [D]; the '
+    'kernel level uses no_lateral_velocity; all three closures are printed, none is picked to '
+    'agree with the pointwise value.',
+    'Slip sensitivities of a constant-friction bite (at foil gauge the experimental mattress or '
+    'the reduced half-space model); no roll stack, no closed gap, no lateral metal flow.',
+    'The literature neither supports nor contradicts the pointwise exit-tension feedback (gap '
+    'study X17); this kernel is a re-derivation, not a validation, and it does not confirm the '
+    'feedback at foil gauge.',
+    'The three present levels, the band states, the friction screen, the local sources, the '
+    'flatness loop, the step test and every evidence item still use the pointwise feedback.',
+)
+WC_MEANING = ('For bands the kernel is not wavenumber-dependent: it reduces to a factor on the '
+              'tension feedback. A smaller feedback suppresses a band less, so with the kernel a '
+              'band reads larger than with the full (pointwise) feedback; the rigid bound, the '
+              'compliance-only level, the kernel level and the with-feedback level bracket the '
+              'answer.')
+
+
+def _kernel(sp, closure):
+    ki = sp['kernel_inputs']
+    return ss.width_coupling_kernel(
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        exit_tension_force_sensitivity_per_width_m=sp['exit_tension_force_sensitivity_per_width_m'],
+        entry_tension_force_sensitivity_per_width_m=ki['entry_tension_force_sensitivity_per_width_m'],
+        dslip_dexit_thickness_per_m=ki['dslip_dexit_thickness_per_m'],
+        dslip_dexit_tension_per_pa=ki['dslip_dexit_tension_per_pa'],
+        dslip_dentry_tension_per_pa=ki['dslip_dentry_tension_per_pa'],
+        exit_thickness_m=sp['exit_thickness_m'],
+        strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        strip_poisson_ratio=sp['strip_poisson_ratio'], xi=sp['xi'], closure=closure)
+
+
+def kernel_ratio(sp):
+    """Kernel feedback / pointwise feedback with the kernel level's closure (None when not
+    defined or without a derived bite)."""
+    if sp is None or not sp.get('kernel_inputs'):
+        return None
+    try:
+        k = _kernel(sp, ss.KERNEL_CLOSURE)
+    except ValueError:
+        return None
+    return k['ratio_to_pointwise'] if k['defined'] else None
+
+
+def _kernel_level(lv, sp, k):
+    zs, drs, h = lv['z_m'], lv['local_radius_deviation_m'], sp['exit_thickness_m']
+    tr = ss.transfer_radius_profile(
+        zs, drs, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], n_rolls=sp['n_rolls'],
+        roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'], feedback_stiffness_per_width_pa=k)
+    exit_profile = [h + v for v in tr['local_thickness_change_m']]
+    if min(exit_profile) <= 0:
+        raise ValueError('the kernel level\'s thickness change reaches the exit gauge')
+    el = ss.differential_elongation(zs, [h] * len(zs), exit_profile, xi=sp['xi'])
+    fl = ss.flatness_from_elongation(
+        zs, el['elongation'], youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        poisson_ratio=sp['strip_poisson_ratio'], thickness_m=h,
+        mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+    peak = max(abs(fl['max_i_units']), abs(fl['min_i_units']))
+    lin = lv.get('linear_feedback_peak_i_units')
+    return {'closure': ss.KERNEL_CLOSURE, 'i_units': fl['i_units'], 'peak_i_units': peak,
+            'bands': _bands(fl['bands']), 'status': fl['status'],
+            'released_status': fl['released_status'],
+            'peak_ratio_to_linear_feedback': (peak / abs(lin) if lin else None),
+            'note': 'linear, no band-wise saturation (as the linear-feedback level)'}
+
+
+def width_coupling_section(lv, sp, w=None):
+    """SPEC19 package 8: the width-coupling kernel, a second estimate of the tension feedback,
+    BESIDE the present levels (always computed for a derived bite; nothing reads it)."""
+    if sp is None or not sp.get('kernel_inputs'):
+        return not_assessable('needs the slip sensitivities of a derived case-pass bite '
+                              '(supplied shape inputs carry none)')
+    if not isinstance(lv, dict) or 'z_m' not in lv:
+        return not_assessable('needs the steady flatness profile of the case pass')
+    closures = [_kernel(sp, c) for c in ss.LATERAL_CLOSURES]
+    main = closures[0]
+    flags = [WC_FLAG]
+    if main['defined'] and main['ratio_to_pointwise'] is not None and \
+            main['ratio_to_pointwise'] < 0.5:
+        flags.append(WC_FLAG_BELOW_HALF)
+    signs = {(c['feedback_stiffness_per_width_pa'] or 0) > 0 for c in closures
+             if c['feedback_stiffness_per_width_pa'] is not None}
+    if len(signs) > 1:
+        flags.append(WC_FLAG_SIGN)
+    if not all(c['defined'] for c in closures):
+        flags.append(WC_FLAG_UNDEFINED)
+    if main['defined']:
+        try:
+            level = _kernel_level(lv, sp, main['feedback_stiffness_per_width_pa'])
+        except ValueError as exc:
+            level = {'status': 'NOT_DEFINED', 'reason': str(exc)}
+    else:
+        level = {'status': 'NOT_DEFINED', 'reason': main.get('reason')}
+    bands = lv['levels']['with_feedback']['bands']
+    big = max(bands, key=lambda b: abs(b['peak_i_units'])) if bands else None
+    dev = {'wavelength_m': None, 'distance_to_95_percent_m': None,
+           'fraction_at_shapemeter': None, 'shapemeter_distance_m': None}
+    if big is not None:
+        zz, iu = lv['z_m'], lv.get('i_units_linear_feedback') or lv['i_units_with_feedback']
+        inside = [i for i, x in enumerate(zz) if big['start_m'] <= x <= big['end_m']]
+        lam = None
+        if inside:
+            pk = max((iu[i] for i in inside), key=abs)
+            half_idx = [i for i in inside if abs(iu[i]) >= 0.5 * abs(pk)]
+            half = zz[half_idx[-1]] - zz[half_idx[0]] if half_idx else 0.0
+            lam = 2 * half if half > 0 else None
+        if lam:
+            dev['wavelength_m'] = lam
+            dev['wavelength_basis'] = ('twice the half-peak width of the largest band of the '
+                                       'with-feedback level')
+            dev['distance_to_95_percent_m'] = ss.distance_to_development(
+                0.95, lam, sp['strip_poisson_ratio'])
+            d = None
+            for key in ('flatness_control', 'zone_step_test'):
+                sec = (w or {}).get(key)
+                if isinstance(sec, dict) and sec.get('shapemeter_distance_m') is not None:
+                    d = sec['shapemeter_distance_m']
+                    break
+            if d is not None:
+                dev['shapemeter_distance_m'] = d
+                dev['fraction_at_shapemeter'] = ss.stress_development_fraction(
+                    d, lam, sp['strip_poisson_ratio'])
+    pt = main['pointwise_feedback_stiffness_per_width_pa']
+    ratios = [c['ratio_to_pointwise'] for c in closures]
+    words = ', '.join('not defined' if (r is None or not c['defined']) else f'{r:.2g}'
+                      for r, c in zip(ratios, closures))
+    finding = (f'An independent estimate of the tension feedback gives {words} of the value used '
+               'by the standard levels (closures ' + ', '.join(ss.LATERAL_CLOSURES) + ').')
+    if level.get('peak_i_units') is not None and lv.get('linear_feedback_peak_i_units'):
+        finding += (f' With the first, the band would read {level["peak_i_units"]:.3g} '
+                    f'I-units instead of {abs(lv["linear_feedback_peak_i_units"]):.3g} (linear, '
+                    'no saturation).')
+    return {'status': WC_STATUS, 'used_by_the_evidence': WC_USED_BY_EVIDENCE,
+            'meaning': WC_MEANING, 'finding': finding, 'closures': closures,
+            'pointwise': {'feedback_stiffness_per_width_pa': pt,
+                          'effective_stiffness_over_strip_stiffness':
+                              1 + pt / sp['strip_stiffness_per_width_pa']},
+            'kernel_level': level, 'development': dev,
+            'basis': {'kernel': ss.KERNEL_BASIS,
+                      'closure_of_the_kernel_level': ss.KERNEL_CLOSURE + ' [D, SPEC19: analyst '
+                                                     'choice]',
+                      'development': '1 - (1 + c*kappa*x)*exp(-kappa*x), c = b/(kappa*a) of the '
+                                     'closure, kappa = 2*pi/wavelength'},
+            'flags': flags, 'limitations': list(WC_LIMITATIONS)}
+
+
 # ======================================== buckling with a wavelength search (SPEC19 package 6, G4)
 BUCKLING_MODELS = ('sine_mode', 'sine_mode_and_fe')
 BF_STATUS = 'UNVALIDATED_LINEAR_BUCKLING_BESIDE_THE_SINE_MODE'
@@ -4432,6 +4603,13 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         except ValueError as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])
+        # SPEC19 package 8: the width-coupling kernel beside the levels (always on)
+        try:
+            shape['width_coupling'] = width_coupling_section(shape.get('steady'), sp, w)
+        except (ValueError, ArithmeticError) as exc:
+            shape['width_coupling'] = failed('shape.width_coupling', exc)
+        flags += [f for f in (shape['width_coupling'].get('flags') or [])
+                  if f in WC_TOP_FLAGS and f not in flags]
         try:
             rip = steady['nozzle_pattern_ripple']['profile_m']
             if max(abs(v) for v in rip) > 0:
@@ -4450,6 +4628,8 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             shape['nozzle_pattern_ripple'] = failed('shape.nozzle_pattern_ripple', exc)
     elif sp is None:
         shape['steady'] = not_assessable(shape_reason)
+    if steady is not None and sp is None:
+        shape['width_coupling'] = not_assessable(shape_reason)
     try:
         shape['crown'] = _crown(case, w, steady['healthy_thermal_crown_m'] if steady else None)
     except ValueError as exc:

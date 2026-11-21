@@ -1342,6 +1342,7 @@ def _width_section(r):
         if isinstance(st, dict) and not _bad(st):
             body += _shape_notes(st)
         body += ('<h3>Steady stripes</h3>' + _stripe_table(w) + _ripple_line(w))
+        body += _width_coupling_block(w)
     pos = w.get('positions')
     if isinstance(pos, dict) and not _bad(pos):
         body += _match_tables(pos)
@@ -1355,6 +1356,31 @@ def _width_section(r):
     body += _surface_cycle_block(w)
     body += _buckling_fe_block(w)
     return head + body + '</section>'
+
+
+def _width_coupling_block(w):
+    """SPEC19 package 8: the levels of the steady profile with the width-coupling kernel as one
+    more row, and the warn paragraph with the three closures."""
+    st = _get(w, 'shape', 'steady')
+    wc = _get(w, 'shape', 'width_coupling')
+    if not isinstance(wc, dict) or not isinstance(st, dict) or _bad(st):
+        return ''
+    if _bad(wc):
+        return _state_p('Width coupling (second estimate of the tension feedback) ' + _bad(wc))
+    kl = wc.get('kernel_level') or {}
+    rows = [('rigid (bound)', st.get('rigid_transfer_bound_i_units')),
+            ('compliance only (bound)', st.get('compliance_only_peak_i_units')),
+            ('with width coupling (kernel)', kl.get('peak_i_units')),
+            ('with feedback (linear, the level the shortlist uses)',
+             st.get('linear_feedback_peak_i_units'))]
+    body = ''.join(f'<tr><td>{_e(n)}</td><td>{_f(abs(v) if _ok(v) else None, digits=4)}</td></tr>'
+                   for n, v in rows)
+    return ('<h3>Flatness levels of the steady profile</h3><table><tr><th>level</th>'
+            '<th>peak [I-units]</th></tr>' + body + '</table><p class="warn">'
+            + _e(wc.get('finding', '')) + ' ' + _e(wc.get('meaning', '')) + ' The standard levels '
+            'above are the ones the shortlist uses; the literature neither supports nor '
+            'contradicts the tension feedback, and the kernel is a re-derivation with an assumed '
+            'lateral closure.</p>')
 
 
 FE_WORDS = {'FLAT': 'flat', 'BUCKLES': 'waves', 'NO_COMPRESSION': 'no compression',

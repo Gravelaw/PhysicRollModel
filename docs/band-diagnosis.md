@@ -606,7 +606,9 @@ What this implies for where to look first on the mill (a screening order, not a 
 if your bands get worse as the gauge thins, a cooling stripe that buckles **in the mill** is
 not the first candidate in this model, because a given stripe is hidden more, not less, at
 thinner gauge (at the measured heat partition it shows in the mill on the thick stock passes
-and not on the foil passes). The thin-gauge-sensitive candidates are bands seen only after tension
+and not on the foil passes). This rests on the pointwise exit-tension feedback: the
+independent width-coupling kernel of section 7.14 gives only 0.10 of it at the battery-foil
+case pass, and the steady band would then read about nine times larger. The thin-gauge-sensitive candidates are bands seen only after tension
 release (a thermal stripe can be one of them), tension troughs and creases in the spans and
 at the ironing roll, coil ridges, a crown change outside the shrinking dead band, and tension
 lines. The first observations to take are therefore: is the band visible in the mill or only
@@ -1961,7 +1963,9 @@ stripe on both rolls, 0.21 mm exit gauge, 30 MPa tension, `Q` = 1.1e10 Pa,
 the test's inputs through `thermal_stripe_flatness`; the test asserts 410.58 I-units without
 the feedback, the latent state with it and a ratio below 0.1). In the lengthwise demo the
 feedback stiffness per width is 76 to 140 times `Q` on every pass (gauge-trend table, 7.3).
-The engine always applies it and reports all three levels.
+The engine always applies it and reports all three levels. An independent estimate of the
+feedback (the width-coupling kernel, section 7.14) gives 0.69 of it at sheet gauge and 0.10 at
+foil gauge in the demos; it is reported beside the levels and the tally keeps this one.
 
 When the feedback term dominates, `eps -> n*dR/(2*C*N_x'*E_strip)`, independent of gauge
 [D]: the raw elongation from a given stripe no longer rises as `1/h`.
@@ -2981,6 +2985,81 @@ reportable foil band** (lift limit below 0.75 I-units at the battery-foil profil
 sheet gauge a band below about 2.2 I-units lies flat. No amplitude or table measurement with its
 stress profile is in the reports (`SS-S14-TABLE` not encoded). Cost of the second part: about
 0.3 s per profile for the table scan (battery-foil section 1.3 s, lengthwise 2.6 s in all).
+
+### 7.14 Width coupling: a second estimate of the tension feedback (`strip_shape.width_coupling_kernel`)
+
+**Why.** The exit-tension feedback of section 7.2 multiplies the strip stiffness 76 to 386 times
+in the demos and decides every thin-gauge band height, yet it is pointwise and uses the
+far-field stress; the literature neither supports nor contradicts it (gap study X17). The gap
+row asks for a plane-stress solution of the span that maps the exit velocity profile to the
+stress. It is derived here `[D, re-derived in SPEC19]` from the eight bite sensitivities the
+engine already has.
+
+**Model.** Per Fourier component `cos(kappa*z)` across the width, small perturbations of a
+uniform pass; unknowns `dh`, the exit and entry stress at the bite `ds_x`, `ds_e`, and the
+relative exit and entry speeds `d_x`, `d_e`:
+
+- (K1) `dF' = -Q*dh - N_x'*ds_x - N_e'*ds_e`, `N_e' = -F_se/width`;
+- (K2) `d_x = f_h*dh + f_sx*ds_x + f_se*ds_e` (roll speed uniform);
+- (K3) `d_e = d_x + xi*dh/h`;
+- (K4) exit span: far downstream `s_inf = -E*e`, `e = -xi*dh/h` (the pointwise value); near
+  the bite a decaying plane-stress field `phi = (a + b*x)*exp(-kappa*x)*cos(kappa*z)`; in a
+  steady flow the speed excess is the total strain: `d_x = chi*(ds_x - s_inf)/E`;
+- (K5) entry span (flat incoming strip): `d_e = chi*ds_e/E`.
+
+`chi = E*eps_xx/sigma_xx` of the field at the bite depends on how the strip is held laterally
+there, the LATERAL CLOSURE, an analyst choice:
+
+| closure | condition at the bite | `chi` | `nu` 0.33 |
+|---|---|---|---|
+| `no_lateral_velocity` (the kernel level) | the strip leaves the bite moving straight, `d(u_z)/dx = 0` | `(3 - nu)*(1 + nu)/(3 + nu)` | 1.066396 |
+| `uniaxial` | `sigma_zz = 0` | 1 | 1.0 |
+| `shear_free` | `sigma_xz = 0` | `1 - nu` | 0.67 |
+
+Solution: `A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx -
+f_se)`, `A_e = A_x + (E*xi/h)*(1 - chi)/chi`, feedback stiffness `K = N_x'*A_x + N_e'*A_e`
+against the pointwise `N_x'*E*xi/h`; `Q_eff = Q + K`. **No wavenumber remains**: a
+half-infinite span has no length but `1/kappa`, so for bands the kernel is a factor on the
+feedback, not the wavenumber-dependent kernel the gap row supposed. `kappa` only sets where the
+far-field stress is reached: `sigma_xx(x) = s_inf + (ds_x - s_inf)*(1 + c*kappa*x)*exp(-kappa*x)`,
+`c = b/(kappa*a)`, 95 % at `kappa*x = 3.94` (0.63 wavelengths) for the first closure [the
+profile "keeps changing outside the bite", SS-S22 EX]. A non-positive denominator or `Q + K`
+means no linear steady state for that closure: reported, never clipped.
+
+| demo | `Q` Pa | pointwise | `no_lateral_velocity` | `uniaxial` | `shear_free` |
+|---|---|---|---|---|---|
+| lengthwise (0.21 mm, Hitchcock bite) | 1.186e10 | 1.009e12 | 6.957e11, ratio 0.690; `A_x*h/E` 0.260, `A_e*h/E` 0.198 | 2.432e11, ratio 0.241 | -3.446e12 (not defined) |
+| battery-foil (30 um, mattress bite) | 7.389e10 | 1.472e13 | 1.500e12, ratio 0.102; `A_x*h/E` 0.0864, `A_e*h/E` 0.0241 | 1.280e11, ratio 0.0087 | -1.074e13 (not defined) |
+
+**Finding 6 (SPEC19), unsoftened: the independent check of the exit-tension feedback does not
+confirm it at foil gauge.** The kernel gives 0.69 of the pointwise feedback on the sheet demo
+and 0.10 on the battery-foil demo; the result depends on the lateral closure (0.24 and 0.009
+uniaxial, negative and undefined shear-free). With the kernel level the steady band reads 71.6
+instead of 50.7 I-units on the lengthwise demo (1.41 times) and 230 instead of 25.1 on the
+battery-foil demo (9.2 times; the planner's single-gain estimate gave 1.43 and 9.2). The
+feedback is what suppresses a band, so a smaller feedback means a larger band: the rigid bound,
+the compliance-only level, the kernel level and the with-feedback level bracket the answer.
+Neither estimate is validated; a roll stack with a closed gap or a plant test with a known
+stripe would decide it.
+
+**In the engine (always on, beside).** `width.shape.width_coupling` for every v2 case with a
+derived case-pass bite (`NOT_ASSESSABLE` with supplied shape inputs, which carry no slip
+sensitivities): the three closures, the pointwise value, the kernel level (the linear chain of
+section 7.2 with `Q_eff = Q + K`, no band-wise saturation), the development length (wavelength
+twice the half-peak width of the largest band, distance to 95 %, the share reached at a
+`shapemeter_distance_m` of the flatness loop or step test when given: 1.0 at 2 m on the
+battery-foil demo, distance to 95 % 0.19 m), a plain `finding` sentence, `meaning`,
+`used_by_the_evidence` (the with-feedback level), basis, flags and limitations. Every gauge-trend
+row gains `kernel_feedback_ratio_to_pointwise` (0.64 to 0.73 on the lengthwise schedule, 0.10 to
+0.50 on the battery-foil schedule, not defined for its pass without a roll gap). Flags: `WIDTH_COUPLING_KERNEL_REPORTED`,
+`KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE`, `KERNEL_CLOSURES_DISAGREE_IN_SIGN`,
+`KERNEL_STEADY_STATE_NOT_DEFINED`. **No level, state, onset, screen, local source, loop, step
+test or evidence item reads it**; the demo artifacts changed only additively. Cost: about 0.05 s
+per diagnosis (quick profile the same or less).
+
+Limits: linear; lateral closure assumed; half-infinite spans; slip sensitivities of a
+constant-friction bite (mattress or reduced half-space at foil gauge); no roll stack, closed gap
+or lateral metal flow (G3 in full is Phase 3).
 
 ## 8. Process models
 
@@ -4090,7 +4169,7 @@ case". Sections of the lengthwise demo report
 | Which family of causes | the `family_summary` text, the observed family and the family of the leading hypothesis, the number of non-contradicted hypotheses per family, and a one-line summary of the key observations as entered |
 | Leading hypotheses | each `CONSISTENT_LEADING` hypothesis with the criteria that support and contradict it; up to three other `CONSISTENT` hypotheses of the observed family with theirs |
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
-| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
+| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Flatness levels of the steady profile (rigid, compliance only, with width coupling (kernel), with feedback) with the warn paragraph of section 7.14; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
 | What the flatness control would do (SPEC19 package 4) | at the end of the shapemeter section, only with `width_model.flatness_control`: the statement that this is what such a loop would do with the tool's own law on this model, the set-up, the status sentence, the end-state warning for an unsettled loop, the repeating pattern, a chart of the largest zone error against time with the dead band, a valve map, the zone outcomes ("could the control" remove, make or leave a band), the first ten predicted events and the low-order sentence |
 | A zone step test, emulated (SPEC19 package 5) | after the flatness-control block, only with `width_model.zone_step_test`: the test set-up, the reading of the zone for each series with its 60 s fit, the table of fitted constants per series and test length, the finding with the window dependence and the statement that a match is not evidence, the model's three time scales |
 | Measured roll profile (SPEC20 additions) | inside the width section: the bands with de-trending orders 2 and 4 and the largest difference, the warning "subtract the grinder's target curve before entering the profile, or state the curve" with `ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER`, and "this profile cannot show a mark narrower than X mm" with `ROLL_PROFILE_GRID_TOO_COARSE`; `GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA` appears in the flag list when a work-roll pitch fits no simple count but a grinder pattern |
@@ -4283,6 +4362,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| width coupling / `tests/test_strip_shape.py` (`WidthCouplingKernelTests`), `tests/test_band_width_coupling.py` | the three closures' `chi` in closed form and from the stress function (the closure condition zero to 1e-9 of the stress scale); both demo rows to 1e-3; the limits (`f_se = 0`, `chi = 1`; `f_sx -> -inf`); `xi` scaling; a negative denominator reported, not clipped; the development fraction (0 at the bite, 0.95 at `kappa*x = 3.94`, monotonic); a supplied stiffness equal to `N_x'*E*xi/h` reproduces the pointwise transfer to 1e-12; in the engine the demo sections (stiffnesses 0.1 %, kernel-level peak ratios 1.41 and 9.2 within 15 % of the planner's), the plain words and the level the tally uses, and with the kernel stubbed every other key equal |
 | wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; package 7: top-hat self-check (wave formula and saturated stress `-sigma_cr` to 1e-6), amplitude zero below and growing as the square root above the critical state, mean saturated stress equals the tension, lift scale above the weightless multiplier, the lift condition `Pi_t = 0`, `dPi_t/da = 0` (1e-6), heavier or thicker sheet raises the limit, table height below the weightless height, the planner's two demo rows (2 %), the saturated profile as an additional shapemeter reading only; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
 | flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
 | grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
@@ -4372,6 +4452,12 @@ guide's own list.
   nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
   expansion with a source-dependent factor (1 or 1 + nu), and no coupling of roll temperature
   back into the bite heat.
+- **The tension feedback is not checked** (section 7.14): the literature neither supports nor
+  contradicts the pointwise exit-tension feedback that every thin-gauge band height, state and
+  the trend "hidden more in the mill" rest on; an independent width-coupling kernel gives 0.69
+  of it at sheet gauge and 0.10 at foil gauge in the demos (with an assumed lateral closure), so
+  at foil gauge a band may be several times larger than the with-feedback level shows. The tally
+  uses the with-feedback level.
 - **The flatness chain is elastic and local**: half-space roll compliance, linear exit-tension
   feedback with an approximate band-wise saturation step (one scale factor, no iteration), no
   roll bending, no entry-tension redistribution, no post-buckling relief, a single assumed

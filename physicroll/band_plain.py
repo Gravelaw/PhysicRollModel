@@ -2677,6 +2677,22 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'WIDTH_COUPLING_KERNEL_REPORTED': (
+        'Beside the standard flatness levels, the page shows a second estimate of how much the '
+        'strip tension holds a band down, from a model of how the strip is held across the '
+        'width; the shortlist uses the standard level.',
+        'Read the levels as a range, not as one answer.'),
+    'KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE': (
+        'The second estimate gives less than half the tension effect the standard level uses, '
+        'so the band would be larger than shown by the standard level.',
+        'Treat the band height as possibly several times larger.'),
+    'KERNEL_CLOSURES_DISAGREE_IN_SIGN': (
+        'Depending on how the strip is assumed to be held at the roll gap, the second estimate '
+        'changes sign: the tension effect is not known even in direction for one of the '
+        'assumptions.', 'No action; it shows how uncertain the tension effect is.'),
+    'KERNEL_STEADY_STATE_NOT_DEFINED': (
+        'For at least one assumption about how the strip is held at the roll gap the second '
+        'estimate has no steady answer.', 'No action.'),
     'BUCKLING_FE_REPORTED_BESIDE_SINE_MODE': (
         'Beside the standard band states, the page shows at which band height the strip would '
         'start to wave and how long the waves would be, from a search over wavelengths on the '
