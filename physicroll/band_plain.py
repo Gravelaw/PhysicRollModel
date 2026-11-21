@@ -4746,7 +4746,8 @@ def _step_test_view(result):
             'curves': [{'label': STEP_SERIES_WORDS[n], 'time_s': ser[n]['time_s'],
                         'i_units': ser[n]['reading_i_units']}
                        for n in ('roll_growth_only', 'roll_growth_plus_strip_temperature',
-                                 'as_measured_hot') if n in ser],
+                                 'as_measured_hot')
+                       if isinstance(ser.get(n), dict) and 'time_s' in ser[n]],
             'hold_s': zt.get('hold_s'), 'window_s': w0}
 
 
@@ -4881,12 +4882,17 @@ def _coil_view(result):
         hard = max(lanes, key=lambda x: x.get('max_wound_on_tension_pa') or 0)
         edge = _strip_view(result).get('strip_start_m') or 0.0
         beside = (cw.get('beside_linear_criterion') or [{}])[0]
-        out.update(available=True, low=min(ecf), high=max(ecf), present=0.5,
+        # every lane of the same thickness: no compaction factor (it is a ratio to the lane's
+        # thickness difference), so no range to state
+        out.update(available=True, low=min(ecf) if ecf else None,
+                   high=max(ecf) if ecf else None, present=0.5,
                    lanes=[{'label': f'lane at {_mm_from(x["centre_m"], edge)} mm',
                            'value': x['effective_compaction_factor'],
                            'verdict': x.get('verdict_words') or x.get('verdict')}
                           for x in lanes if x.get('effective_compaction_factor') is not None],
-                   text=_winding_words(min(ecf), max(ecf)),
+                   text=(_winding_words(min(ecf), max(ecf)) if ecf else
+                         'All lanes have the same thickness, so the coil takes up no thickness '
+                         'difference between them.'),
                    verdicts_text='Lanes: ' + ', '.join(f'{n} {v}' for v, n in counts.items())
                    + '.',
                    hardest_text=(f'The hardest lane is wound at '

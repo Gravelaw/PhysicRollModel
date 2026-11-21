@@ -95,6 +95,32 @@ class SprayCalibrationTests(unittest.TestCase):
         self.assertAlmostEqual(r['footprint_equivalent_w_m2k'],
                                bg + r['fitted_spray_mean_htc_w_m2k'] * 6, delta=1e-6)
 
+    def test_case_coefficient_zero_keeps_the_fit(self):
+        # validation allows a zero case coefficient; before the fix the ratio to it raised
+        # ZeroDivisionError after a successful fit and the command crashed
+        case = copy.deepcopy(self.case)
+        case['width_model']['spray_header']['spray_mean_htc_w_m2k'] = 0.0
+        cal = self.twin('thermal_camber')
+        r = bt.calibrate_spray_coefficient(case, cal, heat_row=self.row)
+        self.assertEqual(r['outcome'], 'FITTED')
+        self.assertAlmostEqual(r['fitted_spray_mean_htc_w_m2k'] / TRUE_H, 1, delta=0.02)
+        self.assertIsNone(r['ratio_fitted_to_case'])
+        self.assertIn('case spray coefficient is zero', r['ratio_fitted_to_case_reason'])
+        self.assertIn('residuals', r)
+        json.dumps(r, allow_nan=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            cpath, mpath = os.path.join(tmp, 'case.json'), os.path.join(tmp, 'cal.json')
+            for path, obj in ((cpath, case), (mpath, cal)):
+                with open(path, 'w', encoding='utf-8') as fh:
+                    json.dump(obj, fh)
+            out = subprocess.run([sys.executable, '-m', 'physicroll.band_cli', cpath,
+                                  '--calibrate-spray', mpath], cwd=ROOT, capture_output=True,
+                                 text=True, check=True)
+        res = json.loads(out.stdout)
+        self.assertEqual(res['outcome'], 'FITTED')
+        self.assertIsNone(res['ratio_fitted_to_case'])
+        self.assertIn('ratio_fitted_to_case_reason', res)
+
     def test_at_search_limit(self):
         r = self.fit(self.twin('thermal_camber', h=60000.0))
         self.assertEqual(r['outcome'], 'AT_SEARCH_LIMIT')

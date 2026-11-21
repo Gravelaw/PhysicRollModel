@@ -121,6 +121,33 @@ class Sections(unittest.TestCase):
             t = r['time_to_fall_below_s']
             self.assertTrue(t is None or 0.0 <= t <= holds[-1], r)
 
+    def test_event_local_sources_on_the_quick_grid(self):
+        # 20 mm cells: a cell centre on the strip edge; band_local used a0 <= z <= a1 while the
+        # shape chain used |z - c| <= w/2*(1 + 1e-12): FAILED "the shape grid differs" before
+        for r in (self.base, self.on):
+            for ev in r['width']['thermal_events']['events']:
+                ls = ev['local_sources']
+                self.assertNotEqual(ls['status'], 'FAILED', ls.get('error'))
+                self.assertIn('at_20_s', ls)
+            self.assertEqual(r['width']['failures'], [])
+
+    def test_one_rule_for_inside_the_strip(self):
+        from physicroll import band_local as bl
+        from physicroll import strip_shape as ss
+        import types
+        c, w = 0.6, 1.2                          # edges 0.0 and 1.2
+        eps = 1e-15
+        z = [-1e-9, -eps, 0.0, eps, 0.6, 1.2 - eps, 1.2, 1.2 + eps, 1.2 + 1e-9]
+        want = [1, 2, 3, 4, 5, 6, 7]             # on the edge and a rounding error either side
+        self.assertEqual(ss.strip_sample_indices(z, c, w), want)
+        self.assertEqual(bw._inside(z, c, w), want)
+        th = types.SimpleNamespace(centre=c, width=w, positions=[0.6], levels=[1.0],
+                                   header=types.SimpleNamespace(
+                                       weight_profile=lambda zz, lv: [1.0] * len(zz)))
+        idx, zs, _, _ = bl._strip_samples(th, {'z_m': z, 'strip_start_m': 0.0,
+                                               'strip_end_m': 1.2})
+        self.assertEqual(idx, want)
+
     def test_coil_temperature_without_package_1(self):
         ct = self.no_local['width']['coil_temperature']
         self.assertEqual(ct['status'], bw.CT_STATUS)

@@ -285,6 +285,55 @@ class CoilTemperature(unittest.TestCase):
         self.assertAlmostEqual(t, 29592.0, places=6)
         self.assertAlmostEqual(v, 0.6913718590022591, places=14)
 
+    def test_layers_never_change_the_amount_wound(self):
+        # 0.30 -> 0.31 m of 1 mm strip is ten laps: before the fix 150 layers wound 150 laps
+        # (undeformed outer radius 0.45 m)
+        law = {'kind': 'constant', 'radial_modulus_pa': E}
+        for layers, used in ((5, 5), (10, 10), (150, 10)):
+            u = wr.wind_uniform(core_radius_m=0.30, outer_radius_m=0.31, thickness_m=1e-3,
+                                winding_tension_pa=TW, hoop_modulus_pa=E, poisson_ratio=NU,
+                                radial_law=law, layers=layers)
+            self.assertAlmostEqual(u['node_radius_m'][-1], 0.31, places=12)
+            self.assertEqual((u['layers_requested'], u['layers_used']), (layers, used))
+            self.assertAlmostEqual(u['laps_per_layer'] * used, 10.0, places=9)
+            ln = wr.wind_lanes(core_radius_m=0.30, outer_radius_m=0.31, thicknesses_m=[1e-3] * 2,
+                               widths_m=[0.05] * 2, winding_tension_pa=TW, hoop_modulus_pa=E,
+                               poisson_ratio=NU, yield_stress_pa=165e6, radial_law=law,
+                               layers=layers)
+            self.assertAlmostEqual(ln['lanes'][0].r[-1], 0.31, places=12)
+            self.assertEqual((ln['layers_used'], ln['layers_wound']), (used, used))
+        # 150 and 10 requested layers are the same problem now
+        a = wr.wind_uniform(core_radius_m=0.30, outer_radius_m=0.31, thickness_m=1e-3,
+                            winding_tension_pa=TW, hoop_modulus_pa=E, poisson_ratio=NU,
+                            radial_law=law, layers=150)
+        self.assertAlmostEqual(a['max_pressure_pa'], 991773.8196008212, delta=1e-3)
+        # a fractional lap count: 10.5 laps in 10 layers of 1.05; half a lap in one layer
+        for outer, used, nl in ((0.3105, 10, 1.05), (0.3005, 1, 0.5)):
+            u = wr.wind_uniform(core_radius_m=0.30, outer_radius_m=outer, thickness_m=1e-3,
+                                winding_tension_pa=TW, hoop_modulus_pa=E, poisson_ratio=NU,
+                                radial_law=law, layers=150)
+            self.assertEqual(u['layers_used'], used)
+            self.assertAlmostEqual(u['laps_per_layer'], nl, places=9)
+            self.assertAlmostEqual(u['node_radius_m'][-1], outer, places=12)
+
+    def test_many_laps_per_layer_unchanged(self):
+        # values before the layer cap (15000 laps in 150 and 40 layers)
+        u = _wind(150)
+        self.assertEqual(u['layers_used'], 150)
+        self.assertAlmostEqual(u['max_pressure_pa'], 54174158.644881345, delta=1e-3)
+        self.assertAlmostEqual(u['outer_radius_m'], 0.5999144321447712, places=13)
+        self.assertAlmostEqual(u['min_hoop_stress_pa'], 9431243.83491057, delta=1e-3)
+        ln = wr.wind_lanes(core_radius_m=0.15, outer_radius_m=0.6,
+                           thicknesses_m=[30e-6, 30.1e-6, 29.9e-6], widths_m=[0.05] * 3,
+                           winding_tension_pa=30e6, hoop_modulus_pa=E, poisson_ratio=NU,
+                           yield_stress_pa=165e6,
+                           radial_law={'kind': 'constant', 'radial_modulus_pa': 1e9}, layers=40)
+        for lane, r, t in zip(ln['lanes'], (0.5987331254395508, 0.5989529901759905,
+                                            0.5984980398986375),
+                              (30992232.999339223, 65217431.3476771, 21543903.201102853)):
+            self.assertAlmostEqual(lane.outer_radius_m, r, places=13)
+            self.assertAlmostEqual(max(lane.wound_on), t, delta=1e-4)
+
     def test_nip_tension_and_cap(self):
         t, capped = wr.wound_in_tension_pa(30e6, H, 500.0, 0.1, 165e6)
         self.assertAlmostEqual(t, 30e6 + 0.1 * 500.0 / H)

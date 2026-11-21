@@ -3852,7 +3852,7 @@ def diagnose(case):
                                            friction_row=fr_row, friction_get_bite=fs_get_bite,
                                            local_sensitivity=(local_sens if bite is not None
                                                               else None))
-    except ValueError as exc:
+    except bp.SECTION_ERRORS as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
     # SPEC18 package 10 -> 9: the case pass's heat partition takes the roll surface at bite

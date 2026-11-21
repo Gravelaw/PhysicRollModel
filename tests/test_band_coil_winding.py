@@ -224,6 +224,46 @@ if __name__ == '__main__':
     unittest.main()
 
 
+class ThinCoil(unittest.TestCase):
+    """A coil of 20 laps (0.42 mm strip, 0.3 -> 0.3084 m) with 40 requested layers: 20 layers
+    of one lap are wound, not 40 (which built the coil to 0.3168 m before the fix)."""
+
+    @classmethod
+    def setUpClass(cls):
+        c = _case(layers=40)
+        c['width_model']['coil']['outer_radius_m'] = 0.3 + 20 * 0.42e-3
+        cls.r = bd.diagnose(c)
+
+    def test_layers_capped_at_the_laps(self):
+        cw = self.r['width']['coil_winding']
+        self.assertEqual(cw['status'], bw.CW_STATUS, cw.get('reason') or cw.get('error'))
+        self.assertEqual((cw['layers_requested'], cw['layers_used']), (40, 20))
+        h = sum(x['thickness_m'] for x in cw['lanes']) / len(cw['lanes'])
+        self.assertAlmostEqual(cw['laps_per_layer'] * 20 * h, 20 * 0.42e-3, places=12)
+        self.assertEqual(len(cw['radius_m']), 20)
+        top = 0.3 + 20 * 0.42e-3                       # the requested outer radius
+        self.assertLess(cw['radius_m'][-1], top)       # mid radius of the last layer
+        self.assertGreater(cw['radius_m'][-1], top - 0.42e-3)
+        view = bpl._coil_view(self.r)
+        self.assertIn('available', view)
+        render_band_report(self.r)
+        json.loads(bd.result_json(self.r))
+
+class UniformLanes(unittest.TestCase):
+    def test_plain_view_with_lanes_of_one_thickness(self):
+        # every lane the same thickness: no compaction factor in any lane; the app view
+        # raised ValueError (min of an empty list) before
+        r = bd.diagnose(_case(layers=20, thickness_profile={
+            'positions_m': [0.0, 0.75, 1.5], 'thickness_deviation_m': [0.0, 0.0, 0.0]}))
+        cw = r['width']['coil_winding']
+        self.assertEqual(cw['status'], bw.CW_STATUS)
+        self.assertTrue(all(x['effective_compaction_factor'] is None for x in cw['per_lane']))
+        v = bpl._coil_view(r)
+        self.assertTrue(v['available'])
+        self.assertIsNone(v['low'])
+        self.assertIn('same thickness', v['text'])
+        bpl.plain_summary(r)
+
 class AllocationSensitivity(unittest.TestCase):
     """Decision after package 10: the other allocation point beside the chosen one; a verdict
     that flips, or a peak within 5 % of yield, is not reported as a plain yes or no."""

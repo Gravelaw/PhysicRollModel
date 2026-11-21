@@ -1182,6 +1182,18 @@ def _signed_peak(values):
     return max(values, key=abs)
 
 
+STRIP_EDGE_REL_TOL = 1e-12             # a sample within this share of the half width of the
+                                       # strip edge counts as on the strip (rounding of a grid)
+
+
+def strip_sample_indices(z_m, centre_m, width_m):
+    """Indices of the samples on the strip: ``|z - centre| <= width/2*(1 + 1e-12)``. The one
+    rule for "inside the strip" (``band_width._inside`` and ``band_local`` call it): a cell
+    centre on the strip edge, or a rounding error either side of it, is on the strip."""
+    half = width_m / 2 * (1 + STRIP_EDGE_REL_TOL)
+    return [i for i, v in enumerate(z_m) if abs(v - centre_m) <= half]
+
+
 def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
                             strip_stiffness_per_width_pa, bite_half_length_m, roll_radius_m,
                             strip_width_m, mean_tension_pa, strip_centre_m=None, n_rolls=2,
@@ -1221,7 +1233,7 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     sig_t = _num('mean_tension_pa', mean_tension_pa, nonnegative=True, hi=2e9)
     e_r = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
     nu_r = _poisson('roll_poisson_ratio', roll_poisson_ratio)
-    idx = [i for i, v in enumerate(z) if abs(v - c) <= w / 2 * (1 + 1e-12)]
+    idx = strip_sample_indices(z, c, w)
     if len(idx) < 4:
         raise ValueError('fewer than 4 samples lie inside the strip width')
     zs, drs = [z[i] for i in idx], [dr[i] for i in idx]

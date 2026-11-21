@@ -42,7 +42,9 @@ the layer tops, node 0 on the core. For a new layer: second-order central differ
 equation at the interior nodes with ``E_r`` from the pressure present there, the core condition
 by a one-sided difference at node 0, ``y = -T_w*n_l*h/s`` at the top node; tridiagonal (Thomas)
 solve; hoop increment at mid layer; then the layer is appended at its wound-on stress. FIRST
-ORDER in the layer thickness (the error falls as 1/layers). Cost O(layers^2): 150 layers about
+ORDER in the layer thickness (the error falls as 1/layers). A coil with fewer laps than the
+requested layers is wound in ``floor(laps)`` layers (``layers_for``): layers x laps per layer is
+always the physical lap count, so the resolution never changes the material wound. Cost O(layers^2): 150 layers about
 0.05 s, 400 layers about 0.3 s.
 
 Foil-bearing film [D, re-derived in SPEC19; formula quoted in SS-S58 EX/AB]: a web of tension
@@ -163,7 +165,7 @@ class WoundLane:
                  poisson_ratio, radial_law, core_stiffness_pa=None, air_gap_m=0.0):
         self.rc = _num('core_radius_m', core_radius_m, positive=True, hi=5.0)
         self.h = _num('thickness_m', thickness_m, positive=True, hi=0.01)
-        self.nl = _num('laps_per_layer', laps_per_layer, lo=1.0, hi=1e6)
+        self.nl = _num('laps_per_layer', laps_per_layer, positive=True, hi=1e6)
         self.Et = _num('hoop_modulus_pa', hoop_modulus_pa, positive=True, hi=1e13)
         self.nu = _num('poisson_ratio', poisson_ratio, lo=0.0, hi=0.499)
         self.law = validate_radial_law(radial_law)
@@ -265,6 +267,16 @@ def _taper(points, radius):
     return pts[-1][1]
 
 
+def layers_for(laps, layers_requested):
+    """(layers used, laps per layer) so that layers x laps per layer = laps, the physical lap
+    count ``(R - r_c)/h``: the requested layers when the coil has at least that many laps, else
+    one layer per whole lap (``floor(laps)``, at least 1), the fractional lap shared among them
+    (10.5 laps: 10 layers of 1.05 laps; under one lap: one layer of that fraction). A
+    numerical resolution setting never changes the amount of material wound."""
+    used = layers_requested if laps >= layers_requested else max(1, int(math.floor(laps + 1e-9)))
+    return used, laps / used
+
+
 def wind_uniform(*, core_radius_m, outer_radius_m, thickness_m, winding_tension_pa,
                  hoop_modulus_pa, poisson_ratio, radial_law, core_stiffness_pa=None,
                  layers=150, air_gap_m=0.0, tension_taper=None) -> dict:
@@ -290,15 +302,16 @@ def wind_uniform(*, core_radius_m, outer_radius_m, thickness_m, winding_tension_
         taper = [(_num('tension_taper radius', p[0], positive=True, hi=5.0),
                   _num('tension_taper tension', p[1], lo=0.0, hi=5e9)) for p in tension_taper]
     laps = (R - rc) / h
-    nl = laps / layers
-    lane = WoundLane(core_radius_m=rc, thickness_m=h, laps_per_layer=max(1.0, nl),
+    used, nl = layers_for(laps, layers)
+    lane = WoundLane(core_radius_m=rc, thickness_m=h, laps_per_layer=nl,
                      hoop_modulus_pa=hoop_modulus_pa, poisson_ratio=poisson_ratio,
                      radial_law=radial_law, core_stiffness_pa=core_stiffness_pa,
                      air_gap_m=air_gap_m)
     base = {'status': STATUS, 'basis': BASIS, 'limitations': list(LIMITATIONS),
-            'radial_law': lane.law, 'laps': laps, 'laps_per_layer': lane.nl, 'layers': layers}
+            'radial_law': lane.law, 'laps': laps, 'laps_per_layer': lane.nl, 'layers': layers,
+            'layers_requested': layers, 'layers_used': used}
     try:
-        for _ in range(layers):
+        for _ in range(used):
             mid = lane.r[-1] + lane.d / 2
             t = tw if taper is None else _taper(taper, mid)
             lane.add_layer(t)
@@ -434,7 +447,7 @@ def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length
     E = _num('hoop_modulus_pa', hoop_modulus_pa, positive=True, hi=1e13)
     tw = _num('winding_tension_pa', winding_tension_pa, lo=0.0, hi=5e9)
     h_nom = sum(thicknesses_m) / n
-    nl = max(1.0, (R - rc) / h_nom / layers)
+    used, nl = layers_for((R - rc) / h_nom, layers)
     lanes = [WoundLane(core_radius_m=rc, thickness_m=h, laps_per_layer=nl, hoop_modulus_pa=E,
                        poisson_ratio=poisson_ratio, radial_law=law,
                        core_stiffness_pa=core_stiffness_pa, air_gap_m=air_gap_m)
@@ -443,7 +456,7 @@ def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length
     status = STATUS
     reason = None
     try:
-        for k in range(layers):
+        for k in range(used):
             mids = [ln.outer_radius_m + ln.d * frac for ln in lanes]
             smean = sum(mids) / n
             t = tw if tension_taper is None else _taper(tension_taper, smean)
@@ -457,6 +470,7 @@ def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length
         status, reason = 'SOLVE_FAILED', str(exc)
     flags = [FLAG_STACK_LAW, FLAG_LUMPED]
     out = {'status': status, 'laps_per_layer': nl, 'layers_wound': len(rows), 'layers': layers,
+           'layers_requested': layers, 'layers_used': used,
            'lanes': lanes, 'radial_law': law, 'basis': BASIS, 'allocation_basis': ALLOCATION_BASIS,
            'flags': flags, 'limitations': list(LIMITATIONS)}
     if reason:

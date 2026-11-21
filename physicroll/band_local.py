@@ -344,8 +344,7 @@ def not_assessable(reason):
 
 def _strip_samples(th, steady):
     z_all = steady['z_m']
-    a0, a1 = steady['strip_start_m'], steady['strip_end_m']
-    idx = [i for i, x in enumerate(z_all) if a0 <= x <= a1]
+    idx = ss.strip_sample_indices(z_all, th.centre, th.width)
     weights = th.header.weight_profile(z_all, th.levels)
     pos = th.positions
     near = []

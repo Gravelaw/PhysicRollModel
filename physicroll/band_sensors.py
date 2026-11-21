@@ -266,6 +266,7 @@ def validate_thickness_gauge(g):
 # a length L keeps G_spot = |sin(pi*L/p)/(pi*L/p)|; a first-order response with time constant
 # tau keeps G_tau = 1/sqrt(1 + (2*pi*f*tau)^2) (equivalent averaging length u*tau); sampling at
 # dt aliases when f > 1/(2*dt). G = G_spot*G_tau.
+GAUGE_AMPLITUDE_MIN_GAIN = 0.01  # [D, analyst choice] below it amplitude/gain is no bound
 GAUGE_RESOLVABLE_GAIN = 0.5    # [D, analyst choice] the gauge keeps less than half
 GAUGE_FLAG_APPLIED = 'GAUGE_TRANSFER_APPLIED'
 GAUGE_FLAG_LESS_THAN_HALF = 'GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK'
@@ -359,10 +360,17 @@ def thickness_gauge_section(case, result):
     amp = obs.get('gauge_variation_amplitude_m')
     if amp is not None:
         for r in rows:
-            if r['combined_gain'] > 0:
+            if r['combined_gain'] >= GAUGE_AMPLITUDE_MIN_GAIN:
                 r['amplitude_before_gauge_m'] = amp / r['combined_gain']
                 r['amplitude_note'] = ('lower bound of the true amplitude if the mark has this '
                                        'pitch')
+            else:
+                # near a zero of the spot average the ratio grows without bound (a 1 m spot
+                # on 10 mm marks: gain 6e-18, 1.6e11 m): no amplitude is worked out
+                r['amplitude_before_gauge_m'] = None
+                r['amplitude_note'] = (f'the gauge keeps less than {GAUGE_AMPLITUDE_MIN_GAIN:g} '
+                                       'of a mark of this pitch: the measured variation does '
+                                       'not bound its amplitude')
     flags = [GAUGE_FLAG_APPLIED]
     obs_rows = rows[:n_obs]
     if any(not r['resolvable'] for r in obs_rows):

@@ -1505,7 +1505,8 @@ roughness or coating map, an oil-flow or oil-temperature map per zone.
 (at least 5, increasing, on the barrel), `radius_deviation_m` (radius, one per position, within
 +-1 mm), `detrend_order` (0-6 or null, default 4 since SPEC20; 2 before), `rolls_carrying` (1 or
 2, default 1) and `provenance`; from a roll grinder's profile report of the work roll in the
-mill (grinder gauges read diameter: halve the deviations). `kinematics.grinder_marks` entries
+mill (grinder gauges read diameter: halve the deviations). A profile that lies entirely outside
+the strip is `NOT_ASSESSABLE` (its held end values would read as a flat roll). `kinematics.grinder_marks` entries
 (SPEC20) give the roll and EITHER `marks_per_circumference` (counted around the roll) OR the
 grinder's last-pass settings: `roll_rotation_hz` with `wheel_rotation_hz` (or
 `vibration_frequency_hz`), from the grinder's program sheet; the guided app asks for them in
@@ -1518,7 +1519,10 @@ whether the shapemeter corrects for strip temperature.
 optional `control_zone_nozzles`, `integral_gain`, `control_interval_s`, `low_order_removed`,
 `target_i_units`, `supplied_actuators` (influence vectors of bender or tilt, measured or from a
 roll-stack model; not modelled here), `horizon_s`, `shapemeter_distance_m`,
-`display_time_constant_s`, `include_local_sources` and `provenance`. The valve steps, dead band
+`display_time_constant_s`, `include_local_sources` and `provenance`. The loop needs at least
+max(2, p + 2) shapemeter zones over the strip (p = `low_order_removed`; 4 for the default 2) and
+a supplied actuator with an effect on some zone; otherwise it is `NOT_ASSESSABLE` (a zone reads
+its mean minus the strip mean; with fewer zones nothing is left to control). The valve steps, dead band
 and minimum times are in the flatness control system's parameter list or commissioning report;
 the grouping of nozzles into zones in the coolant piping drawing.
 `width_model.zone_step_test` (SPEC19 package 5, section 7.1; null = none; needs
@@ -1908,7 +1912,13 @@ body), roll growth plus the strip temperature term read hot, roll growth plus th
 flow-stress terms (`mechanical_net`), and all four (`as_measured_hot`); the surface terms
 follow the roll surface (the circumferential mean of the bulk model; the per-revolution layer
 of 7.10 is not used in the test). Battery-foil, nozzles 18-19, shapemeter zone 17, no delay,
-1 s filter (`tests/test_band_step_test_demos.py`, the planner's table reproduced exactly):
+1 s filter (`tests/test_band_step_test_demos.py`, the planner's table reproduced exactly).
+The record runs in whole time steps to the first step at or after the hold time (hold 10 s at
+3 s steps: 12 s), so every fit window is covered. A window that holds too few points
+(`RECORD_TOO_SHORT_FOR_WINDOW`) or a constant at an end of the search grid is named in the
+finding as such, not as a value; nozzles already at the test level give `NOT_ASSESSABLE`
+(nothing is switched). Any failure inside the section is its `FAILED` status with the message
+(the exception type is named for a programming error); the diagnosis goes on.
 
 | series | 20 s test | 40 s | 60 s | 120 s | 600 s |
 |---|---|---|---|---|---|
@@ -3252,7 +3262,9 @@ linear criterion (`coil_ridge_buildup` with its compaction factor), which the co
 ridge hypothesis and every score keep using. Keys: `radial_law` (REQUIRED, the three laws of the
 first part; the message says that no stack stiffness for aluminium foil is published and how to
 measure one), `core_stiffness_pa` (null = rigid), `lane_width_m` (default the shapemeter zone
-width, else 0.05 m [D]), `layers` (20 to 400, default 150), `tension_taper`,
+width, else 0.05 m [D]), `layers` (20 to 400, default 150; a coil with fewer laps than that is
+wound in one layer per whole lap, `floor(laps)`, the fractional lap shared among them, so the
+undeformed outer radius is always the entered one: `layers_requested`, `layers_used`), `tension_taper`,
 `thickness_profile` (null = the model's own exit profile), `include_length_profile` (true),
 `air_gap_m` (0), `allocation_radius` (`mid_layer`, the specification; `layer_top` reproduces the
 planner's prototype [D, analyst choice]) and `provenance`. No committed demo carries a stack
@@ -3983,7 +3995,9 @@ coil run-out (93966 Pa, SPEC19 package 14, an input here) gives 0.0172 % gauge r
 0.019 % with the loop (`foil_gauge.tension_ripple_gauge`). A 1 % entry gauge step (0.5 um)
 gives 0.2199 um at the exit at first, within 5 % after 0.54 s with 4 % overshoot without
 limits, and needs 4.00 MPa of trim, 114 % of a 10 % limit on 35 MPa: the trim saturates.
-Time runs: explicit steps `dt = min(1 ms, theta/40)` for 20 s; statuses `SETTLED`,
+Time runs: explicit steps `dt = min(1 ms, theta/40)` for 20 s (at most `TIME_RUN_MAX_STEPS`
+= 200000 steps: a dead time below 4 ms gives `TIME_RUN_NOT_MADE_TOO_MANY_STEPS` and no time run,
+the frequency results kept); statuses `SETTLED`,
 `TRIM_SATURATED_HELD_BY_SPEED`, `TRIM_SATURATED_ERROR_REMAINS`, `OSCILLATING`,
 `NOT_SETTLED_WITHIN_HORIZON`; settings with phase margin at or below 0 (or gain margin at or
 below 1) are reported as `UNSTABLE_LOOP_SETTINGS` with the crossover frequency and not run.
@@ -4597,7 +4611,9 @@ speed, about how much of a mark of that pitch the gauge keeps [D, re-derived in 
 `f > 1/(2*dt)`. A pitch is resolvable when the product is at least 0.5 (analyst choice [D])
 and it is not aliased; the shortest resolvable pitch at the operating speed is given. With
 `gauge_variation_amplitude_m` each row gives the amplitude before the gauge, a lower bound of
-the true amplitude if the mark has that pitch. This is a spot average and a first-order lag
+the true amplitude if the mark has that pitch; below a gain of 0.01 (`GAUGE_AMPLITUDE_MIN_GAIN`,
+analyst choice [D]: near a zero of the spot average the ratio grows without bound) it is null
+with a note. This is a spot average and a first-order lag
 only; real gauges have other filters (scanning frames, digital filters, noise), which are not
 modelled. Worked numbers (spot 10 mm, 5 ms, 1 ms sampling; `tests/test_band_sensors_gauge.py`):
 the thin-gauge demo's 84.08 mm pitch at 16 m/s (190.3 Hz) is kept at 0.161 (spot 0.977, time

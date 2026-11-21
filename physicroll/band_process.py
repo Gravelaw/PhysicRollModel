@@ -70,8 +70,18 @@ def not_supplied(reason):
     return {'status': NOT_SUPPLIED, 'not_supplied': True, 'reason': reason}
 
 
+# What an optional section's handler turns into that section's FAILED status (the rest of the
+# diagnosis goes on): a refused input or a numerical failure, and the programming errors a
+# not-supplied or refused sub-result can cause (a None formatted or compared, a missing key).
+# The latter are named with their type in the message, so a test that reads the section's
+# status or the width failures sees them.
+SECTION_ERRORS = (ValueError, ArithmeticError, TypeError, KeyError, IndexError)
+
+
 def failed(section, exc):
-    return {'status': 'FAILED', 'not_supplied': False, 'error': f'{section}: {exc}'}
+    text = (str(exc) if isinstance(exc, (ValueError, ArithmeticError))
+            else f'{type(exc).__name__}: {exc}')
+    return {'status': 'FAILED', 'not_supplied': False, 'error': f'{section}: {text}'}
 
 
 # ============================================================================= validation

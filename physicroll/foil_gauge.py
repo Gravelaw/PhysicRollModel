@@ -57,6 +57,9 @@ BELOW_SCAN_LIMIT_RAD_S = 1e-9         # [D] lowest frequency searched below the 
 TIME_STEP_MAX_S = 1e-3                 # [D] explicit step, also <= theta/40
 DELAY_STEPS_MIN = 40
 HORIZON_S = 20.0
+TIME_RUN_MAX_STEPS = 200000            # [D, analyst choice] cost cap of one time run (20 s at
+                                       # 0.1 ms: a dead time of at least 4 ms; the frequency
+                                       # results need no time run and are always given)
 SETTLE_WINDOW_S = 5.0
 SETTLED_FRACTION = 0.05                # [D, analyst choice] within 5 % of the first value
 OSCILLATING_FRACTION = 0.20            # [D, analyst choice] peak-to-peak above 20 %
@@ -517,6 +520,11 @@ def simulate(loop, dh_dentry_tension_m_per_pa, disturbance, *, horizon_s=HORIZON
     return out
 
 
+def time_run_steps(loop, horizon_s=HORIZON_S):
+    """Steps of one time run of ``simulate`` (its step ``min(1 ms, theta/40)``)."""
+    return int(round(horizon_s / min(TIME_STEP_MAX_S, loop.theta / DELAY_STEPS_MIN)))
+
+
 def _clean(run):
     run = dict(run)
     run.pop('_series', None)
@@ -662,6 +670,13 @@ def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, frict
         step = {'status': 'NOT_ASSESSABLE', 'not_run': True,
                 'reason': 'the gauge does not respond to entry tension here (dh/d(entry '
                           'tension) is zero): the tension trim cannot act; no time run'}
+    elif lp['stable'] and time_run_steps(loop) > TIME_RUN_MAX_STEPS:
+        step = {'status': 'TIME_RUN_NOT_MADE_TOO_MANY_STEPS', 'not_run': True,
+                'reason': f'the dead time {loop.theta:.3g} s needs time steps of '
+                          f'{loop.theta / DELAY_STEPS_MIN:.3g} s, {time_run_steps(loop)} steps '
+                          f'for {HORIZON_S:g} s, more than the {TIME_RUN_MAX_STEPS} the time run '
+                          'is allowed; the frequency-domain results above are complete; no '
+                          'time run'}
     elif lp['stable']:
         lin = simulate(loop, g_se, lambda t: d0, history=False)
         lim = simulate(loop, g_se, lambda t: d0, trim_limit_pa=limit_pa,

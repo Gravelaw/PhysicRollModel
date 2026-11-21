@@ -1435,7 +1435,13 @@ def calibrate_spray_coefficient(case, calibration, *, numerics='quick', heat_row
         return out
     out['outcome'] = 'FITTED'
     out['fitted_spray_mean_htc_w_m2k'] = h_fit
-    out['ratio_fitted_to_case'] = h_fit / base['case_spray_mean_htc_w_m2k']
+    h_case = base['case_spray_mean_htc_w_m2k']
+    if h_case:
+        out['ratio_fitted_to_case'] = h_fit / h_case
+    else:
+        out['ratio_fitted_to_case'] = None
+        out['ratio_fitted_to_case_reason'] = ('the case spray coefficient is zero (the header '
+                                              'off in the case): no ratio to it')
     model = evaluate(h_fit, cal)
     meas = cal['values']
     if cal['kind'] == 'thermal_camber':

@@ -8,6 +8,7 @@ with and without the key (nothing else changes, events identical, report renders
 a simulation with the tool's own control law, never what the plant's controller did.
 """
 import copy
+import json
 import math
 import unittest
 
@@ -313,6 +314,126 @@ class StepTestSectionTests(unittest.TestCase):
         self.assertEqual(ok['width_model']['zone_step_test']['fit_windows_s'], [20.0, 40.0,
                                                                                 60.0])
 
+
+class StepTestEdgeTests(unittest.TestCase):
+    """A refused first-window fit, hold times that are not a multiple of the step, and a
+    failure inside the section: always that section's status, never an aborted diagnosis."""
+
+    @staticmethod
+    def _run(hold, step, windows):
+        raw = _short()
+        raw['width_model']['flatness_control'] = None
+        raw['width_model']['zone_step_test'] = {
+            'nozzle_indices': [4, 5], 'hold_s': hold, 'time_step_s': step,
+            'fit_windows_s': windows, 'provenance': 'unit test'}
+        return bd.diagnose(raw)
+
+    def test_refused_first_window_is_named(self):
+        # hold 10 s at 5 s steps: three points in the 10 s window (the fit needs four); before
+        # the fix the finding formatted the null constant and the TypeError aborted diagnose
+        r = self._run(10.0, 5.0, [10])
+        zt = r['width']['zone_step_test']
+        self.assertEqual(zt['status'], 'SCREENING_RESULT_NOT_PLANT_VALIDATED')
+        f = zt['series']['roll_growth_only']['fits'][0]
+        self.assertEqual(f['status'], 'RECORD_TOO_SHORT_FOR_WINDOW')
+        self.assertIn('nothing from roll growth alone', zt['finding'])
+        self.assertIn('the 10 s window holds 3 points of the record, too few', zt['finding'])
+        self.assertEqual(zt['ratio_to_published']['roll_growth_only'], [None])
+        self.assertEqual(zt['window_dependence'], [])
+        self.assertEqual(r['width']['failures'], [])
+        html = render_band_report(r)
+        self.assertIn('record too short for window', html)
+
+    def test_record_reaches_the_hold_time(self):
+        for hold, step, wins in ((10.0, 3.0, [10]), (20.0, 0.7, [20]), (25.0, 2.0, [20, 25])):
+            zt = self._run(hold, step, wins)['width']['zone_step_test']
+            t = zt['series']['roll_growth_only']['time_s']
+            self.assertGreaterEqual(t[-1], hold - 1e-9, (hold, step))
+            self.assertLess(t[-1], hold + step, (hold, step))
+            for f in zt['series']['roll_growth_only']['fits']:
+                self.assertEqual(f['status'], 'FITTED', (hold, step, f['window_s']))
+
+    def test_no_step_is_not_assessable(self):
+        # the switched nozzles already at the test level: before, a numerical-noise response
+        # was "fitted" (1 s at the end of the search grid) and reported in the finding
+        zt = self._run_level(1.0)['width']['zone_step_test']      # the case runs at 1.0
+        self.assertEqual(zt['status'], 'NOT_ASSESSABLE')
+        self.assertIn('already at level 1 in the case: the test switches nothing', zt['reason'])
+
+    @staticmethod
+    def _run_level(level):
+        raw = _short()
+        raw['width_model']['flatness_control'] = None
+        raw['width_model']['zone_step_test'] = {'nozzle_indices': [4, 5], 'level': level,
+                                                'hold_s': 20.0, 'provenance': 'unit test'}
+        return bd.diagnose(raw)
+
+    def test_fit_at_the_search_limit_is_not_a_value_and_the_view_reads_it(self):
+        from physicroll import band_plain as bpl
+        r = self._run(10.0, 3.0, [10])
+        zt = r['width']['zone_step_test']
+        f = zt['series']['roll_growth_only']['fits'][0]
+        self.assertIn('FITTED_TIME_CONSTANT_AT_SEARCH_LIMIT', f['flags'])
+        self.assertIn('at least 2.04e+03 s (the end of the fit\'s search grid', zt['finding'])
+        # the plain view of a step test without the local sources (three series not
+        # supplied): before, it raised KeyError 'time_s'
+        v = bpl.plain_summary(r)['step_test_view']
+        self.assertTrue(v['available'])
+        self.assertEqual(len(v['curves']), 1)
+
+    def test_a_failure_inside_the_section_is_its_status(self):
+        from unittest import mock
+
+        def broken(*a, **kw):
+            return None + 1                 # a programming error inside the section
+        with mock.patch.object(bw, 'zone_step_test_section', broken):
+            r = self._run(20.0, 1.0, [20])
+        zt = r['width']['zone_step_test']
+        self.assertEqual(zt['status'], 'FAILED')
+        self.assertIn('zone_step_test: TypeError: unsupported operand', zt['error'])
+        self.assertIn(zt['error'], r['width']['failures'])
+        self.assertIn('hypotheses', r)
+
+class TooFewZonesTests(unittest.TestCase):
+    """A one-zone shapemeter or an actuator without effect: not assessed, never a singular
+    matrix (before: FAILED 'singular matrix in the gain'); too few zones for the low order
+    removed: not assessed (before: a trivial SETTLED, nothing left to control)."""
+
+    @staticmethod
+    def _fc(zones, **fc):
+        c = _short(**fc)
+        c['measurement']['shapemeter']['zone_count'] = zones
+        return bd.diagnose(c)['width']['flatness_control']
+
+    def test_smallest_zone_count(self):
+        for zones, order, status in ((1, -1, 'NOT_ASSESSABLE'), (2, -1, None), (2, 0, None),
+                                     (3, 2, 'NOT_ASSESSABLE'), (4, 2, None)):
+            f = self._fc(zones, low_order_removed=order)
+            if status:
+                self.assertEqual(f['status'], status, (zones, order))
+                need = max(2, order + 2)
+                self.assertIn(f'needs at least {need} shapemeter zones over the strip (here '
+                              f'{zones})', f['reason'])
+            else:
+                self.assertNotIn(f['status'], ('NOT_ASSESSABLE', 'FAILED'), (zones, order, f))
+            self.assertNotIn('singular', json.dumps(f))
+
+    def test_actuator_without_effect(self):
+        f = self._fc(10, supplied_actuators=[{'name': 'bend', 'influence_i_units_per_unit':
+                                              [0.0] * 10, 'minimum': -1.0, 'maximum': 1.0}])
+        self.assertEqual(f['status'], 'NOT_ASSESSABLE')
+        self.assertIn('"bend" has no effect on any zone over the strip, so no gain can be '
+                      'formed', f['reason'])
+
+    def test_step_test_with_one_zone(self):
+        c = _short()
+        c['width_model']['flatness_control'] = None
+        c['measurement']['shapemeter']['zone_count'] = 1
+        c['width_model']['zone_step_test'] = {'nozzle_indices': [3, 4], 'hold_s': 60.0,
+                                              'provenance': 'unit test'}
+        zt = bd.diagnose(c)['width']['zone_step_test']
+        self.assertEqual(zt['status'], 'NOT_ASSESSABLE')
+        self.assertIn('needs at least two shapemeter zones', zt['reason'])
 
 EVENT = [{'start_s': 0.0, 'duration_s': 20.0, 'nozzle_indices': [12], 'level': 0.0}]
 

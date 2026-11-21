@@ -446,6 +446,27 @@ class EdgeEngineTests(unittest.TestCase):
         self.assertIn('no entry tension to trim', html)
         self.assertIsNone(re.search(r'\bnan\b|\binf\b', html))
 
+    def test_gauge_at_one_millimetre_skips_only_the_time_run(self):
+        # dead time 77 us: steps of 1.9 us, 10 million steps for 20 s (15 s of run time before)
+        import time
+        t0 = time.perf_counter()
+        r = diagnose(_case(FGC, gauge_distance_m=1e-3))
+        self.assertLess(time.perf_counter() - t0, 10.0)
+        s = r['foil_gauge_control']
+        st = s['step_response']
+        self.assertEqual(st['status'], 'TIME_RUN_NOT_MADE_TOO_MANY_STEPS')
+        self.assertTrue(st['not_run'])
+        self.assertIn('more than the 200000 the time run is allowed', st['reason'])
+        self.assertTrue(s['loop']['stable'])
+        self.assertIsNotNone(s['loop']['phase_margin_deg'])
+        self.assertNotIn(fg.FLAG_SIMULATED, s['flags'])
+        self.assertNotIn(fg.FLAG_UNSTABLE, s['flags'])
+        self.assertGreater(fg.time_run_steps(fg.Loop(1e-3, U, 0.01, 5.0)),
+                           fg.TIME_RUN_MAX_STEPS)
+        self.assertLessEqual(fg.time_run_steps(fg.Loop(1.5, U, 0.01, 5.0)),
+                             fg.TIME_RUN_MAX_STEPS)
+        render_band_report(r)
+
     def test_zero_gauge_lever_is_not_assessable(self):
         real = fg.gauge_sensitivities
 

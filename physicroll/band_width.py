@@ -75,7 +75,7 @@ from . import band_local
 from . import band_products
 from . import roll_thermal as rt
 from . import strip_shape as ss
-from .band_process import (failed, int_list, keys, not_supplied, num, num_list,
+from .band_process import (SECTION_ERRORS, failed, int_list, keys, not_supplied, num, num_list,
                            use_computed_heat_partition,
                            opt_num)
 
@@ -850,7 +850,7 @@ def _moving_average(z, values, window):
 
 
 def _inside(z, centre, width):
-    return [i for i, x in enumerate(z) if abs(x - centre) <= width / 2 * (1 + 1e-12)]
+    return ss.strip_sample_indices(z, centre, width)
 
 
 CASE_PASS_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
@@ -2607,9 +2607,15 @@ def roll_profile_section(case, w, sp, shape_reason, z, th, thermal_steady, bite=
         return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
                 'reason': shape_reason or 'no shape parameters', 'flags': []}
     xs, ys = s['positions_m'], s['radius_deviation_m']
+    a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
+    if xs[-1] < a0 or xs[0] > a1:
+        # held end values over the whole strip would read as a flat roll: not a measurement
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'flags': [],
+                'reason': f'the measured profile ({xs[0]:.4g} to {xs[-1]:.4g} m) lies entirely '
+                          f'outside the strip ({a0:.4g} to {a1:.4g} m): it says nothing about the '
+                          'roll under the strip'}
     vals = [_interp_held(xs, ys, x) for x in z]
     dz = z[1] - z[0]
-    a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
     extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
     spr = dict(sp, n_rolls=s['rolls_carrying'])
 
@@ -3714,6 +3720,9 @@ def _predicted_events(timeline, groups, initial, dt, horizon):
     return rows
 
 
+FC_MIN_ZONES = 2      # a zone reading is relative to the strip mean: one zone reads zero
+
+
 def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
     """``width.flatness_control`` (SPEC19 package 4): a closed spray loop with the tool's own
     control law (``flatness_control``) on ``roll_thermal.ControlledRun``, read through the
@@ -3804,6 +3813,23 @@ def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
         st = th.steady(nozzle_levels(u))
         return readings_of(st)
     weights = [c if r is not None else 0.0 for r, c in zip(op.m, op.cov)]
+    # a zone reads its mean minus the strip mean, and the low-order part (order p) is removed
+    # before the gain acts: with fewer than max(2, p + 2) zones over the strip nothing is left
+    # to control (one zone: the influence is zero and no gain exists)
+    covered = sum(1 for x in weights if x > 0)
+    need = max(FC_MIN_ZONES, fc['low_order_removed'] + 2)
+    if covered < need:
+        return not_assessable(
+            f'the control needs at least {need} shapemeter zones over the strip (here '
+            f'{covered}): a zone reads its mean minus the strip mean'
+            + (f' and the low-order part up to order {fc["low_order_removed"]} is removed'
+               if fc['low_order_removed'] >= 0 else '')
+            + ', so with fewer zones nothing is left to control')
+    for a in fc['supplied_actuators'] or []:
+        if not any(wt > 0 and v != 0 for wt, v in zip(weights,
+                                                      a['influence_i_units_per_unit'])):
+            return not_assessable(f'the supplied actuator "{a["name"]}" has no effect on any '
+                                  'zone over the strip, so no gain can be formed')
     centres = [(lo + hi) / 2 for lo, hi in zip(edges, edges[1:])]
     infl = flc.influence_matrix(readings_at, u0, groups)
     diag = []
@@ -4034,6 +4060,10 @@ def _filtered(times, values, tau):
     return out
 
 
+def _txt_status(code):
+    return str(code).lower().replace('_', ' ') if code else 'refused'
+
+
 def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
     """``width.zone_step_test`` (SPEC19 package 5): one spray zone switched from the case's
     steady state, the reading of the shapemeter zone under it, delayed and filtered, and a first
@@ -4070,11 +4100,21 @@ def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
     j = bsn.zone_of(edges, x)
     if j is None or op.m[j] is None:
         return not_assessable('the switched nozzles are under no shapemeter zone over the strip')
+    if sum(1 for r in op.m if r is not None) < FC_MIN_ZONES:
+        return not_assessable('the step test needs at least two shapemeter zones over the strip: '
+                              'a zone reads its mean minus the strip mean, so one zone reads '
+                              'zero whatever the sprays do')
     lv = list(th.levels)
+    if all(lv[i] == zt['level'] for i in zt['nozzle_indices']):
+        return not_assessable(f'the switched nozzles are already at level {zt["level"]:g} in '
+                              'the case: the test switches nothing, so there is no step '
+                              'response to fit')
     for i in zt['nozzle_indices']:
         lv[i] = zt['level']
     ts = zt['time_step_s']
-    n = max(1, int(round(zt['hold_s'] / ts)))
+    # whole steps that reach the hold time (a hold time that is not a multiple of the step is
+    # run to the next step after it, so every fit window, at most the hold time, is covered)
+    n = max(1, int(math.ceil(zt['hold_s'] / ts - 1e-9)))
     run = rt.ControlledRun(th.roll, th.header, th.segment(lv), initial=actual, **th.kw)
     base_g = [actual['radius_growth_m'][i] for i in idx]
     base_s = [actual['surface_temperature_k'][i] for i in idx]
@@ -4152,14 +4192,32 @@ def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
                               'twice_as_long_time_constant_s': f2['time_constant_s']})
     first = wins[0]
 
-    def tau_of(name):
-        f = series[name]['fits'][0] if isinstance(series[name], dict) and \
-            'fits' in series[name] else None
-        return None if f is None else f['time_constant_s']
-    t1, t2 = tau_of('roll_growth_only'), tau_of('as_measured_hot')
-    finding = (f'A test of {first:g} s would fit {t1:.3g} s from roll growth alone'
-               + (f' and {t2:.3g} s as measured hot' if t2 is not None else
-                  ' (the strip-side terms need width_model.local_coupling)')
+    def fit_of(name):
+        return (series[name]['fits'][0] if isinstance(series[name], dict) and
+                'fits' in series[name] else None)
+
+    def refusal(f):
+        if f.get('status') == flc.FIT_RECORD_TOO_SHORT:
+            return (f'the {f["window_s"]:g} s window holds {f.get("points_in_window")} points '
+                    f'of the record, too few for a first-order fit; take a smaller time step')
+        return f'the fit of the {f["window_s"]:g} s window was refused: ' \
+            f'{_txt_status(f.get("status"))}'
+    def value(f):
+        # a constant at an end of the search grid is not determined by the window
+        tau = f['time_constant_s']
+        if flc.FIT_FLAG_LIMIT in (f.get('flags') or []):
+            return (f'{"at most" if tau <= flc.FIT_TAU_GRID_S[0] else "at least"} {tau:.3g} s '
+                    '(the end of the fit\'s search grid: not determined by this window)')
+        return f'{tau:.3g} s'
+    f1, f2 = fit_of('roll_growth_only'), fit_of('as_measured_hot')
+    t1 = None if f1 is None else f1['time_constant_s']
+    t2 = None if f2 is None else f2['time_constant_s']
+    finding = (f'A test of {first:g} s would fit '
+               + (f'{value(f1)} from roll growth alone' if t1 is not None else
+                  f'nothing from roll growth alone ({refusal(f1)})')
+               + (f' and {value(f2)} as measured hot' if t2 is not None else
+                  ' (the strip-side terms need width_model.local_coupling)' if f2 is None else
+                  f' and nothing as measured hot ({refusal(f2)})')
                + f'; the published value is {ZT_PUBLISHED_TIME_CONSTANT_S:g} s.')
     roll_pairs = [q for q in pairs if q['series'] == 'roll_growth_only']
     if roll_pairs:
@@ -4531,6 +4589,7 @@ def coil_winding_section(case, w, shape, centre, width, _air=None):
             'used_by_the_evidence': CW_USED_BY_EVIDENCE, 'stack_sentence': CW_STACK_SENTENCE,
             'lanes': lanes, 'lane_profile_basis': basis,
             'laps_per_layer': res['laps_per_layer'], 'layers': cw['layers'],
+            'layers_requested': res['layers_requested'], 'layers_used': res['layers_used'],
             'allocation_radius': cw['allocation_radius'],
             'basis': {'model': res['basis'], 'allocation': res['allocation_basis']},
             'limitations': list(CW_LIMITATIONS)}
@@ -5504,7 +5563,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             out['thermal_steady'] = steady
             out['flags'] += [f for f in steady['flags'] if f not in out['flags']]
             flags += [f for f in steady['flags'] if f in FP_TOP_FLAGS and f not in flags]
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             out['thermal_steady'] = failed('thermal_steady', exc)
             out['failures'].append(out['thermal_steady']['error'])
     # SPEC18 package 10: the roll surface within one revolution (one-way, key only additive)
@@ -5522,7 +5581,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['local_state'] = band_local.local_state_section(
             case, w, th, steady, trib, bite, heat_row, friction_row,
             out['roll_surface_cycle'], context=local_ctx)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['local_state'] = failed('local_state', exc)
         out['failures'].append(out['local_state']['error'])
     flags += [f for f in (out['local_state'].get('flags') or [])
@@ -5536,13 +5595,13 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             lv = shape_levels(steady['z_m'], steady['local_deviation_m'], sp)
             shape['steady'] = lv
             shape['steady_stripe_table'] = steady_stripe_table(steady, lv, sp)
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])
         # SPEC19 package 8: the width-coupling kernel beside the levels (always on)
         try:
             shape['width_coupling'] = width_coupling_section(shape.get('steady'), sp, w)
-        except (ValueError, ArithmeticError) as exc:
+        except SECTION_ERRORS as exc:
             shape['width_coupling'] = failed('shape.width_coupling', exc)
         flags += [f for f in (shape['width_coupling'].get('flags') or [])
                   if f in WC_TOP_FLAGS and f not in flags]
@@ -5560,7 +5619,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                     'nozzle_pattern_ripple']['peak_to_peak_m']
                 shape['nozzle_pattern_ripple']['band_count_with_feedback'] = len(
                     lv['levels']['with_feedback']['bands'])
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             shape['nozzle_pattern_ripple'] = failed('shape.nozzle_pattern_ripple', exc)
     elif sp is None:
         shape['steady'] = not_assessable(shape_reason)
@@ -5568,7 +5627,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         shape['width_coupling'] = not_assessable(shape_reason)
     try:
         shape['crown'] = _crown(case, w, steady['healthy_thermal_crown_m'] if steady else None)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         shape['crown'] = failed('shape.crown', exc)
         out['failures'].append(shape['crown']['error'])
     # SPEC19 package 2: the force sensitivities and the event callback of the local sources
@@ -5586,7 +5645,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         try:
             local_sens = local_sensitivity()
             local_ev = band_local.event_sources(local_ctx, sp, local_sens, th)
-        except (ValueError, ArithmeticError) as exc:
+        except SECTION_ERRORS as exc:
             local_reason = f'force sensitivities of the case-pass bite: {exc}'
     if local_ev is None:
         local_ev = band_local.not_assessable(local_reason)
@@ -5596,7 +5655,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             out['thermal_events'] = _events_section(
                 th, sp, actual, w['events'], shape_reason,
                 scales=band_thermal.event_scales(case, th.fraction), local=local_ev)
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             out['thermal_events'] = failed('thermal_events', exc)
             out['failures'].append(out['thermal_events']['error'])
     elif w['events']:
@@ -5610,7 +5669,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         lp = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
               if local_ctx and local_sens is not None else None)
         out['flatness_control'] = flatness_control_section(case, w, th, sp, healthy, actual, lp)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['flatness_control'] = failed('flatness_control', exc)
         out['failures'].append(out['flatness_control']['error'])
     flags += [f for f in (out['flatness_control'].get('flags') or [])
@@ -5620,7 +5679,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         lz = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
               if local_ctx and local_sens is not None else None)
         out['zone_step_test'] = zone_step_test_section(case, w, th, sp, actual, lz, bite)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['zone_step_test'] = failed('zone_step_test', exc)
         out['failures'].append(out['zone_step_test']['error'])
     if ZT_FLAG in (out['zone_step_test'].get('flags') or []) and ZT_FLAG not in flags:
@@ -5632,7 +5691,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             out['local_sources'] = band_local.local_sources_section(
                 case, w, local_ctx, sp, local_sens, shape.get('steady'), th,
                 (out['thermal_events'] or {}).get('events'))
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['local_sources'] = failed('local_sources', exc)
         out['failures'].append(out['local_sources']['error'])
     flags += [f for f in (out['local_sources'].get('flags') or [])
@@ -5648,7 +5707,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     # SPEC19 package 10: winding by lanes, beside the linear criterion (never evidence)
     try:
         out['coil_winding'] = coil_winding_section(case, w, shape, th.centre, th.width)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['coil_winding'] = failed('coil_winding', exc)
         out['failures'].append(out['coil_winding']['error'])
     flags += [f for f in (out['coil_winding'].get('flags') or [])
@@ -5659,7 +5718,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         try:
             shape['buckling_fe'] = buckling_fe_section(
                 shape, ((out.get('thermal_events') or {}).get('events') or []), sp, bm_opt)
-        except (ValueError, ArithmeticError) as exc:
+        except SECTION_ERRORS as exc:
             shape['buckling_fe'] = failed('shape.buckling_fe', exc)
             out['failures'].append(shape['buckling_fe']['error'])
         flags += [f for f in (shape['buckling_fe'].get('flags') or [])
@@ -5668,8 +5727,8 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     try:
         a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
         out['strip_temperature'] = strip_temperature_section(
-            case, w, shape['steady'], [x for x in z if a0 <= x <= a1], a0, a1)
-    except ValueError as exc:
+            case, w, shape['steady'], [z[i] for i in _inside(z, th.centre, th.width)], a0, a1)
+    except SECTION_ERRORS as exc:
         out['strip_temperature'] = failed('strip_temperature', exc)
         out['failures'].append(out['strip_temperature']['error'])
     st_flags = (out['strip_temperature'].get('flags') or []) if isinstance(
@@ -5683,7 +5742,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         try:
             grinding_pitch = ss.grinding_feed_pitch_m(w['grinding']['traverse_speed_m_s'],
                                                       w['grinding']['roll_rotation_hz'])
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             out['failures'].append(f'grinding: {exc}')
     out['two_tone'] = None if two_tone is None else {
         k: two_tone[k] for k in ('status', 'band_positions_m', 'edges')}
@@ -5694,7 +5753,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['positions'] = _positions(case, w, case['observation'], steady, events,
                                       w['incoming_ridges'], out['troughs'], two_tone,
                                       grinding_pitch, th)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         out['positions'] = failed('positions', exc)
         out['failures'].append(out['positions']['error'])
     try:
@@ -5704,7 +5763,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
                    if steady and not steady['stripes'] else None)
         out['gauge_trend'] = _gauge_trend(case, w, get_bite, steady, th.centre, w['coil'], z,
                                           bite, shape_reason, t_shape)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         out['gauge_trend'] = failed('gauge_trend', exc)
         out['failures'].append(out['gauge_trend']['error'])
     # SPEC14 Part 3: heat partition and spray coefficient sensitivity of the stripe result
@@ -5713,7 +5772,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
         out['thermal_sensitivity'] = band_thermal.thermal_sensitivity(
             case, w, th, sp, steady, actual, out['thermal_events'], sys.modules[__name__],
             shape.get('steady_stripe_table') if isinstance(shape, dict) else None)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         # an optional block: no error inside it may abort the diagnosis
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
@@ -5731,7 +5790,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
     try:
         out['roll_profile'] = roll_profile_section(case, w, sp, shape_reason, z, th,
                                                    out.get('thermal_steady'), bite)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['roll_profile'] = failed('roll_profile', exc)
         out['failures'].append(out['roll_profile']['error'])
     rp_flags = [f for f in ((out['roll_profile'].get('flags') or []) if isinstance(
@@ -5744,7 +5803,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             case, w, bite, friction_get_bite or get_bite, friction_sensitivity,
             shape.get('steady'), th,
             trib, friction_row, bite_error)
-    except (ValueError, ArithmeticError) as exc:
+    except SECTION_ERRORS as exc:
         out['friction_stripes'] = failed('friction_stripes', exc)
         out['failures'].append(out['friction_stripes']['error'])
     fs_flags = (out['friction_stripes'].get('flags') or []) if isinstance(
