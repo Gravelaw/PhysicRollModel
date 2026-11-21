@@ -349,3 +349,104 @@ def entrained_air_film_m(radius_m, surface_speed_sum_m_s, tension_per_width_n_m,
     T = _num('tension_per_width_n_m', tension_per_width_n_m, positive=True, hi=1e7)
     mu = _num('viscosity_pa_s', viscosity_pa_s, positive=True, hi=1.0)
     return foil_bearing_constant() * R * (6 * mu * U / T) ** (2 / 3)
+
+
+# ------------------------------------------------ lanes across the width (SPEC19 package 10)
+# Tension allocation [D, re-derived in SPEC19: the "relaxation radius" of the pseudo-2D models,
+# SS-S44 AB, SS-S45 EX, written as a strain allocation]. A new layer lies on lane j at mid radius
+# s_j = outer_j + n_l*h_j/2. All lanes of one lap share the unstrained circumference 2*pi*s0
+# apart from their own length excess e_j, so eps_j = (s_j - s0)/s0 - e_j,
+# sigma_j = min(max(E*eps_j, 0), sigma_y) (a web carries no compression; yield cap),
+# eps_p,j = max(0, eps_j - sigma_y/E), and s0 balances the force:
+# sum_j w_j*h_j*sigma_j = T_w*sum_j w_j*h_j (bisection, 80 halvings).
+ALLOCATION_BASIS = ('[D, re-derived in SPEC19] relaxation-radius allocation as a strain '
+                    'allocation (SS-S44 AB, SS-S45 EX): eps_j = (s_j - s0)/s0 - e_j at the '
+                    'layer mid radius, sigma_j = min(max(E*eps_j, 0), sigma_y), force balance '
+                    'by bisection on s0')
+# Where a new layer's strain is taken: the specification's mid layer, or the planner
+# prototype's layer top (kept to reproduce the prototype's table) [D, analyst choice]
+ALLOCATION_RADII = ('mid_layer', 'layer_top')
+FLAG_LANE_YIELDS = 'WINDING_LANE_YIELDS'
+FLAG_LANE_SLACK = 'WINDING_LANE_SLACK'
+
+
+def allocate_tension(mid_radii_m, thicknesses_m, widths_m, length_excess, mean_tension_pa, *,
+                     youngs_modulus_pa, yield_stress_pa):
+    """(s0, [(sigma_j, eps_p,j)]) of one lap across the lanes (see ALLOCATION_BASIS)."""
+    E, sy = youngs_modulus_pa, yield_stress_pa
+    if mean_tension_pa >= sy:
+        raise ValueError('the mean winding tension must be below the yield stress')
+    s, h, w, e = list(mid_radii_m), list(thicknesses_m), list(widths_m), list(length_excess)
+    target = mean_tension_pa * sum(a * b for a, b in zip(w, h))
+
+    def total(s0):
+        return sum(wj * hj * min(max(E * ((sj - s0) / s0 - ej), 0.0), sy)
+                   for wj, hj, sj, ej in zip(w, h, s, e))
+    hi = max(s) * (1 + max(0.0, -min(e)) + 1e-9)
+    lo = min(s) / (1 + 2 * sy / E + max(max(e), 0.0) + 1e-6)
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        if total(mid) > target:
+            lo = mid
+        else:
+            hi = mid
+    s0 = 0.5 * (lo + hi)
+    out = []
+    for sj, ej in zip(s, e):
+        eps = (sj - s0) / s0 - ej
+        out.append((min(max(E * eps, 0.0), sy), max(0.0, eps - sy / E)))
+    return s0, out
+
+
+def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length_excess=None,
+               winding_tension_pa, hoop_modulus_pa, poisson_ratio, yield_stress_pa, radial_law,
+               core_stiffness_pa=None, layers=150, air_gap_m=0.0, tension_taper=None,
+               allocation_radius='mid_layer') -> dict:
+    """Lanes wound together: the same number of laps per layer in every lane (laps from the
+    nominal thickness, the mean of ``thicknesses_m``), each lane its own WoundLane, coupled only
+    through ``allocate_tension`` per layer. ``radial_law`` is REQUIRED."""
+    law = validate_radial_law(radial_law)
+    if allocation_radius not in ALLOCATION_RADII:
+        raise ValueError(f'allocation_radius must be one of {ALLOCATION_RADII}')
+    frac = 0.5 if allocation_radius == 'mid_layer' else 1.0
+    n = len(thicknesses_m)
+    if n < 1 or len(widths_m) != n:
+        raise ValueError('thicknesses_m and widths_m need one value per lane')
+    e = [0.0] * n if length_excess is None else list(length_excess)
+    rc = _num('core_radius_m', core_radius_m, positive=True, hi=5.0)
+    R = _num('outer_radius_m', outer_radius_m, positive=True, hi=5.0)
+    if R <= rc:
+        raise ValueError('outer_radius_m must exceed core_radius_m')
+    if isinstance(layers, bool) or not isinstance(layers, int) or not 1 <= layers <= 2000:
+        raise ValueError('layers must be an integer in [1, 2000]')
+    sy = _num('yield_stress_pa', yield_stress_pa, positive=True, hi=5e9)
+    E = _num('hoop_modulus_pa', hoop_modulus_pa, positive=True, hi=1e13)
+    tw = _num('winding_tension_pa', winding_tension_pa, lo=0.0, hi=5e9)
+    h_nom = sum(thicknesses_m) / n
+    nl = max(1.0, (R - rc) / h_nom / layers)
+    lanes = [WoundLane(core_radius_m=rc, thickness_m=h, laps_per_layer=nl, hoop_modulus_pa=E,
+                       poisson_ratio=poisson_ratio, radial_law=law,
+                       core_stiffness_pa=core_stiffness_pa, air_gap_m=air_gap_m)
+             for h in thicknesses_m]
+    rows = []
+    status = STATUS
+    reason = None
+    try:
+        for k in range(layers):
+            mids = [ln.outer_radius_m + ln.d * frac for ln in lanes]
+            smean = sum(mids) / n
+            t = tw if tension_taper is None else _taper(tension_taper, smean)
+            s0, alloc = allocate_tension(mids, thicknesses_m, widths_m, e, t,
+                                         youngs_modulus_pa=E, yield_stress_pa=sy)
+            for ln, (sig, ep) in zip(lanes, alloc):
+                ln.add_layer(sig, ep)
+            rows.append({'layer': k + 1, 'laps': (k + 1) * nl, 'relaxation_radius_m': s0})
+    except ArithmeticError as exc:
+        status, reason = 'SOLVE_FAILED', str(exc)
+    flags = [FLAG_STACK_LAW, FLAG_LUMPED]
+    out = {'status': status, 'laps_per_layer': nl, 'layers_wound': len(rows), 'layers': layers,
+           'lanes': lanes, 'radial_law': law, 'basis': BASIS, 'allocation_basis': ALLOCATION_BASIS,
+           'flags': flags, 'limitations': list(LIMITATIONS)}
+    if reason:
+        out['reason'] = reason
+    return out

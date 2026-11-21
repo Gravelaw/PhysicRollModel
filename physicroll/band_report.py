@@ -1355,7 +1355,45 @@ def _width_section(r):
     body += _roll_profile_block(r, w)
     body += _surface_cycle_block(w)
     body += _buckling_fe_block(w)
+    body += _coil_winding_block(w)
     return head + body + '</section>'
+
+
+def _coil_winding_block(w):
+    """SPEC19 package 10: winding the coil lane by lane (only with width_model.coil_winding)."""
+    cw = w.get('coil_winding')
+    if not isinstance(cw, dict) or cw.get('not_supplied'):
+        return ''
+    head = '<h3>Winding the coil lane by lane</h3>'
+    if _bad(cw) or cw.get('status') == 'SOLVE_FAILED':
+        return head + _state_p('Winding by lanes ' + (_bad(cw) or 'failed: '
+                                                     + str(cw.get('reason'))))
+    rows = []
+    for x, p in zip(cw.get('lanes') or [], cw.get('per_lane') or []):
+        rows.append(f'<tr><td>{_f(x["centre_m"], 1e3, 4, "mm")}</td>'
+                    f'<td>{_f(x["thickness_deviation_m"], 1e6, 3, "µm")}</td>'
+                    f'<td>{_mpa(p["max_wound_on_tension_pa"])}</td>'
+                    f'<td>{_mpa(p["min_hoop_stress_pa"])}</td>'
+                    f'<td>{_mpa(p["max_pressure_pa"])}</td>'
+                    f'<td>{_f(p["yielding_length_fraction"])}</td>'
+                    f'<td>{_f(p["effective_compaction_factor"])}</td></tr>')
+    bes = ''.join(f'<tr><td>{_e(b["source"])}</td><td>{_f(b["position_m"], 1e3, 4, "mm")}</td>'
+                  f'<td>{_txt(b.get("linear_status"))}</td>'
+                  f'<td>{_f(b.get("linear_compaction_factor"))}</td>'
+                  f'<td>{_txt(b["lane_model_state"])}</td>'
+                  f'<td>{_f(b.get("effective_compaction_factor"))}</td>'
+                  f'<td>{_e("yes" if b.get("agrees") else "no" if "agrees" in b else "-")}</td>'
+                  f'</tr>' for b in cw.get('beside_linear_criterion') or [])
+    return (head + '<p>The exit thickness and length profile of the case pass wound into the '
+            'coil lane by lane, with the tension shared between the lanes. <strong>The coil '
+            'verdicts above use the present linear criterion</strong>; this block changes no '
+            'verdict or score.</p><table><tr><th>lane centre</th><th>thickness deviation</th>'
+            '<th>largest wound-on tension</th><th>lowest hoop stress</th><th>largest pressure'
+            '</th><th>yielding length share</th><th>effective compaction factor</th></tr>'
+            + ''.join(rows) + '</table><table><tr><th>source</th><th>position</th>'
+            '<th>linear criterion</th><th>its compaction factor</th><th>lane model</th>'
+            '<th>effective factor</th><th>agree</th></tr>' + bes + '</table><p class="warn">'
+            + _e(cw.get('stack_sentence', '')) + '</p>')
 
 
 def _width_coupling_block(w):

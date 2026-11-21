@@ -2711,6 +2711,27 @@ FLAGS = {
     'STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE': (
         'The strip is too thick for one temperature through its thickness.',
         'Read the computed heat share as rough.'),
+    'COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION': (
+        'Beside the standard coil check, the page shows the strip wound into the coil lane by '
+        'lane with the stack stiffness you entered; the shortlist uses the standard check.',
+        'Read both; the answer turns on the stack stiffness.'),
+    'WINDING_LANE_YIELDS': (
+        'In the lane-by-lane winding at least one lane is stretched beyond yield in the coil.',
+        'Look for a long band after unwinding at that place.'),
+    'WINDING_LANE_SLACK': (
+        'In the lane-by-lane winding at least one lane is wound without tension (a long lane).',
+        'Look for loose wraps or telescoping at that place.'),
+    'WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION': (
+        'The lane-by-lane winding and the standard coil check disagree on whether a ridge '
+        'stretches the strip in the coil; the shortlist uses the standard check.',
+        'A coil diameter profile and a press test of the stack would decide it.'),
+    'WINDING_INNER_LAPS_IN_HOOP_COMPRESSION': (
+        'In the lane-by-lane winding the inner laps end in compression along their length.',
+        'No action; it is common in soft stacks.'),
+    'RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND': (
+        'How the coil stack compresses was entered; no measured value for oily aluminium foil '
+        'is published, and the winding result depends on it.',
+        'A press test on a stack of the foil gives the value.'),
     'WIDTH_COUPLING_KERNEL_REPORTED': (
         'Beside the standard flatness levels, the page shows a second estimate of how much the '
         'strip tension holds a band down, from a model of how the strip is held across the '

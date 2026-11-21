@@ -507,6 +507,10 @@ The fifth (SPEC22) is the battery-foil demo with a spray header chosen to match 
 overlap practice (footprint 1.3 nozzle pitches, a parabolic stand-in fan profile); it shows how
 much a wide-overlap header smooths a blocked nozzle (`docs/band-diagnosis.md`, section 7.1).
 
+A coil can also be wound lane by lane (`width_model.coil_winding`, opt-in, beside the present
+coil check): it needs the radial stack stiffness of the wound foil, for which no value is
+published, so the stack law must be entered (section 7.15).
+
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); the steps are
 in [Use it on your own case](#use-it-on-your-own-case).

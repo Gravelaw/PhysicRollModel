@@ -1364,6 +1364,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
+| `width_model.coil_winding` (`radial_law` required, `provenance` required; `core_stiffness_pa`, `lane_width_m`, `layers`, `tension_taper`, `thickness_profile`, `include_length_profile`, `air_gap_m`, `allocation_radius`) | the coil wound lane by lane beside the present criterion (section 7.15) | Pa, m, – | the stack law from a press test on 50 to 200 laps of the oily foil (pressure against strain); winding tension and taper from the coiler set-up; no stack value for aluminium foil is published |
 | `width_model.spray_header.footprint_profile` (`"tophat"` default / `"parabolic"`), `footprint_width_m` (null = geometric), `htc_flow_exponent` (0.5 to 1.0, default 1) | SPEC22 opt-in header options: the fan profile (parabolic is a stand-in, no measured profile is published), the pattern width along the barrel as built, how cooling follows flow (section 7.1) | –, m, – | nozzle data sheet: the catalogue spray width at your standoff; leave the profile and the exponent at their defaults unless a pressure-film print or a measurement says otherwise |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
 | `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
@@ -2090,7 +2091,7 @@ classification needs `gap_crown_m`, `entry_crown_m` and `heredity_coefficient`.
 analyst choice (default 0.5; interwrap gaps vary by up to about 4 um under load [V: Zhu et
 al. 2009]). Incoming ridges pass the bite as
 `dh = 2*C*(F_hin/W + N_x'*E*xi/H)*dH/(1 + 2*C*Q_eff)` [D, integration layer], then wind into
-the coil.
+the coil. The lane winding model of section 7.15 (opt-in) computes the factor instead: 0.02 to 0.77 for a 0.1 um lane depending on the radial stack stiffness, for which no aluminium value is published; the coil verdicts keep this linear criterion.
 
 **Tension troughs and roller wrinkles.** Wavelength and amplitude
 `lam = sqrt(2*pi*L*t)/(3*(1-nu^2)*gamma)^(1/4)`,
@@ -3119,8 +3120,8 @@ or lateral metal flow (G3 in full is Phase 3).
 
 ### 7.15 Winding model (`wound_roll.py`)
 
-SPEC19 package 9 (gap G9 core, G10 film): a module, not yet called by the engine (the lane
-model of package 10 and the nip, air and coil temperature of package 11 follow). The present
+SPEC19 package 9 (gap G9 core, G10 film): the module; package 10 (second part below) winds
+lanes in the engine; the nip, air and coil temperature of package 11 follow. The present
 coil criterion (`strip_shape.coil_ridge_buildup`, compaction factor 0.5) and every coil verdict
 and score are unchanged.
 
@@ -3180,6 +3181,69 @@ note to G10); no nip film.
 
 Limits: elastic laps; plane model per lane (no axial stress); no interlayer slip; stack law
 supplied; lumped layers; no thermal or creep term.
+
+**Second part (SPEC19 package 10): winding by lanes in the engine.** With
+`width_model.coil_winding` (needs `width_model.coil`; null = none) the result gains
+`width.coil_winding`: the exit profile of the case pass wound lane by lane, BESIDE the present
+linear criterion (`coil_ridge_buildup` with its compaction factor), which the coil verdicts, the
+ridge hypothesis and every score keep using. Keys: `radial_law` (REQUIRED, the three laws of the
+first part; the message says that no stack stiffness for aluminium foil is published and how to
+measure one), `core_stiffness_pa` (null = rigid), `lane_width_m` (default the shapemeter zone
+width, else 0.05 m [D]), `layers` (20 to 400, default 150), `tension_taper`,
+`thickness_profile` (null = the model's own exit profile), `include_length_profile` (true),
+`air_gap_m` (0), `allocation_radius` (`mid_layer`, the specification; `layer_top` reproduces the
+planner's prototype [D, analyst choice]) and `provenance`. No committed demo carries a stack
+law.
+
+Lanes: equal lanes across the strip (the last one shortened, at least four); per lane the exit
+thickness plus the lane mean of `width.shape.steady.local_thickness_change_m` (with feedback)
+plus the exit ridge height of every incoming ridge over the lane, and a natural-length excess
+`1e-5` times the lane mean of `i_units_linear_feedback`. Tension allocation `[D, re-derived in
+SPEC19: the "relaxation radius" of the pseudo-2D models, SS-S44 AB, SS-S45 EX, written as a
+strain allocation]`: a new layer lies on lane `j` at mid radius `s_j`; all lanes of one lap share
+the unstrained circumference `2*pi*s0` apart from their length excess, so
+`eps_j = (s_j - s0)/s0 - e_j`, `sigma_j = min(max(E*eps_j, 0), sigma_y)` (no compression, yield
+cap), `eps_p,j = max(0, eps_j - sigma_y/E)`, and `s0` balances the force (bisection, 80 halvings).
+Self-check: a uniform profile gives the mean tension in every lane and reproduces the single-lane
+result. Section: lanes, wound-on tension, hoop stress, pressure and plastic strain per lane at up
+to 60 radii, per lane the largest wound-on tension, lowest hoop stress, largest pressure, first
+yield radius and laps, yielding and slack length shares, outer radius deviation and the
+EFFECTIVE COMPACTION FACTOR (radius deviation over laps x thickness deviation, beside the present
+0.5); `after_unwinding` (the plastic stretch of the outer wraps and its length mean per lane, and
+the mechanical lane profile plus it: an ADDITIONAL profile, not read by the shapemeter section,
+which describes the strip in the mill); `beside_linear_criterion` (for each incoming ridge and the
+largest model band: the linear status, critical height and factor beside the lane model's
+`YIELDS` / `ELASTIC`, its effective factor and `agrees`; a disagreement is written out and flagged
+`WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION`, and the tally uses the linear criterion). Flags:
+`COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION`, `WINDING_LANE_YIELDS`, `WINDING_LANE_SLACK`,
+`WINDING_INNER_LAPS_IN_HOOP_COMPRESSION`, `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`.
+Cost: lanes x layers single-lane solves, about 0.5 s for 24 lanes of 150 layers (budget 2 s); the
+quick profile leaves it as it is.
+
+Worked case (24 lanes of 50 mm, 30 um, coil 0.15 -> 0.6 m, 30 MPa, yield 165 MPa, 150 layers of
+100 laps, one lane thicker; `tests/test_band_coil_winding.py`). Effective compaction factor and
+wound-on tension of the thicker lane at 1000 / 5000 / 15000 laps:
+
+| thicker by | stack (stated assumption) | mid-layer allocation (the specification) | layer-top allocation (planner's prototype) |
+|---|---|---|---|
+| 0.1 um | isotropic `E_r = E_t` | factor 0.772; 65.6 / 131.6 / 159.8 MPa | 0.772; 67.1 / 132.1 / 159.9 |
+| 0.1 um | `E_t/100` | 0.124; 53.0 / 51.9 / 51.3 | 0.121; 53.8 / 51.9 / 51.3 |
+| 0.1 um | Pfeiffer `K2` 100, `K1` 10 kPa | 0.066; 46.4 / 44.1 / 41.7 | 0.062; 47.2 / 44.1 / 41.7 |
+| 0.1 um | Pfeiffer `K2` 30, `K1` 10 kPa | 0.023; 38.3 / 36.1 / 34.5 | 0.019; 38.5 / 36.1 / 34.5 |
+| 1 um | isotropic | 0.970; yields from the 4th layer (by 400 laps), 98 % of the layers, up to 2227 I-units | 0.970; the same, up to 2229 |
+| 1 um | `E_t/100` | 0.437; yields by 400 laps, 98 %, up to 899 I-units | 0.437; up to 904 |
+| 1 um | Pfeiffer `K2` 100 | 0.493; yields by 400 laps, 98 %, up to 1051 I-units | 0.494; up to 1058 |
+| 1 um | Pfeiffer `K2` 30 | 0.034; does NOT yield (peak 158.4 MPa, 4 % below yield); 155.7 / 120.6 / 93.4 | 0.031; yields in 5 % of the layers, up to 17 I-units; 165 / 120.6 / 93.4 |
+
+**Finding 5 (SPEC19), unsoftened: the winding result hangs on the radial stack stiffness, for
+which no aluminium value exists.** For a 0.1 um thicker lane the coil takes up between about 0.02
+and 0.77 of laps x thickness difference depending on the stack; the project's constant 0.5 lies
+inside this range and has no better and no worse support than before (X8: contradicted in form,
+confirmed in that the factor is an outcome). A 1 um thicker lane yields the strip within the first
+few hundred laps with every stack but the softest; with the softest the two allocation radii
+disagree on whether it yields at all. The answer turns on the stack stiffness: a press test on a
+stack of the oily foil decides it.
+
 
 ## 8. Process models
 
@@ -4483,6 +4547,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| winding by lanes / `tests/test_band_coil_winding.py` | allocation: uniform lanes get the mean (1e-9), force balance (1e-9), a longer lane less, slack, yield cap and plastic strain; a uniform profile reproduces the single-lane model; the planner's table with the layer-top allocation; the specification's mid-layer values pinned; orderings (factor below 1, tension stops rising for soft stacks, softer stack smaller factor); the engine section beside the linear criterion; absent key changes nothing; report; validation; flag sentences |
 | winding model / `tests/test_wound_roll.py` | the closed form (radial stress within 0.5 % at 100 layers and 0.12 % at 400 at four radii; first-layer hoop within 2 and 0.5 MPa); first-order convergence (error ratio 200 -> 400 layers 1.7-2.3); outer and core conditions of the increment (1e-9); a soft core lowers the core pressure; a softer stack lowers the inner pressure and the lowest hoop stress (5.779 MPa, -2.98 MPa at `E_t/100`); the Pfeiffer modulus rises with pressure; air layer (no gap equals no air, a gap softens, it closes under pressure); taper; the film constant 0.6430 and the two films (1e-3); the stack law required with the press-test message; rejections; JSON safety |
 | spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
 | width coupling / `tests/test_strip_shape.py` (`WidthCouplingKernelTests`), `tests/test_band_width_coupling.py` | the three closures' `chi` in closed form and from the stress function (the closure condition zero to 1e-9 of the stress scale); both demo rows to 1e-3; the limits (`f_se = 0`, `chi = 1`; `f_sx -> -inf`); `xi` scaling; a negative denominator reported, not clipped; the development fraction (0 at the bite, 0.95 at `kappa*x = 3.94`, monotonic); a supplied stiffness equal to `N_x'*E*xi/h` reproduces the pointwise transfer to 1e-12; in the engine the demo sections (stiffnesses 0.1 %, kernel-level peak ratios 1.41 and 9.2 within 15 % of the planner's), the plain words and the level the tally uses, and with the kernel stubbed every other key equal |
@@ -4654,7 +4719,9 @@ guide's own list.
   `FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE` on both sections and in the top-level flags).
 - **Short-lived bands close together in width**: an event's metrics stop at the start of the
   next event in the same neighbourhood (7.4); what lies beyond is only a lower bound.
-- **Coil ridge compaction factor** is an analyst choice (default 0.5).
+- **Coil ridge compaction factor** is an analyst choice (default 0.5). The lane winding model
+  (opt-in, section 7.15) gives 0.02 to 0.77 for a 0.1 um lane depending on the radial stack
+  stiffness, which is not published for aluminium foil; the tally keeps 0.5.
 - **Mill dynamics**: first-order cylinder loop (the AGC-chatter result depends on the loop
   roll-off, 9.70 against 13.62 m/s in the demo); static formulas hold tension constant.
 - **Hardening**: literature fits are tensile fits, over-predicting beyond `eps` about 0.3; demo

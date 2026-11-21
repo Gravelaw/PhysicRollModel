@@ -142,7 +142,9 @@ WIDTH_DEFAULTS = {
     # SPEC19 package 4 (G5): a closed spray loop with the tool's own control law
     'flatness_control': None,
     # SPEC19 package 5 (A6): emulation of a plant zone step test
-    'zone_step_test': None}
+    'zone_step_test': None,
+    # SPEC19 package 10 (G9): the exit profile wound lane by lane (needs width_model.coil)
+    'coil_winding': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -623,6 +625,9 @@ def validate_width_model(w, pass_):
                                                     hi=1.0)}
         if out['coil']['outer_radius_m'] <= out['coil']['inner_radius_m']:
             raise ValueError('width_model.coil.outer_radius_m must exceed inner_radius_m')
+    else:
+        out['coil'] = None
+    out['coil_winding'] = validate_coil_winding(w.get('coil_winding'), out.get('coil'))
     out['shape_inputs'] = validate_shape_inputs(w.get('shape_inputs'))
     out['previous_strip_widths_m'] = num_list('width_model.previous_strip_widths_m',
                                               w.get('previous_strip_widths_m', []),
@@ -4072,6 +4077,306 @@ def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
                              'protocol is recorded]'},
             'flags': flags, 'limitations': list(ZT_LIMITATIONS)}
 
+# ======================================== winding by lanes (SPEC19 package 10, G9; I7; X8)
+CW_STATUS = 'UNVALIDATED_LANE_WINDING_MODEL_BESIDE_THE_LINEAR_CRITERION'
+CW_FLAG_BESIDE = 'COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION'
+CW_FLAG_YIELDS = 'WINDING_LANE_YIELDS'
+CW_FLAG_SLACK = 'WINDING_LANE_SLACK'
+CW_FLAG_DISAGREES = 'WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION'
+CW_FLAG_HOOP = 'WINDING_INNER_LAPS_IN_HOOP_COMPRESSION'
+CW_FLAG_STACK = 'RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND'
+CW_TOP_FLAGS = (CW_FLAG_BESIDE, CW_FLAG_YIELDS, CW_FLAG_SLACK, CW_FLAG_DISAGREES, CW_FLAG_HOOP,
+                CW_FLAG_STACK)
+CW_KEYS = ('radial_law', 'core_stiffness_pa', 'lane_width_m', 'layers', 'tension_taper',
+           'thickness_profile', 'include_length_profile', 'air_gap_m', 'provenance',
+           'allocation_radius')
+CW_DEFAULT_LANE_WIDTH_M = 0.05
+CW_MAX_RADII = 60
+CW_USED_BY_EVIDENCE = ('the present linear coil criterion (strip_shape.coil_ridge_buildup with '
+                       'its compaction factor): the coil verdicts, the ridge hypothesis and every '
+                       'score use it; this section is reported beside it and changes none')
+CW_STACK_SENTENCE = ('The stack stiffness was entered; no measured value for oily aluminium foil '
+                     'was found. With a stiffer or softer stack the answer changes: for one lane '
+                     '0.1 um thicker the coil takes up between about 0.02 and 0.77 of laps x '
+                     'thickness difference (see the guide, section 7.15).')
+CW_LIMITATIONS = (
+    'Those of the single-lane model: elastic laps apart from the plastic strain of the '
+    'allocation; plane model per lane (no axial stress); no interlayer slip; stack law supplied; '
+    'lumped layers (first order); no thermal or creep term.',
+    'Perfectly registered lanes (no oscillation, no tracking); lanes are coupled only through '
+    'the tension allocation (no bending of the lap across the width).',
+    'Elastic-perfectly plastic lap with the tensile yield stress; plastic thinning ignored.',
+    'The thickness and length profile of the case pass is taken as constant along the coil.',
+    'coil_ridge_buildup, the ridge hypothesis and its evidence are unchanged and do not read '
+    'this section; the length difference after unwinding is an additional profile, not read by '
+    'the shapemeter section (it is what the strip shows after unwinding, not in the mill).',
+)
+
+
+def validate_coil_winding(cw, coil):
+    """``width_model.coil_winding`` (SPEC19 package 10): None, or the validated dict. The radial
+    stack law is REQUIRED (no default; the message says what to measure)."""
+    from . import wound_roll as wr
+    if cw is None:
+        return None
+    where = 'width_model.coil_winding'
+    if not isinstance(cw, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, cw, (), CW_KEYS)
+    if coil is None:
+        raise ValueError(f'{where} needs width_model.coil')
+    try:
+        law = wr.validate_radial_law(cw.get('radial_law'))
+    except ValueError as exc:
+        raise ValueError(f'{where}.radial_law: {exc}') from None
+    prov = cw.get('provenance')
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text')
+    out = {'radial_law': law, 'provenance': prov}
+    ec = cw.get('core_stiffness_pa')
+    out['core_stiffness_pa'] = None if ec is None else num(f'{where}.core_stiffness_pa', ec,
+                                                           positive=True, hi=1e13)
+    lw = cw.get('lane_width_m')
+    out['lane_width_m'] = None if lw is None else num(f'{where}.lane_width_m', lw, lo=0.005,
+                                                      hi=0.5)
+    layers = cw.get('layers', 150)
+    if isinstance(layers, bool) or not isinstance(layers, int) or not 20 <= layers <= 400:
+        raise ValueError(f'{where}.layers must be an integer in [20, 400]')
+    out['layers'] = layers
+    tp = cw.get('tension_taper')
+    if tp is not None:
+        if not isinstance(tp, list) or not 2 <= len(tp) <= 20:
+            raise ValueError(f'{where}.tension_taper must be null or 2-20 points')
+        pts = []
+        for i, p in enumerate(tp):
+            keys(f'{where}.tension_taper[{i}]', p, ('radius_m', 'tension_pa'))
+            pts.append((num(f'{where}.tension_taper[{i}].radius_m', p['radius_m'], positive=True),
+                        num(f'{where}.tension_taper[{i}].tension_pa', p['tension_pa'], lo=0.0)))
+        if any(b[0] <= a[0] for a, b in zip(pts, pts[1:])) or pts[0][0] < coil['inner_radius_m'] \
+                or pts[-1][0] > coil['outer_radius_m']:
+            raise ValueError(f'{where}.tension_taper radii must increase inside the coil')
+        tp = pts
+    out['tension_taper'] = tp
+    prof = cw.get('thickness_profile')
+    if prof is not None:
+        keys(f'{where}.thickness_profile', prof, ('positions_m', 'thickness_deviation_m'))
+        pos = num_list(f'{where}.thickness_profile.positions_m', prof['positions_m'])
+        dev = num_list(f'{where}.thickness_profile.thickness_deviation_m',
+                       prof['thickness_deviation_m'], lo=-1e-4, hi=1e-4)
+        if len(pos) < 3 or len(pos) != len(dev) or any(b <= a for a, b in zip(pos, pos[1:])):
+            raise ValueError(f'{where}.thickness_profile needs >= 3 increasing positions and one '
+                             'deviation per position')
+        prof = {'positions_m': pos, 'thickness_deviation_m': dev}
+    out['thickness_profile'] = prof
+    inc = cw.get('include_length_profile', True)
+    if not isinstance(inc, bool):
+        raise ValueError(f'{where}.include_length_profile must be true or false')
+    out['include_length_profile'] = inc
+    out['air_gap_m'] = num(f'{where}.air_gap_m', cw.get('air_gap_m', 0.0), lo=0.0, hi=1e-4)
+    ar = cw.get('allocation_radius', 'mid_layer')
+    if ar not in wr.ALLOCATION_RADII:
+        raise ValueError(f'{where}.allocation_radius must be one of {wr.ALLOCATION_RADII}')
+    out['allocation_radius'] = ar
+    return out
+
+
+def _lane_mean(z, v, a, b):
+    vals = [y for x, y in zip(z, v) if a <= x < b]
+    if not vals:
+        x = 0.5 * (a + b)
+        return _interp(z, v, x)
+    return sum(vals) / len(vals)
+
+
+def coil_winding_section(case, w, shape, centre, width):
+    """SPEC19 package 10: the exit profile wound lane by lane, BESIDE the linear criterion."""
+    from . import wound_roll as wr
+    cw = w.get('coil_winding')
+    if cw is None:
+        return not_supplied('width_model.coil_winding is null or absent')
+    coil = w['coil']
+    st = shape.get('steady') if isinstance(shape, dict) else None
+    has_steady = isinstance(st, dict) and isinstance(st.get('z_m'), list) and \
+        isinstance(st.get('local_thickness_change_m'), list)
+    if cw['thickness_profile'] is None and not has_steady:
+        return not_assessable('no thickness profile: neither width_model.coil_winding.'
+                              'thickness_profile nor a steady flatness profile of the case pass')
+    mat = case['material']
+    h0 = case['pass']['exit_thickness_m']
+    E, sy = mat['youngs_modulus_pa'], mat['yield_stress_pa']
+    sm = (case.get('measurement') or {}).get('shapemeter') or {}
+    lw = cw['lane_width_m'] or sm.get('zone_width_m') or CW_DEFAULT_LANE_WIDTH_M
+    a0, a1 = centre - width / 2, centre + width / 2
+    n = max(4, int(math.ceil(width / lw - 1e-9)))
+    if n * lw > width + 1e-9 and int(math.ceil(width / lw - 1e-9)) >= 4:
+        edges = [a0 + i * lw for i in range(n)] + [a1]
+    else:
+        edges = [a0 + i * width / n for i in range(n + 1)]
+    lanes = []
+    for i in range(n):
+        a, b = edges[i], edges[i + 1]
+        if cw['thickness_profile'] is not None:
+            tp = cw['thickness_profile']
+            xs = [a + (k + 0.5) * (b - a) / 10 for k in range(10)]
+            dh = sum(_interp(tp['positions_m'], tp['thickness_deviation_m'], x) for x in xs) / 10
+            basis = 'supplied thickness_profile'
+        else:
+            dh = _lane_mean(st['z_m'], st['local_thickness_change_m'], a, b)
+            for r in shape.get('ridges') or []:
+                if r.get('exit_ridge_height_m') is None:
+                    continue
+                lo, hi = r['position_m'] - r['ridge_width_m'] / 2, r['position_m'] + \
+                    r['ridge_width_m'] / 2
+                cover = max(0.0, min(b, hi) - max(a, lo)) / (b - a)
+                dh += cover * r['exit_ridge_height_m']
+            basis = 'width.shape.steady local_thickness_change_m (with feedback) plus ridges'
+        e = 0.0
+        if cw['include_length_profile'] and has_steady and \
+                isinstance(st.get('i_units_linear_feedback'), list):
+            e = 1e-5 * _lane_mean(st['z_m'], st['i_units_linear_feedback'], a, b)
+        lanes.append({'centre_m': 0.5 * (a + b), 'width_m': b - a, 'thickness_m': h0 + dh,
+                      'thickness_deviation_m': dh, 'length_excess_i_units': e * 1e5,
+                      '_e': e})
+    res = wr.wind_lanes(
+        core_radius_m=coil['inner_radius_m'], outer_radius_m=coil['outer_radius_m'],
+        thicknesses_m=[x['thickness_m'] for x in lanes], widths_m=[x['width_m'] for x in lanes],
+        length_excess=[x['_e'] for x in lanes], winding_tension_pa=coil['winding_tension_pa'],
+        hoop_modulus_pa=E, poisson_ratio=wr_poisson(), yield_stress_pa=sy,
+        radial_law=cw['radial_law'], core_stiffness_pa=cw['core_stiffness_pa'],
+        layers=cw['layers'], air_gap_m=cw['air_gap_m'], tension_taper=cw['tension_taper'],
+        allocation_radius=cw['allocation_radius'])
+    for x in lanes:
+        x.pop('_e')
+    flags = [CW_FLAG_BESIDE, CW_FLAG_STACK]
+    base = {'provenance': cw['provenance'], 'radial_law': cw['radial_law'],
+            'used_by_the_evidence': CW_USED_BY_EVIDENCE, 'stack_sentence': CW_STACK_SENTENCE,
+            'lanes': lanes, 'lane_profile_basis': basis,
+            'laps_per_layer': res['laps_per_layer'], 'layers': cw['layers'],
+            'allocation_radius': cw['allocation_radius'],
+            'basis': {'model': res['basis'], 'allocation': res['allocation_basis']},
+            'limitations': list(CW_LIMITATIONS)}
+    if res['status'] != wr.STATUS:
+        return dict(base, status='SOLVE_FAILED', reason=res.get('reason'),
+                    layers_wound=res['layers_wound'], flags=flags)
+    wl = res['lanes']
+    nl = res['laps_per_layer']
+    nlayers = len(wl[0].wound_on)
+    pick = sorted({int(round(k * (nlayers - 1) / (CW_MAX_RADII - 1)))
+                   for k in range(CW_MAX_RADII)}) if nlayers > CW_MAX_RADII else list(range(nlayers))
+    mean_r = [sum(0.5 * (ln.r[k] + ln.r[k + 1]) for ln in wl) / len(wl) for k in pick]
+    h_mean = sum(x['thickness_m'] for x in lanes) / len(lanes)
+    outer_mean = sum(ln.outer_radius_m for ln in wl) / len(wl)
+    laps = nl * nlayers
+    per_lane, wound, hoop, press, plast = [], [], [], [], []
+    for x, ln in zip(lanes, wl):
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        total = sum(lengths)
+        yl = sum(L for L, ep in zip(lengths, ln.plastic_strain) if ep > 0) / total
+        sl = sum(L for L, t in zip(lengths, ln.wound_on) if t <= 0) / total
+        first = next((k for k, ep in enumerate(ln.plastic_strain) if ep > 0), None)
+        ddh = x['thickness_m'] - h_mean
+        dR = ln.outer_radius_m - outer_mean
+        per_lane.append({
+            'centre_m': x['centre_m'], 'max_wound_on_tension_pa': max(ln.wound_on),
+            'min_hoop_stress_pa': min(ln.hoop_stress),
+            'max_pressure_pa': max(-v for v in ln.radial_stress),
+            'first_yield_radius_m': None if first is None else 0.5 * (ln.r[first]
+                                                                     + ln.r[first + 1]),
+            'first_yield_laps': None if first is None else (first + 1) * nl,
+            'yielding_length_fraction': yl, 'slack_length_fraction': sl,
+            'outer_radius_deviation_m': dR,
+            'effective_compaction_factor': (dR / (laps * ddh) if abs(ddh) > 1e-12 * h_mean
+                                            else None),
+            'max_plastic_i_units': max(ln.plastic_strain) * 1e5})
+        wound.append([ln.wound_on[k] for k in pick])
+        hoop.append([ln.hoop_stress[k] for k in pick])
+        press.append([-0.5 * (ln.radial_stress[k] + ln.radial_stress[k + 1]) for k in pick])
+        plast.append([ln.plastic_strain[k] for k in pick])
+        if yl > 0 and CW_FLAG_YIELDS not in flags:
+            flags.append(CW_FLAG_YIELDS)
+        if sl > 0 and CW_FLAG_SLACK not in flags:
+            flags.append(CW_FLAG_SLACK)
+        if min(ln.hoop_stress) < 0 and CW_FLAG_HOOP not in flags:
+            flags.append(CW_FLAG_HOOP)
+    # after unwinding: the plastic stretch as a length difference (an ADDITIONAL profile)
+    zc = [x['centre_m'] for x in lanes]
+    outer = [ln.plastic_strain[-1] for ln in wl]
+    lmean = []
+    for ln in wl:
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        lmean.append(sum(L * ep for L, ep in zip(lengths, ln.plastic_strain)) / sum(lengths))
+
+    def centred(v):
+        m = sum(v) / len(v)
+        return [(a - m) * 1e5 for a in v]
+    mech = [x['length_excess_i_units'] for x in lanes]
+    after = {}
+    for key, prof in (('plastic_i_units_outer_wraps', centred(outer)),
+                      ('plastic_i_units_length_mean', centred(lmean)),
+                      ('with_mechanical_profile', [a + b for a, b in zip(
+                          centred([m * 1e-5 for m in mech]), centred(lmean))])):
+        entry = {'i_units': prof}
+        try:
+            fl = ss.flatness_from_elongation(zc, [1e-5 * v for v in prof], youngs_modulus_pa=E,
+                                             poisson_ratio=STRIP_POISSON_RATIO, thickness_m=h0,
+                                             mean_tension_pa=0.0, yield_stress_pa=sy)
+            entry.update(status=fl['status'], released_status=fl['released_status'],
+                         bands=_bands(fl['bands']))
+        except ValueError as exc:
+            entry['flatness_error'] = str(exc)
+        after[key] = entry
+    after['basis'] = ('plastic hoop strain of the laps (mean removed), on the lane centres; the '
+                      'mechanical profile is the lane mean of i_units_linear_feedback; no creep')
+    # beside the linear criterion
+    beside = []
+    targets = []
+    for r in shape.get('ridges') or []:
+        if isinstance(r.get('coil'), dict):
+            targets.append(('incoming ridge', r['position_m'], r['coil']))
+    bands = ((st or {}).get('levels') or {}).get('with_feedback', {}).get('bands') or [] \
+        if has_steady else []
+    if bands:
+        big = max(bands, key=lambda b: abs(b['peak_i_units']))
+        j = min(range(n), key=lambda k: abs(lanes[k]['centre_m'] - big['peak_position_m']))
+        dh_lane = lanes[j]['thickness_m'] - h_mean
+        try:
+            lin = _coil_buildup(case, coil, abs(dh_lane), h0)
+        except ValueError:
+            lin = None
+        targets.append(('largest model band', big['peak_position_m'], lin))
+    for label, pos, lin in targets:
+        j = min(range(n), key=lambda k: abs(lanes[k]['centre_m'] - pos))
+        pl = per_lane[j]
+        lane_state = 'YIELDS' if pl['yielding_length_fraction'] > 0 else 'ELASTIC'
+        row = {'source': label, 'position_m': pos, 'lane_centre_m': lanes[j]['centre_m'],
+               'lane_model_state': lane_state,
+               'effective_compaction_factor': pl['effective_compaction_factor'],
+               'linear_status': None if lin is None else lin['status'],
+               'linear_critical_ridge_height_m': None if lin is None else lin[
+                   'critical_ridge_height_at_outer_radius_m'],
+               'linear_compaction_factor': None if lin is None else lin['compaction_factor']}
+        if lin is not None:
+            lin_yields = lin['status'] == 'RIDGE_YIELDS_STRIP'
+            row['linear_yields'] = lin_yields
+            row['agrees'] = lin_yields == (lane_state == 'YIELDS')
+            if not row['agrees']:
+                row['note'] = (f'the lane model says {lane_state.lower()}, the linear criterion '
+                               f'says {str(lin["status"]).lower().replace("_", " ")}; the tally '
+                               'uses the linear criterion')
+                if CW_FLAG_DISAGREES not in flags:
+                    flags.append(CW_FLAG_DISAGREES)
+        beside.append(row)
+    return dict(base, status=CW_STATUS, radius_m=mean_r, wound_on_tension_pa=wound,
+                hoop_stress_pa=hoop, pressure_pa=press, plastic_strain=plast,
+                per_lane=per_lane, after_unwinding=after, beside_linear_criterion=beside,
+                flags=flags)
+
+
+def wr_poisson():
+    """Hoop-radial Poisson ratio of the stack (the strip's, as the shape chain)."""
+    return STRIP_POISSON_RATIO
+
+
 # ======================================== width-coupling kernel (SPEC19 package 8, G3; X17)
 WC_STATUS = 'SECOND_ESTIMATE_OF_THE_TENSION_FEEDBACK_NOT_VALIDATED'
 WC_FLAG = 'WIDTH_COUPLING_KERNEL_REPORTED'
@@ -4781,6 +5086,14 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
             shape['ridges'].append(_ridge(case, w, sp, r, z, w['coil'], shape_reason))
         except ValueError as exc:
             shape['ridges'].append({'position_m': r['position_m'], 'rejected': str(exc)})
+    # SPEC19 package 10: winding by lanes, beside the linear criterion (never evidence)
+    try:
+        out['coil_winding'] = coil_winding_section(case, w, shape, th.centre, th.width)
+    except (ValueError, ArithmeticError) as exc:
+        out['coil_winding'] = failed('coil_winding', exc)
+        out['failures'].append(out['coil_winding']['error'])
+    flags += [f for f in (out['coil_winding'].get('flags') or [])
+              if f in CW_TOP_FLAGS and f not in flags]
     bm_opt = (case.get('model_options') or {}).get('buckling_model')
     if bm_opt is not None:
         # SPEC19 package 6: opt-in, beside the present states (key only when the option is set)

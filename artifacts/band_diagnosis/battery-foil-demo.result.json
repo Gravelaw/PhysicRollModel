@@ -4770,6 +4770,7 @@
         "outer_radius_m": 0.6,
         "winding_tension_pa": 30000000.0
       },
+      "coil_winding": null,
       "coolant_temperature_k": 318.15,
       "cooling_zone_pitch_m": 0.104,
       "deflector_roll_radius_m": 0.125,
@@ -18359,6 +18360,11 @@
   },
   "width": {
     "barrel_length_m": 1.5,
+    "coil_winding": {
+      "not_supplied": true,
+      "reason": "width_model.coil_winding is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "failures": [],
     "flags": [
       "BARREL_ENDS_ADIABATIC",
