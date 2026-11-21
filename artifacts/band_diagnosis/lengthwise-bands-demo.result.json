@@ -735,6 +735,11 @@
     "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
     "WIDTH_COUPLING_KERNEL_REPORTED"
   ],
+  "foil_gauge_control": {
+    "not_supplied": true,
+    "reason": "foil_gauge_control is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "foil_regime": null,
   "forced_response": {
     "entry_thickness": {
@@ -4270,6 +4275,7 @@
         1500000.0
       ]
     },
+    "foil_gauge_control": null,
     "gauge_control": {
       "bandwidth_hz": 25.0,
       "compensation_gain": 0.9,

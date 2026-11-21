@@ -291,6 +291,16 @@ def time_constant_gain(time_constant_s, frequency_hz):
     return 1.0 / math.sqrt(1.0 + (2 * math.pi * frequency_hz * time_constant_s) ** 2)
 
 
+def gauge_transfer(spot_length_m, time_constant_s, frequency_hz, exit_speed_m_s):
+    """Complex transfer of the gauge at ``frequency_hz``: the spot average (centred on the
+    gauge position, so real: ``sin(x)/x``, ``x = pi*L*f/u``, with its sign) times the
+    first-order lag ``1/(1 + j*2*pi*f*tau)``. Its magnitude is
+    ``spot_gain*time_constant_gain`` (SPEC19 package 13 uses it inside the foil gauge loop)."""
+    x = math.pi * spot_length_m * frequency_hz / exit_speed_m_s
+    spot = 1.0 if x == 0 else math.sin(x) / x
+    return spot / complex(1.0, 2 * math.pi * frequency_hz * time_constant_s)
+
+
 def gauge_row(source, pitch_m, exit_speed_m_s, g):
     f = exit_speed_m_s / pitch_m
     gs, gt = spot_gain(g['spot_length_m'], pitch_m), time_constant_gain(g['time_constant_s'], f)

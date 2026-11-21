@@ -2725,6 +2725,33 @@ FLAGS = {
         'The lane-by-lane winding and the standard coil check disagree on whether a ridge '
         'stretches the strip in the coil; the shortlist uses the standard check.',
         'A coil diameter profile and a press test of the stack would decide it.'),
+    'FOIL_GAUGE_LOOP_SIMULATED': (
+        'The gauge loop by entry tension and speed was simulated; it is the tool\'s own loop, '
+        'not the plant\'s controller.',
+        'Compare with the plant\'s controller settings before reading the numbers.'),
+    'GAUGE_SET_BY_STRIP_NOT_BY_GAP': (
+        'A change of the roll gap setting moves the gauge by less than a tenth of itself: the '
+        'strip, not the gap, sets the gauge here.',
+        'Steer the gauge with tension and speed, as foil mills do.'),
+    'LOOP_AMPLIFIES_COIL_FREQUENCY': (
+        'The simulated gauge loop makes a once-per-revolution disturbance of a coil larger, not '
+        'smaller.',
+        'Look for a gauge ripple at the coil\'s revolution frequency.'),
+    'TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE': (
+        'Correcting a 1 % entry gauge change by tension alone would need more than the allowed '
+        'tension trim.',
+        'Speed has to take over for larger entry gauge changes.'),
+    'SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE': (
+        'The speed effect on gauge comes from a placeholder friction law that is not fitted to '
+        'any mill.',
+        'Read it as what that law implies, not as this mill\'s speed effect.'),
+    'KISS_STIFFNESS_NOT_MODELLED_ZERO_USED': (
+        'At this gauge the work rolls may touch outside the strip; that contact is not '
+        'modelled and was taken as zero.',
+        'Read the gauge sensitivities as open-gap values.'),
+    'UNSTABLE_LOOP_SETTINGS': (
+        'The entered gauge-loop settings are unstable; the loop was not simulated.',
+        'Lower the loop gain or check the gauge distance and speed.'),
     'SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE': (
         'In the lateral stress from the roller alignment the span is long and tense enough '
         'that tension stiffening, which the beam model leaves out, is not small.',

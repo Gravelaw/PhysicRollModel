@@ -500,6 +500,11 @@
     "SYNTHETIC_INPUTS",
     "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN"
   ],
+  "foil_gauge_control": {
+    "not_supplied": true,
+    "reason": "foil_gauge_control is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "foil_regime": null,
   "forced_response": {
     "entry_thickness": {
@@ -3809,6 +3814,7 @@
       "standoff_m": 0.15
     },
     "drive": null,
+    "foil_gauge_control": null,
     "gauge_control": null,
     "hardening": null,
     "incoming_variation": null,

@@ -250,5 +250,6 @@
   },
   "drive": null,
   "incoming_variation": null,
-  "measurement": null
+  "measurement": null,
+  "foil_gauge_control": null
 }

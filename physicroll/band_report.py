@@ -3059,9 +3059,91 @@ def _incoming_block(iv):
 
 
 def _dynamics_section(r):
+    fgc = r.get('foil_gauge_control')
+    supplied = isinstance(fgc, dict) and not fgc.get('not_supplied')
+    gc = _gc_block(r.get('gauge_control'))
+    if supplied:      # SPEC19 package 13 (X7): the pointer only when the section exists
+        gc += ('<p class="note">This gaugemeter block describes gauge control by roll force at '
+               'an open roll gap. Gauge control by speed and entry tension, the actuators at '
+               'foil gauge, is in the block "Gauge control by speed and tension" below.</p>')
     return ('<section><h2>Gauge control, drive and incoming variation</h2>'
-            + _gc_block(r.get('gauge_control')) + _drive_block(r.get('drive'))
+            + gc + (_foil_gauge_block(fgc) if supplied else '')
+            + _drive_block(r.get('drive'))
             + _incoming_block(r.get('incoming_variation')) + '</section>')
+
+
+def _foil_gauge_block(s):
+    """SPEC19 package 13: foil gauge control by speed and entry tension (analyst loop)."""
+    out = ['<h3>Gauge control by speed and tension</h3>']
+    if _bad(s):
+        return out[0] + _state_p(_bad(s))
+    out.append(f'<p class="warn">{_e(s.get("regime"))} The loop is the tool\'s own structure '
+               '(an analyst control law), not the plant\'s controller.</p>')
+    out.append(f'<p>Bite model: {_e(s.get("bite_model"))}; sensitivities from '
+               f'{_e(s.get("sensitivity_basis"))}; friction closure: '
+               f'{_e(s.get("friction_closure") or "none (no tribology)")}.</p>')
+    rows = []
+    labels = (('dh_dentry_tension_m_per_pa', 'entry_tension_percent_per_mpa',
+               'entry tension', '% of gauge per MPa'),
+              ('dh_dexit_tension_m_per_pa', 'exit_tension_percent_per_mpa', 'exit tension',
+               '% of gauge per MPa'),
+              ('dh_dfriction_m', 'friction_percent_per_percent', 'friction',
+               '% of gauge per 1 % friction'),
+              ('dh_dflow_stress_m_per_pa', 'flow_stress_percent_per_percent', 'flow stress',
+               '% of gauge per 1 % flow stress'),
+              ('dh_dentry_thickness', 'entry_thickness_percent_per_percent', 'entry gauge',
+               '% of gauge per 1 % entry gauge'))
+    modes = s.get('sensitivities_by_gap_mode') or {}
+    names = [m for m in ('constant_force', 'position', 'supplied_modulus') if m in modes]
+    for key, pkey, label, unit in labels:
+        rows.append([_e(label), _e(unit)] + [
+            f'{_f(modes[m].get(key), digits=4)} ({_f((modes[m].get("percent") or {}).get(pkey), digits=3)})'
+            for m in names])
+    rows.append([_e('gap'), _e('dh/dS')] + [_f(modes[m].get('dh_dgap'), digits=3)
+                                            for m in names])
+    out.append(_table(['input', 'unit of the percent'] + [_txt(m) for m in names], rows,
+                      'num'))
+    sp = s.get('speed') or {}
+    if sp.get('dh_du_m_per_m_s') is None:
+        out.append(_state_p('speed effect: ' + str(sp.get('reason', 'not available'))))
+    else:
+        out.append(f'<p>Speed effect dh/du {_f(sp["dh_du_m_per_m_s"], digits=4)} m per m/s '
+                   f'({_f(sp.get("percent_per_m_s"), digits=3)} % of gauge per m/s), from the '
+                   f'friction slope {_f(sp.get("friction_slope_per_m_s"), digits=4)} per m/s. '
+                   f'<strong>{_e(sp.get("words"))}</strong></p>')
+    lp = s.get('loop') or {}
+    out.append(f'<p>Loop: dead time {_f(lp.get("dead_time_s"), digits=4)} s, crossover '
+               f'{_f(lp.get("crossover_rad_s"), digits=4)} rad/s ({_e(lp.get("crossover_source"))}), '
+               f'phase margin {_f(lp.get("phase_margin_deg"), digits=3)} degrees, gain margin '
+               f'{_f(lp.get("gain_margin"), digits=3)}; disturbances are reduced below '
+               f'{_f(lp.get("attenuates_below_hz"), digits=3)} Hz; peak amplification '
+               f'{_f(lp.get("peak_sensitivity"), digits=3)} at '
+               f'{_f(lp.get("peak_sensitivity_hz"), digits=3)} Hz.</p>')
+    rows = [[_e(x['name']), _f(x['frequency_hz'], digits=4), _f(x['magnitude'], digits=4),
+             'amplified' if x['amplifies'] else 'reduced'] for x in lp.get('sensitivity_at') or []]
+    if rows:
+        out.append(_table(('frequency of', 'Hz', 'gauge error left |S|', ''), rows, 'num'))
+    rows = []
+    for d in s.get('disturbances') or []:
+        if d.get('open_loop_gauge_change_m') is None:
+            rows.append([_e(d['disturbance']), f'<em>{_e(d.get("reason", ""))}</em>', '', '', ''])
+            continue
+        rows.append([_e(d['disturbance']), _um(d['open_loop_gauge_change_m'], 4),
+                     _mpa(d['trim_needed_pa'], 4), _f(d['trim_share_of_limit'], 100, 3, '%'),
+                     'yes' if d['trim_saturates'] else 'no'])
+    out.append(_table(('disturbance', 'gauge change without the loop', 'tension trim needed',
+                       'share of the trim limit', 'trim saturates'), rows, 'num'))
+    st = s.get('step_response') or {}
+    if st.get('not_run'):
+        out.append(_state_p(st.get('reason', '')))
+    else:
+        lin, lim = st.get('linear_no_limits') or {}, st.get('with_limits') or {}
+        out.append(f'<p>1 % entry gauge step: without limits within 5 % after '
+                   f'{_f(lin.get("settling_time_s"), digits=3)} s, overshoot '
+                   f'{_f(lin.get("overshoot_fraction"), 100, 2, "%")}; with the trim limit: '
+                   f'{_txt(lim.get("status"))}.</p>')
+    out.append(_ul([_e(x) for x in s.get('limitations') or []]))
+    return ''.join(out)
 
 
 # ------------------------------------------------------------------------------ foil regime

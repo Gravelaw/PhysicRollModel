@@ -521,6 +521,13 @@ class BenchmarkTests(unittest.TestCase):
         self.assertNotIn('SS-V14', reasons)
         self.assertIn('critical values not quoted in the reports', reasons['SS-V15'])
 
+    def test_bt_g13_speed_effect_reference_only(self):
+        # SPEC19 package 13: the BT-V4 speed curves are not digitised
+        case = self.cases['BT-G13-SPEED-EFFECT']
+        self.assertEqual(case['verdict'], 'REFERENCE_ONLY_INPUTS_NOT_RECORDED')
+        self.assertEqual([q['reference_value'] for q in case['quantities']], [40.0])
+        self.assertIsNone(case['quantities'][0]['project_value'])
+
     def test_unknown_case_rejected(self):
         with self.assertRaises(ValueError):
             bm.run_case('BT-V99')

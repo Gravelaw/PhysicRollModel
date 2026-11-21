@@ -76,6 +76,7 @@ from . import band_signatures as bs
 from . import band_thermal
 from . import band_width as bw
 from . import band_sensors
+from . import foil_gauge
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
@@ -364,7 +365,7 @@ TOP_REQUIRED = ('case_schema', 'name', 'synthetic', 'provenance', 'pass', 'mater
                 'spans', 'kinematics', 'lubrication', 'coolant', 'model_options', 'observation')
 TOP_OPTIONAL = ('notes', 'schedule')
 V2_SECTIONS = ('width_model', 'tribology', 'hardening', 'gauge_control', 'drive',
-               'incoming_variation', 'measurement')
+               'incoming_variation', 'measurement', 'foil_gauge_control')
 
 
 def _speed_value(where, value):
@@ -624,6 +625,7 @@ def _validate_v2_sections(case, out):
             and tg['position_m'] > res['width_model']['roll']['barrel_length_m']):
         raise ValueError('measurement.thickness_gauge.position_m must be on the barrel '
                          '(in [0, 10] m and not beyond the barrel length) or null')
+    res['foil_gauge_control'] = foil_gauge.validate(sec['foil_gauge_control'], tg)
     for i, rec in enumerate((res['measurement'] or {}).get('pass_records') or []):
         h0 = rec['entry_thickness_m'] or out['pass']['entry_thickness_m']
         h1 = rec['exit_thickness_m'] or out['pass']['exit_thickness_m']
@@ -2606,6 +2608,47 @@ def _largest_model_band(width):
     return best
 
 
+def _foil_gauge_control(eff, result, bite, bite_error, stand, local_sens, trib, roll_freqs):
+    fgc = eff.get('foil_gauge_control')
+    if fgc is None:
+        return bp.not_supplied('foil_gauge_control is null or absent')
+    if bite is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': f'no bite for the case pass ({bite_error})', 'flags': []}
+    try:
+        ls = local_sens()
+        width = eff['pass']['width_m']
+        forces = {'h': bite.dforce_dexit_thickness_n_m, 'h_in': bite.dforce_dentry_thickness_n_m,
+                  's_e': bite.dforce_dentry_tension_m2, 's_x': bite.dforce_dexit_tension_m2,
+                  'mu': ls['dforce_per_width_dfriction_n_m'] * width,
+                  'Y': ls['dforce_per_width_dflow_stress_m'] * width}
+        proc = result.get('process') if isinstance(result.get('process'), dict) else {}
+        curve = proc.get('friction_speed_curve')
+        if not isinstance(curve, dict) or curve.get('status') == 'FAILED':
+            curve = None
+        closure = None if trib is None else ('load_sharing_curve' if bp.is_load_sharing(trib)
+                                             else 'placeholder')
+        fr_row = (proc.get('friction') or {}).get('operating') if isinstance(
+            proc.get('friction'), dict) else None
+        oil = None
+        if trib is not None and isinstance(fr_row, dict) and fr_row.get('film_ratio') is not None:
+            oil = bw._friction_placeholder(trib, fr_row)
+        rt = (eff.get('hardening') or {}).get('rate_temperature')
+        crit = (result.get('chatter') or {}).get('critical_speed') or {}
+        onset = crit.get('onset_frequency_hz') if isinstance(crit, dict) else None
+        tg = (eff.get('measurement') or {}).get('thickness_gauge')
+        return foil_gauge.foil_gauge_section(
+            eff, fgc, bite, forces, stand_mill_modulus_n_m=stand.mill_modulus_n_m,
+            friction_closure=closure, friction_curve=curve, oil=oil,
+            rate_sensitivity=None if rt is None else rt['rate_sensitivity'],
+            roll_freqs=roll_freqs, chatter_onset_hz=onset, thickness_gauge=tg,
+            closed_gap_range_m=CLOSED_GAP_ONSET_RANGE_M,
+            sensitivity_bite_model=ls['bite_model'], sensitivity_basis=ls['basis'],
+            bite_model=bp.bite_source_word(bite))
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        return bp.failed('foil_gauge_control', exc)
+
+
 def _foil_regime(eff, bite, bite_error, result, flags):
     """SPEC9 9.2 foil-regime block for an exit gauge below 100 um (None otherwise).
 
@@ -3833,6 +3876,12 @@ def diagnose(case):
         result['measurement'] = bp.failed('measurement', exc)
         flags.append('MEASUREMENT_SECTION_FAILED')
     flags.extend(result['measurement'].get('flags') or [])
+    # SPEC19 package 13: foil gauge control by speed and entry tension (opt-in, beside the
+    # gaugemeter section; evidence-neutral; its bites in the friction screen's own cache)
+    result['foil_gauge_control'] = _foil_gauge_control(
+        eff, result, bite, bite_error, stand, local_sens, trib, _roll_freqs(eff, u_op, ctx.slip))
+    flags.extend(f for f in (result['foil_gauge_control'].get('flags') or [])
+                 if f not in flags)
 
     if bite is not None:
         fpw_case = bite.separating_force_n / eff['pass']['width_m']

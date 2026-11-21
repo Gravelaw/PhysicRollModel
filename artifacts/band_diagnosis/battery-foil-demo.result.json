@@ -780,6 +780,11 @@
     "WIDTH_COUPLING_KERNEL_REPORTED",
     "ZONE_STEP_TEST_EMULATED"
   ],
+  "foil_gauge_control": {
+    "not_supplied": true,
+    "reason": "foil_gauge_control is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "foil_regime": {
     "below_bite_model_floor": {
       "case_pass_below_floor": false,
@@ -4505,6 +4510,7 @@
         600000.0
       ]
     },
+    "foil_gauge_control": null,
     "gauge_control": {
       "bandwidth_hz": 25.0,
       "compensation_gain": 0.9,

@@ -1369,6 +1369,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
+| `foil_gauge_control` (`gap_mode` required: `"constant_force"`, `"position"` or `"supplied_modulus"` with `effective_mill_modulus_n_m`; `kiss_stiffness_n_m`; `gauge_distance_m`, `gauge_time_constant_s` (or from `measurement.thickness_gauge`), `tension_loop_bandwidth_hz`, `tension_trim_limit_fraction` required; `integral_crossover_rad_s`, `smith_predictor`, `speed.ramp_limit_m_s2`; `provenance` required) | foil gauge control by speed and entry tension beside the gaugemeter section: sensitivities at constant force and constant tension and the tool's own loop (section 9.5) | –, N/m, m, s, Hz, –, rad/s, m/s² | the distance from the roll gap to the thickness gauge and its response time; the tension loop's bandwidth and how far the entry tension may be trimmed (controller documentation); the speed ramp limit; the roll-to-roll stiffness is not known (Phase 3) |
 | `width_model.span_alignment` (`entry_span`, `exit_span`: each null or `misalignment_m_per_m` 0 to 0.1, `taper_radius_difference_m` 0 to 1e-3, `roller_radius_m` (default `deflector_roll_radius_m`), `roller` {`outer_diameter_m`, `wall_thickness_m`, `face_length_m`, `youngs_modulus_pa`, `wrap_angle_rad`}; `provenance` required) | the lateral stress that roller misalignment and taper put into the span, for the trough and roller-wrinkle screens; the roller deflection as beam quantities only (section 7.2) | m/m (a survey reading of 0.5 mm/m is 0.0005), m, Pa, rad | roller alignment survey in mm per metre (laser tracker or optical survey of the deflector, idler and coiler rollers); taper from the roller grinding report (radius difference across the strip width) |
 | `width_model.coil_winding.ironing_roll` (`load_per_width_n_m`, `traction_coefficient`), `.air` (`mode`, `viscosity_pa_s`); `width_model.deflector_roll_roughness_rq_m`; `width_model.coil_thermal` (`surface_htc_w_m2k`, `ambient_temperature_k`, `strip_conductivity_w_mk`, `gap_medium`, `interlayer_gap_m`, `hold_times_s`, `provenance`) | the ironing roll and air in the coil (the two bounds of the nip effect), traction on the deflector roll, and the coil temperature after winding against the published coil limits (section 7.15) | N/m, –, m, W/m2K, K, W/mK, m, s | ironing-roll load from the coiler set-up; coil surface temperature against time with a contact probe after winding; the traction coefficient and the surface coefficient are assumptions unless measured |
 | `width_model.coil_winding` (`radial_law` required, `provenance` required; `core_stiffness_pa`, `lane_width_m`, `layers`, `tension_taper`, `thickness_profile`, `include_length_profile`, `air_gap_m`, `allocation_radius`) | the coil wound lane by lane beside the present criterion (section 7.15) | Pa, m, – | the stack law from a press test on 50 to 200 laps of the oily foil (pressure against strain); winding tension and taper from the coiler set-up; no stack value for aluminium foil is published |
@@ -3710,6 +3711,11 @@ and without bite damping, so no speed-consistent critical speed is given (fixed 
 0.03: 13.85 m/s, beta 0.5; 5.16 m/s, beta 0). Before the fix those slow scan speeds fell back
 to the mattress model and gave 13.30 and 8.79 m/s, mixing the two bite models.
 
+The same placeholder slope sets the speed effect on foil gauge, `dh/du = g_mu*dmu/du` at
+constant force and constant tension (section 9.5): -3.8 % of gauge per m/s on the battery-foil
+case pass; the number is what the closure implies, not a mill's speed effect, and neither
+closure's speed slope has been checked against a mill.
+
 ### 8.5 Friction from load, torque and forward slip
 
 `measurement.pass_records` (case schema v2, null by default; no demo has records) takes 1 to 8
@@ -3811,7 +3817,9 @@ The results never change hypothesis evidence.
 > **Not for foil passes.** Gaugemeter control acts through roll force and an open gap. At foil
 > gauge the gauge is controlled by speed and tension [TM-LC18 VP]. Do not read this section
 > for passes below the closed-gap onset (section 3.2); the result carries `foil_regime_note`
-> on the gauge-control section there (SPEC17 X7).
+> on the gauge-control section there (SPEC17 X7). Gauge control by speed and entry tension is
+> [section 9.5](#95-foil-gauge-control-by-speed-and-tension-foil_gaugepy) (opt-in, SPEC19
+> package 13).
 
 **Gaugemeter AGC** [V: BISRA gaugemeter `h = S + F/M`, correction `dS = -alpha*dF/M`, IJCA
 9(2); cylinder closed-loop bandwidth 20-30 Hz, Scheidl et al. 2016, Karl et al. 2011]. The
@@ -3880,12 +3888,96 @@ slope; `dF/dmu` is a central difference (+-2 % of the friction) through the bite
 operating bite model, as for `dF/dY`. In the demo both sensitivities report
 `sensitivity_bite_model` `derived_slab_hitchcock`. Demo (`gauge_control.speed_change_gauge_shift`, 6 -> 12 m/s): placeholder friction
 0.0829 -> 0.0765, force -242 kN, exit gauge -4.68 um with AGC, -14.2 um without; the
-absolute friction values are placeholders (8.1).
+absolute friction values are placeholders (8.1). At foil gauge the speed effect at constant
+force and constant tension is in section 9.5 (`foil_gauge_control.speed`).
 
 Not modelled: the cylinder as anything but a first-order loop, AGC monitor / feed-forward /
 mass-flow AGC, eccentricity compensation, tension regulators between the two idealisations,
 motor and drive control loops, gear backlash, strip elastic recovery, thermal effects, roll
 bending and cross-width variation.
+
+### 9.5 Foil gauge control by speed and tension (`foil_gauge.py`)
+
+Status `UNVALIDATED_FOIL_GAUGE_LOOP_ANALYST_CONTROL_LAW`; opt-in (case section
+`foil_gauge_control`, SPEC19 package 13, gaps C1 and BT-G13); evidence-neutral. The
+gaugemeter section above describes gauge control by roll force at an open roll gap and stays as
+it is; this section describes the gauge steered by entry tension and speed, the actuators at
+foil gauge [TM-LC18 VP; TM-LC19 AB; TM-LA36 EX], and says so in `regime`.
+
+**Sensitivities** [D, re-derived in SPEC19]. Static force balance of the linearised bite with
+two extra inputs, `dF = F_h*dh + F_hin*dh_in + F_se*ds_e + F_sx*ds_x + F_mu*dmu + F_Y*dY`,
+against the structure `dF = M_eff*(dh - dS) + K_kiss*dh`; with `den = M_eff + K_kiss - F_h`,
+`g_X = dh/dX = F_X/den` and `dh/dS = M_eff/den`. `M_eff` is 0 for a mill run at constant strip
+force (`gap_mode: "constant_force"`), the stand's mill modulus for position control
+(`"position"`), or an entered value (`"supplied_modulus"`); both standard modes are always
+printed side by side. `K_kiss` stands for the stiffness of the roll-to-roll contact outside
+the strip at a closed gap: the model has **no closed-gap load path** (roll kiss is Phase 3,
+gap BT-G2), so `kiss_stiffness_n_m` is an input, zero when not given (flag
+`KISS_STIFFNESS_NOT_MODELLED_ZERO_USED` in or below the closed-gap onset range). What this
+section may claim about closed gap is only this: the sensitivities at constant force and
+constant tension of the open-gap foil bite. `F_mu` and `F_Y` come from the bite model actually
+selected (analytic derivatives of the reduced half-space bite, else central differences of the
+operating bite model; `sensitivity_bite_model`, `sensitivity_basis`), and the bite's flags are
+repeated in the section. Battery-foil case pass (mattress bite of the demo; mill modulus
+2.3077e9 N/m, strip modulus 8.8665e10 N/m, `dh/dS` 0.0254):
+
+| sensitivity | constant strip force | position control |
+|---|---|---|
+| `dh/ds_e` | -5.4948e-14 m/Pa (-0.183 % of gauge per MPa) | -5.3555e-14 |
+| `dh/ds_x` | -8.5384e-14 m/Pa | -8.3218e-14 |
+| `dh/dmu` | 6.9569e-4 m (0.696 % per 1 % friction) | 6.7804e-4 |
+| `dh/dY` | 1.5110e-13 m/Pa (0.881 % per 1 % flow stress) | 1.4727e-13 |
+| `dh/dh_in` | 0.4397 | 0.4286 |
+
+**Speed and oil temperature.** `dh/du = g_mu*dmu/du + g_Y*Y*m/u`, with `dmu/du` the mean
+slope of the friction closure's speed curve (`process.friction_speed_curve`, needs
+`tribology`) and `m` the rate sensitivity of `hardening.rate_temperature` (else the rate term
+is 0); `dh/dT_oil = g_mu*dmu/dLambda*Lambda*(-beta)` (section 7.8). The speed effect rests
+entirely on how friction falls with speed: by default that slope is the placeholder closure's,
+which is fitted to no mill, or the load-sharing closure's with the contact friction you enter;
+neither has been checked against a mill. The result says this in plain words beside the number
+(`speed.words`, flag `SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE`). On the battery-foil case
+pass the placeholder slope -0.0016462 per m/s gives -1.145e-6 m per m/s, -3.8 % of gauge per
+m/s: what this closure implies, not this mill's speed effect.
+
+**The loop** [D, SPEC19: analyst design; the sources give the structure, no gains or
+equations]. Exit gauge -> integral entry-tension trim (fast, limited to
+`tension_trim_limit_fraction` of the entry tension) -> speed (slow, at most
+`speed.ramp_limit_m_s2`, while the trim is held at its limit). Per unit of gauge error, without
+limits, `L(s) = (w_c/s)*1/(1 + s/w_T)*G_gauge(s)*exp(-s*theta)`, `theta =
+gauge_distance_m/u_exit`, `w_T = 2*pi*tension_loop_bandwidth_hz`, `G_gauge` the thickness-gauge
+transfer of section 11.6 (`band_sensors.gauge_transfer`: the first-order lag, and the spot
+average when `measurement.thickness_gauge` describes the gauge), `w_c` entered or
+`0.5/(theta + tau_g + 1/w_T)` (about 60 degrees). `S = 1/(1 + L)` is the gauge error left of a
+disturbance; with `smith_predictor` and a perfect model `S = 1 - T0*exp(-s*theta)`,
+`T0 = L0/(1 + L0)`, `L0` without the delay and `w_c = 0.5/(tau_g + 1/w_T)`. Margins, the band
+the loop reduces and the peak of `|S|` from a scan of 1200 frequencies (1 % resolution;
+bisection-refined values beside). Three numbers the plant must supply: where the gauge is
+(`gauge_distance_m`), how fast it reads (`gauge_time_constant_s`, under 10 ms [TM-LC24 VP]),
+and how fast and how far the tension can be trimmed (`tension_loop_bandwidth_hz`,
+`tension_trim_limit_fraction`). Battery-foil case pass, gauge 1.5 m at 13 m/s, 10 ms, tension
+loop 5 Hz (assumed): `theta` 0.1154 s, `w_c` 3.180 rad/s (0.506 Hz), phase margin 61.4
+degrees, gain margin 3.34 at 10.08 rad/s; `|S| < 1` below 0.521 Hz; peak 1.565 at 1.132 Hz.
+**Finding 8**: at the entry coil's once-per-revolution frequency (7.8 m/s, 1.0 m: 2.483 Hz) the
+loop amplifies a tension ripple 1.123 times (a 20 s time run: 1.13); a ripple from 0.1 mm of
+coil run-out (93966 Pa, SPEC19 package 14, an input here) gives 0.0172 % gauge ripple open loop,
+0.019 % with the loop (`foil_gauge.tension_ripple_gauge`). A 1 % entry gauge step (0.5 um)
+gives 0.2199 um at the exit at first, within 5 % after 0.54 s with 4 % overshoot without
+limits, and needs 4.00 MPa of trim, 114 % of a 10 % limit on 35 MPa: the trim saturates.
+Time runs: explicit steps `dt = min(1 ms, theta/40)` for 20 s; statuses `SETTLED`,
+`TRIM_SATURATED_HELD_BY_SPEED`, `TRIM_SATURATED_ERROR_REMAINS`, `OSCILLATING`,
+`NOT_SETTLED_WITHIN_HORIZON`; settings with phase margin at or below 0 (or gain margin at or
+below 1) are reported as `UNSTABLE_LOOP_SETTINGS` with the crossover frequency and not run.
+The result also gives the gauge error left at the roll, coil and chatter-onset frequencies and
+rows for a 1 % entry gauge, 1 % flow stress, 1 % friction, 1 K oil and a 10 % speed change
+(open-loop gauge change, trim needed and its share of the limit, the speed change that would
+replace it). Report: block "Gauge control by speed and tension" after the gaugemeter block,
+which then points to it.
+
+Not modelled: a closed-gap load path; decoupling, adaptive and feed-forward control and any
+vendor's controller; reels, spans and run-out (package 14); a speed slope of friction measured
+on a mill. Benchmark: `BT-G13-SPEED-EFFECT` is a reference record (the BT-V4 speed curves
+[BT-S3 EX] are not digitised; section 13).
 
 ## 10. Thin-gauge roll bite
 
@@ -4025,6 +4117,7 @@ recorded only; the case verdict is unchanged):
 | `SS-V2-LOCAL-PLATE` | half-wave [m], simply supported / clamped | 0.149457 / 0.0995553 | 0.06 measured (FT) | 2.49095 / 1.65926 | `INDICATIVE_ASSUMED_INPUTS` |
 | `SS-V2-WIDE-STRIP` | half-wave / mode width (10 %), 10 / 30 MPa | 0.803347 / 0.805223 | 0.4 measured (FT) | 2.00837 / 2.01306 | `RECORDED_DISCREPANCY` (critical peak 12.3003 / 27.2209 I-units against 7.5 and half-waves, `INDICATIVE_ASSUMED_INPUTS`; section 7.13) |
 | `SS-V3-WIDE-STRIP` | half-wave / mode width (10 %), 5 / 15 MPa | 0.796932 / 0.810249 | 0.357 measured (FT) | 2.23141 / 2.2687 | `RECORDED_DISCREPANCY` (section 7.13) |
+| `BT-G13-SPEED-EFFECT` | load ratio between 10 and 40 m/s, foil 50 -> 25 um | - | up to 40 (model output, BT-S3 EX) | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` (curves not digitised; section 9.5) |
 | `SS-V14` | measured / isolated-span critical misalignment, aluminium foil; copper low / high | - | 15; 7 / 10 (measurement, SS-S55 EX) | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` (quoted beside the critical misalignments, section 7.2; `SS-V15` not encoded: critical values not quoted in the reports) |
 | `TM-LC7`* | equivalent Coulomb friction | 0.0265664 | - (substitution 2) | - | `NO_REFERENCE_VALUE` |
 | `TM-LC7`* | separating force [N] | 4.10437e6 | - | - | `NO_REFERENCE_VALUE` |
@@ -4508,7 +4601,7 @@ the quarter-barrel note and the heat-partition / spray sensitivity table; since 
 under the inputs table on the basis of the spray coefficient ("The two are not on the same
 basis", with the jet-zone equivalent when `spray_wetted_arc_rad` is given) and a "Fire limits"
 table (or "Fire limits not checked: no flash point given"). The width section prints the
-wide-foil note under the tension-trough table below 100 um; since SPEC19 package 12 the table has two more columns (the lateral compression from the roller alignment and the critical misalignment for troughs in mm/m, "no alignment survey" without one) and, for each span with a survey, one line with the misalignment, the taper and its equivalent angle, the critical misalignments, the roller deflection (beam quantities, no stress derived), the foil factor and, with a supplied plant stress, the comparison of the two. A v2 report has a section **"What a
+wide-foil note under the tension-trough table below 100 um; since SPEC19 package 12 the table has two more columns (the lateral compression from the roller alignment and the critical misalignment for troughs in mm/m, "no alignment survey" without one) and, for each span with a survey, one line with the misalignment, the taper and its equivalent angle, the critical misalignments, the roller deflection (beam quantities, no stress derived), the foil factor and, with a supplied plant stress, the comparison of the two. Since SPEC19 package 13 the section "Gauge control, drive and incoming variation" has, when the case has `foil_gauge_control`, the block **"Gauge control by speed and tension"** after the gaugemeter block (which then ends with a pointer to it): the regime sentence, the bite model, sensitivity basis and friction closure, the sensitivity table for both gap modes (with percent of gauge), the speed effect with its basis in plain words, the loop line (dead time, crossover, margins, attenuation band, peak), the gauge error left at the roll, coil and chatter frequencies, the disturbance table with the trim needed and whether it saturates, the step response and the limitations; without the section nothing is printed. A v2 report has a section **"What a
 shapemeter would show"** right after the width section (section 7.6): the set-up sentence, a
 chart of the zone readings of the steady profile (bars) over the fine model profile (line) with
 the threshold (dashed) and the nozzles (ticks), a table per profile (band position, model peak,
@@ -4657,6 +4750,7 @@ real mill.
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
 | ironing roll, air, coil temperature / `tests/test_wound_roll.py` (`CoilTemperature`), `tests/test_band_coil_temperature.py`; allocation sensitivity / `tests/test_band_coil_winding.py` | series and parallel conductivities (7.63 and 0.415 W/mK); slab alone and cylinder alone against their lumped limit at small Biot number (2 %); the product against an independent 2-D solve (1 %); monotone cooling; nip tension and its cap; the demo coil's entrained film; a per-layer air gap softens the stack; in the engine the two air bounds (the entrained case softer), the coil temperature with and without package 1, limit rows with their sources, absent keys and `thermal_check` unchanged, report, validation; the softest stack's 1 um lane not decided, the verdict rules |
 | lateral stress in spans (SPEC19 package 12) / `tests/test_strip_shape.py` (`SpanLateralStressTests`), `tests/test_band_foil.py` (`SpanAlignmentEvidenceTests`), `tests/test_benchmarks.py` | the beam solution meets its four conditions and `V = 2*E*I*theta/a^2`; every worked number of section 7.2 to its quoted digit and 1e-4 against the closed forms; `theta_cr` inserted forward returns the threshold (1e-9); taper equals a misalignment `m*a`; small-shear limit `-tau^2/sigma_x`; roller deflection beam quantities; flags, foil factor, limitations, rejections. In the engine: 1 mm/m on the exit span gives `TROUGHS_EXPECTED` and the item `SUPPORTS` weak (one point), 0.1 mm/m `NEUTRAL`, a supplied plant stress gives the branches of before with the computed value compared beside it, without the key every result identical; report columns and lines; validation messages in mm per metre; `SS-V14` reference only (factors 15 and 7-10), `SS-V15` not encoded |
+| foil gauge control (SPEC19 package 13) / `tests/test_foil_gauge.py` | the sensitivity table of section 9.5 (1e-4) from the committed battery-foil bite; an infinite mill modulus gives `dh/dS -> 1` and every `g_X -> 0`; a kiss stiffness lowers every `g_X`; signs; the rate term; the loop numbers (1e-3), `|S|` 1.123 at the entry coil frequency, the tension-ripple input (0.0172 %); `S -> j*w/w_c` at low frequency; the pure delay-integrator margins against their closed forms; the Smith identity at zero delay; the gauge transfer equals `band_sensors`; a time run equals the frequency response for a sinusoid (2 %); the step response (0.54 s, 4 %, 4.00 MPa), the trim clip, speed relief; unstable settings reported and not run. Engine: section present with the bite model and closure named, absent key identical, hypotheses and bite derivations unchanged, unstable settings, report block only with the section, v1 results not supplied with byte-identical HTML, validation; `tests/test_benchmarks.py`: `BT-G13-SPEED-EFFECT` reference only |
 | winding by lanes / `tests/test_band_coil_winding.py` | allocation: uniform lanes get the mean (1e-9), force balance (1e-9), a longer lane less, slack, yield cap and plastic strain; a uniform profile reproduces the single-lane model; the planner's table with the layer-top allocation; the specification's mid-layer values pinned; orderings (factor below 1, tension stops rising for soft stacks, softer stack smaller factor); the engine section beside the linear criterion; absent key changes nothing; report; validation; flag sentences |
 | winding model / `tests/test_wound_roll.py` | the closed form (radial stress within 0.5 % at 100 layers and 0.12 % at 400 at four radii; first-layer hoop within 2 and 0.5 MPa); first-order convergence (error ratio 200 -> 400 layers 1.7-2.3); outer and core conditions of the increment (1e-9); a soft core lowers the core pressure; a softer stack lowers the inner pressure and the lowest hoop stress (5.779 MPa, -2.98 MPa at `E_t/100`); the Pfeiffer modulus rises with pressure; air layer (no gap equals no air, a gap softens, it closes under pressure); taper; the film constant 0.6430 and the two films (1e-3); the stack law required with the press-test message; rejections; JSON safety |
 | spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
@@ -4680,6 +4774,12 @@ guide's own list.
 
 - **No plant validation.** Synthetic, uncalibrated stand, spans, bite, thermal and shape
   parameters; every demo's observations were generated from the model.
+- **Foil gauge control: an analyst loop on open-gap sensitivities** (SPEC19 package 13, C1,
+  BT-G13). The sensitivities are those of the open-gap foil bite at constant force and constant
+  tension; the model has no closed-gap load path, and the kiss stiffness is an input. The speed
+  effect follows the friction closure's speed slope (placeholder by default), which has not been
+  checked against a mill: `dh/du` is not a mill's speed effect. The loop is the tool's own
+  structure, not the plant's controller.
 - **Lateral stress in spans: misalignment and taper only** (SPEC19 package 12, G11). The
   stress computed from `width_model.span_alignment` is a beam model of an isolated span; roller
   deflection is reported as beam quantities with no stress derived from it, and a tension drop

@@ -188,6 +188,9 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-DYN-07 | The pitch-against-speed law separates kinematic families only, not the source within a family; coil-locked pitches drift with coil diameter and can mimic other laws; speeds within 5 % give no law. | Observations from different coil positions can mislead. | `signatures.pitch_speed_exponent` | marks at clearly different speeds | limitation |
 | L-DYN-08 | Bearing and gear frequencies are nominal kinematics without rolling-element slip. | Measured defect frequencies typically deviate by a percent or two. | `signatures` | measured bearing frequencies | limitation |
 
+| L-DYN-09 | Foil gauge control by speed and entry tension (a case option, beside the gaugemeter section): the gauge sensitivities are those of the open-gap foil bite at constant force (or position) and constant tension, from the bite model actually selected; the model has no closed-gap load path, the roll-to-roll (kiss) stiffness is an input and zero when not given. | At the battery-foil case pass 1 MPa of entry tension moves the gauge by 0.18 % and 1 % friction by 0.70 % at constant force; whether these hold at a closed gap is not known. | `GAUGE_SET_BY_STRIP_NOT_BY_GAP`, `KISS_STIFFNESS_NOT_MODELLED_ZERO_USED`; `foil_gauge_control.sensitivities` | a closed-gap load path (G2, BT-G2, Phase 3); gauge, tension and speed logs at 100 Hz | limitation |
+| L-DYN-10 | The speed effect on gauge rests entirely on how friction falls with speed: by default the placeholder friction closure's slope, or the load-sharing closure's with an entered contact friction; neither slope has been checked against a mill. The rate term of the flow stress enters only with a rate law. | -3.8 % of gauge per m/s on the battery-foil case pass with the placeholder slope; another slope gives another number, of either size. | `SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE`; `foil_gauge_control.speed` | load and gauge against speed at constant tension on the plant (BT-G13) | limitation |
+| L-DYN-11 | The gauge loop is the tool's own structure (integral entry-tension trim, first-order tension loop, transport delay, the gauge's transfer, speed relief at the ramp limit while the trim is held at its limit, optional Smith predictor with a perfect model), not a vendor's controller: no decoupling, adaptive or feed-forward scheme. The crossover rule and the status thresholds are analyst choices; unstable settings are reported with their frequency and not run. A tension ripple is an input; reels, spans and run-out are not modelled here. | With the rule and a 5 Hz tension loop the loop reduces disturbances below about 0.5 Hz and amplifies them up to 1.57 times near 1.1 Hz: the entry coil's once-per-revolution ripple of the demo mill (2.5 Hz) is amplified 1.12 times. | `FOIL_GAUGE_LOOP_SIMULATED`, `LOOP_AMPLIFIES_COIL_FREQUENCY`, `TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE`, `UNSTABLE_LOOP_SETTINGS`; `foil_gauge_control.loop`, `step_response` | the plant's controller structure, gains, trim limits and gauge time constant (C1) | analyst choice |
 ### 2.10 Roll grinding and roll surface
 
 | id | what the tool assumes or cannot do | what it means for a reader | how the result shows it | what would lift it | kind |
@@ -265,6 +268,9 @@ These are the results whose answer, not only whose size, turns on something nobo
   two bounds.
 - **The fitted step-test constant** (L-LOOP-07, L-HEAT-09): it grows with the test length, so it
   says nothing about the plant until the plant's test length and display filter are known.
+- **The speed effect on foil gauge** (L-DYN-10): `dh/du` follows the friction closure's speed
+  slope, which nobody has measured on a mill (the placeholder by default, or the load-sharing
+  closure with an entered contact friction); the gauge loop's speed relief inherits it.
 
 ## 4. Analyst choices
 
@@ -335,6 +341,11 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `LOCAL_RELEASED_WIDTH_FACTOR` | 2 | after-release local mode | the local buckle's width limit (L-SHAPE-04) | not reported |
 | `SPAN_TENSION_STIFFENING_LIMIT` | 0.5 | lateral stress in spans | the tension-stiffening parameter `K*a` above which the beam model of a span is flagged (0.19-0.21 in the demos) | sets the flag only (L-COIL-13) |
 
+| `CROSSOVER_RULE_FACTOR` | 0.5 | foil gauge loop | integral crossover `w_c = 0.5/(theta + tau_g + 1/w_T)` when none is entered (about 60 degrees phase margin) | 61.4 degrees, 1.57 peak amplification on the battery-foil case pass (L-DYN-11) |
+| `TIME_STEP_MAX_S` | 1 ms (and at most a fortieth of the dead time) | foil gauge loop time run | explicit step | numerical (the time run equals the frequency response within 0.5 % for a sinusoid) |
+| `SETTLED_FRACTION` | 5 % | foil gauge loop time run | "settled": within 5 % of the first value for the last 5 s | the status word only (L-DYN-11) |
+| `OSCILLATING_FRACTION` | 20 % | foil gauge loop time run | "oscillating": last 5 s peak-to-peak above 20 % of the first value | the status word only (L-DYN-11) |
+| `GAUGE_SET_BY_STRIP_LIMIT` | 0.1 | foil gauge sensitivities | `dh/dS` below which the strip, not the gap, sets the gauge | sets the flag only (L-DYN-09) |
 Not caught by the search:
 
 | constant | value | where used | stands in for | sensitivity |
@@ -377,7 +388,7 @@ Not caught by the search:
 ## 5. Recorded discrepancies with published values
 
 <!-- BEGIN GENERATED BLOCK: discrepancies (python -m physicroll.limitations --write docs/limitations.md; do not edit by hand) -->
-The benchmark harness records 118 project values in 27 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 27 record a project value for which no published value exists. The other 85 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
+The benchmark harness records 119 project values in 28 cases. 6 carry the verdict "within the agreement band" (project / reference 0.9 to 1.1); 27 record a project value for which no published value exists. The other 86 are listed here, including rows whose ratio lies inside the band but whose verdict qualifies the comparison (numbers to four significant digits).
 
 | case | quantity | unit | project | reference | ratio | verdict | in plain words |
 |---|---|---|---|---|---|---|---|
@@ -466,6 +477,7 @@ The benchmark harness records 118 project values in 27 cases. 6 carry the verdic
 | SS-V14 | `aluminium_foil_factor` | 1 | - | 15 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
 | SS-V14 | `copper_foil_factor_low` | 1 | - | 7 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
 | SS-V14 | `copper_foil_factor_high` | 1 | - | 10 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
+| BT-G13-SPEED-EFFECT | `load_ratio_10_to_40_m_s` | 1 | - | 40 | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` | published value only; inputs not recorded |
 
 Cases not encoded, with the reason:
 
@@ -516,7 +528,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B5 | Particles and pinholes. | 3 |
 | B6 | Elastic data and yield for the strip's elastic zones. | 3 |
 | B7 | Recovery of the foil in the coil after rolling. | 3 |
-| C1 | Foil gauge control by speed and entry tension at closed gap, with transport delay. | 2 |
 | C2 | Tension dynamics of spans and reels: regulators, coil eccentricity, coil-on-span resonance. | 2 |
 | C3 | Chatter beyond the linear screen: roll-gap damping from a dynamic model, film dynamics, limit cycles. | 3 |
 | C5 | Torsional self-excitation and drive loops. | 3 |
@@ -531,7 +542,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | BT-G9 | Roughness transfer and asperity flattening (imprint, lay, grinding marks). | 3 |
 | BT-G10 | Thick-film surface effects: oil pits, hydropitting. | 3 |
 | BT-G11 | Boundary film, additives, transfer layer, pick-up, fines. | 3 |
-| BT-G13 | The speed effect on gauge and load at closed gap. | 2 |
 | BT-G14 | Doubled (pack) rolling. | 3 |
 | BT-G15 | Elastic strip zones, recovery, tangential roll displacement. | 3 |
 | BT-G16 | Hardening, rate and temperature inside the foil roll gap. | 3 |
@@ -553,6 +563,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B2 | Parameter sets per alloy group; a recovery term. |
 | B3 | Alloy-group parameters inside a hardening law. |
 | B4 | An anisotropic yield law in the roll gap. |
+| C1 | A closed-gap load path; decoupling, adaptive or feed-forward control; the plant's controller; reels and run-out. |
 | C4 | The amplitude of grinder marks on foil rolls; marks as a forced-response and wear problem. |
 | C7 | The accelerometer position and detection lead time; gauge filters beyond a spot and a lag. |
 | G3 | Lateral metal flow and a strip-element model across the width; a non-uniform entry profile; finite spans; the roll stack and closed gap; which lateral hold at the roll gap is right. |
@@ -574,6 +585,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | BT-G7 | The film formula itself and the friction closure behind it. |
 | BT-G8 | The film-collapse test. |
 | BT-G12 | The inlet meniscus position; lateral spreading, carry-over and wipers. |
+| BT-G13 | A closed-gap load path; a speed slope of friction checked on a mill; the BT-V4 curves. |
 | BT-G17 | Two benchmark cases not encoded; the half-space model the main foil discrepancy calls for as the default. |
 
 ## 7. How this register is kept
@@ -645,6 +657,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `FLATNESS_LOOP_TRIMMING_LIMIT_CYCLE` | In this simulation the valves keep stepping by small amounts while the zone error stays small. | L-LOOP-05 |
 | `FLOW_STRESS_FROM_HARDENING_LAW` | The flow stresses come from the hardening law, not from the values typed in. | L-MAT-04 |
 | `FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED` | The flow stress of every pass was multiplied by your strain-rate and temperature factor; the measured rate sensitivity stops five decades below rolling rates. | L-MAT-01 |
+| `FOIL_GAUGE_LOOP_SIMULATED` | The gauge loop by entry tension and speed was simulated; it is the tool's own loop, not the plant's controller. | L-DYN-11 |
 | `FOOTPRINT_PROFILE_STAND_IN` | Each nozzle cools more in the middle of its fan than at its edges; the shape used is a stand-in, because no measured fan profile is published. | L-HEAT-13 |
 | `FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE` | The fans overlap more than nozzle makers recommend (1.1 to 1.5 nozzle pitches); a blocked nozzle is smoothed more than on such a header. | L-HEAT-14 |
 | `FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE` | Some sensitivities come from the tool's roll-gap model, not from the supplied values. | L-BITE-18 |
@@ -659,6 +672,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `FRICTION_STRIPE_SCREEN_APPLIED` | The page shows how much a local difference in friction across the width would mark the strip, as a rough linear estimate; it does not change the scores. | L-SHAPE-12 |
 | `GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK` | The thickness gauge keeps less than half of at least one mark spacing you saw. | L-MEAS-04 |
 | `GAUGE_NOT_DETECTED_BUT_MARK_NOT_RESOLVABLE` | You saw no gauge variation, but the gauge could not show these marks anyway, so that answer tells little; the scores were not changed. | L-MEAS-05 |
+| `GAUGE_SET_BY_STRIP_NOT_BY_GAP` | A change of the roll gap setting moves the gauge by less than a tenth of itself: the strip, not the gap, sets the gauge here. | L-DYN-09 |
 | `GAUGE_TRANSFER_APPLIED` | The page shows about how much of each mark the thickness gauge you described keeps (spot size and response time only). | L-MEAS-04 |
 | `GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA` | The mark pitch fits no simple count of marks around the work roll, but it would fit a pattern left by a vibrating grinder; without the grinder's speeds that cannot be ruled out. | L-GRIND-02 |
 | `HALF_SPACE_REGIME_CONVENTIONAL` | The half-space model finds the strip sliding over the whole contact (sheet range). | informational |
@@ -671,6 +685,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `KERNEL_CLOSURES_DISAGREE_IN_SIGN` | Depending on how the strip is assumed to be held at the roll gap, the second estimate changes sign: the tension effect is not known even in direction for one of the assumptions. | L-SHAPE-19 |
 | `KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE` | The second estimate gives less than half the tension effect the standard level uses, so the band would be larger than shown by the standard level. | L-SHAPE-19 |
 | `KERNEL_STEADY_STATE_NOT_DEFINED` | For at least one assumption about how the strip is held at the roll gap the second estimate has no steady answer. | L-SHAPE-19 |
+| `KISS_STIFFNESS_NOT_MODELLED_ZERO_USED` | At this gauge the work rolls may touch outside the strip; that contact is not modelled and was taken as zero. | L-DYN-09 |
 | `LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE` | None of the modelled lengthwise bands passes under the thickness gauge. | L-MEAS-04 |
 | `LIGHT_REDUCTION_ELASTIC_STRIP_ZONES_NOT_MODELLED` | The reduction is light (below 10 %), where the short elastic zones the model leaves out matter more. | L-BITE-09 |
 | `LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE` | Somewhere across the width the friction changes by more than a fifth; the straight-line estimate built on it is then rough. | L-SHAPE-14 |
@@ -682,6 +697,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED` | The parts are added on the straight-line flatness profile; a band that buckles is not capped there. | L-SHAPE-14 |
 | `LOCAL_STATE_COMPUTED` | The oil film, friction, metal strength and strip temperature across the width were worked out as differences from a healthy spray header; they change no other result. | L-SHAPE-13 |
 | `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE` | The roll surface temperature used for the oil and the strip is the average around the roll, not the value just before the roll gap. | L-SHAPE-13 |
+| `LOOP_AMPLIFIES_COIL_FREQUENCY` | The simulated gauge loop makes a once-per-revolution disturbance of a coil larger, not smaller. | L-DYN-11 |
 | `LOW_ORDER_FLATNESS_LEFT_TO_BENDING_NOT_MODELLED` | The smooth overall shape (mean, slope, curve) is left to bending and tilt, which the tool does not model. | L-LOOP-02 |
 | `LUDERS_STRAIN_NOT_SUPPLIED_ZERO_USED_IN_WINDOWS` | No yield-point strain was given, so zero is used in the bending check. | L-MAT-09 |
 | `MATERIAL_NOT_STATED_LITERATURE_PROPOSAL_SHOWN` | Alloy and temper are a suggestion from the literature, not the plant's statement. | L-MAT-07 |
@@ -728,6 +744,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `SIGNATURES_SECTION_FAILED` | The mark-spacing checks could not be computed. | L-DATA-10 |
 | `SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE` | The span is shorter than the strip is wide, so the beam model of the lateral stress from the roller alignment is indicative only. | L-COIL-13 |
 | `SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE` | In the lateral stress from the roller alignment the span is long and tense enough that tension stiffening, which the beam model leaves out, is not small. | L-COIL-13 |
+| `SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE` | The speed effect on gauge comes from a placeholder friction law that is not fitted to any mill. | L-DYN-10 |
 | `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE` | The spray cooling value is an average around the roll; the published value is an average over the sprayed patch of one cooling zone, so the two are not comparable. | L-HEAT-03 |
 | `SPRAY_FLOW_EXPONENT_APPLIED` | The cooling of a nozzle was taken to fall less than its flow (flow to a power below one), as published for water sprays and one oil simulation. | L-HEAT-15 |
 | `STEADY_STATE_NOT_CONVERGED` | The roll temperature model did not fully settle. | L-HEAT-01 |
@@ -744,10 +761,12 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `STRIP_THICKNESS_SPRING_NOT_IN_PUBLISHED_MODEL` | The half-space model lets the strip compress a little under the roll; the published model does not. It raises the roll force by a few per cent. | L-BITE-07 |
 | `SUPPLIED_BITE_SENSITIVITIES_NOT_VERIFIED` | The roll-gap values were supplied from outside and are not checked by the tool. | L-DATA-03 |
 | `SYNTHETIC_INPUTS` | The inputs are synthetic or typical values, not your mill's measured values. | L-DATA-01 |
+| `TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE` | Correcting a 1 % entry gauge change by tension alone would need more than the allowed tension trim. | L-DYN-11 |
 | `THERMAL_CHECK_FAILED` | The process-temperature check could not be computed. | L-DATA-10 |
 | `THERMAL_SENSITIVITY_FAILED` | The heat-share sensitivity table could not be computed. | L-DATA-10 |
 | `THERMAL_SENSITIVITY_PER_PASS_FAILED` | The per-pass heat-share table could not be computed. | L-DATA-10 |
 | `THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN` | The pass is thinner than the range the sheet roll-gap model was reviewed for. | L-BITE-01 |
+| `UNSTABLE_LOOP_SETTINGS` | The entered gauge-loop settings are unstable; the loop was not simulated. | L-DYN-11 |
 | `USER_SUPPLIED_INPUTS_NOT_VERIFIED` | The values were entered by a person and have not been checked by the tool. | L-DATA-03 |
 | `WIDTH_COUPLING_KERNEL_REPORTED` | Beside the standard flatness levels, the page shows a second estimate of how much the strip tension holds a band down, from a model of how the strip is held across the width; the shortlist uses the standard level. | L-SHAPE-19 |
 | `WIDTH_SECTION_PARTIAL_FAILURE` | Part of the across-the-width model could not be computed. | L-DATA-10 |

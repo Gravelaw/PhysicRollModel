@@ -91,7 +91,7 @@ CASE_IDS = ('BT-V1', 'BT-V2-R89', 'BT-V2-R135', 'BT-V3-FIG1-140UM', 'BT-V3-EQ29'
             'BT-G3-FILM-E6-T42', 'BT-V4-FILM', 'A9-PRESSURE-LAWS-KEROSINE',
             'BT-G3-CRUSHING-LAWS', 'BT-V2-FRICTION-HS', 'TM-LA19-HEAT-SPLIT',
             'TM-LA8-SPRAY-FIT', 'SS-V8-LOOP', 'A6-ZONE-TIME-CONSTANT',
-            'SS-V2-LOCAL-PLATE', 'SS-V2-WIDE-STRIP', 'SS-V3-WIDE-STRIP', 'SS-V14')
+            'SS-V2-LOCAL-PLATE', 'SS-V2-WIDE-STRIP', 'SS-V3-WIDE-STRIP', 'SS-V14', 'BT-G13-SPEED-EFFECT')
 RECORDED_ON = '2026-11-19, commit 8f10cbe'
 RECORDED_ON_SPEC18_P1 = '2026-11-20, on commit dc1145a (SPEC18 package 1)'
 RECORDED_ON_SPEC18_P4 = '2026-11-20, on commit ec2d7b4 (SPEC18 package 4)'
@@ -1256,6 +1256,26 @@ def _ss_v14_foil_factor():
                  ['INPUTS_NOT_RECORDED'])
 
 
+# ------------------------------------- speed effect on foil gauge (SPEC19 package 13)
+def _bt_g13_speed_effect():
+    """Reference record only: the published speed effect on a foil pass (load ratio up to 40
+    between 10 and 40 m/s, model results) is in figure curves that are not digitised, so the
+    project's dh/du at constant force and tension is not compared."""
+    q = [_quantity('load_ratio_10_to_40_m_s', '1', None, None, 40.0,
+                   'upper end of the load ratio between 10 and 40 m/s, aluminium foil 50 -> 25 '
+                   'um (MODEL_OUTPUT, BT-V4 [BT-S3 EX], Figs 6-7)',
+                   row_verdict='REFERENCE_ONLY_INPUTS_NOT_RECORDED')]
+    notes = ['foil_gauge.speed_sensitivity gives dh/du at constant force and constant tension '
+             'from the selected bite and the friction closure\'s speed slope; the published '
+             'curves of load and slip against speed are not digitised and the friction '
+             'distribution through the bite is not modelled: nothing to run, no comparison.']
+    return _case('BT-G13-SPEED-EFFECT', 'Speed effect on a foil pass (reference only)',
+                 'Sutcliffe & Montmitonnet (2001), Table I, Figs 6-7 [BT-S3 EX]', 'BT-S3', 'EX',
+                 'MODEL_OUTPUT', {}, notes, q, 'REFERENCE_ONLY_INPUTS_NOT_RECORDED',
+                 'Reference only: the speed curves are not digitised; the project value is '
+                 'not computed for this case.', ['INPUTS_NOT_RECORDED'])
+
+
 # ------------------------------------------------ flatness loop (SPEC19 package 4, G5)
 SS_V8_PUBLISHED_BAND_I_UNITS = 6.0    # "within 6 I-units around a 30 I-unit target at steady
 #                                       speed", 2 x 6.5 um foil [SS-S31 EX; MEASUREMENT]
@@ -1479,7 +1499,8 @@ _CASES = {'BT-V1': _bt_v1, 'BT-V2-R89': lambda: _bt_v2('BT-V2-R89', 0.089),
           'TM-LA8-SPRAY-FIT': _tm_la8_spray_fit, 'SS-V8-LOOP': _ss_v8_loop,
           'A6-ZONE-TIME-CONSTANT': _a6_zone_time_constant,
           'SS-V2-LOCAL-PLATE': _ss_v2_local_plate, 'SS-V2-WIDE-STRIP': _ss_v2_wide_strip,
-          'SS-V3-WIDE-STRIP': _ss_v3_wide_strip, 'SS-V14': _ss_v14_foil_factor}
+          'SS-V3-WIDE-STRIP': _ss_v3_wide_strip, 'SS-V14': _ss_v14_foil_factor,
+          'BT-G13-SPEED-EFFECT': _bt_g13_speed_effect}
 
 
 def run_case(case_id: str) -> dict:
