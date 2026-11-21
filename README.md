@@ -73,9 +73,10 @@ updates the shortlist and shows what changed. The result is a screening shortlis
 that has not been compared with plant data, and its trust level stays low until your own mill
 values are entered. One optional entry point in step 3 groups what else you may have (a
 flatness roll, a thickness gauge, a strip temperature scan, a grinder report, pass records, oil
-data, a known friction difference, the spray layout around the roll, model choices), and the
-result shows one card for each, saying what it would show (for example what each shapemeter zone
-would read, or which friction your logged force corresponds to). See
+data, the spray nozzles, a flatness control or zone step test, the coil and its cooling, a
+roller alignment survey, gauge control and coil run-out, model choices), and the result shows
+its cards under one heading per group, saying what each would show (for example what each
+shapemeter zone would read, or which friction your logged force corresponds to). See
 [the band app guide](docs/band-app.md).
 
 ### Use it on your own case

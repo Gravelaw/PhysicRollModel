@@ -76,7 +76,7 @@ class Phase1AnswersTest(unittest.TestCase):
             self.assertEqual(bd.validate_case(again)[k], bd.validate_case(c)[k], k)
         st = bpl.addon_status(c)
         self.assertEqual(st['pass_records']['summary'], '2 records')
-        self.assertEqual(st['roll_cooling']['summary'], '1 spray band placed')
+        self.assertEqual(st['sprays']['summary'], '1 spray band placed')
         self.assertEqual(st['model_choices']['summary'], 'speed and temperature factor')
 
     def test_dont_know_clears_the_sections(self):
@@ -112,7 +112,8 @@ class Phase1SummaryTest(unittest.TestCase):
                 self.assertIn(x, engine, f'{v}: {x}')
         ids = [c['id'] for c in s['addon_cards']]
         self.assertEqual(ids, ['shapemeter', 'hotcold', 'records', 'friction', 'rollsurface',
-                               'flowstress', 'heatshare', 'rollgap'])
+                               'flowstress', 'heatshare', 'rollgap', 'loop', 'steptest',
+                               'stepfit', 'hotstripe', 'transfer'])
         for c in s['addon_cards']:
             self.assertTrue(c['takeaway'] and c['how_to_read'] and c['text_alternative'])
             if c['chart']:

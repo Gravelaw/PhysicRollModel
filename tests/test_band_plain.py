@@ -271,7 +271,10 @@ def reader_texts(summary, path='summary'):
 TECH_TERMS = ('I-unit', 'film ratio', 'forward slip', 'heat share', 'half-space model',
               'standard foil model', 'exit-tension feedback', 'compliance', 'flow stress',
               'contact friction', 'shapemeter', 'thermal camber', 'flatness roll zone',
-              'strain rate', 'Roelands', 'Eyring', 'mattress', 'Hitchcock', 'heat partition')
+              'strain rate', 'Roelands', 'Eyring', 'mattress', 'Hitchcock', 'heat partition',
+              'control zone', 'dwell time', 'valve dead band', 'step test', 'inlet weight',
+              'wound-in tension', 'stack stiffness', 'compaction factor', 'ironing roll',
+              'run-out', 'tension trim', 'wave height', 'transfer level')
 
 
 def glossary_problems(found):
@@ -592,10 +595,12 @@ class AddonGroupTest(unittest.TestCase):
     def test_group_status_lines_come_from_the_built_case(self):
         p = preset('example_battery_foil')
         st = bpl.addon_status(bpl.case_from_answers(bpl.answers_from_case(p['case']), p))
-        self.assertEqual(st['flatness_roll'], {'filled': True, 'summary': '24 zones of 52 mm'})
+        self.assertEqual(st['flatness_roll'], {'filled': True, 'summary': '24 zones of 52 mm',
+                                               'needs': []})
         self.assertEqual(st['temperature_scan']['summary'], '25 points')
-        self.assertFalse(st['oil_data']['filled'])           # the default pressure rule
-        self.assertEqual(st['model_choices'], {'filled': False,
+        self.assertEqual(st['oil_data']['summary'], 'oil and metal across the width')  # not
+        # the default pressure rule: the example carries the oil and metal across the width
+        self.assertEqual(st['model_choices'], {'filled': False, 'needs': [],
                                                'summary': 'standard choices'})
         self.assertEqual(set(st), {g[0] for g in bpl.ADDON_GROUPS})
 
@@ -690,7 +695,8 @@ class CardPatternTest(unittest.TestCase):
                     self.assertIn(m['group_title'], more['text'])
         battery = bpl.plain_summary(artifact('battery-foil-demo'))
         self.assertEqual([c['id'] for c in battery['addon_cards']],
-                         ['shapemeter', 'hotcold', 'friction'])
+                         ['shapemeter', 'hotcold', 'friction', 'heatshare', 'loop', 'steptest',
+                          'stepfit', 'hotstripe'])
         # the heat-share and roll-gap results exist in every foil run, but their cards wait for
         # their group: a person who uses no add-on sees no new card
         self.assertIn('"Model choices"', battery['addon_more']['text'])
@@ -701,7 +707,8 @@ class CardPatternTest(unittest.TestCase):
         case['model_options']['bite_model'] = 'auto_half_space'
         ids = [c['id'] for c in
                bpl.plain_summary(artifact('battery-foil-demo'), case)['addon_cards']]
-        self.assertEqual(ids, ['shapemeter', 'hotcold', 'friction', 'heatshare', 'rollgap'])
+        self.assertEqual(ids, ['shapemeter', 'hotcold', 'friction', 'heatshare', 'rollgap',
+                               'loop', 'steptest', 'stepfit', 'hotstripe', 'transfer'])
         bearing = bpl.plain_summary(artifact('bearing-order-demo'))
         self.assertEqual(bearing['addon_cards'], [])
         self.assertIn('A thickness gauge', bearing['addon_more']['text'])
@@ -750,6 +757,74 @@ class CardPatternTest(unittest.TestCase):
         self.assertIn(f'give {round(hs["w_bar_printed_end_40_um"])} to '
                       f'{round(hs["w_bar_printed_end_2.5_um"])}', v['benchmark_text'])
         self.assertNotIn('0.7', v['benchmark_text'])          # no ratio is shown (SPEC18 risks)
+
+
+UNIT_WORDS = re.compile(r'I-units|no unit|°C|kPa|MPa|mm|µm|%|\btimes\b|\d s\b|\bs;|s\)|kN')
+
+
+class PolishTest(unittest.TestCase):
+    """Defects of the Phase 2 review that must not return."""
+
+    def test_yes_and_no_only_for_boolean_values(self):
+        # "the true shape" stays prose; "= true" becomes "yes"
+        self.assertEqual(bpl.words('front tension masks the true shape at foil gauge'),
+                         'front tension masks the true shape at foil gauge')
+        self.assertIn('= yes', bpl.words('worse_at_thinner_gauge = true'))
+        for name, r in all_results().items():
+            s = bpl.plain_summary(r)
+            raw = [line for line in r.get('recommended_next_measurements') or []]
+            for h in r['hypotheses']:
+                for e in h.get('evidence') or []:
+                    raw += [str(v) for v in e.values() if isinstance(v, str)]
+            for line in raw:
+                if not re.search(r'\b(true|false|True|False)\b', line):
+                    continue                     # only the boolean step is checked here
+                out = bpl.words(line)
+                for w in ('yes', 'no'):
+                    made = len(re.findall(rf'\b{w}\b', out, re.I)) - len(
+                        re.findall(rf'\b{w}\b', line.replace('_', ' '), re.I))
+                    booleans = len(re.findall(r'(^|[=:(]\s*)' + (
+                        '(true|True)' if w == 'yes' else '(false|False)') + r'\b', line))
+                    self.assertLessEqual(made, booleans, (name, line[:120]))
+
+    def test_every_range_tooltip_has_a_unit_and_a_meaning(self):
+        for name, r in all_results().items():
+            for c in bpl.plain_summary(r)['addon_cards']:
+                ch = c['chart']
+                if not ch or ch['type'] != 'range':
+                    continue
+                for row in ch['rows']:
+                    self.assertTrue(row['unit'] and row['meaning'], (name, c['id']))
+                    for p_ in row['points']:
+                        self.assertRegex(p_['tip'], UNIT_WORDS, (name, c['id'], p_['tip']))
+                        self.assertGreaterEqual(len(p_['tip'].split()), 4, p_['tip'])
+                for x in ch['references']:
+                    self.assertRegex(x['tip'], UNIT_WORDS, (name, c['id'], x['tip']))
+
+    def test_counts_and_words_come_from_the_data(self):
+        v = bpl.plain_summary(artifact('battery-foil-demo'))
+        t = [c for c in v['addon_cards'] if c['id'] == 'transfer']
+        if t:
+            n = len(v['feedback_check_view']['levels'])
+            self.assertIn({3: 'three', 4: 'four'}[n], t[0]['title'])
+        self.assertIn('ends up lower on the coil than its neighbours, not higher (factor -1.08)',
+                      bpl._winding_words(-1.0807, -1.0807))
+        self.assertNotIn('(the range', bpl._winding_words(-1.0807, -1.0807))
+        self.assertIn('builds up on the coil by 0.4 of its extra thickness',
+                      bpl._winding_words(0.4, 0.4))
+        self.assertIn('between 0.2 and 0.6', bpl._winding_words(0.2, 0.6))
+        for name, r in all_results().items():
+            s = bpl.plain_summary(r)
+            status = bpl.addon_status(r['inputs'])
+            for g in {m['group'] for m in s['addon_more']['items']}:
+                title = bpl.GROUP_TITLES[g]
+                if status[g]['filled']:          # a group in use is never listed as unused
+                    self.assertIn(f'further choices in "{title}"', s['addon_more']['text'])
+            for sec in s['addon_sections']:      # a heading's line is a result when it has one
+                cards = [c for c in s['addon_cards'] if c['id'] in sec['cards']]
+                if any(not c.get('left_out') for c in cards):
+                    first = [c for c in cards if not c.get('left_out')][0]
+                    self.assertEqual(sec['summary'], first['takeaway'], (name, sec['group']))
 
 
 class UnitTest(unittest.TestCase):

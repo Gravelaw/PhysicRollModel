@@ -65,6 +65,7 @@ import copy
 import json
 import math
 import re
+import types
 
 from . import band_diagnosis as bd
 from . import benchmarks as bbench
@@ -116,6 +117,10 @@ UNITS = {
     'kn': ('kN', 1e3, 1.0, 0.0), 'knm': ('kN·m', 1e3, 1.0, 0.0),
     'percent_per_k': ('% per K', 1.0, 100.0, 0.0), 'per_s': ('1/s', 1.0, 1.0, 0.0),
     'r_min': ('r/min', 1.0, 60.0, 0.0),
+    'l_min': ('l/min', 1.0, 6e4, 0.0), 'mm_per_m': ('mm/m', 1.0, 1e3, 0.0),
+    'kn_per_m': ('kN/m', 1e3, 1.0, 0.0), 'w_m2k': ('W/(m²·K)', 1.0, 1.0, 0.0),
+    'w_mk': ('W/(m·K)', 1.0, 1.0, 0.0), 'kg_m2': ('kg·m²', 1.0, 1.0, 0.0),
+    'm_s2': ('m/s²', 1.0, 1.0, 0.0), 'kpa': ('kPa', 1e3, 1.0, 0.0),
 }
 INTEGER_UNITS = ('count', 'nozzle_no')
 
@@ -1123,8 +1128,16 @@ PHASE1_QUESTIONS = (
 MEASUREMENT_SECTIONS = ('measurement.shapemeter', 'measurement.thickness_gauge')
 # optional sub-objects the add-on questions fill: all their questions "Don't know" -> null;
 # otherwise their required answers are needed and unanswered optional keys take the defaults
+PHASE2_SECTIONS = ('width_model.coil_winding.radial_law', 'width_model.coil_winding.ironing_roll',
+                   'width_model.span_alignment.entry_span', 'width_model.span_alignment.exit_span',
+                   'foil_gauge_control.speed', 'foil_gauge_control.reels.entry',
+                   'foil_gauge_control.reels', 'width_model.flatness_control',
+                   'width_model.zone_step_test', 'width_model.local_coupling',
+                   'width_model.coil_winding', 'width_model.coil_thermal',
+                   'width_model.span_alignment', 'foil_gauge_control')
 OPTIONAL_SECTIONS = MEASUREMENT_SECTIONS + ('hardening.rate_temperature',
-                                            'width_model.circumferential_layout')
+                                            'width_model.circumferential_layout') \
+    + PHASE2_SECTIONS
 # list questions stored as parallel arrays of one case object: key -> ({field: array}, defaults)
 PARALLEL_LISTS = {
     'width_model.strip_temperature': ({'position': 'positions_m', 'temperature': 'temperature_k'},
@@ -1139,6 +1152,188 @@ PARALLEL_LISTS = {
 # ============================================================================= add-on groups
 # What a person may have beyond the three steps, one group each (the owner's standing
 # requirement: grouped by what the person has, not by model). id, title, one-line help, questions.
+# ================================================================ Phase 2 inputs (SPEC19 pkg 15)
+# All optional, all "Don't know" by default, none ask-first, none moves the trust level. A
+# section whose questions are all unknown stays null; the stack law and the contact friction of
+# the second friction law have NO preset value: the question says what to measure.
+ZONE_SIZE_KEY = 'nozzles_per_valve'     # app-only key, turned into control_zone_nozzles
+VALVE_LEVELS = {'on_off': [0.0, 1.0], 'three': [0.0, 0.5, 1.0],
+                'five_percent': [round(i * 0.05, 2) for i in range(21)]}
+STACK_LAW_WORDS = {'constant': 'One stiffness at every pressure (from a press test)',
+                   'ratio_of_hoop_modulus': 'A fraction of the foil\'s own stiffness',
+                   'pfeiffer': 'Stiffening with pressure (two numbers from a press test)'}
+STACK_HELP = (' No measured value for oily aluminium foil was found: use your own press test '
+              'of a stack of your foil. Without it the coil is not computed lane by lane; the '
+              'tool never fills in a number.')
+FC_NEEDS = ' Needs a flatness roll (the loop reads its zones).'
+PHASE2_QUESTIONS = (
+    # the flatness control on the sprays, and a zone step test (both read the shapemeter)
+    _meas('valve_levels_kind', 'width_model.flatness_control.valve_levels', 'choice',
+          'How your spray valves are switched by the flatness control',
+          'From the flatness control settings: valves that are only on or off, valves with three '
+          'steps, or valves set in 5 % steps.' + FC_NEEDS,
+          choices=((VALVE_LEVELS['on_off'], 'On or off'),
+                   (VALVE_LEVELS['three'], 'Off, half or full'),
+                   (VALVE_LEVELS['five_percent'], 'In 5 % steps'))),
+    _meas('valve_min_on', 'width_model.flatness_control.minimum_on_time_s', 'number',
+          'Shortest time a valve stays on', 'From the valve or control settings (the dwell '
+          'time).', unit='s'),
+    _meas('valve_min_off', 'width_model.flatness_control.minimum_off_time_s', 'number',
+          'Shortest time a valve stays off', 'From the valve or control settings.', unit='s'),
+    _meas('flatness_dead_band', 'width_model.flatness_control.dead_band_i_units', 'number',
+          'Flatness error the control leaves alone (its dead band)',
+          'From the flatness control settings, in I-units.', unit='i_units'),
+    _meas('control_zone_size', 'width_model.flatness_control.' + ZONE_SIZE_KEY, 'number',
+          'Nozzles switched together by one valve',
+          'Leave it at "Don\'t know" when each nozzle has its own valve. The drawing shows the '
+          'valves as brackets over the nozzle row.', unit='count', lo_si=1, hi_si=12),
+    _meas('flatness_control_interval', 'width_model.flatness_control.control_interval_s',
+          'number', 'How often the flatness control acts',
+          'The control cycle time from the control settings (the tool uses 2 s if unknown).',
+          unit='s'),
+    _meas('shapemeter_distance', 'width_model.flatness_control.shapemeter_distance_m', 'number',
+          'Distance from the roll gap to the flatness roll',
+          'Measured along the strip. The reading then lags behind the roll gap by the time the '
+          'strip needs for it.', unit='m'),
+    _meas('flatness_display_filter', 'width_model.flatness_control.display_time_constant_s',
+          'number', 'Filter time of the flatness reading',
+          'From the shapemeter settings (0 if the reading is not filtered).', unit='s'),
+    _meas('step_test_nozzles', 'width_model.zone_step_test.nozzle_indices', 'numbers',
+          'A test you ran: the nozzles of the spray zone you closed',
+          'Nozzle numbers (1 = first nozzle). The tool then shows what the flatness roll would '
+          'read when that zone is closed, and the response time a fit would give.' + FC_NEEDS,
+          unit='nozzle_no', unknown='empty'),
+    _meas('step_test_hold', 'width_model.zone_step_test.hold_s', 'number',
+          'How long the zone stayed closed', 'From the test record.', unit='s'),
+    _meas('step_test_filter', 'width_model.zone_step_test.display_time_constant_s', 'number',
+          'Filter time of the flatness reading during the test',
+          'From the shapemeter settings at the time of the test.', unit='s'),
+    # the oil and the metal across the width (in the oil group)
+    _meas('inlet_weight', 'width_model.local_coupling.inlet_roll_temperature_weight', 'number',
+          'How much the roll warms the oil entering the roll gap',
+          '0 = the oil enters at the strip temperature, 1 = at the roll temperature. Nobody '
+          'has measured it; the tool shows both ends of the range beside its result.',
+          unit='ratio', lo_si=0.0, hi_si=1.0),
+    _meas('softening_per_kelvin', 'width_model.local_coupling.'
+          'flow_stress_temperature_coefficient_per_k', 'number',
+          'How much softer your foil gets per degree warmer',
+          'From tensile tests of your alloy at two temperatures (published: about 0.15 % per K '
+          'for a 1100 alloy, derived from two strengths).', unit='percent_per_k'),
+    _meas('oil_flow_per_nozzle', 'width_model.local_coupling.oil_flow_per_nozzle_m3_s', 'number',
+          'Oil flow of one spray nozzle', 'From the spray header data or the pump flow divided '
+          'by the number of nozzles.', unit='l_min'),
+    # the coil: build-up, stack press test, ironing roll, cooling
+    _meas('stack_law_kind', 'width_model.coil_winding.radial_law.kind', 'choice',
+          'How stiff a stack of your foil is (from a press test)',
+          'Press a stack of your foil, as it comes off the mill, and record how much it '
+          'compresses.' + STACK_HELP,
+          choices=_choices(('constant', 'ratio_of_hoop_modulus', 'pfeiffer'), STACK_LAW_WORDS)),
+    _meas('stack_modulus', 'width_model.coil_winding.radial_law.radial_modulus_pa', 'number',
+          'Stiffness of the stack', 'From your press test.' + STACK_HELP, unit='mpa',
+          show_if=('stack_law_kind', ('constant',))),
+    _meas('stack_ratio', 'width_model.coil_winding.radial_law.ratio', 'number',
+          'How many times softer the stack is than the foil itself',
+          'From your press test.' + STACK_HELP, unit='ratio', lo_si=1.0,
+          show_if=('stack_law_kind', ('ratio_of_hoop_modulus',))),
+    _meas('stack_k1', 'width_model.coil_winding.radial_law.k1_pa', 'number',
+          'Press test: the pressure scale of the stiffening', 'From your press test.'
+          + STACK_HELP, unit='kpa', show_if=('stack_law_kind', ('pfeiffer',))),
+    _meas('stack_k2', 'width_model.coil_winding.radial_law.k2', 'number',
+          'Press test: how fast the stack stiffens', 'From your press test.' + STACK_HELP,
+          unit='ratio', show_if=('stack_law_kind', ('pfeiffer',))),
+    _meas('core_stiffness', 'width_model.coil_winding.core_stiffness_pa', 'number',
+          'Stiffness of the winding core', 'From the core maker; leave it unknown for a steel '
+          'core (taken as rigid).', unit='gpa'),
+    _meas('winding_taper', 'width_model.coil_winding.tension_taper', 'list',
+          'Winding tension against coil size (taper)',
+          'From the winder settings: the winding tension at two or more coil radii.',
+          fields=(Field('radius_m', 'Coil radius', unit='mm'),
+                  Field('tension_pa', 'Winding tension', unit='mpa'))),
+    _meas('ironing_roll_load', 'width_model.coil_winding.ironing_roll.load_per_width_n_m',
+          'number', 'Load of the ironing roll on the coil', 'From the winder settings: the '
+          'force per metre of roll width.', unit='kn_per_m'),
+    _meas('ironing_roll_traction', 'width_model.coil_winding.ironing_roll.traction_coefficient',
+          'number', 'Friction between the ironing roll and the foil',
+          'Not published for foil; 0.1 is a common first guess.', unit='ratio'),
+    _meas('coil_surface_htc', 'width_model.coil_thermal.surface_htc_w_m2k', 'number',
+          'How fast the coil surface gives off heat',
+          'About 5 to 15 for a coil standing in still air (a textbook range).', unit='w_m2k'),
+    _meas('coil_ambient', 'width_model.coil_thermal.ambient_temperature_k', 'number',
+          'Temperature where the coil stands', 'The hall or store temperature.', unit='degc'),
+    _meas('strip_conductivity', 'width_model.coil_thermal.strip_conductivity_w_mk', 'number',
+          'Heat conductivity of your alloy', 'From the alloy data sheet (about 220 for '
+          'aluminium of the 1xxx series).', unit='w_mk'),
+    _meas('coil_gap_medium', 'width_model.coil_thermal.gap_medium', 'choice',
+          'What fills the gap between the laps', 'Rolling oil, or air in a dry coil.',
+          choices=(('oil', 'Rolling oil'), ('air', 'Air'))),
+    _meas('coil_gap', 'width_model.coil_thermal.interlayer_gap_m', 'number',
+          'Gap between the laps', 'About the roughness of the foil; leave unknown only when the '
+          'winding above is computed with air.', unit='um'),
+    # a roller alignment survey
+    _meas('entry_misalignment', 'width_model.span_alignment.entry_span.misalignment_m_per_m',
+          'number', 'Entry side: misalignment of the roller before the mill',
+          'From your last alignment survey, in mm per metre of roller length.',
+          unit='mm_per_m'),
+    _meas('entry_taper', 'width_model.span_alignment.entry_span.taper_radius_difference_m',
+          'number', 'Entry side: difference in roller radius from end to end',
+          'From the survey or a diameter check of the roller.', unit='um'),
+    _meas('entry_roller_radius', 'width_model.span_alignment.entry_span.roller_radius_m',
+          'number', 'Entry side: roller diameter', 'From the drawing.', unit='mm_dia'),
+    _meas('exit_misalignment', 'width_model.span_alignment.exit_span.misalignment_m_per_m',
+          'number', 'Exit side: misalignment of the roller after the mill',
+          'From your last alignment survey.', unit='mm_per_m'),
+    _meas('exit_taper', 'width_model.span_alignment.exit_span.taper_radius_difference_m',
+          'number', 'Exit side: difference in roller radius from end to end',
+          'From the survey or a diameter check of the roller.', unit='um'),
+    _meas('exit_roller_radius', 'width_model.span_alignment.exit_span.roller_radius_m',
+          'number', 'Exit side: roller diameter', 'From the drawing.', unit='mm_dia'),
+    # gauge control and coil run-out
+    _meas('gap_mode', 'foil_gauge_control.gap_mode', 'choice',
+          'How the roll gap is held on this pass',
+          'From the mill\'s gauge control: constant rolling force, or a held gap position.',
+          choices=(('constant_force', 'Constant rolling force'),
+                   ('position', 'Held gap position'),
+                   ('supplied_modulus', 'With a mill stiffness I enter'))),
+    _meas('gauge_distance', 'foil_gauge_control.gauge_distance_m', 'number',
+          'Distance from the roll gap to the thickness gauge', 'Measured along the strip.',
+          unit='m'),
+    _meas('gauge_response', 'foil_gauge_control.gauge_time_constant_s', 'number',
+          'Response time of the gauge signal used by the control',
+          'Leave it unknown when you described the thickness gauge above.', unit='ms'),
+    _meas('tension_loop_bandwidth', 'foil_gauge_control.tension_loop_bandwidth_hz', 'number',
+          'How fast the entry tension follows its set value', 'From the tension controller '
+          'settings (its bandwidth).', unit='hz'),
+    _meas('tension_trim_limit', 'foil_gauge_control.tension_trim_limit_fraction', 'number',
+          'Largest tension trim the gauge control may use', 'As a share of the set tension.',
+          unit='percent'),
+    _meas('smith_predictor', 'foil_gauge_control.smith_predictor', 'yesno',
+          'Does the gauge control allow for the gauge distance (a Smith predictor)?',
+          'From the control description.'),
+    _meas('speed_ramp_limit', 'foil_gauge_control.speed.ramp_limit_m_s2', 'number',
+          'Fastest speed change the gauge control may ask for', 'From the drive settings.',
+          unit='m_s2'),
+    _meas('reel_coil_radius', 'foil_gauge_control.reels.entry.coil_radius_m', 'number',
+          'Entry coil: diameter at the start', 'Of the coil being unwound.', unit='mm_dia'),
+    _meas('reel_core_radius', 'foil_gauge_control.reels.entry.core_radius_m', 'number',
+          'Entry coil: core diameter', 'Of the coil being unwound.', unit='mm_dia'),
+    _meas('reel_motor_inertia', 'foil_gauge_control.reels.entry.motor_inertia_kg_m2', 'number',
+          'Entry reel: motor and mandrel inertia', 'From the drive data sheet.', unit='kg_m2'),
+    _meas('reel_runout', 'foil_gauge_control.reels.entry.runout_m', 'number',
+          'Entry coil: run-out', 'How far the coil surface moves in and out per turn, from a '
+          'dial gauge.', unit='mm'),
+    _meas('reel_regulator', 'foil_gauge_control.reels.entry.regulator', 'choice',
+          'Entry reel: does a tension regulator act on the reel?', 'From the drive settings.',
+          choices=(('none', 'No'), ('direct', 'Yes'))),
+    _meas('reel_regulator_bandwidth', 'foil_gauge_control.reels.entry.regulator_bandwidth_hz',
+          'number', 'Entry reel: how fast the tension regulator acts',
+          'From the drive settings (its bandwidth).', unit='hz',
+          show_if=('reel_regulator', ('direct',))),
+    _meas('ripple_pitches', 'foil_gauge_control.ripple_pitches_m', 'numbers',
+          'Gauge ripple pitches you measured', 'Distances between gauge marks along the strip, '
+          'from the gauge record.', unit='mm', unknown='empty'),
+)
+
+
 ADDON_GROUPS = (
     ('flatness_roll', 'A flatness roll (shapemeter)',
      'Zone width and count of your flatness roll: the result then shows what each zone would '
@@ -1160,22 +1355,44 @@ ADDON_GROUPS = (
     ('pass_records', 'Pass records (force, torque, slip)',
      'Logged rolling force, torque or forward slip: the result shows which friction each one '
      'corresponds to.', ('pass_records',)),
-    ('oil_data', 'Oil data',
-     'Oil laboratory data beyond the basic oil values: viscosity at several temperatures, '
-     'high-pressure behaviour, flash point and site limits.',
+    ('oil_data', 'Oil data and the oil film across the width',
+     'Oil laboratory data, how the oil and the metal respond to a hot roll stripe, and a place '
+     'where the oil film is known to differ: the result shows what each would do across the '
+     'width.',
      ('oil_viscosity_table', 'oil_pressure_law', 'oil_roelands_z', 'oil_eyring_stress',
       'oil_eyring_coefficient', 'oil_limiting_shear', 'oil_limiting_shear_coefficient',
-      'oil_flash_point', 'oil_supply_temperature_cap')),
-    ('friction_difference', 'A known friction difference across the width',
-     'A place where the oil film or roll surface is known to differ: the result shows the band '
-     'it could make.', ('friction_stripes',)),
-    ('nozzle_sheet', 'A nozzle data sheet',
-     'The fan pattern, the pattern width along the roll and how cooling follows flow, from '
-     'the nozzle maker\'s data sheet: the result then uses them for the spray header.',
-     ('nozzle_fan_pattern', 'nozzle_pattern_width', 'nozzle_flow_exponent')),
-    ('roll_cooling', 'How the roll is cooled around its circumference',
-     'Where around the roll the sprays hit: the result shows the roll surface temperature '
-     'within one turn.', ('spray_wetted_arc', 'spray_arcs')),
+      'oil_flash_point', 'oil_supply_temperature_cap', 'inlet_weight', 'softening_per_kelvin',
+      'oil_flow_per_nozzle', 'friction_stripes')),
+    ('sprays', 'The spray nozzles: data sheet and where they hit the roll',
+     'The nozzle maker\'s data (fan pattern, pattern width, how cooling follows flow) and '
+     'where around the roll the sprays hit: the header drawing and the roll surface within one '
+     'turn use them.',
+     ('nozzle_fan_pattern', 'nozzle_pattern_width', 'nozzle_flow_exponent', 'spray_wetted_arc',
+      'spray_arcs')),
+    ('flatness_control', 'A flatness control on the sprays, or a zone step test',
+     'How the flatness control switches the spray valves, or a test with one zone closed: the '
+     'result shows what such a loop would do and the response time a test would give.',
+     ('valve_levels_kind', 'valve_min_on', 'valve_min_off', 'flatness_dead_band',
+      'control_zone_size', 'flatness_control_interval', 'shapemeter_distance',
+      'flatness_display_filter', 'step_test_nozzles', 'step_test_hold', 'step_test_filter')),
+    ('coil', 'The coil: build-up, stack press test, ironing roll, cooling',
+     'How the coil is wound, how stiff a stack of your foil is, the ironing roll and how the '
+     'coil cools: the result shows the coil lane by lane and its temperature.',
+     ('stack_law_kind', 'stack_modulus', 'stack_ratio', 'stack_k1', 'stack_k2',
+      'core_stiffness', 'winding_taper', 'ironing_roll_load', 'ironing_roll_traction',
+      'coil_surface_htc', 'coil_ambient', 'strip_conductivity', 'coil_gap_medium', 'coil_gap')),
+    ('alignment', 'A roller alignment survey',
+     'Misalignment and taper of the rollers before and after the mill: the result shows the '
+     'sideways stress they put into the strip.',
+     ('entry_misalignment', 'entry_taper', 'entry_roller_radius', 'exit_misalignment',
+      'exit_taper', 'exit_roller_radius')),
+    ('gauge_control', 'Gauge control and coil run-out',
+     'How gauge is held on this pass (tension and speed) and the run-out of the entry coil: '
+     'the result shows the gauge loop and the gauge ripple a coil makes.',
+     ('gap_mode', 'gauge_distance', 'gauge_response', 'tension_loop_bandwidth',
+      'tension_trim_limit', 'smith_predictor', 'speed_ramp_limit', 'reel_coil_radius',
+      'reel_core_radius', 'reel_motor_inertia', 'reel_runout', 'reel_regulator',
+      'reel_regulator_bandwidth', 'ripple_pitches')),
     ('model_choices', 'Model choices',
      'Leave these alone unless you want to compare models: which roll-gap model, which friction '
      'law, and a speed and temperature factor on the metal\'s strength. Each changes the '
@@ -1184,12 +1401,15 @@ ADDON_GROUPS = (
       'closure_valley_model', 'closure_contact_ratio_curve', 'closure_valley_film_curve',
       'interface_conductance', 'use_computed_heat_partition', 'rate_sensitivity',
       'rate_reference', 'temperature_softening', 'rate_reference_temperature',
-      'use_rate_temperature')),
+      'use_rate_temperature', 'buckling_model')),
 )
+# a group whose data needs another group says so in its line (instead of failing later)
+GROUP_NEEDS = {'flatness_control': ('flatness_roll',)}
 ADDON_BY_QUESTION = {q: g[0] for g in ADDON_GROUPS for q in g[3]}
 
 QUESTIONS = tuple(q.validate() for q in OBSERVATION_QUESTIONS + PASS_QUESTIONS + FAULT_QUESTIONS
-                  + MILL_QUESTIONS + MEASUREMENT_QUESTIONS + PHASE1_QUESTIONS)
+                  + MILL_QUESTIONS + MEASUREMENT_QUESTIONS + PHASE1_QUESTIONS
+                  + PHASE2_QUESTIONS)
 QUESTION_BY_ID = {q.id: q for q in QUESTIONS}
 if len(QUESTION_BY_ID) != len(QUESTIONS):
     raise RuntimeError('duplicate question id')
@@ -1197,6 +1417,7 @@ QUESTION_BY_KEY = {k: q for q in QUESTIONS for k in (q.key,) + q.also_keys}
 
 # nullable sub-objects the form may create when the starting point has none:
 # path -> (plain name, required keys, defaults)
+APP_PROV = {'provenance': 'entered in the band app'}
 SECTIONS = {
     'gauge_control': ('gauge control', ('compensation_gain', 'bandwidth_hz'),
                       {'force_filter_hz': None}),
@@ -1222,6 +1443,28 @@ SECTIONS = {
                                    {'mu_b': bt.FrictionClosure().mu_b,
                                     'mu_v': bt.FrictionClosure().mu_v,
                                     'lambda0': bt.FrictionClosure().lambda0}),
+    'width_model.flatness_control': ('the flatness control', ('valve_levels',
+                                     'minimum_on_time_s', 'minimum_off_time_s',
+                                     'dead_band_i_units'), APP_PROV),
+    'width_model.zone_step_test': ('the zone step test', ('nozzle_indices',), APP_PROV),
+    'width_model.local_coupling': ('the oil and metal across the width', (), APP_PROV),
+    'width_model.coil_winding': ('the coil build-up', ('radial_law',), APP_PROV),
+    'width_model.coil_winding.radial_law': ('the stack stiffness', ('kind',), {}),
+    'width_model.coil_winding.ironing_roll': ('the ironing roll', ('load_per_width_n_m',
+                                                                 'traction_coefficient'), {}),
+    'width_model.coil_thermal': ('the coil cooling', ('surface_htc_w_m2k',
+                                 'ambient_temperature_k', 'strip_conductivity_w_mk',
+                                 'gap_medium'), {'provenance': 'entered in the band app'}),
+    'width_model.span_alignment': ('the roller alignment', (), APP_PROV),
+    'width_model.span_alignment.entry_span': ('the entry roller', (), {}),
+    'width_model.span_alignment.exit_span': ('the exit roller', (), {}),
+    'foil_gauge_control': ('the gauge control', ('gap_mode', 'gauge_distance_m',
+                           'tension_loop_bandwidth_hz', 'tension_trim_limit_fraction'),
+                           {'provenance': 'entered in the band app', 'smith_predictor': False}),
+    'foil_gauge_control.speed': ('the speed limit', ('ramp_limit_m_s2',), {}),
+    'foil_gauge_control.reels': ('the reels', (), {}),
+    'foil_gauge_control.reels.entry': ('the entry coil', ('coil_radius_m', 'core_radius_m',
+                                       'motor_inertia_kg_m2', 'runout_m', 'regulator'), {}),
     'measurement': ('a flatness or gauge measurement', (),
                     {'shapemeter': None, 'thickness_gauge': None, 'pass_records': None}),
     'measurement.shapemeter': ('the shapemeter', ('zone_width_m', 'zone_count'),
@@ -1754,7 +1997,9 @@ def case_from_answers(answers, preset):
                   if f'{path}.{r}' in QUESTION_BY_KEY]
             raise AnswerError(f'To use {label}, also answer: ' + '; '.join(qs) + '.',
                               QUESTION_BY_KEY.get(f'{path}.{lack[0]}', QUESTIONS[0]).id)
+    _phase2_to_case(case)
     _tidy_optional(case, values)
+    _phase2_tidy(case)
     if case.get('hardening') is not None:
         law = case['hardening'].get('law')
         if law not in bproc.HARDENING_LAW_KEYS:
@@ -1817,14 +2062,79 @@ def _section_questions(path):
     return [q for q in QUESTIONS if q.key == path or q.key.startswith(path + '.')]
 
 
+STACK_LAW_KEYS = {'constant': ('radial_modulus_pa',), 'ratio_of_hoop_modulus': ('ratio',),
+                  'pfeiffer': ('k1_pa', 'k2')}
+
+
+def _nozzle_count(case):
+    w = case.get('width_model')
+    try:
+        return len(bw._header(w).nozzle_positions(w['roll']['barrel_length_m']))
+    except (TypeError, KeyError, ValueError):
+        return None
+
+
+def _phase2_to_case(case):
+    """The valve size (nozzles per valve) becomes the engine's groups of nozzle indices."""
+    fc = (case.get('width_model') or {}).get('flatness_control')
+    if isinstance(fc, dict) and ZONE_SIZE_KEY in fc:
+        n, count = fc.pop(ZONE_SIZE_KEY), _nozzle_count(case)
+        if n is not None and count:
+            n = int(n)
+            fc['control_zone_nozzles'] = [list(range(i, min(i + n, count)))
+                                          for i in range(0, count, n)]
+
+
+def _phase2_tidy(case):
+    """The stack law carries exactly the numbers of its kind (the engine checks the key set);
+    unanswered optional keys of the new sections are left out."""
+    law = ((case.get('width_model') or {}).get('coil_winding') or {}).get('radial_law')
+    if isinstance(law, dict):
+        need = STACK_LAW_KEYS.get(law.get('kind'), ())
+        lack = [k for k in need if law.get(k) is None]
+        if lack:
+            qid = QUESTION_BY_KEY[f'width_model.coil_winding.radial_law.{lack[0]}'].id
+            raise AnswerError('To use the stack stiffness, also answer: '
+                              + QUESTION_BY_ID[qid].wording + '. The tool never fills in a '
+                              'number for it.', qid)
+        for k in list(law):
+            if k != 'kind' and k not in need:
+                del law[k]
+    sa = (case.get('width_model') or {}).get('span_alignment')
+    for side in ('entry_span', 'exit_span'):
+        sp = sa.get(side) if isinstance(sa, dict) else None
+        if isinstance(sp, dict):
+            for k in [k for k, v in sp.items() if v is None]:
+                del sp[k]
+    fgc = case.get('foil_gauge_control')
+    if isinstance(fgc, dict) and not fgc.get('ripple_pitches_m'):
+        fgc['ripple_pitches_m'] = None
+    reels = (case.get('foil_gauge_control') or {}).get('reels')
+    if isinstance(reels, dict) and isinstance(reels.get('entry'), dict):
+        if reels['entry'].get('regulator_bandwidth_hz') is None:
+            reels['entry'].pop('regulator_bandwidth_hz', None)
+
+
+def _control_zone_size(case):
+    groups = ((case.get('width_model') or {}).get('flatness_control') or {}).get(
+        'control_zone_nozzles')
+    if not groups:
+        return None
+    n = len(groups[0])
+    flat = [i for g in groups for i in g]
+    if flat == list(range(len(flat))) and all(len(g) == n for g in groups[:-1]):
+        return n
+    return None
+
+
 def _tidy_optional(case, values):
     """An optional sub-object (a shapemeter, a thickness gauge, the speed and temperature factor,
     the spray layout around the roll, the roll scan) whose questions are all "Don't know" is not
     described: it becomes null (and ``measurement`` too when it is left empty). A described one
     needs its required answers; its unanswered optional keys take the engine defaults."""
     for path in OPTIONAL_SECTIONS:
-        parent_path, name = path.rsplit('.', 1)
-        parent = _get(case, parent_path)
+        parent_path, name = path.rsplit('.', 1) if '.' in path else ('', path)
+        parent = _get(case, parent_path) if parent_path else case
         if not isinstance(parent, dict) or not isinstance(parent.get(name), dict):
             continue
         sec = parent[name]
@@ -1872,6 +2182,7 @@ def answers_from_case(case):
         if q.origin_tracked and v is not None:
             origins[q.id] = noted.get(q.key, 'preset')
     _fold_nozzle_answers(case, values, origin)
+    values['control_zone_size'] = _control_zone_size(case)
     return {'name': case.get('name'), 'own_mill': not case.get('synthetic', True),
             'values': values, 'origins': origins}
 
@@ -2229,6 +2540,27 @@ def _side_model(case, edge, starting_point):
                 measured=counts['measured'], estimated=counts['estimated'])
 
 
+def _control_zone_layout(case):
+    """The spray valves of the flatness control as the engine groups them (its own grouping
+    function, ``band_width._fc_groups``), with the barrel positions of their nozzles; None
+    without a flatness control or a shapemeter (the engine then leaves the loop out)."""
+    w = case.get('width_model')
+    if not isinstance(w, dict) or not isinstance(w.get('flatness_control'), dict) or not (
+            (case.get('measurement') or {}).get('shapemeter')):
+        return None
+    try:
+        wn = bw.validate_width_model(w, case['pass'])
+        hdr = bw._header(wn)
+        pos = hdr.nozzle_positions(wn['roll']['barrel_length_m'])
+        th = types.SimpleNamespace(header=hdr, count=len(pos))
+        groups, basis = bw._fc_groups(wn['flatness_control'], th, wn)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return None
+    return {'basis': basis, 'valves': [{'number': k + 1, 'nozzle_numbers': [i + 1 for i in g],
+                                        'start_m': pos[g[0]], 'end_m': pos[g[-1]]}
+                                       for k, g in enumerate(groups)]}
+
+
 def drawing_model(case, starting_point=None):
     """Everything the page draws or states about a case, computed from the BUILT case the way
     the engine reads it: the spray header (positions, footprint, EFFECTIVE level per nozzle from
@@ -2283,6 +2615,7 @@ def drawing_model(case, starting_point=None):
     out['side'] = _side_model(case, edge, starting_point)
     out['shapemeter'] = _shapemeter_layout(case)
     out['addons'] = addon_status(case)
+    out['control_zones'] = _control_zone_layout(case)
     return out
 
 
@@ -2316,7 +2649,12 @@ PROFILES = {
                            'when the case does not set its own grid)',
                            'the fine roll-gap grid: 128 cells instead of 256 (foil roll-gap '
                            'models keep at least 200)',
-                           'the friction stripe estimate per pass; run in detail to see it']},
+                           'the friction stripe estimate per pass; run in detail to see it',
+                           'the wavelength search for waves (when it was switched on); run in '
+                           'detail to see it',
+                           'the effects of a hot stripe on the oil and the metal across the width '
+                           '(they need the fine roll-temperature grid); run in detail to see '
+                           'them']},
     'detailed': {'label': 'Detailed', 'description': 'The case as entered, with the engine\'s '
                  'own settings (slower: up to a few minutes).', 'left_out': []},
 }
@@ -2346,6 +2684,15 @@ def apply_profile(case, profile):
         if isinstance(fs, dict) and not fs.get('stripes'):
             w['friction_stripe_screen'] = None
             changed.append(PROFILES['quick']['left_out'][3])
+        # SPEC19 package 15: the wavelength search for waves is a detailed-run feature
+        if out['model_options'].get('buckling_model') == 'sine_mode_and_fe':
+            out['model_options']['buckling_model'] = 'sine_mode'
+            changed.append(PROFILES['quick']['left_out'][4])
+        # the hot-stripe effects need the fine roll-temperature grid: on the quick grid the
+        # engine reports them as not assessable; the case itself is not changed
+        if isinstance(w, dict) and isinstance(w.get('local_coupling'), dict) and \
+                w.get('numerics') == QUICK_NUMERICS:
+            changed.append(PROFILES['quick']['left_out'][5])
     return out, changed
 
 
@@ -3202,6 +3549,26 @@ FLAGS = {
 FLAG_FALLBACK = 'no plain description yet'
 
 GLOSSARY = {
+    'control zone': 'The nozzles one spray valve switches together.',
+    'dwell time': 'The shortest time a spray valve stays on or off once switched.',
+    'valve dead band': 'A flatness error small enough that the control leaves the valves alone.',
+    'step test': 'A plant test: one spray zone is closed for a while and the flatness reading '
+                 'is recorded to see how fast it responds.',
+    'inlet weight': 'How much of the roll temperature the oil has when it enters the roll gap '
+                    '(0 = strip temperature, 1 = roll temperature).',
+    'wound-in tension': 'The tension a lap keeps once it is wound into the coil.',
+    'stack stiffness': 'How hard a stack of foil laps is to press together; only a press test '
+                       'of your foil gives it.',
+    'compaction factor': 'How much of a thicker lane the coil packs into extra stretch of that '
+                         'lane (the standard coil check uses 0.5).',
+    'ironing roll': 'A roll pressed onto the coil while it is wound, to push air out.',
+    'run-out': 'How far a coil surface moves in and out once per turn.',
+    'tension trim': 'The small change of the entry tension a gauge control uses to correct the '
+                    'gauge.',
+    'wave height': 'The height of the waves a band would make, of the order of an upper '
+                   'estimate.',
+    'transfer level': 'How much of a roll stripe reaches the strip as a band; the estimates differ '
+                      'with how strongly strip tension hides the stripe.',
     'span': 'The free length of strip between the roll gap and the next roll.',
     'flatness roll zone': 'One measuring section of a flatness (shapemeter) roll across the '
                           'strip; it shows the average flatness over its width.',
@@ -3399,8 +3766,11 @@ def words(text, question_ids=()):
                           f'{TOKEN_WORDS.get(m.group(3), m.group(3))}'), t)
     t = re.sub(r'deflector_roll:(\d+)', lambda m: f'deflector roll {int(m.group(1)) + 1}', t)
     t = _SNAKE.sub(lambda m: _token(m.group(0), local), t)
-    t = re.sub(r'\b(true|True)\b', 'yes', t)
-    t = re.sub(r'\b(false|False)\b', 'no', t)
+    # booleans only (a value after "=" or ":"), never the word in prose ("the true shape")
+    t = re.sub(r'^(true|True)$|([=:(]\s*)(true|True)\b',
+               lambda m: (m.group(2) or '') + 'yes', t)
+    t = re.sub(r'^(false|False)$|([=:(]\s*)(false|False)\b',
+               lambda m: (m.group(2) or '') + 'no', t)
     t = re.sub(r'\b(LATENT|latent)\b', 'hidden under tension', t)
     t = re.sub(r'\b(MANIFEST|manifest)\b', 'visible', t)
     t = re.sub(r'\b([A-Z]{4,})\b', lambda m: m.group(1).lower(), t)
@@ -4289,6 +4659,319 @@ def _flow_stress_view(result):
                        'decades below rolling.')}
 
 
+# ============================================================================= Phase 2 views
+# Numbers from the result only; the loops are the tool's own control law; ranges are said as
+# ranges, "not decided" as not decided (docs/limitations.md part 3).
+LOOP_FIXED = ('The control law is this tool\'s own, not your system\'s.',
+              'The slow overall shape is left to bending and tilt, which the tool does not '
+              'model.')
+OUTCOME_WORDS = {'MADE': 'made', 'REMOVED': 'removed', 'REMAINS': 'remains', 'NONE': 'none'}
+HOT_STRIPE_LEFT_OUT = ('The quick run left out the effects of a hot stripe on the oil and the '
+                       'metal (they need the fine roll-temperature grid); run in detail to see '
+                       'them.')
+
+
+def _control_loop_view(result):
+    fc = (result.get('width') or {}).get('flatness_control')
+    if not _good(fc) or not isinstance(fc.get('valve_map'), dict):
+        return {'available': False}
+    ini, fin = fc.get('initial') or {}, fc.get('final') or {}
+    made = [z['zone'] + 1 for z in fc.get('bands_made_by_switching') or []
+            if z.get('outcome') == 'MADE']
+    removed = [z['zone'] + 1 for z in fc.get('zone_outcomes') or [] if z.get('outcome') ==
+               'REMOVED']
+    hist = fc.get('history') or {}
+    return {'available': True, 'status_text': clean(fc.get('status_sentence')),
+            'valve_changes': fc.get('valve_changes'), 'horizon_s': fc.get('horizon_s'),
+            'error_text': (f'The zone error went from {_f3(ini.get("max_abs_residual_i_units"))} '
+                           f'to {_f3(fin.get("max_abs_residual_i_units"))} I-units.'),
+            'zones_text': ('Zones where switching made a band: '
+                           + (', '.join(str(z) for z in made) or 'none') + '; zones where it '
+                           'removed one: ' + (', '.join(str(z) for z in removed) or 'none')
+                           + '.'),
+            'depends_text': ('Whether such a loop settles or keeps trimming depends on choices '
+                             'of the control law nobody has measured: how the zones are weighted '
+                             'and when the first valve change is allowed.'),
+            'end_text': clean(fc.get('end_state_note')),
+            'low_order_text': clean((fc.get('low_order') or {}).get('sentence')),
+            'fixed': list(LOOP_FIXED),
+            'valve_map': {'time_s': fc['valve_map']['time_s'],
+                          'levels': fc['valve_map']['levels']},
+            'error': {'time_s': hist.get('time_s') or [],
+                      'i_units': hist.get('max_abs_residual_i_units') or []}}
+
+
+STEP_SERIES_WORDS = {'roll_growth_only': 'roll growth alone',
+                     'roll_growth_plus_strip_temperature': 'with the strip temperature',
+                     'as_measured_hot': 'as the flatness roll reads it hot',
+                     'mechanical_net': 'the mechanical net'}
+
+
+def _step_test_view(result):
+    zt = (result.get('width') or {}).get('zone_step_test')
+    if not _good(zt) or not isinstance(zt.get('series'), dict):
+        return {'available': False}
+    ser = zt['series']
+
+    def fit(name, window):
+        for f in (ser.get(name) or {}).get('fits') or []:
+            if f.get('window_s') == window and f.get('status') == 'FITTED':
+                return f.get('time_constant_s')
+        return None
+    w0 = (zt.get('fit_windows_s') or [None])[0]
+    t1, t2 = fit('roll_growth_only', w0), fit('roll_growth_plus_strip_temperature', w0)
+    rows = []
+    for name in ('roll_growth_only', 'roll_growth_plus_strip_temperature', 'as_measured_hot'):
+        fits = [(f['window_s'], f['time_constant_s']) for f in (ser.get(name) or {}).get(
+            'fits') or [] if f.get('status') == 'FITTED']
+        if fits:
+            rows.append({'label': STEP_SERIES_WORDS[name], 'fits': [
+                {'window_s': a, 'time_constant_s': b} for a, b in fits]})
+    pub = (zt.get('published') or {}).get('time_constant_s')
+    return {'available': True,
+            'text': (f'A test of {_f3(w0)} s would show a response time of about {_f3(t1)} s '
+                     f'from roll growth alone and {_f3(t2)} s with the strip temperature '
+                     'included.') if t1 is not None and t2 is not None else clean(
+                zt.get('finding')),
+            'finding': clean(zt.get('finding')), 'not_evidence': clean(
+                zt.get('not_evidence_note')), 'published_s': pub, 'rows': rows,
+            'curves': [{'label': STEP_SERIES_WORDS[n], 'time_s': ser[n]['time_s'],
+                        'i_units': ser[n]['reading_i_units']}
+                       for n in ('roll_growth_only', 'roll_growth_plus_strip_temperature',
+                                 'as_measured_hot') if n in ser],
+            'hold_s': zt.get('hold_s'), 'window_s': w0}
+
+
+def _hot_stripe_view(result, case=None):
+    ls = (result.get('width') or {}).get('local_sources')
+    if not isinstance(ls, dict) or not isinstance(ls.get('at_bands'), list):
+        asked = ((case or {}).get('width_model') or {}).get('local_coupling')
+        if isinstance(ls, dict) and isinstance(asked, dict) and 'grid' in str(ls.get('reason')):
+            return {'available': False, 'left_out': True, 'text': HOT_STRIPE_LEFT_OUT}
+        return {'available': False}
+    rows = []
+    for b in ls['at_bands'][:3]:
+        if b.get('mechanical_net_at_weight_0_i_units') is None:
+            continue
+        edge = _strip_view(result).get('strip_start_m') or 0.0
+        rows.append({'label': f'band at {_mm_from(b["position_m"], edge)} mm',
+                     'low': min(b['mechanical_net_at_weight_0_i_units'],
+                                b['mechanical_net_at_weight_1_i_units']),
+                     'high': max(b['mechanical_net_at_weight_0_i_units'],
+                                 b['mechanical_net_at_weight_1_i_units']),
+                     'used': b['mechanical_net_i_units'], 'hot': b.get('as_measured_hot_i_units'),
+                     'terms': {'roll growth': b.get('roll_growth_i_units'),
+                               'oil film': b.get('film_i_units'),
+                               'softer metal': b.get('flow_stress_i_units'),
+                               'strip temperature': b.get('strip_temperature_i_units')},
+                     'sign_depends': bool(b.get('sign_depends_on_inlet_weight'))})
+    if not rows:
+        return {'available': False}
+    r0 = max(rows, key=lambda r: abs(r['used']))         # the largest band
+    return {'available': True, 'rows': rows,
+            'text': (f'The roll, the oil film and the softer metal together give between '
+                     f'{_f3(r0["low"])} and {_f3(r0["high"])} I-units at the largest band '
+                     f'({r0["label"]}), depending on how much the roll warms the oil.'),
+            'sign_text': ('The sign of the fast part depends on an assumption about the oil '
+                          'temperature.' if any(r['sign_depends'] for r in rows) else
+                          'The sign is the same at both ends of that assumption.'),
+            'caveat': 'Read the signs, not the digits: each effect rests on an assumption.'}
+
+
+def _feedback_check_view(result):
+    sh = (result.get('width') or {}).get('shape') or {}
+    st, wc = sh.get('steady') or {}, sh.get('width_coupling') or {}
+    kl = wc.get('kernel_level') or {}
+    used = st.get('feedback_peak_i_units')
+    if used is None or kl.get('peak_i_units') is None:
+        return {'available': False}
+    levels = [('with the exit-tension feedback (used by the scores)', used),
+              ('the same, linear', st.get('linear_feedback_peak_i_units')),
+              ('the second estimate of the feedback', kl['peak_i_units']),
+              ('roll stripe passed on in full (upper bound)',
+               st.get('rigid_transfer_bound_i_units'))]
+    levels = [(a, b) for a, b in levels if b is not None]
+    vals = [abs(b) for _, b in levels]
+    ratio = (abs(kl['peak_i_units']) / abs(used)) if used else None
+    return {'available': True, 'levels': [{'label': a, 'i_units': b} for a, b in levels],
+            'low': min(vals), 'high': max(vals), 'used': abs(used),
+            'text': (f'The largest band lies between {_f3(min(vals))} and {_f3(max(vals))} '
+                     f'I-units depending on how much of a roll stripe the strip tension hides; '
+                     f'the scores use {_f3(abs(used))}.'),
+            'second_text': (f'A second estimate of how strongly strip tension hides a roll '
+                            f'stripe gives {_f3(1 / ratio) if ratio else "–"} of the value this '
+                            f'tool uses; with it the band would read '
+                            f'{_f3(abs(kl["peak_i_units"]))} I-units.'),
+            'caveat': ('A second estimate, not a corrected value: neither is checked on a mill; '
+                       'a roll stack with a closed gap or a plant test of a known stripe would '
+                       'decide it.')}
+
+
+WAVES_LEFT_OUT = ('The quick run left out the wavelength search for waves; run in detail to see '
+                  'it.')
+
+
+def _waves_view(result, case=None):
+    bf = ((result.get('width') or {}).get('shape') or {}).get('buckling_fe')
+    if not isinstance(bf, dict) or not bf.get('profiles'):
+        if ((case or {}).get('model_options') or {}).get('buckling_model') == 'sine_mode_and_fe':
+            return {'available': False, 'left_out': True, 'text': WAVES_LEFT_OUT}
+        return {'available': False}
+    p = bf['profiles'][0]
+    inm, rel, tab = p.get('in_mill') or {}, p.get('after_release') or {}, p.get('on_table') or {}
+    wh = (p.get('wave_height') or {})
+    rows = [{'label': 'in the mill, under tension', 'utilisation': inm.get('utilisation')},
+            {'label': 'after the tension is released', 'utilisation': rel.get('utilisation')}]
+    rows = [r for r in rows if isinstance(r['utilisation'], (int, float)) and r['utilisation'] > 0]
+    if not rows:
+        return {'available': False}
+    lift = tab.get('lift_limit_peak_i_units')
+    return {'available': True, 'rows': rows,
+            'text': ('In the mill the band uses '
+                     f'{_f3(rows[0]["utilisation"] * 100)} % of what makes the strip wave'
+                     + (f'; after release {_f3(rows[1]["utilisation"])} times it.'
+                        if len(rows) > 1 else '.')),
+            'height_text': (f'Wave height of the order of {_f3(wh["peak_to_valley_m"] * 1000)} '
+                            'mm (an upper estimate).') if isinstance(
+                wh.get('peak_to_valley_m'), (int, float)) else None,
+            'table_text': ((f'On a table it lifts above about {_f3(lift)} I-units; below that '
+                            'it lies flat under its own weight, and the length difference is '
+                            'still there.') if lift is not None else None),
+            'caveat': 'An upper estimate beside the standard result; the shortlist uses the '
+                      'standard result.'}
+
+
+def _winding_words(lo, hi):
+    """What the effective compaction factor of the lanes says, in plain words: how much of a
+    lane's extra thickness ends up as extra coil radius (band_width._cw_lane_numbers: radius
+    difference over laps times thickness difference)."""
+    std = ' The standard coil check assumes 0.5.'
+    if _f3(lo) != _f3(hi):
+        return (f'Across the lanes a thicker lane builds up on the coil by between {_f3(lo)} and '
+                f'{_f3(hi)} of its extra thickness (a negative value: it ends up lower than its '
+                'neighbours).' + std)
+    if lo < 0:
+        return ('In this model a thicker lane ends up lower on the coil than its neighbours, '
+                f'not higher (factor {_f3(lo)}): it is wound tighter and is pressed into the '
+                'soft stack by more than its extra thickness. The thinner lanes then stand higher '
+                'instead.' + std)
+    return f'A thicker lane builds up on the coil by {_f3(lo)} of its extra thickness.' + std
+
+
+def _coil_view(result):
+    w = result.get('width') or {}
+    cw, ct = w.get('coil_winding'), w.get('coil_temperature')
+    out = {'available': False, 'temperature': {'available': False}}
+    if _good(cw) and isinstance(cw.get('per_lane'), list) and cw['per_lane']:
+        lanes = cw['per_lane']
+        ecf = [x['effective_compaction_factor'] for x in lanes
+               if x.get('effective_compaction_factor') is not None]
+        counts = {}
+        for x in lanes:
+            counts[x.get('verdict_words') or x.get('verdict')] = counts.get(
+                x.get('verdict_words') or x.get('verdict'), 0) + 1
+        hard = max(lanes, key=lambda x: x.get('max_wound_on_tension_pa') or 0)
+        edge = _strip_view(result).get('strip_start_m') or 0.0
+        beside = (cw.get('beside_linear_criterion') or [{}])[0]
+        out.update(available=True, low=min(ecf), high=max(ecf), present=0.5,
+                   lanes=[{'label': f'lane at {_mm_from(x["centre_m"], edge)} mm',
+                           'value': x['effective_compaction_factor'],
+                           'verdict': x.get('verdict_words') or x.get('verdict')}
+                          for x in lanes if x.get('effective_compaction_factor') is not None],
+                   text=_winding_words(min(ecf), max(ecf)),
+                   verdicts_text='Lanes: ' + ', '.join(f'{n} {v}' for v, n in counts.items())
+                   + '.',
+                   hardest_text=(f'The hardest lane is wound at '
+                                 f'{_f3(hard["max_wound_on_tension_pa"] / 1e6)} MPa.'),
+                   agree_text=('The lane-by-lane winding and the standard coil check agree.'
+                               if beside.get('agrees') else 'The lane-by-lane winding and the '
+                               'standard coil check disagree; the shortlist uses the standard '
+                               'check.') if beside else None,
+                   stack_text=clean(cw.get('stack_sentence')),
+                   nip_text=(f'With the ironing roll the wound-in tension is '
+                             f'{_f3(cw["nip"]["wound_in_tension_pa"] / 1e6)} MPa.'
+                             if isinstance(cw.get('nip'), dict) and
+                             cw['nip'].get('wound_in_tension_pa') is not None else None))
+    if _good(ct) and ct.get('winding_temperature_k') is not None:
+        cool = ct.get('cooling') or []
+        out['temperature'] = {
+            'available': True, 'winding_c': ct['winding_temperature_k'] - 273.15,
+            'times': [{'hours': c['time_s'] / 3600, 'hottest_c': c['hottest_k'] - 273.15}
+                      for c in cool if c.get('hottest_k') is not None],
+            'limits': [{'label': LIMIT_WORDS.get(r['limit'], r['limit']),
+                        'c': r['limit_k'] - 273.15, 'at_winding': r.get('at_winding')}
+                       for r in ct.get('limit_rows') or []],
+            'text': (f'The coil is wound at no more than '
+                     f'{_f3(ct["winding_temperature_k"] - 273.15)}'
+                     ' °C (an upper bound: the strip exit temperature) and its hottest lap '
+                     'falls to ' + (f'{_f3(cool[-1]["hottest_k"] - 273.15)} °C after '
+                                    f'{_f3(cool[-1]["time_s"] / 3600)} h.' if cool else
+                                    'an unknown value.'))}
+    return out
+
+
+LIMIT_WORDS = {'entering_final_pass': 'published limit entering the final pass',
+               'leaving_final_pass': 'published limit leaving the final pass',
+               'elongation_decay_above': 'above this the elongation decays (published)'}
+
+
+def _alignment_view(result):
+    tr = (result.get('width') or {}).get('troughs') or {}
+    rows = []
+    for side, words in (('entry_span', 'entry span'), ('exit_span', 'exit span')):
+        t = tr.get(side)
+        if not isinstance(t, dict) or t.get('lateral_compressive_stress_pa') is None or \
+                'span_alignment' not in str(t.get('lateral_stress_basis')):
+            continue
+        crit = abs(t.get('trough_critical_lateral_stress_pa') or 0.0)
+        if not crit:
+            continue
+        rows.append({'label': words, 'share': abs(t['lateral_compressive_stress_pa']) / crit,
+                     'stress_kpa': t['lateral_compressive_stress_pa'] / 1e3,
+                     'critical_kpa': crit / 1e3})
+    if not rows:
+        return {'available': False}
+    top = max(rows, key=lambda r: r['share'])
+    return {'available': True, 'rows': rows,
+            'text': (f'In the {top["label"]} the roller alignment you entered gives a sideways '
+                     f'stress of {_f3(top["stress_kpa"])} kPa, against '
+                     f'{_f3(top["critical_kpa"])} kPa that starts troughs.'),
+            'caveat': ('A computed sideways stress is not a prediction that the foil wrinkles; '
+                       'below the line troughs are not excluded by other causes.')}
+
+
+def _gauge_loop_view(result):
+    fg = result.get('foil_gauge_control')
+    if not _good(fg) or not isinstance(fg.get('sensitivities'), dict):
+        return {'available': False}
+    pc = fg['sensitivities'].get('percent') or {}
+    rows = [(f'per MPa of entry tension', pc.get('entry_tension_percent_per_mpa')),
+            (f'per MPa of exit tension', pc.get('exit_tension_percent_per_mpa')),
+            (f'per % of friction', pc.get('friction_percent_per_percent'))]
+    rows = [{'label': a, 'value': b} for a, b in rows if isinstance(b, (int, float))]
+    step = ((fg.get('step_response') or {}).get('linear_no_limits') or {})
+    reel = ((fg.get('reels') or {}).get('entry') or {})
+    flags = set(fg.get('flags') or [])
+    return {'available': True, 'rows': rows,
+            'text': ('The gauge changes by ' + '; '.join(
+                f'{_f3(r["value"])} % {r["label"]}' for r in rows) + '.') if rows else '',
+            'loop_text': ('The simulated loop makes a once-per-revolution disturbance of a coil '
+                          'larger.' if 'LOOP_AMPLIFIES_COIL_FREQUENCY' in flags else
+                          'The simulated loop does not make a coil\'s once-per-revolution '
+                          'disturbance larger.'),
+            'trim_text': ('A 1 % entry gauge step needs more than the allowed tension trim.'
+                          if 'TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE' in flags else
+                          'A 1 % entry gauge step is corrected within the tension trim'
+                          + (f' in about {_f3(step["settling_time_s"])} s.' if isinstance(
+                              step.get('settling_time_s'), (int, float)) else '.')),
+            'reel_text': (f'The entry coil turns {_f3(reel["once_per_revolution_hz"])} times a '
+                          'second at the start; its run-out makes a tension ripple of '
+                          f'{_f3(reel["tension_ripple_pa"] / 1e3)} kPa.') if isinstance(
+                reel.get('tension_ripple_pa'), (int, float)) else None,
+            'caveat': ('The loop is the tool\'s own, not the plant\'s controller; the speed '
+                       'effect on gauge is not the mill\'s speed effect.')}
+
+
 # ============================================================================= the add-on cards
 # One card pattern for every add-on result: a one-sentence takeaway, one chart, one "how to
 # read this" line, details collapsed, a text alternative. A card appears only when its result
@@ -4305,12 +4988,31 @@ CARD_SPECS = (
      'the bands your measured roll profile would make'),
     ('records', 'friction_records_view', 'pass_records', 'Friction from your pass records',
      'which friction your logged force and slip correspond to'),
-    ('friction', 'friction_view', 'friction_difference', 'A friction or oil-film stripe',
+    ('friction', 'friction_view', 'oil_data', 'A friction or oil-film stripe',
      'the band a local friction difference could make'),
-    ('rollsurface', 'roll_surface_view', 'roll_cooling', 'The roll surface within one turn',
+    ('rollsurface', 'roll_surface_view', 'sprays', 'The roll surface within one turn',
      'the roll surface temperature within one turn'),
     ('flowstress', 'flow_stress_view', 'model_choices', 'Speed and temperature factor',
      'the strength factor for rolling speed and temperature'),
+    ('loop', 'control_loop_view', 'flatness_control', 'What the flatness control would do',
+     'what such a flatness control would do with your valves'),
+    ('steptest', 'step_test_view', 'flatness_control', 'Your zone step test in the model',
+     'what a zone step test would show'),
+    ('stepfit', 'step_test_view', 'flatness_control', 'Response time against the test length',
+     None),
+    ('hotstripe', 'hot_stripe_view', 'oil_data', 'A hot stripe: four effects',
+     'how the oil and the metal answer a hot roll stripe'),
+    ('winding', 'coil_view', 'coil', 'Winding the coil, lane by lane',
+     'the coil lane by lane'),
+    ('coiltemp', 'coil_view', 'coil', 'How the coil cools', None),
+    ('alignment', 'alignment_view', 'alignment', 'Sideways stress from the roller alignment',
+     'the sideways stress from the roller alignment'),
+    ('gaugeloop', 'gauge_loop_view', 'gauge_control', 'Gauge control and coil run-out',
+     'the gauge loop and the ripple of a coil'),
+    ('transfer', 'feedback_check_view', 'model_choices', 'How large the band is: four '
+     'estimates', None),
+    ('waves', 'waves_view', 'model_choices', 'Waves: when the strip would start to wave',
+     None),
     ('heatshare', 'heat_share_view', 'model_choices', 'Heat share: entered and computed',
      'the tool\'s own heat-share estimate beside the one entered'),
     ('rollgap', 'roll_gap_model_view', 'model_choices', 'Which roll-gap model',
@@ -4318,7 +5020,8 @@ CARD_SPECS = (
 )
 # cards whose result every foil run has: shown only once their group is in use, so that a
 # person who uses no add-on sees no new card (the owner's rule: the default path does not grow)
-CARD_NEEDS_GROUP = {'heatshare': ('model_choices', 'oil_data'), 'rollgap': ('model_choices',)}
+CARD_NEEDS_GROUP = {'heatshare': ('model_choices', 'oil_data'), 'rollgap': ('model_choices',),
+                    'transfer': ('model_choices',)}
 GROUP_TITLES = {g[0]: g[1] for g in ADDON_GROUPS}
 
 
@@ -4483,11 +5186,11 @@ def _cards_from_views(views, result):
     v = views['friction_view']
     if v.get('left_out'):
         cards.append(_card(
-            'friction', 'A friction or oil-film stripe', 'friction_difference', v['text'],
+            'friction', 'A friction or oil-film stripe', 'oil_data', v['text'],
             'Run in detail to see the estimate.', None, [], [v['text']], left_out=True))
     elif v.get('available'):
         cards.append(_card(
-            'friction', 'A friction or oil-film stripe', 'friction_difference',
+            'friction', 'A friction or oil-film stripe', 'oil_data',
             v['text'].split(' This rests')[0] + ' This rests on the least certain part of the '
             'model.',
             'Read the two together: they are the model\'s two limits and differ greatly; '
@@ -4506,7 +5209,7 @@ def _cards_from_views(views, result):
     v = views['roll_surface_view']
     if v.get('available'):
         cards.append(_card(
-            'rollsurface', 'The roll surface within one turn', 'roll_cooling', v['text'],
+            'rollsurface', 'The roll surface within one turn', 'sprays', v['text'],
             'The jump at 0° and 360° is the roll gap; the dips are the sprays.',
             _spec({'type': 'cycle', 'series': v['series']},
                   {'title': 'angle after the roll gap, in the direction of rotation',
@@ -4568,6 +5271,262 @@ def _cards_from_views(views, result):
                    _ref('family', 'the same published equations', 'range')]),
             [v['benchmark_text'], v['option_text']],
             [v['benchmark_text']]))
+    cards += _phase2_cards(views)
+    return cards
+
+
+# ----------------------------------------------------------------- Phase 2 cards
+# One range chart for every result that is a range or undecided: a bar from low to high, the
+# value the scores (or the model) use as a distinct mark, other values as points, neutral
+# reference lines; the takeaway states the range first.
+RANGE_MARK = ('range', 'possible range', 'bar', 'open', 'blue')
+
+
+def _range_rows(rows, unit, meaning):
+    return [{'label': r['label'], 'low': r.get('low'), 'high': r.get('high'),
+             'points': r.get('points') or [], 'unit': unit,
+             'meaning': r.get('meaning') or meaning} for r in rows]
+
+
+def _rng(rows, x_axis, marks, refs=(), log=False, legend=None, meaning=''):
+    # a range chart; every row says its unit and what its bar means (for the tooltips)
+    unit = x_axis.get('unit') or 'no unit'
+    for r in refs:
+        r.setdefault('tip', f'{r["label"]}: {_f3(r["value"])} {unit} (a reference line, not a '
+                            'result of this run)')
+    return _spec({'type': 'range', 'log': log, 'rows': _range_rows(rows, unit, meaning)},
+                 x_axis, {'title': '', 'unit': None, 'categories': True}, marks, refs, legend)
+
+
+def _ref_at(rid, label, value, kind='line'):
+    r = _ref(rid, label, kind)
+    r['value'] = value
+    return r
+
+
+def _phase2_cards(views):
+    cards = []
+    v = views['control_loop_view']
+    if v.get('available'):
+        cards.append(_card(
+            'loop', 'What the flatness control would do', 'flatness_control',
+            v['status_text'] + (f' {v["valve_changes"]} valve changes in {_f3(v["horizon_s"])} s.'
+                                if v['valve_changes'] is not None else ''),
+            'A zone that keeps switching shows as a row that keeps changing shade.',
+            _spec({'type': 'valve_map', 'time_s': v['valve_map']['time_s'],
+                   'levels': v['valve_map']['levels'], 'error': v['error']},
+                  {'title': 'time', 'unit': 's'}, {'title': 'valve', 'unit': None,
+                                                   'categories': True},
+                  [_mk('level', 'valve level (pale = closed, dark = open)', 'bar', 'solid',
+                       'blue'),
+                   _mk('error', 'largest zone error, I-units', 'line', 'solid', 'orange')]),
+            [v['error_text'], v['zones_text'], v['depends_text'], v['end_text'],
+             v['fixed'][1], v['low_order_text']],
+            [v['error_text'], v['zones_text'], f'{v["valve_changes"]} valve changes.'],
+            caveat=v['fixed'][0]))
+    v = views['step_test_view']
+    if v.get('available'):
+        cols = ('blue', 'orange', 'purple')
+        cards.append(_card(
+            'steptest', 'Your zone step test in the model', 'flatness_control', v['text'],
+            f'Left of the dashed line is what a {_f3(v["window_s"])} s test sees; look for '
+            'curves that keep rising after it.',
+            _spec({'type': 'step_response', 'curves': v['curves']},
+                  {'title': 'time after the zone was closed', 'unit': 's'},
+                  {'title': 'flatness roll reading', 'unit': 'I-units'},
+                  [_mk(f'c{k}', c['label'], 'line', 'solid', cols[k % 3],
+                       ('solid', 'dashed', 'dotted')[k % 3], direct=True)
+                   for k, c in enumerate(v['curves'])],
+                  [_ref_at('test_end', f'a {_f3(v["window_s"])} s test ends here',
+                           v['window_s'])]),
+            [v['finding']], [f'{c["label"]}: reaches {_f3(c["i_units"][-1])} I-units after '
+                             f'{_f3(c["time_s"][-1])} s' for c in v['curves']],
+            caveat=v['not_evidence']))
+        if v['rows']:
+            allf = [f['time_constant_s'] for r in v['rows'] for f in r['fits']]
+            cards.append(_card(
+                'stepfit', 'Response time against the test length', 'flatness_control',
+                f'Depending on the test length a fit gives between {_f3(min(allf))} and '
+                f'{_f3(max(allf))} s; the published test gave {_f3(v["published_s"])} s.',
+                'A fit that changes with the test length is not one time constant.',
+                _rng([{'label': r['label'], 'low': min(f['time_constant_s'] for f in r['fits']),
+                       'high': max(f['time_constant_s'] for f in r['fits']),
+                       'points': [{'id': 'fit', 'value': f['time_constant_s'],
+                                   'tip': f'{r["label"]}: a fit of a test of '
+                                          f'{_f3(f["window_s"])} s gives a response time of '
+                                          f'{_f3(f["time_constant_s"])} s'} for f in r['fits']]}
+                      for r in v['rows']],
+                     {'title': 'fitted response time', 'unit': 's'},
+                     [_mk(*RANGE_MARK), _mk('fit', 'one test length', 'circle', 'solid',
+                                            'purple')],
+                     [_ref_at('published', 'published', v['published_s'])],
+                     meaning='the response time a fit gives depends on the test length'),
+                [v['finding']], [f'{r["label"]}: ' + ', '.join(
+                    f'{_f3(f["time_constant_s"])} s for a test of {_f3(f["window_s"])} s'
+                    for f in r['fits']) for r in v['rows']], caveat=v['not_evidence']))
+    v = views['hot_stripe_view']
+    if v.get('left_out'):
+        cards.append(_card('hotstripe', 'A hot stripe: four effects', 'oil_data', v['text'],
+                           'Run in detail to see the effects.', None, [], [v['text']],
+                           left_out=True))
+    elif v.get('available'):
+        cards.append(_card(
+            'hotstripe', 'A hot stripe: four effects', 'oil_data', v['text'],
+            'The bar runs from oil entering at the strip to oil entering at the roll '
+            'temperature.',
+            _rng([{'label': r['label'], 'low': r['low'], 'high': r['high'],
+                   'points': [{'id': 'used', 'value': r['used'],
+                               'tip': f'{r["label"]}: {_f3(r["used"])} I-units at the inlet '
+                                      'weight used'}]
+                   + ([{'id': 'hot', 'value': r['hot'], 'tip': f'{r["label"]}: '
+                        f'{_f3(r["hot"])} I-units read hot'}] if r['hot'] is not None else [])}
+                  for r in v['rows']],
+                 {'title': 'net of the roll, oil film and softer metal (negative = tight)',
+                  'unit': 'I-units'},
+                 [_mk(*RANGE_MARK), _mk('used', 'at the inlet weight used', 'diamond', 'solid',
+                                        'orange'),
+                  _mk('hot', 'as the flatness roll reads it hot', 'circle', 'solid',
+                      'purple')],
+                 [_ref_at('zero', 'no band', 0.0)],
+                 meaning='where it lies depends on how much the roll warms the oil'),
+            [v['sign_text']] + [f'{r["label"]}: ' + ', '.join(
+                f'{k} {_f3(x)}' for k, x in r['terms'].items() if x is not None) + ' I-units'
+                for r in v['rows']],
+            [f'{r["label"]}: between {_f3(r["low"])} and {_f3(r["high"])} I-units, '
+             f'{_f3(r["used"])} at the weight used' for r in v['rows']], caveat=v['caveat']))
+    v = views['feedback_check_view']
+    if v.get('available'):
+        pts, words = [], {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five'}
+        for k, x in enumerate(v['levels']):              # estimates that coincide: one mark
+            same = [p for p in pts if _f3(p['value']) == _f3(abs(x['i_units']))]
+            if same:
+                same[0]['labels'].append(x['label'])
+            else:
+                pts.append({'id': 'used' if k == 0 else 'level', 'value': abs(x['i_units']),
+                            'labels': [x['label']]})
+        for p_ in pts:
+            p_['tip'] = (f'{_f3(p_["value"])} I-units: ' + ' and '.join(p_['labels'])
+                         + (' (these estimates coincide)' if len(p_['labels']) > 1 else ''))
+        n = len(v['levels'])
+        dup = [p_ for p_ in pts if len(p_['labels']) > 1]
+        cards.append(_card(
+            'transfer', f'How large the band is: {words.get(n, n)} estimates', 'model_choices',
+            v['text'] + (f' {words.get(len(dup[0]["labels"]), len(dup[0]["labels"])).capitalize()}'
+                         f' of the {words.get(n, n)} estimates coincide at '
+                         f'{_f3(dup[0]["value"])} I-units.' if dup else ''),
+            'The scale is logarithmic: the estimates differ by more than a factor of ten.',
+            _rng([{'label': 'largest band', 'low': v['low'], 'high': v['high'],
+                   'points': [{'id': p_['id'], 'value': p_['value'], 'tip': p_['tip']}
+                              for p_ in pts]}],
+                 {'title': 'size of the largest band', 'unit': 'I-units'},
+                 [_mk(*RANGE_MARK), _mk('used', 'used by the scores', 'diamond', 'solid',
+                                        'orange'),
+                  _mk('level', 'another estimate', 'circle', 'solid', 'purple')],
+                 log=True, meaning='where it lies depends on how much of a roll stripe the '
+                                   'strip tension hides'),
+            [v['second_text']] + [f'{x["label"]}: {_f3(abs(x["i_units"]))} I-units'
+                                  for x in v['levels']],
+            [f'{x["label"]}: {_f3(abs(x["i_units"]))} I-units' for x in v['levels']],
+            caveat=v['caveat']))
+    v = views['waves_view']
+    if v.get('left_out'):
+        cards.append(_card('waves', 'Waves: when the strip would start to wave', 'model_choices',
+                           v['text'], 'Run in detail to see the wavelength search.', None, [],
+                           [v['text']], left_out=True))
+    elif v.get('available'):
+        cards.append(_card(
+            'waves', 'Waves: when the strip would start to wave', 'model_choices', v['text'],
+            'Beyond the line the band would make the strip wave.',
+            _rng([{'label': r['label'], 'low': r['utilisation'], 'high': r['utilisation'],
+                   'points': [{'id': 'use', 'value': r['utilisation'],
+                               'tip': f'{r["label"]}: the band is {_f3(r["utilisation"])} '
+                                      'times (no unit) what makes the strip wave'}]}
+                  for r in v['rows']],
+                 {'title': 'band against the onset of waves (log scale)', 'unit': 'times'},
+                 [_mk('use', 'band against the onset', 'circle', 'solid', 'blue')],
+                 [_ref_at('onset', 'waves start', 1.0)], log=True,
+                 meaning='above 1 the strip would wave'),
+            [x for x in (v['height_text'], v['table_text']) if x],
+            [f'{r["label"]}: {_f3(r["utilisation"])} times the onset' for r in v['rows']],
+            caveat=v['caveat']))
+    v = views['coil_view']
+    if v.get('available'):
+        cards.append(_card(
+            'winding', 'Winding the coil, lane by lane', 'coil', v['text'],
+            'Left of the line at 0 a thicker lane ends up lower than its neighbours.',
+            _rng([{'label': 'the lanes', 'low': v['low'], 'high': v['high'],
+                   'points': [{'id': 'lane', 'value': x['value'],
+                               'tip': f'{x["label"]}: compaction factor {_f3(x["value"])} '
+                                      f'(no unit), {x["verdict"]}'} for x in v['lanes']] + [
+                       {'id': 'used', 'value': 0.5, 'tip': 'used by the scores: the standard '
+                        'coil check assumes a compaction factor of 0.5 (no unit)'}]}],
+                 {'title': 'how much of a ridge the coil packs (compaction factor)',
+                  'unit': None, 'dimensionless': True},
+                 [_mk(*RANGE_MARK), _mk('lane', 'one lane', 'circle', 'solid', 'purple'),
+                  _mk('used', 'used by the scores', 'diamond', 'solid', 'orange')],
+                 [_ref_at('zero', 'no build-up', 0.0)],
+                 meaning='how much of its extra thickness a thicker lane builds up'),
+            [x for x in (v['verdicts_text'], v['hardest_text'], v['agree_text'],
+                         v['nip_text'], v['stack_text']) if x],
+            [f'{x["label"]}: {_f3(x["value"])}, {x["verdict"]}' for x in v['lanes']],
+            caveat='The answer turns on the stack stiffness you entered; no measured value for '
+                   'oily aluminium foil was found.'))
+    t = (views['coil_view'] or {}).get('temperature') or {}
+    if t.get('available') and t['times']:
+        lo = min(x['hottest_c'] for x in t['times'])
+        cards.append(_card(
+            'coiltemp', 'How the coil cools', 'coil',
+            f'The hottest lap lies between {_f3(lo)} and {_f3(t["winding_c"])} °C over the '
+            'hold times; the start is an upper bound.',
+            'The dashed lines are the published limits.',
+            _rng([{'label': 'hottest lap', 'low': lo, 'high': t['winding_c'],
+                   'points': [{'id': 'time', 'value': x['hottest_c'],
+                               'tip': f'the hottest lap after {_f3(x["hours"])} h: '
+                                      f'{_f3(x["hottest_c"])} °C'} for x in t['times']]}],
+                 {'title': 'temperature of the hottest lap', 'unit': '°C'},
+                 [_mk(*RANGE_MARK), _mk('time', 'after a hold time', 'circle', 'solid',
+                                        'purple')],
+                 [_ref_at(f'limit{k}', x['label'], x['c']) for k, x in enumerate(t['limits'])],
+                 meaning='from the winding temperature (an upper bound) down over the hold '
+                         'times'),
+            [t['text']], [f'after {_f3(x["hours"])} h: {_f3(x["hottest_c"])} °C'
+                          for x in t['times']],
+            caveat='An upper bound: the coil is taken at the strip exit temperature.'))
+    v = views['alignment_view']
+    if v.get('available'):
+        cards.append(_card(
+            'alignment', 'Sideways stress from the roller alignment', 'alignment', v['text'],
+            'Where the square lies right of the dot, the span is below the start of troughs.',
+            _rng([{'label': r['label'], 'low': r['stress_kpa'], 'high': r['critical_kpa'],
+                   'points': [{'id': 'stress', 'value': abs(r['stress_kpa']),
+                               'tip': f'{r["label"]}: {_f3(r["stress_kpa"])} kPa from your '
+                                      'survey'},
+                              {'id': 'critical', 'value': r['critical_kpa'],
+                               'tip': f'{r["label"]}: troughs start at '
+                                      f'{_f3(r["critical_kpa"])} kPa'}]} for r in v['rows']],
+                 {'title': 'sideways stress (log scale)', 'unit': 'kPa'},
+                 [_mk('stress', 'computed from your survey', 'circle', 'solid', 'blue'),
+                  _mk('critical', 'where troughs start', 'square', 'solid', 'purple')],
+                 log=True, meaning='from the sideways stress of your survey to the stress that '
+                                   'starts troughs'),
+            [f'{r["label"]}: {_f3(r["stress_kpa"])} kPa against {_f3(r["critical_kpa"])} kPa'
+             for r in v['rows']],
+            [f'{r["label"]}: {_f3(r["share"] * 100)} %' for r in v['rows']],
+            caveat=v['caveat']))
+    v = views['gauge_loop_view']
+    if v.get('available') and v['rows']:
+        cards.append(_card(
+            'gaugeloop', 'Gauge control and coil run-out', 'gauge_control', v['text'],
+            'Points left of the line make the foil thinner.',
+            _rng([{'label': r['label'], 'low': r['value'], 'high': r['value'],
+                   'points': [{'id': 'sens', 'value': r['value'],
+                               'tip': f'gauge change: {_f3(r["value"])} % {r["label"]}'}]}
+                  for r in v['rows']],
+                 {'title': 'gauge change', 'unit': '% per stated unit'},
+                 [_mk('sens', 'gauge change', 'circle', 'solid', 'blue')],
+                 [_ref_at('zero', 'no change', 0.0)], meaning='gauge change'),
+            [x for x in (v['loop_text'], v['trim_text'], v['reel_text']) if x],
+            [f'{_f3(r["value"])} % {r["label"]}' for r in v['rows']], caveat=v['caveat']))
     return cards
 
 
@@ -4582,10 +5541,25 @@ def _cards_and_more(views, result, case=None):
     shown = {c['id'] for c in cards}
     more = [{'what': what, 'group': g, 'group_title': GROUP_TITLES[g]}
             for cid, _, g, _, what in CARD_SPECS if what and cid not in shown]
-    titles = list(dict.fromkeys(m['group_title'] for m in more))      # one per group, in order
-    text = ('More cards are possible with what you can add in step 3: ' + ', '.join(
-        f'"{t}"' for t in titles) + '.') if more else ''
+    groups = list(dict.fromkeys(m['group'] for m in more))           # one per group, in order
+    words = [f'"{GROUP_TITLES[g]}"' if not (status.get(g) or {}).get('filled') else
+             f'further choices in "{GROUP_TITLES[g]}"' for g in groups]
+    text = ('More cards are possible with what you can add in step 3: ' + ', '.join(words)
+            + '.') if more else ''
     return cards, {'items': more, 'text': text}
+
+
+def addon_sections(cards):
+    """The add-on cards under one heading per input group (in the order of the groups), each
+    with a one-line summary: the takeaway of its first card."""
+    out = []
+    for gid, title, _, _ in ADDON_GROUPS:
+        cs = [c for c in cards if c['group'] == gid]
+        if cs:
+            real = [c for c in cs if not c.get('left_out')]
+            out.append({'group': gid, 'title': title, 'cards': [c['id'] for c in cs],
+                        'summary': (real or cs)[0]['takeaway']})
+    return out
 
 
 # ============================================================================= group status
@@ -4608,15 +5582,18 @@ def _group_line(gid, vals):
         n = len(vals.get('roll_profile_scan') or [])
         return ((f'{n} point{"s" if n != 1 else ""}, ' if n else '')
                 + 'grinder marks or speeds entered')
-    if gid in ('temperature_scan', 'grinder_report', 'pass_records', 'friction_difference'):
+    if gid in ('temperature_scan', 'grinder_report', 'pass_records'):
         q = ADDON_Q1[gid]
         n = len(vals.get(q) or [])
         return (f'{n} point{"s" if n != 1 else ""}' if gid in ('temperature_scan',
                                                               'grinder_report')
                 else f'{n} record{"s" if n != 1 else ""}' if gid == 'pass_records'
                 else f'{n} place{"s" if n != 1 else ""}') if n else None
-    if gid == 'roll_cooling':
+    if gid == 'sprays':
         bits = []
+        if has('nozzle_fan_pattern') or has('nozzle_pattern_width') or \
+                has('nozzle_flow_exponent'):
+            bits.append('nozzle data sheet')
         if has('spray_wetted_arc'):
             bits.append(f'sprays wet {_f3(vals["spray_wetted_arc"])}°')
         if has('spray_arcs'):
@@ -4625,8 +5602,39 @@ def _group_line(gid, vals):
         return ', '.join(bits) or None
     if gid == 'oil_data':
         names = [QUESTION_GROUP_WORDS.get(q, q) for q in ADDON_QUESTIONS['oil_data'] if has(q)
+                 and q != 'friction_stripes'
                  and not (q == 'oil_pressure_law' and vals[q] == 'barus')]   # the default rule
+        n = len(vals.get('friction_stripes') or [])
+        if n:
+            names.append(f'{n} place{"s" if n != 1 else ""} where the film differs')
         return ', '.join(dict.fromkeys(names)) or None
+    if gid == 'flatness_control':
+        bits = []
+        if has('valve_levels_kind'):
+            bits.append('valves ' + dict((tuple(v), w) for v, w in QUESTION_BY_ID[
+                'valve_levels_kind'].choices)[tuple(vals['valve_levels_kind'])].lower())
+        if has('step_test_nozzles'):
+            bits.append('a zone step test')
+        return ', '.join(bits) or None
+    if gid == 'coil':
+        bits = []
+        if has('stack_law_kind'):
+            bits.append('stack stiffness entered')
+        if has('ironing_roll_load'):
+            bits.append('ironing roll')
+        if has('coil_surface_htc'):
+            bits.append('cooling')
+        return ', '.join(bits) or None
+    if gid == 'alignment':
+        n = sum(1 for q in ('entry_misalignment', 'exit_misalignment') if has(q))
+        return f'{n} span{"s" if n != 1 else ""}' if n else None
+    if gid == 'gauge_control':
+        bits = []
+        if has('gap_mode'):
+            bits.append('gauge loop')
+        if has('reel_runout'):
+            bits.append('entry coil run-out')
+        return ', '.join(bits) or None
     if gid == 'model_choices':
         bits = []
         bm = vals.get('bite_model')
@@ -4643,6 +5651,8 @@ def _group_line(gid, vals):
             bits.append('heat transfer in the roll gap entered')
         if has('shear_cap_factor'):
             bits.append('friction cap entered')
+        if vals.get('buckling_model') == 'sine_mode_and_fe':
+            bits.append('wavelength search for waves')
         return ', '.join(bits) or None
     return None
 
@@ -4654,6 +5664,9 @@ QUESTION_GROUP_WORDS = {'oil_viscosity_table': 'viscosity table', 'oil_pressure_
                         'high-pressure shear', 'oil_eyring_coefficient': 'high-pressure shear',
                         'oil_limiting_shear': 'largest shear stress',
                         'oil_limiting_shear_coefficient': 'largest shear stress',
+                        'inlet_weight': 'oil and metal across the width',
+                        'softening_per_kelvin': 'oil and metal across the width',
+                        'oil_flow_per_nozzle': 'oil and metal across the width',
                         'oil_flash_point': 'flash point', 'oil_supply_temperature_cap':
                         'site limit'}
 
@@ -4665,9 +5678,13 @@ def addon_status(case):
     out = {}
     for gid, title, _, _ in ADDON_GROUPS:
         line = _group_line(gid, vals)
+        need = [GROUP_TITLES[n].lower() for n in GROUP_NEEDS.get(gid, ())
+                if _group_line(n, vals) is None]
         out[gid] = {'filled': line is not None,
-                    'summary': line or ('standard choices' if gid == 'model_choices'
-                                        else 'not filled in')}
+                    'summary': ('needs: ' + ', '.join(need) + (f' ({line} entered)' if line else
+                                                               '')) if need else
+                    line or ('standard choices' if gid == 'model_choices' else 'not filled in'),
+                    'needs': need}
     return out
 
 
@@ -4891,6 +5908,14 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
         'heat_share_view': _heat_share_view(result),
         'roll_surface_view': _roll_surface_view(result),
         'flow_stress_view': _flow_stress_view(result),
+        'control_loop_view': _control_loop_view(result),
+        'step_test_view': _step_test_view(result),
+        'hot_stripe_view': _hot_stripe_view(result, case),
+        'feedback_check_view': _feedback_check_view(result),
+        'waves_view': _waves_view(result, case),
+        'coil_view': _coil_view(result),
+        'alignment_view': _alignment_view(result),
+        'gauge_loop_view': _gauge_loop_view(result),
         'not_assessable': _not_assessable(result, causes),
         'roll_gap_failed': bool(result.get('bite_error')),
         'limitations': list(STANDING_LIMITATIONS),
@@ -4904,6 +5929,7 @@ def plain_summary(result, case=None, value_origins_=None, own_mill=None):
     for k in PASS_VIEWS:
         out[k] = _rename_passes(out[k], names, codes)
     out['addon_cards'], out['addon_more'] = _cards_and_more(out, result, case)
+    out['addon_sections'] = addon_sections(out['addon_cards'])
     json.dumps(out, allow_nan=False)
     return out
 

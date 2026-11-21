@@ -244,7 +244,9 @@ width:100%;text-align:left;border:1px solid transparent;border-radius:6px;backgr
 .checklist{list-style:none;padding:0;margin:0}
 .checklist>li{border-top:1px solid var(--line);padding:.6rem 0}
 .checklist>li:first-child{border-top:0}
-.checklist .row{display:flex;gap:.6rem;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.checklist .row{display:grid;grid-template-columns:minmax(0,1fr) 13rem;gap:.6rem;align-items:start}
+.checklist .row>:last-child{justify-self:end;text-align:right}
+@media (max-width:600px){.checklist .row{grid-template-columns:minmax(0,1fr)}.checklist .row>:last-child{justify-self:start;text-align:left}}
 .inline-q{border:1px solid var(--line);border-radius:8px;padding:.4rem .8rem;margin:.5rem 0;background:var(--paper)}
 .pending{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;background:var(--panel);border-radius:8px;
 padding:.6rem .8rem;margin-top:.8rem}
@@ -387,6 +389,22 @@ svg .axis-title{fill:var(--ink)}
 .addon-group>details>summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 @media (max-width:600px){.addon-group>details>summary{display:grid;grid-template-columns:1.2em minmax(0,1fr);gap:.1rem 0;align-items:baseline}
 .addon-group>details>summary>[data-view]{grid-column:2}}
+/* the add-on cards under one heading per input group, and the index near the top */
+.addon-index{margin:.2rem 0 1rem;padding:.5rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--card);line-height:1.9}
+.addon-index a{color:var(--blue);overflow-wrap:anywhere}
+.addon-section>summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:1.2em minmax(0,1fr);gap:0 .2rem;align-items:baseline}
+.addon-section>summary::-webkit-details-marker{display:none}
+.addon-section>summary::before{content:'▸';grid-row:1/3}.addon-section[open]>summary::before{content:'▾'}
+.addon-section>summary .s-title{font-weight:700;font-size:1.1rem}
+.addon-section>summary .s-line{grid-column:2;color:var(--soft-text,var(--soft));font-size:.95rem}
+.addon-section>summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.addon-section>.card.addon{box-shadow:none;margin:.8rem 0 0}
+.valve-bracket{fill:none;stroke:var(--soft);stroke-width:1.4}
+.valve-change{stroke:var(--ink);stroke-width:1;opacity:.55}
+.headline .addon-index{margin:.6rem 0 0}
+@media print{.lpprint{display:block!important;clear:both;margin-top:4px}.lpprint svg{width:60%;height:auto}}
+.valve-outline{fill:none;stroke:var(--blue);stroke-opacity:.35;stroke-width:.5}
+@media print{.checklist .row{display:flex;flex-wrap:wrap;justify-content:space-between}}
 '''
 
 APP_JS = r''''use strict';
@@ -899,6 +917,11 @@ APP_JS = r''''use strict';
     var noz = o.nozzles || [];
     var pitch = noz.length > 1 ? (noz[1].pos - noz[0].pos) * sx : 30;
     var r = Math.max(4, Math.min(10, pitch * 0.32));
+    // the spray valves of the flatness control (the engine's grouping), as brackets
+    (o.valves || []).forEach(function (v) {
+      var xa = X(v.start_m) - r, xb = X(v.end_m) + r, yv = yN - r - 5;
+      s += '<path class="valve-bracket" d="M' + xa + ' ' + (yv + 3) + 'L' + xa + ' ' + yv + 'L' + xb + ' ' + yv + 'L' + xb + ' ' + (yv + 3) + '"/>';
+    });
     noz.forEach(function (n) {
       var st = n.level <= 0 ? 'blocked' : n.level >= 1 ? 'healthy' : 'weak';
       if (n.level > 0) {
@@ -1080,7 +1103,8 @@ APP_JS = r''''use strict';
     var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-nozzles', label: 'Spray header over the strip. Click a nozzle to cycle healthy, weak and blocked; with the keyboard press Enter or Space on a nozzle.',
       barrel: a.barrel, edge: a.edge, width: a.width,
-      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles', zones: zonesOf(m)});
+      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles', zones: zonesOf(m),
+      valves: m.control_zones ? m.control_zones.valves : null});
     var known = h.levels_known, lst = '';
     if (known) {
       lst = '<details class="more"' + (S.nozListOpen ? ' open' : '') + ' data-nozlist="1"><summary>Nozzle list (flow level of each nozzle, 1 = full, 0 = blocked)</summary><div class="nozlist">' +
@@ -1620,7 +1644,7 @@ APP_JS = r''''use strict';
         return m ? '<li>' + esc(m[1]) + '. <details class="inline"><summary>Which ones</summary>' + esc(m[2]) + '</details></li>' : '<li>' + esc(r.text) + '</li>';
       }).join('') : '<li>No cap applies; the level is never higher than fair because nothing has been compared with plant data.</li>') +
       '</ul><details class="noprint"><summary class="small">The rule</summary><p class="small soft">' + esc(t.rule) + '</p></details></details></div>' +
-      '<p class="small soft">The full list of what this tool assumes and cannot decide is in docs/limitations.md of the repository.</p>';
+      '<p class="small soft noprint">The full list of what this tool assumes and cannot decide is in docs/limitations.md of the repository.</p>';
   }
 
   function profileLine(sum, run) {
@@ -1685,7 +1709,7 @@ APP_JS = r''''use strict';
     var t = v.threshold_i_units, mx = t;
     v.zones.forEach(function (z) { if (isNum(z.reading_i_units)) { mx = Math.max(mx, Math.abs(z.reading_i_units)); } });
     v.profile.i_units.forEach(function (y) { mx = Math.max(mx, Math.abs(y)); });
-    var lg = print ? {s: '', h: 0} : legend(spec || {legend: ['zone_shows', 'zone_not', 'profile']}, W, 0);
+    var lg = print ? {s: '', h: 0} : chartLegend(spec || {legend: ['zone_shows', 'zone_not', 'profile']}, W, 0);
     var top = print ? 18 : lg.h + 24, hh = 150, y0 = top + hh / 2, k = (hh / 2 - 6) / mx;
     function Y(val) { return y0 - val * k; }
     var edge = v.strip_start_m, ms = markOf(spec, 'zone_shows'), mn = markOf(spec, 'zone_not'), mp = markOf(spec, 'profile');
@@ -1724,6 +1748,14 @@ APP_JS = r''''use strict';
     if (!v || !v.available) { return ''; }
     return '<div class="printonly smprint"><p class="smprint-h"><strong>What your flatness roll would show</strong> (bars: zone readings; line: modelled flatness; dashed: band level)</p>' +
       shapemeterSvg(v, true) + '<p class="smprint-w">' + esc(v.caveat) + '</p></div>';
+  }
+  // the printed page: the flatness-control card in a compact form (takeaway, valve map, the
+  // fixed sentence); its card on the screen is folded under its heading
+  function loopPrint(sum) {
+    var c = (sum.addon_cards || []).filter(function (x) { return x.id === 'loop' && x.chart; })[0];
+    if (!c) { return ''; }
+    return '<div class="printonly lpprint"><p class="smprint-h"><strong>' + esc(c.title) + '</strong>: ' + esc(c.takeaway) + '</p>' +
+      chartSvg(c.chart) + '<p class="smprint-w">' + esc(c.caveat || '') + '</p></div>';
   }
   function nextChecks(sum) {
     if (!sum.next_checks.length) { return '<p class="empty">No further checks listed.</p>'; }
@@ -1790,7 +1822,7 @@ APP_JS = r''''use strict';
     var note = '<p class="screening-note">A shortlist from a screening model that has not been compared with plant data, not a finding.</p>';
     var h = '<div class="wrap"><p class="printonly"><strong>Band screening summary</strong> — ' + esc(sum.case_name) + '</p>';
     h += '<section class="card"><div class="headline"><div><p class="text">' + esc(sum.headline.text) + '</p><p>' + esc(sum.family.text) + '</p>' +
-      '<p class="statusline"><span aria-hidden="true">ⓘ</span><span>' + esc(sum.status_words) + '</span></p>' + profileLine(sum, run) + '</div>' + trustBox(sum.trust) + '</div></section>';
+      '<p class="statusline"><span aria-hidden="true">ⓘ</span><span>' + esc(sum.status_words) + '</span></p>' + profileLine(sum, run) + addonIndex(sum) + '</div>' + trustBox(sum.trust) + '</div></section>';
     var missing = sum.not_assessable.filter(function (x) { return x.kind === 'not_assessable' || x.kind === 'failed'; });
     if (sum.roll_gap_failed && missing.length) {
       h += '<section class="card" id="not-assessed-top"><h2>What could not be assessed</h2><p class="howto">How to read this: the roll-gap model could not compute the pass where the bands show, so these parts of the screening are missing. The shortlist below rests on the rest.</p>' +
@@ -1806,11 +1838,11 @@ APP_JS = r''''use strict';
         (sum.along_view.available ? '<div class="fig">' + alongSvg(sum.along_view) + '</div>' : '<p class="empty">No spacing measured yet: measure the mark spacing at two speeds to see this picture.</p>') + '</section>';
     } else {
       h += '<section class="card stripcard"><h2>Where across the width</h2><p class="howto">How to read this: the strip seen from above with the spray header over it. Solid bars are the bands you saw; outlined boxes with a letter are where the model puts a candidate; the line above shows where the roll grows. Hover, tap or tab to a mark for its position.</p>' +
-        shapemeterPrint(sum) + stripResult(sum) + '</section>';
+        shapemeterPrint(sum) + stripResult(sum) + loopPrint(sum) + '</section>';
     }
+    h += '<section class="card"><h2>What to check next</h2><p class="howto">How to read this: measurements that would narrow the shortlist. Tick one you have done, answer it, and update the result.</p>' + nextChecks(sum) + pendingBar() + '</section>';
     resetGloss();
     h += addonCards(sum);
-    h += '<section class="card"><h2>What to check next</h2><p class="howto">How to read this: measurements that would narrow the shortlist. Tick one you have done, answer it, and update the result.</p>' + nextChecks(sum) + pendingBar() + '</section>';
     h += '<section class="card noprint"><h2>What if</h2>' + whatIfCard() + '</section>';
     if (sum.gauge_view.available && sum.gauge_view.passes.length < 2) {
       h += '<section class="card noprint"><h2>Thinner or thicker</h2><p class="empty">Only one pass is known. Add the other passes of the route in step 2 ("The route") to see how the result changes from thick to thin.</p></section>';
@@ -1929,7 +1961,7 @@ APP_JS = r''''use strict';
     return '<text x="' + x + '" y="' + y + '" font-size="' + (px || 12) + '" style="fill:' + (TEXTCOL[m.colour] || 'var(--ink)') + '"' + (anchor ? ' text-anchor="' + anchor + '"' : '') + ' class="dlab" data-mark="' + esc(m.id) + '">' + esc(m.label) + '</text>';
   }
   // the legend: the marks the spec lists, each drawn by glyph(), wrapped to the width
-  function legend(c, w, y0) {
+  function chartLegend(c, w, y0) {
     var ids = (c && c.legend) || [];
     if (!ids.length) { return {s: '', h: 0}; }
     var x = 4, y = y0 + 9, s = '<g class="legend" role="list" aria-label="Legend">';
@@ -2009,7 +2041,7 @@ APP_JS = r''''use strict';
     function X(m) { return ML + m * sx; }
     var all = []; c.series.forEach(function (s) { all = all.concat(s.values); });
     var r = niceRange(Math.min.apply(null, all.concat([0])), Math.max.apply(null, all.concat([0])));
-    var lg = legend(c, w, 0), top = lg.h + 24, hh = 150;
+    var lg = chartLegend(c, w, 0), top = lg.h + 24, hh = 150;
     function Y(v) { return top + (r[1] - v) / (r[1] - r[0]) * hh; }
     var s = lg.s + yTitle(c, 4, top - 10);
     s += '<rect x="' + X(c.strip_start_m) + '" y="' + top + '" width="' + ((c.strip_end_m - c.strip_start_m) * sx) + '" height="' + hh + '" fill="var(--strip)" opacity=".4"/>';
@@ -2042,7 +2074,7 @@ APP_JS = r''''use strict';
     var lo = pct ? 0 : Math.min(0.8, Math.min.apply(null, vals)), hi = pct ? 1 : Math.max.apply(null, vals) * 1.08;
     function X(v) { return lw + (v - lo) / (hi - lo) * (w - lw - 16); }
     function fmt(v) { return pct ? sig(v * 100, 2) + ' %' : sig(v, 3) + ' times'; }
-    var lg = legend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
     var s = lg.s;
     s += xTicks(pct ? [0, 0.25, 0.5, 0.75, 1] : ticks(lo, hi, 4), X, top, yb, pct ? function (t) { return Math.round(t * 100); } : null);
     c.rows.forEach(function (r, i) {
@@ -2066,7 +2098,7 @@ APP_JS = r''''use strict';
     var vals = []; c.rows.forEach(function (r) { vals.push(Math.abs(r.with_feedback), Math.abs(r.compliance_only)); });
     var lo = Math.floor(Math.log10(Math.min.apply(null, vals))), hi = Math.ceil(Math.log10(Math.max.apply(null, vals)));
     function X(v) { return lw + (Math.log10(Math.abs(v)) - lo) / (hi - lo) * (w - lw - 20); }
-    var lg = legend(c, w, 0), top = lg.h + 8, yb = top + rl.total;
+    var lg = chartLegend(c, w, 0), top = lg.h + 8, yb = top + rl.total;
     var s = lg.s;
     var tk = []; for (var e = lo; e <= hi; e++) { tk.push(Math.pow(10, e)); }
     s += xTicks(tk, X, top, yb, function (t) { return sig(t, 1); });
@@ -2090,11 +2122,11 @@ APP_JS = r''''use strict';
     vals = vals.filter(isNum);
     var rg = niceRange(Math.min.apply(null, vals), Math.max.apply(null, vals));
     function X(v) { return lw + (v - rg[0]) / (rg[1] - rg[0]) * (w - lw - 16); }
-    var lg = legend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
     var s = lg.s + xTicks(ticks(rg[0], rg[1], 4), X, top, yb);
     if (isNum(c.case_value)) {
       var xc = X(c.case_value), right = xc > w * 0.75;
-      s += markG(refLine(xc, top - 4, xc, yb, 'case'), refLabel(c, 'case') + ': ' + sig(c.case_value, 3)) + refText(right ? xc - 4 : xc + 4, top - 8, refLabel(c, 'case'), right ? 'end' : null);
+      s += markG(refLine(xc, top - 4, xc, yb, 'case'), refLabel(c, 'case') + ': a friction coefficient of ' + sig(c.case_value, 3) + ' (no unit)') + refText(right ? xc - 4 : xc + 4, top - 8, refLabel(c, 'case'), right ? 'end' : null);
     }
     c.rows.forEach(function (r, i) {
       var y0 = top + rl.tops[i], rowH = rl.hs[i], n = r.points.length;
@@ -2102,7 +2134,7 @@ APP_JS = r''''use strict';
       r.points.forEach(function (p, k) {
         var m = markOf(c, p.kind), y = y0 + rowH / 2 + (k - (n - 1) / 2) * 10;
         if (isNum(p.low) && isNum(p.high)) { s += '<line class="interval" data-mark="' + esc(m.id) + '" stroke="' + COL[m.colour] + '" x1="' + X(p.low) + '" x2="' + X(p.high) + '" y1="' + y + '" y2="' + y + '"/>'; }
-        s += markG(glyph(m, X(p.value), y), r.label + ', friction ' + KIND_WORDS[p.kind] + ': ' + sig(p.value, 3) + (isNum(p.low) ? ' (between ' + sig(p.low, 3) + ' and ' + sig(p.high, 3) + ' for the measuring error)' : ''));
+        s += markG(glyph(m, X(p.value), y), r.label + ', friction ' + KIND_WORDS[p.kind] + ': ' + sig(p.value, 3) + ' (no unit)' + (isNum(p.low) ? ', between ' + sig(p.low, 3) + ' and ' + sig(p.high, 3) + ' for the measuring error' : ''));
       });
     });
     var xt = xTitle(c, yb + 32, w);
@@ -2116,7 +2148,7 @@ APP_JS = r''''use strict';
     // the same marks, drawn the same way, and the plot takes the whole width
     var fits = c.series.every(function (ser, k) { return wrapLines(markOf(c, 's' + k).label, r - 10, 11).length === 1; });
     if (!fits) { c = Object.assign({}, c, {legend: c.series.map(function (ser, k) { return 's' + k; })}); r = 14; }
-    var lg = legend(c, w, 0), top = lg.h + 26;
+    var lg = chartLegend(c, w, 0), top = lg.h + 26;
     var labs = [], all = []; c.series.forEach(function (s) { all = all.concat(s.temperature_k); });
     var rg = niceRange(Math.min.apply(null, all) - 273.15, Math.max.apply(null, all) - 273.15);
     function X(a) { return l + a / 360 * (w - l - r); }
@@ -2157,10 +2189,10 @@ APP_JS = r''''use strict';
     var w = Math.min(760, chartWidth()), lw = Math.min(200, w * 0.4);
     var rl = rowLabels(c.rows, lw, 24);
     function X(v) { return lw + v * (w - lw - 16); }
-    var lg = legend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
     var s = lg.s;
     if (c.band) {
-      s += markG(refArea(X(c.band[0]), top, X(c.band[1]) - X(c.band[0]), rl.total, 'measured'), refLabel(c, 'measured') + ': ' + sig(c.band[0] * 100, 2) + ' to ' + sig(c.band[1] * 100, 2) + ' %');
+      s += markG(refArea(X(c.band[0]), top, X(c.band[1]) - X(c.band[0]), rl.total, 'measured'), refLabel(c, 'measured') + ': ' + sig(c.band[0] * 100, 2) + ' to ' + sig(c.band[1] * 100, 2) + ' % of the heat stays in the strip');
       s += refText(X(c.band[1]) + 4, top - 8, refLabel(c, 'measured'));
     }
     s += xTicks([0, 0.25, 0.5, 0.75, 1], X, top, yb, function (t) { return Math.round(t * 100); });
@@ -2180,8 +2212,8 @@ APP_JS = r''''use strict';
     var lo = Math.min(c.range[0], c.points[1].value) - 10, hi = Math.max(c.range[1], c.published) + 10;
     function X(v) { return l + (v - lo) / (hi - lo) * (w - l - r); }
     var s = '<line class="tick" x1="' + X(lo) + '" x2="' + X(hi) + '" y1="' + y + '" y2="' + y + '"/>';
-    s += markG(refArea(X(c.range[0]), y - 12, X(c.range[1]) - X(c.range[0]), 24, 'family'), refLabel(c, 'family') + ' give ' + Math.round(c.range[0]) + ' to ' + Math.round(c.range[1]) + ', depending on a detail the paper does not state');
-    s += markG(refLine(X(c.published), y - 16, X(c.published), y + 16, 'published'), 'Published figure: ' + c.published);
+    s += markG(refArea(X(c.range[0]), y - 12, X(c.range[1]) - X(c.range[0]), 24, 'family'), refLabel(c, 'family') + ' give a load of ' + Math.round(c.range[0]) + ' to ' + Math.round(c.range[1]) + ' (no unit), depending on a detail the paper does not state');
+    s += markG(refLine(X(c.published), y - 16, X(c.published), y + 16, 'published'), 'Published figure: a load of ' + c.published + ' (no unit)');
     s += refText(X(c.published), y + 30, refLabel(c, 'published'), 'middle');
     var fam = refLabel(c, 'family') + ': ' + Math.round(c.range[0]) + ' to ' + Math.round(c.range[1]), fx = X(c.range[0]);
     s += refText(fx + fam.length * 5.8 > w ? w - 2 : fx, y + 46, fam, fx + fam.length * 5.8 > w ? 'end' : null);
@@ -2189,11 +2221,124 @@ APP_JS = r''''use strict';
     // the first model's label above the line, the second's below it: they never meet
     c.points.forEach(function (p, k) {
       var m = markOf(c, p.id), xl = X(p.value), left = xl < w * 0.6;
-      s += markG(glyph(m, xl, y), p.label + ': ' + Math.round(p.value));
+      s += markG(glyph(m, xl, y), p.label + ': a load of ' + Math.round(p.value) + ' (no unit) on the published foil case');
       s += labelText({id: m.id, label: p.label + ' ' + Math.round(p.value), colour: m.colour}, left ? Math.max(2, xl - 6) : Math.min(w - 2, xl + 6), k ? y + 30 : y - 18, left ? null : 'end', 11);
     });
     var xt = xTitle(c, y + 84, w);
     return svgOpen(w, y + 74 + xt.h, 'Loads on the one published foil case') + s + xt.s + '</svg>';
+  }
+
+  // the one range chart: for each row a bar from low to high (the possible range), the value the
+  // scores or the model use as a distinct mark, other values as points; neutral reference lines
+  function rangeChart(c) {
+    var w = Math.min(760, chartWidth()), lw = Math.min(170, w * 0.32);
+    var rl = rowLabels(c.rows, lw, 30);
+    var vals = [];
+    c.rows.forEach(function (r) { [r.low, r.high].concat(r.points.map(function (p) { return p.value; })).forEach(function (v) { if (isNum(v)) { vals.push(v); } }); });
+    (c.references || []).forEach(function (x) { if (isNum(x.value)) { vals.push(x.value); } });
+    var log = !!c.log && vals.every(function (v) { return v > 0; });
+    var lo, hi, X, tk;
+    if (log) {
+      lo = Math.floor(Math.log10(Math.min.apply(null, vals))); hi = Math.ceil(Math.log10(Math.max.apply(null, vals)));
+      if (hi === lo) { hi += 1; }
+      X = function (v) { return lw + (Math.log10(v) - lo) / (hi - lo) * (w - lw - 20); };
+      tk = []; for (var e = lo; e <= hi; e++) { tk.push(Math.pow(10, e)); }
+    } else {
+      var rg = niceRange(Math.min.apply(null, vals), Math.max.apply(null, vals)); lo = rg[0]; hi = rg[1];
+      X = function (v) { return lw + (v - lo) / (hi - lo) * (w - lw - 20); };
+      tk = ticks(lo, hi, w < 500 ? 3 : 5);
+    }
+    var refs = (c.references || []).filter(function (x) { return isNum(x.value); });
+    var lg = chartLegend(c, w, 0), top = lg.h + 8 + refs.length * 14, yb = top + rl.total;
+    var s = lg.s + xTicks(tk, X, top, yb, function (t) { return sig(t, 3); });
+    refs.forEach(function (x, k) {
+      var xr = X(x.value), right = xr > w * 0.7;
+      s += markG(refLine(xr, top - 4, xr, yb, x.id), x.tip || (x.label + ': ' + sig(x.value, 3) + ' ' + axisWords(c.x_axis)));
+      s += refText(right ? xr - 4 : xr + 4, lg.h + 10 + k * 14, x.label, right ? 'end' : null);
+    });
+    var mr = markOf(c, 'range');
+    c.rows.forEach(function (r, i) {
+      var y = top + rl.tops[i] + rl.hs[i] / 2;
+      s += rowLabel(rl.lines[i], lw - 8, y);
+      if (isNum(r.low) && isNum(r.high) && r.high > r.low && (c.marks || []).some(function (m) { return m.id === 'range'; })) {
+        s += markG(barRect(mr, X(r.low), y - 7, X(r.high) - X(r.low), 14), r.label + ': from ' + sig(r.low, 3) + ' to ' + sig(r.high, 3) + ' ' + (r.unit || 'no unit') + (r.meaning ? '; ' + r.meaning : ''));
+      }
+      // the value the scores use is drawn last, so that no other point hides it
+      r.points.slice().sort(function (a, b) { return (a.id === 'used') - (b.id === 'used'); }).forEach(function (p) { s += markG(glyph(markOf(c, p.id), X(p.value), y), p.tip || (r.label + ': ' + sig(p.value, 3))); });
+    });
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Range: ' + axisWords(c.x_axis)) + s + xt.s + '</svg>';
+  }
+
+  // the valve map of the flatness loop: one row per valve, its level as the shade over time, and
+  // under it the largest zone error the flatness roll would read
+  function valveMap(c) {
+    var w = chartWidth(), l = 34, r = 8, mv = markOf(c, 'level'), me = markOf(c, 'error');
+    var n = (c.levels[0] || []).length, rowH = Math.max(5, Math.min(12, Math.floor(160 / Math.max(1, n))));
+    var lg = chartLegend(c, w, 0), top = lg.h + 22, mapH = n * rowH, gap = 30, errH = 70;
+    var t0 = 0, t1 = c.time_s[c.time_s.length - 1] || 1;
+    function X(t) { return l + (t - t0) / (t1 - t0) * (w - l - r); }
+    var s = lg.s + '<text x="4" y="' + (top - 8) + '" font-size="12" class="axis-title" data-axis="y">valve (control zone), 1 at the top</text>';
+    for (var z = 0; z < n; z++) {
+      var k0 = 0;
+      for (var k = 1; k <= c.time_s.length; k++) {
+        if (k === c.time_s.length || c.levels[k][z] !== c.levels[k0][z]) {
+          var lev = c.levels[k0][z], xa = X(k0 ? c.time_s[k0 - 1] : t0), xb = X(c.time_s[k - 1]);
+          // closed is a pale tint with an outline (never the card itself), open the full colour;
+          // the lightness ramp is steep in the upper half, where most valves sit
+          var op = 0.1 + 0.9 * Math.pow(lev, 2.2);
+          s += '<rect class="valve-outline" x="' + xa + '" y="' + (top + z * rowH) + '" width="' + Math.max(1, xb - xa) + '" height="' + (rowH - 1) + '"/>';
+          s += markG(barRect(mv, xa, top + z * rowH, xb - xa, rowH - 1).replace('/>', ' fill-opacity="' + op.toFixed(2) + '"/>'),
+            'Valve ' + (z + 1) + ': ' + Math.round(lev * 100) + ' % open from ' + Math.round(k0 ? c.time_s[k0 - 1] : 0) + ' s to ' + Math.round(c.time_s[k - 1]) + ' s');
+          if (k < c.time_s.length) { s += '<line class="valve-change" x1="' + xb + '" x2="' + xb + '" y1="' + (top + z * rowH) + '" y2="' + (top + z * rowH + rowH - 1) + '"/>'; }
+          k0 = k;
+        }
+      }
+      if (w >= 600 || z % Math.max(1, Math.ceil(n / 7)) === 0) { s += '<text x="' + (l - 4) + '" y="' + (top + z * rowH + rowH - 1) + '" font-size="10" text-anchor="end">' + (z + 1) + '</text>'; }
+    }
+    var e = c.error || {}, ey = top + mapH + gap, emax = Math.max.apply(null, (e.i_units || [1]).concat([1]));
+    function Y(v) { return ey + errH - v / emax * errH; }
+    s += '<text x="4" y="' + (ey - 8) + '" font-size="12" class="axis-title" data-axis="y2">' + esc(me.label) + '</text>';
+    s += '<line class="grid" x1="' + l + '" x2="' + (w - r) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"/><text x="' + (l - 4) + '" y="' + (Y(emax) + 4) + '" font-size="10" text-anchor="end">' + sig(emax, 2) + '</text><text x="' + (l - 4) + '" y="' + (Y(0) + 4) + '" font-size="10" text-anchor="end">0</text>';
+    if (e.time_s && e.time_s.length) {
+      s += lineOf(me, e.time_s.map(function (t, i) { return X(t).toFixed(1) + ',' + Y(e.i_units[i]).toFixed(1); }));
+      var ip = 0; e.i_units.forEach(function (v, i) { if (v > e.i_units[ip]) { ip = i; } });
+      s += markG(glyph({id: me.id, shape: 'circle', fill: 'solid', colour: me.colour}, X(e.time_s[ip]), Y(e.i_units[ip])), 'Largest zone error ' + sig(e.i_units[ip], 3) + ' I-units at ' + Math.round(e.time_s[ip]) + ' s');
+    }
+    var yb = ey + errH;
+    s += ticks(t0, t1, w < 500 ? 3 : 6).map(function (t) { return '<text x="' + X(t) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round(t) + '</text>'; }).join('');
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Valve levels over time and the largest zone error') + s + xt.s + '</svg>';
+  }
+
+  // the zone step test: what the flatness roll zone would read after the zone was closed
+  function stepResponse(c) {
+    var w = Math.min(860, chartWidth()), l = 40, r = Math.round(Math.min(170, w * 0.3)), hh = 150;
+    var fits = c.curves.every(function (cv, k) { return wrapLines(markOf(c, 'c' + k).label, r - 10, 11).length === 1; });
+    if (!fits) { c = Object.assign({}, c, {legend: c.curves.map(function (cv, k) { return 'c' + k; })}); r = 12; }
+    var lg = chartLegend(c, w, 0), top = lg.h + 26, all = [0], tmax = 0;
+    c.curves.forEach(function (cv) { all = all.concat(cv.i_units); tmax = Math.max(tmax, cv.time_s[cv.time_s.length - 1]); });
+    var rg = niceRange(Math.min.apply(null, all), Math.max.apply(null, all));
+    function X(t) { return l + t / tmax * (w - l - r); }
+    function Y(v) { return top + (rg[1] - v) / (rg[1] - rg[0]) * hh; }
+    var s = lg.s + yTitle(c, 4, top - 12);
+    ticks(rg[0], rg[1], 4).forEach(function (t) { s += '<line class="grid" x1="' + l + '" x2="' + (w - r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text x="' + (l - 4) + '" y="' + (Y(t) + 4) + '" font-size="11" text-anchor="end">' + sig(t, 3) + '</text>'; });
+    (c.references || []).forEach(function (x) {
+      if (!isNum(x.value)) { return; }
+      s += markG(refLine(X(x.value), top, X(x.value), top + hh, x.id), x.tip || (x.label + ': ' + sig(x.value, 3) + ' s'));
+      s += refText(X(x.value) + 4, top + 12, x.label);
+    });
+    c.curves.forEach(function (cv, k) {
+      var m = markOf(c, 'c' + k), step = Math.max(1, Math.floor(cv.time_s.length / 300));
+      s += lineOf(m, cv.time_s.filter(function (t, i) { return i % step === 0; }).map(function (t, j) { var i = j * step; return X(t).toFixed(1) + ',' + Y(cv.i_units[i]).toFixed(1); }));
+      var e = cv.time_s.length - 1;
+      s += markG(glyph({id: m.id, shape: 'circle', fill: 'solid', colour: m.colour}, X(cv.time_s[e]), Y(cv.i_units[e])), cv.label + ': ' + sig(cv.i_units[e], 3) + ' I-units after ' + Math.round(cv.time_s[e]) + ' s');
+      if (fits) { s += labelText({id: m.id, label: cv.label, colour: m.colour}, w - r + 6, Y(cv.i_units[e]) + 4 + (k - 1) * 13, null, 11); }
+    });
+    var yb = top + hh;
+    s += ticks(0, tmax, w < 500 ? 3 : 6).map(function (t) { return '<text x="' + X(t) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round(t) + '</text>'; }).join('');
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Zone step test: flatness roll reading over time') + s + xt.s + '</svg>';
   }
 
   function chartSvg(c) {
@@ -2206,6 +2351,9 @@ APP_JS = r''''use strict';
     if (c.type === 'cycle') { return cycleChart(c); }
     if (c.type === 'shares') { return sharesChart(c); }
     if (c.type === 'loads') { return loadsChart(c); }
+    if (c.type === 'range') { return rangeChart(c); }
+    if (c.type === 'valve_map') { return valveMap(c); }
+    if (c.type === 'step_response') { return stepResponse(c); }
     return '';
   }
 
@@ -2226,10 +2374,25 @@ APP_JS = r''''use strict';
     return h + '<p class="small soft">From "' + esc(card.group_title) + '" in step 3.</p></section>';
   }
   function addonCards(sum) {
-    var cards = sum.addon_cards || [];
-    var h = cards.map(addonCard).join('');
+    var cards = sum.addon_cards || [], by = {};
+    cards.forEach(function (c) { by[c.id] = c; });
+    var h = (sum.addon_sections || []).map(function (sec) {
+      var open = S.openSections && S.openSections[sec.group];
+      return '<details class="addon-section card noprint" id="sec-' + sec.group + '" data-section="' + sec.group + '"' + (open ? ' open' : '') + '><summary><span class="s-title">' + esc(sec.title) + '</span> <span class="small soft">' +
+        sec.cards.length + (sec.cards.length === 1 ? ' card' : ' cards') + '</span><span class="s-line">' + esc(sec.summary) + '</span></summary>' +
+        sec.cards.map(function (id) { return addonCard(by[id]); }).join('') + '</details>';
+    }).join('');
     if (sum.addon_more && sum.addon_more.text) { h += '<p class="small soft quietline noprint">' + esc(sum.addon_more.text) + '</p>'; }
     return h;
+  }
+
+  // the index near the top: one link per heading (nothing when nothing was added)
+  function addonIndex(sum) {
+    var secs = sum.addon_sections || [];
+    if (!secs.length) { return ''; }
+    return '<nav class="addon-index noprint" aria-label="From what you added"><span class="small">From what you added:</span> ' + secs.map(function (sec) {
+      return '<a href="#sec-' + sec.group + '" data-open-section="' + sec.group + '">' + esc(sec.title) + '</a>';
+    }).join('<span class="sep" aria-hidden="true"> · </span>') + '</nav>';
   }
 
   // ------------------------------------------------------------------ the add-on area of step 3
@@ -2251,7 +2414,7 @@ APP_JS = r''''use strict';
     var h = '<details class="addons" data-more="addons"' + (open ? ' open' : '') + '><summary><span class="a-title">Add what else you have (optional)</span> <span class="small soft" data-view="addoncount">' + addonCountHtml() + '</span></summary>' +
       '<p class="howto">A flatness roll, a gauge, a scan, pass records, oil data, or a model choice: each adds what it would show to the result. None of them changes the shortlist unless a model choice says so.</p><ul class="groups">';
     M.addon_groups.forEach(function (g) {
-      var qs = g.questions.map(function (id) { return Q[id]; }).filter(function (q) { return q && shown(q); });
+      var qs = g.questions.map(function (id) { return Q[id]; }).filter(function (q) { return q && shown(q) && visible(q); });
       var gopen = S.openGroups && S.openGroups[g.id];
       h += '<li class="addon-group"><details data-group="' + g.id + '"' + (gopen ? ' open' : '') + '><summary><span class="g-title">' + esc(g.title) + '</span><span data-view="addon:' + g.id + '">' + addonStatusHtml(g.id) + '</span></summary>' +
         '<p class="help">' + gloss(g.help) + '</p>' + qs.map(function (q) { return renderQ(q); }).join('') +
@@ -2435,7 +2598,7 @@ APP_JS = r''''use strict';
 
   // ------------------------------------------------------------------ events
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-step],[data-run],[data-cause],[data-answer],[data-check],[data-update],[data-discard],[data-open-run],[data-rerun],[data-cancel],[data-back-input],[data-goto],[data-report],[data-download],[data-print],[data-drawer],[data-trywhatif],[data-wstep],[data-list-add],[data-list-del],[data-route-use],[data-band-add],[data-band-del],[data-band-clear],[data-noz],[data-noz-reset],[data-noz-init],[data-defaults],[data-new],[data-mark],[data-clear-group]');
+    var t = e.target.closest('[data-step],[data-run],[data-cause],[data-answer],[data-check],[data-update],[data-discard],[data-open-run],[data-rerun],[data-cancel],[data-back-input],[data-goto],[data-report],[data-download],[data-print],[data-drawer],[data-trywhatif],[data-wstep],[data-list-add],[data-list-del],[data-route-use],[data-band-add],[data-band-del],[data-band-clear],[data-noz],[data-noz-reset],[data-noz-init],[data-defaults],[data-new],[data-mark],[data-clear-group],[data-open-section]');
     if (!t) { var m = e.target.closest('.mark'); if (m) { showTip(m); } return; }
     var d = t.dataset;
     if (d.step) { goStep(d.step); }
@@ -2496,6 +2659,11 @@ APP_JS = r''''use strict';
     else if (d.nozInit) { sendEdit({op: 'all_healthy'}); }
     else if (d.defaults) { productDefaults(); }
     else if (d.clearGroup) { clearGroup(d.clearGroup); }
+    else if (d.openSection) {
+      e.preventDefault();
+      var sec = document.getElementById('sec-' + d.openSection);
+      if (sec) { sec.open = true; sec.scrollIntoView({block: 'start'}); sec.querySelector('summary').focus({preventScroll: true}); }
+    }
     else if (d.new) { newScreening(); }
   });
 
@@ -2572,6 +2740,7 @@ APP_JS = r''''use strict';
     if (t.dataset && t.dataset.trust) { S.trustOpen = t.open; }
     if (t.dataset && t.dataset.nozlist) { S.nozListOpen = t.open; }
     if (t.dataset && t.dataset.group) { S.openGroups = S.openGroups || {}; S.openGroups[t.dataset.group] = t.open; }
+    if (t.dataset && t.dataset.section) { S.openSections = S.openSections || {}; S.openSections[t.dataset.section] = t.open; }
   }, true);
   document.addEventListener('input', function (e) {
     var t = e.target, d = t.dataset;

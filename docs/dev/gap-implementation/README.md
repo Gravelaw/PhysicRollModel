@@ -21,7 +21,7 @@ study. Whether this folder stays in the final pull request is to be decided when
 | `research_phase1_equations.md` | Literature research for Phase 1 (source prefix `E`). Moved by Phase 1 package 1 to [phase1-equations.md](../../research/band-screening-2026-11/phase1-equations.md); no longer in this folder. |
 | `prototypes/` | The planners' and the researcher's scratch scripts. Prototypes, not specifications; where they differ from a brief, the brief holds. Inside the briefs they are named by their original scratch folders: `s21` is `prototypes/phase0`, `s23` is `prototypes/phase1`, `s24` is `prototypes/phase1-research`, `s25` is `prototypes/phase2`. |
 | `verify_additive.py` | Compares the working-tree artifacts with the last commit and reports added, grown, changed and removed paths. Run from the repository root. |
-| `verify_tests.sh` | Runs the band test modules in four parallel groups and the smoke script. Run from the repository root. |
+| `verify_tests.sh` | Runs the band test modules in five parallel groups and the smoke script. Run from the repository root. |
 
 ## Status
 
