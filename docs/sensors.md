@@ -80,7 +80,35 @@ process solver's net tension-power term. Rotational kinetic energies are shown a
 specified radii, but acceleration torque and motor losses are `null` in the snapshot.
 No claim is made that `P_roll + P_reels` is total electrical demand.
 
-Roll-stack bending, thermal crown, widthwise flatness, coolant/lubricant flow, coil-build
-kinematics, dynamics and control remain interfaces. See `docs/research.md` for scientific
-validation gates. Tests are in `tests/test_equipment_sensors.py` and
-`tests/test_observations.py`.
+In this demonstrator (the equipment and sensor registry: `physicroll/equipment.py`,
+`physicroll/sensors.py`, `physicroll/observations.py`) roll-stack bending, thermal crown,
+widthwise flatness, coolant/lubricant flow, coil-build kinematics, dynamics and control remain
+interfaces: the registry names the instruments and converts readings, and nothing in it
+simulates these effects. The band screening part of the repository (`docs/band-diagnosis.md`)
+has since added models of some of them, all unvalidated and most of them switched on only by a
+case key: a roll thermal model with spray cooling and the thermal crown across the barrel
+(section 7.1), the strip shape and flatness across the width (section 7.2), what a shapemeter
+and a thickness gauge would show (sections 7.6 and 11.6), a simulated spray-zone flatness loop
+with the tool's own control rule (section 7.12), an emulated zone step test (section 7.1), a
+linear chatter and mill-dynamics screen (sections 9 and 11) and a coil ridge screen. Roll-stack
+bending is not modelled anywhere in the repository; neither is a plant's own flatness or gauge
+controller. None of these models has been compared with plant data; the full list of what they
+assume is in `docs/limitations.md`. See `docs/research.md` for scientific validation gates.
+Tests are in `tests/test_equipment_sensors.py` and `tests/test_observations.py`.
+
+## Measurement inputs of the band screening tool
+
+The band screening tool (`python -m physicroll.band_cli`, and the guided app) takes the
+measurements below. They are values a person types in or loads from a file; there is no live
+plant connection, and the sensor manifest's readings above stay empty. Section numbers refer to
+`docs/band-diagnosis.md`.
+
+| Input (case key) | What is entered | What the tool does with it | The caution that matters most |
+|---|---|---|---|
+| Shapemeter (`measurement.shapemeter`), section 7.6 | zone width and positions, coverage, optional neighbour spreading and whether it corrects for strip temperature | shows what each zone would read for the modelled bands | the readings are zone means of a model, not a forecast of the operator's screen: no shapemeter dynamics, filter, noise, calibration or temperature compensation; the readings never change a score |
+| Thickness gauge (`measurement.thickness_gauge`), section 11.6 | spot length and response time of the gauge | shows about how much of each mark spacing the gauge keeps | a spot average and a first-order lag only (real gauges have other filters); when the gauge cannot show a mark, a "no gauge variation" answer is flagged but the scores are not changed |
+| Pass records (`measurement.pass_records`), section 8.5 | roll force (required), forward slip and torque where measured, with their uncertainties | works out the friction that reproduces them, per record | shown only and applied nowhere; the value absorbs the roll-gap model's own error (about 12 % from load and 30 % from slip on the published case), and the entered numbers are not verified |
+| Strip temperature scan (`width_model.strip_temperature`), section 7.7 | an exit strip temperature profile across the width | adds the temperature part to flatness as measured hot and after cooling | the scan is an input, not computed; the expansion coefficient defaults to a textbook value, and without a controller the held-flat case is only a bound |
+| Measured roll profile (`width_model.roll_ground_profile`), section 7.9 | the radius deviation of one work roll along the barrel from a grinder report | puts it through the same transfer as a hot roll stripe | one roll, measured cold and off the mill; narrow marks are smoothed; grinder gauges read diameter, so halve the deviations; never evidence |
+| Grinder marks and settings (`kinematics.grinder_marks`), section 6.3 (rule 3) and section 7.9 | a counted number of marks around the roll, or the grinder's last-pass wheel (or vibration) and roll speeds | computes the mark count and tests the roll-mark spacing against it | without these data a grinder chatter pattern cannot be ruled out; no amplitude of grinder marks on foil rolls is published |
+| Roll temperature scan or thermal camber (`--calibrate-spray` file), section 7.1 | roll surface temperatures after a stop, or a measured thermal camber, along the barrel | fits one circumferential-mean spray coefficient for the whole header and prints it | the fit carries the errors of the heat share and the other inputs taken from the case; it is never applied: you enter the value yourself |

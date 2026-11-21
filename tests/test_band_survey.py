@@ -8,6 +8,7 @@ import json
 import re
 import tempfile
 import unittest
+from unittest import mock
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -24,7 +25,10 @@ FEW = ['battery_pouch_laminate_foil', 'household_foil', 'litho_sheet']
 class ProductSurveyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.r = bs.survey()
+        # rows in 4 processes (band_survey.survey(workers=...)): the same result, asserted
+        # against the committed artifact in test_determinism_and_committed_artifacts; serial
+        # it takes about 55 s, above the module time limit
+        cls.r = bs.survey(workers=4)
         cls.html = bs.render_survey_report(cls.r)
         cls.rows = {x['product_id']: x for x in cls.r['rows']}
 
@@ -134,6 +138,24 @@ class ProductSurveyTests(unittest.TestCase):
         self.assertIn('&lt;b&gt;&amp;&quot;x', out)
         self.assertNotIn('<b>&"x', out)
         self.assertTrue(re.search(r'Excluded \(\d+\) and why', self.html))
+
+
+class SurveyProcessPoolTests(unittest.TestCase):
+    """survey(workers=...) starts its pool by spawn and falls back to serial rows when the
+    pool cannot start: the result is the same either way."""
+
+    def test_pool_failure_falls_back_to_serial(self):
+        serial = bs.survey(products=FEW)
+        with mock.patch('concurrent.futures.ProcessPoolExecutor',
+                        side_effect=OSError('no processes here')):
+            with self.assertWarnsRegex(RuntimeWarning, 'rows computed serially'):
+                fallback = bs.survey(products=FEW, workers=2)
+        self.assertEqual(bs.result_json(fallback), bs.result_json(serial))
+
+    def test_spawn_pool_equals_serial(self):
+        serial = bs.survey(products=FEW)
+        self.assertEqual(bs.result_json(bs.survey(products=FEW, workers=2)),
+                         bs.result_json(serial))
 
 
 class BatteryGradeMatrixTests(unittest.TestCase):

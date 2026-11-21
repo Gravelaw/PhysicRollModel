@@ -152,13 +152,93 @@ class BatteryDemoArtifactTests(unittest.TestCase):
                          'WITHIN_PUBLISHED_RANGE')
         self.assertEqual(f['spray_footprint_overlap']['verdict'], 'ABOVE_PUBLISHED_LIMIT')
         self.assertTrue(all(t['value'] < 80 for t in tc['strip_exit_temperatures']))
-        self.assertEqual(tc['flags'], [])
+        self.assertEqual(tc['flags'], [bt.SPRAY_BASIS_FLAG])          # SPEC17 A5
         b = tc['growth']['steady_build_up']
         self.assertLess(b['time_to_50_percent_s'], b['time_to_90_percent_s'])
         for line in bt.THERMAL_MEASUREMENTS:
             self.assertIn(line, self.r['recommended_next_measurements'])
         html = (ART / 'battery-foil-demo.report.html').read_text(encoding='utf-8')
         self.assertIn('<h2>Process temperatures</h2>', html)
+
+
+
+class SprayBasisAndFireLimitTests(unittest.TestCase):
+    """SPEC17 A5 / X3 (basis of the spray coefficient) and A10 (fire limits): evaluated on the
+    committed battery-foil result with a changed case (thermal_check reads only the two)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = json.loads((ART / 'battery-foil-demo.result.json').read_text(encoding='utf-8'))
+        cls.raw = json.loads((ROOT / 'scenarios' /
+                              'band_diagnosis_battery_foil.json').read_text())
+
+    def _tc(self, width=None, trib=None, result=None):
+        c = copy.deepcopy(self.raw)
+        c['width_model'].update(width or {})
+        c['tribology'].update(trib or {})
+        return bt.thermal_check(copy.deepcopy(result or self.r), validate_case(c))
+
+    def test_spray_basis_keys_flag_and_unchanged_verdict(self):
+        f = by_item(self.r['thermal_check']['inputs'])['spray_heat_transfer_coefficient']
+        self.assertEqual(f['verdict'], 'WITHIN_PUBLISHED_RANGE')
+        self.assertEqual(f['basis_comparable'], 'NOT_COMPARABLE')
+        self.assertIn('roll-wall patch of one cooling zone', f['basis_comparable_reason'])
+        self.assertIn('0.14 to 1.07 kW/m2K', f['basis_comparable_reason'])
+        self.assertEqual(bt.SPRAY_BASIS_FLAG, 'SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE')
+        self.assertIn('circumferential mean', f['value_basis'])
+        self.assertIn('jet zone', f['published_basis'])
+        self.assertNotIn('footprint_equivalent_w_m2k', f)
+        self.assertIn(bt.SPRAY_BASIS_FLAG, self.r['flags'])
+        html = (ART / 'battery-foil-demo.report.html').read_text(encoding='utf-8')
+        self.assertIn('The two are not on the same basis', html)
+
+    def test_wetted_arc_conversion_and_range(self):
+        import math
+        tc = self._tc(width={'spray_wetted_arc_rad': math.pi / 3})
+        f = by_item(tc['inputs'])['spray_heat_transfer_coefficient']
+        self.assertAlmostEqual(f['footprint_equivalent_w_m2k'], 20450.0, places=9)
+        self.assertEqual(f['footprint_equivalent_verdict'], 'ABOVE_PUBLISHED_RANGE')
+        self.assertEqual(f['verdict'], 'WITHIN_PUBLISHED_RANGE')      # verdict unchanged
+        self.assertAlmostEqual(bt.footprint_equivalent_htc(3400.0, 50.0, 2 * math.pi), 3450.0)
+        for bad in (0.0, -1.0, 7.0):
+            c = copy.deepcopy(self.raw)
+            c['width_model']['spray_wetted_arc_rad'] = bad
+            with self.assertRaisesRegex(ValueError, r'spray_wetted_arc_rad must be in \(0, '
+                                                    r'2\*pi\]'):
+                validate_case(c)
+
+    def test_fire_limits(self):
+        fl = self.r['thermal_check']['fire_limits']
+        self.assertTrue(fl['not_supplied'])
+        self.assertEqual(fl['rows'], [])
+        topics = {x['topic']: x for x in fl['context']}
+        self.assertIn('PT-T9', topics['flash_point']['sources'])
+        self.assertIn('PT-T15', topics['fire']['sources'])
+        self.assertIn('EXIT_IS_NOT_COIL', fl['note'])
+        tc = self._tc(trib={'oil_flash_point_k': 353.15})
+        rows = tc['fire_limits']['rows']
+        oil = next(x for x in rows if x['item'] == 'oil_inlet_temperature')
+        self.assertAlmostEqual(oil['margin_k'], 35.0, places=9)
+        self.assertEqual(oil['verdict'], 'BELOW_LIMIT')
+        self.assertTrue(any(x['item'] == 'coolant_temperature_as_oil_supply' for x in rows))
+        self.assertTrue(all(x['verdict'] == 'BELOW_LIMIT' for x in rows))   # demo below 80 C
+        self.assertEqual(tc['flags'], [bt.SPRAY_BASIS_FLAG])
+        # a pass hotter than the flash point (synthetic result of PropertyRiskTests)
+        hot = PropertyRiskTests()._result(95.0)
+        case = PropertyRiskTests._case()
+        case['tribology'].update(oil_flash_point_k=353.15, oil_supply_temperature_cap_k=313.15)
+        tc = bt.thermal_check(hot, case)
+        f2 = next(x for x in tc['fire_limits']['rows'] if x.get('label') == 'F2')
+        self.assertEqual(f2['verdict'], 'AT_OR_ABOVE_LIMIT')
+        self.assertIn(bt.FIRE_FLAG_STRIP, tc['flags'])
+        self.assertIn(bt.FIRE_FLAG_CAP, tc['flags'])                       # 45 C > 40 C cap
+        self.assertNotIn(bt.FIRE_FLAG_OIL, tc['flags'])
+        for key in ('oil_flash_point_k', 'oil_supply_temperature_cap_k'):
+            for bad in (200.0, 800.0):
+                c = copy.deepcopy(self.raw)
+                c['tribology'][key] = bad
+                with self.assertRaisesRegex(ValueError, key):
+                    validate_case(c)
 
 
 if __name__ == '__main__':

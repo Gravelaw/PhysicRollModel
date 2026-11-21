@@ -75,20 +75,32 @@ from . import band_products
 from . import band_signatures as bs
 from . import band_thermal
 from . import band_width as bw
+from . import band_sensors
+from . import foil_gauge
 from .chatter import (BitePass, BiteResponse, StandModel, StripSpans, critical_speed,
                       derive_bite_response, frequency_response, natural_frequencies, simulate,
                       stability)
 from .chatter import BITE_MIN_EXIT_THICKNESS_M as chatter_BITE_MIN_EXIT_THICKNESS_M
+from .chatter import HITCHCOCK_MIN_EXIT_THICKNESS_M
+from .chatter import _converged_bite as chatter_converged_bite
 from .chatter import REDUCTION_EXTENDED_FLAG
 from .foil_bite import (EXTENDED_GAUGE_FLAG, EXTENDED_GAUGE_LIMITATION,
-                        EXTENDED_REDUCTION_LIMITATION, derive_bite_response_mattress)
+                        EXTENDED_REDUCTION_LIMITATION, LARGE_SLIP_EXPLANATION,
+                        derive_bite_response_mattress, solve_mattress_bite)
+from . import halfspace_bite
 
 CASE_SCHEMA_V1 = 'physicroll.band_case.v1'
 CASE_SCHEMA_V2 = 'physicroll.band_case.v2'
 CASE_SCHEMA = CASE_SCHEMA_V1          # phase-1 name kept (the v1 schema)
 CASE_SCHEMAS = (CASE_SCHEMA_V1, CASE_SCHEMA_V2)
-BITE_MODELS = ('hitchcock', 'mattress', 'auto')
+BITE_MODELS = ('hitchcock', 'mattress', 'auto', 'half_space', 'auto_half_space')
 MATTRESS_MIN_CELLS = 200
+HALF_SPACE_USED_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
+HALF_SPACE_LIMITATION = (
+    'Reduced half-space bite: its load depends on how the bite ends are closed; on the '
+    'published foil case it gives 88.9 to 92.9 where the printed model gives 78 to 134 '
+    'depending on an unstated end length [computed, SPEC18].')
+HALF_SPACE_WARM_START_DISTANCE = 0.25   # SPEC18 package 4: warm start below this distance
 STATUS = 'SCREENING_RESULT_NOT_PLANT_VALIDATED'
 REALISTIC_MAX_EXIT_SPEED_M_S = 35.0     # analyst choice: resonant speeds above are dropped
 SPEED_SCAN_M_S = (0.05, 60.0)
@@ -180,6 +192,10 @@ LIMITATIONS = (
     'roll temperature field instead).',
     'The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on '
     'planner-derived and memory formulas flagged in each result; no plant validation.',
+    # SPEC17 B4 [D, re-derived in SPEC17; r-values TM-LB1 EX]
+    'The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um '
+    '1235-H18 foil would move it by -12 % to +1 % under Hill\'s 1948 criterion (table in '
+    'docs/thin-gauge-products.md).',
 )
 
 # confirming tests and levers per hypothesis (drawn from mill practice; plain words)
@@ -336,7 +352,8 @@ COOLANT_KEYS = ('barrel_length_m', 'nozzle_pitch_m', 'standoff_m', 'spray_angle_
                 'assumed_excess_temperature_k')
 OPTION_KEYS = ('bite_damping_transit_fraction', 'max_radius_ratio', 'cells',
                'bite_response_override')
-OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity')
+OPTION_OPTIONAL = ('bite_model', 'thermal_sensitivity', 'shear_cap_factor', 'buckling_model')
+BUCKLING_MODELS = bw.BUCKLING_MODELS
 OBS_KEYS = ('orientation', 'pitch_observations', 'faces', 'gauge_variation_detected',
             'gauge_variation_amplitude_m', 'first_seen', 'disappears_after_work_roll_change',
             'disappears_after_backup_roll_change', 'onset_above_exit_speed_m_s',
@@ -348,7 +365,7 @@ TOP_REQUIRED = ('case_schema', 'name', 'synthetic', 'provenance', 'pass', 'mater
                 'spans', 'kinematics', 'lubrication', 'coolant', 'model_options', 'observation')
 TOP_OPTIONAL = ('notes', 'schedule')
 V2_SECTIONS = ('width_model', 'tribology', 'hardening', 'gauge_control', 'drive',
-               'incoming_variation')
+               'incoming_variation', 'measurement', 'foil_gauge_control')
 
 
 def _speed_value(where, value):
@@ -511,6 +528,16 @@ def validate_case(case):
             raise ValueError('model_options.thermal_sensitivity must be one of '
                              f'{band_thermal.MODES}')
         out['model_options']['thermal_sensitivity'] = o['thermal_sensitivity']
+    if 'buckling_model' in o:           # kept only when given (results without it unchanged)
+        if o['buckling_model'] not in BUCKLING_MODELS:
+            raise ValueError(f'model_options.buckling_model must be one of {BUCKLING_MODELS}')
+        out['model_options']['buckling_model'] = o['buckling_model']
+    if 'shear_cap_factor' in o:         # kept only when given (results without it unchanged)
+        cap = o['shear_cap_factor']
+        if isinstance(cap, bool) or not isinstance(cap, (int, float)) or \
+                not math.isfinite(cap) or not 0 < cap <= 1:
+            raise ValueError('model_options.shear_cap_factor must be in (0, 1]')
+        out['model_options']['shear_cap_factor'] = float(cap)
 
     ob = case['observation']
     _keys('observation', ob, OBS_KEYS + (bw.OBS_V2_KEYS if v2 else ()),
@@ -591,7 +618,29 @@ def _validate_v2_sections(case, out):
                                  else bp.validate_incoming_variation(sec['incoming_variation']))
     res['width_model'] = (None if sec['width_model'] is None
                           else bw.validate_width_model(sec['width_model'], out['pass']))
+    res['measurement'] = (None if sec['measurement'] is None
+                          else band_sensors.validate_measurement(sec['measurement']))
+    tg = (res['measurement'] or {}).get('thickness_gauge')
+    if (tg is not None and tg['position_m'] is not None and res['width_model'] is not None
+            and tg['position_m'] > res['width_model']['roll']['barrel_length_m']):
+        raise ValueError('measurement.thickness_gauge.position_m must be on the barrel '
+                         '(in [0, 10] m and not beyond the barrel length) or null')
+    res['foil_gauge_control'] = foil_gauge.validate(sec['foil_gauge_control'], tg)
+    for i, rec in enumerate((res['measurement'] or {}).get('pass_records') or []):
+        h0 = rec['entry_thickness_m'] or out['pass']['entry_thickness_m']
+        h1 = rec['exit_thickness_m'] or out['pass']['exit_thickness_m']
+        if not h1 < h0:
+            raise ValueError(f'measurement.pass_records[{i}].exit_thickness_m must be below its '
+                             'entry_thickness_m (null = the case pass value)')
     w = res['width_model']
+    if w is not None and (w.get('flatness_control') is not None
+                          or w.get('zone_step_test') is not None):   # SPEC19 packages 4, 5
+        sm = (res['measurement'] or {}).get('shapemeter')
+        if sm is None:
+            raise ValueError('width_model.' + ('flatness_control' if w.get('flatness_control')
+                                               is not None else 'zone_step_test')
+                             + ' needs measurement.shapemeter')
+        bw.check_flatness_control_zones(w, sm)
     if w is not None and w['roll_heat_fraction_per_roll'] is None and res['tribology'] is None:
         raise ValueError('width_model.roll_heat_fraction_per_roll is required when tribology '
                          'is null (otherwise it is (1 - tribology.strip_heat_fraction)/2)')
@@ -653,10 +702,10 @@ def _bite_pass(case, row=None):
 SLIP_KINEMATICS_LIMIT = 0.5   # band_signatures accepts |forward slip| < 0.5
 SLIP_KINEMATICS_FLAG = 'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'
 SLIP_KINEMATICS_LIMITATION = (
-    'The bite\'s forward slip is 0.5 or more (experimental mattress model without elastic '
-    'strip zones): zero slip is used in the roll-borne pitch kinematics only (source '
-    'catalogue, roll-mark and order-locked pitches); the forward-slip screen is not '
-    'assessable and every other result uses the bite\'s actual slip.')
+    'The bite\'s forward slip is 0.5 or more (experimental mattress model): zero slip is used '
+    'in the roll-borne pitch kinematics only (source catalogue, roll-mark and order-locked '
+    'pitches); the forward-slip screen is not assessable and every other result uses the '
+    'bite\'s actual slip. ' + LARGE_SLIP_EXPLANATION)
 BITE_FLOOR_M = chatter_BITE_MIN_EXIT_THICKNESS_M
 BITE_FLOOR_FLAG = 'EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR'
 BITE_FLOOR_REASON = ('not derivable (exit gauge {:.3g} um below the 8 um floor of the roll-bite '
@@ -671,9 +720,13 @@ class _BiteCache:
     """Caches bite derivations per (BitePass, options) within one diagnose call.
 
     ``model_options.bite_model``: 'hitchcock' (slab + circular flattening), 'mattress' (the
-    EXPERIMENTAL elastic-foundation model, ``foil_bite``) or 'auto' (Hitchcock, and the
-    mattress model when Hitchcock rejects the pass). Mattress bites carry the flag
-    ``BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL``.
+    EXPERIMENTAL elastic-foundation model, ``foil_bite``), 'auto' (Hitchcock, and the
+    mattress model when Hitchcock rejects the pass), 'half_space' (the reduced half-space foil
+    model, ``halfspace_bite``, for every pass) or 'auto_half_space' (Hitchcock, and the
+    half-space model when Hitchcock rejects). Mattress bites carry
+    ``BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL``, half-space bites
+    ``BITE_FROM_REDUCED_HALF_SPACE_MODEL``. Half-space derivations keep their state
+    (``states``) and warm-start from the nearest stored solution (distance below 0.25).
     """
 
     def __init__(self, case):
@@ -681,6 +734,8 @@ class _BiteCache:
         self.store = {}
         self.derivations = 0
         self.fallbacks = {}
+        self.states = {}
+        self.nominal_solutions = []
 
     def _mattress(self, bite_pass):
         s, o = self.case['stand'], self.case['model_options']
@@ -689,9 +744,128 @@ class _BiteCache:
             roll_poisson_ratio=s['roll_poisson_ratio'], cells=max(o['cells'], MATTRESS_MIN_CELLS))
         return bp.replace_bite_flags(bite, (bp.MATTRESS_FLAG,))
 
+    def _nearest_state(self, bite_pass):
+        best, best_d = None, HALF_SPACE_WARM_START_DISTANCE
+        for key, st in self.states.items():
+            q = key[0]
+            y = bite_pass.mean_flow_stress_pa
+            d = (abs(math.log(bite_pass.entry_thickness_m / q.entry_thickness_m))
+                 + abs(math.log(bite_pass.exit_thickness_m / q.exit_thickness_m))
+                 + abs(math.log(y / q.mean_flow_stress_pa))
+                 + abs(math.log(bite_pass.friction_coefficient / q.friction_coefficient))
+                 + (abs(bite_pass.entry_tension_pa - q.entry_tension_pa)
+                    + abs(bite_pass.exit_tension_pa - q.exit_tension_pa)) / y)
+            if d < best_d:
+                best, best_d = st, d
+        return best
+
+    def _half_space(self, bite_pass, key):
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        warm = self._nearest_state(bite_pass)
+        bite, state = halfspace_bite.derive_bite_response_half_space(
+            bite_pass, roll_youngs_modulus_pa=s['roll_youngs_modulus_pa'],
+            roll_poisson_ratio=s['roll_poisson_ratio'],
+            strip_plane_strain_modulus_pa=(m['youngs_modulus_pa']
+                                           / (1 - bw.STRIP_POISSON_RATIO ** 2)),
+            shear_cap_factor=o.get('shear_cap_factor', 1.0),
+            warm_start=None if warm is None else warm['solution'], with_state=True)
+        bite = bp.replace_bite_flags(bite, (bp.HALF_SPACE_FLAG,))
+        state['response'] = bite
+        self.states[key] = state
+        return bite
+
+    def state_for(self, bite):
+        """The half-space state of a bite this cache derived, else None."""
+        for st in self.states.values():
+            if st['response'] is bite:
+                return st
+        return None
+
+    def state(self, bite_pass, model=None):
+        """ONE nominal solve of ``bite_pass`` (no sensitivities), cached by the key of ``get``:
+        ``{'force_n', 'forward_slip_fraction', 'torque_per_work_roll_nm' (or None),
+        'contact_length_m', 'contact_radius_ratio', 'flags'}`` (SPEC18 package 7: an inversion
+        costs solves, not derivations). ValueError when the model rejects the pass."""
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        model = o['bite_model'] if model is None else model
+        key = ('state', bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'],
+               o['cells'], o['max_radius_ratio'], model, o.get('shear_cap_factor', 1.0))
+        if key not in self.store:
+            try:
+                if bite_pass.exit_thickness_m < BITE_FLOOR_M:
+                    raise ValueError(BITE_FLOOR_REASON.format(bite_pass.exit_thickness_m * 1e6))
+                bite_pass.validate()
+                self.store[key] = self._state(bite_pass, model)
+            except ValueError as exc:
+                self.store[key] = exc
+        value = self.store[key]
+        if isinstance(value, Exception):
+            raise ValueError(str(value))
+        return value
+
+    def _state(self, bp_, model):
+        s, o, m = self.case['stand'], self.case['model_options'], self.case['material']
+        e, nu = s['roll_youngs_modulus_pa'], s['roll_poisson_ratio']
+        args = (bp_.entry_thickness_m, bp_.exit_thickness_m, bp_.width_m, bp_.work_roll_radius_m,
+                bp_.mean_flow_stress_pa, bp_.friction_coefficient, bp_.entry_tension_pa,
+                bp_.exit_tension_pa)
+        if model == 'mattress':
+            r = solve_mattress_bite(*args, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+                                    cells=max(o['cells'], MATTRESS_MIN_CELLS))
+            return {'force_n': r['separating_force_n'],
+                    'forward_slip_fraction': r['forward_slip_fraction'],
+                    'torque_per_work_roll_nm': r['torque_per_work_roll_nm'],
+                    'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': 1.0,
+                    'flags': list(r['flags']), 'model': 'experimental_mattress'}
+        if model == 'half_space':
+            warm = self._nearest_nominal(bp_)
+            r, sol = halfspace_bite.solve_half_space_bite(
+                *args, roll_youngs_modulus_pa=e, roll_poisson_ratio=nu,
+                strip_plane_strain_modulus_pa=(m['youngs_modulus_pa']
+                                               / (1 - bw.STRIP_POISSON_RATIO ** 2)),
+                shear_cap_factor=o.get('shear_cap_factor', 1.0), warm_start=warm,
+                with_solution=True)
+            self.nominal_solutions.append((bp_, sol))
+            return {'force_n': r['separating_force_n'],
+                    'forward_slip_fraction': r['forward_slip_fraction'],
+                    'torque_per_work_roll_nm': r['torque_per_work_roll_nm'],
+                    'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': 1.0,
+                    'flags': list(r['flags']), 'model': 'reduced_half_space'}
+        if bp_.exit_thickness_m < HITCHCOCK_MIN_EXIT_THICKNESS_M:
+            raise ValueError(f'slab/Hitchcock bite domain requires exit thickness >= '
+                             f'{HITCHCOCK_MIN_EXIT_THICKNESS_M:g} m')
+        compliance = 16 * (1 - nu ** 2) / (math.pi * e)
+        try:
+            r, ratio = chatter_converged_bite(bp_, bp_.exit_thickness_m, bp_.entry_thickness_m,
+                                              bp_.entry_tension_pa, bp_.exit_tension_pa,
+                                              o['cells'], compliance, o['max_radius_ratio'])
+        except (ArithmeticError, TypeError) as exc:
+            raise ValueError(f'slab evaluation failed: {exc}') from exc
+        return {'force_n': r['separating_force_n'],
+                'forward_slip_fraction': r['forward_slip_fraction'],
+                'torque_per_work_roll_nm': r.get('torque_per_work_roll_nm'),
+                'contact_length_m': r['contact_length_m'], 'contact_radius_ratio': ratio,
+                'flags': list(r.get('flags') or []), 'model': 'hitchcock'}
+
+    def _nearest_nominal(self, bite_pass):
+        best, best_d = None, HALF_SPACE_WARM_START_DISTANCE
+        cands = list(self.nominal_solutions) + [(k[0], st['solution'])
+                                                for k, st in self.states.items()]
+        for q, sol in cands:
+            y = bite_pass.mean_flow_stress_pa
+            d = (abs(math.log(bite_pass.entry_thickness_m / q.entry_thickness_m))
+                 + abs(math.log(bite_pass.exit_thickness_m / q.exit_thickness_m))
+                 + abs(math.log(y / q.mean_flow_stress_pa))
+                 + abs(math.log(bite_pass.friction_coefficient / q.friction_coefficient))
+                 + (abs(bite_pass.entry_tension_pa - q.entry_tension_pa)
+                    + abs(bite_pass.exit_tension_pa - q.exit_tension_pa)) / y)
+            if d < best_d:
+                best, best_d = sol, d
+        return best
+
     def get(self, bite_pass, model=None):
         """Bite of ``bite_pass`` with the case's bite model, or with ``model`` ('hitchcock' /
-        'mattress') to keep perturbed bites on the model of a reference bite."""
+        'mattress' / 'half_space') to keep perturbed bites on the model of a reference bite."""
         s, o = self.case['stand'], self.case['model_options']
         model = o['bite_model'] if model is None else model
         key = (bite_pass, s['roll_youngs_modulus_pa'], s['roll_poisson_ratio'], o['cells'],
@@ -705,6 +879,8 @@ class _BiteCache:
                 self.derivations += 1
                 if model == 'mattress':
                     self.store[key] = self._mattress(bite_pass)
+                elif model == 'half_space':
+                    self.store[key] = self._half_space(bite_pass, key)
                 else:
                     try:
                         self.store[key] = derive_bite_response(
@@ -712,13 +888,16 @@ class _BiteCache:
                             roll_poisson_ratio=s['roll_poisson_ratio'], cells=o['cells'],
                             max_radius_ratio=o['max_radius_ratio'])
                     except ValueError as exc:
-                        if model != 'auto':
+                        if model not in ('auto', 'auto_half_space'):
                             raise
+                        word = ('experimental mattress' if model == 'auto'
+                                else 'reduced half-space')
                         try:
-                            self.store[key] = self._mattress(bite_pass)
+                            self.store[key] = (self._mattress(bite_pass) if model == 'auto'
+                                               else self._half_space(bite_pass, key))
                         except ValueError as exc2:
-                            raise ValueError(f'{exc}; experimental mattress fallback also '
-                                             f'rejected: {exc2}') from exc2
+                            raise ValueError(f'{exc}; {word} fallback also rejected: '
+                                             f'{exc2}') from exc2
                         self.fallbacks[key] = str(exc)
             except ValueError as exc:
                 self.store[key] = exc
@@ -731,11 +910,15 @@ class _BiteCache:
 def perturbed_bite_model(case, bite):
     """Bite model for the perturbed bites of the levers, the speed-consistent critical speed
     and the sensitivities: the model of the operating bite (mattress when it is a mattress
-    bite or ``bite_model`` is 'mattress', else Hitchcock; a supplied bite keeps the selected
-    model, Hitchcock for 'auto'). No silent switch: a perturbed pass that model cannot solve is
-    reported as not assessable with the reason."""
+    bite or ``bite_model`` is 'mattress'; half-space when it is a half-space bite or
+    ``bite_model`` is 'half_space'; else Hitchcock; a supplied bite keeps the selected model,
+    Hitchcock for 'auto' and 'auto_half_space'). No silent switch: a perturbed pass that model
+    cannot solve is reported as not assessable with the reason."""
+    option = case['model_options']['bite_model']
+    if (bite is not None and bp.is_half_space(bite)) or option == 'half_space':
+        return 'half_space'
     return ('mattress' if (bite is not None and bp.is_mattress(bite))
-            or case['model_options']['bite_model'] == 'mattress' else 'hitchcock')
+            or option == 'mattress' else 'hitchcock')
 
 
 class _ModelCache:
@@ -746,6 +929,12 @@ class _ModelCache:
 
     def get(self, bite_pass, model=None):
         return self.cache.get(bite_pass, model=model or self.model)
+
+    def state_for(self, bite):
+        return self.cache.state_for(bite)
+
+    def state(self, bite_pass, model=None):
+        return self.cache.state(bite_pass, model=model or self.model)
 
 
 def _opts(beta):
@@ -1023,22 +1212,23 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
     elif abs(slip) < SLIP_KINEMATICS_LIMIT:
         scr['forward_slip'] = bs.forward_slip_screen(slip)
     else:
-        # band_signatures accepts |slip| < 0.5; a larger (implausible, flagged) model slip is
+        # band_signatures accepts |slip| < 0.5; a larger (flagged) model slip is
         # not skidding: the screen is not assessable, never 'SKIDDING'
         scr['forward_slip'] = {
             'status': 'NOT_ASSESSABLE', 'forward_slip_fraction': slip,
             'reason': (f'forward slip {slip:.4g} is outside the screen domain (|f| < 0.5): '
-                       'strongly positive, not skidding; an experimental mattress bite reports '
-                       'such values because it has no elastic strip zones'),
+                       'strongly positive, not skidding. ' + LARGE_SLIP_EXPLANATION),
             'flags': [], 'limitations': [], 'sources': []}
     lub = case['lubrication']
     if lub is not None and bite is not None:
         vr = p['exit_speed_m_s'] / (1 + slip)
+        # contact_radius_ratio here is bp.film_radius_ratio(bite): 1.0 for a mattress bite
         theta = bs.inlet_angle_rad(h0, h1, p['work_roll_radius_m'] * contact_radius_ratio)
         film = bs.inlet_film_thickness_wilson_walowit(
             lub['viscosity_pa_s'], lub['pressure_viscosity_coefficient_per_pa'], vr,
             p['exit_speed_m_s'] * h1 / h0, theta, 2 / math.sqrt(3) * p['mean_flow_stress_pa'])
         film['inlet_angle_rad'] = theta
+        film['inlet_angle_basis'] = bp.inlet_angle_basis(bite)
         scr['film'] = film
         scr['film_regime'] = bs.film_ratio_regime(film['film_thickness_m'],
                                                   lub['roll_roughness_rq_m'],
@@ -1049,7 +1239,8 @@ def _section_screens(case, bite, slip, contact_length, contact_radius_ratio, fla
     if c is not None:
         cov = bs.spray_coverage(c['barrel_length_m'], c['nozzle_pitch_m'], c['standoff_m'],
                                 c['spray_angle_rad'], c['offset_angle_rad'],
-                                tuple(c['blocked_nozzle_indices']))
+                                tuple(c['blocked_nozzle_indices']),
+                                footprint_width_m=_coverage_width(case))
         risk = [s for s in cov['stripes']
                 if s['cause'] == 'BLOCKED_NOZZLE' or (s['kind'] == 'UNCOVERED'
                                                       and not s['at_barrel_edge'])]
@@ -1115,6 +1306,18 @@ def _failed_screens(case, exc, slip, contact_length, flags, no_bite=False):
                                                   'sources': []},
             'film': None, 'film_regime': None, 'spray_coverage': None, 'thermal': None,
             'band_position_match': None, 'coverage_profile': None, 'band_risk_stripes': None}
+
+
+def _coverage_width(case):
+    """SPEC22: a supplied pattern width of the width model's header, when the coverage check's
+    header is the same physical header (same pitch, standoff, angle and offset); else None."""
+    w, c = case.get('width_model'), case.get('coolant')
+    h = (w or {}).get('spray_header') or {}
+    if c is None or h.get('footprint_width_m') is None:
+        return None
+    same = all(abs(h[k] - c[k]) <= 1e-12 for k in ('nozzle_pitch_m', 'standoff_m',
+                                                    'spray_angle_rad', 'offset_angle_rad'))
+    return h['footprint_width_m'] if same else None
 
 
 def _coverage_profile(cov, length):
@@ -1627,13 +1830,35 @@ def _h_fifth(ctx):
     return ev, pred
 
 
+# SPEC20 part 2: once-per-wheel-revolution grinder chatter leaves 12-240 marks per roll
+# circumference [RG25 AB, RG26 AB, RG24 VP; range computed from printed settings]. It bounds
+# what cannot be excluded without grinder data; it is never used to compute a count or a pitch.
+GRINDER_CHATTER_COUNT_RANGE = (12, 240)
+GRINDER_CHATTER_FLAG = 'GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA'
+GRINDER_CHATTER_NOTE = ('a grinder chatter pattern (12-240 marks per circumference [RG25 AB, '
+                        'RG26 AB, RG24 VP; range computed from printed settings]) cannot be '
+                        "excluded without the grinder's wheel and roll speeds or a supplied "
+                        'count')
+GRINDER_TEST_SENTENCE = ("Entering the grinder's last-pass wheel and roll speeds (or a counted "
+                         'number of marks around the roll) turns this into a test.')
+ROLL_MARK_TOLERANCE = 0.03       # the rule's existing tolerance (3 %)
+
+
+def _grinder_counts(ctx, roll):
+    """[(count, how obtained, basis)] of the grinder_marks entries of ``roll`` (SPEC20)."""
+    return [bs.grinder_mark_count(g, i)
+            for i, g in enumerate(ctx.case['kinematics']['grinder_marks']) if g['roll'] == roll]
+
+
 def _mark_count(ctx, diameter, roll):
     """Review finding (single source, as for the coil): ONE mark count n must explain every
     pitch. n is the count with the smallest worst relative mismatch over all pitches; on a tie
-    a supplied grinder-mark count is preferred, then the smaller n. Returns (n, worst mismatch,
-    how chosen, supplied counts) or (None, None, '', counts) without pitches."""
-    marks = sorted({g['marks_per_circumference'] for g in ctx.case['kinematics']['grinder_marks']
-                    if g['roll'] == roll})
+    a supplied or computed grinder-mark count is preferred, then the smaller n. Returns (n,
+    worst mismatch, how chosen, grinder counts) or (None, None, '', counts) without pitches.
+    SPEC20: a grinder count may be computed from the grinder's settings and need not be an
+    integer (it is never rounded)."""
+    entries = _grinder_counts(ctx, roll)
+    marks = sorted({c for c, _, _ in entries})
     ns = sorted(set(range(1, 9)) | set(marks))
     if not ctx.pitches:
         return None, None, '', marks
@@ -1650,7 +1875,38 @@ def _mark_count(ctx, diameter, roll):
     if len(tied) > 1:
         how += (f'; tie between n = {tied}, the supplied grinder-mark count preferred'
                 if pref else f'; tie between n = {tied}, the smaller count taken')
+    if n in marks:
+        obtained = next(h for c, h, _ in entries if c == n)
+        if obtained != 'supplied':
+            how += f'; grinder count {n:.4g} {obtained}'
+    if n == int(n):
+        n = int(n)
     return n, w[n], how, marks
+
+
+def grinder_pitch_check(ctx, diameter, roll):
+    """SPEC20 part 2: per observed pitch the implied marks per circumference and whether it lies
+    in the typical grinder chatter range (work roll only: the range is from work-roll
+    grinding), with the grinder counts entered and how each was obtained."""
+    circ = math.pi * diameter * (1 + ctx.kin_slip)
+    entries = _grinder_counts(ctx, roll)
+    lo, hi = GRINDER_CHATTER_COUNT_RANGE
+    rows = []
+    for p in ctx.pitches:
+        k = circ / p['pitch_m']
+        rows.append({'pitch_m': p['pitch_m'], 'implied_marks_per_circumference': k,
+                     'in_typical_grinder_chatter_range': (lo <= k <= hi
+                                                          if roll == 'work_roll' else None)})
+    return {'grinder_data_entered': bool(entries),
+            'grinder_counts': [{'marks_per_circumference': c, 'obtained': h, 'basis': b}
+                               for c, h, b in entries],
+            'pitches': rows,
+            'typical_grinder_chatter_range': list(GRINDER_CHATTER_COUNT_RANGE),
+            'typical_range_basis': ('[RG25 AB, RG26 AB, RG24 VP; range computed from printed '
+                                    'settings] work-roll grinding; bounds what cannot be '
+                                    'excluded, never a default grinder'),
+            'typical_range_applies': roll == 'work_roll',
+            'note': GRINDER_TEST_SENTENCE}
 
 
 def _roll_mark(ctx, diameter, roll, label):
@@ -1659,18 +1915,37 @@ def _roll_mark(ctx, diameter, roll, label):
     mixed = len(ctx.pitches) > 1 and len({
         min(sorted(set(range(1, 9)) | set(marks)),
             key=lambda k: abs(circ / k - p['pitch_m'])) for p in ctx.pitches}) > 1
+    crit = f'pitch = pi*D_{label}*(1+f)/n'
+    expected = (f'within 3 % for one n in 1..8 or grinder marks '
+                f'{[int(m) if m == int(m) else round(m, 4) for m in marks]}, the same n for '
+                'every pitch')
 
     def rule(p):
         mis = abs(circ / n - p['pitch_m']) / p['pitch_m']
-        note = f'n = {n} ({how}), mismatch {mis:.2%}'
+        note = f'n = {n if isinstance(n, int) else f"{n:.4g}"} ({how}), mismatch {mis:.2%}'
         if mixed:
             note += '; the pitches fit different counts separately, one count is applied to all'
-        if mis <= 0.03:
+        if mis <= ROLL_MARK_TOLERANCE:
             return ('SUPPORTS', 'strong', note)
         return ('CONTRADICTS', 'moderate', note)
-    return _per_pitch(ctx, f'pitch = pi*D_{label}*(1+f)/n',
-                      f'within 3 % for one n in 1..8 or grinder marks {marks}, the same n for '
-                      'every pitch', rule)
+    # SPEC20 part 2, no grinder data (WORK roll only; the range is from work-roll grinding):
+    # when no count in 1..8 explains every pitch but every implied count lies in the typical
+    # grinder chatter range, a grinder source cannot be excluded: NEUTRAL, never CONTRADICTS.
+    # With grinder data entered the test is decisive (rule above); the neutral case never
+    # applies.
+    if ctx.pitches and roll == 'work_roll' and not _grinder_counts(ctx, roll):
+        lo, hi = GRINDER_CHATTER_COUNT_RANGE
+        items = [rule(p) for p in ctx.pitches]
+        if any(v == 'CONTRADICTS' for v, _, _ in items) and all(
+                lo <= circ / p['pitch_m'] <= hi for p in ctx.pitches):
+            ctx.grinder_chatter_not_excluded = True
+            observed = '; '.join(
+                f'{p["pitch_m"] * 1e3:.4g} mm at {p["exit_speed_m_s"]:.4g} m/s ({note}; '
+                f'implied {circ / p["pitch_m"]:.4g} marks per circumference)'
+                for p, (_, _, note) in zip(ctx.pitches, items))
+            return _ev(crit, observed + '. ' + GRINDER_CHATTER_NOTE + '. '
+                       + GRINDER_TEST_SENTENCE, expected, 'NEUTRAL')
+    return _per_pitch(ctx, crit, expected, rule)
 
 
 def _h_roll(ctx, which):
@@ -1705,6 +1980,8 @@ def _h_roll(ctx, which):
     if n is not None:     # keys only with pitches
         pred.update(mark_count_used=n, mark_count_worst_relative_mismatch=worst,
                     mark_count_basis=how)
+        pred['grinder_pitch_check'] = grinder_pitch_check(
+            ctx, d, 'work_roll' if work else 'backup_roll')     # SPEC20 part 2
     return ev, pred
 
 
@@ -1973,13 +2250,15 @@ def _h_herringbone(ctx):
                   None if (g is None or g) else 'weak'))
     reg = scr['film_regime']
     if reg is None:
-        ev.append(_ev('film regime', 'no lubrication data', 'boundary (Lambda < 1)',
-                      'NOT_OBSERVED', basis='input'))
+        ev.append(_ev('film regime', 'no lubrication data',
+                      'substantial asperity contact (Lambda < 1)', 'NOT_OBSERVED',
+                      basis='input'))
     else:
         lam = reg['film_ratio']
         ev.append(_ev('film regime', f'Lambda = {lam:.3g} ({reg["regime"]})',
-                      'boundary (Lambda < 1)', 'SUPPORTS' if lam < 1 else 'NEUTRAL',
-                      'weak' if lam < 1 else None, 'model'))
+                      'substantial asperity contact (Lambda < 1)',
+                      'SUPPORTS' if lam < 1 else 'NEUTRAL', 'weak' if lam < 1 else None,
+                      'model'))
     pred = {'contact_length_m': lc, 'reduction_fraction': red,
             'risk_level': scr['herringbone']['risk_level'],
             'contact_length_basis': scr['herringbone']['contact_length_basis']}
@@ -2243,6 +2522,8 @@ def _process_inputs(eff, cache, flags, supplied=None):
             if eff['hardening']['use_computed_flow_stress']:
                 bp.apply_flow_stress(eff, fs)
                 flags.append('FLOW_STRESS_FROM_HARDENING_LAW')
+                if bp.RATE_FACTOR_APPLIED_FLAG in fs['flags']:       # SPEC18 package 8
+                    flags.append(bp.RATE_FACTOR_APPLIED_FLAG)
             else:
                 for r in fs['passes']:
                     r['used_mean_flow_stress_pa'] = r['supplied_mean_flow_stress_pa']
@@ -2298,6 +2579,11 @@ BITE_RELIABILITY = {
                              'zones (forward slip flagged implausible); not validated; it '
                              'models the contact on the strip only, not the load the rolls '
                              'carry outside the strip in closed gap.',
+    'reduced_half_space': 'REDUCED half-space foil model (halfspace_bite): rolls as elastic '
+                          'half-spaces, no longitudinal elastic strain of strip or roll; its '
+                          'load depends on how the bite ends are closed; not validated; it '
+                          'models the contact on the strip only, not the load the rolls carry '
+                          'outside the strip in closed gap.',
     'supplied': 'Supplied bite sensitivities, not verified by the tool.',
     None: 'No bite: chatter, levers, gauge control, forward slip and the derived shape chain '
           'are not assessable.'}
@@ -2320,6 +2606,68 @@ def _largest_model_band(width):
         if _is_num(v) and (best is None or abs(v) > best[0]):
             best = (abs(v), f'event {e.get("label")} at its peak (linear exit-tension feedback)')
     return best
+
+
+def _chain_passes(eff, cache, bite, result):
+    """Schedule rows for the pass chain of SPEC19 package 14 (bites from the engine cache:
+    the schedule sweep has already derived them)."""
+    onsets = {r.get('label'): r.get('onset_frequency_hz')
+              for r in (result.get('schedule_sweep') or {}).get('rows') or []}
+    out = []
+    for row in eff['schedule']:
+        cp = {'label': row['label'], 'entry_thickness_m': row['entry_thickness_m'],
+              'exit_thickness_m': row['exit_thickness_m'], 'exit_speed_m_s': row['exit_speed_m_s'],
+              'onset_frequency_hz': onsets.get(row['label'])}
+        try:
+            cp['bite'] = _case_bite(eff, cache, bite, _bite_pass(eff, row), row)
+        except ValueError as exc:
+            cp['bite'], cp['reason'] = None, f'no bite: {exc}'
+        out.append(cp)
+    return out
+
+
+def _foil_gauge_control(eff, result, bite, bite_error, stand, local_sens, trib, roll_freqs,
+                        cache=None):
+    fgc = eff.get('foil_gauge_control')
+    if fgc is None:
+        return bp.not_supplied('foil_gauge_control is null or absent')
+    if bite is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': f'no bite for the case pass ({bite_error})', 'flags': []}
+    try:
+        ls = local_sens()
+        width = eff['pass']['width_m']
+        forces = {'h': bite.dforce_dexit_thickness_n_m, 'h_in': bite.dforce_dentry_thickness_n_m,
+                  's_e': bite.dforce_dentry_tension_m2, 's_x': bite.dforce_dexit_tension_m2,
+                  'mu': ls['dforce_per_width_dfriction_n_m'] * width,
+                  'Y': ls['dforce_per_width_dflow_stress_m'] * width}
+        proc = result.get('process') if isinstance(result.get('process'), dict) else {}
+        curve = proc.get('friction_speed_curve')
+        if not isinstance(curve, dict) or curve.get('status') == 'FAILED':
+            curve = None
+        closure = None if trib is None else ('load_sharing_curve' if bp.is_load_sharing(trib)
+                                             else 'placeholder')
+        fr_row = (proc.get('friction') or {}).get('operating') if isinstance(
+            proc.get('friction'), dict) else None
+        oil = None
+        if trib is not None and isinstance(fr_row, dict) and fr_row.get('film_ratio') is not None:
+            oil = bw._friction_placeholder(trib, fr_row)
+        rt = (eff.get('hardening') or {}).get('rate_temperature')
+        crit = (result.get('chatter') or {}).get('critical_speed') or {}
+        onset = crit.get('onset_frequency_hz') if isinstance(crit, dict) else None
+        tg = (eff.get('measurement') or {}).get('thickness_gauge')
+        return foil_gauge.foil_gauge_section(
+            eff, fgc, bite, forces, stand_mill_modulus_n_m=stand.mill_modulus_n_m,
+            friction_closure=closure, friction_curve=curve, oil=oil,
+            rate_sensitivity=None if rt is None else rt['rate_sensitivity'],
+            roll_freqs=roll_freqs, chatter_onset_hz=onset, thickness_gauge=tg,
+            closed_gap_range_m=CLOSED_GAP_ONSET_RANGE_M,
+            sensitivity_bite_model=ls['bite_model'], sensitivity_basis=ls['basis'],
+            bite_model=bp.bite_source_word(bite),
+            chain_passes=(_chain_passes(eff, cache, bite, result) if eff['schedule']
+                          and cache is not None else None))
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        return bp.failed('foil_gauge_control', exc)
 
 
 def _foil_regime(eff, bite, bite_error, result, flags):
@@ -2927,6 +3275,9 @@ CREDIBILITY_BASIS = ('applied only to extended-domain mattress bites (exit gauge
                      'the 0.9-2.3 kN/mm range is the one reported for battery-foil passes '
                      '[V S3, S4; conversion D]')
 
+CREDIBILITY_BASIS_HALF_SPACE = CREDIBILITY_BASIS.replace(
+    'extended-domain mattress bites', 'extended-domain foil-model bites (mattress or reduced '
+    'half-space)')
 
 # Model-based evidence items that do not use the case-pass roll bite (tension-trough screen,
 # Shohet-Townsend dead band, yield-point bending window): left alone by the credibility gate.
@@ -3006,6 +3357,28 @@ def _apply_credibility(result, eff, bite, flags):
                          + ' Not credible (excluded from the trend): ' + '; '.join(excluded)
                          + '.')
             g['excluded_not_credible'] = excluded
+    # SPEC17 BT-G4: the friction-stripe screen's per-pass rows, marked as the gauge trend's
+    fs = w.get('friction_stripes') if isinstance(w, dict) else None
+    if isinstance(fs, dict) and isinstance(fs.get('per_pass'), list):
+        excluded = []
+        for row in fs['per_pass']:
+            if 'rejected' in row:
+                continue
+            mark, ratio = _bite_credibility(row.get('bite_flags'), row.get('force_per_width_n_m'))
+            if mark:
+                row['bite_credibility'] = mark
+                row['bite_force_ratio_to_reported_range'] = ratio
+                row['bite_credibility_basis'] = CREDIBILITY_BASIS
+            if mark == CREDIBILITY_OUTSIDE:
+                excluded.append(_credibility_note(row['label'], row['force_per_width_n_m'],
+                                                  ratio))
+        if excluded:
+            credible = [r for r in fs['per_pass']
+                        if r.get('bite_credibility') != CREDIBILITY_OUTSIDE]
+            fs['trend_text'] = (bw.friction_trend_text(credible)
+                                + ' Not credible (excluded from the trend): '
+                                + '; '.join(excluded) + '.')
+            fs['excluded_not_credible'] = excluded
     fr = result.get('foil_regime')
     if isinstance(fr, dict) and fr.get('extended_bite_domain'):
         notes = []
@@ -3028,11 +3401,15 @@ def _apply_credibility(result, eff, bite, flags):
     if mark:
         result['case_bite_credibility'] = {'mark': mark, 'force_per_width_n_m': fpw,
                                            'ratio_to_reported_range': ratio,
-                                           'basis': CREDIBILITY_BASIS}
+                                           'basis': (CREDIBILITY_BASIS_HALF_SPACE
+                                                     if bp.is_half_space(bite)
+                                                     else CREDIBILITY_BASIS)}
     if mark == CREDIBILITY_OUTSIDE:
         flags.append(CASE_NOT_CREDIBLE_FLAG)
         result['limitations'].append(
-            'The case-pass roll bite is an extended-domain mattress bite whose force lies '
+            ('The case-pass roll bite is an extended-domain reduced half-space bite whose '
+             'force lies ' if bp.is_half_space(bite) else
+             'The case-pass roll bite is an extended-domain mattress bite whose force lies ') +
             'outside the range reported for battery-foil passes: every model result resting on '
             'it (chatter, levers, shape chain, onsets, model evidence) is not credible; the '
             'model evidence that rests on the bite is scored NEUTRAL (basis "model not '
@@ -3080,6 +3457,29 @@ def merge_band_positions(positions, tol=POSITION_MERGE_TOLERANCE_M):
         else:
             groups.append([x])
     return [sum(g) / len(g) for g in groups], len(srt) - len(groups)
+
+
+def case_pass_heat_row(case):
+    """(effective case, case-pass heating row or None, reason) built exactly as ``diagnose``
+    builds them (process inputs, bite, pass heating) without the rest of the diagnosis: the
+    bite heat of the steady thermal problem for ``band_thermal.calibrate_spray_coefficient``."""
+    case = validate_case(case)
+    eff = copy.deepcopy(case)
+    cache = _BiteCache(eff)
+    flags = []
+    supplied = _supplied_bite(eff)
+    process = _process_inputs(eff, cache, flags, supplied)
+    bite, bite_error = _section_bite(eff, cache, flags, supplied)
+    if bite is None:
+        return eff, None, bite_error
+    s_ = eff['stand']
+    state = cache.state_for(bite) if bp.is_half_space(bite) else None
+    fr = process.get('friction')
+    fr_row = fr.get('operating') if isinstance(fr, dict) and 'operating' in fr else None
+    row = bp.heating_row(eff, eff['pass'], bite, eff['tribology'],
+                         eff['model_options']['cells'], s_['roll_youngs_modulus_pa'],
+                         s_['roll_poisson_ratio'], state, fr_row)
+    return eff, row, None
 
 
 def diagnose(case):
@@ -3131,9 +3531,12 @@ def diagnose(case):
                     'downstream section uses these.'}
     result['bite'] = bite.to_dict() if bite is not None else None
     result['bite_error'] = bite_error
-    if bite is not None and bp.is_mattress(bite):
+    if bite is not None and bp.is_foil_model(bite):
         fb = [v for k, v in cache.fallbacks.items() if k[0] == _bite_pass(eff)]
         result['bite_fallback_reason'] = fb[0] if fb else None
+    state = cache.state_for(bite) if bite is not None and bp.is_half_space(bite) else None
+    result['bite_extras'] = (dict(state['extra']) if state is not None else
+                             bp.not_supplied('only the reduced half-space bite returns these'))
 
     q_s = bite.strip_modulus_n_m if bite is not None else 0.0
     nf = natural_frequencies(stand, q_s)
@@ -3170,8 +3573,8 @@ def diagnose(case):
     # two values (review finding): ctx.slip is the bite's actual forward slip, used by the
     # evidence and the screens; ctx.kin_slip is the value of the roll-borne pitch kinematics,
     # whose helpers (band_signatures) accept |slip| < 0.5 only. An experimental mattress bite
-    # can report an implausible slip of 0.5 or more (no elastic strip zones): then only the
-    # kinematics use zero.
+    # can report a slip of 0.5 or more (constant Coulomb friction with a no-slip zone; elastic
+    # strip zones are not the cause, SPEC17 X20): then only the kinematics use zero.
     if bite is not None:
         ctx.slip = bite.forward_slip_fraction
         ctx.kin_slip = ctx.slip if abs(ctx.slip) < SLIP_KINEMATICS_LIMIT else 0.0
@@ -3219,6 +3622,8 @@ def diagnose(case):
                 sc['fixed_friction_critical_exit_speed_without_bite_damping_m_s'] = \
                     chat['without_bite_damping']['critical_exit_speed_m_s']
                 sc['fixed_friction_coefficient'] = p['friction_coefficient']
+                if perturbed_bite_model(eff, bite) == 'half_space':   # key only then
+                    sc['perturbed_bite_model'] = 'reduced_half_space'
                 chat['speed_consistent'] = sc
             except ValueError as exc:
                 chat['speed_consistent'] = bp.failed('chatter.speed_consistent', exc)
@@ -3236,6 +3641,8 @@ def diagnose(case):
         result['forced_response'] = _section_forced(eff, stand, bite, spans, u_op, beta,
                                                     unstable)
         levers = _lever_rows(eff, cache, stand, spans, bite, beta, override)
+        if perturbed_bite_model(eff, bite) == 'half_space':           # key only then
+            levers['perturbed_bite_model'] = 'reduced_half_space'
         result['levers'] = levers
         ctx.lever_directions = levers['directions']
     else:
@@ -3262,7 +3669,7 @@ def diagnose(case):
         ctx.freqs.append(('measured vibration', obs['measured_vibration_hz']))
 
     contact = bite.contact_length_m if bite is not None else None
-    ratio = bite.contact_radius_ratio if bite is not None else 1.0
+    ratio = bp.film_radius_ratio(bite) if bite is not None else 1.0
     try:
         result['screens'] = _section_screens(eff, bite, ctx.slip, contact, ratio, flags)
     except ValueError as exc:
@@ -3282,7 +3689,8 @@ def diagnose(case):
         try:
             process['heating'] = bp.heating_section(
                 eff, trib, cache, bite, eff['model_options']['cells'],
-                s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'])
+                s_['roll_youngs_modulus_pa'], s_['roll_poisson_ratio'],
+                friction=process.get('friction'))
             op = process['heating']['operating']
             if bite is None:
                 op['rejected'] = f'no roll bite for the case pass: {bite_error}'
@@ -3311,6 +3719,41 @@ def diagnose(case):
     else:
         process.update(status=STATUS, not_supplied=False)
         result['process'] = process
+    # SPEC18 package 7: friction identified from entered pass records, REPORTED only (no pass,
+    # lever or evidence item uses it); not supplied without records
+    records = (eff['measurement'] or {}).get('pass_records')
+    if records:
+        try:
+            fid = bp.friction_identification(eff, records, cache, bite,
+                                             perturbed_bite_model(eff, bite))
+            flags.extend(f for f in fid['flags'] if f not in flags)
+        except ValueError as exc:
+            fid = bp.failed('process.friction_identification', exc)
+    else:
+        fid = bp.not_supplied('measurement.pass_records is null or absent')
+    result['process']['friction_identification'] = fid
+    # SPEC18 package 8 (D): the rate share of the heuristic bite damping, reported only
+    if bite is not None:
+        rt = (eff['hardening'] or {}).get('rate_temperature')
+        fs = (result['process'] or {}).get('flow_stress')
+        if rt is None:
+            rsd = bp.not_supplied('hardening.rate_temperature is null or absent')
+        else:
+            try:
+                if not isinstance(fs, dict) or fs.get('status') == 'FAILED':
+                    raise ValueError('the flow-stress section is not available')
+                st = cache.state_for(bite) if bp.is_half_space(bite) else None
+                if st is not None:
+                    f_y = st['extra']['dforce_dflow_stress_m2']
+                else:
+                    model = perturbed_bite_model(eff, bite)
+                    f_y = bp.flow_stress_sensitivity(
+                        lambda q: cache.get(q, model=model), _bite_pass(eff))[
+                        'dforce_dflow_stress_m2']
+                rsd = bp.rate_sensitivity_damping(eff, bite, fs, f_y, beta)
+            except ValueError as exc:
+                rsd = bp.failed('chatter.rate_sensitivity_damping', exc)
+        result['chatter']['rate_sensitivity_damping'] = rsd
     ctx.process = result['process']
 
     # perturbed bites of the sensitivities: same bite model as the operating bite (a supplied
@@ -3360,12 +3803,85 @@ def diagnose(case):
 
     def get_bite(src):
         return cache.get(bp.bite_pass(eff, src))
+
+    # SPEC17 BT-G4: the friction-stripe screen derives its bites in a cache of its own, so the
+    # result's bite_derivations count (and every other section) is the same with or without it
+    fs_cache = _BiteCache(eff)
+
+    def fs_get_bite(src):
+        return fs_cache.get(bp.bite_pass(eff, src))
+
+    def friction_sens(src):
+        # dF/dmu of the pass's bite model (the case pass: the operating bite's model)
+        if src is eff['pass']:
+            return bp.friction_force_sensitivity(lambda q: fs_cache.get(q, model=sens_model),
+                                                 bp.bite_pass(eff, src))
+        model = perturbed_bite_model(eff, fs_get_bite(src))
+        return bp.friction_force_sensitivity(lambda q: fs_cache.get(q, model=model),
+                                             bp.bite_pass(eff, src))
+    def local_sens():
+        # SPEC19 package 2: dF/dmu and dF/dY of the case-pass bite per width. A reduced
+        # half-space bite gives its analytic derivatives (bite_extras); otherwise central
+        # differences in the friction screen's own cache with the operating bite's model, so
+        # bite_derivations and every other section are unchanged
+        width_ = eff['pass']['width_m']
+        st_ = cache.state_for(bite) if bp.is_half_space(bite) else None
+        if st_ is not None:
+            f_mu, f_y = st_['extra']['dforce_dfriction_n'], st_['extra']['dforce_dflow_stress_m2']
+            model_, basis_ = 'reduced_half_space', ('analytic derivatives of the reduced '
+                                                   'half-space bite (bite_extras)')
+        else:
+            fr_ = friction_sens(eff['pass'])
+            fy_ = bp.flow_stress_sensitivity(lambda q: fs_cache.get(q, model=sens_model),
+                                             bp.bite_pass(eff, eff['pass']))
+            f_mu, f_y = fr_['dforce_dfriction_n'], fy_['dforce_dflow_stress_m2']
+            model_ = fr_['bite_model']
+            basis_ = (f'central differences of the {model_} bite (friction +-2 %, flow stress '
+                      '+-0.5 %)')
+        return {'dforce_per_width_dfriction_n_m': f_mu / width_,
+                'dforce_per_width_dflow_stress_m': f_y / width_,
+                'flow_stress_pa': eff['pass']['mean_flow_stress_pa'],
+                'force_per_width_n_m': bite.separating_force_n / width_,
+                'bite_model': model_, 'basis': basis_}
+    proc = result.get('process') if isinstance(result.get('process'), dict) else {}
+    fr_row = (proc.get('friction') or {}).get('operating') if isinstance(
+        proc.get('friction'), dict) else None
     try:
         result['width'] = bw.width_section(eff, bite, get_bite, heat_row, trib, flags,
-                                           bite_error)
-    except ValueError as exc:
+                                           bite_error, friction_sensitivity=friction_sens,
+                                           friction_row=fr_row, friction_get_bite=fs_get_bite,
+                                           local_sensitivity=(local_sens if bite is not None
+                                                              else None))
+    except bp.SECTION_ERRORS as exc:
         result['width'] = bp.failed('width', exc)
     ctx.width = result['width']
+    # SPEC18 package 10 -> 9: the case pass's heat partition takes the roll surface at bite
+    # entry from the surface cycle (strip centre; one pass, no iteration; reported values only)
+    rsc = (result['width'] or {}).get('roll_surface_cycle') if isinstance(
+        result.get('width'), dict) else None
+    op_heat = ((proc.get('heating') or {}).get('operating') if isinstance(
+        proc.get('heating'), dict) else None)
+    if isinstance(rsc, dict) and rsc.get('status') == 'UNVALIDATED_ROLL_SURFACE_CYCLE' and \
+            isinstance(op_heat, dict) and isinstance(op_heat.get('heat_partition'), dict) and \
+            op_heat['heat_partition'].get('status') == 'UNVALIDATED_COMPUTED_HEAT_PARTITION':
+        try:
+            centre = rsc['cycles'][0]
+            old = op_heat['heat_partition']
+            new = bp.pass_heat_partition(
+                eff, p, bite, trib, op_heat['plastic_power_per_width_w_m'],
+                op_heat['friction_power_per_width_w_m'], fr_row,
+                roll_entry=(centre['bite_entry_temperature_k'],
+                            'width.roll_surface_cycle bite_entry_temperature_k at the strip '
+                            'centre (one pass, no iteration)'))
+            if bp.use_computed_heat_partition(trib):
+                new['strip_heat_fraction_used_by_pass_heating'] = old[
+                    'strip_heat_fraction_computed']
+            op_heat['heat_partition'] = new
+            if 'supplied_minus_computed_strip_heat_fraction' in op_heat:
+                op_heat['supplied_minus_computed_strip_heat_fraction'] = (
+                    trib['strip_heat_fraction'] - new['strip_heat_fraction_computed'])
+        except (ValueError, KeyError, IndexError) as exc:
+            op_heat['heat_partition_surface_cycle_error'] = str(exc)
     try:
         band_thermal.attach_per_pass(result)
     except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
@@ -3374,14 +3890,32 @@ def diagnose(case):
             ts['per_pass'] = None
             ts['per_pass_note'] = f'per-pass extension failed: {exc}'
         flags.append('THERMAL_SENSITIVITY_PER_PASS_FAILED')
+    # SPEC17 package 4: what a shapemeter would show (evidence-neutral, read by no hypothesis)
+    try:
+        result['measurement'] = band_sensors.measurement_section(eff, result)
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        result['measurement'] = bp.failed('measurement', exc)
+        flags.append('MEASUREMENT_SECTION_FAILED')
+    flags.extend(result['measurement'].get('flags') or [])
+    # SPEC19 package 13: foil gauge control by speed and entry tension (opt-in, beside the
+    # gaugemeter section; evidence-neutral; its bites in the friction screen's own cache)
+    result['foil_gauge_control'] = _foil_gauge_control(
+        eff, result, bite, bite_error, stand, local_sens, trib, _roll_freqs(eff, u_op, ctx.slip),
+        cache)
+    flags.extend(f for f in (result['foil_gauge_control'].get('flags') or [])
+                 if f not in flags)
 
     if bite is not None:
         fpw_case = bite.separating_force_n / eff['pass']['width_m']
         if _bite_credibility(bite.flags, fpw_case)[0] == CREDIBILITY_OUTSIDE:
             ctx.credibility_gate_note = _credibility_gate_note(fpw_case)
+    ctx.grinder_chatter_not_excluded = False
     hyps, leading = _hypotheses(ctx)
+    if ctx.grinder_chatter_not_excluded:          # SPEC20 part 2
+        flags.append(GRINDER_CHATTER_FLAG)
     result['hypotheses'] = hyps
     result['leading_hypotheses'] = leading
+    band_sensors.name_gauge_hypotheses(result)      # text only; the tally is unchanged
     if ctx.hypothesis_failures:          # keys only then
         result['hypothesis_evaluation_failures'] = ctx.hypothesis_failures
         flags.append(HYPOTHESIS_FAILED_FLAG)
@@ -3405,6 +3939,19 @@ def diagnose(case):
     if tc is not None:
         result['thermal_check'] = tc
         flags.extend(tc.get('flags') or [])
+    # SPEC19 package 11: the coil temperature (after thermal_check, which holds the coil limits;
+    # key only with width_model.coil_thermal; thermal_check gains rows BESIDE its verdicts)
+    wsec = result.get('width')
+    if isinstance(wsec, dict) and (eff.get('width_model') or {}).get('coil_thermal') is not None:
+        try:
+            ctsec = bw.coil_temperature_section(eff, result)
+        except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+            ctsec = bp.failed('coil_temperature', exc)
+        wsec['coil_temperature'] = ctsec
+        flags.extend(f for f in (ctsec.get('flags') or []) if f in bw.CT_TOP_FLAGS
+                     and f not in flags)
+        if isinstance(tc, dict) and ctsec.get('status') == bw.CT_STATUS:
+            tc['coil_temperature_beside'] = bw.coil_temperature_beside_thermal_check(ctsec)
     if result['foil_regime'] is not None:
         note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
                 'rolling (not modelled), where load is no longer a gauge actuator.')
@@ -3438,12 +3985,18 @@ def diagnose(case):
             'NOT_ASSESSABLE with score 0, the other hypotheses and sections are unaffected.')
     ext_flags = set(flags) | {f for x in (result.get('schedule_sweep') or {}).get('rows') or []
                               for f in x.get('bite_flags') or []}
+    if any(bp.is_half_space(b) for b in cache.store.values() if isinstance(b, BiteResponse)):
+        ext_flags.add(HALF_SPACE_USED_FLAG)
     if EXTENDED_GAUGE_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_GAUGE_LIMITATION)
     if REDUCTION_EXTENDED_FLAG in ext_flags:
         result['limitations'].append(EXTENDED_REDUCTION_LIMITATION)
     if SLIP_KINEMATICS_FLAG in flags:
-        result['limitations'].append(SLIP_KINEMATICS_LIMITATION)
+        result['limitations'].append(
+            SLIP_KINEMATICS_LIMITATION.replace('experimental mattress', 'reduced half-space')
+            if bite is not None and bp.is_half_space(bite) else SLIP_KINEMATICS_LIMITATION)
+    if HALF_SPACE_USED_FLAG in ext_flags or (bite is not None and bp.is_half_space(bite)):
+        result['limitations'].append(HALF_SPACE_LIMITATION)
     _apply_credibility(result, eff, bite, flags)
     result['flags'] = sorted(set(flags))
     result['sources'] = list(SOURCES)

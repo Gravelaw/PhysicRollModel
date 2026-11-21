@@ -883,3 +883,354 @@ class TestValidationAndJson(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TransferForceProfileTests(unittest.TestCase):
+    """SPEC17 package 7: a local force change per width transferred into thickness."""
+
+    KW = dict(bite_half_length_m=0.004, strip_stiffness_per_width_pa=3e11, roll_radius_m=0.135)
+
+    def _wave(self, lam, n=128, amp=1e-7):
+        dz = 4 * lam / n                       # four whole waves in the window
+        z = [i * dz for i in range(n)]
+        return z, [amp * math.cos(2 * math.pi * x / lam) for x in z]
+
+    def test_matches_the_radius_transfer_for_one_sinusoid(self):
+        lam = 0.05
+        z, dr = self._wave(lam)
+        c = ss.roll_line_compliance_m2_n(lam, self.KW['bite_half_length_m'])
+        dp = [-2 * v / (2 * c) for v in dr]
+        for fb in ({}, {'exit_tension_force_sensitivity_per_width_m': 2e-4,
+                        'exit_thickness_m': 30e-6, 'xi': 1.0}):
+            a = ss.transfer_force_profile(z, dp, **self.KW, **fb)['local_thickness_change_m']
+            b = ss.transfer_radius_profile(z, dr, n_rolls=2, **self.KW,
+                                           **fb)['local_thickness_change_m']
+            for x, y in zip(a, b):
+                self.assertLessEqual(abs(x - y), 1e-9 * max(abs(v) for v in b))
+
+    def test_zero_mean_sign_and_feedback_limit(self):
+        z = [i * 0.005 for i in range(64)]
+        self.assertTrue(all(v == 0 for v in ss.transfer_force_profile(
+            z, [0.0] * 64, **self.KW)['local_thickness_change_m']))
+        # the mean component keeps Q: a uniform force change gives a uniform dh with Q
+        r = ss.transfer_force_profile(z, [1e3] * 64, **self.KW,
+                                      exit_tension_force_sensitivity_per_width_m=1e-3,
+                                      exit_thickness_m=30e-6)
+        c = ss.roll_line_compliance_m2_n(0.135, 0.004)
+        want = 2 * c / (1 + 2 * c * 3e11) * 1e3
+        self.assertTrue(all(abs(v - want) < 1e-12 * want for v in r['local_thickness_change_m']))
+        # more friction (positive force) -> thicker strip (dh > 0)
+        g = [1e3 * math.exp(-((x - 0.16) / 0.03) ** 2) for x in z]
+        r = ss.transfer_force_profile(z, g, **self.KW)
+        self.assertGreater(r['peak_local_thickness_change_m'], 0)
+        # feedback dominant: eps = -xi*dh/h -> -dp0'/(N_x'*E), independent of gauge
+        gm = [v - sum(g) / 64 for v in g]          # mean-free (the mean keeps Q)
+        k = max(range(64), key=lambda i: abs(gm[i]))
+        for h in (30e-6, 3e-6):
+            r = ss.transfer_force_profile(z, gm, **dict(self.KW, strip_stiffness_per_width_pa=1.0),
+                                          exit_tension_force_sensitivity_per_width_m=1.0,
+                                          exit_thickness_m=h)
+            eps = -r['local_thickness_change_m'][k] / h
+            self.assertAlmostEqual(eps / (-gm[k] / 70e9), 1.0, delta=1e-3)
+
+    def test_validation_and_radius_transfer_unchanged(self):
+        z = [i * 0.005 for i in range(16)]
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z, [2e9] * 16, **self.KW)
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z, [0.0] * 15, **self.KW)
+        with self.assertRaises(ValueError):
+            ss.transfer_force_profile(z[:-1] + [1.0], [0.0] * 16, **self.KW)
+        dr = [1e-7 * math.sin(i) for i in range(16)]
+        a = ss.transfer_radius_profile(z, dr, **self.KW)
+        b = ss.transfer_radius_profile(z, dr, **self.KW)
+        self.assertEqual(a, b)
+
+
+class WidthCouplingKernelTests(unittest.TestCase):
+    """SPEC19 package 8: the width-coupling kernel (a second estimate of the tension feedback)."""
+
+    # bite sensitivities of the committed demos (artifacts/band_diagnosis/*.result.json, 'bite')
+    LENGTHWISE = dict(width=1.5, h=0.21e-3, Q=None, F_h=None)
+
+    @staticmethod
+    def _bite(name):
+        from pathlib import Path
+        p = (Path(__file__).resolve().parents[1] / 'artifacts' / 'band_diagnosis'
+             / f'{name}.result.json')
+        r = json.loads(p.read_text(encoding='utf-8'))
+        return r['bite'], r['inputs']['pass']['exit_thickness_m'], r['inputs']['pass']['width_m']
+
+    def _kernel(self, name, closure):
+        b, h, w = self._bite(name)
+        return ss.width_coupling_kernel(
+            strip_stiffness_per_width_pa=b['strip_modulus_n_m'] / w,
+            exit_tension_force_sensitivity_per_width_m=-b['dforce_dexit_tension_m2'] / w,
+            entry_tension_force_sensitivity_per_width_m=-b['dforce_dentry_tension_m2'] / w,
+            dslip_dexit_thickness_per_m=b['dslip_dexit_thickness_per_m'],
+            dslip_dexit_tension_per_pa=b['dslip_dexit_tension_per_pa'],
+            dslip_dentry_tension_per_pa=b['dslip_dentry_tension_per_pa'], exit_thickness_m=h,
+            strip_youngs_modulus_pa=70e9, strip_poisson_ratio=0.33, closure=closure)
+
+    def test_span_strain_ratio_closed_forms_and_conditions(self):
+        nu = 0.33
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'no_lateral_velocity'),
+                               (3 - nu) * (1 + nu) / (3 + nu), places=12)
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'no_lateral_velocity'), 1.066396, 6)
+        self.assertEqual(ss.span_strain_ratio(nu, 'uniaxial'), 1.0)
+        self.assertAlmostEqual(ss.span_strain_ratio(nu, 'shear_free'), 1 - nu, places=12)
+        for closure, key in (('no_lateral_velocity', 'e_duz_dx'), ('uniaxial', 'sigma_zz'),
+                             ('shear_free', 'sigma_xz')):
+            f = ss.closure_field_at_bite(nu, closure, kappa=30.0)
+            self.assertLess(abs(f[key]), 1e-9 * abs(f['sigma_xx']))
+            self.assertAlmostEqual(f['chi'], ss.span_strain_ratio(nu, closure), places=12)
+        with self.assertRaises(ValueError):
+            ss.span_strain_ratio(nu, 'clamped')
+
+    def test_lengthwise_row(self):
+        k = self._kernel('lengthwise-bands-demo', 'no_lateral_velocity')
+        self.assertLess(abs(k['strip_stiffness_per_width_pa'] / 1.186e10 - 1), 1e-3)
+        self.assertLess(abs(k['pointwise_feedback_stiffness_per_width_pa'] / 1.009e12 - 1), 1e-3)
+        self.assertLess(abs(k['feedback_stiffness_per_width_pa'] / 6.957e11 - 1), 1e-3)
+        self.assertAlmostEqual(k['ratio_to_pointwise'], 0.690, delta=1e-3)
+        self.assertAlmostEqual(k['exit_stress_per_thickness_over_e_per_h'], 0.260, delta=1e-3)
+        self.assertAlmostEqual(k['entry_stress_per_thickness_over_e_per_h'], 0.198, delta=1e-3)
+        u = self._kernel('lengthwise-bands-demo', 'uniaxial')
+        self.assertLess(abs(u['feedback_stiffness_per_width_pa'] / 2.432e11 - 1), 1e-3)
+        sf = self._kernel('lengthwise-bands-demo', 'shear_free')
+        self.assertLess(abs(sf['feedback_stiffness_per_width_pa'] / -3.446e12 - 1), 1e-3)
+        self.assertFalse(sf['defined'])
+
+    def test_battery_foil_row(self):
+        k = self._kernel('battery-foil-demo', 'no_lateral_velocity')
+        self.assertLess(abs(k['strip_stiffness_per_width_pa'] / 7.389e10 - 1), 1e-3)
+        self.assertLess(abs(k['pointwise_feedback_stiffness_per_width_pa'] / 1.472e13 - 1), 1e-3)
+        self.assertLess(abs(k['feedback_stiffness_per_width_pa'] / 1.500e12 - 1), 1e-3)
+        self.assertAlmostEqual(k['ratio_to_pointwise'], 0.102, delta=1e-3)
+        self.assertAlmostEqual(k['exit_stress_per_thickness_over_e_per_h'], 0.0864, delta=1e-4)
+        self.assertAlmostEqual(k['entry_stress_per_thickness_over_e_per_h'], 0.0241, delta=1e-4)
+        u = self._kernel('battery-foil-demo', 'uniaxial')
+        self.assertLess(abs(u['feedback_stiffness_per_width_pa'] / 1.280e11 - 1), 1e-3)
+        sf = self._kernel('battery-foil-demo', 'shear_free')
+        self.assertLess(abs(sf['feedback_stiffness_per_width_pa'] / -1.074e13 - 1), 1e-3)
+        self.assertFalse(sf['defined'])
+
+    def _plain(self, **kw):
+        base = dict(strip_stiffness_per_width_pa=1e10,
+                    exit_tension_force_sensitivity_per_width_m=0.01,
+                    entry_tension_force_sensitivity_per_width_m=0.005,
+                    dslip_dexit_thickness_per_m=-500.0, dslip_dexit_tension_per_pa=2e-12,
+                    dslip_dentry_tension_per_pa=-5e-12, exit_thickness_m=0.2e-3,
+                    strip_youngs_modulus_pa=70e9, strip_poisson_ratio=0.33)
+        base.update(kw)
+        return ss.width_coupling_kernel(**base)
+
+    def test_limits_and_xi_scaling(self):
+        h, E = 0.2e-3, 70e9
+        k = self._plain(dslip_dentry_tension_per_pa=0.0, closure='uniaxial')
+        ax = (-500.0 + 1 / h) / (1 / E - 2e-12)
+        self.assertLess(abs(k['exit_stress_per_thickness_pa_m'] / ax - 1), 1e-12)
+        self.assertLess(abs(k['entry_stress_per_thickness_pa_m'] / ax - 1), 1e-12)
+        far = self._plain(dslip_dexit_tension_per_pa=-1e-3)
+        self.assertLess(abs(far['exit_stress_per_thickness_pa_m']), 1e-3 * abs(ax))
+        # xi scales every term linearly with f_h = 0
+        a = self._plain(dslip_dexit_thickness_per_m=0.0, xi=1.0)
+        b = self._plain(dslip_dexit_thickness_per_m=0.0, xi=0.5)
+        self.assertAlmostEqual(b['feedback_stiffness_per_width_pa']
+                               / a['feedback_stiffness_per_width_pa'], 0.5, places=12)
+        self.assertAlmostEqual(b['ratio_to_pointwise'], a['ratio_to_pointwise'], places=12)
+
+    def test_sign_reversal_reported_never_clipped(self):
+        k = self._plain(dslip_dexit_tension_per_pa=1e-9)    # denominator negative
+        self.assertFalse(k['defined'])
+        self.assertIsNone(k['feedback_stiffness_per_width_pa'])
+        self.assertIn('denominator', k['reason'])
+
+    def test_stress_development_fraction(self):
+        lam, nu = 0.2, 0.33
+        self.assertEqual(ss.stress_development_fraction(0.0, lam, nu), 0.0)
+        x95 = 3.94 / (2 * math.pi / lam)
+        self.assertAlmostEqual(ss.stress_development_fraction(x95, lam, nu), 0.95, delta=1e-3)
+        prev = -1.0
+        for i in range(50):
+            f = ss.stress_development_fraction(i * 0.01, lam, nu)
+            self.assertGreater(f, prev)
+            prev = f
+        d = ss.distance_to_development(0.95, lam, nu)
+        self.assertAlmostEqual(ss.stress_development_fraction(d, lam, nu), 0.95, places=9)
+        self.assertAlmostEqual(d / lam, 0.627, delta=0.005)        # about 0.63 wavelengths
+
+    def test_supplied_feedback_equals_the_pointwise_call(self):
+        z = [0.005 * i for i in range(64)]
+        dr = [1e-6 * math.exp(-((x - 0.16) / 0.03) ** 2) for x in z]
+        kw = dict(bite_half_length_m=0.003, strip_stiffness_per_width_pa=1.2e10,
+                  roll_radius_m=0.2, n_rolls=1)
+        nx, h, E, xi = 0.0128, 0.21e-3, 70e9, 1.0
+        a = ss.transfer_radius_profile(z, dr, exit_tension_force_sensitivity_per_width_m=nx,
+                                       exit_thickness_m=h, strip_youngs_modulus_pa=E, xi=xi,
+                                       **kw)
+        b = ss.transfer_radius_profile(z, dr, feedback_stiffness_per_width_pa=nx * E * xi / h,
+                                       **kw)
+        for u, v in zip(a['local_thickness_change_m'], b['local_thickness_change_m']):
+            self.assertLessEqual(abs(u - v), 1e-12 * max(abs(u), 1e-30))
+        with self.assertRaises(ValueError):
+            ss.transfer_radius_profile(z, dr, exit_tension_force_sensitivity_per_width_m=nx,
+                                       exit_thickness_m=h, feedback_stiffness_per_width_pa=1e11,
+                                       **kw)
+
+
+class SpanLateralStressTests(unittest.TestCase):
+    """SPEC19 package 12 (G11): misalignment and taper of the span rollers; the worked numbers
+    of the brief (E 70 GPa, nu 0.33)."""
+
+    def _rel(self, got, want, tol=1e-4):
+        self.assertLess(abs(got / want - 1), tol, (got, want))
+
+    def test_beam_solution_conditions_and_shear_force(self):
+        a, w, t, e, th = 3.0, 1.2, 30e-6, 70e9, 1e-3
+        i = t * w ** 3 / 12
+
+        # v = c2*x^2 + c3*x^3 (the brief's solution); derivatives of the polynomial
+        c2, c3 = th / a, -th / (3 * a * a)
+        v = lambda x: c2 * x * x + c3 * x ** 3          # noqa: E731
+        dv = lambda x: 2 * c2 * x + 3 * c3 * x * x      # noqa: E731
+        d2v = lambda x: 2 * c2 + 6 * c3 * x             # noqa: E731
+        d3v = 6 * c3
+        self.assertEqual((v(0.0), dv(0.0)), (0.0, 0.0))
+        self.assertLess(abs(dv(a) - th), 1e-15)
+        self.assertLess(abs(d2v(a)), 1e-15)
+        # the derivative formulas agree with the polynomial itself (central differences)
+        hx = 1e-4
+        self.assertLess(abs((v(1.0 + hx) - v(1.0 - hx)) / (2 * hx) - dv(1.0)), 1e-9)
+        self.assertLess(abs((dv(1.0 + hx) - dv(1.0 - hx)) / (2 * hx) - d2v(1.0)), 1e-9)
+        # V = E*I*|v'''| = 2*E*I*theta/a^2 (constant along the span)
+        self._rel(e * i * abs(d3v), 2 * e * i * th / a ** 2, 1e-12)
+        tau = ss.misalignment_shear_stress_pa(th, a, w, e)
+        self._rel(tau, 2 * e * i * th / a ** 2 / (w * t), 1e-12)
+        self._rel(tau, e * w * w * th / (6 * a * a), 1e-12)
+
+    def _quoted(self, got, text, scale):
+        """``got`` equals the brief's number ``text`` (times ``scale``) to its last quoted
+        digit (half a unit of that digit)."""
+        mant = text.replace('.', '').lstrip('0')
+        sig = len(mant)
+        want = float(text) * scale
+        unit = 10 ** (math.floor(math.log10(abs(want))) - sig + 1)
+        self.assertLessEqual(abs(got - want), 0.5 * unit * (1 + 1e-9), (got, text))
+
+    def test_worked_table(self):
+        # trough threshold [Pa], critical shear [MPa], critical misalignment troughs [mm/m],
+        # wrinkle threshold [MPa], critical misalignment wrinkles [mm/m], x 15 [mm/m]
+        for h, a, w, sx, r, want in (
+                (30e-6, 3.0, 1.2, 40e6, 0.125, ('32152', '1.1345', '0.6078', '10.275', '12.18',
+                                                '183')),
+                (50e-6, 3.0, 1.2, 35e6, 0.125, ('50125', '1.3255', '0.7101', '17.125', '16.01',
+                                                '240')),
+                (210e-6, 4.0, 1.5, 30e6, 0.15, ('146182', '2.0992', '1.2795', '59.94', '44.75',
+                                                '671'))):
+            g = ss.span_lateral_stress(h, a, sx, w, roller_radius_m=r, youngs_modulus_pa=E_AL,
+                                       poisson_ratio=NU_AL)
+            got = (-g['trough_critical_lateral_stress_pa'],
+                   g['critical_shear_stress_troughs_pa'], g['critical_misalignment_troughs_rad'],
+                   -g['roller_wrinkle_critical_lateral_stress_pa'],
+                   g['critical_misalignment_wrinkles_rad'],
+                   g['foil_factor_context'][
+                       'critical_misalignment_wrinkles_times_aluminium_factor_rad'])
+            for x, y, sc in zip(got, want, (1, 1e6, 1e-3, 1e6, 1e-3, 1e-3)):
+                self._quoted(x, y, sc)
+            # and 1e-4 relative against the full-precision closed forms of the prototype
+            s_tr = (math.pi * h / a) * math.sqrt(E_AL * sx / (3 * (1 - NU_AL ** 2)))
+            s_w = E_AL * h / (r * math.sqrt(3 * (1 - NU_AL ** 2)))
+            for x, y in ((got[0], s_tr), (got[3], s_w),
+                         (got[2], 6 * a * a * math.sqrt(s_tr * (sx + s_tr)) / (E_AL * w * w)),
+                         (got[4], 6 * a * a * math.sqrt(s_w * (sx + s_w)) / (E_AL * w * w))):
+                self._rel(x, y, 1e-4)
+            self.assertIsNone(g['shear_stress_pa'])
+            self.assertIsNone(g['computed_lateral_compressive_stress_pa'])
+            self.assertTrue(0.19 <= g['tension_stiffening_parameter'] <= 0.21 or h > 100e-6)
+            self.assertEqual(g['flags'], [])
+
+    def test_forward_and_critical_inverse(self):
+        g = ss.span_lateral_stress(30e-6, 3.0, 40e6, 1.2, misalignment_rad=1e-4,
+                                   roller_radius_m=0.125, youngs_modulus_pa=E_AL,
+                                   poisson_ratio=NU_AL)
+        self._rel(g['shear_stress_pa'], 186667)
+        self._rel(g['second_principal_stress_pa'], -871.1)
+        self.assertLess(g['computed_lateral_compressive_stress_pa'],
+                        -g['trough_critical_lateral_stress_pa'])
+        for s in (g['trough_critical_lateral_stress_pa'],
+                  g['roller_wrinkle_critical_lateral_stress_pa']):
+            th = ss.critical_misalignment_rad(s, 40e6, 3.0, 1.2, E_AL)
+            tau = ss.misalignment_shear_stress_pa(th, 3.0, 1.2, E_AL)
+            self.assertLess(abs(-ss.second_principal_stress_pa(40e6, tau) / abs(s) - 1), 1e-9)
+
+    def test_taper_equals_misalignment_m_times_a(self):
+        th = ss.taper_equivalent_misalignment_rad(10e-6, 0.125, 1.2, 3.0)
+        self._rel(th, 0.2e-3, 1e-12)
+        self._rel(th, 10e-6 / (0.125 * 1.2) * 3.0, 1e-12)
+        a = ss.span_lateral_stress(30e-6, 3.0, 40e6, 1.2, taper_radius_difference_m=10e-6,
+                                   roller_radius_m=0.125)
+        b = ss.span_lateral_stress(30e-6, 3.0, 40e6, 1.2, misalignment_rad=0.2e-3,
+                                   roller_radius_m=0.125)
+        self._rel(a['shear_stress_pa'], b['shear_stress_pa'], 1e-12)
+        both = ss.span_lateral_stress(30e-6, 3.0, 40e6, 1.2, misalignment_rad=1e-3,
+                                      taper_radius_difference_m=10e-6, roller_radius_m=0.125)
+        self._rel(both['combined_misalignment_rad'], 1.2e-3, 1e-12)   # added in magnitude
+
+    def test_small_shear_limit(self):
+        for tau in (1e3, 1e5):
+            s2 = ss.second_principal_stress_pa(40e6, tau)
+            self._rel(s2, -tau * tau / 40e6, 1e-4 if tau > 1e4 else 1e-8)
+        self.assertEqual(ss.second_principal_stress_pa(40e6, 0.0), 0.0)
+        self._rel(ss.second_principal_stress_pa(40e6, 30e6),
+                  20e6 - math.sqrt(400e12 + 900e12), 1e-12)
+
+    def test_roller_deflection_beam_quantities(self):
+        g = ss.span_lateral_stress(
+            30e-6, 3.0, 40e6, 1.2, misalignment_rad=0.0, roller_radius_m=0.125,
+            roller={'outer_diameter_m': 0.25, 'wall_thickness_m': 0.010, 'face_length_m': 1.5,
+                    'youngs_modulus_pa': 210e9, 'wrap_angle_rad': math.pi / 2})
+        rd = g['roller_deflection']
+        self._rel(rd['load_per_length_n_m'], 1697.06)
+        self._rel(rd['second_moment_m4'], 5.4381e-5)
+        self._rel(rd['mid_length_curvature_per_m'], 4.179e-5, 2e-4)
+        self._rel(rd['end_slope_rad'], 2.090e-5, 2e-4)
+        self.assertIn('no lateral stress', rd['note'])
+        self.assertEqual(g['shear_stress_pa'], 0.0)      # the deflection adds no stress
+
+    def test_flags_foil_factor_and_limitations(self):
+        g = ss.span_lateral_stress(30e-6, 1.0, 40e6, 1.2, misalignment_rad=1e-4)
+        self.assertIn(ss.SPAN_FLAG_SHORT, g['flags'])
+        self.assertIsNone(g['critical_misalignment_wrinkles_rad'])
+        self.assertIsNone(g['foil_factor_context'][
+            'critical_misalignment_wrinkles_times_aluminium_factor_rad'])
+        g = ss.span_lateral_stress(30e-6, 9.0, 200e6, 1.2)
+        self.assertGreater(g['tension_stiffening_parameter'], 0.5)
+        self.assertIn(ss.SPAN_FLAG_STIFFENING, g['flags'])
+        ff = ss.span_lateral_stress(20e-6, 3.0, 40e6, 1.2)['foil_factor_context']
+        self.assertEqual((ff['aluminium_factor'], ff['copper_factor_range']), (15.0, [7.0, 10.0]))
+        self.assertTrue(ff['gauge_within_trials'])
+        self.assertIn('not applied', ff['note'])
+        lim = ' '.join(g['limitations'])
+        for words in ('isolated span', 'Misalignment and taper only', 'roller deflection',
+                      'baggy lane', 'moment transfer', 'slack edge', 'traction', '15 times'):
+            self.assertIn(words, lim)
+        dumps(g)
+
+    def test_rejections(self):
+        base = dict(thickness_m=30e-6, span_length_m=3.0, tension_stress_pa=40e6,
+                    strip_width_m=1.2)
+        for kw in ({'misalignment_rad': -1e-4}, {'misalignment_rad': 0.2},
+                   {'taper_radius_difference_m': 2e-3, 'roller_radius_m': 0.1},
+                   {'taper_radius_difference_m': 1e-5},          # no roller radius
+                   {'roller_radius_m': 0.0}, {'misalignment_rad': True},
+                   {'roller': {'outer_diameter_m': 0.25}},
+                   {'roller': {'outer_diameter_m': 0.25, 'wall_thickness_m': 0.2,
+                               'face_length_m': 1.5, 'youngs_modulus_pa': 210e9,
+                               'wrap_angle_rad': 1.0}}):
+            with self.assertRaises(ValueError, msg=kw):
+                ss.span_lateral_stress(**base, **kw)
+        with self.assertRaises(ValueError):
+            ss.critical_misalignment_rad(1e4, 0.0, 3.0, 1.2)
+        with self.assertRaises(ValueError):
+            ss.roller_deflection(0.25, 0.01, 1.5, 210e9, 4.0, 1200.0)

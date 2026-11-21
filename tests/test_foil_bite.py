@@ -20,7 +20,7 @@ MID_MU05 = (0.3e-3, 0.21e-3, 1.5, 0.2, 270e6, 0.05, 25e6, 30e6)       # Hitchcoc
 MID_MU03 = (0.3e-3, 0.21e-3, 1.5, 0.2, 270e6, 0.03, 25e6, 30e6)       # Hitchcock: 2.787 MN
 THIN = (0.12e-3, 0.084e-3, 1.5, 0.2, 285e6, 0.03, 25e6, 30e6)         # Hitchcock rejects
 FOIL_MU03 = (50e-6, 25e-6, 1.5, 0.135, 150e6, 0.03, 20e6, 20e6)
-FOIL_MU10 = (50e-6, 25e-6, 1.5, 0.135, 150e6, 0.10, 20e6, 20e6)       # Sutcliffe-type case
+FOIL_MU10 = (50e-6, 25e-6, 1.5, 0.135, 150e6, 0.10, 20e6, 20e6)       # nominal mu 0.10
 E_STAR = 210e9 / (1 - 0.3 ** 2)
 
 
@@ -160,7 +160,7 @@ class FoilRegimeTests(unittest.TestCase):
         self.assertEqual(zones[0], 'entry_contact_zone')
         self.assertEqual(zones[-1], 'exit_contact_zone')
         self.assertTrue(all(p >= 0 for p in r['profile']['pressure_pa']))
-        self.assertIn('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES', r['flags'])
+        self.assertIn('FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL', r['flags'])
 
     def test_foil_grid_convergence(self):
         c = self.foil['convergence']
@@ -169,6 +169,9 @@ class FoilRegimeTests(unittest.TestCase):
         self.assertLess(c['mechanical_work_residual_relative'], 1e-8)
 
     def test_published_high_friction_foil_case_rejected_coulomb_above_shear_yield(self):
+        """A 50 -> 25 um pass at a NOMINAL friction of 0.10 is rejected (Coulomb shear above
+        shear yield). This is not the published case, where 0.1 acts on asperity contact areas
+        only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]."""
         for end_zones in (True, False):
             with self.assertRaisesRegex(ValueError, 'shear yield'):
                 solve_mattress_bite(*FOIL_MU10, contact_end_zones=end_zones)

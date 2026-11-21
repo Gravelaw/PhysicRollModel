@@ -42,7 +42,16 @@
     "observation.appeared_after_narrower_coil: true if the bands started when a wider coil was rolled after a narrower one (without a backup-roll change).",
     "width_model.shape_inputs (optional, null = derive from the bite): when no bite model solves the pass (foil), supply {strip_stiffness_per_width_pa, exit_tension_force_sensitivity_per_width_m, bite_half_length_m, provenance} from a plant foil model; they then drive the strip-shape chain (transfer, flatness, onset heights) of the case pass and take precedence over a derived bite. Without a bite and without them the shape parts are not assessable and the rest of the width section still runs; the roll thermal stripes then need bite_heat_per_width_w_m supplied.",
     "material.final_pass_doubled (optional, v2): whether the thinnest pass of the case (schedule rows and the case pass) is rolled doubled, two sheets in one bite. null = not stated (the foil-regime block then asks the plant); false = single-sheet stated (the block records it and notes that both faces are roll-side, so observation.faces is worth recording); true = doubled stated (flag DOUBLED_FINAL_PASS_NOT_MODELLED: the tool models one sheet in the bite). It has no effect when the case is not in the foil regime (exit gauge of 100 um or more, no foil_regime block).",
-    "material.product (optional, v2): a product id from the thin-gauge catalogue (physicroll/band_products.py, docs/thin-gauge-products.md): battery_collector_foil, battery_pouch_laminate_foil, capacitor_anode_foil_high_voltage, capacitor_anode_foil_low_voltage, capacitor_cathode_foil, pharma_blister_lidding, pharma_cold_form_foil, pharma_strip_pack_foil, household_foil, household_foil_heavy_duty, converter_foil, cigarette_liner_foil, dairy_lidding_foil, container_foil_wrinkle_wall, container_foil_smooth_wall, container_foil_retortable, brazed_fin_stock, brazing_sheet_tube, hvac_fin_stock, litho_sheet, can_body_stock, can_end_stock, closure_sheet, transformer_strip. With it the result carries a product_check: every pass against the published envelope of that product (final gauge, per-pass and final-pass reduction, final-pass entry gauge, speed, rolled mode, alloy, temper, flow stress as an indicator) and the nearest published passes. It is a literature check and never changes the hypothesis scores; an unknown id is rejected with the list of valid ids. material.alloy may carry a prefix (AA1235, EN AW-1235): the check uses the bare designation."
+    "material.product (optional, v2): a product id from the thin-gauge catalogue (physicroll/band_products.py, docs/thin-gauge-products.md): battery_collector_foil, battery_pouch_laminate_foil, capacitor_anode_foil_high_voltage, capacitor_anode_foil_low_voltage, capacitor_cathode_foil, pharma_blister_lidding, pharma_cold_form_foil, pharma_strip_pack_foil, household_foil, household_foil_heavy_duty, converter_foil, cigarette_liner_foil, dairy_lidding_foil, container_foil_wrinkle_wall, container_foil_smooth_wall, container_foil_retortable, brazed_fin_stock, brazing_sheet_tube, hvac_fin_stock, litho_sheet, can_body_stock, can_end_stock, closure_sheet, transformer_strip. With it the result carries a product_check: every pass against the published envelope of that product (final gauge, per-pass and final-pass reduction, final-pass entry gauge, speed, rolled mode, alloy, temper, flow stress as an indicator) and the nearest published passes. It is a literature check and never changes the hypothesis scores; an unknown id is rejected with the list of valid ids. material.alloy may carry a prefix (AA1235, EN AW-1235): the check uses the bare designation.",
+    "width_model.spray_wetted_arc_rad (optional, null = not given): the arc of the roll circumference [rad, in (0, 2*pi]] that the coolant spray wets. The model's spray_mean_htc_w_m2k is a mean around the roll; with the arc, thermal_check also shows the equivalent coefficient inside the jet zone, h_bg + spray_mean_htc * 2*pi/arc. It does not enter the roll thermal model.",
+    "tribology.oil_flash_point_k and tribology.oil_supply_temperature_cap_k (optional, null = not given, 250-700 K): the flash point of your rolling oil (data sheet) and a site or insurer cap on the oil supply temperature. thermal_check.fire_limits compares the oil temperatures and the modelled strip exit temperatures with them (a rule check; a modelled exit temperature is not a coil temperature); there is no default limit.",
+    "measurement (optional, v2; null = not supplied): {\"shapemeter\": {zone_width_m, zone_count, edge_zone_width_m, edge_zone_count_per_side, centre_m, neighbour_spreading_fraction, resolution_i_units, provenance}, \"thickness_gauge\": null}. The shapemeter block gives what each zone of a flatness roll with that zone width would read for every modelled band (zone means of the model profile; no flatness controller is modelled). Zone width, count and edge zones come from the shapemeter data sheet or the level-2 configuration; leave neighbour_spreading_fraction at 0 unless the vendor states it, and resolution_i_units null unless the vendor gives one.",
+    "width_model.strip_temperature (optional, null = not supplied): a measured or assumed strip temperature scan across the width, {positions_m (>= 3, increasing, on the barrel), temperature_k (one per position, 250-700 K), expansion_coefficient_per_k (null = 23.6e-6 /K, a textbook value), provenance}. It is not computed by the tool. The result then shows flatness as a shapemeter measures it hot (model flatness plus about 2.4 I-units per kelvin) beside the flatness after the coil has cooled.",
+    "width_model.friction_stripe_screen (optional, null = not supplied): {reference_half_peak_width_m (null = 0.1 m), stripes: [{position_m, half_peak_width_m, friction_change_fraction (relative change of the pass friction, -0.9 to 5, not 0), label}]}. A screening estimate of a local friction or oil-film difference across the width as a band source: I-units per 1 % friction per pass (with and without the exit-tension feedback) and the flatness of each supplied stripe; the list may be empty. It never changes a score.",
+    "width_model.roll_ground_profile (optional, null = not supplied): a measured roll profile from a grinder report, {positions_m (>= 5, increasing, on the barrel, from the barrel end where the spray header starts), radius_deviation_m (RADIUS, half a diameter deviation, positive = larger roll, one per position), detrend_order (default 2: the crown is removed; null = none), rolls_carrying (1 or 2), provenance}. It goes through the same transfer as a thermal stripe; it never changes a score.",
+    "width_model.local_coupling (optional, null = not supplied): {inlet_roll_temperature_weight (share of a roll surface temperature difference that reaches the oil at the inlet, [0, 1], default 0.5 = the mean of roll and strip, an assumption), flow_stress_temperature_coefficient_per_k (softening per kelvin, [0, 0.01], null = hardening.rate_temperature when given), strip_roll_temperature_coupling (strip exit temperature change per kelvin of roll surface, [0, 1.5], null = computed from the bite heat partition), oil_flow_per_nozzle_m3_s ((0, 0.1], null = no supply check), oil_capture_fraction ((0, 1], default 1), provenance}. Oil viscosity, film, friction, flow stress and strip exit temperature across the width as differences from a healthy header (width.local_state); it never changes a score.",
+    "width_model.flatness_control (optional, null = not supplied; needs measurement.shapemeter): a closed spray loop with the tool's own control law, {valve_levels (2-41 increasing values in [0, 1]), initial_level (one of them, default the highest), minimum_on_time_s and minimum_off_time_s ([0, 600] s), dead_band_i_units ((0, 100]), control_zone_nozzles (null = groups of cooling_zone_pitch_m/nozzle_pitch_m adjacent nozzles), integral_gain (default 0.1), control_interval_s (default 2), low_order_removed (default 2), target_i_units (per shapemeter zone or null), supplied_actuators (null or 1-4 influence vectors), horizon_s (default 1800), shapemeter_distance_m, display_time_constant_s, include_local_sources (needs local_coupling), provenance}. It shows what such a loop would do with these settings on this model (width.flatness_control), not what the plant's controller did; it never changes a score.",
+    "width_model.zone_step_test (optional, null = not supplied; needs measurement.shapemeter): the emulation of a plant zone step test, {nozzle_indices (the zone switched), level (default 0), hold_s (10-3600, default 60), fit_windows_s (1-6 test lengths, default 20, 40, 60 s), time_step_s (default 0.5), shapemeter_distance_m (null = no delay), display_time_constant_s (default 1 s), provenance}. The first-order time constant such a test would fit on this model (width.zone_step_test), beside the published 20 s; a match is not evidence. It never changes a score."
   ],
   "pass": {
     "entry_thickness_m": 0.0003,
@@ -200,7 +209,15 @@
     "cooling_zone_pitch_m": null,
     "deflector_roll_radius_m": null,
     "lateral_compressive_stress_pa": null,
-    "shape_inputs": null
+    "shape_inputs": null,
+    "spray_wetted_arc_rad": null,
+    "strip_temperature": null,
+    "friction_stripe_screen": null,
+    "roll_ground_profile": null,
+    "circumferential_layout": null,
+    "local_coupling": null,
+    "flatness_control": null,
+    "zone_step_test": null
   },
   "tribology": {
     "lubricant": {
@@ -220,6 +237,8 @@
     "strip_entry_temperature_k": 313.15,
     "strip_heat_fraction": 0.84,
     "temperature_limit_k": null,
+    "oil_flash_point_k": null,
+    "oil_supply_temperature_cap_k": null,
     "thermal_correction": false,
     "use_computed_friction": false
   },
@@ -230,5 +249,7 @@
     "force_filter_hz": null
   },
   "drive": null,
-  "incoming_variation": null
+  "incoming_variation": null,
+  "measurement": null,
+  "foil_gauge_control": null
 }

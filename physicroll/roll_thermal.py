@@ -19,9 +19,14 @@ Li et al. 2024]::
   edges) [D]: ``q = roll_heat_fraction_per_roll*bite_heat_per_width_w_m/(2*pi*R)``.
 - Heat-transfer coefficient (circumferential mean) [D]:
   ``h = background_htc + spray_mean_htc*weight(z,t)``. Nozzle ``i`` at ``z_i`` with
-  along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)`` [V: Lloyd 2010;
-  Tucker 2006] and level ``s_i`` in [0, 1] adds ``s_i*pitch/W_eff`` inside
-  ``[z_i - W_eff/2, z_i + W_eff/2]`` (top-hat footprint; a healthy header averages to 1).
+  along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)`` [D] geometric;
+  neither paper prints it [SN1 FT; SN3 FT]; catalogue widths are 6-14 % larger [SN5 VP;
+  computed] (``footprint_width_m`` supplies the pattern width as built instead) and level
+  ``s_i`` in [0, 1] adds ``s_i**n*pitch/W_eff`` inside ``[z_i - W_eff/2, z_i + W_eff/2]``
+  (top-hat footprint by default; ``footprint_profile='parabolic'`` uses the density
+  ``1.5*(1 - (2x/W)**2)``, a stand-in: parabolic is the makers' word [SN2 FT; SN5 VP], no
+  measured profile is published; ``n = htc_flow_exponent``, 1 by default; a healthy header
+  averages to 1).
   Default layout as ``band_signatures.spray_coverage``: ``n = floor(B/pitch)`` nozzles
   centred on the barrel.
 - Thermal radius growth per axial station [V factor 1: Yamaguchi 2016; V factor 2(1+nu):
@@ -112,8 +117,9 @@ _LIMITATIONS = [
     'Bite heat flux, roll heat fraction and spray heat-transfer coefficients are caller '
     'inputs; no measured value for kerosene-based coolant sprays was found (planner estimate '
     '0.5-2 kW/m2K [D]).',
-    'Top-hat nozzle footprints: real fans have a tapered flow distribution, so the nozzle-'
-    'pitch variation of h for a healthy header is an artefact of this idealisation.',
+    'Top-hat nozzle footprints by default: the nozzle-pattern ripple is of unknown size: with '
+    'a parabolic profile a healthy header still ripples by about -12 % / +7 % at 1.43 pitches '
+    'and about +/-5 % at 3.2 [computed]; the top-hat value is not representative.',
     'Barrel ends adiabatic (neck and chock losses ignored); constant properties.',
     'Thermal expansion per axial station (no axial mechanical coupling); the expansion factor '
     'differs between sources (1 axially free vs 1+nu plane strain).',
@@ -178,6 +184,21 @@ def _overlap(a, b, c, d):
     return max(0.0, min(b, d) - max(a, c))
 
 
+def _parabola_integral(a, b, x, w):
+    """Exact integral of ``1.5*(1 - (2u/w)**2)`` over ``[a, b]`` intersected with the footprint
+    ``[x - w/2, x + w/2]`` (u = z - x); the integral over the whole footprint is ``w``."""
+    lo, hi = max(a, x - w / 2) - x, min(b, x + w / 2) - x
+    if hi <= lo:
+        return 0.0
+    f = lambda u: 1.5 * (u - 4 * u ** 3 / (3 * w * w))  # noqa: E731
+    return f(hi) - f(lo)
+
+
+FOOTPRINT_PROFILES = ('tophat', 'parabolic')
+FOOTPRINT_STAND_IN_BASIS = ('parabolic is the makers\' word [SN2 FT; SN5 VP]; the function '
+                            '1.5*(1 - (2x/W)**2) is a stand-in, no measured profile is published')
+
+
 # --------------------------------------------------------------------------- inputs
 @dataclass(frozen=True)
 class RollThermalProperties:
@@ -216,12 +237,26 @@ class SprayHeader:
     offset_angle_rad: float = 0.0
     first_nozzle_position_m: float | None = None
     background_htc_w_m2k: float = 50.0
+    # SPEC22: opt-in header options; the defaults reproduce the earlier numbers bit for bit
+    footprint_profile: str = 'tophat'
+    footprint_width_m: float | None = None
+    htc_flow_exponent: float = 1.0
 
     def validate(self):
         _num('nozzle_pitch_m', self.nozzle_pitch_m, positive=True, hi=10.0)
         _num('standoff_m', self.standoff_m, positive=True, hi=5.0)
         _num('spray_angle_rad', self.spray_angle_rad, positive=True, hi=math.radians(170))
-        _num('offset_angle_rad', self.offset_angle_rad, nonnegative=True, hi=math.radians(60))
+        # 70 degrees: catalogue nozzles are sold with a 70 degree offset [SN5 VP]
+        _num('offset_angle_rad', self.offset_angle_rad, nonnegative=True, hi=math.radians(70))
+        if self.footprint_profile not in FOOTPRINT_PROFILES:
+            raise ValueError('footprint_profile must be "tophat" or "parabolic"')
+        if self.footprint_width_m is not None:
+            if isinstance(self.footprint_width_m, bool) or not isinstance(
+                    self.footprint_width_m, (int, float)) or not math.isfinite(
+                    self.footprint_width_m) or not 0 < self.footprint_width_m <= 5.0:
+                raise ValueError('footprint_width_m (the pattern width along the barrel) must '
+                                 'be > 0 and <= 5 m')
+        _num('htc_flow_exponent', self.htc_flow_exponent, lo=0.5, hi=1.0)
         if self.first_nozzle_position_m is not None:
             _num('first_nozzle_position_m', self.first_nozzle_position_m, nonnegative=True,
                  hi=10.0)
@@ -230,11 +265,30 @@ class SprayHeader:
         return self
 
     @property
-    def effective_footprint_width_m(self):
-        """Along-barrel footprint ``W_eff = 2*standoff*tan(angle/2)*cos(offset)``."""
+    def geometric_footprint_width_m(self):
+        """Geometric along-barrel footprint ``2*standoff*tan(angle/2)*cos(offset)`` [D]."""
         self.validate()
         return (2 * self.standoff_m * math.tan(self.spray_angle_rad / 2)
                 * math.cos(self.offset_angle_rad))
+
+    @property
+    def effective_footprint_width_m(self):
+        """Along-barrel footprint: ``footprint_width_m`` when supplied (the pattern width as
+        built), else the geometric value. Every reader of the header takes the width here."""
+        if self.footprint_width_m is not None:
+            self.validate()
+            return float(self.footprint_width_m)
+        return self.geometric_footprint_width_m
+
+    @property
+    def footprint_width_source(self):
+        return 'geometric' if self.footprint_width_m is None else 'supplied'
+
+    def nozzle_weight(self, level):
+        """A nozzle's cooling weight at flow level ``level``: ``level**n`` (``level`` itself
+        for the default n = 1, so that code path and numbers are unchanged)."""
+        n = self.htc_flow_exponent
+        return level if n == 1.0 else level ** n
 
     def nozzle_positions(self, barrel_length_m):
         """Nozzle positions [m] along the barrel (same default layout as spray_coverage)."""
@@ -274,12 +328,17 @@ class SprayHeader:
         lv = _levels(levels, len(positions))
         w_eff = self.effective_footprint_width_m
         height = self.nozzle_pitch_m / w_eff
+        wts = [self.nozzle_weight(s) for s in lv]
+        parabolic = self.footprint_profile == 'parabolic'
         out = []
         for a, b in zip(edges, edges[1:]):
             acc = 0.0
-            for x, s in zip(positions, lv):
+            for x, s in zip(positions, wts):
                 if s > 0:
-                    acc += s * _overlap(a, b, x - w_eff / 2, x + w_eff / 2)
+                    if parabolic:
+                        acc += s * _parabola_integral(a, b, x, w_eff)
+                    else:
+                        acc += s * _overlap(a, b, x - w_eff / 2, x + w_eff / 2)
             out.append(height * acc / (b - a))
         return out
 
@@ -688,7 +747,7 @@ def _base_flags(prob, header):
         flags.append('NOZZLES_REDUCED_OR_OFF')
     w_eff = header.effective_footprint_width_m
     ratio = w_eff / header.nozzle_pitch_m
-    if abs(ratio - round(ratio)) > 1e-6:
+    if header.footprint_profile == 'tophat' and abs(ratio - round(ratio)) > 1e-6:
         flags.append('TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC')
     if w_eff < header.nozzle_pitch_m:
         flags.append('NO_NOMINAL_OVERLAP_GAPS_BETWEEN_FANS')
@@ -962,6 +1021,149 @@ def simulate(roll, header, segments, *, initial='uniform_coolant', time_step_s=1
         'sources': [SOURCES['yamaguchi_2016'], SOURCES['li_2024'], SOURCES['dohmae_2012'],
                     SOURCES['lloyd_2010'], SOURCES['tucker_2006']]})
 
+
+
+class ControlledRun:
+    """A transient roll-temperature run whose nozzle levels may change at every call
+    (SPEC19 package 3; the stepping of ``simulate``, not a new scheme).
+
+    ``base_segment`` gives bite heat, heat fraction, strip and coolant (its levels and duration
+    are ignored). ``advance(levels, duration_s, time_step_s)`` steps the field for
+    ``duration_s`` in ``n = max(1, ceil(duration_s/min(time_step_s, cap)))`` equal steps (``cap``
+    the internal step cap of ``simulate``); the first step after the levels CHANGED (and the
+    very first step) is the start-up of ``simulate`` (two backward-Euler half steps), every
+    other step a Peaceman-Rachford step, exactly as ``simulate`` steps a segment. Driven with
+    the levels and durations of a list of segments (different levels in consecutive segments,
+    no record times) it reproduces ``simulate`` to float rounding. The energy ledger is the
+    one of ``simulate``. Operators are cached per level set (rounded to 6 decimals), the
+    oldest dropped beyond ``max_cached_level_sets``. ``result()`` returns what ``simulate``
+    returns at its end, without snapshots, monitors and wall time.
+    """
+
+    def __init__(self, roll, header, base_segment, *, initial, axial_cell_m=0.005,
+                 radial_cells=16, expansion_constraint='axially_free',
+                 reference_temperature_k=None, max_cached_level_sets=512):
+        grid, factor = _common(roll, header, axial_cell_m, radial_cells, expansion_constraint)
+        if not isinstance(base_segment, ThermalSegment):
+            raise ValueError('base_segment must be ThermalSegment')
+        base_segment.validate()
+        cap = _int('max_cached_level_sets', max_cached_level_sets, lo=1, hi=100000)
+        self._roll, self._header, self._base = roll, header, base_segment
+        self._grid, self._factor, self._cap = grid, factor, cap
+        self._constraint = expansion_constraint
+        tc0 = base_segment.coolant_temperature_k
+        self._t_ref = (tc0 if reference_temperature_k is None else
+                       _num('reference_temperature_k', reference_temperature_k, lo=200.0,
+                            hi=600.0))
+        self._rows = _initial_rows(initial, grid, tc0)
+        a_z = roll.conductivity_w_mk / (roll.density_kg_m3 * roll.specific_heat_j_kgk)
+        self._step_cap = ADI_AXIAL_STEP_FACTOR * grid.dz ** 2 / a_z
+        self._cache = {}             # key -> (problem, stepper), insertion order = age
+        self._key = None             # level set of the last step
+        self._prob = self._entry(base_segment.nozzle_levels)[0]
+        self._stored0 = _stored_energy_j(self._prob, self._rows)
+        self._heat_in = self._heat_out = 0.0
+        self._steps = self._startup = 0
+        self._flags = set(_base_flags(self._prob, header))
+        self._last_dt_max = None
+        self._subdivided = False
+        self.z_m = list(grid.z)
+        self.time_s = 0.0
+
+    def _entry(self, levels):
+        n = len(self._header.nozzle_positions(self._roll.barrel_length_m))
+        lv = _levels(levels, n)
+        key = tuple(round(v, 6) for v in lv)
+        if key in self._cache:
+            ent = self._cache.pop(key)          # re-insert: most recently used last
+        else:
+            seg = ThermalSegment(
+                duration_s=1.0, bite_heat_per_width_w_m=self._base.bite_heat_per_width_w_m,
+                roll_heat_fraction_per_roll=self._base.roll_heat_fraction_per_roll,
+                strip_width_m=self._base.strip_width_m,
+                coolant_temperature_k=self._base.coolant_temperature_k,
+                strip_centre_m=self._base.strip_centre_m, nozzle_levels=list(lv))
+            prob = _Problem(self._roll, self._header, seg, self._grid)
+            ent = (prob, _Stepper(prob))
+            while len(self._cache) >= self._cap:
+                self._cache.pop(next(iter(self._cache)))
+        self._cache[key] = ent
+        return ent[0], ent[1], key
+
+    @property
+    def cached_level_sets(self):
+        return len(self._cache)
+
+    def advance(self, nozzle_levels, duration_s, time_step_s):
+        """Step ``duration_s`` with ``nozzle_levels``; returns ``time_s``, ``radius_growth_m``
+        and ``surface_temperature_k`` at the end of the interval."""
+        span = _num('duration_s', duration_s, positive=True, hi=1e7)
+        dt_max = _num('time_step_s', time_step_s, positive=True, hi=1e5)
+        prob, stepper, key = self._entry(nozzle_levels)
+        self._flags.update(_base_flags(prob, self._header))
+        dt_step = min(dt_max, self._step_cap)
+        self._last_dt_max = dt_max
+        self._subdivided = self._subdivided or dt_max > self._step_cap
+        n = max(1, int(math.ceil(span / dt_step - 1e-9)))
+        dt = span / n
+        area = 2 * math.pi * self._roll.radius_m * self._grid.dz
+        q_rate = area * sum(prob.q)
+        rows = self._rows
+        for _ in range(n):
+            if key != self._key:
+                sub = dt / STARTUP_SUBSTEPS
+                for _ in range(STARTUP_SUBSTEPS):
+                    rows, star = stepper.be_step(rows, sub)
+                    _, hout = prob.heat_rates(star)
+                    self._heat_in += sub * q_rate
+                    self._heat_out += sub * hout
+                self._startup += 1
+                self._key = key
+            else:
+                rows, star = stepper.pr_step(rows, dt)
+                _, hout = prob.heat_rates(star)
+                self._heat_in += dt * q_rate
+                self._heat_out += dt * hout
+            self._steps += 1
+        self._rows, self._prob = rows, prob
+        self.time_s += span
+        _, growth, surface = _profiles(prob, rows, self._t_ref, self._factor, self._roll)
+        return {'time_s': self.time_s, 'radius_growth_m': growth,
+                'surface_temperature_k': surface}
+
+    def result(self):
+        """What ``simulate`` returns at its end (no snapshots, monitors or wall time)."""
+        prob, rows, grid = self._prob, self._rows, self._grid
+        mean, growth, surface = _profiles(prob, rows, self._t_ref, self._factor, self._roll)
+        stored = _stored_energy_j(prob, rows) - self._stored0
+        residual = stored - (self._heat_in - self._heat_out)
+        scale = max(abs(stored), abs(self._heat_in), abs(self._heat_out), 1e-300)
+        flags = sorted(self._flags)
+        if self._subdivided:
+            flags.append('TIME_STEP_SUBDIVIDED_FOR_ADI_DAMPING')
+        crown = _crown(grid.z, growth, prob.strip_centre, prob.strip_width)
+        return _checked({
+            'status': STATUS_TRANSIENT, 'end_time_s': self.time_s,
+            'z_m': list(grid.z), 'surface_temperature_k': surface, 'mean_temperature_k': mean,
+            'radius_growth_m': growth, 'htc_w_m2k': list(prob.h),
+            'heat_flux_w_m2': list(prob.q), 'nozzle_levels': list(prob.levels),
+            'thermal_crown_m': crown, 'reference_temperature_k': self._t_ref,
+            'expansion_constraint': self._constraint, 'expansion_factor': self._factor,
+            'stored_j': stored, 'heat_in_j': self._heat_in, 'heat_out_j': self._heat_out,
+            'residual_j': residual, 'relative_energy_residual': residual / scale,
+            'field': _field(grid, rows), 'grid': grid.describe(),
+            'solver': {'method': 'PEACEMAN_RACHFORD_ADI_WITH_BACKWARD_EULER_STARTUP',
+                       'time_step_s': self._last_dt_max,
+                       'internal_time_step_cap_s': self._step_cap,
+                       'time_step_subdivided': self._subdivided, 'steps': self._steps,
+                       'startup_steps': self._startup, 'startup_substeps': STARTUP_SUBSTEPS,
+                       'cached_level_sets': len(self._cache)},
+            'reasons': [f'{self.time_s:g} s simulated in {self._steps} steps with changing '
+                        f'nozzle levels; final thermal crown {crown:.3e} m.'],
+            'flags': flags, 'limitations': list(_LIMITATIONS),
+            'threshold_basis': _threshold_basis(),
+            'sources': [SOURCES['yamaguchi_2016'], SOURCES['li_2024'], SOURCES['dohmae_2012'],
+                        SOURCES['lloyd_2010'], SOURCES['tucker_2006']]})
 
 def _legendre(x, order):
     out = [1.0, x]

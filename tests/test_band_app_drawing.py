@@ -14,6 +14,7 @@ import random
 import unittest
 
 from physicroll import band_plain as bpl
+from physicroll import band_sensors as bsensors
 from physicroll import band_width as bw
 from tests.test_band_app import ServerCase, fake_engine
 
@@ -23,6 +24,24 @@ WEAK = bpl.WEAK_NOZZLE_LEVEL
 def engine_levels(case):
     """The nozzle levels the width model simulates for a case, from the engine itself."""
     return [float(x) for x in bw.spray_layout(case)['nozzle_levels']]
+
+
+def engine_zones(case):
+    """(start, end, nozzle numbers) of every shapemeter zone of a case, placed by the engine's
+    measurement code, or None without a shapemeter."""
+    m = case.get('measurement')
+    if not isinstance(m, dict) or not isinstance(m.get('shapemeter'), dict):
+        return None
+    sec = bsensors.shapemeter_section(dict(case, measurement=bsensors.validate_measurement(m)),
+                                      {})
+    return [(z['start_m'], z['end_m'], [i + 1 for i in z['nozzle_indices'] or []])
+            for z in sec['zones']]
+
+
+def model_zones(out):
+    sm = out['model']['shapemeter']
+    return None if sm is None else [(z['start_m'], z['end_m'], z['nozzle_numbers'])
+                                    for z in sm['zones']]
 
 
 def model_levels(out):
@@ -252,11 +271,14 @@ class EditSequenceTest(ServerCase):
                          [i + 1 for i, lv in enumerate(drawn) if lv < 1], msg)
         xs = [nz['position_m'] for nz in out['model']['header']['nozzles']]
         self.assertEqual(xs, bpl.nozzle_layout(case), msg)
+        self.assertEqual(model_zones(out), engine_zones(case), msg)      # shapemeter zones
+        self.assertIsNotNone(model_zones(out), msg)
 
     def test_pseudo_random_edit_sequence(self):
         rnd = random.Random(20261119)
         capture_engine.cases.clear()
         api = Api(self)
+        api.answers['values'].update(shapemeter_zone_width=52.0, shapemeter_zone_count=24)
         st, out = api.check()
         exp = None
         counts = {}
@@ -264,7 +286,8 @@ class EditSequenceTest(ServerCase):
         for step in range(self.STEPS):
             n = len(out['model']['header']['nozzles'])
             op = rnd.choice(['cycle'] * 5 + ['set_level'] * 3 + ['set_blocked'] * 3
-                            + ['clear', 'all_healthy', 'pitch1', 'pitch8', 'barrel', 'reopen'])
+                            + ['clear', 'all_healthy', 'pitch1', 'pitch8', 'barrel', 'reopen',
+                               'zone_width', 'zone_count'])
             counts[op] = counts.get(op, 0) + 1
             if op == 'cycle':
                 i = rnd.randrange(n)
@@ -283,6 +306,12 @@ class EditSequenceTest(ServerCase):
             elif op in ('clear', 'all_healthy'):
                 st, out = api.edit(op=op)
                 exp = self.expected_after(op, exp, n)
+            elif op in ('zone_width', 'zone_count'):        # never touch the nozzle marks
+                qid, v = (('shapemeter_zone_width', rnd.choice([26.0, 40.0, 52.0, 60.0]))
+                          if op == 'zone_width' else
+                          ('shapemeter_zone_count', rnd.randrange(8, 40)))
+                st, out = api.set(qid, v)
+                self.assertEqual(out['reconciled'], [], f'step {step}')
             elif op in ('pitch1', 'pitch8', 'barrel'):
                 if op == 'barrel':
                     qid, v = 'barrel_length', rnd.choice([1450.0, 1500.0, 1520.0, 1560.0])

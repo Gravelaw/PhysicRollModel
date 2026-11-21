@@ -173,5 +173,6 @@
       "exit_tension_pa": 30000000.0,
       "exit_speed_m_s": 16.0
     }
-  ]
+  ],
+  "measurement": null
 }

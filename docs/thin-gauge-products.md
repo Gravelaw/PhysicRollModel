@@ -8,7 +8,7 @@ This is a literature survey of thin-gauge aluminium products: gauges, alloys, te
 
 Per-pass reductions are computed by `physicroll.band_products` from the published gauge sequences as 1 − h_exit/h_entry (per sheet for a doubled pass); a block of n passes shows its total and the equal-split mean 1 − (h_exit/h_entry)^(1/n). Ranges are kept as ranges, and the reports' disagreements and "not found" lists are kept below.
 
-Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
+Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report, `TM-` thermal, material and dynamics gap report. A citation such as [PK-S20] shows the sources; a fact whose own read status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. Read-status legend:
 
 | Read status | Meaning | Report tags mapped onto it |
 |---|---|---|
@@ -19,7 +19,7 @@ Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper 
 | memory_unverified | researcher's memory, unverified | MEM; M |
 | computed | computed by this module from published gauges | report "calc." values are recomputed |
 
-Catalogue: 27 products, 1211 sourced facts, 201 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
+Catalogue: 27 products, 1211 sourced facts, 210 sources. Status: LITERATURE_SURVEY_UNVALIDATED.
 
 ## Summary
 
@@ -488,8 +488,8 @@ Literature statements, not model outputs: the tool has no roll-wear model and no
 ### Numbers for simulation
 
 - Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; a net balance. [PT-T16]
-- Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at 500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll 50 °C); viscosity ranks first among spray factors. [PT-T18, PT-T17]
-- Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about 5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll). [PT-T19]
+- Spray coefficient, kerosene on a work roll: at 500 kPa it rises from 3.0 to 4.0 kW/m²K in time as the coolant spreads over the wall (not across space); 2.5–4.3 over 200–700 kPa, an average over the roll-wall patch of one cooling zone. Simulated (1800 mm cold mill, two rows of 34 nozzles at 52 mm per work roll, entry side only, kerosene [SN14 FT]; roll 50 °C); viscosity ranks first among spray factors. [PT-T18, PT-T17]
+- Oil against water spray: oil 3–6 times lower at equal impingement density (the text; the conclusions say "about 3–5 times" [SN16 FT]) (measured on a steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about 5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll). [PT-T19]
 - Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll. [PT-T25]
 - Zone-cooling authority: ±3.6 to ±4.2 µm on diameter 20 revolutions after a change; grows linearly with rolled length; halves from 100 to 300 m/min (simulated, 1100 alloy). [PT-T18]
 - Bite contact conductance: 25–40 kW/m²K in aluminium models; measurements span 7–800. [PT-T34]
@@ -514,6 +514,41 @@ Literature statements, not model outputs: the tool has no roll-wear model and no
 - A direct measurement of temperature against dyne, gloss or roll wear; property or thickness bands traced to a width-wise temperature difference.
 - Full texts on hosts outside the research session's allowed network domains: the heat-partition paper, the Collins thesis (measured thermal cambers), the Mansell thesis, engineeringmechanics.cz, alufoil.org, aluminium-guide.com.
 - A published heat partition or spray coefficient for sheet-gauge cold rolling: the survey has foil-mill data only.
+
+## Alloy groups: hardening and softening data found
+
+From the thermal, material and dynamics gap report (sources `TM-`; gap study Appendix A.1, part B), values as printed.
+
+| Quantity | Value | Conditions | Read | Sources |
+|---|---|---|---|---|
+| 1235-H18 foil, 16 um | stress at 2 % strain 160 to 200 MPa over 1e-5 to 1e-2 /s; m about 0.027; r = 0.2 / 1.5 / 1.1; transverse stress +10 %; fracture strain 0.023-0.028 | Micro-tensile, three directions; Yld2000-2d fit | EX | TM-LB1 |
+| AA1200 to strain 5 | no saturation of flow stress or boundary spacing | Tensile tests on rolled sheet, reductions 40-99 % | AB | TM-LB3 |
+| Hardness against reduction | A1050 peak at 80 %, about 43 HV; Al-0.69 mol% Fe peak at 60 %, softening beyond 80 % | Cold rolled 40-95 % after 330 C anneal | EX | TM-LB2 |
+| As-rolled strength at 50 um by alloy; Fe in solution | 405-469 ppm as rolled without intermediate anneal; softening start 200-220 C (8079 / 8021), above 260 C (1050) | 1050, 1200, 8079, 8021, industrial route | EX (figure values partly unreadable) | TM-LB6 |
+| 1100-H18 against temperature | 165 / 150 MPa at RT; 145 / 130 at 100 C; 125 at 150 C | Long holding | AB / EX | PT-T31, PT-T39 |
+| m against temperature, 1050-H14 | 0.04 at 100 C, 0.07 at 200 C | Slow tensile tests | EX | TM-LB10 |
+| 1100-O Voce | sigma = 133 - 81*exp(-6.1*eps) MPa | Tension to 0.2 | EX | TM-LB12 |
+| 1050 annealed | E = 69.8 GPa, K = 144.6 MPa, n = 0.3 | Tensile and Brinell | EX | TM-LB13 |
+| 8021 foil, 40 um | 47.6 HV as rolled; softening from 180 C at 40 C/h | 92 % cold reduction | EX | TM-LB18 |
+| Pinhole onset | interface opens above 38 % cumulative reduction; 10-70 um foreign particles perforate 40 um foil | 8021 pilot rolling | EX | TM-LB15 |
+
+- Values as printed in the gap study (Appendix A.1, part B); nothing is fitted and nothing is passed to a hardening law or a bite.
+- A positive stage-IV hardening slope is wrong in sign for purified Al-Fe and high-purity grades beyond 80 % reduction [TM-LB2 EX] (gap study X2); the engine's Voce laws accept a negative late slope, entered by the user (band-diagnosis 8.3); none is selected by alloy group.
+
+## Anisotropy and the plane-strain factor
+
+Measured r-values of 1235-H18 foil, 16 um: 0.2 / 1.5 / 1.1; transverse stress about 10 % higher [TM-LB1; excerpt]. The report prints them for "three directions"; 0 / 45 / 90 degrees in that order is an assumption.
+
+Plane-strain factor (plane-strain yield / uniaxial yield) under Hill's 1948 criterion, `sqrt((1 + r_0)(1 + r_90)/(1 + r_0 + r_90))`:
+
+| Case | Factor | Against isotropic | Tag |
+|---|---|---|---|
+| isotropic (the engine's value) | 1.154701 | +0.0 % | [D] |
+| normal anisotropy R = 0.2 (the report's bound) | 1.014185 | -12.2 % | [computed in the report; D] |
+| Hill 1948 with r_0 = 0.2 and r_90 = 1.1 | 1.046734 | -9.4 % | [D, re-derived in SPEC17] |
+| mean normal anisotropy (r_0 + 2 r_45 + r_90)/4 = 1.075 | 1.169130 | +1.2 % | [D, re-derived in SPEC17] |
+
+Hill-type criteria are known to be poor for aluminium [M, from memory, as in the report]. The engine keeps the isotropic 2/sqrt(3); no bite uses these factors.
 
 ## 1. Li-ion cathode current-collector foil (`battery_collector_foil`)
 
@@ -2498,3 +2533,12 @@ Key requirement: ≥60–62 % IACS, burr-free edge, Rm 60–95 MPa. [HX-S39]
 | PT-T37 | "Milling Over Rolling Oils", Lubes'n'Greases 2017 | excerpt | EX | <https://www.lubesngreases.com/magazine/23_9/milling-over-rolling-oils/> | — |
 | PT-T38 | CN202803755U, coolant spray device for a foil roughing mill | full_text | FT | <https://www.xjishu.com/zhuanli/23/201220412752.html> | — |
 | PT-T39 | Toei Denka, typical mechanical properties of aluminium alloys | excerpt | EX | <https://toeidenka.co.jp/refer/mechanical_strength_of_aluminum.html> | — |
+| TM-LB1 | Bonatti, Mohr, anisotropic viscoplasticity and fracture of fine grained metallic aluminum foil used in Li-ion batteries | excerpt | EX | <https://old.mohr.ethz.ch/papers/56.pdf> | excerpt of the full paper |
+| TM-LB2 | Hara, Egusa, Mihara, Tanaka, Ohnuma, Abe, Mater. Trans. 62(4) (2021) | excerpt | EX | <https://www.jstage.jst.go.jp/article/matertrans/62/4/62_MT-M2020349/_pdf/-char/en> | most of the text |
+| TM-LB3 | Liu, Huang, Lloyd, Hansen, Acta Mater. 50 (2002) 3789 | abstract_or_snippet | AB | <https://doi.org/10.1016/s1359-6454(02)00174-x> | — |
+| TM-LB6 | Hasenclever, ICAA9 (2004), AlFe alloys AA1050-AA8021 | excerpt | EX | <http://www.icaa-conference.net/ICAA9/data/papers/GP%20124.pdf> | — |
+| TM-LB10 | Allazadeh (2020), rate sensitivity of AA1050-H14 | excerpt | EX | <https://strathprints.strath.ac.uk/74717/1/Allazadeh_ISSJ_2020_Computing_strain_rate_sensitivity_of_aluminium_alloy_1050.pdf> | = PT-T33 |
+| TM-LB12 | Ha, Fones, Kinsey, Korkolis, Materials (2020), AA1100-O | excerpt | EX | <https://pmc.ncbi.nlm.nih.gov/articles/PMC7579055/> | — |
+| TM-LB13 | Batorfi et al., Appl. Sci. 13 (2023) 4359 | excerpt | EX | <https://www.mdpi.com/2076-3417/13/7/4359> | = PT-T7 |
+| TM-LB15 | Zhang, Chen, Fan, Chen, Xiao, Coatings 15 (2025) 472 | excerpt | EX | <https://www.mdpi.com/2079-6412/15/4/472> | excerpt of the full paper |
+| TM-LB18 | Chen et al., Mater. Res. Express (2020), AA8021 foil | excerpt | EX | <https://google.iopscience.iop.org/article/10.1088/2053-1591/abb7ab> | — |

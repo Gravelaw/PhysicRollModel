@@ -71,10 +71,12 @@ closed-gap (roll-kissing) rolling; any physical model of foil tension lines.
 import math
 import sys
 
+from . import band_local
 from . import band_products
 from . import roll_thermal as rt
 from . import strip_shape as ss
-from .band_process import (failed, int_list, keys, not_supplied, num, num_list,
+from .band_process import (SECTION_ERRORS, failed, int_list, keys, not_supplied, num, num_list,
+                           use_computed_heat_partition,
                            opt_num)
 
 STRIPE_THRESHOLD_M = 1e-7          # analyst choice: reporting threshold for radius stripes
@@ -102,6 +104,17 @@ ROLL_KEYS = ('barrel_length_m', 'conductivity_w_mk', 'density_kg_m3', 'specific_
              'expansion_coefficient_per_k', 'poisson_ratio', 'expansion_constraint')
 HEADER_KEYS = ('nozzle_pitch_m', 'standoff_m', 'spray_angle_rad', 'offset_angle_rad',
                'spray_mean_htc_w_m2k', 'background_htc_w_m2k')
+HEADER_OPTIONAL = ('footprint_profile', 'footprint_width_m', 'htc_flow_exponent')   # SPEC22
+VENDOR_OVERLAP_MAX_WIDTH_OVER_PITCH = 1.5   # 1.1 to 1.5 nozzle pitches [SN2; SN7; SN13]
+FP_FLAG_STAND_IN = 'FOOTPRINT_PROFILE_STAND_IN'
+FP_FLAG_EXPONENT = 'SPRAY_FLOW_EXPONENT_APPLIED'
+FP_FLAG_WIDE = 'FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE'
+FP_TOP_FLAGS = (FP_FLAG_STAND_IN, FP_FLAG_EXPONENT, FP_FLAG_WIDE)
+FP_WIDE_NOTE = ('fans overlap more than makers recommend (1.1 to 1.5 nozzle pitches [SN2; SN7; '
+                'SN13]); a blocked nozzle is smoothed more than on such a header')
+FP_EXPONENT_NOTE = ('cooling is taken as proportional to flow; published exponents are 0.5 to '
+                    '1.0, with which the stripe of this partly blocked nozzle would be 7 to 45 % '
+                    'smaller [computed]')
 WIDTH_REQUIRED = ('roll', 'spray_header', 'coolant_temperature_k')
 WIDTH_DEFAULTS = {
     'strip_centre_m': None, 'roll_heat_fraction_per_roll': None,
@@ -110,7 +123,32 @@ WIDTH_DEFAULTS = {
     'shape_disturbing_coefficient': None, 'heredity_coefficient': None, 'gap_crown_m': None,
     'entry_crown_m': None, 'incoming_ridges': [], 'coil': None, 'previous_strip_widths_m': [],
     'grinding': None, 'cooling_zone_pitch_m': None, 'deflector_roll_radius_m': None,
-    'lateral_compressive_stress_pa': None, 'shape_inputs': None}
+    'lateral_compressive_stress_pa': None, 'shape_inputs': None,
+    # SPEC17 A5 / X3: arc of the circumference the spray wets [rad]; used only to express the
+    # circumferential-mean spray coefficient on a jet-zone basis in thermal_check, never in the
+    # roll thermal model
+    'spray_wetted_arc_rad': None,
+    # SPEC17 A1 / G6: a supplied strip temperature scan across the width (not computed)
+    'strip_temperature': None,
+    # SPEC17 BT-G4 (screening version): friction / film stripes as a second band source
+    'friction_stripe_screen': None,
+    # SPEC17 G13: a measured roll ground profile (radius deviation) through the existing transfer
+    'roll_ground_profile': None,
+    # SPEC18 package 10 (A4, G8): angular layout of sprays and backup contact for the roll
+    # surface cycle within one revolution
+    'circumferential_layout': None,
+    # SPEC19 package 1 (A2 inputs, BT-G12, A1 computed): local state across the width
+    'local_coupling': None,
+    # SPEC19 package 4 (G5): a closed spray loop with the tool's own control law
+    'flatness_control': None,
+    # SPEC19 package 5 (A6): emulation of a plant zone step test
+    'zone_step_test': None,
+    # SPEC19 package 10 (G9): the exit profile wound lane by lane (needs width_model.coil)
+    'coil_winding': None,
+    # SPEC19 package 11: deflector roll roughness (traction) and the coil temperature
+    'deflector_roll_roughness_rq_m': None, 'coil_thermal': None,
+    # SPEC19 package 12 (G11): roller alignment survey of the two spans (misalignment, taper)
+    'span_alignment': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -176,6 +214,296 @@ def validate_shape_inputs(si):
             'provenance': prov}
 
 
+LAYOUT_WHERE = 'width_model.circumferential_layout'
+LAYOUT_MAX_SPRAY_ARCS = 6
+LAYOUT_ARC_TOL_RAD = 1e-6
+
+
+def _layout_region(where, r, extra=()):
+    keys(where, r, ('start_rad', 'arc_rad') + tuple(extra))
+    start = num(f'{where}.start_rad', r['start_rad'])
+    arc = num(f'{where}.arc_rad', r['arc_rad'])
+    if not 0 <= start < 2 * math.pi:
+        raise ValueError(f'{where}.start_rad must be in [0, 2*pi)')
+    if not arc > 0:
+        raise ValueError(f'{where}.arc_rad must be > 0')
+    if start + arc > 2 * math.pi + 1e-12:
+        raise ValueError(f'{where}: start_rad + arc_rad ({start + arc:.6g} rad) exceeds one '
+                         'revolution (2*pi): the region would pass the bite')
+    return {'start_rad': start, 'arc_rad': arc}
+
+
+def validate_circumferential_layout(lay, wetted_arc=None):
+    """SPEC18 package 10: ``{"spray_arcs": [{"start_rad", "arc_rad"}], "backup_contact": null |
+    {"start_rad", "arc_rad", "conductance_w_m2k", "backup_surface_temperature_k"},
+    "provenance"}``; angles in the direction of rotation from the bite exit, in [0, 2*pi);
+    regions sorted, not overlapping one another (the bite is checked against the case-pass
+    bite in the section)."""
+    if lay is None:
+        return None
+    w = LAYOUT_WHERE
+    keys(w, lay, ('spray_arcs', 'provenance'), ('backup_contact',))
+    prov = lay['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    arcs = lay['spray_arcs']
+    if not isinstance(arcs, list) or not 1 <= len(arcs) <= LAYOUT_MAX_SPRAY_ARCS:
+        raise ValueError(f'{w}.spray_arcs must be a list of 1 to {LAYOUT_MAX_SPRAY_ARCS} arcs')
+    sprays = [_layout_region(f'{w}.spray_arcs[{i}]', a) for i, a in enumerate(arcs)]
+    regions = [(f'spray arc {i}', r) for i, r in enumerate(sprays)]
+    bc = lay.get('backup_contact')
+    backup = None
+    if bc is not None:
+        where = f'{w}.backup_contact'
+        backup = _layout_region(where, bc, ('conductance_w_m2k', 'backup_surface_temperature_k'))
+        backup['conductance_w_m2k'] = num(f'{where}.conductance_w_m2k', bc['conductance_w_m2k'],
+                                          positive=True)
+        if backup['conductance_w_m2k'] > 1e9:
+            raise ValueError(f'{where}.conductance_w_m2k must be <= 1e9 W/m2K')
+        backup['backup_surface_temperature_k'] = num(
+            f'{where}.backup_surface_temperature_k', bc['backup_surface_temperature_k'],
+            lo=200.0, hi=700.0)
+        regions.append(('backup contact', backup))
+    for i in range(len(sprays) - 1):
+        if sprays[i + 1]['start_rad'] < sprays[i]['start_rad']:
+            raise ValueError(f'{w}.spray_arcs must be sorted by start_rad')
+    for i, (na, a) in enumerate(regions):
+        for nb, b in regions[i + 1:]:
+            lo = max(a['start_rad'], b['start_rad'])
+            hi = min(a['start_rad'] + a['arc_rad'], b['start_rad'] + b['arc_rad'])
+            if hi > lo + 1e-12:
+                raise ValueError(
+                    f'{w}: {na} ({a["start_rad"]:.4g} to {a["start_rad"] + a["arc_rad"]:.4g} '
+                    f'rad) overlaps {nb} ({b["start_rad"]:.4g} to '
+                    f'{b["start_rad"] + b["arc_rad"]:.4g} rad)')
+    total = sum(r['arc_rad'] for r in sprays)
+    if wetted_arc is not None and abs(total - wetted_arc) > LAYOUT_ARC_TOL_RAD:
+        raise ValueError(f'{w}: the spray arcs must add up to width_model.spray_wetted_arc_rad '
+                         f'({total:.6g} rad against {wetted_arc:.6g} rad)')
+    return {'spray_arcs': sprays, 'backup_contact': backup, 'provenance': prov}
+
+
+FC_WHERE = 'width_model.flatness_control'
+FC_REQUIRED = ('valve_levels', 'minimum_on_time_s', 'minimum_off_time_s', 'dead_band_i_units',
+               'provenance')
+FC_DEFAULTS = {'initial_level': None, 'control_zone_nozzles': None, 'integral_gain': 0.1,
+               'control_interval_s': 2.0, 'low_order_removed': 2, 'target_i_units': None,
+               'supplied_actuators': None, 'horizon_s': 1800.0, 'shapemeter_distance_m': None,
+               'display_time_constant_s': 0.0, 'include_local_sources': False}
+
+
+def _fc_num(key, value, lo, hi, lo_open=False):
+    where = f'{FC_WHERE}.{key}'
+    words = f'in {"(" if lo_open else "["}{lo:g}, {hi:g}]'
+    try:
+        v = num(where, value)
+    except ValueError:
+        raise ValueError(f'{where} must be a number {words}') from None
+    if (v <= lo if lo_open else v < lo) or v > hi:
+        raise ValueError(f'{where} must be {words}')
+    return v
+
+
+def validate_flatness_control(fc, local_coupling=None):
+    """``width_model.flatness_control`` (SPEC19 package 4), or None. Zone counts against the
+    shapemeter and nozzle indices are checked in ``check_flatness_control_zones``."""
+    if fc is None:
+        return None
+    w = FC_WHERE
+    keys(w, fc, FC_REQUIRED, tuple(FC_DEFAULTS))
+    out = dict(FC_DEFAULTS)
+    lv = fc['valve_levels']
+    msg = f'{w}.valve_levels must be 2 to 41 strictly increasing values in [0, 1]'
+    if not isinstance(lv, list) or not 2 <= len(lv) <= 41:
+        raise ValueError(msg)
+    try:
+        lv = [num(f'{w}.valve_levels[{i}]', v, lo=0.0, hi=1.0) for i, v in enumerate(lv)]
+    except ValueError:
+        raise ValueError(msg) from None
+    if any(b <= a for a, b in zip(lv, lv[1:])):
+        raise ValueError(msg)
+    out['valve_levels'] = lv
+    init = fc.get('initial_level')
+    if init is None:
+        init = lv[-1]
+    elif isinstance(init, bool) or init not in lv:
+        raise ValueError(f'{w}.initial_level must be one of valve_levels')
+    out['initial_level'] = float(init)
+    for k in ('minimum_on_time_s', 'minimum_off_time_s'):
+        out[k] = _fc_num(k, fc[k], 0.0, 600.0)
+    out['dead_band_i_units'] = _fc_num('dead_band_i_units', fc['dead_band_i_units'], 0.0, 100.0,
+                                       True)
+    groups = fc.get('control_zone_nozzles')
+    if groups is not None:
+        gm = f'{w}.control_zone_nozzles must be a list of non-empty, disjoint lists of nozzle ' \
+             'indices, or null'
+        if not isinstance(groups, list) or not groups:
+            raise ValueError(gm)
+        seen = set()
+        out_g = []
+        for i, g in enumerate(groups):
+            if not isinstance(g, list) or not g:
+                raise ValueError(gm)
+            g = int_list(f'{w}.control_zone_nozzles[{i}]', g)
+            if seen & set(g):
+                raise ValueError(gm)
+            seen |= set(g)
+            out_g.append(g)
+        groups = out_g
+    out['control_zone_nozzles'] = groups
+    if fc.get('integral_gain') is not None:
+        out['integral_gain'] = _fc_num('integral_gain', fc['integral_gain'], 0.0, 1.0, True)
+    if fc.get('control_interval_s') is not None:
+        out['control_interval_s'] = _fc_num('control_interval_s', fc['control_interval_s'],
+                                            0.5, 60.0)
+    lo = fc.get('low_order_removed', 2)
+    if isinstance(lo, bool) or not isinstance(lo, int) or not -1 <= lo <= 4:
+        raise ValueError(f'{w}.low_order_removed must be an int in [-1, 4]')
+    out['low_order_removed'] = lo
+    tg = fc.get('target_i_units')
+    if tg is not None:
+        tm = f'{w}.target_i_units must be one value in [-200, 200] per shapemeter zone, or null'
+        if not isinstance(tg, list):
+            raise ValueError(tm)
+        try:
+            tg = [num(f'{w}.target_i_units[{i}]', v, lo=-200.0, hi=200.0)
+                  for i, v in enumerate(tg)]
+        except ValueError:
+            raise ValueError(tm) from None
+    out['target_i_units'] = tg
+    acts = fc.get('supplied_actuators')
+    if acts is not None:
+        am = (f'{w}.supplied_actuators must be null or 1-4 of {{"name", '
+              '"influence_i_units_per_unit": [per zone], "minimum", "maximum"}')
+        if not isinstance(acts, list) or not 1 <= len(acts) <= 4:
+            raise ValueError(am)
+        out_a = []
+        for i, a in enumerate(acts):
+            keys(f'{w}.supplied_actuators[{i}]', a,
+                 ('name', 'influence_i_units_per_unit', 'minimum', 'maximum'))
+            if not isinstance(a['name'], str) or not a['name'].strip():
+                raise ValueError(f'{w}.supplied_actuators[{i}].name must be a nonempty string')
+            inf = num_list(f'{w}.supplied_actuators[{i}].influence_i_units_per_unit',
+                           a['influence_i_units_per_unit'], lo=-1e4, hi=1e4)
+            mn = num(f'{w}.supplied_actuators[{i}].minimum', a['minimum'])
+            mx = num(f'{w}.supplied_actuators[{i}].maximum', a['maximum'])
+            if mx <= mn:
+                raise ValueError(f'{w}.supplied_actuators[{i}].maximum must exceed minimum')
+            out_a.append({'name': a['name'], 'influence_i_units_per_unit': inf,
+                          'minimum': mn, 'maximum': mx})
+        acts = out_a
+    out['supplied_actuators'] = acts
+    if fc.get('horizon_s') is not None:
+        out['horizon_s'] = _fc_num('horizon_s', fc['horizon_s'], 600.0, 7200.0)
+    d = fc.get('shapemeter_distance_m')
+    out['shapemeter_distance_m'] = None if d is None else _fc_num('shapemeter_distance_m', d,
+                                                                  0.0, 20.0, True)
+    if fc.get('display_time_constant_s') is not None:
+        out['display_time_constant_s'] = _fc_num('display_time_constant_s',
+                                                 fc['display_time_constant_s'], 0.0, 60.0)
+    inc = fc.get('include_local_sources', False)
+    if not isinstance(inc, bool):
+        raise ValueError(f'{w}.include_local_sources must be true or false')
+    if inc and local_coupling is None:
+        raise ValueError(f'{w}.include_local_sources needs width_model.local_coupling')
+    out['include_local_sources'] = inc
+    pv = fc['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    out['provenance'] = pv
+    return out
+
+
+ZT_WHERE = 'width_model.zone_step_test'
+ZT_DEFAULT_WINDOWS_S = (20.0, 40.0, 60.0)
+
+
+def _zt_num(key, value, lo, hi, lo_open=False):
+    where = f'{ZT_WHERE}.{key}'
+    words = f'in {"(" if lo_open else "["}{lo:g}, {hi:g}]'
+    try:
+        v = num(where, value)
+    except ValueError:
+        raise ValueError(f'{where} must be a number {words}') from None
+    if (v <= lo if lo_open else v < lo) or v > hi:
+        raise ValueError(f'{where} must be {words}')
+    return v
+
+
+def validate_zone_step_test(st):
+    """``width_model.zone_step_test`` (SPEC19 package 5), or None."""
+    if st is None:
+        return None
+    w = ZT_WHERE
+    keys(w, st, ('nozzle_indices', 'provenance'),
+         ('level', 'hold_s', 'fit_windows_s', 'time_step_s', 'shapemeter_distance_m',
+          'display_time_constant_s'))
+    idx = st['nozzle_indices']
+    if not isinstance(idx, list) or not idx:
+        raise ValueError(f'{w}.nozzle_indices must be a non-empty list of nozzle indices')
+    idx = int_list(f'{w}.nozzle_indices', idx)
+    out = {'nozzle_indices': idx,
+           'level': _zt_num('level', st.get('level', 0.0), 0.0, 1.0),
+           'hold_s': _zt_num('hold_s', st.get('hold_s', 60.0), 10.0, 3600.0),
+           'time_step_s': _zt_num('time_step_s', st.get('time_step_s', 0.5), 0.1, 5.0),
+           'shapemeter_distance_m': None,
+           'display_time_constant_s': _zt_num('display_time_constant_s',
+                                              st.get('display_time_constant_s', 1.0), 0.0,
+                                              60.0)}
+    if st.get('shapemeter_distance_m') is not None:
+        out['shapemeter_distance_m'] = _zt_num('shapemeter_distance_m',
+                                               st['shapemeter_distance_m'], 0.0, 20.0, True)
+    wins = st.get('fit_windows_s')
+    if wins is None:
+        wins = [x for x in ZT_DEFAULT_WINDOWS_S if x <= out['hold_s']] or [out['hold_s']]
+    else:
+        wm = (f'{w}.fit_windows_s must be 1 to 6 increasing values in [10, hold_s '
+              f'({out["hold_s"]:g} s)]')
+        if not isinstance(wins, list) or not 1 <= len(wins) <= 6:
+            raise ValueError(wm)
+        try:
+            wins = [num(f'{w}.fit_windows_s[{i}]', v, lo=10.0, hi=out['hold_s'])
+                    for i, v in enumerate(wins)]
+        except ValueError:
+            raise ValueError(wm) from None
+        if any(b <= a for a, b in zip(wins, wins[1:])):
+            raise ValueError(wm)
+    out['fit_windows_s'] = [float(x) for x in wins]
+    pv = st['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{w}.provenance must be a nonempty string')
+    out['provenance'] = pv
+    return out
+
+
+def check_flatness_control_zones(w, shapemeter):
+    """Zone-count checks of ``width_model.flatness_control`` against the shapemeter and the
+    header (called by the case validation once both sections are validated)."""
+    zt = w.get('zone_step_test')
+    if zt is not None:
+        count = len(_header(w).nozzle_positions(w['roll']['barrel_length_m']))
+        if max(zt['nozzle_indices']) >= count:
+            raise ValueError(f'{ZT_WHERE}.nozzle_indices: nozzle index '
+                             f'{max(zt["nozzle_indices"])} out of range (header has {count} '
+                             'nozzles)')
+    fc = w['flatness_control']
+    if fc is None:
+        return
+    n = shapemeter['zone_count']
+    if fc['target_i_units'] is not None and len(fc['target_i_units']) != n:
+        raise ValueError(f'{FC_WHERE}.target_i_units must be one value in [-200, 200] per '
+                         f'shapemeter zone ({n}), or null')
+    for i, a in enumerate(fc['supplied_actuators'] or []):
+        if len(a['influence_i_units_per_unit']) != n:
+            raise ValueError(f'{FC_WHERE}.supplied_actuators[{i}].influence_i_units_per_unit '
+                             f'needs one value per shapemeter zone ({n})')
+    count = len(_header(w).nozzle_positions(w['roll']['barrel_length_m']))
+    for g in fc['control_zone_nozzles'] or []:
+        if max(g) >= count:
+            raise ValueError(f'{FC_WHERE}.control_zone_nozzles: nozzle index {max(g)} out of '
+                             f'range (header has {count} nozzles)')
+
+
 def validate_width_model(w, pass_):
     if not isinstance(w, dict):
         raise ValueError('width_model must be a JSON object or null')
@@ -189,9 +517,28 @@ def validate_width_model(w, pass_):
                          f'{rt.EXPANSION_CONSTRAINTS}')
     roll['expansion_constraint'] = w['roll']['expansion_constraint']
     out['roll'] = roll
-    keys('width_model.spray_header', w['spray_header'], HEADER_KEYS)
+    keys('width_model.spray_header', w['spray_header'], HEADER_KEYS, HEADER_OPTIONAL)
     out['spray_header'] = {k: num(f'width_model.spray_header.{k}', w['spray_header'][k])
                            for k in HEADER_KEYS}
+    # SPEC22: optional header keys, kept in the validated case only when given
+    hs = w['spray_header']
+    if hs.get('footprint_profile') is not None:
+        if hs['footprint_profile'] not in rt.FOOTPRINT_PROFILES:
+            raise ValueError('width_model.spray_header.footprint_profile must be "tophat" or '
+                             '"parabolic"')
+        out['spray_header']['footprint_profile'] = hs['footprint_profile']
+    if hs.get('footprint_width_m') is not None:
+        v = hs['footprint_width_m']
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) \
+                or not 0 < v <= 5.0:
+            raise ValueError('width_model.spray_header.footprint_width_m (the pattern width '
+                             'along the barrel) must be > 0 and <= 5 m')
+        out['spray_header']['footprint_width_m'] = float(v)
+    if hs.get('htc_flow_exponent') is not None:
+        v = hs['htc_flow_exponent']
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.5 <= v <= 1.0:
+            raise ValueError('width_model.spray_header.htc_flow_exponent must be in [0.5, 1.0]')
+        out['spray_header']['htc_flow_exponent'] = float(v)
     out['coolant_temperature_k'] = num('width_model.coolant_temperature_k',
                                        w['coolant_temperature_k'])
     for k in ('strip_centre_m', 'roll_heat_fraction_per_roll', 'bite_heat_per_width_w_m',
@@ -199,6 +546,24 @@ def validate_width_model(w, pass_):
               'entry_crown_m', 'cooling_zone_pitch_m', 'deflector_roll_radius_m',
               'lateral_compressive_stress_pa'):
         out[k] = opt_num(f'width_model.{k}', w.get(k))
+    arc = w.get('spray_wetted_arc_rad')
+    if arc is not None:
+        arc = num('width_model.spray_wetted_arc_rad', arc)
+        if not 0 < arc <= 2 * math.pi:
+            raise ValueError('width_model.spray_wetted_arc_rad must be in (0, 2*pi]')
+    out['spray_wetted_arc_rad'] = arc
+    out['strip_temperature'] = _validate_strip_temperature(w.get('strip_temperature'),
+                                                           roll['barrel_length_m'])
+    out['friction_stripe_screen'] = _validate_friction_screen(w.get('friction_stripe_screen'),
+                                                              roll['barrel_length_m'])
+    out['roll_ground_profile'] = _validate_roll_profile(w.get('roll_ground_profile'),
+                                                        roll['barrel_length_m'])
+    out['circumferential_layout'] = validate_circumferential_layout(
+        w.get('circumferential_layout'), arc)
+    out['local_coupling'] = band_local.validate_local_coupling(w.get('local_coupling'))
+    out['flatness_control'] = validate_flatness_control(w.get('flatness_control'),
+                                                        out['local_coupling'])
+    out['zone_step_test'] = validate_zone_step_test(w.get('zone_step_test'))
     out['blocked_nozzle_indices'] = int_list('width_model.blocked_nozzle_indices',
                                              w.get('blocked_nozzle_indices', []))
     if w.get('nozzle_levels') is not None:
@@ -264,6 +629,17 @@ def validate_width_model(w, pass_):
                                                     hi=1.0)}
         if out['coil']['outer_radius_m'] <= out['coil']['inner_radius_m']:
             raise ValueError('width_model.coil.outer_radius_m must exceed inner_radius_m')
+    else:
+        out['coil'] = None
+    out['coil_winding'] = validate_coil_winding(w.get('coil_winding'), out.get('coil'))
+    out['coil_thermal'] = validate_coil_thermal(w.get('coil_thermal'), out['coil_winding'])
+    if out['coil_thermal'] is not None and out.get('coil') is None:
+        raise ValueError('width_model.coil_thermal needs width_model.coil')
+    out['deflector_roll_roughness_rq_m'] = opt_num('width_model.deflector_roll_roughness_rq_m',
+                                                   w.get('deflector_roll_roughness_rq_m'),
+                                                   positive=True, hi=1e-4)
+    out['span_alignment'] = validate_span_alignment(w.get('span_alignment'),
+                                                    out['deflector_roll_radius_m'])
     out['shape_inputs'] = validate_shape_inputs(w.get('shape_inputs'))
     out['previous_strip_widths_m'] = num_list('width_model.previous_strip_widths_m',
                                               w.get('previous_strip_widths_m', []),
@@ -292,6 +668,80 @@ def validate_width_model(w, pass_):
     return out
 
 
+SPAN_ALIGNMENT_SPAN_KEYS = ('misalignment_m_per_m', 'taper_radius_difference_m',
+                            'roller_radius_m', 'roller')
+SPAN_ROLLER_KEYS = ('outer_diameter_m', 'wall_thickness_m', 'face_length_m',
+                    'youngs_modulus_pa', 'wrap_angle_rad')
+SPAN_LATERAL_BASIS_COMPUTED = 'computed from span_alignment (misalignment and taper only)'
+SPAN_LATERAL_BASIS_SUPPLIED = 'supplied'
+SPAN_COMPUTED_OBSERVED_NOTE = '(lateral stress computed from the entered roller alignment)'
+
+
+def validate_span_alignment(sa, deflector_radius):
+    """``width_model.span_alignment`` (SPEC19 package 12): None, or ``{"entry_span": S |
+    null, "exit_span": S | null, "provenance"}`` from a roller alignment survey. Misalignment
+    in m per m (a survey reading in mm per metre divided by 1000), taper as the roller radius
+    difference over the strip width."""
+    if sa is None:
+        return None
+    where = 'width_model.span_alignment'
+    if not isinstance(sa, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, sa, ('provenance',), ('entry_span', 'exit_span'))
+    prov = sa['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text (e.g. the date and '
+                         'method of the roller alignment survey)')
+    out = {'provenance': prov}
+    for name in ('entry_span', 'exit_span'):
+        sp = sa.get(name)
+        if sp is None:
+            out[name] = None
+            continue
+        ws = f'{where}.{name}'
+        keys(ws, sp, (), SPAN_ALIGNMENT_SPAN_KEYS)
+        m = sp.get('misalignment_m_per_m')
+        if m is not None:
+            if isinstance(m, bool) or not isinstance(m, (int, float)) or not math.isfinite(m) \
+                    or not 0 <= m <= 0.1:
+                raise ValueError(f'{ws}.misalignment_m_per_m is the roller misalignment in m '
+                                 'per m: 0 to 0.1 (0 to 100 mm per metre; a survey reading '
+                                 'of 0.5 mm/m is entered as 0.0005)')
+            m = float(m)
+        dr = sp.get('taper_radius_difference_m')
+        if dr is not None:
+            if isinstance(dr, bool) or not isinstance(dr, (int, float)) \
+                    or not math.isfinite(dr) or not 0 <= dr <= 1e-3:
+                raise ValueError(f'{ws}.taper_radius_difference_m is the roller radius '
+                                 'difference across the strip width: 0 to 0.001 m (0 to 1 mm; '
+                                 'a 10 um taper from the roller grinding report is 1e-05)')
+            dr = float(dr)
+        rr = opt_num(f'{ws}.roller_radius_m', sp.get('roller_radius_m'), positive=True,
+                     hi=5.0)
+        if dr is not None and rr is None and deflector_radius is None:
+            raise ValueError(f'{ws}.taper_radius_difference_m needs the roller radius: give '
+                             f'{ws}.roller_radius_m or width_model.deflector_roll_radius_m')
+        roller = sp.get('roller')
+        if roller is not None:
+            keys(f'{ws}.roller', roller, SPAN_ROLLER_KEYS)
+            wr_ = f'{ws}.roller'
+            d = num(f'{wr_}.outer_diameter_m', roller['outer_diameter_m'], positive=True,
+                    hi=5.0)
+            roller = {'outer_diameter_m': d,
+                      'wall_thickness_m': num(f'{wr_}.wall_thickness_m',
+                                              roller['wall_thickness_m'], positive=True,
+                                              hi=d / 2),
+                      'face_length_m': num(f'{wr_}.face_length_m', roller['face_length_m'],
+                                           positive=True, hi=20.0),
+                      'youngs_modulus_pa': num(f'{wr_}.youngs_modulus_pa',
+                                               roller['youngs_modulus_pa'], lo=1e9, hi=1e13),
+                      'wrap_angle_rad': num(f'{wr_}.wrap_angle_rad', roller['wrap_angle_rad'],
+                                            positive=True, hi=math.pi)}
+        out[name] = {'misalignment_m_per_m': m, 'taper_radius_difference_m': dr,
+                     'roller_radius_m': rr, 'roller': roller}
+    return out
+
+
 def _listv(where, value):
     if not isinstance(value, list):
         raise ValueError(f'{where} must be a list')
@@ -313,7 +763,34 @@ def _header(w):
                           spray_angle_rad=h['spray_angle_rad'],
                           offset_angle_rad=h['offset_angle_rad'],
                           spray_mean_htc_w_m2k=h['spray_mean_htc_w_m2k'],
-                          background_htc_w_m2k=h['background_htc_w_m2k'])
+                          background_htc_w_m2k=h['background_htc_w_m2k'],
+                          **header_options(h))
+
+
+def header_options(h):
+    """The SPEC22 header options of a validated ``spray_header`` dict (only those given)."""
+    return {k: h[k] for k in HEADER_OPTIONAL if h.get(k) is not None}
+
+
+def header_description(header):
+    """The footprint keys reported with the thermal section and the spray layout."""
+    return {'footprint_profile': header.footprint_profile,
+            'footprint_width_source': header.footprint_width_source,
+            'footprint_width_over_pitch': header.effective_footprint_width_m
+            / header.nozzle_pitch_m,
+            'htc_flow_exponent': header.htc_flow_exponent}
+
+
+def header_flags(header):
+    flags = []
+    if header.footprint_profile != 'tophat':
+        flags.append(FP_FLAG_STAND_IN)
+    if header.htc_flow_exponent != 1.0:
+        flags.append(FP_FLAG_EXPONENT)
+    if header.effective_footprint_width_m / header.nozzle_pitch_m > \
+            VENDOR_OVERLAP_MAX_WIDTH_OVER_PITCH:
+        flags.append(FP_FLAG_WIDE)
+    return flags
 
 
 # ============================================================================= helpers
@@ -373,7 +850,7 @@ def _moving_average(z, values, window):
 
 
 def _inside(z, centre, width):
-    return [i for i, x in enumerate(z) if abs(x - centre) <= width / 2 * (1 + 1e-12)]
+    return ss.strip_sample_indices(z, centre, width)
 
 
 CASE_PASS_KEYS = ('entry_thickness_m', 'exit_thickness_m', 'mean_flow_stress_pa',
@@ -444,7 +921,15 @@ def shape_params(case, bite, w, src=None, supplied=None):
             'yield_stress_pa': case['material']['yield_stress_pa'],
             'exit_tension_force_sensitivity_per_width_m': nx,
             'entry_force_sensitivity_per_width_pa': (None if bite is None else
-                                                     bite.dforce_dentry_thickness_n_m / width)}
+                                                     bite.dforce_dentry_thickness_n_m / width),
+            # SPEC19 package 8: the bite's slip sensitivities for the width-coupling kernel
+            # (None with supplied shape inputs: they describe a stiffness, not a bite)
+            'kernel_inputs': (None if bite is None or supplied is not None else {
+                'entry_tension_force_sensitivity_per_width_m':
+                    -bite.dforce_dentry_tension_m2 / width,
+                'dslip_dexit_thickness_per_m': bite.dslip_dexit_thickness_per_m,
+                'dslip_dexit_tension_per_pa': bite.dslip_dexit_tension_per_pa,
+                'dslip_dentry_tension_per_pa': bite.dslip_dentry_tension_per_pa})}
 
 
 def _tsf(z, dev, sp, feedback=True):
@@ -906,7 +1391,7 @@ def spray_layout(case):
             'effective_footprint_width_m': th.header.effective_footprint_width_m,
             'barrel_length_m': th.length, 'strip_centre_m': th.centre,
             'strip_width_m': th.width, 'strip_start_m': th.centre - th.width / 2,
-            'strip_end_m': th.centre + th.width / 2}
+            'strip_end_m': th.centre + th.width / 2, **header_description(th.header)}
 
 
 def _steady_section(th, sp):
@@ -956,6 +1441,20 @@ def _steady_section(th, sp):
         'relative_energy_residual': actual['relative_energy_residual'],
         'expansion_factor': actual['expansion_factor'],
         'flags': actual['flags']}
+    # SPEC22: footprint description, flags and notes (keys added after the earlier ones)
+    out.update(header_description(th.header))
+    hf = header_flags(th.header)
+    if hf:
+        out['flags'] = list(out['flags']) + [f for f in hf if f not in out['flags']]
+    notes = []
+    if FP_FLAG_STAND_IN in hf:
+        notes.append(rt.FOOTPRINT_STAND_IN_BASIS)
+    if FP_FLAG_WIDE in hf:
+        notes.append(FP_WIDE_NOTE)
+    if th.header.htc_flow_exponent == 1.0 and any(0.0 < v < 1.0 for v in th.levels):
+        notes.append(FP_EXPONENT_NOTE)
+    if notes:
+        out['footprint_notes'] = notes
     return out, healthy, actual, dev
 
 
@@ -1144,7 +1643,7 @@ def event_metrics(z, prof, k_pk, sp, on, at_mon, times, dev, sel, ts, te, tw, en
     return row
 
 
-def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
+def _events_section(th, sp, actual, events, shape_reason=None, scales=None, local=None):
     """One transient from the steady state through all events (overlaps combined).
 
     Per event: one monitor per connected group of adjacent switched nozzles (a stripe); the
@@ -1152,7 +1651,11 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
     start of the next event in the same neighbourhood (attribution window); what lies beyond
     it is reported as a lower bound, not as this event's value. The peak profile is the
     snapshot AT the governing stripe's measured peak time (event boundaries are always
-    recorded; a missing peak time is recorded by a second run)."""
+    recorded; a missing peak time is recorded by a second run).
+
+    ``local`` (SPEC19 package 2): None (no key), a dict put into every row as
+    ``local_sources`` (not supplied / not assessable), or a callable of the event context
+    returning that row's ``local_sources``; the simulation is the same in every case."""
     t0 = min(e['start_s'] for e in events)
     marks = sorted({0.0} | {e['start_s'] - t0 for e in events}
                    | {e['start_s'] - t0 + e['duration_s'] for e in events})
@@ -1296,6 +1799,13 @@ def _events_section(th, sp, actual, events, shape_reason=None, scales=None):
                 for sc in scales]
         if flags:
             row['flags'] = flags
+        if isinstance(local, dict):
+            row['local_sources'] = dict(local)
+        elif local is not None:
+            row['local_sources'] = local({
+                'snapshots': sim['snapshots'], 'peak_snapshot': snap, 'start_s': ts,
+                'duration_s': e['duration_s'], 'x': x, 'base_radius': base,
+                'base_surface': actual['surface_temperature_k']})
         hist = [i for i, t in enumerate(times) if t >= ts - 1e-9]
         stride = max(1, int(math.ceil(len(hist) / HISTORY_MAX_POINTS)))
         keep = hist[::stride]
@@ -1482,6 +1992,777 @@ def _ridge(case, w, sp, ridge, z, coil, reason=None):
     return out
 
 
+# SPEC17 X12 [SS-S55 EX]: the isolated-span thresholds are conservative for wide foil
+WIDE_FOIL_TROUGH_NOTE = (
+    'Screening value from an isolated-span formula. For aluminium and copper foil below 25 um '
+    'and wider than 0.6-1 m, wrinkles needed about 15 times the predicted roller misalignment '
+    '[SS-S55 EX]: at foil gauge this threshold is conservative.')
+
+
+def _validate_strip_temperature(s, barrel):
+    if s is None:
+        return None
+    where = 'width_model.strip_temperature'
+    keys(where, s, ('positions_m', 'temperature_k', 'provenance'),
+         ('expansion_coefficient_per_k',))
+    pos = s['positions_m']
+    msg = f'{where}.positions_m must be >= 3 strictly increasing positions on the barrel'
+    if not isinstance(pos, list) or len(pos) < 3:
+        raise ValueError(msg)
+    try:
+        pos = [num(f'{where}.positions_m[{i}]', v) for i, v in enumerate(pos)]
+    except ValueError:
+        raise ValueError(msg) from None
+    if any(b <= a for a, b in zip(pos, pos[1:])) or pos[0] < 0 or pos[-1] > barrel:
+        raise ValueError(msg)
+    temps = s['temperature_k']
+    tmsg = f'{where}.temperature_k needs one value in [250, 700] K per position'
+    if not isinstance(temps, list) or len(temps) != len(pos):
+        raise ValueError(tmsg)
+    try:
+        temps = [num(f'{where}.temperature_k[{i}]', v, lo=250.0, hi=700.0)
+                 for i, v in enumerate(temps)]
+    except ValueError:
+        raise ValueError(tmsg) from None
+    a = s.get('expansion_coefficient_per_k')
+    if a is not None:
+        if isinstance(a, bool) or not isinstance(a, (int, float)) or not math.isfinite(a) \
+                or not 1e-6 < a < 1e-4:
+            raise ValueError(f'{where}.expansion_coefficient_per_k must be in (1e-6, 1e-4) or '
+                             'null')
+        a = float(a)
+    pv = s['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty string')
+    return {'positions_m': pos, 'temperature_k': temps, 'expansion_coefficient_per_k': a,
+            'provenance': pv}
+
+
+def _interp_held(xs, ys, x):
+    """Linear interpolation; outside the scan the end value is held."""
+    if x <= xs[0]:
+        return ys[0]
+    if x >= xs[-1]:
+        return ys[-1]
+    lo, hi = 0, len(xs) - 1
+    while hi - lo > 1:
+        m = (lo + hi) // 2
+        if xs[m] <= x:
+            lo = m
+        else:
+            hi = m
+    f = (x - xs[lo]) / (xs[hi] - xs[lo])
+    return ys[lo] + f * (ys[hi] - ys[lo])
+
+
+ST_FLAG_SUPPLIED = 'STRIP_TEMPERATURE_TERM_SUPPLIED_PROFILE'
+ST_FLAG_COVER = 'STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP'
+ST_FLAG_NO_MECH = 'STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE'
+ST_FLAG_STATE = 'STRIP_TEMPERATURE_CHANGES_A_BAND_STATE'
+ST_MEANINGS = {
+    'mechanical': "the model's flatness as it is today (width.shape.steady, with feedback)",
+    'as_measured_hot': 'what a shapemeter without temperature compensation senses; also the '
+                       'state of the strip in the mill and of a sample released while hot',
+    'after_cooling': 'equal to mechanical (no flatness controller in the model); stated so '
+                     'that the reader sees it',
+    'after_cooling_if_hot_reading_held_flat': (
+        'BOUNDING CASE: if a flatness control had removed everything the hot shapemeter '
+        'showed, the cold strip would carry the negative of the thermal term (a hot fibre '
+        'becomes tight); needs the controller of G5 to be more than a bound')}
+ST_LIMITATIONS = (
+    'The temperature profile is an input, not computed (no per-width heat balance, gap A3).',
+    'The thermal strain is not fed back into the bite or the exit-tension feedback.',
+    'Where the mechanical profile was saturation-scaled (slack band) the sum is indicative.',
+    'The temperature at the shapemeter is assumed equal to the scan.',
+    'The after-cooling profile assumes no creep or set in the coil (gap A8).',
+    'No flatness controller: the bounding case is a bound, not a prediction.')
+
+
+def strip_temperature_section(case, w, shape_steady, z_strip, strip_start, strip_end):
+    """SPEC17 A1 / G6: flatness measured hot against after cooling, from a SUPPLIED scan.
+
+    [D, re-derived in SPEC17] With eps_m the model's mechanical elongation (referred to a
+    uniform temperature) the stress a shapemeter senses in the hot strip follows
+    eps_m + eps_T; after the coil has cooled only eps_m is left. Without a flatness controller
+    'after_cooling' equals 'mechanical'; the held-flat case is a bound. The term is reported
+    beside the width section's verdicts and never folded into them or into any evidence.
+    """
+    s = w.get('strip_temperature')
+    if s is None:
+        return not_supplied('width_model.strip_temperature is null or absent')
+    flags = [ST_FLAG_SUPPLIED]
+    mech_ok = (isinstance(shape_steady, dict) and isinstance(shape_steady.get('z_m'), list)
+               and isinstance(shape_steady.get('i_units_with_feedback'), list)
+               and len(shape_steady['z_m']) > 2)
+    z = list(shape_steady['z_m']) if mech_ok else list(z_strip)
+    if len(z) < 3:
+        raise ValueError('fewer than 3 strip samples for the strip temperature term')
+    xs, ys = s['positions_m'], s['temperature_k']
+    temps = [_interp_held(xs, ys, x) for x in z]
+    dz = z[1] - z[0]
+    a0, a1 = strip_start, strip_end
+    extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
+    if extrap > dz:
+        flags.append(ST_FLAG_COVER)
+    alpha = s['expansion_coefficient_per_k']
+    th = (ss.thermal_flatness_term(z, temps) if alpha is None
+          else ss.thermal_flatness_term(z, temps, expansion_coefficient_per_k=alpha))
+    flags += th['flags']
+    m = case['material']
+    kw = dict(youngs_modulus_pa=m['youngs_modulus_pa'], poisson_ratio=STRIP_POISSON_RATIO,
+              thickness_m=case['pass']['exit_thickness_m'],
+              mean_tension_pa=case['pass']['exit_tension_pa'], yield_stress_pa=m['yield_stress_pa'])
+
+    def prof(name, iu, available=True):
+        f = ss.flatness_from_elongation(z, [v * 1e-5 for v in iu], **kw)
+        return {'name': name, 'meaning': ST_MEANINGS[name], 'available': available,
+                'i_units': f['i_units'], 'status': f['status'],
+                'released_status': f['released_status'], 'max_i_units': f['max_i_units'],
+                'min_i_units': f['min_i_units'], 'bands': f['bands']}
+    zero = [0.0] * len(z)
+    mech_iu = list(shape_steady['i_units_with_feedback']) if mech_ok else zero
+    if not mech_ok:
+        flags.append(ST_FLAG_NO_MECH)
+    profiles = {
+        'mechanical': prof('mechanical', mech_iu, mech_ok),
+        'as_measured_hot': prof('as_measured_hot', [a + b for a, b in
+                                                    zip(mech_iu, th['i_units'])]),
+        'after_cooling': prof('after_cooling', mech_iu, mech_ok),
+        'after_cooling_if_hot_reading_held_flat': prof(
+            'after_cooling_if_hot_reading_held_flat', [-b for b in th['i_units']])}
+    changes = []
+    for src, other in (('mechanical', 'as_measured_hot'), ('as_measured_hot', 'mechanical')):
+        for b in profiles[src]['bands']:
+            o = _band_at(profiles[other]['bands'], b['peak_position_m'])
+            differs = (o is None or o['state'] != b['state']
+                       or o['state_after_tension_release'] != b['state_after_tension_release'])
+            changes.append({
+                'profile': src, 'peak_position_m': b['peak_position_m'],
+                'peak_i_units': b['peak_i_units'], 'state': b['state'],
+                'state_after_tension_release': b['state_after_tension_release'],
+                'other_profile': other,
+                'other_state': None if o is None else o['state'],
+                'other_state_after_tension_release': (None if o is None else
+                                                      o['state_after_tension_release']),
+                'other_peak_i_units': None if o is None else o['peak_i_units'],
+                'state_differs': differs})
+    if any(c['state_differs'] for c in changes):
+        flags.append(ST_FLAG_STATE)
+    dev = th['temperature_deviation_k']
+    return {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+            'provenance': s['provenance'],
+            'expansion_coefficient_per_k': th['expansion_coefficient_per_k'],
+            'expansion_coefficient_basis': (
+                '[M] 23.6e-6 /K, textbook value used by the gap reports, not verified there '
+                '(default)' if alpha is None else 'supplied'),
+            'i_units_per_kelvin': th['i_units_per_kelvin'],
+            'z_m': z, 'temperature_k': temps, 'mean_temperature_k': th['mean_temperature_k'],
+            'max_temperature_deviation_k': max(abs(d) for d in dev),
+            'scan_coverage': {'scan_start_m': xs[0], 'scan_end_m': xs[-1],
+                              'strip_start_m': a0, 'strip_end_m': a1,
+                              'extrapolated_width_m': extrap,
+                              'rule': 'linear between scan points; end values held outside'},
+            'thermal_i_units': th['i_units'], 'profiles': profiles, 'state_changes': changes,
+            'basis': {'thermal_term': th['formula_basis'],
+                      'profiles': '[D, re-derived in SPEC17] hot = mechanical + thermal; after '
+                                  'cooling = mechanical (no controller); held-flat = -thermal '
+                                  '(bounding case)',
+                      'literature': 'a hotter fibre reads loose in the mill and the difference '
+                                    'disappears when the coil cools [TM-LA13 EX]; steel: '
+                                    '1 C = 1.2 I-units [TM-LA30 EX]; about 2.4 I-units per K '
+                                    'for aluminium [computed]'},
+            'flags': flags, 'limitations': list(ST_LIMITATIONS)}
+
+
+def _validate_friction_screen(s, barrel):
+    if s is None:
+        return None
+    where = 'width_model.friction_stripe_screen'
+    keys(where, s, (), ('reference_half_peak_width_m', 'stripes'))
+    ref = s.get('reference_half_peak_width_m')
+    if ref is not None:
+        if isinstance(ref, bool) or not isinstance(ref, (int, float)) or not math.isfinite(ref) \
+                or not 0 < ref <= 1:
+            raise ValueError(f'{where}.reference_half_peak_width_m must be in (0, 1] m or null')
+        ref = float(ref)
+    stripes = s.get('stripes', [])
+    if not isinstance(stripes, list):
+        raise ValueError(f'{where}.stripes must be a list (it may be empty)')
+    out = []
+    for i, x in enumerate(stripes):
+        w_i = f'{where}.stripes[{i}]'
+        keys(w_i, x, ('position_m', 'half_peak_width_m', 'friction_change_fraction'),
+             ('label',))
+        pos = num(f'{w_i}.position_m', x['position_m'])
+        if not 0 <= pos <= barrel:
+            raise ValueError(f'{w_i}.position_m must be >= 0 and on the barrel')
+        hw = num(f'{w_i}.half_peak_width_m', x['half_peak_width_m'])
+        if not 0 < hw <= 1:
+            raise ValueError(f'{w_i}.half_peak_width_m must be in (0, 1] m')
+        fr = num(f'{w_i}.friction_change_fraction', x['friction_change_fraction'])
+        if not -0.9 <= fr <= 5 or fr == 0:
+            raise ValueError(f'{w_i}.friction_change_fraction must be in [-0.9, 5] and not 0')
+        lab = x.get('label')
+        if lab is not None and (not isinstance(lab, str) or not lab.strip()):
+            raise ValueError(f'{w_i}.label must be a nonempty string or null')
+        out.append({'position_m': pos, 'half_peak_width_m': hw,
+                    'friction_change_fraction': fr, 'label': lab})
+    return {'reference_half_peak_width_m': ref, 'stripes': out}
+
+
+FS_FLAG_APPLIED = 'FRICTION_STRIPE_SCREEN_APPLIED'
+FS_FLAG_NOT_SATURATED = 'FRICTION_STRIPE_LINEAR_FEEDBACK_NOT_SATURATED'
+FS_PUBLISHED_EXPONENT = [2.0, 2.6]
+FS_PUBLISHED_EXPONENT_NOTE = ('[derived by the bite report, slope read by eye from BT-S1 Fig. '
+                              '6a; regimes II-III at fixed gauge and reduction]')
+FS_TREND_END = ('Whether a friction stripe grows as gauge falls therefore depends on the '
+                'exit-tension feedback, the least supported element of the shape chain.')
+FS_SIGN_NOTE = ('A locally higher friction makes the strip locally thicker and the fibre tight; '
+                'a locally lower friction makes it loose. For a hot roll stripe the film path '
+                '(thinner film, more friction) therefore acts against the roll-growth path '
+                '(larger roll, thinner strip). The net sign is not known (gap A2).')
+FS_LIMITATIONS = (
+    'Linear sensitivity chain: dh from dF/dmu times a supplied friction change; the band-wise '
+    'saturation of the roll-bump chain is not applied.',
+    'dF/dmu is a central difference (+-2 %) of a constant-friction bite; at foil gauge that '
+    'bite is the experimental mattress model, which returns 0.42 of the reference load on '
+    'the one published benchmark (physicroll.benchmarks, BT-V1).',
+    'The with-feedback level rests on the linear exit-tension feedback, which the literature '
+    'neither supports nor contradicts (gap study X17); the compliance-only level is shown '
+    'beside it.',
+    'Friction is taken as uniform through the bite; no film model across the width, no '
+    'starvation (BT-G12), no coupling to the roll temperature (gap A2); entry tension uniform.',
+    'No evidence item: the screen does not change any hypothesis score (SPEC17 open decision '
+    '3).')
+FS_PLACEHOLDER_NOTE = ('The closure\'s slope is not supported by data (X22); these conversions '
+                       'show orders of magnitude only.')
+
+
+def _gauss(z, c, b, amp):
+    return [amp * math.exp(-4 * math.log(2) * ((x - c) / b) ** 2) for x in z]
+
+
+def _friction_i_units(z, dp, sp, feedback):
+    h = sp['exit_thickness_m']
+    tr = ss.transfer_force_profile(
+        z, dp, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'],
+        exit_tension_force_sensitivity_per_width_m=(
+            sp['exit_tension_force_sensitivity_per_width_m'] if feedback else None),
+        exit_thickness_m=h, strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        xi=sp['xi'])
+    dh = tr['local_thickness_change_m']
+    el = ss.differential_elongation(z, [h] * len(z), [h + v for v in dh], xi=sp['xi'])
+    eps = el['elongation']
+    m = math.fsum(eps) / len(eps)
+    return tr, [1e5 * (e - m) for e in eps], eps
+
+
+def _monotonic_words(values):
+    if all(b > a for a, b in zip(values, values[1:])):
+        return 'rises'
+    if all(b < a for a, b in zip(values, values[1:])):
+        return 'falls'
+    overall = 'up' if values[-1] > values[0] else 'down'
+    return f'is not monotonic (overall {overall})'
+
+
+def friction_trend_text(rows):
+    """Trend of the three quantities over the credible rows, ordered by falling exit gauge."""
+    ok = sorted([r for r in rows if 'rejected' not in r], key=lambda r: -r['exit_thickness_m'])
+    if len(ok) < 2:
+        return ('Fewer than two assessable passes: no trend. ' + FS_TREND_END)
+    span = (f'{ok[0]["exit_thickness_m"] * 1e3:.3g} -> {ok[-1]["exit_thickness_m"] * 1e3:.3g} '
+            'mm')
+    ex = [r['load_exponent_in_friction'] for r in ok]
+    co = [abs(r['i_units_per_percent_friction_compliance_only']) for r in ok]
+    fb = [abs(r['i_units_per_percent_friction_with_feedback']) for r in ok]
+    names = ', '.join(r['label'].split()[0] for r in ok)
+    return (f'As the exit gauge falls ({span}, {names}): the load '
+            f'exponent in friction {_monotonic_words(ex)} ({ex[0]:.3g} to {ex[-1]:.3g}); the '
+            f'compliance-only I-units per 1 % friction {_monotonic_words(co)} in magnitude '
+            f'({co[0]:.3g} to {co[-1]:.3g}); with exit-tension feedback the magnitude '
+            f'{_monotonic_words(fb)} (between {min(fb):.3g} and {max(fb):.3g}). '
+            + FS_TREND_END)
+
+
+def _friction_row(case, w, src, label, bite, sens, z, b_ref):
+    width = case['pass']['width_m']
+    sp, sp_basis = shape_params_or_none(case, bite, w, None if src is case['pass'] else src)
+    if sp is None:
+        raise ValueError('no bite and no shape inputs for this pass')
+    mu = src['friction_coefficient']
+    fpw = bite.separating_force_n / width
+    m_mu = sens['dforce_dfriction_n'] / width
+    zc = sp['strip_centre_m']
+    k = min(range(len(z)), key=lambda i: abs(z[i] - zc))
+    dp = [m_mu * v for v in _gauss(z, zc, b_ref, 0.01 * mu)]
+    _, iu_fb, _ = _friction_i_units(z, dp, sp, True)
+    _, iu_co, _ = _friction_i_units(z, dp, sp, False)
+    nx = sp['exit_tension_force_sensitivity_per_width_m']
+    return {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
+            'friction_coefficient': mu, 'force_per_width_n_m': fpw,
+            'dforce_per_width_dfriction_n_m': m_mu,
+            'load_exponent_in_friction': m_mu * mu / fpw,
+            'i_units_per_percent_friction_with_feedback': iu_fb[k],
+            'i_units_per_percent_friction_compliance_only': iu_co[k],
+            'feedback_limit_i_units_per_percent': (
+                None if not nx else -1e5 * m_mu * 0.01 * mu
+                / (nx * sp['strip_youngs_modulus_pa'])),
+            'shape_inputs_basis': sp_basis, 'bite_model': bite_model_name(bite),
+            'bite_flags': list(bite.flags), 'sensitivity_bite_model': sens.get('bite_model')}, sp
+
+
+def friction_stripes_section(case, w, op_bite, get_bite, friction_sensitivity, steady_shape,
+                             th, trib, friction_row, bite_error=None):
+    """SPEC17 BT-G4, screening version: a local friction difference as a band source.
+
+    With ``M_mu = (dF/dmu)/width`` of the existing bite (central difference +-2 %), a friction
+    stripe ``dmu(z)`` gives ``dp0' = M_mu*dmu`` at an unchanged gap, ``dh`` by
+    ``strip_shape.transfer_force_profile`` (with and without the exit-tension feedback) and the
+    flatness as the shape chain computes it. Reported beside the roll-bump chain, never summed
+    into it, and never evidence (open decision 3).
+    """
+    s = w.get('friction_stripe_screen')
+    if s is None:
+        return not_supplied('width_model.friction_stripe_screen is null or absent')
+    if op_bite is None or friction_sensitivity is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': ('no bite for the case pass'
+                           + (f' ({bite_error})' if bite_error else '')
+                           + ': dF/dmu is not available'), 'flags': []}
+    b_ref = s['reference_half_peak_width_m'] or REFERENCE_HALF_PEAK_WIDTH_M
+    p = case['pass']
+    centre, width = th.centre, th.width
+    if isinstance(steady_shape, dict) and isinstance(steady_shape.get('z_m'), list) \
+            and len(steady_shape['z_m']) >= 4:
+        z = list(steady_shape['z_m'])
+        grid_basis = 'the strip samples of width.shape.steady'
+    else:
+        n = max(4, int(round(width / 0.005)))
+        z = [centre - width / 2 + (i + 0.5) * width / n for i in range(n)]
+        grid_basis = 'a uniform 5 mm grid over the strip (no steady shape)'
+    flags = [FS_FLAG_APPLIED]
+    # passes: the case pass and every other schedule pass (a schedule row that IS the case
+    # pass is listed once, under its own label, with the operating bite)
+    srcs, case_label = [], 'case pass'
+    for r in case['schedule']:
+        if is_case_pass(case, r):
+            case_label = r['label']
+    srcs.append((case_label, p, True))
+    srcs += [(r['label'], r, False) for r in case['schedule'] if not is_case_pass(case, r)]
+    rows, case_row, case_sp = [], None, None
+    for label, src, is_case in srcs:
+        try:
+            bite = op_bite if is_case else get_bite(src)
+            sens = friction_sensitivity(src)
+            row, sp = _friction_row(case, w, src, label, bite, sens, z, b_ref)
+            if is_case:
+                case_row, case_sp = row, sp
+        except ValueError as exc:
+            row = {'label': label, 'exit_thickness_m': src['exit_thickness_m'],
+                   'friction_coefficient': src['friction_coefficient'], 'rejected': str(exc)}
+        row['is_case_pass'] = is_case
+        rows.append(row)
+    rows.sort(key=lambda r: -r['exit_thickness_m'])
+    out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+           'grid_basis': grid_basis, 'reference_half_peak_width_m': b_ref,
+           'reference_half_peak_width_basis': ('supplied' if s['reference_half_peak_width_m']
+                                               else 'default, the gauge trend\'s reference'),
+           'per_pass': rows, 'trend_text': friction_trend_text(rows),
+           'sign_note': FS_SIGN_NOTE, 'stripes': []}
+    if case_row is None:
+        out.update(status='NOT_ASSESSABLE', reason=next(
+            (r['rejected'] for r in rows if r['is_case_pass']), 'case pass not assessable'),
+            flags=flags, limitations=list(FS_LIMITATIONS))
+        return out
+    fb_value = case_row['i_units_per_percent_friction_with_feedback']
+    out['case_pass'] = {
+        'label': case_row['label'], 'force_per_width_n_m': case_row['force_per_width_n_m'],
+        'friction_coefficient': case_row['friction_coefficient'],
+        'dforce_per_width_dfriction_n_m': case_row['dforce_per_width_dfriction_n_m'],
+        'load_exponent_in_friction': case_row['load_exponent_in_friction'],
+        'published_load_exponent': list(FS_PUBLISHED_EXPONENT),
+        'published_load_exponent_note': FS_PUBLISHED_EXPONENT_NOTE}
+    out['reference'] = {
+        'stripe': (f'Gaussian friction stripe dmu = 0.01*mu*exp(-4 ln2 ((z - z_c)/b)^2) at the '
+                   f'strip centre, b = {b_ref:g} m'),
+        'i_units_per_percent_friction_with_feedback': fb_value,
+        'i_units_per_percent_friction_compliance_only':
+            case_row['i_units_per_percent_friction_compliance_only'],
+        'friction_change_fraction_for_reporting_threshold': (
+            None if fb_value == 0 else 0.01 * 2 / abs(fb_value)),
+        'feedback_limit_i_units_per_percent': case_row['feedback_limit_i_units_per_percent']}
+    mu, m_mu, sp = case_row['friction_coefficient'], case_row['dforce_per_width_dfriction_n_m'], \
+        case_sp
+    for i, st in enumerate(s['stripes']):
+        dmu = _gauss(z, st['position_m'], st['half_peak_width_m'],
+                     st['friction_change_fraction'] * mu)
+        tr, _, eps = _friction_i_units(z, [m_mu * v for v in dmu], sp, True)
+        fl = ss.flatness_from_elongation(
+            z, eps, youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+            poisson_ratio=sp['strip_poisson_ratio'], thickness_m=sp['exit_thickness_m'],
+            mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+        band = _band_at(fl['bands'], st['position_m'])
+        peak = max(fl['i_units'], key=abs)
+        if any(b['state'] == 'MANIFEST_BUCKLE' for b in fl['bands']):
+            if FS_FLAG_NOT_SATURATED not in flags:
+                flags.append(FS_FLAG_NOT_SATURATED)
+        out['stripes'].append({
+            'index': i, 'label': st['label'], 'position_m': st['position_m'],
+            'half_peak_width_m': st['half_peak_width_m'],
+            'friction_change_fraction': st['friction_change_fraction'],
+            'peak_local_thickness_change_m': tr['peak_local_thickness_change_m'],
+            'peak_i_units': peak, 'sense': None if band is None else band['sense'],
+            'state': 'BELOW_REPORTING_THRESHOLD' if band is None else band['state'],
+            'state_after_tension_release': (None if band is None
+                                            else band['state_after_tension_release']),
+            'band': band, 'bands': fl['bands'], 'i_units': fl['i_units'], 'z_m': z,
+            'reporting_threshold_i_units': ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS})
+    if trib is not None and isinstance(friction_row, dict) \
+            and friction_row.get('film_ratio') is not None:
+        out['conversion_placeholder'] = _friction_placeholder(trib, friction_row)
+    out['flags'] = flags
+    out['limitations'] = list(FS_LIMITATIONS)
+    return out
+
+
+def _friction_placeholder(trib, row):
+    from . import band_process as bproc
+    from . import bite_tribology as bt
+    _, fin, clo = bproc.tribology_objects(trib)
+    lam = row['film_ratio']
+    load_sharing = clo.model == 'load_sharing_curve'
+    if load_sharing and row.get('dmu_dlambda') is not None:
+        d = row['dmu_dlambda']             # the friction row's slope (its bite state)
+    else:
+        d = bt.friction_coefficient(lam, clo)['dmu_dlambda']
+    beta = trib['lubricant']['temperature_viscosity_coefficient_per_k']
+    rr, rs = fin.roll_roughness_rq_m, fin.strip_roughness_rq_m
+    mu_used = row.get('used_friction_coefficient', row.get('supplied_friction_coefficient'))
+    per_k = d * lam * (-beta)
+    per_rough = d * lam * (-0.1 * rr ** 2 / (rr ** 2 + rs ** 2))
+    extra = ({'friction_closure': 'load_sharing_curve', 'note_closure': bt.LOAD_SHARING_NOTE}
+             if load_sharing else {})      # keys only then
+    return {**extra, 'flags': [bt.LOAD_SHARING_FLAG if load_sharing else bt.PLACEHOLDER_FLAG],
+            'film_ratio': lam, 'dmu_dlambda': d,
+            'friction_change_per_kelvin_oil': per_k,
+            'friction_change_per_kelvin_oil_fraction': None if not mu_used else per_k / mu_used,
+            'friction_change_per_10_percent_roll_roughness': per_rough,
+            'friction_change_per_10_percent_roll_roughness_fraction':
+                None if not mu_used else per_rough / mu_used,
+            'friction_coefficient_used': mu_used,
+            'basis': ('dmu/dT = dmu/dLambda * Lambda * (-beta) (film proportional to the inlet '
+                      'viscosity, eta0 ~ exp(-beta dT)); dmu per +10 % roll Rq = dmu/dLambda * '
+                      'Lambda * (-0.1 Rq_r^2/(Rq_r^2 + Rq_s^2)) [D]; '
+                      + ('load-sharing closure' if load_sharing else 'placeholder closure')),
+            'note': FS_PLACEHOLDER_NOTE}
+
+
+def _case_radii(case):
+    """(label, radius) of every roller or coil radius the case gives (SPEC17 G12)."""
+    out = []
+    w = case.get('width_model')
+    if w is not None:
+        if w.get('deflector_roll_radius_m') is not None:
+            out.append(('width_model.deflector_roll_radius_m', w['deflector_roll_radius_m']))
+        coil = w.get('coil')
+        if coil is not None:
+            out.append(('width_model.coil.inner_radius_m', coil['inner_radius_m']))
+            out.append(('width_model.coil.outer_radius_m', coil['outer_radius_m']))
+    k = case.get('kinematics') or {}
+    for i, d in enumerate(k.get('deflector_roll_diameters_m') or []):
+        out.append((f'kinematics.deflector_roll_diameters_m[{i}]/2', d / 2))
+    if k.get('exit_coil_diameter_m') is not None:
+        out.append(('kinematics.exit_coil_diameter_m/2', k['exit_coil_diameter_m'] / 2))
+    return out
+
+
+TL_PUBLISHED_PITCH_M = [0.005, 0.020]
+TL_HOW_TO_TEST = ('Measure the pitch at two coil radii and two gauges: this candidate predicts '
+                  'pitch proportional to sqrt(radius x gauge).')
+TL_BASIS = ('entrained-air corrugation in winding has the same remedies and thin-gauge trend '
+            '[SS-S53 EX, SS-S66 EX]; wavelength formula re-derived (classical shell); no onset '
+            'condition, no air-film model (G9, G10)')
+TL_NOTE = ('not evidence: almost any foil coil gives a candidate pitch inside the published '
+           '5-20 mm')
+
+
+def candidate_tension_line_pitch(exit_thickness_m, radii, observed_spacing_m=None):
+    """SPEC17 G12: the shell-buckling pitch at each radius of the case; a candidate for
+    comparison only, never evidence (the tension-line rules are unchanged)."""
+    out = {'formula': 'pitch = 2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4) [D, re-derived in SPEC17; '
+                      'reported from memory as 3.47*sqrt(R*t)]',
+           'poisson_ratio': STRIP_POISSON_RATIO, 'rows': [], 'pitch_range_m': None,
+           'published_pitch_m': list(TL_PUBLISHED_PITCH_M),
+           'observed_spacing_m': observed_spacing_m, 'observed_inside_candidate_range': None,
+           'how_to_test': TL_HOW_TO_TEST, 'basis': TL_BASIS, 'note': TL_NOTE}
+    if exit_thickness_m >= FOIL_GAUGE_M:
+        out['status'] = 'NOT_APPLICABLE_ABOVE_FOIL_GAUGE'
+        return out
+    if not radii:
+        out['status'] = 'NO_RADIUS_IN_CASE'
+        return out
+    rows = [{'where': where, 'radius_m': r,
+             'pitch_m': ss.shell_buckling_wavelength_m(r, exit_thickness_m, STRIP_POISSON_RATIO)}
+            for where, r in radii]
+    lo, hi = min(x['pitch_m'] for x in rows), max(x['pitch_m'] for x in rows)
+    out.update(status='CANDIDATE_NOT_ESTABLISHED', rows=rows, pitch_range_m=[lo, hi])
+    if observed_spacing_m is not None:
+        out['observed_inside_candidate_range'] = lo <= observed_spacing_m <= hi
+    return out
+
+
+def _validate_roll_profile(s, barrel):
+    if s is None:
+        return None
+    where = 'width_model.roll_ground_profile'
+    keys(where, s, ('positions_m', 'radius_deviation_m', 'provenance'),
+         ('detrend_order', 'rolls_carrying'))
+    pos = s['positions_m']
+    msg = f'{where}.positions_m must be >= 5 strictly increasing positions on the barrel'
+    if not isinstance(pos, list) or len(pos) < 5:
+        raise ValueError(msg)
+    try:
+        pos = [num(f'{where}.positions_m[{i}]', v) for i, v in enumerate(pos)]
+    except ValueError:
+        raise ValueError(msg) from None
+    if any(b <= a for a, b in zip(pos, pos[1:])) or pos[0] < 0 or pos[-1] > barrel:
+        raise ValueError(msg)
+    dev = s['radius_deviation_m']
+    dmsg = f'{where}.radius_deviation_m needs one value in [-1e-3, 1e-3] m per position'
+    if not isinstance(dev, list) or len(dev) != len(pos):
+        raise ValueError(dmsg)
+    try:
+        dev = [num(f'{where}.radius_deviation_m[{i}]', v, lo=-1e-3, hi=1e-3)
+               for i, v in enumerate(dev)]
+    except ValueError:
+        raise ValueError(dmsg) from None
+    order = s.get('detrend_order', ROLL_PROFILE_DETREND_ORDER_DEFAULT)
+    if order is not None and (isinstance(order, bool) or not isinstance(order, int)
+                              or not 0 <= order <= 6):
+        raise ValueError(f'{where}.detrend_order must be an int in [0, 6] or null')
+    nr = s.get('rolls_carrying', 1)
+    if isinstance(nr, bool) or nr not in (1, 2):
+        raise ValueError(f'{where}.rolls_carrying must be 1 or 2')
+    pv = s['provenance']
+    if not isinstance(pv, str) or not pv.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty string')
+    return {'positions_m': pos, 'radius_deviation_m': dev, 'detrend_order': order,
+            'rolls_carrying': nr, 'provenance': pv}
+
+
+# SPEC20 part 3: order 2 removes a parabolic crown only; on a cosine-ground roll (80 um crown
+# on diameter, 70 degree half angle) it leaves a W-shaped residual of 0.68 um peak to peak on
+# radius, order 4 under 0.02 um [computed, prototypes/grinding-research/detrend_check.py,
+# curve form assumed]
+ROLL_PROFILE_DETREND_ORDER_DEFAULT = 4
+DETREND_ORDERS_COMPARED = (2, 4)
+RP_FLAG_ORDER = 'ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER'
+# SPEC20 part 4: two samples per feature [D]; the narrow stripe of the guide's worked case [D]
+NARROW_STRIPE_REFERENCE_WIDTH_M = 0.030
+RP_FLAG_GRID = 'ROLL_PROFILE_GRID_TOO_COARSE'
+RP_ORDER_SENTENCE = ('The bands of this profile depend on the de-trending order: subtract the '
+                     "grinder's target curve before entering the profile, or state the curve.")
+RP_FLAG_SUPPLIED = 'ROLL_GROUND_PROFILE_SUPPLIED'
+RP_FLAG_BAND = 'ROLL_GROUND_PROFILE_BAND_ABOVE_THRESHOLD'
+RP_LIMITATIONS = (
+    "The profile is one roll's ground shape, measured cold and off the mill.",
+    'Marks narrower than about two grid cells or than 4a (four bite half-lengths) are smoothed.',
+    'No wear growth during the campaign.',
+    'No barrel-position modulation by roll bending (needs the roll stack, gap G1).',
+    'The removed polynomial (crown or camber) is reported only; it is not passed to the crown '
+    'or heredity model.',
+    'The hypotheses roll_surface_band and grinding_feed_marks stay rule-based and do not read '
+    'this section.',
+    'A report taken on a roll not thermally settled carries a thermal profile of the size of '
+    'the grinding tolerance: 3.3 um per K on a 280 mm roll [computed; rest time about a day, '
+    'RG5].',
+    'Grinder gauges measure diameter: deviations are halved for the radius input.')
+RP_PUBLISHED_STIFFNESS = ('thin aluminium 0.236 mm: 176 / 57.8 kN/mm2, ratio 3.04; thin '
+                          'stainless: ratio 28, transfer almost negligible (model output) '
+                          '[SS-S3 FT]')
+RP_LV_KEYS = ('status', 'released_status', 'z_m', 'local_radius_deviation_m',
+              'local_thickness_change_m', 'i_units_with_feedback', 'i_units_linear_feedback',
+              'rigid_transfer_bound_i_units', 'compliance_only_peak_i_units',
+              'feedback_peak_i_units', 'linear_feedback_peak_i_units', 'levels', 'flags')
+
+
+def roll_profile_section(case, w, sp, shape_reason, z, th, thermal_steady, bite=None):
+    """SPEC17 G13: a measured roll ground profile through the existing transfer.
+
+    The supplied radius deviation (one roll, positive = larger roll) is interpolated onto the
+    width section's grid (end values held outside the scan), de-trended over the strip by
+    ``roll_thermal.local_stripes`` (the removed polynomial is reported, not passed on) and put
+    through ``shape_levels`` exactly as a thermal stripe [SS-S3 FT: grinding residuals and
+    wear transfer like thermal stripes; the transfer itself is the project's, D]. Reported
+    beside the width section, never evidence.
+    """
+    s = w.get('roll_ground_profile')
+    if s is None:
+        return not_supplied('width_model.roll_ground_profile is null or absent')
+    if sp is None:
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False,
+                'reason': shape_reason or 'no shape parameters', 'flags': []}
+    xs, ys = s['positions_m'], s['radius_deviation_m']
+    a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
+    if xs[-1] < a0 or xs[0] > a1:
+        # held end values over the whole strip would read as a flat roll: not a measurement
+        return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'flags': [],
+                'reason': f'the measured profile ({xs[0]:.4g} to {xs[-1]:.4g} m) lies entirely '
+                          f'outside the strip ({a0:.4g} to {a1:.4g} m): it says nothing about the '
+                          'roll under the strip'}
+    vals = [_interp_held(xs, ys, x) for x in z]
+    dz = z[1] - z[0]
+    extrap = max(0.0, min(xs[0], a1) - a0) + max(0.0, a1 - max(xs[-1], a0))
+    spr = dict(sp, n_rolls=s['rolls_carrying'])
+
+    def detrended(order):
+        lo_ = rt.local_stripes(z, vals, th.centre, th.width, threshold_m=STRIPE_THRESHOLD_M,
+                               smooth_order=order)
+        bz = dict(zip(lo_['z_m'], lo_['local_radius_deviation_m']))
+        dv = [bz.get(x, 0.0) for x in z]
+        return lo_, bz, dv, shape_levels(z, dv, spr)
+    loc, by_z, dev, lv = detrended(s['detrend_order'])
+    smooth = [a - b for a, b in zip(
+        [v for x, v in zip(z, vals) if x in by_z], loc['local_radius_deviation_m'])]
+    out = {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+           'provenance': s['provenance'], 'detrend_order': s['detrend_order'],
+           'rolls_carrying': s['rolls_carrying'],
+           'scan_coverage': {'scan_start_m': xs[0], 'scan_end_m': xs[-1], 'strip_start_m': a0,
+                             'strip_end_m': a1, 'extrapolated_width_m': extrap,
+                             'rule': 'linear between scan points; end values held outside'},
+           'removed_polynomial_m': smooth, 'removed_polynomial_z_m': list(loc['z_m']),
+           'removed_polynomial_peak_to_peak_m': (max(smooth) - min(smooth)) if smooth else 0.0,
+           'removed_polynomial_note': ('the removed crown or camber belongs to the crown model; '
+                                       'it is reported and drawn, not passed to it'),
+           'measured_on_strip_m': [v for x, v in zip(z, vals) if x in by_z],
+           'stripes': loc['stripes'], 'local_stripes_status': loc['status'],
+           'local_stripes_flags': loc['flags']}
+    out.update({k: lv[k] for k in RP_LV_KEYS if k in lv})
+    stripe_input = {'stripes': loc['stripes'], 'z_m': z, 'local_deviation_m': dev}
+    try:
+        out['stripe_table'] = steady_stripe_table(stripe_input, lv, spr)
+        out['stripe_table_basis'] = 'steady_stripe_table (states and onsets per stripe)'
+    except (ValueError, KeyError):
+        out['stripe_table'] = [dict(position_m=st['peak_position_m'],
+                                    peak_radius_deviation_m=st['peak_deviation_m'],
+                                    width_at_half_peak_m=st['width_at_half_peak_m'],
+                                    **stripe_states(lv, st['peak_position_m']))
+                               for st in loc['stripes']]
+        out['stripe_table_basis'] = 'stripe_states at each stripe peak'
+    # combined with the thermal stripes of the same roll
+    if not isinstance(thermal_steady, dict) or 'local_deviation_m' not in thermal_steady:
+        out['combined_with_thermal'] = not_supplied('no roll thermal solution')
+    elif s['rolls_carrying'] != w['rolls_carrying_stripe']:
+        out['combined_with_thermal'] = not_assessable(
+            f'rolls_carrying {s["rolls_carrying"]} differs from '
+            f'width_model.rolls_carrying_stripe {w["rolls_carrying_stripe"]}: the two radius '
+            'deviations are not on the same roll(s)')
+    else:
+        comb = shape_levels(thermal_steady['z_m'],
+                            [a + _interp_held(z, dev, x) for x, a in
+                             zip(thermal_steady['z_m'], thermal_steady['local_deviation_m'])],
+                            sp)
+        out['combined_with_thermal'] = {k: comb[k] for k in RP_LV_KEYS if k in comb}
+    # stiffness indicator [SS-S3 FT idea and ratios; the project's analogue D]
+    p = case['pass']
+    big = max(loc['stripes'], key=lambda x: abs(x['peak_deviation_m']), default=None)
+    a_half = sp['bite_half_length_m']
+    lam = None if big is None else min(max(2 * big['width_at_half_peak_m'], 4 * a_half),
+                                       sp['roll_radius_m'])
+    roll_term = (None if lam is None else 1 / (2 * ss.roll_line_compliance_m2_n(
+        lam, a_half, sp['roll_youngs_modulus_pa'], sp['roll_poisson_ratio'])))
+    kf1 = (None if bite is None else bite.separating_force_n / p['width_m']
+           / (p['entry_thickness_m'] - p['exit_thickness_m']))
+    out['stiffness_check'] = {
+        'strip_foundation_modulus_pa': kf1,
+        'strip_foundation_modulus_basis': ("(F/width)/(h_entry - h_exit), Patel's kf1 as the "
+                                           'report restates it [SS-S3 FT]'),
+        'roll_term_pa': roll_term, 'wavelength_m': lam,
+        'wavelength_basis': 'twice the half-peak width of the largest stripe, clamped to [4a, R]',
+        'ratio_strip_to_roll': (None if kf1 is None or not roll_term else kf1 / roll_term),
+        'published_context': RP_PUBLISHED_STIFFNESS,
+        'basis': ("roll term 1/(2*C(lam)) is the project's analogue, not Patel's kf2 (its "
+                  'definition was not recorded) [D]')}
+    # observed positions: information only
+    obs = case['observation']
+    if obs['band_positions_across_width_m']:
+        tol, tbasis = position_tolerance(obs, w['spray_header']['nozzle_pitch_m'])
+        peaks = [b['peak_position_m'] for b in lv['levels']['with_feedback']['bands']]
+        out['position_match'] = {
+            'tolerance_m': tol, 'tolerance_basis': tbasis,
+            'matches': ss.match_positions(peaks, obs['band_positions_across_width_m'],
+                                          tol)['matches'],
+            'note': 'information only: not evidence'}
+    else:
+        out['position_match'] = None
+    flags = list(lv.get('flags') or []) + [RP_FLAG_SUPPLIED]
+    if lv['levels']['with_feedback']['bands']:
+        flags.append(RP_FLAG_BAND)
+    # SPEC20 part 3: the bands with de-trending orders 2 and 4 (always computed)
+    tol, tbasis = position_tolerance(obs, w['spray_header']['nozzle_pitch_m'])
+    runs = {}
+    for order in DETREND_ORDERS_COMPARED:
+        runs[order] = ((loc, dev, lv) if order == s['detrend_order']
+                       else (lambda r: (r[0], r[2], r[3]))(detrended(order)))
+
+    def bands_of(lv_):
+        return [{'peak_position_m': b['peak_position_m'], 'peak_i_units': b['peak_i_units'],
+                 'state': b['state'],
+                 'state_after_tension_release': b['state_after_tension_release']}
+                for b in lv_['levels']['with_feedback']['bands']]
+    b2, b4 = (bands_of(runs[o][2]) for o in DETREND_ORDERS_COMPARED)
+
+    def same(a, b):
+        if len(a) != len(b):
+            return False
+        return all(abs(x['peak_position_m'] - y['peak_position_m']) <= tol
+                   and x['state'] == y['state']
+                   and x['state_after_tension_release'] == y['state_after_tension_release']
+                   for x, y in zip(a, b))
+    diffs = [abs(a - b) for a, b in zip(runs[2][1], runs[4][1])]
+    k = max(range(len(z)), key=lambda i: diffs[i])
+    depends = not same(b2, b4)
+    out['detrend_sensitivity'] = {
+        'bands_order_2': b2, 'bands_order_4': b4,
+        'largest_local_deviation_difference_m': diffs[k],
+        'largest_difference_position_m': z[k], 'bands_depend_on_order': depends,
+        'position_tolerance_m': tol, 'position_tolerance_basis': tbasis,
+        'sentence': RP_ORDER_SENTENCE if depends else None,
+        'basis': ('order 2 removes a parabolic crown only; on a cosine-ground roll it leaves a '
+                  'W-shaped residual (0.68 um peak to peak on radius for an 80 um diameter '
+                  'crown, 70 degree half angle), order 4 under 0.02 um [computed, curve form '
+                  'assumed]')}
+    if depends:
+        flags.append(RP_FLAG_ORDER)
+    # SPEC20 part 4: what the station grid can carry (a flag and a sentence only)
+    gaps = [b - a for a, b in zip(xs, xs[1:]) if b > a0 and a < a1]
+    largest = max(gaps) if gaps else None
+    resolvable = None if largest is None else 2 * largest
+    ref = obs['band_width_m']
+    ref_basis = ('observation.band_width_m' if ref is not None else
+                 f'{NARROW_STRIPE_REFERENCE_WIDTH_M * 1e3:g} mm, the narrow stripe of the '
+                 "guide's worked case [D]")
+    ref = ref if ref is not None else NARROW_STRIPE_REFERENCE_WIDTH_M
+    coarse = resolvable is not None and resolvable > ref
+    out['grid'] = {'largest_spacing_inside_strip_m': largest,
+                   'smallest_resolvable_width_m': resolvable,
+                   'basis': 'two samples per feature [D]',
+                   'reference_width_m': ref, 'reference_width_basis': ref_basis,
+                   'too_coarse': coarse,
+                   'sentence': (f'this profile cannot show a mark narrower than '
+                                f'{resolvable * 1e3:.3g} mm; a missing band here does not mean '
+                                'the roll has none' if coarse else None)}
+    if coarse:
+        flags.append(RP_FLAG_GRID)
+    out['flags'] = flags
+    out['limitations'] = list(RP_LIMITATIONS)
+    return out
+
+
 def _troughs(case, w, obs):
     p, spans = case['pass'], case['spans']
     out = {}
@@ -1490,6 +2771,11 @@ def _troughs(case, w, obs):
              p['entry_tension_pa']),
             ('exit_span', p['exit_thickness_m'], spans['exit_span_length_m'],
              p['exit_tension_pa'])):
+        if not tension > 0:
+            out[name] = not_assessable('no span tension entered, so trough onset cannot be '
+                                       'assessed (the trough and wrinkle thresholds scale with '
+                                       'the span tension)')
+            continue
         try:
             r = ss.tension_trough_screen(
                 h, length, tension, p['width_m'], roller_radius_m=w['deflector_roll_radius_m'],
@@ -1504,9 +2790,69 @@ def _troughs(case, w, obs):
                 'roller_radius_m', 'roller_wrinkle_critical_lateral_stress_pa',
                 'lateral_compressive_stress_pa', 'observed_spacing_to_wavelength_ratio',
                 'observed_spacing_consistent', 'flags')}
+            if h < FOIL_GAUGE_M:
+                out[name]['wide_foil_note'] = WIDE_FOIL_TROUGH_NOTE
+            _span_generators(case, w, name, h, length, tension, out[name], obs)
         except ValueError as exc:
             out[name] = {'status': 'REJECTED', 'error': str(exc)}
     return out
+
+
+def _span_generators(case, w, name, h, length, tension, row, obs):
+    """SPEC19 package 12 (G11): the lateral stress that the entered roller misalignment and
+    taper put into this span. A supplied plant stress keeps driving the screen exactly as
+    before; the computed one is then reported beside it and compared. Without a supplied
+    stress, a computed one drives the screen (``lateral_stress_basis``)."""
+    supplied = w['lateral_compressive_stress_pa']
+    row['lateral_stress_basis'] = None if supplied is None else SPAN_LATERAL_BASIS_SUPPLIED
+    sa = w.get('span_alignment')
+    sp = None if sa is None else sa.get(name)
+    if sp is None:
+        row['generators'] = not_supplied(
+            'no width_model.span_alignment' if sa is None else
+            f'no width_model.span_alignment.{name}')
+        return
+    p, e = case['pass'], case['material']['youngs_modulus_pa']
+    rr = sp['roller_radius_m']
+    rr_src = f'width_model.span_alignment.{name}.roller_radius_m'
+    if rr is None:
+        rr, rr_src = w['deflector_roll_radius_m'], 'width_model.deflector_roll_radius_m'
+    if rr is None:
+        rr_src = 'not given'
+    try:
+        g = ss.span_lateral_stress(
+            h, length, tension, p['width_m'], misalignment_rad=sp['misalignment_m_per_m'],
+            taper_radius_difference_m=sp['taper_radius_difference_m'], roller_radius_m=rr,
+            roller=sp['roller'], youngs_modulus_pa=e, poisson_ratio=STRIP_POISSON_RATIO)
+    except ValueError as exc:
+        row['generators'] = failed('span_alignment', exc)
+        return
+    g = {k: v for k, v in g.items() if k != 'sources'}
+    g.update({'status': 'COMPUTED', 'not_supplied': False, 'roller_radius_source': rr_src,
+              'provenance': sa['provenance']})
+    row['generators'] = g
+    lat = g['computed_lateral_compressive_stress_pa']
+    if lat is None:
+        return
+    screen = ss.tension_trough_screen(
+        h, length, tension, p['width_m'], roller_radius_m=rr, lateral_compressive_stress_pa=lat,
+        observed_spacing_m=obs['band_spacing_m'], youngs_modulus_pa=e,
+        poisson_ratio=STRIP_POISSON_RATIO)
+    if supplied is None:
+        row.update({'status': screen['status'], 'lateral_compressive_stress_pa': lat,
+                    'roller_radius_m': rr,
+                    'roller_wrinkle_critical_lateral_stress_pa':
+                        screen['roller_wrinkle_critical_lateral_stress_pa'],
+                    'flags': screen['flags'],
+                    'lateral_stress_basis': SPAN_LATERAL_BASIS_COMPUTED})
+        return
+    g['supplied_vs_computed'] = {
+        'supplied_pa': supplied, 'computed_pa': lat,
+        'computed_over_supplied': None if supplied == 0 else lat / supplied,
+        'status_from_supplied': row['status'], 'status_from_computed': screen['status'],
+        'statuses_agree': row['status'] == screen['status'],
+        'note': 'the supplied plant value drives the screen and the evidence; the computed '
+                'value is shown beside it'}
 
 
 def position_tolerance(obs, nozzle_pitch):
@@ -1667,7 +3013,8 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 return None if scale is None else scale * height
             row.update(
                 shape_inputs_basis=sp_basis,
-                bite_source=None if bite is None else bite.source,
+                bite_source=(None if bite is None else 'reduced_half_space'
+                             if HALF_SPACE_FLAG in bite.flags else bite.source),
                 bite_model=bite_model_name(bite),
                 bite_flags=[] if bite is None else list(bite.flags),
                 separating_force_per_width_n_m=(None if bite is None else
@@ -1676,6 +3023,7 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
                 tension_feedback_stiffness_per_width_pa=lv[
                     'tension_feedback_stiffness_per_width_pa'],
+                kernel_feedback_ratio_to_pointwise=kernel_ratio(sp),
                 bite_half_length_m=sp['bite_half_length_m'],
                 transfer_factor_with_feedback=lv['peak_transfer_ratio_with_feedback'],
                 transfer_factor_compliance_only=lv['compliance_only_peak_transfer_ratio'],
@@ -1720,6 +3068,9 @@ def _gauge_trend(case, w, get_bite, steady, centre, coil, z_grid, op_bite, shape
                 for name, k in keys_.items():
                     if f'{name}_domain_limit' in o:      # keys only then (no onset)
                         row[k[:-2] + '_domain_limit_m'] = o[f'{name}_domain_limit'] * height
+        except ss.ShapeDomainError as exc:
+            row['rejected'] = exc.plain             # a plant reader's reason, no array bound
+            row['rejected_outside_model_range'] = True    # the bite ran; the shape did not
         except ValueError as exc:
             row['rejected'] = str(exc)
         h1 = src['exit_thickness_m']
@@ -1949,22 +3300,2203 @@ def _rejected_text(rows):
 
 # ============================================================================= section
 def bite_model_name(bite):
-    """'hitchcock', 'experimental_mattress', 'supplied' or None (no bite)."""
+    """'hitchcock', 'experimental_mattress', 'reduced_half_space', 'supplied' or None."""
     if bite is None:
         return None
     if MATTRESS_FLAG in bite.flags:
         return 'experimental_mattress'
+    if HALF_SPACE_FLAG in bite.flags:
+        return 'reduced_half_space'
     return 'supplied' if bite.source == 'supplied' else 'hitchcock'
 
 
 MATTRESS_FLAG = 'BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL'
+HALF_SPACE_FLAG = 'BITE_FROM_REDUCED_HALF_SPACE_MODEL'
+
+
+# ================================================ roll surface cycle (SPEC18 package 10, A4, G8)
+SURFACE_CYCLE_WEIGHTS = 9            # unit solutions spanning the spray-weight range [D]
+SURFACE_CYCLE_TOLERANCE_K = 1e-4     # periodicity of the unit solutions [D]
+MEAN_COEFFICIENT_BIAS = 0.05         # flag when a mean_coefficient_ratio differs from 1 by more
+CYCLE_FLAG = 'ROLL_SURFACE_CYCLE_COMPUTED'
+CYCLE_BIAS_FLAG = 'CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED'
+
+
+def _deep_temperature(field, depth, radius):
+    """Steady bulk temperature at radius R - depth for every axial station (linear in r
+    between the cell centres of the circumferential-mean field)."""
+    r = radius - depth
+    rs = field['r_m']
+    rows = field['temperature_k']
+    if r <= rs[0]:
+        return list(rows[0])
+    i = max(k for k in range(len(rs)) if rs[k] <= r)
+    if i >= len(rs) - 1:
+        return list(rows[-1])
+    f = (r - rs[i]) / (rs[i + 1] - rs[i])
+    return [a + f * (b - a) for a, b in zip(rows[i], rows[i + 1])]
+
+
+def surface_cycle_layout(w, radius, contact_length):
+    """The arcs (time fractions from bite entry) of the layout and the table of the layout used
+    (angles from the bite exit in the direction of rotation). ValueError naming the region
+    when a region overlaps the bite."""
+    lay = w['circumferential_layout']
+    theta_b = contact_length / radius
+    fb = contact_length / (2 * math.pi * radius)
+    regions = [('spray', f'spray arc {i}', r) for i, r in enumerate(lay['spray_arcs'])]
+    if lay['backup_contact'] is not None:
+        regions.append(('backup', 'backup contact', lay['backup_contact']))
+    regions.sort(key=lambda t: t[2]['start_rad'])
+    table = [{'region': 'bite', 'start_rad': 2 * math.pi - theta_b, 'arc_rad': theta_b,
+              'start_deg': math.degrees(2 * math.pi - theta_b),
+              'end_deg': 360.0, 'basis': 'contact length of the case-pass bite'}]
+    limit = 2 * math.pi - theta_b
+    for kind, name, r in regions:
+        if r['start_rad'] + r['arc_rad'] > limit + 1e-12:
+            raise ValueError(f'{LAYOUT_WHERE}: {name} ({r["start_rad"]:.4g} to '
+                             f'{r["start_rad"] + r["arc_rad"]:.4g} rad) overlaps the bite '
+                             f'({limit:.4g} to {2 * math.pi:.4g} rad before the bite exit)')
+        table.append({'region': name, 'start_rad': r['start_rad'], 'arc_rad': r['arc_rad'],
+                      'start_deg': math.degrees(r['start_rad']),
+                      'end_deg': math.degrees(r['start_rad'] + r['arc_rad'])})
+    arcs, pos = [('bite', 0.0, fb, None)], fb
+    for kind, name, r in regions:
+        a = fb + r['start_rad'] / (2 * math.pi)
+        b = fb + (r['start_rad'] + r['arc_rad']) / (2 * math.pi)
+        if a > pos + 1e-12:
+            arcs.append(('air', pos, a, None))
+        arcs.append((kind, a, b, r))
+        pos = b
+    if pos < 1 - 1e-12:
+        arcs.append(('air', pos, 1.0, None))
+    arcs[-1] = arcs[-1][:2] + (1.0,) + arcs[-1][3:]
+    return arcs, table, fb
+
+
+def _skin_arcs(pattern, h_spray, background, coolant, bite_flux):
+    out = []
+    for kind, a, b, r in pattern:
+        if kind == 'bite':
+            out.append({'kind': 'bite', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': bite_flux, 'htc_w_m2k': 0.0,
+                        'sink_temperature_k': None})
+        elif kind == 'spray':
+            out.append({'kind': 'spray', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': h_spray,
+                        'sink_temperature_k': coolant})
+        elif kind == 'backup':
+            out.append({'kind': 'backup', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': r['conductance_w_m2k'],
+                        'sink_temperature_k': r['backup_surface_temperature_k']})
+        else:
+            out.append({'kind': 'air', 'start_fraction': a, 'end_fraction': b,
+                        'heat_flux_w_m2': 0.0, 'htc_w_m2k': background,
+                        'sink_temperature_k': coolant})
+    return out
+
+
+def _cycle_unit_at(grid, units, wt, key):
+    """Unit solution at spray weight ``wt``: linear in the weight between the unit solutions of
+    ``grid`` (continued with the end interval's slope outside it)."""
+    if len(grid) == 1:
+        return units[0][key]
+    i = max(0, min(len(grid) - 2, max(j for j in range(len(grid)) if grid[j] <= wt)
+                   if wt >= grid[0] else 0))
+    f = (wt - grid[i]) / (grid[i + 1] - grid[i])
+    a, b = units[i][key], units[i + 1][key]
+    return None if a is None else [x + f * (y - x) for x, y in zip(a, b)]
+
+
+def roll_surface_cycle_section(case, w, th, actual, bite, steady, healthy=None):
+    """``width.roll_surface_cycle`` (SPEC18 package 10): the per-revolution surface layer on top
+    of the steady circumferential-mean field, per axial station (one-way).
+
+    ``healthy`` (SPEC19 package 1, additive key ``healthy_bite_entry_temperature_k``): the
+    healthy-header steady solution; its bite entry temperature comes from the same unit
+    solutions (unit solutions are added only at healthy weights outside the actual grid, which
+    leaves every value inside it unchanged) with the healthy weight, flux and deep field."""
+    from . import roll_skin
+    lay = w['circumferential_layout']
+    if lay is None:
+        return not_supplied('width_model.circumferential_layout is null or absent')
+    if actual is None:
+        return not_assessable('needs the steady thermal solution')
+    if bite is None:
+        return not_assessable('needs the case-pass bite (contact length and forward slip)')
+    roll, hdr = th.roll, th.header
+    radius = roll.radius_m
+    k = roll.conductivity_w_mk
+    rho_c = roll.density_kg_m3 * roll.specific_heat_j_kgk
+    tc = w['coolant_temperature_k']
+    u = case['pass']['exit_speed_m_s']
+    v_r = u / (1 + bite.forward_slip_fraction)
+    t_rev = 2 * math.pi * radius / v_r
+    ld = bite.contact_length_m
+    pattern, table, fb = surface_cycle_layout(w, radius, ld)
+    phi = sum(r['arc_rad'] for r in lay['spray_arcs'])
+    bg, hm = hdr.background_htc_w_m2k, hdr.spray_mean_htc_w_m2k
+    z, weights = actual['z_m'], actual['spray_weight']
+    qmean = actual['heat_flux_w_m2']
+    depth = roll_skin.LAYER_DEPTH_FACTOR * math.sqrt(k / rho_c * t_rev)
+    t_deep = _deep_temperature(actual['field'], depth, radius)
+    t_bk = lay['backup_contact']['backup_surface_temperature_k'] if lay['backup_contact'] \
+        else None
+    wl, wh = min(weights), max(weights)
+    grid = sorted({wl + (wh - wl) * i / (SURFACE_CYCLE_WEIGHTS - 1)
+                   for i in range(SURFACE_CYCLE_WEIGHTS)} | ({0.0} if 0.0 in weights else set()))
+
+    def h_spray(wt):
+        return bg + hm * wt * 2 * math.pi / phi
+    units = []
+    for wt in grid:
+        units.append(roll_skin.unit_solutions(
+            conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c, revolution_time_s=t_rev,
+            arcs=_skin_arcs(pattern, h_spray(wt), bg, tc, 1.0), coolant_temperature_k=tc,
+            tolerance_k=SURFACE_CYCLE_TOLERANCE_K))
+    tf = units[0]['time_fraction']
+    dts = [b - a for a, b in zip([0.0] + tf[:-1], tf)]
+    kinds = []      # (kind, arc) per step
+    arcs0 = _skin_arcs(pattern, 0.0, bg, tc, 1.0)
+    for f in tf:
+        a = next(x for x in arcs0 if x['start_fraction'] < f <= x['end_fraction'] + 1e-12)
+        kinds.append(a)
+
+    def unit_at(wt, key):
+        return _cycle_unit_at(grid, units, wt, key)
+    rows = {'bite_entry_temperature_k': [], 'bite_exit_temperature_k': [],
+            'minimum_temperature_k': [], 'mean_surface_temperature_k': [], 'swing_k': [],
+            'mean_coefficient_ratio': [], 'mean_model_surface_temperature_k': [],
+            'mean_minus_mean_model_k': []}
+    histories = []
+    bite_last = max(i for i, a in enumerate(kinds) if a['kind'] == 'bite')
+    for j, (wt, qm, td) in enumerate(zip(weights, qmean, t_deep)):
+        qb = qm * 2 * math.pi * radius / ld
+        ua, ub = unit_at(wt, 'per_unit_bite_flux_k_per_w_m2'), unit_at(wt, 'per_unit_deep_excess')
+        uc = unit_at(wt, 'per_unit_backup_excess')
+        ts = [tc + qb * x + (td - tc) * y for x, y in zip(ua, ub)]
+        if uc is not None:
+            ts = [t + (t_bk - tc) * c for t, c in zip(ts, uc)]
+        mean = sum(t * d for t, d in zip(ts, dts))
+        hs = [h_spray(wt) if a['kind'] == 'spray' else a['htc_w_m2k'] for a in kinds]
+        sinks = [tc if a['sink_temperature_k'] is None else a['sink_temperature_k']
+                 for a in kinds]
+        mean_h = sum(h * d for h, d in zip(hs, dts))
+        hq = sum(h * (t - s_) * d for h, t, s_, d in zip(hs, ts, sinks, dts))
+        ratio = (hq / (mean - tc)) / mean_h if mean != tc and mean_h > 0 else None
+        rows['bite_entry_temperature_k'].append(ts[-1])
+        rows['bite_exit_temperature_k'].append(ts[bite_last])
+        rows['minimum_temperature_k'].append(min(ts))
+        rows['mean_surface_temperature_k'].append(mean)
+        rows['swing_k'].append(max(ts) - min(ts))
+        rows['mean_coefficient_ratio'].append(ratio)
+        mm = actual['surface_temperature_k'][j]
+        rows['mean_model_surface_temperature_k'].append(mm)
+        rows['mean_minus_mean_model_k'].append(mean - mm)
+        histories.append(ts)
+    if healthy is not None:
+        # SPEC19 package 1: the healthy header's bite entry temperature on the same z_m
+        hw = healthy['spray_weight']
+        extra = sorted({x for x in (min(hw), max(hw)) if x < grid[0] or x > grid[-1]})
+        hgrid, hunits = list(grid), list(units)
+        for wt in extra:
+            u_ = roll_skin.unit_solutions(
+                conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c,
+                revolution_time_s=t_rev, arcs=_skin_arcs(pattern, h_spray(wt), bg, tc, 1.0),
+                coolant_temperature_k=tc, tolerance_k=SURFACE_CYCLE_TOLERANCE_K)
+            j = sum(1 for g_ in hgrid if g_ < wt)
+            hgrid.insert(j, wt)
+            hunits.insert(j, u_)
+        h_deep = _deep_temperature(healthy['field'], depth, radius)
+        h_entry = []
+        for wt, qm, td in zip(hw, healthy['heat_flux_w_m2'], h_deep):
+            qb = qm * 2 * math.pi * radius / ld
+            ua = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_bite_flux_k_per_w_m2')
+            ub = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_deep_excess')
+            uc = _cycle_unit_at(hgrid, hunits, wt, 'per_unit_backup_excess')
+            te = tc + qb * ua[-1] + (td - tc) * ub[-1]
+            if uc is not None:
+                te += (t_bk - tc) * uc[-1]
+            h_entry.append(te)
+    # the three stations
+    stations = [('strip centre', th.centre)]
+    stripes = (steady or {}).get('stripes') or []
+    if stripes:
+        big = max(stripes, key=lambda s_: abs(s_['peak_deviation_m']))
+        stations.append(('largest steady stripe', big['peak_position_m']))
+    healthy = [x for x, lv in zip(th.positions, th.levels) if lv == 1.0]
+    if healthy:
+        stations.append(('first station under a healthy nozzle', healthy[0]))
+    angle = [math.degrees((f - fb) * 2 * math.pi) % 360.0 for f in tf]
+    cycles = []
+    for name, x in stations:
+        j = min(range(len(z)), key=lambda i: abs(z[i] - x))
+        cycles.append({'station': name, 'z_m': z[j], 'angle_from_bite_exit_deg': angle,
+                       'time_fraction_from_bite_entry': tf,
+                       'surface_temperature_k': histories[j],
+                       'bite_entry_temperature_k': rows['bite_entry_temperature_k'][j],
+                       'bite_exit_temperature_k': rows['bite_exit_temperature_k'][j],
+                       'minimum_temperature_k': rows['minimum_temperature_k'][j],
+                       'mean_surface_temperature_k': rows['mean_surface_temperature_k'][j],
+                       'mean_model_surface_temperature_k':
+                           rows['mean_model_surface_temperature_k'][j]})
+    scales = roll_skin.time_scales(
+        conductivity_w_mk=k, volumetric_heat_capacity_j_m3k=rho_c, revolution_time_s=t_rev,
+        radius_m=radius, mean_htc_w_m2k=bg + hm,
+        event_durations_s=[e['duration_s'] for e in w['events']])
+    flags = [CYCLE_FLAG]
+    ratios = [r for r in rows['mean_coefficient_ratio'] if r is not None]
+    worst = max(ratios, key=lambda r: abs(r - 1)) if ratios else None
+    bias = None
+    if worst is not None and abs(worst - 1) > MEAN_COEFFICIENT_BIAS:
+        flags.append(CYCLE_BIAS_FLAG)
+    if worst is not None:
+        bias = (f'The effective mean cooling coefficient of this layout is {worst:.3f} of the '
+                f'circumferential mean at the most affected station: the mean model '
+                + ('over' if worst < 1 else 'under') + f'-states the cooling by '
+                f'{abs(1 - worst) * 100:.1f} %. Reported only; the bulk model is not corrected.')
+    if healthy is not None:          # key only then (SPEC19 package 1)
+        rows['healthy_bite_entry_temperature_k'] = h_entry
+    return {'status': roll_skin.STATUS, 'not_supplied': False, 'z_m': z, **rows,
+            'cycles': cycles, 'layout_used': table, 'layout_provenance': lay['provenance'],
+            'revolution_time_s': t_rev, 'roll_surface_speed_m_s': v_r,
+            'bite_fraction_of_revolution': fb, 'layer_depth_m': depth,
+            'deep_temperature_k': t_deep,
+            'unit_solution_weights': grid, 'time_scales': scales, 'bias_sentence': bias,
+            'worst_mean_coefficient_ratio': worst,
+            'basis': {'model': '[D, re-derived in SPEC18] periodic 1D layer under the surface '
+                               '(roll_skin), deep boundary at 6*sqrt(a*t_rev) held at the '
+                               'steady circumferential-mean temperature; linear in the bite '
+                               'flux, the deep and the backup excess, interpolated linearly '
+                               f'in the spray weight between {len(grid)} unit solutions [D]',
+                      'spray_coefficient': 'background + spray_mean_htc*weight*2*pi/phi on the '
+                                           'spray arcs (the footprint identity of SPEC17 '
+                                           'package 3: the angular mean equals the mean model)',
+                      'bite_flux': 'circumferential-mean flux of the steady model x 2*pi*R/l_d '
+                                   'under the strip, no cooling in the bite',
+                      'time_scale_kinds': scales['scale_meaning']},
+            'flags': flags, 'limitations': list(roll_skin.LIMITATIONS) + [
+                'One-dimensional layer per axial station: no axial conduction inside the layer '
+                '(the bulk field carries it). With sprays all round on the template case the '
+                'layer mean departs from the mean model by up to about 0.4 K at the nozzle scale '
+                'and 0.5 K at the strip edges; averaged over a nozzle pitch, by less than 1 % of '
+                'the surface excess in the strip interior [run].']}
+
+
+
+# ======================================== closed spray loop (SPEC19 package 4, G5; I5)
+MADE_BAND_MIN_S = 20.0   # [D, analyst choice; the literature band life is 20-120 s,
+#                          LITERATURE_BAND_LIFE_S]
+PREDICTED_EVENTS_MAX = 50
+FC_STATUS = 'UNVALIDATED_FLATNESS_LOOP_SIMULATION_ANALYST_CONTROL_LAW'
+FC_FLAG_SIMULATED = 'FLATNESS_LOOP_SIMULATED'
+FC_FLAG_NOT_SETTLED = 'FLATNESS_LOOP_NOT_SETTLED'
+FC_FLAG_TRIMMING = 'FLATNESS_LOOP_TRIMMING_LIMIT_CYCLE'
+FC_FLAG_MADE = 'CONTROL_MADE_BAND'
+FC_FLAG_LOW_ORDER = 'LOW_ORDER_FLATNESS_LEFT_TO_BENDING_NOT_MODELLED'
+FC_FLAG_COARSE = 'FLATNESS_LOOP_ON_COARSE_GRID'
+FC_TOP_FLAGS = (FC_FLAG_SIMULATED, FC_FLAG_NOT_SETTLED, FC_FLAG_TRIMMING,
+                'CONTROL_INCREASES_RESIDUAL', 'CONTROL_ZONE_AT_LIMIT', FC_FLAG_MADE,
+                FC_FLAG_LOW_ORDER, FC_FLAG_COARSE)
+FC_LOW_ORDER_SENTENCE = ('This part is left to the bender and the tilt, which this tool does not '
+                         'model.')
+FC_WHAT_IT_IS = ('What such a loop would do with these settings on this model: the control law '
+                 "is the tool's own [D, SPEC19: analyst design], not the plant's controller; "
+                 'the roll model takes the heat share and the spray coefficient as inputs. '
+                 '"Could the control make or remove a band" is answered as could / could not '
+                 'within the model, never as did.')
+FC_UNSETTLED_NOTE = ('The loop has not settled: its end state is one moment of a loop that keeps '
+                     'switching, not the flatness the mill would have.')
+FC_SENSITIVITY_NOTE = (
+    'Whether such a loop settles or keeps trimming is sensitive to choices of the control law '
+    'nobody has measured: how the shapemeter zones are weighted (here by their coverage of the '
+    'strip) and when the first valve change is allowed (here one dwell time after the start). '
+    'On the battery-foil demo the planner\'s variant (every covered zone weighted equally, the '
+    'first change at once) settles after 1382 s, this one keeps trimming [run, '
+    'tests/test_band_flatness_demos.py].')
+FC_STATUS_WORDS = {'SETTLED': 'The valves stop moving after {t} s.',
+                   'TRIMMING_WITHIN_BAND': 'The valves keep stepping; the zone error stays below '
+                                           '{x} I-units.',
+                   'NOT_SETTLED': 'The loop does not settle: {n} valve changes in {h} s.'}
+FC_LIMITATIONS = (
+    "The control law is the tool's own [D, SPEC19: analyst design]; the reports give its "
+    'structure only.',
+    'One spray header on one work roll.',
+    'Linear readings: a buckled band reads less (SPEC19 package 7).',
+    'The low-order part (mean, tilt, parabola) is assumed removed by bending and tilt, which '
+    'are not modelled.',
+    'The weak or blocked nozzle itself is not known to the controller.',
+    'No feed-forward, no speed or gauge interaction.',
+    'The valve events predicted here do not enter width.thermal_events or any evidence item.')
+
+
+def _fc_groups(fc, th, w):
+    if fc['control_zone_nozzles'] is not None:
+        return [list(g) for g in fc['control_zone_nozzles']], 'entered'
+    pitch = w.get('cooling_zone_pitch_m')
+    per = max(1, int(round(pitch / th.header.nozzle_pitch_m))) if pitch else 1
+    groups = [list(range(k, min(k + per, th.count))) for k in range(0, th.count, per)]
+    return groups, (f'groups of {per} adjacent nozzles from nozzle 0 '
+                    + ('(round(cooling_zone_pitch_m/nozzle_pitch_m))' if pitch else
+                       '(one nozzle per zone: no cooling_zone_pitch_m)'))
+
+
+def _linear_i_units(zs, dev, sp):
+    """Linear exit-tension-feedback I-units of a radius deviation on the strip samples, no
+    saturation, mean removed (eps = -xi*dh/h)."""
+    h = sp['exit_thickness_m']
+    tr = ss.transfer_radius_profile(
+        zs, dev, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], n_rolls=sp['n_rolls'],
+        roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'],
+        exit_tension_force_sensitivity_per_width_m=sp[
+            'exit_tension_force_sensitivity_per_width_m'],
+        exit_thickness_m=h, strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'], xi=sp['xi'])
+    eps = [-sp['xi'] * v / h for v in tr['local_thickness_change_m']]
+    m = math.fsum(eps) / len(eps)
+    return [(e - m) / ss.I_UNIT for e in eps]
+
+
+class _ReadingOperator:
+    """Zone readings of a radius deviation [D, SPEC19]: the linear transfer is symmetric, so
+    the zone means are ``M*dev`` with row ``j`` = the transfer of zone ``j``'s weight row
+    (scaled by 1e-6 into the transfer's range and back); then the roll-mean removal and
+    neighbour spreading of ``band_sensors.readings``."""
+
+    def __init__(self, zs, sp, a0, a1, edges, spreading):
+        from . import band_sensors as bsn
+        self.bsn, self.edges, self.spreading = bsn, edges, spreading
+        self.zs, self.sp, self._a = zs, sp, (a0, a1)
+        rows = bsn.zone_weight_rows(zs, a0, a1, edges)
+        self.cov = [c for _, c in rows]
+        self.m = [None if r is None else [v * 1e6 for v in _linear_i_units(
+            zs, [x * 1e-6 for x in r], sp)] for r, _ in rows]
+
+    def means(self, dev):
+        return [None if r is None else math.fsum(a * b for a, b in zip(r, dev))
+                for r in self.m]
+
+    def readings(self, dev, extra_means=None):
+        ms = self.means(dev)
+        if extra_means is not None:
+            ms = [None if m is None else m + e for m, e in zip(ms, extra_means)]
+        return self.bsn.readings(list(zip(ms, self.cov)), self.edges, self.spreading)[0]
+
+    def direct(self, dev):
+        """The direct route (transfer, then zone means): for the operator test."""
+        iu = _linear_i_units(self.zs, dev, self.sp)
+        a0, a1 = self._a
+        means = self.bsn.zone_means(self.zs, iu, a0, a1, self.edges)
+        return self.bsn.readings(means, self.edges, self.spreading)[0]
+
+
+def _predicted_events(timeline, groups, initial, dt, horizon):
+    """Per control zone every maximal interval with a valve level other than ``initial``."""
+    out = []
+    for k, g in enumerate(groups):
+        cur = None
+        for t, levels in timeline:
+            lv = levels[k]
+            if lv != initial and cur is None:
+                cur = {'start_s': t, 'nozzle_indices': list(g), 'acc': 0.0, 'changes': 1,
+                       'last': lv}
+            elif cur is not None and lv != cur['last'] and lv != initial:
+                cur['changes'] += 1
+            if cur is not None:
+                if lv == initial:
+                    cur['end'] = t
+                    out.append(cur)
+                    cur = None
+                else:
+                    cur['acc'] += lv * dt
+                    cur['last'] = lv
+        if cur is not None:
+            cur['end'] = None
+            out.append(cur)
+    rows = []
+    for e in sorted(out, key=lambda x: (x['start_s'], x['nozzle_indices'][0])):
+        end = e['end'] if e['end'] is not None else horizon
+        dur = end - e['start_s']
+        rows.append({'start_s': e['start_s'],
+                     'duration_s': None if e['end'] is None else dur,
+                     'nozzle_indices': e['nozzle_indices'],
+                     'level': e['acc'] / dur if dur > 0 else e['last'],
+                     'changes': e['changes'],
+                     'open_at_horizon': e['end'] is None})
+    return rows
+
+
+SHAPE_FLAG_OUTSIDE_RANGE = 'STRIP_SHAPE_OUTSIDE_MODEL_RANGE'
+FC_MIN_ZONES = 2      # a zone reading is relative to the strip mean: one zone reads zero
+
+
+def flatness_control_section(case, w, th, sp, healthy, actual, local=None):
+    """``width.flatness_control`` (SPEC19 package 4): a closed spray loop with the tool's own
+    control law (``flatness_control``) on ``roll_thermal.ControlledRun``, read through the
+    shapemeter operator of ``band_sensors``. Reported beside the width section; never evidence.
+    ``local``: ``{'params', 'sens', 'idx'}`` of the local sources (with
+    ``include_local_sources``)."""
+    from . import band_sensors as bsn
+    from . import flatness_control as flc
+    fc = w.get('flatness_control')
+    if fc is None:
+        return not_supplied('width_model.flatness_control is null or absent')
+    sm = (case.get('measurement') or {}).get('shapemeter')
+    if sm is None:
+        return not_assessable('needs measurement.shapemeter')
+    if actual is None or healthy is None:
+        return not_assessable('needs the steady roll thermal solution')
+    if sp is None:
+        return not_assessable('needs the shape parameters of the case pass')
+    if fc['include_local_sources'] and local is None:
+        return not_assessable('include_local_sources needs width.local_state and the force '
+                              'sensitivities of the case-pass bite')
+    groups, gbasis = _fc_groups(fc, th, w)
+    init = fc['initial_level']
+
+    def nozzle_levels(u):
+        lv = list(th.levels)
+        for k, g in enumerate(groups):
+            for i in g:
+                lv[i] = th.levels[i] * u[k]
+        return lv
+
+    def healthy_levels(u):
+        lv = [1.0] * th.count
+        for k, g in enumerate(groups):
+            for i in g:
+                lv[i] = u[k]
+        return lv
+    nk = len(groups)
+    u0 = [init] * nk
+    start = actual if nozzle_levels(u0) == list(th.levels) else th.steady(nozzle_levels(u0))
+    ref = (healthy if healthy_levels(u0) == [1.0] * th.count
+           else th.steady(healthy_levels(u0)))
+    z = start['z_m']
+    idx = (list(local['idx']) if fc['include_local_sources'] and local is not None
+           else _inside(z, sp['strip_centre_m'], sp['strip_width_m']))
+    zs = [z[i] for i in idx]
+    a0 = sp['strip_centre_m'] - sp['strip_width_m'] / 2
+    a1 = sp['strip_centre_m'] + sp['strip_width_m'] / 2
+    centre = sm['centre_m'] if sm['centre_m'] is not None else th.centre
+    edges = bsn.zone_edges(centre, sm['zone_width_m'], sm['zone_count'],
+                           sm['edge_zone_width_m'], sm['edge_zone_count_per_side'])
+    op = _ReadingOperator(zs, sp, a0, a1, edges, sm['neighbour_spreading_fraction'])
+    ref_g = [ref['radius_growth_m'][i] for i in idx]
+    ref_s = ref['surface_temperature_k']
+    hot = fc['include_local_sources']
+    compensated = bool(sm.get('temperature_compensated'))
+    force_rows = None
+    if hot:
+        from . import band_local
+        force_rows = [None if r is None else [v * 1e3 for v in band_local._force_i_units(
+            zs, [x * 1e-3 for x in r], sp, True)] for r, _ in bsn.zone_weight_rows(
+            zs, a0, a1, edges)]
+        lsens, lparams = local['sens'], local['params']
+
+    def extra_means(surface):
+        if not hot:
+            return None
+        from . import band_local
+        dtr = [surface[i] - ref_s[i] for i in idx]
+        ch = band_local.local_changes(zs, dtr, lparams)
+        dp = [lsens['dforce_per_width_dfriction_n_m'] * d for d in ch['friction_change']]
+        if ch.get('flow_stress_change_fraction') is not None:
+            dp = [a + lsens['dforce_per_width_dflow_stress_m'] * lsens['flow_stress_pa'] * b
+                  for a, b in zip(dp, ch['flow_stress_change_fraction'])]
+        out = [None if r is None else math.fsum(a * b for a, b in zip(r, dp))
+               for r in force_rows]
+        if not compensated and ch.get('strip_exit_temperature_k') is not None:
+            it = ss.thermal_flatness_term(zs, ch['strip_exit_temperature_k'])['i_units']
+            tm = bsn.zone_means(zs, it, a0, a1, edges)
+            out = [None if o is None else o + (m or 0.0) for o, (m, _) in zip(out, tm)]
+        return out
+
+    def readings_of(state):
+        dev = [state['radius_growth_m'][i] - g for i, g in zip(idx, ref_g)]
+        return op.readings(dev, extra_means(state['surface_temperature_k']))
+
+    def readings_at(u):
+        st = th.steady(nozzle_levels(u))
+        return readings_of(st)
+    weights = [c if r is not None else 0.0 for r, c in zip(op.m, op.cov)]
+    # a zone reads its mean minus the strip mean, and the low-order part (order p) is removed
+    # before the gain acts: with fewer than max(2, p + 2) zones over the strip nothing is left
+    # to control (one zone: the influence is zero and no gain exists)
+    covered = sum(1 for x in weights if x > 0)
+    need = max(FC_MIN_ZONES, fc['low_order_removed'] + 2)
+    if covered < need:
+        return not_assessable(
+            f'the control needs at least {need} shapemeter zones over the strip (here '
+            f'{covered}): a zone reads its mean minus the strip mean'
+            + (f' and the low-order part up to order {fc["low_order_removed"]} is removed'
+               if fc['low_order_removed'] >= 0 else '')
+            + ', so with fewer zones nothing is left to control')
+    for a in fc['supplied_actuators'] or []:
+        if not any(wt > 0 and v != 0 for wt, v in zip(weights,
+                                                      a['influence_i_units_per_unit'])):
+            return not_assessable(f'the supplied actuator "{a["name"]}" has no effect on any '
+                                  'zone over the strip, so no gain can be formed')
+    centres = [(lo + hi) / 2 for lo, hi in zip(edges, edges[1:])]
+    infl = flc.influence_matrix(readings_at, u0, groups)
+    diag = []
+    for k, g in enumerate(groups):
+        xk = sum(th.positions[i] for i in g) / len(g)
+        j = min(range(len(centres)), key=lambda q: abs(centres[q] - xk))
+        diag.append({'control_zone': k, 'shapemeter_zone': j, 'i_units_per_unit_level':
+                     infl[j][k]})
+    ctrl = flc.ZoneController(
+        infl, weights, groups, fc['valve_levels'], init, fc['minimum_on_time_s'],
+        fc['minimum_off_time_s'], fc['dead_band_i_units'], integral_gain=fc['integral_gain'],
+        low_order=fc['low_order_removed'], targets=fc['target_i_units'],
+        supplied_actuators=fc['supplied_actuators'], zone_centres_m=centres)
+    ts = min(th.numerics['time_step_s'], fc['control_interval_s'])
+    ci = max(1, int(round(fc['control_interval_s'] / ts))) * ts
+    u_exit = case['pass']['exit_speed_m_s']
+    delay = (0 if fc['shapemeter_distance_m'] is None
+             else int(round(fc['shapemeter_distance_m'] / (u_exit * ci))))
+    run = rt.ControlledRun(th.roll, th.header, th.segment(nozzle_levels(u0)), initial=start,
+                           **th.kw)
+    timeline, zhist = [], []
+
+    def on_step(t, shown, res, levels):
+        timeline.append((t, list(levels)))
+        zhist.append((t, shown, res))
+    out = flc.run_loop(lambda lv, d, dt: run.advance(nozzle_levels(lv), d, dt), readings_of,
+                       ctrl, horizon_s=fc['horizon_s'], control_interval_s=ci, time_step_s=ts,
+                       delay_intervals=delay,
+                       display_time_constant_s=fc['display_time_constant_s'], on_step=on_step)
+    horizon = out['horizon_s']
+    thr = ss.DEFAULT_REPORTING_THRESHOLD_I_UNITS
+    win_start = horizon - out['settle_window_s']
+    nz = len(edges) - 1
+    r0 = out['initial']['residual_i_units']
+    outcomes = []
+    for j in range(nz):
+        if r0[j] is None:
+            outcomes.append({'zone': j, 'outcome': None, 'reason': 'no strip under the zone'})
+            continue
+        series = [(t, res[j]) for t, _, res in zhist]
+        above_t = sum(ci for _, v in series if abs(v) >= thr)
+        last_ok = all(abs(v) < thr for t, v in series if t > win_start + 1e-9)
+        if abs(r0[j]) >= thr:
+            word = 'REMOVED' if last_ok else 'REMAINS'
+        else:
+            word = 'MADE' if above_t > MADE_BAND_MIN_S else 'NONE'
+        outcomes.append({'zone': j, 'residual_start_i_units': r0[j],
+                         'residual_largest_i_units': max((v for _, v in series), key=abs),
+                         'residual_end_i_units': series[-1][1],
+                         'time_above_reporting_threshold_s': above_t,
+                         'outcome': word})
+    made = [o for o in outcomes if o['outcome'] == 'MADE']
+    # zone histories: at most four zones (largest initial residual, largest final residual,
+    # largest excursion, the zone over the largest steady stripe), thinned
+    cand = [j for j in range(nz) if r0[j] is not None]
+    pick = []
+
+    def add(j):
+        if j is not None and j not in pick:
+            pick.append(j)
+    add(max(cand, key=lambda j: abs(r0[j])) if cand else None)
+    add(max(cand, key=lambda j: abs(out['final']['residual_i_units'][j] or 0.0))
+        if cand else None)
+    add(max(cand, key=lambda j: max(abs(r[j]) for _, _, r in zhist)) if cand else None)
+    sdev = [actual['radius_growth_m'][i] - healthy['radius_growth_m'][i] for i in idx]
+    kbig = max(range(len(idx)), key=lambda i: abs(sdev[i]))
+    if abs(sdev[kbig]) > 0:                  # the zone over the largest steady stripe
+        add(bsn.zone_of(edges, zs[kbig]))
+    stride = max(1, int(math.ceil(len(zhist) / HISTORY_MAX_POINTS)))
+    keep = list(range(0, len(zhist), stride))
+    if keep[-1] != len(zhist) - 1:
+        keep = (keep if len(keep) < HISTORY_MAX_POINTS else keep[:-1]) + [len(zhist) - 1]
+    zone_hist = [{'zone': j, 'time_s': [zhist[i][0] for i in keep],
+                  'reading_i_units': [zhist[i][1][j] for i in keep],
+                  'residual_i_units': [zhist[i][2][j] for i in keep]} for j in pick[:4]]
+    ev = _predicted_events(timeline, groups, init, ci, horizon)
+    # valve map (thinned): control zones against time
+    vmap = {'time_s': [timeline[i][0] for i in keep],
+            'levels': [timeline[i][1] for i in keep]}
+    # limit cycle (estimate) of an unsettled loop: changes per zone in the last window
+    per_zone = [0] * nk
+    win_changes = {}
+    prev = u0
+    for t, lv in timeline:
+        for k in range(nk):
+            if lv[k] != prev[k]:
+                per_zone[k] += 1
+                if t > win_start + 1e-9:
+                    win_changes[k] = win_changes.get(k, 0) + 1
+        prev = lv
+    cycle = None
+    if out['status'] != 'SETTLED' and win_changes:
+        busiest = max(win_changes.values())
+        cycle = {'zones_switching_in_last_window': sorted(win_changes),
+                 'period_estimate_s': 2 * out['settle_window_s'] / busiest,
+                 'amplitude_i_units': (out['last_window']['max_abs_residual_i_units_highest']
+                                       - out['last_window']['max_abs_residual_i_units_lowest'])
+                 / 2,
+                 'basis': 'period: twice the last window over the most changes of one control '
+                          'zone in it (an up and a down step per cycle); amplitude: half the '
+                          'range of the largest zone residual in the last window [D]'}
+    lo_e = out['initial']['low_order_coefficients']
+    fin_e = out['final']['low_order_coefficients']
+    err_end = ctrl.error_terms(out['final']['readings_i_units'])
+    low_part = [None if (e is None or r is None) else e - r
+                for e, r in zip(err_end[0], err_end[1])]
+    covd = [j for j in range(nz) if low_part[j] is not None]
+    edge_centre = None
+    if len(covd) >= 3:
+        cj = min(covd, key=lambda j: abs(centres[j] - th.centre))
+        edge_centre = (low_part[covd[0]] + low_part[covd[-1]]) / 2 - low_part[cj]
+    flags = [FC_FLAG_SIMULATED, FC_FLAG_LOW_ORDER] + list(out['flags'])
+    if out['status'] == 'NOT_SETTLED':
+        flags.append(FC_FLAG_NOT_SETTLED)
+    elif out['status'] == 'TRIMMING_WITHIN_BAND':
+        flags.append(FC_FLAG_TRIMMING)
+    if made:
+        flags.append(FC_FLAG_MADE)
+    if th.numerics['axial_cell_m'] > sm['zone_width_m'] / 4:
+        flags.append(FC_FLAG_COARSE)
+    if out['status'] == 'SETTLED':
+        sentence = FC_STATUS_WORDS['SETTLED'].format(t=f'{out["last_valve_change_s"] or 0:.4g}')
+    elif out['status'] == 'TRIMMING_WITHIN_BAND':
+        sentence = FC_STATUS_WORDS['TRIMMING_WITHIN_BAND'].format(
+            x=f'{out["last_window"]["max_abs_residual_i_units_highest"]:.3g}')
+    else:
+        sentence = FC_STATUS_WORDS['NOT_SETTLED'].format(n=out['valve_changes'],
+                                                         h=f'{horizon:.4g}')
+    out.update({
+        'status_sentence': sentence, 'what_it_is': FC_WHAT_IT_IS,
+        'end_state_note': None if out['status'] == 'SETTLED' else FC_UNSETTLED_NOTE,
+        'provenance': fc['provenance'],
+        'reading_basis': (
+            'as measured hot: linear exit-tension-feedback transfer of the radius difference '
+            'from the healthy reference plus the film and flow-stress terms'
+            + ('' if compensated else ' and the strip temperature term')
+            + ' (width_model.flatness_control.include_local_sources)' if hot else
+            'mechanical: linear exit-tension-feedback transfer of the radius difference from '
+            'the healthy reference, mean removed, no band-wise saturation; zone means, roll-mean '
+            'removal and neighbour spreading of the shapemeter operator (band_sensors)'),
+        'set_up': {
+            'zones': [{'index': j, 'start_m': lo, 'end_m': hi, 'coverage_fraction': c}
+                      for j, (lo, hi, c) in enumerate(zip(edges, edges[1:], op.cov))],
+            'control_zones': [{'index': k, 'nozzle_indices': g,
+                               'nozzle_positions_m': [th.positions[i] for i in g]}
+                              for k, g in enumerate(groups)],
+            'control_zone_basis': gbasis,
+            'influence_diagonal': diag,
+            'influence_matrix_condition_note': (
+                'one-sided difference of steady readings per unit level (step 0.2) at the '
+                'initial levels; the gain is regularised with 0.01 of the largest diagonal of '
+                "B^T W B [D, SPEC19: analyst choice]"),
+            'reference_basis': ('steady radius growth of a HEALTHY header at the initial valve '
+                                'levels (the stripe difference convention: ground camber and '
+                                'set-up taken to match the healthy state)'),
+            'numerics': {'axial_cell_m': th.numerics['axial_cell_m'],
+                         'radial_cells': th.numerics['radial_cells'],
+                         'time_step_s': ts, 'control_interval_s': ci,
+                         'delay_intervals': delay}},
+        'valve_changes_per_control_zone': per_zone,
+        'valve_map': vmap, 'zone_histories': zone_hist,
+        'predicted_events': ev[:PREDICTED_EVENTS_MAX], 'predicted_event_count': len(ev),
+        'predicted_events_note': ('predicted by the flatness loop with the tool\'s own control '
+                                  'law; not a log of what happened. In the key names of '
+                                  'width_model.events: one can be copied into events to get '
+                                  'the event analysis for it (the valve level, not times the '
+                                  "nozzles' own levels). They enter no evidence."),
+        'zone_outcomes': outcomes, 'bands_made_by_switching': made,
+        'limit_cycle': cycle,
+        'low_order': {'coefficients_start': lo_e, 'coefficients_end': fin_e,
+                      'edge_to_centre_i_units': edge_centre,
+                      'sentence': FC_LOW_ORDER_SENTENCE},
+        'outcome_sensitivity': (FC_SENSITIVITY_NOTE if out['status'] in (
+            'SETTLED', 'TRIMMING_WITHIN_BAND') else None),
+        'status_vocabulary': list(flc.LOOP_STATUSES), 'model_status': FC_STATUS,
+        'flags': flags, 'limitations': list(FC_LIMITATIONS) + list(out['limitations'])})
+    return out
+
+
+# ======================================== zone step test emulation (SPEC19 package 5, A6; X5)
+ZT_FLAG = 'ZONE_STEP_TEST_EMULATED'
+ZT_PUBLISHED_TIME_CONSTANT_S = 20.0     # [Dohmae & Okamura 2012, as cited by the project]
+ZT_SERIES = ('roll_growth_only', 'roll_growth_plus_strip_temperature', 'mechanical_net',
+             'as_measured_hot')
+ZT_SERIES_MEANING = {
+    'roll_growth_only': 'roll growth alone (the roll body; bulk_s)',
+    'roll_growth_plus_strip_temperature': 'roll growth plus the strip temperature term read '
+                                          'hot (the roll body and the roll surface)',
+    'mechanical_net': 'roll growth plus the film and flow-stress terms (the roll body and the '
+                      'roll surface)',
+    'as_measured_hot': 'all four terms read hot (the roll body and the roll surface)'}
+ZT_NOT_EVIDENCE = ('A match with the published 20 s is not evidence that this is what the plant '
+                   'measured: the coupling factor, the inlet weight and the display filter are '
+                   'assumptions, and no plant test protocol is recorded.')
+ZT_WINDOW_SENTENCE = ('A first-order fit to a response with several time scales gives a constant '
+                      'that depends on the test length and grows over longer tests: the '
+                      'constant belongs to the test as much as to the mill.')
+ZT_LIMITATIONS = (
+    'The strip-to-roll coupling, the inlet weight and the display filter are assumptions.',
+    'The fit depends on the window, which is the point of the emulation.',
+    'Over a short test the fitted dead time and time constant trade off against each other: a '
+    'small change of the transport delay or the display filter can move the fitted constant '
+    'markedly; read the constants of the longer windows beside it.',
+    'One spray header on one work roll; no controller acting during the test.',
+    'The surface temperature is the circumferential mean of the bulk model; the per-revolution '
+    'layer of width.roll_surface_cycle is not used here.',
+    'The fit is the tool\'s own least squares on a fixed grid [D, SPEC19]; no plant fitting '
+    'protocol is recorded.')
+
+
+def _delayed(times, values, delay):
+    if delay <= 0:
+        return list(values)
+    out = []
+    for t in times:
+        tt = t - delay
+        out.append(0.0 if tt <= times[0] else _interp(times, values, tt))
+    return out
+
+
+def _filtered(times, values, tau):
+    if tau <= 0:
+        return list(values)
+    out = [values[0]]
+    for i in range(1, len(values)):
+        dt = times[i] - times[i - 1]
+        out.append(out[-1] + dt / (tau + dt) * (values[i] - out[-1]))
+    return out
+
+
+def _txt_status(code):
+    return str(code).lower().replace('_', ' ') if code else 'refused'
+
+
+def zone_step_test_section(case, w, th, sp, actual, local=None, bite=None):
+    """``width.zone_step_test`` (SPEC19 package 5): one spray zone switched from the case's
+    steady state, the reading of the shapemeter zone under it, delayed and filtered, and a first
+    order plus dead time fitted per window (``flatness_control.fit_first_order_dead_time``).
+    ``local``: ``{'params', 'sens'}`` of the local sources (series with the strip, film and
+    flow-stress terms only then). Reported beside the width section; never evidence."""
+    from . import band_sensors as bsn
+    from . import flatness_control as flc
+    from . import roll_skin
+    zt = w.get('zone_step_test')
+    if zt is None:
+        return not_supplied('width_model.zone_step_test is null or absent')
+    sm = (case.get('measurement') or {}).get('shapemeter')
+    if sm is None:
+        return not_assessable('needs measurement.shapemeter')
+    if actual is None:
+        return not_assessable('needs the steady roll thermal solution')
+    if sp is None:
+        return not_assessable('needs the shape parameters of the case pass')
+    z = actual['z_m']
+    # the strip samples of the local state when its terms are used (the same samples as its
+    # supply profile), else those of the shape chain
+    idx = (list(local['idx']) if local is not None and local.get('idx') is not None
+           else _inside(z, sp['strip_centre_m'], sp['strip_width_m']))
+    zs = [z[i] for i in idx]
+    a0 = sp['strip_centre_m'] - sp['strip_width_m'] / 2
+    a1 = sp['strip_centre_m'] + sp['strip_width_m'] / 2
+    centre = sm['centre_m'] if sm['centre_m'] is not None else th.centre
+    edges = bsn.zone_edges(centre, sm['zone_width_m'], sm['zone_count'],
+                           sm['edge_zone_width_m'], sm['edge_zone_count_per_side'])
+    spread = sm['neighbour_spreading_fraction']
+    op = _ReadingOperator(zs, sp, a0, a1, edges, spread)
+    x = sum(th.positions[i] for i in zt['nozzle_indices']) / len(zt['nozzle_indices'])
+    j = bsn.zone_of(edges, x)
+    if j is None or op.m[j] is None:
+        return not_assessable('the switched nozzles are under no shapemeter zone over the strip')
+    if sum(1 for r in op.m if r is not None) < FC_MIN_ZONES:
+        return not_assessable('the step test needs at least two shapemeter zones over the strip: '
+                              'a zone reads its mean minus the strip mean, so one zone reads '
+                              'zero whatever the sprays do')
+    lv = list(th.levels)
+    if all(lv[i] == zt['level'] for i in zt['nozzle_indices']):
+        return not_assessable(f'the switched nozzles are already at level {zt["level"]:g} in '
+                              'the case: the test switches nothing, so there is no step '
+                              'response to fit')
+    for i in zt['nozzle_indices']:
+        lv[i] = zt['level']
+    ts = zt['time_step_s']
+    # whole steps that reach the hold time (a hold time that is not a multiple of the step is
+    # run to the next step after it, so every fit window, at most the hold time, is covered)
+    n = max(1, int(math.ceil(zt['hold_s'] / ts - 1e-9)))
+    run = rt.ControlledRun(th.roll, th.header, th.segment(lv), initial=actual, **th.kw)
+    base_g = [actual['radius_growth_m'][i] for i in idx]
+    base_s = [actual['surface_temperature_k'][i] for i in idx]
+    rows_w = bsn.zone_weight_rows(zs, a0, a1, edges)
+    have_local = local is not None
+    if have_local:
+        from . import band_local
+        force_rows = [None if r is None else [v * 1e3 for v in band_local._force_i_units(
+            zs, [q * 1e-3 for q in r], sp, True)] for r, _ in rows_w]
+        lp, ls_ = local['params'], local['sens']
+    cov = [c for _, c in rows_w]
+
+    def reading(means):
+        return bsn.readings(list(zip(means, cov)), edges, spread)[0][j]
+    times = [0.0]
+    ser = {k: [0.0] for k in ZT_SERIES}
+    surf, surf_rel = [0.0], [0.0]
+    for k in range(1, n + 1):
+        st = run.advance(lv, ts, ts)
+        dev = [st['radius_growth_m'][i] - g for i, g in zip(idx, base_g)]
+        dtr = [st['surface_temperature_k'][i] - b for i, b in zip(idx, base_s)]
+        r_roll = reading(op.means(dev))
+        times.append(k * ts)
+        ser['roll_growth_only'].append(r_roll)
+        wz = rows_w[j][0]
+        surf.append(math.fsum(a * b for a, b in zip(wz, dtr)))
+        sm_ = [None if r is None else math.fsum(a * b for a, b in zip(r, dtr))
+               for r, _ in rows_w]
+        surf_rel.append(bsn.readings(list(zip(sm_, cov)), edges, 0.0)[1][j])
+        if have_local:
+            ch = band_local.local_changes(zs, dtr, lp)
+            dp = [ls_['dforce_per_width_dfriction_n_m'] * d for d in ch['friction_change']]
+            if ch.get('flow_stress_change_fraction') is not None:
+                dp = [a + ls_['dforce_per_width_dflow_stress_m'] * ls_['flow_stress_pa'] * b
+                      for a, b in zip(dp, ch['flow_stress_change_fraction'])]
+            r_ff = reading([None if r is None else math.fsum(a * b for a, b in zip(r, dp))
+                            for r in force_rows])
+            r_t = 0.0
+            if ch.get('strip_exit_temperature_k') is not None:
+                it = ss.thermal_flatness_term(zs, ch['strip_exit_temperature_k'])['i_units']
+                r_t = reading([m for m, _ in bsn.zone_means(zs, it, a0, a1, edges)])
+            ser['roll_growth_plus_strip_temperature'].append(r_roll + r_t)
+            ser['mechanical_net'].append(r_roll + r_ff)
+            ser['as_measured_hot'].append(r_roll + r_ff + r_t)
+    u = case['pass']['exit_speed_m_s']
+    delay = 0.0 if zt['shapemeter_distance_m'] is None else zt['shapemeter_distance_m'] / u
+    tau_f = zt['display_time_constant_s']
+    stride = max(1, int(math.ceil(len(times) / HISTORY_MAX_POINTS)))
+    keep = list(range(0, len(times), stride))
+    if keep[-1] != len(times) - 1:
+        keep = (keep if len(keep) < HISTORY_MAX_POINTS else keep[:-1]) + [len(times) - 1]
+    series, ratios = {}, {}
+    names = ZT_SERIES if have_local else ZT_SERIES[:1]
+    for name in names:
+        y = _filtered(times, _delayed(times, ser[name], delay), tau_f)
+        fits = [flc.fit_first_order_dead_time(times, y, wd) for wd in zt['fit_windows_s']]
+        series[name] = {'meaning': ZT_SERIES_MEANING[name],
+                        'time_s': [times[i] for i in keep],
+                        'reading_i_units': [y[i] for i in keep], 'fits': fits}
+        ratios[name] = [None if f['time_constant_s'] is None else
+                        f['time_constant_s'] / ZT_PUBLISHED_TIME_CONSTANT_S for f in fits]
+    for name in ZT_SERIES:
+        if name not in series:
+            series[name] = not_supplied('needs width_model.local_coupling (local sources)')
+    # the window dependence (a test twice as long, where the windows contain the pair)
+    wins = zt['fit_windows_s']
+    pairs = []
+    for name in names:
+        fits = {f['window_s']: f for f in series[name]['fits']}
+        for wd in wins:
+            f1, f2 = fits.get(wd), fits.get(2 * wd)
+            if f1 and f2 and f1['time_constant_s'] and f2['time_constant_s']:
+                pairs.append({'series': name, 'window_s': wd, 'time_constant_s':
+                              f1['time_constant_s'], 'twice_as_long_window_s': 2 * wd,
+                              'twice_as_long_time_constant_s': f2['time_constant_s']})
+    first = wins[0]
+
+    def fit_of(name):
+        return (series[name]['fits'][0] if isinstance(series[name], dict) and
+                'fits' in series[name] else None)
+
+    def refusal(f):
+        if f.get('status') == flc.FIT_RECORD_TOO_SHORT:
+            return (f'the {f["window_s"]:g} s window holds {f.get("points_in_window")} points '
+                    f'of the record, too few for a first-order fit; take a smaller time step')
+        return f'the fit of the {f["window_s"]:g} s window was refused: ' \
+            f'{_txt_status(f.get("status"))}'
+    def value(f):
+        # a constant at an end of the search grid is not determined by the window
+        tau = f['time_constant_s']
+        if flc.FIT_FLAG_LIMIT in (f.get('flags') or []):
+            return (f'{"at most" if tau <= flc.FIT_TAU_GRID_S[0] else "at least"} {tau:.3g} s '
+                    '(the end of the fit\'s search grid: not determined by this window)')
+        return f'{tau:.3g} s'
+    f1, f2 = fit_of('roll_growth_only'), fit_of('as_measured_hot')
+    t1 = None if f1 is None else f1['time_constant_s']
+    t2 = None if f2 is None else f2['time_constant_s']
+    finding = (f'A test of {first:g} s would fit '
+               + (f'{value(f1)} from roll growth alone' if t1 is not None else
+                  f'nothing from roll growth alone ({refusal(f1)})')
+               + (f' and {value(f2)} as measured hot' if t2 is not None else
+                  ' (the strip-side terms need width_model.local_coupling)' if f2 is None else
+                  f' and nothing as measured hot ({refusal(f2)})')
+               + f'; the published value is {ZT_PUBLISHED_TIME_CONSTANT_S:g} s.')
+    roll_pairs = [q for q in pairs if q['series'] == 'roll_growth_only']
+    if roll_pairs:
+        p0 = roll_pairs[-1]                   # the longest pair of the roll-growth series
+        finding += (f' A test twice as long ({p0["twice_as_long_window_s"]:g} s instead of '
+                    f'{p0["window_s"]:g} s) fits {p0["twice_as_long_time_constant_s"]:.3g} s '
+                    f'instead of {p0["time_constant_s"]:.3g} s ({p0["series"].replace("_", " ")}'
+                    '). ' + ZT_WINDOW_SENTENCE)
+    finding += ' ' + ZT_NOT_EVIDENCE
+    v_r = u / (1 + (bite.forward_slip_fraction if bite is not None else 0.0))
+    roll, hdr = th.roll, th.header
+    scales = roll_skin.time_scales(
+        conductivity_w_mk=roll.conductivity_w_mk,
+        volumetric_heat_capacity_j_m3k=roll.density_kg_m3 * roll.specific_heat_j_kgk,
+        revolution_time_s=2 * math.pi * roll.radius_m / v_r, radius_m=roll.radius_m,
+        mean_htc_w_m2k=hdr.background_htc_w_m2k + hdr.spray_mean_htc_w_m2k,
+        event_durations_s=[zt['hold_s']])
+    flags = [ZT_FLAG] + sorted({fl for nm in names for f in series[nm]['fits']
+                                for fl in f['flags']})
+    return {'status': 'SCREENING_RESULT_NOT_PLANT_VALIDATED', 'not_supplied': False,
+            'provenance': zt['provenance'], 'nozzle_indices': zt['nozzle_indices'],
+            'level': zt['level'], 'hold_s': zt['hold_s'], 'time_step_s': ts,
+            'shapemeter_zone_index': j, 'nozzle_mean_position_m': x,
+            'transport_delay_s': delay,
+            'transport_delay_basis': ('shapemeter_distance_m / exit speed'
+                                      if zt['shapemeter_distance_m'] is not None
+                                      else 'no shapemeter distance given: no delay'),
+            'display_time_constant_s': tau_f, 'fit_windows_s': list(wins),
+            'series': series,
+            'surface_temperature_change_k': {'time_s': [times[i] for i in keep],
+                                             'zone_mean_k': [surf[i] for i in keep],
+                                             'zone_mean_minus_roll_mean_k':
+                                                 [surf_rel[i] for i in keep]},
+            'published': {'time_constant_s': ZT_PUBLISHED_TIME_CONSTANT_S,
+                          'source': rt.SOURCES['dohmae_2012'],
+                          'note': 'first-order flatness response to one cooling zone, '
+                                  'identified on a plant; test length, zone width and filter '
+                                  'not recorded in the project'},
+            'ratio_to_published': ratios, 'window_dependence': pairs,
+            'finding': finding, 'not_evidence_note': ZT_NOT_EVIDENCE,
+            'time_scales': {
+                'model_scales': {k_: scales[k_] for k_ in ('per_revolution_s', 'surface_film_s',
+                                                           'bulk_s', 'mean_htc_w_m2k')},
+                'scale_meaning': scales['scale_meaning'],
+                'test_over_scales': scales['events'][0],
+                'surface_path': ('circumferential-mean surface of the bulk model (the '
+                                 'per-revolution layer of width.roll_surface_cycle is not used '
+                                 'in the step test)'),
+                'roll_surface_speed_basis': ('exit speed / (1 + forward slip) of the case-pass '
+                                             'bite' if bite is not None else
+                                             'exit speed (no bite: forward slip not known)')},
+            'basis': {'reading': 'the reading of the shapemeter zone over the switched nozzles '
+                                 '(zone mean minus roll mean, the operator of the flatness '
+                                 'loop), of the difference from the starting steady state',
+                      'local_terms': 'film and flow-stress terms through the force transfer, '
+                                     'strip temperature term read hot (width.local_sources '
+                                     'formulas) of the surface change at each step',
+                      'fit': '[D, SPEC19: least squares on a fixed grid; no plant fitting '
+                             'protocol is recorded]'},
+            'flags': flags, 'limitations': list(ZT_LIMITATIONS)}
+
+# ======================================== winding by lanes (SPEC19 package 10, G9; I7; X8)
+CW_STATUS = 'UNVALIDATED_LANE_WINDING_MODEL_BESIDE_THE_LINEAR_CRITERION'
+CW_FLAG_BESIDE = 'COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION'
+CW_FLAG_YIELDS = 'WINDING_LANE_YIELDS'
+CW_FLAG_SLACK = 'WINDING_LANE_SLACK'
+CW_FLAG_DISAGREES = 'WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION'
+CW_FLAG_HOOP = 'WINDING_INNER_LAPS_IN_HOOP_COMPRESSION'
+CW_FLAG_STACK = 'RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND'
+CW_TOP_FLAGS = (CW_FLAG_BESIDE, CW_FLAG_YIELDS, CW_FLAG_SLACK, CW_FLAG_DISAGREES, CW_FLAG_HOOP,
+                CW_FLAG_STACK, 'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT',
+                'WOUND_IN_TENSION_CAPPED_AT_YIELD', 'ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS',
+                'AIR_CASES_BRACKET_THE_NIP_EFFECT')
+CW_KEYS = ('radial_law', 'core_stiffness_pa', 'lane_width_m', 'layers', 'tension_taper',
+           'thickness_profile', 'include_length_profile', 'air_gap_m', 'provenance',
+           'allocation_radius', 'ironing_roll', 'air')
+AIR_MODES = ('entrained_film', 'none', 'both')
+CW_FLAG_CAPPED = 'WOUND_IN_TENSION_CAPPED_AT_YIELD'
+CW_FLAG_FILM_THICK = 'ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS'
+CW_FLAG_BRACKET = 'AIR_CASES_BRACKET_THE_NIP_EFFECT'
+CW_AIR_NOTE = ('upper bound: smooth, wide, impermeable web, no side leakage [gap study, note to '
+               'G10]')
+CW_BOUND_WORDS = {'none': 'the nip removes all the air (bound: no air in the coil)',
+                  'entrained_film': 'the nip removes none of the air (bound: the full entrained '
+                                    'film in every lap)'}
+CW_NARROW = ('a coil diameter profile across the width, or a measured air content of the wound '
+             'coil, would narrow the two bounds; no nip film formula is in the reports')
+CW_DEFAULT_LANE_WIDTH_M = 0.05
+CW_CLOSE_TO_YIELD_FRACTION = 0.05   # [D, analyst choice] peak within 5 % of yield: not decided
+CW_FLAG_ALLOCATION = 'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT'
+CW_VERDICTS = ('YIELDS', 'DOES_NOT_YIELD', 'CLOSE_TO_YIELD_NOT_DECIDED',
+               'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT')
+CW_VERDICT_WORDS = {'YIELDS': 'yields', 'DOES_NOT_YIELD': 'does not yield',
+                    'CLOSE_TO_YIELD_NOT_DECIDED': 'close to yield, not decided',
+                    'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT':
+                        'not decided: depends on the allocation point'}
+
+
+def _cw_variant_verdict(yielding_fraction, peak_pa, yield_pa):
+    if yielding_fraction > 0:
+        return 'YIELDS'
+    if peak_pa >= (1 - CW_CLOSE_TO_YIELD_FRACTION) * yield_pa:
+        return 'CLOSE_TO_YIELD_NOT_DECIDED'
+    return 'DOES_NOT_YIELD'
+
+
+def _cw_lane_verdict(a, b):
+    """Verdict of a lane from the verdicts under the two allocation points."""
+    if (a == 'YIELDS') != (b == 'YIELDS'):
+        return 'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT'
+    if a == 'YIELDS':
+        return 'YIELDS'
+    if 'CLOSE_TO_YIELD_NOT_DECIDED' in (a, b):
+        return 'CLOSE_TO_YIELD_NOT_DECIDED'
+    return 'DOES_NOT_YIELD'
+
+
+def _cw_lane_numbers(res, lanes):
+    """Effective compaction factor, yielding length share and peak stress per lane."""
+    wl, nl = res['lanes'], res['laps_per_layer']
+    nlayers = len(wl[0].wound_on)
+    h_mean = sum(x['thickness_m'] for x in lanes) / len(lanes)
+    outer_mean = sum(ln.outer_radius_m for ln in wl) / len(wl)
+    out = []
+    for x, ln in zip(lanes, wl):
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        yl = sum(L for L, ep in zip(lengths, ln.plastic_strain) if ep > 0) / sum(lengths)
+        ddh = x['thickness_m'] - h_mean
+        dR = ln.outer_radius_m - outer_mean
+        out.append({'yielding_length_fraction': yl, 'peak_stress_pa': max(ln.wound_on),
+                    'effective_compaction_factor': (dR / (nl * nlayers * ddh)
+                                                    if abs(ddh) > 1e-12 * h_mean else None)})
+    return out
+CW_MAX_RADII = 60
+CW_USED_BY_EVIDENCE = ('the present linear coil criterion (strip_shape.coil_ridge_buildup with '
+                       'its compaction factor): the coil verdicts, the ridge hypothesis and every '
+                       'score use it; this section is reported beside it and changes none')
+CW_STACK_SENTENCE = ('The stack stiffness was entered; no measured value for oily aluminium foil '
+                     'was found. With a stiffer or softer stack the answer changes: for one lane '
+                     '0.1 um thicker the coil takes up between about 0.02 and 0.77 of laps x '
+                     'thickness difference (see the guide, section 7.15).')
+CW_LIMITATIONS = (
+    'Those of the single-lane model: elastic laps apart from the plastic strain of the '
+    'allocation; plane model per lane (no axial stress); no interlayer slip; stack law supplied; '
+    'lumped layers (first order); no thermal or creep term.',
+    'Perfectly registered lanes (no oscillation, no tracking); lanes are coupled only through '
+    'the tension allocation (no bending of the lap across the width).',
+    'Elastic-perfectly plastic lap with the tensile yield stress; plastic thinning ignored.',
+    'The thickness and length profile of the case pass is taken as constant along the coil.',
+    'coil_ridge_buildup, the ridge hypothesis and its evidence are unchanged and do not read '
+    'this section; the length difference after unwinding is an additional profile, not read by '
+    'the shapemeter section (it is what the strip shows after unwinding, not in the mill).',
+)
+
+
+def validate_coil_winding(cw, coil):
+    """``width_model.coil_winding`` (SPEC19 package 10): None, or the validated dict. The radial
+    stack law is REQUIRED (no default; the message says what to measure)."""
+    from . import wound_roll as wr
+    if cw is None:
+        return None
+    where = 'width_model.coil_winding'
+    if not isinstance(cw, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, cw, (), CW_KEYS)
+    if coil is None:
+        raise ValueError(f'{where} needs width_model.coil')
+    try:
+        law = wr.validate_radial_law(cw.get('radial_law'))
+    except ValueError as exc:
+        raise ValueError(f'{where}.radial_law: {exc}') from None
+    prov = cw.get('provenance')
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text')
+    out = {'radial_law': law, 'provenance': prov}
+    ec = cw.get('core_stiffness_pa')
+    out['core_stiffness_pa'] = None if ec is None else num(f'{where}.core_stiffness_pa', ec,
+                                                           positive=True, hi=1e13)
+    lw = cw.get('lane_width_m')
+    out['lane_width_m'] = None if lw is None else num(f'{where}.lane_width_m', lw, lo=0.005,
+                                                      hi=0.5)
+    layers = cw.get('layers', 150)
+    if isinstance(layers, bool) or not isinstance(layers, int) or not 20 <= layers <= 400:
+        raise ValueError(f'{where}.layers must be an integer in [20, 400]')
+    out['layers'] = layers
+    tp = cw.get('tension_taper')
+    if tp is not None:
+        if not isinstance(tp, list) or not 2 <= len(tp) <= 20:
+            raise ValueError(f'{where}.tension_taper must be null or 2-20 points')
+        pts = []
+        for i, p in enumerate(tp):
+            keys(f'{where}.tension_taper[{i}]', p, ('radius_m', 'tension_pa'))
+            pts.append((num(f'{where}.tension_taper[{i}].radius_m', p['radius_m'], positive=True),
+                        num(f'{where}.tension_taper[{i}].tension_pa', p['tension_pa'], lo=0.0)))
+        if any(b[0] <= a[0] for a, b in zip(pts, pts[1:])) or pts[0][0] < coil['inner_radius_m'] \
+                or pts[-1][0] > coil['outer_radius_m']:
+            raise ValueError(f'{where}.tension_taper radii must increase inside the coil')
+        tp = pts
+    out['tension_taper'] = tp
+    prof = cw.get('thickness_profile')
+    if prof is not None:
+        keys(f'{where}.thickness_profile', prof, ('positions_m', 'thickness_deviation_m'))
+        pos = num_list(f'{where}.thickness_profile.positions_m', prof['positions_m'])
+        dev = num_list(f'{where}.thickness_profile.thickness_deviation_m',
+                       prof['thickness_deviation_m'], lo=-1e-4, hi=1e-4)
+        if len(pos) < 3 or len(pos) != len(dev) or any(b <= a for a, b in zip(pos, pos[1:])):
+            raise ValueError(f'{where}.thickness_profile needs >= 3 increasing positions and one '
+                             'deviation per position')
+        prof = {'positions_m': pos, 'thickness_deviation_m': dev}
+    out['thickness_profile'] = prof
+    inc = cw.get('include_length_profile', True)
+    if not isinstance(inc, bool):
+        raise ValueError(f'{where}.include_length_profile must be true or false')
+    out['include_length_profile'] = inc
+    out['air_gap_m'] = num(f'{where}.air_gap_m', cw.get('air_gap_m', 0.0), lo=0.0, hi=1e-4)
+    ar = cw.get('allocation_radius', 'mid_layer')
+    if ar not in wr.ALLOCATION_RADII:
+        raise ValueError(f'{where}.allocation_radius must be one of {wr.ALLOCATION_RADII}')
+    out['allocation_radius'] = ar
+    ir = cw.get('ironing_roll')
+    if ir is not None:
+        keys(f'{where}.ironing_roll', ir, ('load_per_width_n_m', 'traction_coefficient'))
+        ir = {'load_per_width_n_m': num(f'{where}.ironing_roll.load_per_width_n_m',
+                                        ir['load_per_width_n_m'], positive=True, hi=1e5),
+              'traction_coefficient': num(f'{where}.ironing_roll.traction_coefficient',
+                                          ir['traction_coefficient'], positive=True, hi=1.0)}
+    out['ironing_roll'] = ir
+    air = cw.get('air')
+    if air is not None:
+        keys(f'{where}.air', air, ('mode',), ('viscosity_pa_s',))
+        if air['mode'] not in AIR_MODES:
+            raise ValueError(f'{where}.air.mode must be one of {AIR_MODES}')
+        visc = air.get('viscosity_pa_s')
+        air = {'mode': air['mode'], 'viscosity_pa_s': None if visc is None else num(
+            f'{where}.air.viscosity_pa_s', visc, positive=True, hi=1.0)}
+        if air['mode'] != 'none' and out['air_gap_m'] > 0:
+            raise ValueError(f'{where}: give air_gap_m or an entrained air film, not both')
+    out['air'] = air
+    return out
+
+
+def _lane_mean(z, v, a, b):
+    vals = [y for x, y in zip(z, v) if a <= x < b]
+    if not vals:
+        x = 0.5 * (a + b)
+        return _interp(z, v, x)
+    return sum(vals) / len(vals)
+
+
+def _cw_air_mode(cw):
+    mode = (cw.get('air') or {}).get('mode')
+    if mode is None and cw.get('ironing_roll') is not None:
+        return 'both'      # no nip film formula: the two bounds
+    return mode or 'none'
+
+
+def _cw_summary(sec):
+    return {'flags': list(sec.get('flags') or []), 'per_lane': [
+        {k: p.get(k) for k in ('centre_m', 'verdict', 'effective_compaction_factor',
+                               'max_wound_on_tension_pa', 'max_pressure_pa',
+                               'yielding_length_fraction')} for p in sec.get('per_lane') or []],
+        'mean_air_gap_under_pressure_m': sec.get('mean_air_gap_under_pressure_m')}
+
+
+def coil_winding_section(case, w, shape, centre, width, _air=None):
+    """SPEC19 package 10: the exit profile wound lane by lane, BESIDE the linear criterion.
+    Package 11: an ironing roll (wound-in tension) and air (an entrained film per layer, none,
+    or both as the two bounds of the nip effect)."""
+    from . import wound_roll as wr
+    cw = w.get('coil_winding')
+    if cw is None:
+        return not_supplied('width_model.coil_winding is null or absent')
+    mode = _cw_air_mode(cw)
+    if mode == 'both' and _air is None:
+        lo = coil_winding_section(case, w, shape, centre, width, _air='none')
+        if lo.get('status') != CW_STATUS:
+            return lo
+        hi = coil_winding_section(case, w, shape, centre, width, _air='entrained_film')
+        lo['air_cases'] = {'none': dict(_cw_summary(lo), words=CW_BOUND_WORDS['none']),
+                           'entrained_film': dict(_cw_summary(hi),
+                                                  words=CW_BOUND_WORDS['entrained_film'])}
+        lo['air_cases_note'] = ('the main result above is the bound "' + CW_BOUND_WORDS['none']
+                                + '"; ' + CW_NARROW)
+        for f in hi.get('flags') or []:
+            if f not in lo['flags']:
+                lo['flags'].append(f)
+        if CW_FLAG_BRACKET not in lo['flags']:
+            lo['flags'].append(CW_FLAG_BRACKET)
+        return lo
+    run_mode = _air or mode
+    coil = w['coil']
+    st = shape.get('steady') if isinstance(shape, dict) else None
+    has_steady = isinstance(st, dict) and isinstance(st.get('z_m'), list) and \
+        isinstance(st.get('local_thickness_change_m'), list)
+    if cw['thickness_profile'] is None and not has_steady:
+        return not_assessable('no thickness profile: neither width_model.coil_winding.'
+                              'thickness_profile nor a steady flatness profile of the case pass')
+    mat = case['material']
+    h0 = case['pass']['exit_thickness_m']
+    E, sy = mat['youngs_modulus_pa'], mat['yield_stress_pa']
+    sm = (case.get('measurement') or {}).get('shapemeter') or {}
+    lw = cw['lane_width_m'] or sm.get('zone_width_m') or CW_DEFAULT_LANE_WIDTH_M
+    a0, a1 = centre - width / 2, centre + width / 2
+    n = max(4, int(math.ceil(width / lw - 1e-9)))
+    if n * lw > width + 1e-9 and int(math.ceil(width / lw - 1e-9)) >= 4:
+        edges = [a0 + i * lw for i in range(n)] + [a1]
+    else:
+        edges = [a0 + i * width / n for i in range(n + 1)]
+    lanes = []
+    for i in range(n):
+        a, b = edges[i], edges[i + 1]
+        if cw['thickness_profile'] is not None:
+            tp = cw['thickness_profile']
+            xs = [a + (k + 0.5) * (b - a) / 10 for k in range(10)]
+            dh = sum(_interp(tp['positions_m'], tp['thickness_deviation_m'], x) for x in xs) / 10
+            basis = 'supplied thickness_profile'
+        else:
+            dh = _lane_mean(st['z_m'], st['local_thickness_change_m'], a, b)
+            for r in shape.get('ridges') or []:
+                if r.get('exit_ridge_height_m') is None:
+                    continue
+                lo, hi = r['position_m'] - r['ridge_width_m'] / 2, r['position_m'] + \
+                    r['ridge_width_m'] / 2
+                cover = max(0.0, min(b, hi) - max(a, lo)) / (b - a)
+                dh += cover * r['exit_ridge_height_m']
+            basis = 'width.shape.steady local_thickness_change_m (with feedback) plus ridges'
+        e = 0.0
+        if cw['include_length_profile'] and has_steady and \
+                isinstance(st.get('i_units_linear_feedback'), list):
+            e = 1e-5 * _lane_mean(st['z_m'], st['i_units_linear_feedback'], a, b)
+        lanes.append({'centre_m': 0.5 * (a + b), 'width_m': b - a, 'thickness_m': h0 + dh,
+                      'thickness_deviation_m': dh, 'length_excess_i_units': e * 1e5,
+                      '_e': e})
+    # package 11: wound-in tension with an ironing roll; air per layer
+    tw = coil['winding_tension_pa']
+    nip = None
+    capped = False
+    taper = cw['tension_taper']
+    if cw.get('ironing_roll') is not None:
+        ir = cw['ironing_roll']
+        tw, capped = wr.wound_in_tension_pa(tw, h0, ir['load_per_width_n_m'],
+                                            ir['traction_coefficient'], sy)
+        add = ir['traction_coefficient'] * ir['load_per_width_n_m'] / h0
+        if taper is not None:
+            taper = [(r, min(t + add, sy * (1 - 1e-6))) for r, t in taper]
+        nip = {'load_per_width_n_m': ir['load_per_width_n_m'],
+               'traction_coefficient': ir['traction_coefficient'],
+               'winding_tension_pa': coil['winding_tension_pa'], 'wound_in_tension_pa': tw,
+               'capped_at_yield': capped, 'basis': wr.NIP_BASIS}
+    u_exit = case['pass']['exit_speed_m_s']
+    visc = (cw.get('air') or {}).get('viscosity_pa_s') or wr.AIR_VISCOSITY_PA_S
+    gap_of = None
+    if run_mode == 'entrained_film':
+        def gap_of(radius, tension):
+            return min(1e-3, wr.entrained_air_film_m(radius, 2 * u_exit, max(tension, 1.0) * h0,
+                                                     visc))
+    res = wr.wind_lanes(
+        core_radius_m=coil['inner_radius_m'], outer_radius_m=coil['outer_radius_m'],
+        thicknesses_m=[x['thickness_m'] for x in lanes], widths_m=[x['width_m'] for x in lanes],
+        length_excess=[x['_e'] for x in lanes], winding_tension_pa=tw,
+        hoop_modulus_pa=E, poisson_ratio=wr_poisson(), yield_stress_pa=sy,
+        radial_law=cw['radial_law'], core_stiffness_pa=cw['core_stiffness_pa'],
+        layers=cw['layers'], air_gap_m=cw['air_gap_m'], tension_taper=taper,
+        allocation_radius=cw['allocation_radius'], air_gap_of=gap_of)
+    for x in lanes:
+        x.pop('_e')
+    flags = [CW_FLAG_BESIDE, CW_FLAG_STACK]
+    base = {'provenance': cw['provenance'], 'radial_law': cw['radial_law'],
+            'used_by_the_evidence': CW_USED_BY_EVIDENCE, 'stack_sentence': CW_STACK_SENTENCE,
+            'lanes': lanes, 'lane_profile_basis': basis,
+            'laps_per_layer': res['laps_per_layer'], 'layers': cw['layers'],
+            'layers_requested': res['layers_requested'], 'layers_used': res['layers_used'],
+            'allocation_radius': cw['allocation_radius'],
+            'basis': {'model': res['basis'], 'allocation': res['allocation_basis']},
+            'limitations': list(CW_LIMITATIONS)}
+    if res['status'] != wr.STATUS:
+        return dict(base, status='SOLVE_FAILED', reason=res.get('reason'),
+                    layers_wound=res['layers_wound'], flags=flags)
+    wl = res['lanes']
+    nl = res['laps_per_layer']
+    nlayers = len(wl[0].wound_on)
+    pick = sorted({int(round(k * (nlayers - 1) / (CW_MAX_RADII - 1)))
+                   for k in range(CW_MAX_RADII)}) if nlayers > CW_MAX_RADII else list(range(nlayers))
+    mean_r = [sum(0.5 * (ln.r[k] + ln.r[k + 1]) for ln in wl) / len(wl) for k in pick]
+    h_mean = sum(x['thickness_m'] for x in lanes) / len(lanes)
+    outer_mean = sum(ln.outer_radius_m for ln in wl) / len(wl)
+    laps = nl * nlayers
+    per_lane, wound, hoop, press, plast = [], [], [], [], []
+    for x, ln in zip(lanes, wl):
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        total = sum(lengths)
+        yl = sum(L for L, ep in zip(lengths, ln.plastic_strain) if ep > 0) / total
+        sl = sum(L for L, t in zip(lengths, ln.wound_on) if t <= 0) / total
+        first = next((k for k, ep in enumerate(ln.plastic_strain) if ep > 0), None)
+        ddh = x['thickness_m'] - h_mean
+        dR = ln.outer_radius_m - outer_mean
+        per_lane.append({
+            'centre_m': x['centre_m'], 'max_wound_on_tension_pa': max(ln.wound_on),
+            'min_hoop_stress_pa': min(ln.hoop_stress),
+            'max_pressure_pa': max(-v for v in ln.radial_stress),
+            'first_yield_radius_m': None if first is None else 0.5 * (ln.r[first]
+                                                                     + ln.r[first + 1]),
+            'first_yield_laps': None if first is None else (first + 1) * nl,
+            'yielding_length_fraction': yl, 'slack_length_fraction': sl,
+            'outer_radius_deviation_m': dR,
+            'effective_compaction_factor': (dR / (laps * ddh) if abs(ddh) > 1e-12 * h_mean
+                                            else None),
+            'max_plastic_i_units': max(ln.plastic_strain) * 1e5})
+        wound.append([ln.wound_on[k] for k in pick])
+        hoop.append([ln.hoop_stress[k] for k in pick])
+        press.append([-0.5 * (ln.radial_stress[k] + ln.radial_stress[k + 1]) for k in pick])
+        plast.append([ln.plastic_strain[k] for k in pick])
+        if yl > 0 and CW_FLAG_YIELDS not in flags:
+            flags.append(CW_FLAG_YIELDS)
+        if sl > 0 and CW_FLAG_SLACK not in flags:
+            flags.append(CW_FLAG_SLACK)
+        if min(ln.hoop_stress) < 0 and CW_FLAG_HOOP not in flags:
+            flags.append(CW_FLAG_HOOP)
+    # the other allocation point (decision after package 10): a verdict that flips with this
+    # discretisation choice is not reported as a plain yes or no
+    other = 'layer_top' if cw['allocation_radius'] == 'mid_layer' else 'mid_layer'
+    res2 = wr.wind_lanes(
+        core_radius_m=coil['inner_radius_m'], outer_radius_m=coil['outer_radius_m'],
+        thicknesses_m=[x['thickness_m'] for x in lanes], widths_m=[x['width_m'] for x in lanes],
+        length_excess=[1e-5 * x['length_excess_i_units'] for x in lanes],
+        winding_tension_pa=tw, hoop_modulus_pa=E,
+        poisson_ratio=wr_poisson(), yield_stress_pa=sy, radial_law=cw['radial_law'],
+        core_stiffness_pa=cw['core_stiffness_pa'], layers=cw['layers'],
+        air_gap_m=cw['air_gap_m'], tension_taper=taper, allocation_radius=other,
+        air_gap_of=gap_of)
+    main_n = _cw_lane_numbers(res, lanes)
+    other_n = _cw_lane_numbers(res2, lanes) if res2['status'] == wr.STATUS else None
+    sens = []
+    for j, (pl, a) in enumerate(zip(per_lane, main_n)):
+        va = _cw_variant_verdict(a['yielding_length_fraction'], a['peak_stress_pa'], sy)
+        if other_n is None:
+            vb, b = None, None
+            verdict = va
+        else:
+            b = other_n[j]
+            vb = _cw_variant_verdict(b['yielding_length_fraction'], b['peak_stress_pa'], sy)
+            verdict = _cw_lane_verdict(va, vb)
+        pl['verdict'] = verdict
+        pl['verdict_words'] = CW_VERDICT_WORDS[verdict]
+        sens.append({'centre_m': pl['centre_m'],
+                     cw['allocation_radius']: {'verdict': va, **a},
+                     other: None if b is None else {'verdict': vb, **b}})
+        if verdict == 'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT' and CW_FLAG_ALLOCATION not in flags:
+            flags.append(CW_FLAG_ALLOCATION)
+    allocation_sensitivity = {
+        'used': cw['allocation_radius'], 'other': other,
+        'other_status': res2['status'], 'lanes': sens,
+        'close_to_yield_fraction': CW_CLOSE_TO_YIELD_FRACTION,
+        'basis': ('the other allocation point run beside the chosen one; a lane whose verdict '
+                  'differs reads "not decided: depends on the allocation point"; a peak within '
+                  f'{CW_CLOSE_TO_YIELD_FRACTION:.0%} of the yield stress without yielding reads '
+                  '"close to yield, not decided" [D, analyst choice]')}
+    # after unwinding: the plastic stretch as a length difference (an ADDITIONAL profile)
+    zc = [x['centre_m'] for x in lanes]
+    outer = [ln.plastic_strain[-1] for ln in wl]
+    lmean = []
+    for ln in wl:
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        lmean.append(sum(L * ep for L, ep in zip(lengths, ln.plastic_strain)) / sum(lengths))
+
+    def centred(v):
+        m = sum(v) / len(v)
+        return [(a - m) * 1e5 for a in v]
+    mech = [x['length_excess_i_units'] for x in lanes]
+    after = {}
+    for key, prof in (('plastic_i_units_outer_wraps', centred(outer)),
+                      ('plastic_i_units_length_mean', centred(lmean)),
+                      ('with_mechanical_profile', [a + b for a, b in zip(
+                          centred([m * 1e-5 for m in mech]), centred(lmean))])):
+        entry = {'i_units': prof}
+        try:
+            fl = ss.flatness_from_elongation(zc, [1e-5 * v for v in prof], youngs_modulus_pa=E,
+                                             poisson_ratio=STRIP_POISSON_RATIO, thickness_m=h0,
+                                             mean_tension_pa=0.0, yield_stress_pa=sy)
+            entry.update(status=fl['status'], released_status=fl['released_status'],
+                         bands=_bands(fl['bands']))
+        except ValueError as exc:
+            entry['flatness_error'] = str(exc)
+        after[key] = entry
+    after['basis'] = ('plastic hoop strain of the laps (mean removed), on the lane centres; the '
+                      'mechanical profile is the lane mean of i_units_linear_feedback; no creep')
+    # beside the linear criterion
+    beside = []
+    targets = []
+    for r in shape.get('ridges') or []:
+        if isinstance(r.get('coil'), dict):
+            targets.append(('incoming ridge', r['position_m'], r['coil']))
+    bands = ((st or {}).get('levels') or {}).get('with_feedback', {}).get('bands') or [] \
+        if has_steady else []
+    if bands:
+        big = max(bands, key=lambda b: abs(b['peak_i_units']))
+        j = min(range(n), key=lambda k: abs(lanes[k]['centre_m'] - big['peak_position_m']))
+        dh_lane = lanes[j]['thickness_m'] - h_mean
+        try:
+            lin = _coil_buildup(case, coil, abs(dh_lane), h0)
+        except ValueError:
+            lin = None
+        targets.append(('largest model band', big['peak_position_m'], lin))
+    for label, pos, lin in targets:
+        j = min(range(n), key=lambda k: abs(lanes[k]['centre_m'] - pos))
+        pl = per_lane[j]
+        lane_state = {'YIELDS': 'YIELDS', 'DOES_NOT_YIELD': 'ELASTIC'}.get(pl['verdict'],
+                                                                          pl['verdict'])
+        row = {'source': label, 'position_m': pos, 'lane_centre_m': lanes[j]['centre_m'],
+               'lane_model_state': lane_state,
+               'effective_compaction_factor': pl['effective_compaction_factor'],
+               'linear_status': None if lin is None else lin['status'],
+               'linear_critical_ridge_height_m': None if lin is None else lin[
+                   'critical_ridge_height_at_outer_radius_m'],
+               'linear_compaction_factor': None if lin is None else lin['compaction_factor']}
+        if lin is not None:
+            lin_yields = lin['status'] == 'RIDGE_YIELDS_STRIP'
+            row['linear_yields'] = lin_yields
+            if lane_state not in ('YIELDS', 'ELASTIC'):
+                row['agrees'] = None
+                row['note'] = (f'the lane model is {CW_VERDICT_WORDS[lane_state]}; the tally '
+                               'uses the linear criterion')
+            else:
+                row['agrees'] = lin_yields == (lane_state == 'YIELDS')
+            if row['agrees'] is False:
+                row['note'] = (f'the lane model says {lane_state.lower()}, the linear criterion '
+                               f'says {str(lin["status"]).lower().replace("_", " ")}; the tally '
+                               'uses the linear criterion')
+                if CW_FLAG_DISAGREES not in flags:
+                    flags.append(CW_FLAG_DISAGREES)
+        beside.append(row)
+    extra = {}
+    gaps = [g for ln in wl for g in ln.gap_under_pressure_m()]
+    extra['mean_air_gap_under_pressure_m'] = (sum(gaps) / len(gaps)) if gaps else 0.0
+    extra['air_mode'] = run_mode
+    if capped and CW_FLAG_CAPPED not in flags:
+        flags.append(CW_FLAG_CAPPED)
+    if nip is not None:
+        extra['nip'] = nip
+    if cw.get('air') is not None or cw.get('ironing_roll') is not None:
+        ri, ro = coil['inner_radius_m'], coil['outer_radius_m']
+        f0 = wr.entrained_air_film_m(ri, 2 * u_exit, coil['winding_tension_pa'] * h0, visc)
+        f1 = wr.entrained_air_film_m(ro, 2 * u_exit, coil['winding_tension_pa'] * h0, visc)
+        extra['air_entrainment'] = {
+            'film_at_core_m': f0, 'film_at_outer_radius_m': f1,
+            'film_over_strip_thickness': [f0 / h0, f1 / h0],
+            'surface_speed_sum_m_s': 2 * u_exit, 'viscosity_pa_s': visc,
+            'basis': ('foil-bearing film h0 = C*R*(6*mu*U/T)^(2/3) at the winding tension '
+                      '[D, re-derived in SPEC19; SS-S58 EX/AB]'), 'note': CW_AIR_NOTE}
+        if f1 > h0 and CW_FLAG_FILM_THICK not in flags:
+            flags.append(CW_FLAG_FILM_THICK)
+    dr = w.get('deflector_roll_radius_m')
+    if dr is not None and (cw.get('air') is not None or cw.get('ironing_roll') is not None):
+        t_exit = case['pass']['exit_tension_pa'] * h0
+        film = wr.entrained_air_film_m(dr, 2 * u_exit, max(t_exit, 1.0), visc)
+        sf = (case.get('tribology') or {}).get('surface_finish') or {}
+        rq_s, rq_d = sf.get('strip_roughness_rq_m'), w.get('deflector_roll_roughness_rq_m')
+        block = {'radius_m': dr, 'film_m': film, 'note': CW_AIR_NOTE}
+        if rq_s is not None and rq_d is not None:
+            ratio = film / math.hypot(rq_s, rq_d)
+            block.update(film_over_combined_roughness=ratio,
+                         traction='LIKELY_LOST' if ratio > 3 else 'KEPT',
+                         traction_basis='traction is lost when the film exceeds about three '
+                                        'times the combined roughness [SS-S58 EX/AB]')
+        else:
+            block['traction'] = 'NOT_ASSESSABLE'
+            block['traction_reason'] = ('needs tribology.surface_finish.strip_roughness_rq_m '
+                                        'and width_model.deflector_roll_roughness_rq_m')
+        extra['deflector_roll'] = block
+    return dict(base, status=CW_STATUS, radius_m=mean_r, wound_on_tension_pa=wound,
+                hoop_stress_pa=hoop, pressure_pa=press, plastic_strain=plast,
+                per_lane=per_lane, after_unwinding=after, beside_linear_criterion=beside,
+                allocation_sensitivity=allocation_sensitivity, **extra, flags=flags)
+
+
+def wr_poisson():
+    """Hoop-radial Poisson ratio of the stack (the strip's, as the shape chain)."""
+    return STRIP_POISSON_RATIO
+
+
+# ======================================== coil temperature (SPEC19 package 11, A8; I8 in part)
+CT_KEYS = ('surface_htc_w_m2k', 'ambient_temperature_k', 'strip_conductivity_w_mk', 'gap_medium',
+           'interlayer_gap_m', 'hold_times_s', 'provenance')
+CT_STATUS = 'UNVALIDATED_COIL_COOLING_ESTIMATE'
+CT_FLAG_UPPER = 'COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND'
+CT_FLAG_STRESS = 'COIL_COOLING_STRESS_REACHES_YIELD'
+CT_TOP_FLAGS = (CT_FLAG_UPPER, CT_FLAG_STRESS)
+CT_DEFAULT_HOLD_TIMES_S = (3600.0, 14400.0, 86400.0)
+CT_LIMITATIONS = (
+    'The temperature at winding is the modelled strip exit temperature of the case pass: an '
+    'upper bound (no loss between the roll gap and the coil).',
+    'No heat from the next laps while winding; no radiation beyond the surface coefficient; a '
+    'uniform gap between laps; the coil starts uniformly hot (per lane differences only for the '
+    'stress estimate).',
+    'No creep of the hoop stress and no recovery of the foil properties at coil temperature '
+    '(A8 stress part and B7 are Phase 3).',
+    'The surface coefficient, the ambient temperature, the strip conductivity and the gap are '
+    'inputs; the radial conductivity rests on the gap and its medium.',
+)
+
+
+def validate_coil_thermal(ct, coil_winding):
+    if ct is None:
+        return None
+    where = 'width_model.coil_thermal'
+    if not isinstance(ct, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, ct, ('surface_htc_w_m2k', 'ambient_temperature_k', 'strip_conductivity_w_mk',
+                     'gap_medium', 'provenance'), ('interlayer_gap_m', 'hold_times_s'))
+    out = {'surface_htc_w_m2k': num(f'{where}.surface_htc_w_m2k', ct['surface_htc_w_m2k'],
+                                    positive=True, hi=500.0),
+           'ambient_temperature_k': num(f'{where}.ambient_temperature_k',
+                                        ct['ambient_temperature_k'], lo=250.0, hi=400.0),
+           'strip_conductivity_w_mk': num(f'{where}.strip_conductivity_w_mk',
+                                          ct['strip_conductivity_w_mk'], lo=50.0, hi=300.0)}
+    if ct['gap_medium'] not in ('oil', 'air'):
+        raise ValueError(f'{where}.gap_medium must be "oil" or "air"')
+    out['gap_medium'] = ct['gap_medium']
+    prov = ct['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text')
+    out['provenance'] = prov
+    g = ct.get('interlayer_gap_m')
+    if g is None:
+        air = None if coil_winding is None else _cw_air_mode(coil_winding)
+        if air not in ('entrained_film', 'both') and not (coil_winding or {}).get('air_gap_m'):
+            raise ValueError(f'{where}.interlayer_gap_m is required unless width_model.'
+                             'coil_winding runs with air (its mean gap under pressure is used)')
+        out['interlayer_gap_m'] = None
+    else:
+        out['interlayer_gap_m'] = num(f'{where}.interlayer_gap_m', g, positive=True, hi=1e-4)
+    ht = ct.get('hold_times_s')
+    if ht is None:
+        ht = list(CT_DEFAULT_HOLD_TIMES_S)
+    else:
+        ht = num_list(f'{where}.hold_times_s', ht, positive=True, hi=1e7)
+        if not 1 <= len(ht) <= 8 or any(b <= a for a, b in zip(ht, ht[1:])):
+            raise ValueError(f'{where}.hold_times_s needs 1-8 increasing values')
+    out['hold_times_s'] = ht
+    return out
+
+
+def coil_temperature_section(case, result):
+    """SPEC19 package 11: cooling of the coil from the winding temperature (an upper bound),
+    against the published coil limits; never evidence. Called after thermal_check."""
+    from . import wound_roll as wr
+    from . import bite_tribology as bt
+    from . import band_products as bpr
+    w = case.get('width_model') or {}
+    ct = w.get('coil_thermal')
+    if ct is None:
+        return not_supplied('width_model.coil_thermal is null or absent')
+    coil = w.get('coil')
+    if coil is None:
+        return not_assessable('needs width_model.coil (the coil radii)')
+    proc = result.get('process') or {}
+    op = ((proc.get('heating') or {}).get('operating') or {}) if isinstance(proc, dict) else {}
+    t_wind = op.get('exit_temperature_k')
+    if t_wind is None:
+        return not_assessable('needs the modelled strip exit temperature of the case pass '
+                              '(process.heating, which needs tribology and hardening)')
+    width = result.get('width') or {}
+    cws = width.get('coil_winding') if isinstance(width.get('coil_winding'), dict) else {}
+    h = case['pass']['exit_thickness_m']
+    gap = ct['interlayer_gap_m']
+    gap_basis = 'supplied'
+    if gap is None:
+        gap = cws.get('mean_air_gap_under_pressure_m') or (
+            ((cws.get('air_cases') or {}).get('entrained_film') or {}).get(
+                'mean_air_gap_under_pressure_m'))
+        gap_basis = ('the mean air gap under pressure of width.coil_winding'
+                     + ('' if cws.get('mean_air_gap_under_pressure_m') else
+                        ' (its entrained-film bound)'))
+        if not gap:
+            return not_assessable('no interlayer gap: width.coil_winding did not run with air')
+    if ct['gap_medium'] == 'oil':
+        trib = case.get('tribology') or {}
+        lub = trib.get('lubricant') or {}
+        k_g = (lub.get('conductivity_w_mk') if lub.get('conductivity_w_mk') is not None
+               else bt.DEFAULT_OIL_CONDUCTIVITY_W_MK)
+        kg_basis = ('tribology.lubricant.conductivity_w_mk' if lub.get('conductivity_w_mk')
+                    is not None else 'default oil conductivity 0.13 W/mK [M]')
+    else:
+        k_g, kg_basis = wr.AIR_CONDUCTIVITY_W_MK, 'air 0.026 W/mK [M]'
+    ks = ct['strip_conductivity_w_mk']
+    kr = wr.radial_conductivity_w_mk(h, gap, ks, k_g)
+    kz = wr.axial_conductivity_w_mk(h, gap, ks)
+    rc = bt.ALUMINIUM_VOLUMETRIC_HEAT_CAPACITY_J_M3K * h / (h + gap)
+    cool = wr.coil_cooling(inner_radius_m=coil['inner_radius_m'],
+                           outer_radius_m=coil['outer_radius_m'], width_m=case['pass']['width_m'],
+                           surface_htc_w_m2k=ct['surface_htc_w_m2k'], k_radial_w_mk=kr,
+                           k_axial_w_mk=kz, rho_c_j_m3k=rc, hold_times_s=ct['hold_times_s'])
+    ta = ct['ambient_temperature_k']
+
+    def temp(theta):
+        return ta + theta * (t_wind - ta)
+    rows = [{'time_s': r['time_s'], 'hottest_k': temp(r['hottest']), 'mean_k': temp(r['mean']),
+             'outer_surface_mid_width_k': temp(r['outer_surface_mid_width'])}
+            for r in cool['rows']]
+    flags = [CT_FLAG_UPPER]
+    tc = result.get('thermal_check') if isinstance(result.get('thermal_check'), dict) else {}
+    limit_rows = []
+    if tc.get('battery_coil_limits_apply') and isinstance(tc.get('coil_limits_c'), dict):
+        srcs = {'entering_final_pass': bpr.COIL_IN_FINAL_LIMIT,
+                'leaving_final_pass': bpr.COIL_OUT_FINAL_LIMIT,
+                'elongation_decay_above': bpr.COIL_OUT_FINAL_LIMIT_LOOSE}
+        for key, lim_c in tc['coil_limits_c'].items():
+            lim_k = lim_c + 273.15
+            theta = (lim_k - ta) / (t_wind - ta) if t_wind != ta else None
+            above = t_wind > lim_k
+            tfall = (None if not above or theta is None or theta <= 0 else
+                     wr.time_to_fall_below(cool['hottest_history'], theta))
+            # the null time has two meanings: the coil never gets below a limit under the
+            # surrounding temperature, or not within the longest hold time computed
+            fall_status = ('BELOW_AT_WINDING' if not above else
+                           'LIMIT_BELOW_AMBIENT' if theta is None or theta <= 0 else
+                           'FOUND' if tfall is not None else 'NOT_REACHED_WITHIN_LONGEST_HOLD')
+            st = srcs.get(key)
+            limit_rows.append({'limit': key, 'limit_k': lim_k,
+                               'source': None if st is None else list(st.sources),
+                               'at_winding': 'ABOVE' if above else 'BELOW',
+                               'time_to_fall_below_s': 0.0 if not above else tfall,
+                               'time_to_fall_below_status': fall_status,
+                               'longest_hold_time_s': max(ct['hold_times_s'])})
+    lane_stress, per_lane = None, None
+    ls = width.get('local_state') if isinstance(width.get('local_state'), dict) else {}
+    lanes = cws.get('lanes') if cws else None
+    if lanes and isinstance(ls.get('strip_exit_temperature_k'), list) and \
+            isinstance(ls.get('z_m'), list):
+        temps = []
+        for x in lanes:
+            a, b = x['centre_m'] - x['width_m'] / 2, x['centre_m'] + x['width_m'] / 2
+            temps.append(_lane_mean(ls['z_m'], ls['strip_exit_temperature_k'], a, b))
+        mean_t = sum(temps) / len(temps)
+        E = case['material']['youngs_modulus_pa']
+        dsig = [E * ss.ALUMINIUM_EXPANSION_PER_K * (t - mean_t) for t in temps]
+        per_lane = [{'centre_m': x['centre_m'], 'winding_temperature_k': t}
+                    for x, t in zip(lanes, temps)]
+        lane_stress = []
+        sy = case['material']['yield_stress_pa']
+        for x, d, pl in zip(lanes, dsig, cws.get('per_lane') or []):
+            final = None
+            hs = cws.get('hoop_stress_pa')
+            j = lanes.index(x)
+            if hs:
+                final = max(hs[j]) + d
+            lane_stress.append({'centre_m': x['centre_m'], 'stress_change_pa': d,
+                                'final_hoop_stress_with_cooling_pa': final})
+            if final is not None and final >= sy and CT_FLAG_STRESS not in flags:
+                flags.append(CT_FLAG_STRESS)
+    out = {'status': CT_STATUS, 'provenance': ct['provenance'],
+           'winding_temperature_k': t_wind,
+           'winding_temperature_basis': ('process.heating.operating.exit_temperature_k: the '
+                                         'modelled strip exit temperature of the case pass, an '
+                                         'upper bound at winding'),
+           'per_lane': per_lane,
+           'conductivities': {'radial_w_mk': kr, 'axial_w_mk': kz, 'gap_m': gap,
+                              'gap_basis': gap_basis, 'gap_medium': ct['gap_medium'],
+                              'gap_conductivity_w_mk': k_g, 'gap_conductivity_basis': kg_basis,
+                              'strip_conductivity_w_mk': ks, 'volumetric_heat_capacity_j_m3k': rc,
+                              'basis': 'k_r = (h + g)/(h/k_s + g/k_g) (series), k_z = k_s*h/(h + '
+                                       'g) (parallel), rho*c of aluminium times h/(h + g) [D, '
+                                       'SPEC19; k_r << k_z: gap A8, TM-LA33 EX, TM-LA32 EX]'},
+           'time_scales': cool['time_scales'], 'cooling': rows, 'limit_rows': limit_rows,
+           'lane_stress_on_cooling_pa': lane_stress,
+           'basis': {'cooling': cool['method'] + ' (exact product for a uniform start, core side '
+                                                 'adiabatic, convection on the outer surface and '
+                                                 'both end faces) [D, classical]',
+                     'lane_stress': ('d_sigma_j = E*alpha*(T_j - mean T): a hotter lane ends '
+                                     'tighter; an upper bound (no radial relaxation, no creep)')},
+           'flags': flags, 'limitations': list(CT_LIMITATIONS)}
+    return out
+
+
+def coil_temperature_beside_thermal_check(sec):
+    """The rows added beside thermal_check's coil limits (its verdicts are not changed)."""
+    return {'note': ('computed coil temperature beside the published coil limits; the verdicts '
+                     'above compare the strip exit temperature and are unchanged'),
+            'winding_temperature_k': sec['winding_temperature_k'],
+            'limit_rows': sec['limit_rows'],
+            'hottest_after_hold_k': [{'time_s': r['time_s'], 'hottest_k': r['hottest_k']}
+                                     for r in sec['cooling']]}
+
+
+# ======================================== width-coupling kernel (SPEC19 package 8, G3; X17)
+WC_STATUS = 'SECOND_ESTIMATE_OF_THE_TENSION_FEEDBACK_NOT_VALIDATED'
+WC_FLAG = 'WIDTH_COUPLING_KERNEL_REPORTED'
+WC_FLAG_BELOW_HALF = 'KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE'
+WC_FLAG_SIGN = 'KERNEL_CLOSURES_DISAGREE_IN_SIGN'
+WC_FLAG_UNDEFINED = 'KERNEL_STEADY_STATE_NOT_DEFINED'
+WC_TOP_FLAGS = (WC_FLAG, WC_FLAG_BELOW_HALF, WC_FLAG_SIGN, WC_FLAG_UNDEFINED)
+WC_USED_BY_EVIDENCE = ('the with-feedback level (pointwise exit-tension feedback): every band '
+                       'state, onset, gauge-trend row, screen and evidence item uses it; the '
+                       'kernel level is a second estimate beside it and enters no tally')
+WC_LIMITATIONS = (
+    'Linear, small perturbations of a uniform pass; half-infinite spans (a span shorter than '
+    'about half a band wavelength is not covered).',
+    'The lateral closure (how the strip is held at the roll gap) is an analyst choice [D]; the '
+    'kernel level uses no_lateral_velocity; all three closures are printed, none is picked to '
+    'agree with the pointwise value.',
+    'Slip sensitivities of a constant-friction bite (at foil gauge the experimental mattress or '
+    'the reduced half-space model); no roll stack, no closed gap, no lateral metal flow.',
+    'The literature neither supports nor contradicts the pointwise exit-tension feedback (gap '
+    'study X17); this kernel is a re-derivation, not a validation, and it does not confirm the '
+    'feedback at foil gauge.',
+    'The three present levels, the band states, the friction screen, the local sources, the '
+    'flatness loop, the step test and every evidence item still use the pointwise feedback.',
+)
+WC_MEANING = ('For bands the kernel is not wavenumber-dependent: it reduces to a factor on the '
+              'tension feedback. A smaller feedback suppresses a band less, so with the kernel a '
+              'band reads larger than with the full (pointwise) feedback; the rigid bound, the '
+              'compliance-only level, the kernel level and the with-feedback level bracket the '
+              'answer.')
+
+
+def _kernel(sp, closure):
+    ki = sp['kernel_inputs']
+    return ss.width_coupling_kernel(
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        exit_tension_force_sensitivity_per_width_m=sp['exit_tension_force_sensitivity_per_width_m'],
+        entry_tension_force_sensitivity_per_width_m=ki['entry_tension_force_sensitivity_per_width_m'],
+        dslip_dexit_thickness_per_m=ki['dslip_dexit_thickness_per_m'],
+        dslip_dexit_tension_per_pa=ki['dslip_dexit_tension_per_pa'],
+        dslip_dentry_tension_per_pa=ki['dslip_dentry_tension_per_pa'],
+        exit_thickness_m=sp['exit_thickness_m'],
+        strip_youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        strip_poisson_ratio=sp['strip_poisson_ratio'], xi=sp['xi'], closure=closure)
+
+
+def kernel_ratio(sp):
+    """Kernel feedback / pointwise feedback with the kernel level's closure (None when not
+    defined or without a derived bite)."""
+    if sp is None or not sp.get('kernel_inputs'):
+        return None
+    try:
+        k = _kernel(sp, ss.KERNEL_CLOSURE)
+    except ValueError:
+        return None
+    return k['ratio_to_pointwise'] if k['defined'] else None
+
+
+def _kernel_level(lv, sp, k):
+    zs, drs, h = lv['z_m'], lv['local_radius_deviation_m'], sp['exit_thickness_m']
+    tr = ss.transfer_radius_profile(
+        zs, drs, bite_half_length_m=sp['bite_half_length_m'],
+        strip_stiffness_per_width_pa=sp['strip_stiffness_per_width_pa'],
+        roll_radius_m=sp['roll_radius_m'], n_rolls=sp['n_rolls'],
+        roll_youngs_modulus_pa=sp['roll_youngs_modulus_pa'],
+        roll_poisson_ratio=sp['roll_poisson_ratio'], feedback_stiffness_per_width_pa=k)
+    exit_profile = [h + v for v in tr['local_thickness_change_m']]
+    if min(exit_profile) <= 0:
+        raise ValueError('the kernel level\'s thickness change reaches the exit gauge')
+    el = ss.differential_elongation(zs, [h] * len(zs), exit_profile, xi=sp['xi'])
+    fl = ss.flatness_from_elongation(
+        zs, el['elongation'], youngs_modulus_pa=sp['strip_youngs_modulus_pa'],
+        poisson_ratio=sp['strip_poisson_ratio'], thickness_m=h,
+        mean_tension_pa=sp['mean_tension_pa'], yield_stress_pa=sp['yield_stress_pa'])
+    peak = max(abs(fl['max_i_units']), abs(fl['min_i_units']))
+    lin = lv.get('linear_feedback_peak_i_units')
+    return {'closure': ss.KERNEL_CLOSURE, 'i_units': fl['i_units'], 'peak_i_units': peak,
+            'bands': _bands(fl['bands']), 'status': fl['status'],
+            'released_status': fl['released_status'],
+            'peak_ratio_to_linear_feedback': (peak / abs(lin) if lin else None),
+            'note': 'linear, no band-wise saturation (as the linear-feedback level)'}
+
+
+def width_coupling_section(lv, sp, w=None):
+    """SPEC19 package 8: the width-coupling kernel, a second estimate of the tension feedback,
+    BESIDE the present levels (always computed for a derived bite; nothing reads it)."""
+    if sp is None or not sp.get('kernel_inputs'):
+        return not_assessable('needs the slip sensitivities of a derived case-pass bite '
+                              '(supplied shape inputs carry none)')
+    if not isinstance(lv, dict) or 'z_m' not in lv:
+        return not_assessable('needs the steady flatness profile of the case pass')
+    closures = [_kernel(sp, c) for c in ss.LATERAL_CLOSURES]
+    main = closures[0]
+    flags = [WC_FLAG]
+    if main['defined'] and main['ratio_to_pointwise'] is not None and \
+            main['ratio_to_pointwise'] < 0.5:
+        flags.append(WC_FLAG_BELOW_HALF)
+    signs = {(c['feedback_stiffness_per_width_pa'] or 0) > 0 for c in closures
+             if c['feedback_stiffness_per_width_pa'] is not None}
+    if len(signs) > 1:
+        flags.append(WC_FLAG_SIGN)
+    if not all(c['defined'] for c in closures):
+        flags.append(WC_FLAG_UNDEFINED)
+    if main['defined']:
+        try:
+            level = _kernel_level(lv, sp, main['feedback_stiffness_per_width_pa'])
+        except ValueError as exc:
+            level = {'status': 'NOT_DEFINED', 'reason': str(exc)}
+    else:
+        level = {'status': 'NOT_DEFINED', 'reason': main.get('reason')}
+    bands = lv['levels']['with_feedback']['bands']
+    big = max(bands, key=lambda b: abs(b['peak_i_units'])) if bands else None
+    dev = {'wavelength_m': None, 'distance_to_95_percent_m': None,
+           'fraction_at_shapemeter': None, 'shapemeter_distance_m': None}
+    if big is not None:
+        zz, iu = lv['z_m'], lv.get('i_units_linear_feedback') or lv['i_units_with_feedback']
+        inside = [i for i, x in enumerate(zz) if big['start_m'] <= x <= big['end_m']]
+        lam = None
+        if inside:
+            pk = max((iu[i] for i in inside), key=abs)
+            half_idx = [i for i in inside if abs(iu[i]) >= 0.5 * abs(pk)]
+            half = zz[half_idx[-1]] - zz[half_idx[0]] if half_idx else 0.0
+            lam = 2 * half if half > 0 else None
+        if lam:
+            dev['wavelength_m'] = lam
+            dev['wavelength_basis'] = ('twice the half-peak width of the largest band of the '
+                                       'with-feedback level')
+            dev['distance_to_95_percent_m'] = ss.distance_to_development(
+                0.95, lam, sp['strip_poisson_ratio'])
+            d = None
+            for key in ('flatness_control', 'zone_step_test'):
+                sec = (w or {}).get(key)
+                if isinstance(sec, dict) and sec.get('shapemeter_distance_m') is not None:
+                    d = sec['shapemeter_distance_m']
+                    break
+            if d is not None:
+                dev['shapemeter_distance_m'] = d
+                dev['fraction_at_shapemeter'] = ss.stress_development_fraction(
+                    d, lam, sp['strip_poisson_ratio'])
+    pt = main['pointwise_feedback_stiffness_per_width_pa']
+    ratios = [c['ratio_to_pointwise'] for c in closures]
+    words = ', '.join('not defined' if (r is None or not c['defined']) else f'{r:.2g}'
+                      for r, c in zip(ratios, closures))
+    finding = (f'An independent estimate of the tension feedback gives {words} of the value used '
+               'by the standard levels (closures ' + ', '.join(ss.LATERAL_CLOSURES) + ').')
+    if level.get('peak_i_units') is not None and lv.get('linear_feedback_peak_i_units'):
+        finding += (f' With the first, the band would read {level["peak_i_units"]:.3g} '
+                    f'I-units instead of {abs(lv["linear_feedback_peak_i_units"]):.3g} (linear, '
+                    'no saturation).')
+    return {'status': WC_STATUS, 'used_by_the_evidence': WC_USED_BY_EVIDENCE,
+            'meaning': WC_MEANING, 'finding': finding, 'closures': closures,
+            'pointwise': {'feedback_stiffness_per_width_pa': pt,
+                          'effective_stiffness_over_strip_stiffness':
+                              1 + pt / sp['strip_stiffness_per_width_pa']},
+            'kernel_level': level, 'development': dev,
+            'basis': {'kernel': ss.KERNEL_BASIS,
+                      'closure_of_the_kernel_level': ss.KERNEL_CLOSURE + ' [D, SPEC19: analyst '
+                                                     'choice]',
+                      'development': '1 - (1 + c*kappa*x)*exp(-kappa*x), c = b/(kappa*a) of the '
+                                     'closure, kappa = 2*pi/wavelength'},
+            'flags': flags, 'limitations': list(WC_LIMITATIONS)}
+
+
+# ======================================== buckling with a wavelength search (SPEC19 package 6, G4)
+BUCKLING_MODELS = ('sine_mode', 'sine_mode_and_fe')
+BF_STATUS = 'UNVALIDATED_LINEAR_BUCKLING_BESIDE_THE_SINE_MODE'
+BF_FLAG_BESIDE = 'BUCKLING_FE_REPORTED_BESIDE_SINE_MODE'
+BF_FLAG_MILL = 'BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE'
+BF_FLAG_RELEASED = 'BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE'
+BF_FLAG_TABLE = 'DEAD_LOAD_KEEPS_REPORTED_BAND_FLAT_ON_TABLE'
+BF_TOP_FLAGS = (BF_FLAG_BESIDE, BF_FLAG_MILL, BF_FLAG_RELEASED, BF_FLAG_TABLE)
+BF_NOT_IN_TALLY = ('The wave heights, the saturated stress and the table states of this section '
+                   'do NOT change any band state, onset, gauge-trend row, evidence item or score: '
+                   'the tally uses the sine-mode states.')
+BF_FLAT_ON_TABLE_NOTE = ('lies flat on a table under its own weight in this estimate; the length '
+                         'difference is still there and may show when the sheet is hung, slit '
+                         'or levelled')
+RELEASED_SAMPLE_LENGTH_FACTOR = 1.0   # [D, analyst choice: a square sample] longest half-wave
+BF_MAX_EVENTS = 4                     # events with a peak shape searched (run-time budget)
+BF_USED_BY_EVIDENCE = ('the present (sine-mode) band states: state and '
+                       'state_after_tension_release of width.shape; this section changes no '
+                       'state, onset, gauge-trend row or score')
+BF_LIMITATIONS = (
+    'Linear bifurcation of a flat, infinitely long strip with free edges: critical load, '
+    'wavelength and mode.',
+    'Wave height (SPEC19 package 7): a one-mode Ritz estimate on the frozen critical mode with a '
+    'fibre membrane model (no in-plane shear, no lateral stress), softer than a plate: an UPPER '
+    'ESTIMATE, of the order of what that mode gives, not a height a person would measure on a '
+    'sample. The saturated stress (stress of a buckled band clipped near minus its critical '
+    'value) comes from the same estimate.',
+    'On a table: a gravity criterion on a rigid flat table (one-sided dead load, not an elastic '
+    'foundation), weightless mode shape at each wavelength, aluminium density 2700 kg/m3 from '
+    'memory, no friction, adhesion or finite sample length.',
+    'One mode per profile and state: the most critical one. When it buckles, other bands are '
+    'not decided by this section.',
+    'The stress profile is the modelled far-field profile of the case pass (linear exit-tension '
+    'feedback, before the band-wise saturation), not a measured one; longitudinal stress only, '
+    'no lateral stress, no shear; elastic.',
+    'After release: tension zero and half-waves up to the strip width (a square sample, an '
+    'analyst choice); no dead load and no finite sample length. The mode is nearly always at '
+    'the longest half-wave searched (a whole-sheet mode).',
+    'On the published local buckles (SS-V2, SS-V3) the half-wave is about twice the measured '
+    'share of the buckle width (benchmarks SS-V2-WIDE-STRIP, SS-V3-WIDE-STRIP): not validated.',
+)
+
+
+def _bf_profile(prof):
+    """Nodes on a >= ONSET_GRID_M grid (every n-th sample) and the residual stress."""
+    z = prof['z_m']
+    iu = prof['i_units_linear_feedback']
+    step = max(1, int(math.ceil(ONSET_GRID_M / (z[1] - z[0]) - 1e-9))) if len(z) > 1 else 1
+    while len(z[::step]) > 400:
+        step += 1
+    return z[::step], iu[::step]
+
+
+def _bf_state(z, iu, sp, tension, longest, label):
+    from . import strip_buckling as sb
+    E = sp['strip_youngs_modulus_pa']
+    s = [-E * 1e-5 * v for v in iu]
+    spacing = min(b - a for a, b in zip(z, z[1:]))
+    r = sb.critical_mode(z, s, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                         poisson_ratio=sp['strip_poisson_ratio'], mean_tension_pa=tension,
+                         edges=('free', 'free'), half_wave_range_m=(4 * spacing, longest))
+    out = {'support': SUPPORT_WORDS[label], 'mean_tension_pa': tension, 'status': r['status'],
+           'critical_multiplier': r['critical_multiplier'], 'utilisation': r['utilisation'],
+           'state': ('NO_COMPRESSION' if r['critical_multiplier'] is None else
+                     'BUCKLES' if r['utilisation'] >= 1.0 else 'FLAT'),
+           'half_wave_range_m': r['half_wave_range_m'], 'flags': r['flags'],
+           'at_search_limit': r['at_search_limit']}
+    if r['critical_multiplier'] is None:
+        return out
+    lam = r['critical_multiplier']
+    i0 = min(range(len(s)), key=lambda i: s[i])
+    out.update({
+        'critical_profile_peak_loose_i_units': lam * max(iu),
+        'critical_net_stress_at_most_compressed_fibre_pa': tension + lam * s[i0],
+        'half_wavelength_m': r['half_wavelength_m'], 'wavelength_m': 2 * r['half_wavelength_m'],
+        'mode_peak_position_m': r['mode_peak_position_m'],
+        'mode_width_10_percent_m': r['mode_width_10_percent_m'],
+        'mode_width_50_percent_m': r['mode_width_50_percent_m'],
+        'half_wave_over_mode_width': r['half_wave_over_mode_width'],
+        'mode_localisation': ('LOCAL' if r['mode_width_10_percent_m'] < 0.5 * (z[-1] - z[0])
+                              else 'WHOLE_SHEET')})
+    # SPEC19 package 7: one-mode Ritz amplitude and saturated stress (an upper estimate)
+    pb = sb.post_buckling(z, s, r, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                          mean_tension_pa=tension)
+    ip = max(range(len(iu)), key=lambda i: iu[i])
+    whole = 'whole-sheet ' if out['mode_localisation'] == 'WHOLE_SHEET' else ''
+    out['post_buckling'] = {
+        'state': pb['state'], 'amplitude_m': pb['amplitude_m'],
+        'peak_to_valley_m': pb['peak_to_valley_m'], 'wave_i_units': pb.get('wave_i_units'),
+        'reading_at_profile_peak_i_units': pb['saturated_i_units'][ip],
+        'linear_reading_at_profile_peak_i_units': iu[ip],
+        'basis': pb['basis'],
+        'wording': (f'a wave of the order of {pb["peak_to_valley_m"] * 1e3:.2g} mm peak to '
+                    f'valley in the {whole}mode of half-wave {r["half_wavelength_m"] * 1e3:.3g} mm '
+                    f'({out["support"]}); an upper estimate, not a measured height'
+                    if pb['state'] == 'BUCKLED' else 'no wave: the profile is below its '
+                    'critical state')}
+    if label == 'in_mill' and pb['state'] == 'BUCKLED':
+        out['post_buckling']['z_m'] = list(z)
+        out['post_buckling']['saturated_i_units'] = pb['saturated_i_units']
+        out['post_buckling']['saturated_stress_pa'] = pb['saturated_stress_pa']
+    return out
+
+
+SUPPORT_WORDS = {'in_mill': 'in the mill under the exit tension, free strip edges',
+                 'after_release': 'hanging free after release, without tension or weight',
+                 'on_table': 'lying on a rigid flat table under its own weight'}
+
+
+def _bf_table(z, iu, sp):
+    from . import strip_buckling as sb
+    E = sp['strip_youngs_modulus_pa']
+    s = [-E * 1e-5 * v for v in iu]
+    d = sb.dead_load_lift(z, s, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                          poisson_ratio=sp['strip_poisson_ratio'],
+                          density_kg_m3=sp.get('strip_density_kg_m3'))
+    out = {'support': SUPPORT_WORDS['on_table'], 'state': d['state'],
+           'scale_to_lift': d['scale_to_lift'],
+           'lift_limit_peak_i_units': (None if d['scale_to_lift'] is None
+                                       else d['scale_to_lift'] * max(iu)),
+           'half_wavelength_m': d.get('half_wavelength_m'),
+           'peak_to_valley_on_table_m': d['peak_to_valley_on_table_m'],
+           'weightless_peak_to_valley_m': d.get('weightless_peak_to_valley_m'),
+           'mode_peak_position_m': d.get('mode_peak_position_m'),
+           'mode_width_10_percent_m': d.get('mode_width_10_percent_m'),
+           'mode_localisation': (None if d.get('mode_width_10_percent_m') is None else
+                                 'LOCAL' if d['mode_width_10_percent_m'] < 0.5 * (z[-1] - z[0])
+                                 else 'WHOLE_SHEET'),
+           'at_search_limit': d['at_search_limit'], 'density_kg_m3': d['density_kg_m3'],
+           'basis': d['basis'], 'flags': d['flags']}
+    if d['state'] == 'LIFTS':
+        out['wording'] = (f'lifts above about {out["lift_limit_peak_i_units"]:.2g} I-units of '
+                          f'profile peak; a wave of the order of '
+                          f'{d["peak_to_valley_on_table_m"] * 1e3:.2g} mm peak to valley in the '
+                          f'mode of half-wave {d["half_wavelength_m"] * 1e3:.3g} mm on the table; '
+                          'an upper estimate, not a measured height')
+    else:
+        out['wording'] = ('the whole profile ' + BF_FLAT_ON_TABLE_NOTE)
+    return out
+
+
+def _bf_band_rows(bands, mill, rel, table=None):
+    """Per present band: its sine-mode states beside what the wavelength search says."""
+    rows = []
+    for b in bands:
+        row = {'start_m': b['start_m'], 'end_m': b['end_m'], 'peak_position_m': b.get(
+            'peak_position_m'), 'peak_i_units': b['peak_i_units'], 'sense': b.get('sense'),
+            'sine_mode_state': b['state'],
+            'sine_mode_state_after_tension_release': b['state_after_tension_release'],
+            'sine_mode_buckling_utilisation': b.get('buckling_utilisation')}
+        for key, st, present, manifest in (
+                ('in_mill', mill, b['state'], 'MANIFEST_BUCKLE'),
+                ('after_release', rel, b['state_after_tension_release'],
+                 'MANIFEST_AFTER_TENSION_RELEASE')):
+            governs = (st.get('mode_peak_position_m') is not None
+                       and b['start_m'] <= st['mode_peak_position_m'] <= b['end_m'])
+            if st['state'] in ('FLAT', 'NO_COMPRESSION'):
+                fe = 'FLAT'
+            elif st.get('mode_localisation') == 'WHOLE_SHEET':
+                fe = 'WHOLE_SHEET_MODE_NOT_A_BAND'   # compare released_global_status instead
+            elif governs:
+                fe = 'BUCKLES'
+            else:
+                fe = 'NOT_DECIDED_ONE_MODE'
+            agrees = None if fe in ('NOT_DECIDED_ONE_MODE', 'WHOLE_SHEET_MODE_NOT_A_BAND') else (
+                (fe == 'BUCKLES') == (present == manifest))
+            row[key] = {'wavelength_search_state': fe, 'mode_peaks_in_this_band': governs,
+                        'agrees_with_sine_mode': agrees}
+            if agrees is False:
+                row[key]['note'] = (
+                    f'the wavelength search says {fe.lower().replace("_", " ")}, the sine mode '
+                    f'says {present.lower().replace("_", " ")}; the evidence uses the sine '
+                    'mode')
+            pb = st.get('post_buckling') or {}
+            if fe == 'BUCKLES' and pb.get('state') == 'BUCKLED':
+                row[key]['wave'] = pb['wording']
+        if table is not None:
+            governs = (table.get('mode_peak_position_m') is not None
+                       and b['start_m'] <= table['mode_peak_position_m'] <= b['end_m'])
+            if table['state'] == 'LIES_FLAT':
+                ts = 'LIES_FLAT'
+            elif table.get('mode_localisation') == 'WHOLE_SHEET':
+                ts = 'WHOLE_SHEET_MODE_NOT_A_BAND'
+            elif governs:
+                ts = 'LIFTS'
+            else:
+                ts = 'NOT_DECIDED_ONE_MODE'
+            row['on_table'] = {'table_state': ts, 'mode_peaks_in_this_band': governs}
+            if ts == 'LIFTS':
+                row['on_table']['wave'] = table['wording']
+            if ts == 'LIES_FLAT' and b['state_after_tension_release'] == \
+                    'MANIFEST_AFTER_TENSION_RELEASE':
+                row['on_table']['note'] = ('reported visible after tension release by the sine '
+                                           'mode, but ' + BF_FLAT_ON_TABLE_NOTE
+                                           + '; the tally keeps the sine-mode state')
+                row['on_table']['keeps_reported_band_flat'] = True
+        rows.append(row)
+    return rows
+
+
+def _bf_one(prof, sp, label):
+    z, iu = _bf_profile(prof)
+    width = z[-1] - z[0]
+    mill = _bf_state(z, iu, sp, sp['mean_tension_pa'], 2 * width, 'in_mill')
+    rel = _bf_state(z, iu, sp, 0.0, RELEASED_SAMPLE_LENGTH_FACTOR * width, 'after_release')
+    table = _bf_table(z, iu, sp)
+    bands = (prof.get('levels') or {}).get('with_feedback', {}).get('bands') or []
+    out = {'label': label, 'nodes': len(z), 'node_spacing_m': z[1] - z[0],
+           'profile_peak_loose_i_units': max(iu), 'profile_peak_tight_i_units': min(iu),
+           'in_mill': mill, 'after_release': rel, 'on_table': table,
+           'bands': _bf_band_rows(bands, mill, rel, table),
+           'sine_mode_released_global_status': prof.get('released_global_status')}
+    g = prof.get('released_global_status')
+    if rel.get('mode_localisation') == 'WHOLE_SHEET' and g is not None:
+        out['after_release_whole_sheet_agrees_with_sine_mode'] = (
+            (rel['state'] == 'BUCKLES') == (g == 'GLOBAL_BUCKLE_AFTER_RELEASE'))
+    if rel.get('mode_localisation') == 'WHOLE_SHEET':
+        out['after_release_note'] = (
+            'after release the wavelength search finds a whole-sheet mode '
+            f'({rel["state"].lower()}, utilisation {rel["utilisation"]:.3g}); compare it with '
+            'the sine mode\'s whole-sheet indicator, not with a band')
+    return out
+
+
+def buckling_fe_section(shape, events, sp, option):
+    """SPEC19 package 6: linear buckling with a wavelength search (strip_buckling) for the
+    steady profile and each event's peak shape, BESIDE the present sine-mode states. Opt-in
+    (model_options.buckling_model = 'sine_mode_and_fe'); nothing reads it."""
+    if option != 'sine_mode_and_fe':
+        return not_supplied('model_options.buckling_model is sine_mode')
+    steady = shape.get('steady')
+    if sp is None or not isinstance(steady, dict) or 'i_units_linear_feedback' not in steady:
+        return not_assessable('needs the steady flatness profile of the case pass')
+    flags = [BF_FLAG_BESIDE]
+    profiles = [_bf_one(steady, sp, 'steady')]
+    skipped = 0
+    for ev in events or []:
+        ps = ev.get('peak_shape')
+        if not isinstance(ps, dict) or 'i_units_linear_feedback' not in ps:
+            continue
+        if len(profiles) > BF_MAX_EVENTS:
+            skipped += 1
+            continue
+        profiles.append(_bf_one(ps, sp, f'event {ev.get("index")}: {ev.get("label")}'))
+    for p in profiles:
+        for row in p['bands']:
+            if row['in_mill']['agrees_with_sine_mode'] is False and BF_FLAG_MILL not in flags:
+                flags.append(BF_FLAG_MILL)
+            if row['after_release']['agrees_with_sine_mode'] is False and \
+                    BF_FLAG_RELEASED not in flags:
+                flags.append(BF_FLAG_RELEASED)
+        if p.get('after_release_whole_sheet_agrees_with_sine_mode') is False and \
+                BF_FLAG_RELEASED not in flags:
+            flags.append(BF_FLAG_RELEASED)
+            if (row.get('on_table') or {}).get('keeps_reported_band_flat') and \
+                    BF_FLAG_TABLE not in flags:
+                flags.append(BF_FLAG_TABLE)
+        for st in (p['in_mill'], p['after_release'], p['on_table']):
+            flags += [f for f in st['flags'] if f not in flags]
+    out = {'status': BF_STATUS, 'used_by_the_evidence': BF_USED_BY_EVIDENCE,
+           'not_in_the_tally': BF_NOT_IN_TALLY,
+           'profiles': profiles,
+           'basis': {'model': 'strip_buckling.critical_mode: ' + _sb_basis(),
+                     'stress_profile': 'width.shape i_units_linear_feedback (the modelled '
+                                       'far-field profile before the band-wise saturation), '
+                                       'sigma_res = -E*1e-5*I, on a >= 10 mm node grid',
+                     'edges': 'free (the strip edges)',
+                     'in_mill': 'the exit tension of the case pass held fixed; half-waves '
+                                'from 4 node spacings to twice the strip width',
+                     'after_release': 'tension zero; half-waves from 4 node spacings to the '
+                                      'strip width [D, analyst choice: a square sample]',
+                     'wave_height': 'strip_buckling.post_buckling: ' + _sb_attr('AMPLITUDE_BASIS'),
+                     'on_table': 'strip_buckling.dead_load_lift: ' + _sb_attr('TABLE_BASIS')
+                                 + '; half-waves from 1/40 to 4 times the strip width, 24 '
+                                   'wavenumbers'},
+           'flags': flags, 'limitations': list(BF_LIMITATIONS)}
+    if skipped:
+        out['events_not_searched'] = skipped
+    return out
+
+
+def _sb_basis():
+    from . import strip_buckling as sb
+    return sb.BASIS
+
+
+def _sb_attr(name):
+    from . import strip_buckling as sb
+    return getattr(sb, name)
 
 
 def not_assessable(reason):
     return {'status': 'NOT_ASSESSABLE', 'not_supplied': False, 'reason': reason}
 
 
-def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
+def thermal_heat_inputs(w, trib, heat_row):
+    """(roll heat fraction per roll, its basis, bite heat per width, its basis, computed strip
+    share or None) of the steady thermal problem: the ONE place the width section and the spray
+    calibration (band_thermal.calibrate_spray_coefficient) take them from."""
+    f_c = ((heat_row or {}).get('heat_partition') or {}).get('strip_heat_fraction_computed')
+    if w['roll_heat_fraction_per_roll'] is not None:
+        fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
+    elif use_computed_heat_partition(trib) and f_c is not None:
+        # SPEC18 package 9: the case pass's computed share (clipped to [0, 1])
+        fraction = (1 - min(1.0, max(0.0, f_c))) / 2
+        fbasis = ('computed: (1 - strip share of the bite heat partition of the case pass)/2 '
+                  '(tribology.use_computed_heat_partition)')
+    else:
+        fraction = (1 - trib['strip_heat_fraction']) / 2
+        fbasis = '(1 - tribology.strip_heat_fraction)/2'
+    if w['bite_heat_per_width_w_m'] is not None:
+        heat, hbasis = w['bite_heat_per_width_w_m'], 'supplied'
+    elif heat_row is not None and 'bite_heat_per_width_w_m' in heat_row:
+        heat = heat_row['bite_heat_per_width_w_m']
+        hbasis = 'computed: plastic work + interface slip dissipation of the pass (' + \
+            heat_row['friction_power_basis'] + ')'
+    else:
+        heat, hbasis = None, None
+    return fraction, fbasis, heat, hbasis, f_c
+
+
+def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None,
+                  friction_sensitivity=None, friction_row=None, friction_get_bite=None,
+                  local_sensitivity=None):
     """The ``width`` result section (SPEC6 6.2). ``get_bite(src)`` returns the bite of a
     schedule pass (effective values) or raises ValueError.
 
@@ -1975,7 +5507,10 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
     fraction. The shape chain (transfer, flatness, onsets, gauge trend of the case pass) uses
     ``width_model.shape_inputs`` when supplied (they take precedence over a derived bite),
     else the bite; with neither its parts are individually NOT_ASSESSABLE with the bite error
-    as the reason (``shape_chain``)."""
+    as the reason (``shape_chain``).
+
+    ``local_sensitivity()`` (SPEC19 package 2) returns the case-pass bite's force sensitivities
+    for ``width.local_sources``; called only with ``width_model.local_coupling``."""
     w = case.get('width_model')
     if w is None:
         return not_supplied('width_model is null or absent')
@@ -2013,20 +5548,9 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
                              'troughs', 'coil ridge build-up and critical ridge height',
                              'positions', 'two_tone', 'grinding_feed_pitch_m',
                              'shape.crown (Shohet-Townsend window)']}
-    if w['roll_heat_fraction_per_roll'] is not None:
-        fraction, fbasis = w['roll_heat_fraction_per_roll'], 'supplied'
-    else:
-        fraction = (1 - trib['strip_heat_fraction']) / 2
-        fbasis = '(1 - tribology.strip_heat_fraction)/2'
+    fraction, fbasis, heat, hbasis, f_c = thermal_heat_inputs(w, trib, heat_row)
     thermal_reason = None
-    if w['bite_heat_per_width_w_m'] is not None:
-        heat, hbasis = w['bite_heat_per_width_w_m'], 'supplied'
-    elif heat_row is not None and 'bite_heat_per_width_w_m' in heat_row:
-        heat = heat_row['bite_heat_per_width_w_m']
-        hbasis = 'computed: plastic work + interface slip dissipation of the pass (' + \
-            heat_row['friction_power_basis'] + ')'
-    else:
-        heat, hbasis = None, None
+    if heat is None:
         thermal_reason = ('bite heat per width not supplied (width_model.bite_heat_per_width_w_m) '
                           'and not computable' + (' without a bite' if bite is None else ''))
         flags.append('WIDTH_THERMAL_NOT_ASSESSABLE_NO_BITE_HEAT')
@@ -2054,10 +5578,32 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
             steady, healthy, actual, dev = _steady_section(th, sp)
             out['thermal_steady'] = steady
             out['flags'] += [f for f in steady['flags'] if f not in out['flags']]
-        except ValueError as exc:
+            flags += [f for f in steady['flags'] if f in FP_TOP_FLAGS and f not in flags]
+        except SECTION_ERRORS as exc:
             out['thermal_steady'] = failed('thermal_steady', exc)
             out['failures'].append(out['thermal_steady']['error'])
+    # SPEC18 package 10: the roll surface within one revolution (one-way, key only additive)
+    try:
+        out['roll_surface_cycle'] = roll_surface_cycle_section(case, w, th, actual, bite, steady,
+                                                               healthy=healthy)
+        if out['roll_surface_cycle'].get('status') == 'UNVALIDATED_ROLL_SURFACE_CYCLE':
+            out['flags'] += [f for f in out['roll_surface_cycle']['flags']
+                             if f not in out['flags']]
+    except ValueError as exc:
+        out['roll_surface_cycle'] = not_assessable(str(exc))
+    # SPEC19 package 1: local state across the width (one-way; NOT_SUPPLIED without the key)
+    local_ctx = {}
+    try:
+        out['local_state'] = band_local.local_state_section(
+            case, w, th, steady, trib, bite, heat_row, friction_row,
+            out['roll_surface_cycle'], context=local_ctx)
+    except SECTION_ERRORS as exc:
+        out['local_state'] = failed('local_state', exc)
+        out['failures'].append(out['local_state']['error'])
+    flags += [f for f in (out['local_state'].get('flags') or [])
+              if f in band_local.TOP_LEVEL_FLAGS and f not in flags]
     shape = {'steady': None, 'nozzle_pattern_ripple': None, 'crown': None, 'ridges': []}
+    shape_domain_reason = None
     if steady is not None and sp is None:
         shape['steady'] = not_assessable(shape_reason)
         shape['nozzle_pattern_ripple'] = not_assessable(shape_reason)
@@ -2066,9 +5612,20 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
             lv = shape_levels(steady['z_m'], steady['local_deviation_m'], sp)
             shape['steady'] = lv
             shape['steady_stripe_table'] = steady_stripe_table(steady, lv, sp)
-        except ValueError as exc:
+        except ss.ShapeDomainError as exc:
+            shape_domain_reason = exc.plain
+            shape['steady'] = dict(not_assessable(shape_domain_reason), outside_model_range=True)
+            flags.append(SHAPE_FLAG_OUTSIDE_RANGE)
+        except SECTION_ERRORS as exc:
             shape['steady'] = failed('shape.steady', exc)
             out['failures'].append(shape['steady']['error'])
+        # SPEC19 package 8: the width-coupling kernel beside the levels (always on)
+        try:
+            shape['width_coupling'] = width_coupling_section(shape.get('steady'), sp, w)
+        except SECTION_ERRORS as exc:
+            shape['width_coupling'] = failed('shape.width_coupling', exc)
+        flags += [f for f in (shape['width_coupling'].get('flags') or [])
+                  if f in WC_TOP_FLAGS and f not in flags]
         try:
             rip = steady['nozzle_pattern_ripple']['profile_m']
             if max(abs(v) for v in rip) > 0:
@@ -2083,22 +5640,43 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
                     'nozzle_pattern_ripple']['peak_to_peak_m']
                 shape['nozzle_pattern_ripple']['band_count_with_feedback'] = len(
                     lv['levels']['with_feedback']['bands'])
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             shape['nozzle_pattern_ripple'] = failed('shape.nozzle_pattern_ripple', exc)
     elif sp is None:
         shape['steady'] = not_assessable(shape_reason)
+    if steady is not None and sp is None:
+        shape['width_coupling'] = not_assessable(shape_reason)
     try:
         shape['crown'] = _crown(case, w, steady['healthy_thermal_crown_m'] if steady else None)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         shape['crown'] = failed('shape.crown', exc)
         out['failures'].append(shape['crown']['error'])
+    # SPEC19 package 2: the force sensitivities and the event callback of the local sources
+    local_sens, local_ev, local_reason = None, None, None
+    if w.get('local_coupling') is None:
+        local_ev = not_supplied('width_model.local_coupling is null or absent')
+    elif not local_ctx:
+        local_reason = 'needs width.local_state (' + str(
+            out['local_state'].get('reason') or out['local_state'].get('error')) + ')'
+    elif sp is None:
+        local_reason = f'needs the shape parameters of the case pass ({shape_reason})'
+    elif local_sensitivity is None:
+        local_reason = 'no force sensitivities of the case-pass bite'
+    else:
+        try:
+            local_sens = local_sensitivity()
+            local_ev = band_local.event_sources(local_ctx, sp, local_sens, th)
+        except SECTION_ERRORS as exc:
+            local_reason = f'force sensitivities of the case-pass bite: {exc}'
+    if local_ev is None:
+        local_ev = band_local.not_assessable(local_reason)
     if w['events'] and actual is not None:
         try:
             from . import band_thermal
             out['thermal_events'] = _events_section(
                 th, sp, actual, w['events'], shape_reason,
-                scales=band_thermal.event_scales(case, th.fraction))
-        except ValueError as exc:
+                scales=band_thermal.event_scales(case, th.fraction), local=local_ev)
+        except SECTION_ERRORS as exc:
             out['thermal_events'] = failed('thermal_events', exc)
             out['failures'].append(out['thermal_events']['error'])
     elif w['events']:
@@ -2107,6 +5685,38 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
                                                   else ''))
     else:
         out['thermal_events'] = not_supplied('no width_model.events')
+    # SPEC19 package 4: a closed spray loop with the tool's own control law (never evidence)
+    try:
+        lp = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
+              if local_ctx and local_sens is not None else None)
+        out['flatness_control'] = flatness_control_section(case, w, th, sp, healthy, actual, lp)
+    except SECTION_ERRORS as exc:
+        out['flatness_control'] = failed('flatness_control', exc)
+        out['failures'].append(out['flatness_control']['error'])
+    flags += [f for f in (out['flatness_control'].get('flags') or [])
+              if f in FC_TOP_FLAGS and f not in flags]
+    # SPEC19 package 5: zone step test emulation (never evidence)
+    try:
+        lz = ({'params': local_ctx['params'], 'sens': local_sens, 'idx': local_ctx['idx']}
+              if local_ctx and local_sens is not None else None)
+        out['zone_step_test'] = zone_step_test_section(case, w, th, sp, actual, lz, bite)
+    except SECTION_ERRORS as exc:
+        out['zone_step_test'] = failed('zone_step_test', exc)
+        out['failures'].append(out['zone_step_test']['error'])
+    if ZT_FLAG in (out['zone_step_test'].get('flags') or []) and ZT_FLAG not in flags:
+        flags.append(ZT_FLAG)
+    try:
+        if local_reason is not None:
+            out['local_sources'] = band_local.not_assessable(local_reason)
+        else:
+            out['local_sources'] = band_local.local_sources_section(
+                case, w, local_ctx, sp, local_sens, shape.get('steady'), th,
+                (out['thermal_events'] or {}).get('events'))
+    except SECTION_ERRORS as exc:
+        out['local_sources'] = failed('local_sources', exc)
+        out['failures'].append(out['local_sources']['error'])
+    flags += [f for f in (out['local_sources'].get('flags') or [])
+              if f in band_local.SOURCE_FLAGS and f not in flags]
     cell = th.numerics['axial_cell_m']
     z = steady['z_m'] if steady else [(i + 0.5) * cell for i in
                                       range(max(4, int(round(th.length / cell))))]
@@ -2115,7 +5725,36 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
             shape['ridges'].append(_ridge(case, w, sp, r, z, w['coil'], shape_reason))
         except ValueError as exc:
             shape['ridges'].append({'position_m': r['position_m'], 'rejected': str(exc)})
+    # SPEC19 package 10: winding by lanes, beside the linear criterion (never evidence)
+    try:
+        out['coil_winding'] = coil_winding_section(case, w, shape, th.centre, th.width)
+    except SECTION_ERRORS as exc:
+        out['coil_winding'] = failed('coil_winding', exc)
+        out['failures'].append(out['coil_winding']['error'])
+    flags += [f for f in (out['coil_winding'].get('flags') or [])
+              if f in CW_TOP_FLAGS and f not in flags]
+    bm_opt = (case.get('model_options') or {}).get('buckling_model')
+    if bm_opt is not None:
+        # SPEC19 package 6: opt-in, beside the present states (key only when the option is set)
+        try:
+            shape['buckling_fe'] = buckling_fe_section(
+                shape, ((out.get('thermal_events') or {}).get('events') or []), sp, bm_opt)
+        except SECTION_ERRORS as exc:
+            shape['buckling_fe'] = failed('shape.buckling_fe', exc)
+            out['failures'].append(shape['buckling_fe']['error'])
+        flags += [f for f in (shape['buckling_fe'].get('flags') or [])
+                  if f in BF_TOP_FLAGS and f not in flags]
     out['shape'] = shape
+    try:
+        a0, a1 = th.centre - th.width / 2, th.centre + th.width / 2
+        out['strip_temperature'] = strip_temperature_section(
+            case, w, shape['steady'], [z[i] for i in _inside(z, th.centre, th.width)], a0, a1)
+    except SECTION_ERRORS as exc:
+        out['strip_temperature'] = failed('strip_temperature', exc)
+        out['failures'].append(out['strip_temperature']['error'])
+    st_flags = (out['strip_temperature'].get('flags') or []) if isinstance(
+        out['strip_temperature'], dict) else []
+    flags += [f for f in st_flags if f not in flags]
     out['troughs'] = _troughs(case, w, case['observation'])
     two_tone = (ss.two_tone_positions_m(w['previous_strip_widths_m'], th.centre, th.width)
                 if w['previous_strip_widths_m'] else None)
@@ -2124,7 +5763,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         try:
             grinding_pitch = ss.grinding_feed_pitch_m(w['grinding']['traverse_speed_m_s'],
                                                       w['grinding']['roll_rotation_hz'])
-        except ValueError as exc:
+        except SECTION_ERRORS as exc:
             out['failures'].append(f'grinding: {exc}')
     out['two_tone'] = None if two_tone is None else {
         k: two_tone[k] for k in ('status', 'band_positions_m', 'edges')}
@@ -2135,7 +5774,7 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
         out['positions'] = _positions(case, w, case['observation'], steady, events,
                                       w['incoming_ridges'], out['troughs'], two_tone,
                                       grinding_pitch, th)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         out['positions'] = failed('positions', exc)
         out['failures'].append(out['positions']['error'])
     try:
@@ -2145,20 +5784,56 @@ def width_section(case, bite, get_bite, heat_row, trib, flags, bite_error=None):
                    if steady and not steady['stripes'] else None)
         out['gauge_trend'] = _gauge_trend(case, w, get_bite, steady, th.centre, w['coil'], z,
                                           bite, shape_reason, t_shape)
-    except ValueError as exc:
+    except SECTION_ERRORS as exc:
         out['gauge_trend'] = failed('gauge_trend', exc)
         out['failures'].append(out['gauge_trend']['error'])
     # SPEC14 Part 3: heat partition and spray coefficient sensitivity of the stripe result
     try:
         from . import band_thermal
+        if shape_domain_reason is not None:
+            raise ss.ShapeDomainError(shape_domain_reason, shape_domain_reason)
         out['thermal_sensitivity'] = band_thermal.thermal_sensitivity(
             case, w, th, sp, steady, actual, out['thermal_events'], sys.modules[__name__],
             shape.get('steady_stripe_table') if isinstance(shape, dict) else None)
-    except (ValueError, ArithmeticError) as exc:
+    except ss.ShapeDomainError as exc:
+        out['thermal_sensitivity'] = not_assessable(f'not assessed: {exc.plain}')
+    except SECTION_ERRORS as exc:
         # an optional block: no error inside it may abort the diagnosis
         out['thermal_sensitivity'] = failed('thermal_sensitivity', exc)
         out['failures'].append(out['thermal_sensitivity']['error'])
         flags.append('THERMAL_SENSITIVITY_FAILED')
+    ts = out['thermal_sensitivity']
+    if f_c is not None and isinstance(ts, dict) and ts.get('status') == 'EVALUATED':
+        # SPEC18 package 9: the computed share beside the rows (the stripes stay those above)
+        ts['computed_strip_share'] = {
+            'strip_heat_share': f_c, 'roll_heat_fraction_per_roll': (1 - f_c) / 2,
+            'used_by_the_rows_above': fbasis.startswith('computed'),
+            'note': 'strip share of the bite heat partition of the case pass '
+                    '(process.heating.operating.heat_partition); the rows above are evaluated '
+                    'at their own shares'}
+    # SPEC17 G13: a measured roll ground profile through the existing transfer
+    try:
+        out['roll_profile'] = roll_profile_section(case, w, sp, shape_reason, z, th,
+                                                   out.get('thermal_steady'), bite)
+    except SECTION_ERRORS as exc:
+        out['roll_profile'] = failed('roll_profile', exc)
+        out['failures'].append(out['roll_profile']['error'])
+    rp_flags = [f for f in ((out['roll_profile'].get('flags') or []) if isinstance(
+        out['roll_profile'], dict) else []) if f in (RP_FLAG_SUPPLIED, RP_FLAG_BAND, RP_FLAG_ORDER,
+                                        RP_FLAG_GRID)]
+    flags += [f for f in rp_flags if f not in flags]
+    # SPEC17 BT-G4: friction / film stripes as a second band source (screening version)
+    try:
+        out['friction_stripes'] = friction_stripes_section(
+            case, w, bite, friction_get_bite or get_bite, friction_sensitivity,
+            shape.get('steady'), th,
+            trib, friction_row, bite_error)
+    except SECTION_ERRORS as exc:
+        out['friction_stripes'] = failed('friction_stripes', exc)
+        out['failures'].append(out['friction_stripes']['error'])
+    fs_flags = (out['friction_stripes'].get('flags') or []) if isinstance(
+        out['friction_stripes'], dict) else []
+    flags += [f for f in fs_flags if f not in flags]
     if out['failures']:
         flags.append('WIDTH_SECTION_PARTIAL_FAILURE')
     if steady and any(s['sign'] == 'HOT_HIGH' for s in steady['stripes']):
@@ -2258,6 +5933,8 @@ class Facts:
             self.model_reason = ('shape chain: ' + str((steady_shape or {}).get(
                 'reason', (steady_shape or {}).get('error', 'not available'))))
         self.exit_thickness = case['pass']['exit_thickness_m']
+        # SPEC17 G12: radii in the case, for the candidate tension-line pitch
+        self.radii = _case_radii(case)
         self.film_ratio, self.film_basis = None, None
         coolant = case['coolant']
         pitch = (w['spray_header']['nozzle_pitch_m'] if w is not None else
@@ -2672,6 +6349,17 @@ def _h_roll_surface(f):
                'note': 'settle by roll inspection and a work-roll change test'}
 
 
+# SPEC20 part 1: printed final-pass feeds 9-53 mm [RG5; RG7 computed]; ceiling set just above
+# the largest, an analyst choice [D]
+FEED_MARK_SPACING_CEILING_M = 0.060
+FEED_RANGE_NOTE = (
+    'Printed final-pass traverse feeds per roll revolution: 9-25 mm on an aluminium cold-mill '
+    'roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings]; the law '
+    'pitch = traverse per roll revolution is confirmed [RG8 FT, RG11 VP]. A wide, irregular '
+    'spiral from table float does not follow the feed law and belongs with roll_surface_band '
+    '[RG8 FT].')
+
+
 def _h_grinding(f):
     o = f.obs
     e = [_orientation(o)]
@@ -2692,16 +6380,18 @@ def _h_grinding(f):
         e.append(ev(crit, '; '.join(notes) + f' (feed pitch {p * 1e3:.4g} mm)',
                     'every gap within 10 % of 1-3 x feed pitch', 'SUPPORTS' if ok else
                     'CONTRADICTS', 'strong' if ok else 'moderate'))
-    crit = 'regular fine spacing (CV < 0.15, spacing < 30 mm)'
+    ceil_mm = f'{FEED_MARK_SPACING_CEILING_M * 1e3:.0f} mm'
+    crit = f'regular fine spacing (CV < 0.15, spacing < {ceil_mm})'
     sp = f.spacing
     if sp is None or len(sp['gaps_m']) < 2:
-        e.append(ev(crit, 'fewer than three observed positions', 'regular and < 30 mm',
+        e.append(ev(crit, 'fewer than three observed positions', f'regular and < {ceil_mm}',
                     'NOT_OBSERVED'))
     else:
         spacing = o['band_spacing_m'] if o['band_spacing_m'] is not None else sp['mean_gap_m']
-        ok = sp['coefficient_of_variation'] < 0.15 and spacing < 0.030
+        ok = (sp['coefficient_of_variation'] < 0.15
+              and spacing < FEED_MARK_SPACING_CEILING_M)
         e.append(ev(crit, f'CV {sp["coefficient_of_variation"]:.3f}, spacing '
-                    f'{spacing * 1e3:.4g} mm', 'regular and < 30 mm',
+                    f'{spacing * 1e3:.4g} mm', f'regular and < {ceil_mm}',
                     'SUPPORTS' if ok else 'NEUTRAL', 'weak' if ok else None))
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'true',
@@ -2710,7 +6400,7 @@ def _h_grinding(f):
                      {'gloss_or_shade': ('SUPPORTS', 'moderate')}))
     e.append(_choice(o, 'lengthwise_continuity', 'continuity', 'continuous',
                      {'continuous': ('SUPPORTS', 'weak')}))
-    return e, {'grinding_feed_pitch_m': p}
+    return e, {'grinding_feed_pitch_m': p, 'feed_range_note': FEED_RANGE_NOTE}
 
 
 def _h_ridge(f):
@@ -2817,8 +6507,20 @@ def _h_troughs(f):
                    ('SUPPORTS', 'strong'), ('CONTRADICTS', 'strong')))
     crit = 'model trough status (either span)'
     sts = [tr[n]['status'] for n in ('entry_span', 'exit_span') if isinstance(tr.get(n), dict)]
-    valid = [s for s in sts if s != 'REJECTED']
-    if any(s in ('TROUGHS_EXPECTED', 'ROLLER_WRINKLE_EXPECTED') for s in valid):
+    valid = [s for s in sts if s not in ('REJECTED', 'NOT_ASSESSABLE')]
+    # SPEC19 package 12: statuses from a stress computed from span_alignment (no supplied
+    # plant stress) count only a little and never against troughs
+    computed = [tr[n]['status'] for n in ('entry_span', 'exit_span')
+                if isinstance(tr.get(n), dict)
+                and tr[n].get('lateral_stress_basis') == SPAN_LATERAL_BASIS_COMPUTED]
+    expected = ('TROUGHS_EXPECTED', 'ROLLER_WRINKLE_EXPECTED')
+    if computed:
+        txt = f'{", ".join(sts)} {SPAN_COMPUTED_OBSERVED_NOTE}'
+        if any(s in expected for s in computed):
+            e.append(ev(crit, txt, 'TROUGHS_EXPECTED', 'SUPPORTS', 'weak', 'model'))
+        else:
+            e.append(ev(crit, txt, 'TROUGHS_EXPECTED', 'NEUTRAL', basis='model'))
+    elif any(s in expected for s in valid):
         e.append(ev(crit, ', '.join(sts), 'TROUGHS_EXPECTED', 'SUPPORTS', 'moderate', 'model'))
     elif valid and all(s == 'BELOW_TROUGH_THRESHOLD' for s in valid):
         e.append(ev(crit, ', '.join(sts), 'TROUGHS_EXPECTED', 'CONTRADICTS', 'weak', 'model'))
@@ -2927,15 +6629,21 @@ def _h_heat_streak(f):
         if op.get('temperature_limit_k') is not None and 'exit_temperature_k' in op:
             hot = op['exit_temperature_k'] > op['temperature_limit_k']
     k_regime = len(e)
+    # SPEC17 (BT-G8, X21): the film-ratio label no longer supports. A film ratio below 1 is
+    # normal mixed-regime operation (substantial asperity contact, a good roll imprint)
+    # [BT-S3 EX, BT-S9 EX]; only an exit temperature above the supplied limit supports. The
+    # film-collapse test of the gap study (film against additive length or contact
+    # temperature) is NOT built: it needs BT-G3 / BT-G11.
+    expected = ('above the temperature limit (a film ratio below 1 is normal mixed-regime '
+                'operation and no longer counts [BT-S3 EX, BT-S9 EX])')
     if regime is None and hot is None:
-        e.append(ev(crit, 'no tribology', 'BOUNDARY or above the temperature limit',
-                    'NOT_OBSERVED', basis='input'))
-    elif regime == 'BOUNDARY' or hot:
-        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}',
-                    'BOUNDARY or above the temperature limit', 'SUPPORTS', 'weak', 'model'))
+        e.append(ev(crit, 'no tribology', expected, 'NOT_OBSERVED', basis='input'))
+    elif hot:
+        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}', expected,
+                    'SUPPORTS', 'weak', 'model'))
     else:
-        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}',
-                    'BOUNDARY or above the temperature limit', 'NEUTRAL', basis='model'))
+        e.append(ev(crit, f'regime {regime}; exit temperature above limit: {hot}', expected,
+                    'NEUTRAL', basis='model'))
     e.append(_rule(o, 'positions_change_after_work_roll_change',
                    'positions change after work-roll change', 'false',
                    ('CONTRADICTS', 'weak'), None))
@@ -3066,7 +6774,11 @@ def _h_tension_lines(f):
                         'tension)',
                'reported_pitch_m': [0.005, 0.020],
                'reported_onset_exit_gauge_m': [15e-6, 30e-6],
-               'case_exit_thickness_m': h}
+               'case_exit_thickness_m': h,
+               'candidate_shell_buckling_pitch': candidate_tension_line_pitch(
+                   h, f.radii, None if f.gaps is None else (
+                       o['band_spacing_m'] if o['band_spacing_m'] is not None
+                       else sum(f.gaps) / len(f.gaps)))}
 
 
 def _h_stain(f):

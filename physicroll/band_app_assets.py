@@ -30,11 +30,11 @@ def page_html(token):
 
 APP_CSS = r''':root{--ink:#14202B;--paper:#F3F4F1;--panel:#E4E8E3;--line:#C9D0CA;--soft:#47545F;
 --orange-text:#B5521A;--orange:#E0702A;--blue:#2F6FA3;--green:#2E6B4F;--amber:#8A5A00;
---red:#9B2C2C;--card:#FFFFFF;--focus:#2F6FA3;--bar-old:#9AA6AE;--strip:#D5DBD6;
+--red:#9B2C2C;--purple:#8E4A86;--card:#FFFFFF;--focus:#2F6FA3;--bar-old:#9AA6AE;--strip:#D5DBD6;
 --strip-edge:#6B7780;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--ink:#E6EBE8;--paper:#11181F;--panel:#1B252E;
 --line:#33414C;--soft:#AEB9C1;--orange-text:#F0A06A;--orange:#E0702A;--blue:#7DB3E0;
---green:#7CC4A0;--amber:#E2B85C;--red:#F09A9A;--card:#16202A;--focus:#7DB3E0;
+--green:#7CC4A0;--amber:#E2B85C;--red:#F09A9A;--purple:#D49ACB;--card:#16202A;--focus:#7DB3E0;
 --bar-old:#5C6A74;--strip:#2A3640;--strip-edge:#8C99A2;color-scheme:dark}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -173,7 +173,7 @@ svg .link{stroke:var(--green);stroke-width:2;stroke-dasharray:3 2}
 svg .tol{fill:var(--green);opacity:.15}
 svg [tabindex]{cursor:pointer}
 svg .mark:focus{outline:none}
-svg .mark:focus>*:first-child{stroke:var(--orange);stroke-width:3}
+svg .mark:focus>*:first-child{stroke:var(--ink);stroke-width:3}
 .legend{list-style:none;padding:0;margin:.4rem 0;display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.88rem}
 .legend li{display:flex;align-items:center;gap:.35rem}
 .legend svg{width:30px;height:16px;flex:none}
@@ -244,7 +244,9 @@ width:100%;text-align:left;border:1px solid transparent;border-radius:6px;backgr
 .checklist{list-style:none;padding:0;margin:0}
 .checklist>li{border-top:1px solid var(--line);padding:.6rem 0}
 .checklist>li:first-child{border-top:0}
-.checklist .row{display:flex;gap:.6rem;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.checklist .row{display:grid;grid-template-columns:minmax(0,1fr) 13rem;gap:.6rem;align-items:start}
+.checklist .row>:last-child{justify-self:end;text-align:right}
+@media (max-width:600px){.checklist .row{grid-template-columns:minmax(0,1fr)}.checklist .row>:last-child{justify-self:start;text-align:left}}
 .inline-q{border:1px solid var(--line);border-radius:8px;padding:.4rem .8rem;margin:.5rem 0;background:var(--paper)}
 .pending{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;background:var(--panel);border-radius:8px;
 padding:.6rem .8rem;margin-top:.8rem}
@@ -353,6 +355,56 @@ svg .spray{opacity:.11}
 .noz .valve{fill:none;stroke:var(--blue);stroke-width:1.5;stroke-dasharray:2 2}
 .notice.moved{border-left-color:var(--blue)}
 .notice-slot:empty{display:none}
+.zones line{stroke:var(--blue);stroke-width:1.2;stroke-dasharray:3 3}
+.warnline{border-left:4px solid var(--amber);padding:.3rem .6rem;margin:.5rem 0}
+@media print{#shapemeter{display:none!important}.smprint{--blue:#000;--orange:#666;--orange-text:#000;--purple:#333}.stripcard{display:flow-root}.smprint{display:block!important;float:right;width:44%;margin:0 0 2px 8px}.smprint-h,.smprint-w{font-size:7.5pt;margin:0;line-height:1.25}.smprint svg{width:100%;height:auto}}
+
+/* add-on area of step 3: one line per group, filled state, clear in one action */
+.addons{border:1px solid var(--line);border-radius:8px;margin:1rem 0;padding:.2rem .8rem;background:var(--card)}
+.addons>summary{cursor:pointer;padding:.6rem 0;font-weight:700}
+.addons .a-title{font-size:1.05rem}
+.groups{list-style:none;margin:.2rem 0 .6rem;padding:0}
+.addon-group{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;border-top:1px solid var(--line)}
+.addon-group>details>summary{cursor:pointer;padding:.55rem 0;display:flex;flex-wrap:wrap;gap:.2rem .8rem;align-items:baseline}
+.addon-group .g-title{font-weight:600}
+.g-state{font-size:.9rem}.g-state.empty{color:var(--soft-text,var(--soft))}.g-state.filled{color:var(--ink)}
+.g-clear{margin-top:.45rem}
+/* the one add-on card pattern */
+.addon .takeaway-line{font-size:1.05rem;margin:.2rem 0 .6rem}
+.quietline{margin:.4rem 0 1rem}
+.term{text-decoration:underline dotted;text-underline-offset:3px;cursor:help}
+/* charts: colour plus shape and dash; both themes through the palette tokens */
+/* series colours come from the chart spec (blue, orange, purple: one meaning each); references
+   and ranges are neutral; the legend draws each mark with the chart's own drawing */
+.interval{stroke-width:2.5}
+.ref{stroke:var(--soft);stroke-width:1.6;stroke-dasharray:5 4;fill:none}
+.ref-area{fill:var(--soft);opacity:.2}
+svg .ref-label{fill:var(--soft)}
+svg .axis-title{fill:var(--ink)}
+.grid{stroke:var(--line);stroke-width:.6;opacity:.6}
+.hbar{fill:var(--blue)}.hbar.low{fill:var(--orange)}.fig text.inbar{fill:var(--paper)}
+.addon-group>details>summary{list-style:none}.addon-group>details>summary::-webkit-details-marker{display:none}
+.addon-group>details>summary::before{content:'▸';display:inline-block;width:1em;color:var(--soft-text,var(--ink))}
+.addon-group>details[open]>summary::before{content:'▾'}
+.addon-group>details>summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+@media (max-width:600px){.addon-group>details>summary{display:grid;grid-template-columns:1.2em minmax(0,1fr);gap:.1rem 0;align-items:baseline}
+.addon-group>details>summary>[data-view]{grid-column:2}}
+/* the add-on cards under one heading per input group, and the index near the top */
+.addon-index{margin:.2rem 0 1rem;padding:.5rem .8rem;border:1px solid var(--line);border-radius:8px;background:var(--card);line-height:1.9}
+.addon-index a{color:var(--blue);overflow-wrap:anywhere}
+.addon-section>summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:1.2em minmax(0,1fr);gap:0 .2rem;align-items:baseline}
+.addon-section>summary::-webkit-details-marker{display:none}
+.addon-section>summary::before{content:'▸';grid-row:1/3}.addon-section[open]>summary::before{content:'▾'}
+.addon-section>summary .s-title{font-weight:700;font-size:1.1rem}
+.addon-section>summary .s-line{grid-column:2;color:var(--soft-text,var(--soft));font-size:.95rem}
+.addon-section>summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.addon-section>.card.addon{box-shadow:none;margin:.8rem 0 0}
+.valve-bracket{fill:none;stroke:var(--soft);stroke-width:1.4}
+.valve-change{stroke:var(--ink);stroke-width:1;opacity:.55}
+.headline .addon-index{margin:.6rem 0 0}
+@media print{.lpprint{display:block!important;clear:both;margin-top:4px}.lpprint svg{width:60%;height:auto}}
+.valve-outline{fill:none;stroke:var(--blue);stroke-opacity:.35;stroke-width:.5}
+@media print{.checklist .row{display:flex;flex-wrap:wrap;justify-content:space-between}}
 '''
 
 APP_JS = r''''use strict';
@@ -435,6 +487,9 @@ APP_JS = r''''use strict';
   }
   function pv(id) { var v = preset().answers.values[id]; return v === undefined ? null : v; }
   function val(id) { var v = S.answers.values[id]; return v === undefined ? null : v; }
+  // a question with a condition (for example the Tome-form hardening values) shows only when
+  // the answer it depends on has one of the listed values
+  function visible(q) { return shown(q) && (!q.show_if || q.show_if.values.indexOf(val(q.show_if.question)) >= 0); }
   function shown(q) {
     if (q.unknown !== 'preset') { return true; }
     var vals = preset().answers.values;
@@ -624,7 +679,10 @@ APP_JS = r''''use strict';
       try { keep.s = act.selectionStart; keep.e = act.selectionEnd; } catch (err) { keep.s = null; }
     }
     var nodes = app.querySelectorAll('[data-view]');
-    for (var i = 0; i < nodes.length; i++) { nodes[i].innerHTML = VIEWS[nodes[i].getAttribute('data-view')](); }
+    for (var i = 0; i < nodes.length; i++) {
+      var name = nodes[i].getAttribute('data-view');
+      nodes[i].innerHTML = name.indexOf('addon:') === 0 ? addonStatusHtml(name.slice(6)) : name.indexOf('addonclear:') === 0 ? addonClearHtml(name.slice(11)) : name === 'addoncount' ? addonCountHtml() : VIEWS[name]();
+    }
     S.drawnKey = drawnState();
     if (keep) {
       var n = document.getElementById(keep.id);
@@ -859,6 +917,11 @@ APP_JS = r''''use strict';
     var noz = o.nozzles || [];
     var pitch = noz.length > 1 ? (noz[1].pos - noz[0].pos) * sx : 30;
     var r = Math.max(4, Math.min(10, pitch * 0.32));
+    // the spray valves of the flatness control (the engine's grouping), as brackets
+    (o.valves || []).forEach(function (v) {
+      var xa = X(v.start_m) - r, xb = X(v.end_m) + r, yv = yN - r - 5;
+      s += '<path class="valve-bracket" d="M' + xa + ' ' + (yv + 3) + 'L' + xa + ' ' + yv + 'L' + xb + ' ' + yv + 'L' + xb + ' ' + (yv + 3) + '"/>';
+    });
     noz.forEach(function (n) {
       var st = n.level <= 0 ? 'blocked' : n.level >= 1 ? 'healthy' : 'weak';
       if (n.level > 0) {
@@ -881,6 +944,16 @@ APP_JS = r''''use strict';
         s += '<text x="' + X(n.pos) + '" y="' + (yN + r + 15) + '" font-size="13" font-weight="600" text-anchor="middle">' + n.number + '</text>';
       }
     });
+    // shapemeter zones (from the server's model): dashed boundaries just above the strip
+    if (o.zones && o.zones.length) {
+      var yZ = yTop - 7;
+      s += '<g class="zones" aria-hidden="true"><line x1="' + X(o.zones[0].start_m) + '" x2="' + X(o.zones[o.zones.length - 1].end_m) + '" y1="' + yZ + '" y2="' + yZ + '"/>';
+      o.zones.forEach(function (z, k) {
+        s += '<line x1="' + X(z.start_m) + '" x2="' + X(z.start_m) + '" y1="' + (yZ - 6) + '" y2="' + (yTop + 6) + '"/>';
+        if (k === o.zones.length - 1) { s += '<line x1="' + X(z.end_m) + '" x2="' + X(z.end_m) + '" y1="' + (yZ - 6) + '" y2="' + (yTop + 6) + '"/>'; }
+      });
+      s += '</g>';
+    }
     // thermal profile of the roll (result only)
     if (hasTh) {
       var z = res.thermal_profile.z_m, d = res.thermal_profile.local_deviation_m;
@@ -986,6 +1059,20 @@ APP_JS = r''''use strict';
     return m.bands.positions_m.map(function (x) { return {x: x, w: withWidth && isNum(bw) ? bw : null}; });
   }
   function stripArgs(m) { return {barrel: m.strip.barrel_length_m, edge: m.strip.edge_m, width: m.strip.width_m}; }
+  function zonesOf(m) { return m.shapemeter ? m.shapemeter.zones : null; }
+  // the shapemeter zones in words, beside the drawing (the drawing's zone lines are not focusable)
+  function zonesNote(m) {
+    var sm = m.shapemeter;
+    if (!sm) { return ''; }
+    var edge = m.strip.edge_m, z = sm.zones;
+    var counts = {}; z.forEach(function (x) { var n = x.nozzle_numbers.length; counts[n] = (counts[n] || 0) + 1; });
+    var per = Object.keys(counts).sort().map(function (n) { return counts[n] + ' zone' + (counts[n] > 1 ? 's' : '') + ' with ' + n + ' nozzle' + (n === '1' ? '' : 's'); }).join(', ');
+    return '<p class="small">Shapemeter: ' + sm.zone_count + ' zones (dashed lines just above the strip) from ' + mmInt(z[0].start_m - edge) + ' to ' + mmInt(z[z.length - 1].end_m - edge) +
+      ' from the strip edge; ' + per + '.' + (sm.uncovered_strip_width_m > 0.0005 ? ' The zones do not cover ' + mmInt(sm.uncovered_strip_width_m) + ' of the strip.' : '') + '</p>' +
+      '<details class="more"><summary>The zones as a list</summary><ul class="small">' + z.map(function (x) {
+        return '<li>Zone ' + (x.index + 1) + ': ' + mmInt(x.start_m - edge) + ' to ' + mmInt(x.end_m - edge) + ' from the strip edge' + (x.nozzle_numbers.length ? ', nozzle ' + x.nozzle_numbers.join(', ') : ', no nozzle') + '</li>';
+      }).join('') + '</ul></details>';
+  }
 
   function bandsInput(q, ctx) { return '<div data-view="bands">' + VIEWS.bands() + '</div>'; }
   function bandsView() {
@@ -994,7 +1081,7 @@ APP_JS = r''''use strict';
     var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-input', label: 'Top view of the strip. Click or tap on the strip to add a band; drag a band to move it; with the keyboard use the arrow keys on a band, Delete removes it.',
       barrel: a.barrel, edge: a.edge, width: a.width,
-      nozzles: nozzlesOf(m), bands: bandsOf(m, true), interactive: 'bands'});
+      nozzles: nozzlesOf(m), bands: bandsOf(m, true), interactive: 'bands', zones: zonesOf(m)});
     var list = '<ol class="poslist" aria-label="Band positions">' + pos.map(function (mm, i) {
       return '<li><label for="bp-' + i + '">Band ' + (i + 1) + '</label><input type="number" step="1" id="bp-' + i + '" data-bandpos="' + i +
         '" value="' + esc(mm) + '"><span class="unit">mm</span><button type="button" class="btn" data-band-del="' + i +
@@ -1016,7 +1103,8 @@ APP_JS = r''''use strict';
     var a = stripArgs(m);
     var svg = drawStrip({id: 'strip-nozzles', label: 'Spray header over the strip. Click a nozzle to cycle healthy, weak and blocked; with the keyboard press Enter or Space on a nozzle.',
       barrel: a.barrel, edge: a.edge, width: a.width,
-      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles'});
+      nozzles: nozzlesOf(m), bands: bandsOf(m, false), interactive: 'nozzles', zones: zonesOf(m),
+      valves: m.control_zones ? m.control_zones.valves : null});
     var known = h.levels_known, lst = '';
     if (known) {
       lst = '<details class="more"' + (S.nozListOpen ? ' open' : '') + ' data-nozlist="1"><summary>Nozzle list (flow level of each nozzle, 1 = full, 0 = blocked)</summary><div class="nozlist">' +
@@ -1033,7 +1121,7 @@ APP_JS = r''''use strict';
       '<p class="small" aria-live="polite" data-nozstatus="1">' + (known ? (h.weak + ' weak, ' + h.blocked + ' blocked of ' + h.nozzles.length +
       ' nozzles. <button type="button" class="btn link" data-noz-reset="1">Set back to "Don\'t know"</button>') :
       'Nozzle state: "Don\'t know" (nobody has checked; the model uses full flow). Click a nozzle to mark it; the others then count as healthy.') + '</p>' +
-      (known ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + ev + lst + '</div>';
+      (known ? '' : '<button type="button" class="btn" data-noz-init="1">All nozzles checked and healthy</button>') + ev + zonesNote(m) + lst + '</div>';
   }
 
   // "Blocked nozzles (by number)": a view of the level-0 nozzles of the drawing that edits them
@@ -1204,9 +1292,9 @@ APP_JS = r''''use strict';
       function Y(v) { return t + (hi - v) / (hi - lo) * (h - t - b); }
       var s = '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(qt.label + ' for each pass, thickest on the left, thinnest on the right') + '">';
       ps.forEach(function (p, i) {
-        if (p.not_credible || p.no_bite) {
+        if (p.not_credible || p.no_bite || p.outside_model_range) {
           s += '<rect x="' + (X(i) - 14) + '" y="' + t + '" width="28" height="' + (h - t - b) + '" fill="url(#mh)" opacity=".7"/>' +
-            '<text x="' + X(i) + '" y="' + (t + 12) + '" font-size="9" text-anchor="middle">' + (p.not_credible ? 'not credible' : 'no result') + '</text>';
+            '<text x="' + X(i) + '" y="' + (t + 12) + '" font-size="9" text-anchor="middle">' + (p.not_credible ? 'not credible' : p.outside_model_range ? 'outside range' : 'no result') + '</text>';
         }
       });
       s += '<defs><pattern id="mh" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="6" fill="var(--soft)"/></pattern></defs>';
@@ -1336,7 +1424,7 @@ APP_JS = r''''use strict';
     h += '<h3>Alloy and temper</h3>' + ['alloy', 'temper'].map(function (id) { return renderQ(Q[id]); }).join('');
     h += '<h3>The route</h3>' + renderQ(Q.route) + '<div data-view="route">' + routeView() + '</div>';
     var rest = M.questions.filter(function (q) {
-      return q.step === 'rolling' && !q.ask_first && ['product', 'alloy', 'temper', 'route'].indexOf(q.id) < 0 && shown(q);
+      return q.step === 'rolling' && !q.ask_first && !q.addon_group && ['product', 'alloy', 'temper', 'route'].indexOf(q.id) < 0 && visible(q);
     });
     h += '<details class="more" data-more="rolling"' + (S.openMore && S.openMore.rolling ? ' open' : '') + '><summary>More details (' + rest.length + ' more values)</summary>' +
       groupBy(rest).map(function (g) { return '<h4>' + esc(g.group) + '</h4>' + g.qs.map(function (q) { return renderQ(q); }).join(''); }).join('') + '</details>';
@@ -1362,9 +1450,10 @@ APP_JS = r''''use strict';
     h += M.questions.filter(function (q) { return q.step === 'mill' && q.ask_first && q.kind !== 'nozzles' && shown(q); })
       .map(function (q) { return renderQ(q); }).join('');
     h += '<h3>Spray header</h3>' + renderQ(Q.nozzle_levels);
-    var rest = M.questions.filter(function (q) { return q.step === 'mill' && !q.ask_first && shown(q); });
+    var rest = M.questions.filter(function (q) { return q.step === 'mill' && !q.ask_first && !q.addon_group && visible(q); });
     h += '<details class="more" data-more="mill"' + (S.openMore && S.openMore.mill ? ' open' : '') + '><summary>More details (' + rest.length + ' more values)</summary>' +
       groupBy(rest).map(function (g) { return '<h4>' + esc(g.group) + '</h4>' + g.qs.map(function (q) { return renderQ(q); }).join(''); }).join('') + '</details>';
+    h += addonArea();
     h += '<div class="q"><label class="w" for="casename">Name for this case</label><input type="text" class="wide" id="casename" value="' + esc(S.answers.name || '') +
       '" placeholder="for example coil 4711, stand 2" style="padding:.4rem;border:1px solid var(--line);border-radius:5px;width:min(26rem,100%)"></div>';
     return h;
@@ -1522,7 +1611,8 @@ APP_JS = r''''use strict';
       '<p>' + esc(c.description) + '</p><p>' + standWords(c) + ' <span class="num small">score ' + c.score + ', place ' + c.rank + ' of 20</span></p></div></div>' +
       '<div class="cols"><div><h4>What fits</h4>' + evidList(c.fits_because, 'Nothing entered speaks for it yet.') + '</div>' +
       '<div><h4>What speaks against it</h4>' + evidList(c.speaks_against, 'Nothing entered speaks against it.') + '</div></div>' +
-      '<h4>Not looked at yet</h4>' + nl + '<h4>How to check on the floor</h4><p>' + esc(c.how_to_check) + '</p></div>';
+      '<h4>Not looked at yet</h4>' + nl + '<h4>How to check on the floor</h4><p>' + esc(c.how_to_check) + '</p>' +
+      (c.candidate_pitch ? '<h4>A candidate spacing (not evidence)</h4><p>' + esc(c.candidate_pitch.text) + '</p><ul class="small">' + c.candidate_pitch.rows.map(function (r) { return '<li>' + esc(r.text) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
   }
 
   // inline answers for the check-and-update loop (edits pending changes of the shown run)
@@ -1553,7 +1643,8 @@ APP_JS = r''''use strict';
         var m = /^(.*?): (.{80,})$/.exec(r.text);
         return m ? '<li>' + esc(m[1]) + '. <details class="inline"><summary>Which ones</summary>' + esc(m[2]) + '</details></li>' : '<li>' + esc(r.text) + '</li>';
       }).join('') : '<li>No cap applies; the level is never higher than fair because nothing has been compared with plant data.</li>') +
-      '</ul><details class="noprint"><summary class="small">The rule</summary><p class="small soft">' + esc(t.rule) + '</p></details></details></div>';
+      '</ul><details class="noprint"><summary class="small">The rule</summary><p class="small soft">' + esc(t.rule) + '</p></details></details></div>' +
+      '<p class="small soft noprint">The full list of what this tool assumes and cannot decide is in docs/limitations.md of the repository.</p>';
   }
 
   function profileLine(sum, run) {
@@ -1606,6 +1697,66 @@ APP_JS = r''''use strict';
     return '<div class="fig">' + svg + '</div>' + legend(items) + '<details><summary>The same as a list</summary><ul class="small">' + (listRows || '<li>No band positions entered.</li>') + '</ul></details>';
   }
 
+  // ------------------------------------------------------------------ flatness roll and the other measurements
+  // the flatness roll chart: one bar per zone, the modelled flatness, the neutral band level.
+  // On the screen (spec = the card's chart) with its legend and axis titles; on the printed page
+  // (print) at its earlier size, the caption above it saying the same.
+  function shapemeterSvg(v, print, spec) {
+    W = drawW();
+    var barrel = v.barrel_length_m || (v.strip_end_m + v.strip_start_m);
+    var sx = (W - ML - MR) / barrel;
+    function X(m) { return ML + m * sx; }
+    var t = v.threshold_i_units, mx = t;
+    v.zones.forEach(function (z) { if (isNum(z.reading_i_units)) { mx = Math.max(mx, Math.abs(z.reading_i_units)); } });
+    v.profile.i_units.forEach(function (y) { mx = Math.max(mx, Math.abs(y)); });
+    var lg = print ? {s: '', h: 0} : chartLegend(spec || {legend: ['zone_shows', 'zone_not', 'profile']}, W, 0);
+    var top = print ? 18 : lg.h + 24, hh = 150, y0 = top + hh / 2, k = (hh / 2 - 6) / mx;
+    function Y(val) { return y0 - val * k; }
+    var edge = v.strip_start_m, ms = markOf(spec, 'zone_shows'), mn = markOf(spec, 'zone_not'), mp = markOf(spec, 'profile');
+    var s = lg.s + (print ? '' : yTitle(spec, 4, top - 10));
+    s += '<rect x="' + X(v.strip_start_m) + '" y="' + top + '" width="' + ((v.strip_end_m - v.strip_start_m) * sx) + '" height="' + hh + '" fill="var(--strip)" opacity=".45"/>';
+    s += '<line class="tick" x1="' + X(0) + '" x2="' + X(barrel) + '" y1="' + y0 + '" y2="' + y0 + '"/>';
+    [t, -t].forEach(function (y) { s += refLine(X(0), Y(y), X(barrel), Y(y), 'band_level'); });
+    s += refText(X(barrel) - 2, Y(t) - 4, '± ' + sig(t, 3) + ' I-units: band level', 'end');
+    v.zones.forEach(function (z) {
+      var r = z.reading_i_units, x0 = X(z.start_m) + 1, wpx = Math.max(1, (z.end_m - z.start_m) * sx - 2);
+      var where = 'Zone ' + (z.index + 1) + ' (' + mmInt(z.start_m - edge) + ' to ' + mmInt(z.end_m - edge) + ' from the strip edge)';
+      if (!isNum(r)) {
+        s += '<g class="mark" tabindex="0" aria-label="' + esc(where + ': does not cover the strip') + '" data-tip="' + esc(where + ': does not cover the strip') + '"><rect x="' + x0 + '" y="' + (y0 - 2) + '" width="' + wpx + '" height="4" fill="none" stroke="var(--soft)"/></g>';
+        return;
+      }
+      var shows = Math.abs(r) >= t;
+      var words = where + ' would read ' + sig(r, 3) + ' I-units: ' + (shows ? 'would show' : 'would probably not show');
+      s += markG(barRect(shows ? ms : mn, x0, Math.min(Y(r), y0), wpx, Math.abs(Y(r) - y0)).replace('class="glyph"', 'class="glyph zbar' + (shows ? ' shows' : '') + '"'), words);
+    });
+    var pts = [];
+    v.profile.z_m.forEach(function (z, i) { pts.push(X(z).toFixed(1) + ',' + Y(v.profile.i_units[i]).toFixed(1)); });
+    if (pts.length) { s += lineOf(mp, pts); }
+    var yb = top + hh;
+    s += '<text x="' + X(v.strip_start_m) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">0</text><text x="' + X(v.strip_end_m) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round((v.strip_end_m - v.strip_start_m) * 1000).toLocaleString('en-GB') + '</text>';
+    var label = 'What each shapemeter zone would read, with the modelled flatness as a line';
+    if (print) {
+      s += '<text x="' + X(v.strip_start_m) + '" y="' + (yb + 32) + '" font-size="12" class="softtext">mm from the strip edge nearest nozzle 1; up = longer (loose), down = shorter (tight)</text>';
+      return '<svg viewBox="0 0 ' + W + ' ' + (yb + 40) + '" role="group" aria-label="' + label + '">' + s + '</svg>';
+    }
+    var xt = xTitle(spec, yb + 32, W);
+    return svgOpen(W, yb + 22 + xt.h, label) + s + xt.s + '</svg>';
+  }
+  // the printed page: the flatness roll chart beside the strip picture (the page has room there)
+  function shapemeterPrint(sum) {
+    var v = sum.shapemeter_view;
+    if (!v || !v.available) { return ''; }
+    return '<div class="printonly smprint"><p class="smprint-h"><strong>What your flatness roll would show</strong> (bars: zone readings; line: modelled flatness; dashed: band level)</p>' +
+      shapemeterSvg(v, true) + '<p class="smprint-w">' + esc(v.caveat) + '</p></div>';
+  }
+  // the printed page: the flatness-control card in a compact form (takeaway, valve map, the
+  // fixed sentence); its card on the screen is folded under its heading
+  function loopPrint(sum) {
+    var c = (sum.addon_cards || []).filter(function (x) { return x.id === 'loop' && x.chart; })[0];
+    if (!c) { return ''; }
+    return '<div class="printonly lpprint"><p class="smprint-h"><strong>' + esc(c.title) + '</strong>: ' + esc(c.takeaway) + '</p>' +
+      chartSvg(c.chart) + '<p class="smprint-w">' + esc(c.caveat || '') + '</p></div>';
+  }
   function nextChecks(sum) {
     if (!sum.next_checks.length) { return '<p class="empty">No further checks listed.</p>'; }
     var more = sum.next_checks.length - 3;
@@ -1671,7 +1822,7 @@ APP_JS = r''''use strict';
     var note = '<p class="screening-note">A shortlist from a screening model that has not been compared with plant data, not a finding.</p>';
     var h = '<div class="wrap"><p class="printonly"><strong>Band screening summary</strong> — ' + esc(sum.case_name) + '</p>';
     h += '<section class="card"><div class="headline"><div><p class="text">' + esc(sum.headline.text) + '</p><p>' + esc(sum.family.text) + '</p>' +
-      '<p class="statusline"><span aria-hidden="true">ⓘ</span><span>' + esc(sum.status_words) + '</span></p>' + profileLine(sum, run) + '</div>' + trustBox(sum.trust) + '</div></section>';
+      '<p class="statusline"><span aria-hidden="true">ⓘ</span><span>' + esc(sum.status_words) + '</span></p>' + profileLine(sum, run) + addonIndex(sum) + '</div>' + trustBox(sum.trust) + '</div></section>';
     var missing = sum.not_assessable.filter(function (x) { return x.kind === 'not_assessable' || x.kind === 'failed'; });
     if (sum.roll_gap_failed && missing.length) {
       h += '<section class="card" id="not-assessed-top"><h2>What could not be assessed</h2><p class="howto">How to read this: the roll-gap model could not compute the pass where the bands show, so these parts of the screening are missing. The shortlist below rests on the rest.</p>' +
@@ -1686,10 +1837,12 @@ APP_JS = r''''use strict';
       h += '<section class="card"><h2>Along the strip</h2><p class="howto">How to read this: the top strip shows the mark spacing you measured, the bottom one the spacing of the best-fitting candidate with a spacing.</p>' +
         (sum.along_view.available ? '<div class="fig">' + alongSvg(sum.along_view) + '</div>' : '<p class="empty">No spacing measured yet: measure the mark spacing at two speeds to see this picture.</p>') + '</section>';
     } else {
-      h += '<section class="card"><h2>Where across the width</h2><p class="howto">How to read this: the strip seen from above with the spray header over it. Solid bars are the bands you saw; outlined boxes with a letter are where the model puts a candidate; the line above shows where the roll grows. Hover, tap or tab to a mark for its position.</p>' +
-        stripResult(sum) + '</section>';
+      h += '<section class="card stripcard"><h2>Where across the width</h2><p class="howto">How to read this: the strip seen from above with the spray header over it. Solid bars are the bands you saw; outlined boxes with a letter are where the model puts a candidate; the line above shows where the roll grows. Hover, tap or tab to a mark for its position.</p>' +
+        shapemeterPrint(sum) + stripResult(sum) + loopPrint(sum) + '</section>';
     }
     h += '<section class="card"><h2>What to check next</h2><p class="howto">How to read this: measurements that would narrow the shortlist. Tick one you have done, answer it, and update the result.</p>' + nextChecks(sum) + pendingBar() + '</section>';
+    resetGloss();
+    h += addonCards(sum);
     h += '<section class="card noprint"><h2>What if</h2>' + whatIfCard() + '</section>';
     if (sum.gauge_view.available && sum.gauge_view.passes.length < 2) {
       h += '<section class="card noprint"><h2>Thinner or thicker</h2><p class="empty">Only one pass is known. Add the other passes of the route in step 2 ("The route") to see how the result changes from thick to thin.</p></section>';
@@ -1745,6 +1898,541 @@ APP_JS = r''''use strict';
   }
   function productName(id) {
     var n = id; M.products.forEach(function (g) { g.products.forEach(function (p) { if (p.id === id) { n = p.name; } }); }); return n;
+  }
+  // ------------------------------------------------------------------ glossary: first use per screen
+  // Technical terms carry a plain-word tooltip the first time they appear on a screen; the
+  // terms and meanings are band_plain.GLOSSARY (one source), sent with /api/meta.
+  var glossUsed = {};
+  function resetGloss() { glossUsed = {}; }
+  function gloss(text) {
+    var out = esc(text);
+    if (!M || !M.glossary) { return out; }
+    Object.keys(M.glossary).sort(function (a, b) { return b.length - a.length; }).forEach(function (term) {
+      if (glossUsed[term]) { return; }
+      var re = new RegExp('(^|[^\\w-])(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 's?)(?![\\w-])', 'i');
+      var m = re.exec(out);
+      if (!m || /<[^>]*$/.test(out.slice(0, m.index + m[1].length))) { return; }
+      glossUsed[term] = true;
+      var at = m.index + m[1].length, word = m[2];
+      var tip = esc(term + ': ' + M.glossary[term]);
+      out = out.slice(0, at) + '<span class="term mark" tabindex="0" data-tip="' + tip + '" aria-label="' + esc(word) + ' (' + esc(M.glossary[term]) + ')">' + word + '</span>' + out.slice(at + word.length);
+    });
+    return out;
+  }
+
+  // ------------------------------------------------------------------ chart helpers
+  // Every chart is drawn from its spec (band_plain): each series ("mark") has one shape, fill,
+  // colour and line style, used for the chart AND its legend by the same function; reference
+  // lines and ranges are neutral; the axes carry their titles with units; the legend lists only
+  // the marks that are not labelled on the chart. Focusable marks give the exact value (hover,
+  // keyboard focus, tap); "The same as a list" is the text alternative.
+  var COL = {blue: 'var(--blue)', orange: 'var(--orange)', purple: 'var(--purple)', neutral: 'var(--soft)'};
+  var TEXTCOL = {blue: 'var(--blue)', orange: 'var(--orange-text)', purple: 'var(--purple)', neutral: 'var(--soft)'};
+  var DASH = {solid: '', dashed: '7 4', dotted: '2 3'};
+  // the flatness roll chart of the printed page has no card spec: the same marks as the card
+  var ZONE_MARKS = {zone_shows: {id: 'zone_shows', label: 'zone that would show', shape: 'bar', fill: 'solid', colour: 'blue', line: 'solid'},
+    zone_not: {id: 'zone_not', label: 'zone that would probably not show', shape: 'bar', fill: 'open', colour: 'blue', line: 'solid'},
+    profile: {id: 'profile', label: 'modelled flatness', shape: 'line', fill: 'solid', colour: 'orange', line: 'solid'}};
+  function markG(inner, tip) {
+    return '<g class="mark" tabindex="0" aria-label="' + esc(tip) + '" data-tip="' + esc(tip) + '">' + inner + '</g>';
+  }
+  function markOf(c, id) {
+    var m = ((c && c.marks) || []).filter(function (x) { return x.id === id; })[0];
+    return m || ZONE_MARKS[id] || {id: id, label: id, shape: 'circle', fill: 'solid', colour: 'blue', line: 'solid'};
+  }
+  function paint(m) {
+    var col = COL[m.colour] || COL.blue;
+    if (m.shape === 'line') { return ' fill="none" stroke="' + col + '" stroke-width="2.4"' + (DASH[m.line] ? ' stroke-dasharray="' + DASH[m.line] + '"' : ''); }
+    if (m.fill === 'open') { return ' fill="var(--card)" stroke="' + col + '" stroke-width="2"'; }
+    return ' fill="' + col + '"' + (m.shape === 'bar' ? '' : ' stroke="var(--card)" stroke-width="1.5"');
+  }
+  // one mark at (x, y): the chart and the legend both draw it with this
+  function glyph(m, x, y) {
+    var tag = ' class="glyph" data-mark="' + esc(m.id) + '"' + paint(m), r = 5;
+    if (m.shape === 'diamond') { r = 6; return '<path' + tag + ' d="M' + x + ' ' + (y - r) + 'L' + (x + r) + ' ' + y + 'L' + x + ' ' + (y + r) + 'L' + (x - r) + ' ' + y + 'Z"/>'; }
+    if (m.shape === 'square') { return '<rect' + tag + ' x="' + (x - r) + '" y="' + (y - r) + '" width="' + 2 * r + '" height="' + 2 * r + '"/>'; }
+    if (m.shape === 'line') { return '<line' + tag + ' x1="' + (x - 11) + '" x2="' + (x + 11) + '" y1="' + y + '" y2="' + y + '"/>'; }
+    if (m.shape === 'bar') { return '<rect' + tag + ' x="' + (x - 8) + '" y="' + (y - 5) + '" width="16" height="10"/>'; }
+    return '<circle' + tag + ' cx="' + x + '" cy="' + y + '" r="' + r + '"/>';
+  }
+  function barRect(m, x, y, w, h) { return '<rect class="glyph" data-mark="' + esc(m.id) + '"' + paint(m) + ' x="' + x + '" y="' + y + '" width="' + Math.max(1, w) + '" height="' + Math.max(1, h) + '"/>'; }
+  function lineOf(m, pts) { return '<polyline class="glyph" data-mark="' + esc(m.id) + '"' + paint(m) + ' points="' + pts.join(' ') + '"/>'; }
+  function labelText(m, x, y, anchor, px) {
+    return '<text x="' + x + '" y="' + y + '" font-size="' + (px || 12) + '" style="fill:' + (TEXTCOL[m.colour] || 'var(--ink)') + '"' + (anchor ? ' text-anchor="' + anchor + '"' : '') + ' class="dlab" data-mark="' + esc(m.id) + '">' + esc(m.label) + '</text>';
+  }
+  // the legend: the marks the spec lists, each drawn by glyph(), wrapped to the width
+  function chartLegend(c, w, y0) {
+    var ids = (c && c.legend) || [];
+    if (!ids.length) { return {s: '', h: 0}; }
+    var x = 4, y = y0 + 9, s = '<g class="legend" role="list" aria-label="Legend">';
+    ids.forEach(function (id) {
+      var m = markOf(c, id), tw = 30 + String(m.label).length * 6.5;
+      if (x > 4 && x + tw > w) { x = 4; y += 20; }
+      s += '<g class="legend-item" role="listitem" data-mark="' + esc(id) + '">' + glyph(m, x + 11, y) + '<text x="' + (x + 27) + '" y="' + (y + 4) + '" font-size="12">' + esc(m.label) + '</text></g>';
+      x += tw + 14;
+    });
+    return {s: s + '</g>', h: y - y0 + 18};
+  }
+  function axisWords(a) { return a ? a.title + (a.unit ? ', ' + a.unit : a.dimensionless ? ' (no unit)' : '') : ''; }
+  // the x title under the ticks, wrapped; returns {s, h}
+  function xTitle(c, y, w) {
+    var t = axisWords(c && c.x_axis);
+    if (!t) { return {s: '', h: 0}; }
+    return {s: wrapText(4, y, t, w - 8, 'class="axis-title" data-axis="x"'), h: wrapLines(t, w - 8).length * 14.4};
+  }
+  function yTitle(c, x, y) {
+    var t = axisWords(c && c.y_axis);
+    return t ? '<text x="' + x + '" y="' + y + '" font-size="12" class="axis-title" data-axis="y">' + esc(t) + '</text>' : '';
+  }
+  function refLine(x1, y1, x2, y2, id) { return '<line class="ref" data-ref="' + esc(id) + '" x1="' + x1 + '" x2="' + x2 + '" y1="' + y1 + '" y2="' + y2 + '"/>'; }
+  function refArea(x, y, w, h, id) { return '<rect class="ref-area" data-ref="' + esc(id) + '" x="' + x + '" y="' + y + '" width="' + Math.max(1, w) + '" height="' + h + '"/>'; }
+  function refText(x, y, text, anchor) { return '<text class="ref-label" x="' + x + '" y="' + y + '" font-size="11"' + (anchor ? ' text-anchor="' + anchor + '"' : '') + '>' + esc(text) + '</text>'; }
+  function refLabel(c, id) { var r = ((c && c.references) || []).filter(function (x) { return x.id === id; })[0]; return r ? r.label : id; }
+  function svgOpen(w, h, label) { return '<svg viewBox="0 0 ' + w + ' ' + Math.ceil(h) + '" role="group" aria-label="' + esc(label) + '">'; }
+  function niceRange(lo, hi) {
+    if (lo === hi) { lo -= 1; hi += 1; }
+    var pad = (hi - lo) * 0.08; return [lo - pad, hi + pad];
+  }
+  function ticks(lo, hi, n) {
+    var step = Math.pow(10, Math.floor(Math.log10((hi - lo) / n)));
+    [1, 2, 2.5, 5, 10].some(function (k) { if ((hi - lo) / (step * k) <= n) { step *= k; return true; } return false; });
+    var out = []; for (var t = Math.ceil(lo / step) * step; t <= hi + 1e-12; t += step) { out.push(Number(t.toFixed(10))); }
+    return out;
+  }
+  function chartWidth() { return drawW(); }
+  // words in a chart, broken into lines that fit maxW (about 6.4 px a character at 12 px)
+  function wrapLines(text, maxW, px) {
+    var n = Math.max(8, Math.floor(maxW / ((px || 12) * 0.54))), out = [], cur = '';
+    String(text).split(' ').forEach(function (word) {
+      if (cur && (cur + ' ' + word).length > n) { out.push(cur); cur = word; } else { cur = cur ? cur + ' ' + word : word; }
+    });
+    if (cur) { out.push(cur); }
+    return out;
+  }
+  function wrapText(x, y, text, maxW, attrs, px) {
+    var ls = wrapLines(text, maxW, px);
+    return '<text x="' + x + '" y="' + y + '" font-size="' + (px || 12) + '" ' + (attrs || '') + '>' + ls.map(function (t, i) { return '<tspan x="' + x + '" dy="' + (i ? 1.2 * (px || 12) : 0) + '">' + esc(t) + '</tspan>'; }).join('') + '</text>';
+  }
+  // row labels of a chart with one row per pass or record: up to two lines, right-aligned
+  // (a "(…)" note goes on its own line; each row is as tall as its label needs)
+  function rowLabels(rows, lw, base) {
+    var tops = [], hs = [], y = 0;
+    var ls = rows.map(function (r) {
+      var t = String(r.label || ''), k = t.indexOf(' (');
+      var l = k > 0 && t.length * 6.5 > lw - 10 ? [t.slice(0, k)].concat(wrapLines(t.slice(k + 1), lw - 10, 12)) : wrapLines(t, lw - 10, 12);
+      return l.slice(0, 4);
+    });
+    ls.forEach(function (l) { var h = Math.max(base || 24, 10 + 14 * l.length); tops.push(y); hs.push(h); y += h; });
+    return {lines: ls, tops: tops, hs: hs, total: y};
+  }
+  function rowLabel(lines, x, yMid, soft) {
+    var y = yMid + 4 - (lines.length - 1) * 7;
+    return '<text x="' + x + '" y="' + y + '" font-size="12" text-anchor="end"' + (soft ? ' class="softtext"' : '') + '>' + lines.map(function (t, i) { return '<tspan x="' + x + '" dy="' + (i ? 14 : 0) + '">' + esc(t) + '</tspan>'; }).join('') + '</text>';
+  }
+  // a horizontal value axis under rows: ticks and their numbers
+  function xTicks(tk, X, yTop, yBot, fmt) {
+    return tk.map(function (t) { return '<line class="grid" x1="' + X(t) + '" x2="' + X(t) + '" y1="' + yTop + '" y2="' + yBot + '"/><text x="' + X(t) + '" y="' + (yBot + 14) + '" font-size="11" text-anchor="middle">' + (fmt ? fmt(t) : sig(t, 3)) + '</text>'; }).join('');
+  }
+
+  // a profile across the strip, on the strip picture's horizontal scale (lines labelled on the chart)
+  function widthLines(c) {
+    var w = chartWidth(), barrel = c.barrel_length_m || (c.strip_end_m + c.strip_start_m);
+    var sx = (w - ML - MR) / barrel;
+    function X(m) { return ML + m * sx; }
+    var all = []; c.series.forEach(function (s) { all = all.concat(s.values); });
+    var r = niceRange(Math.min.apply(null, all.concat([0])), Math.max.apply(null, all.concat([0])));
+    var lg = chartLegend(c, w, 0), top = lg.h + 24, hh = 150;
+    function Y(v) { return top + (r[1] - v) / (r[1] - r[0]) * hh; }
+    var s = lg.s + yTitle(c, 4, top - 10);
+    s += '<rect x="' + X(c.strip_start_m) + '" y="' + top + '" width="' + ((c.strip_end_m - c.strip_start_m) * sx) + '" height="' + hh + '" fill="var(--strip)" opacity=".4"/>';
+    ticks(r[0], r[1], 4).forEach(function (t) {
+      s += '<line class="grid" x1="' + X(0) + '" x2="' + X(barrel) + '" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text x="' + (X(0) + 2) + '" y="' + (Y(t) - 3) + '" font-size="11" class="softtext">' + sig(t, 3) + '</text>';
+    });
+    s += '<line class="tick" x1="' + X(0) + '" x2="' + X(barrel) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"/>';
+    c.series.forEach(function (ser, k) {
+      var m = markOf(c, ser.id || ('s' + k));
+      s += lineOf(m, ser.z_m.map(function (z, i) { return X(z).toFixed(1) + ',' + Y(ser.values[i]).toFixed(1); }));
+      var ip = 0; ser.values.forEach(function (v, i) { if (Math.abs(v) > Math.abs(ser.values[ip])) { ip = i; } });
+      var x = X(ser.z_m[ip]), y = Y(ser.values[ip]);
+      var tip = ser.label + ': ' + sig(ser.values[ip], 3) + ' ' + c.unit + ' at ' + mmInt(ser.z_m[ip] - c.strip_start_m) + ' from the strip edge (' + (ser.values[ip] > 0 ? 'longer fibre: loose' : 'shorter fibre: tight') + ')';
+      s += markG(glyph({id: m.id, shape: 'circle', fill: 'solid', colour: m.colour}, x, y), tip);
+      var right = x > w * 0.7;
+      s += labelText(m, right ? x - 8 : x + 8, y + (k ? 16 : -8), right ? 'end' : null);
+    });
+    var yb = top + hh;
+    s += '<text x="' + X(c.strip_start_m) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">0</text><text x="' + X(c.strip_end_m) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round((c.strip_end_m - c.strip_start_m) * 1000).toLocaleString('en-GB') + '</text>';
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Profile across the strip in ' + c.unit) + s + xt.s + '</svg>';
+  }
+
+  // one horizontal bar per row (a share in % or a factor), with one neutral reference line
+  function barsChart(c) {
+    var m = markOf(c, ((c.marks || [])[0] || {}).id), pct = c.unit === 'percent';
+    var w = Math.min(760, chartWidth()), lw = Math.min(200, w * 0.4);
+    var rl = rowLabels(c.rows, lw, 26);
+    var vals = c.rows.map(function (r) { return r.value; }).concat([c.line]);
+    var lo = pct ? 0 : Math.min(0.8, Math.min.apply(null, vals)), hi = pct ? 1 : Math.max.apply(null, vals) * 1.08;
+    function X(v) { return lw + (v - lo) / (hi - lo) * (w - lw - 16); }
+    function fmt(v) { return pct ? sig(v * 100, 2) + ' %' : sig(v, 3) + ' times'; }
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var s = lg.s;
+    s += xTicks(pct ? [0, 0.25, 0.5, 0.75, 1] : ticks(lo, hi, 4), X, top, yb, pct ? function (t) { return Math.round(t * 100); } : null);
+    c.rows.forEach(function (r, i) {
+      var y = top + rl.tops[i], rowH = rl.hs[i], bh = Math.min(rowH - 8, 18);
+      s += rowLabel(rl.lines[i], lw - 8, y + rowH / 2);
+      s += markG(barRect(m, X(lo), y + (rowH - bh) / 2, X(r.value) - X(lo), bh), r.tip || (r.label + ': ' + fmt(r.value)));
+      var inside = X(r.value) + 4 + fmt(r.value).length * 6.2 > w;     // no room on the right: in the bar
+      s += '<text x="' + (inside ? X(r.value) - 4 : X(r.value) + 4) + '" y="' + (y + rowH / 2 + 4) + '" font-size="11"' + (inside ? ' text-anchor="end" class="inbar"' : '') + '>' + fmt(r.value) + '</text>';
+    });
+    s += refLine(X(c.line), top - 4, X(c.line), yb, (c.references[0] || {}).id || 'line') + refText(X(c.line) + 4, top - 8, c.line_label);
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Bars: ' + axisWords(c.x_axis)) + s + xt.s + '</svg>';
+  }
+
+  // per pass, both friction levels on one logarithmic scale (they differ greatly)
+  function passLevels(c) {
+    var mw = markOf(c, 'with'), mo = markOf(c, 'without');
+    var w = Math.min(760, chartWidth()), lw = Math.min(210, w * 0.4);
+    var rows = c.rows.map(function (r) { var l = String(r.label); return {label: r.credible ? l : /\)$/.test(l) ? l.slice(0, -1) + ', not credible)' : l + ' (not credible)'}; });
+    var rl = rowLabels(rows, lw, 26);
+    var vals = []; c.rows.forEach(function (r) { vals.push(Math.abs(r.with_feedback), Math.abs(r.compliance_only)); });
+    var lo = Math.floor(Math.log10(Math.min.apply(null, vals))), hi = Math.ceil(Math.log10(Math.max.apply(null, vals)));
+    function X(v) { return lw + (Math.log10(Math.abs(v)) - lo) / (hi - lo) * (w - lw - 20); }
+    var lg = chartLegend(c, w, 0), top = lg.h + 8, yb = top + rl.total;
+    var s = lg.s;
+    var tk = []; for (var e = lo; e <= hi; e++) { tk.push(Math.pow(10, e)); }
+    s += xTicks(tk, X, top, yb, function (t) { return sig(t, 1); });
+    c.rows.forEach(function (r, i) {
+      var y = top + rl.tops[i] + rl.hs[i] / 2;
+      s += rowLabel(rl.lines[i], lw - 8, y, !r.credible);
+      s += '<line class="tick" x1="' + X(r.with_feedback) + '" x2="' + X(r.compliance_only) + '" y1="' + y + '" y2="' + y + '"/>';
+      s += markG(glyph(mw, X(r.with_feedback), y), r.label + ', ' + mw.label + ': ' + sig(r.with_feedback, 2) + ' I-units for 1 % more friction at one place');
+      s += markG(glyph(mo, X(r.compliance_only), y), r.label + ', without the feedback (compliance alone): ' + sig(r.compliance_only, 2) + ' I-units for 1 % more friction');
+    });
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Flatness per 1 % friction, with and without the exit-tension feedback, per pass') + s + xt.s + '</svg>';
+  }
+
+  // friction from each measured quantity, with the range its measuring error allows
+  var KIND_WORDS = {force: 'from the force', slip: 'from the forward slip', torque: 'from the torque'};
+  function recordsChart(c) {
+    var w = Math.min(760, chartWidth()), lw = Math.min(150, w * 0.28);
+    var rl = rowLabels(c.rows, lw, Math.max(26, 12 + 10 * Math.max.apply(null, c.rows.map(function (r) { return r.points.length; }))));
+    var vals = [c.case_value]; c.rows.forEach(function (r) { r.points.forEach(function (p) { vals.push(p.value, p.low, p.high); }); });
+    vals = vals.filter(isNum);
+    var rg = niceRange(Math.min.apply(null, vals), Math.max.apply(null, vals));
+    function X(v) { return lw + (v - rg[0]) / (rg[1] - rg[0]) * (w - lw - 16); }
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var s = lg.s + xTicks(ticks(rg[0], rg[1], 4), X, top, yb);
+    if (isNum(c.case_value)) {
+      var xc = X(c.case_value), right = xc > w * 0.75;
+      s += markG(refLine(xc, top - 4, xc, yb, 'case'), refLabel(c, 'case') + ': a friction coefficient of ' + sig(c.case_value, 3) + ' (no unit)') + refText(right ? xc - 4 : xc + 4, top - 8, refLabel(c, 'case'), right ? 'end' : null);
+    }
+    c.rows.forEach(function (r, i) {
+      var y0 = top + rl.tops[i], rowH = rl.hs[i], n = r.points.length;
+      s += rowLabel(rl.lines[i], lw - 8, y0 + rowH / 2);
+      r.points.forEach(function (p, k) {
+        var m = markOf(c, p.kind), y = y0 + rowH / 2 + (k - (n - 1) / 2) * 10;
+        if (isNum(p.low) && isNum(p.high)) { s += '<line class="interval" data-mark="' + esc(m.id) + '" stroke="' + COL[m.colour] + '" x1="' + X(p.low) + '" x2="' + X(p.high) + '" y1="' + y + '" y2="' + y + '"/>'; }
+        s += markG(glyph(m, X(p.value), y), r.label + ', friction ' + KIND_WORDS[p.kind] + ': ' + sig(p.value, 3) + ' (no unit)' + (isNum(p.low) ? ', between ' + sig(p.low, 3) + ' and ' + sig(p.high, 3) + ' for the measuring error' : ''));
+      });
+    });
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Friction from each pass record') + s + xt.s + '</svg>';
+  }
+
+  // the roll surface over one turn: temperature against angle after the roll gap
+  function cycleChart(c) {
+    var w = Math.min(860, chartWidth()), l = 34, r = Math.round(Math.min(170, w * 0.3)), hh = 170;
+    // labels at the line ends where each fits on one line; otherwise (a phone) the legend lists
+    // the same marks, drawn the same way, and the plot takes the whole width
+    var fits = c.series.every(function (ser, k) { return wrapLines(markOf(c, 's' + k).label, r - 10, 11).length === 1; });
+    if (!fits) { c = Object.assign({}, c, {legend: c.series.map(function (ser, k) { return 's' + k; })}); r = 14; }
+    var lg = chartLegend(c, w, 0), top = lg.h + 26;
+    var labs = [], all = []; c.series.forEach(function (s) { all = all.concat(s.temperature_k); });
+    var rg = niceRange(Math.min.apply(null, all) - 273.15, Math.max.apply(null, all) - 273.15);
+    function X(a) { return l + a / 360 * (w - l - r); }
+    function Y(tc) { return top + (rg[1] - tc) / (rg[1] - rg[0]) * hh; }
+    var s = lg.s + yTitle(c, 4, top - 12);
+    ticks(rg[0], rg[1], 5).forEach(function (t) { s += '<line class="grid" x1="' + l + '" x2="' + (w - r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text x="' + (l - 4) + '" y="' + (Y(t) + 4) + '" font-size="11" text-anchor="end">' + sig(t, 3) + '</text>'; });
+    [0, 90, 180, 270, 360].forEach(function (a) { s += '<text x="' + X(a) + '" y="' + (top + hh + 15) + '" font-size="11" text-anchor="middle">' + a + '</text>'; });
+    c.series.forEach(function (ser, k) {
+      var m = markOf(c, 's' + k);
+      // unwrap the angle so the line runs 0..360 from the roll gap exit
+      var pts = ser.angle_deg.map(function (a, i) { return [a, ser.temperature_k[i] - 273.15]; }).sort(function (p, q) { return p[0] - q[0]; });
+      s += lineOf(m, pts.map(function (p) { return X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1); }));
+      var end = pts[pts.length - 1];
+      labs.push({m: m, y: Y(end[1]) + 4});
+      s += markG(glyph({id: m.id, shape: 'circle', fill: 'solid', colour: m.colour}, X(end[0]), Y(end[1])), ser.label + ': ' + sig(end[1], 3) + ' °C just before the roll gap');
+    });
+    // labels beside the line ends, pushed apart and kept inside the plot
+    labs.sort(function (a, b) { return a.y - b.y; });
+    var prev = top + 4;
+    labs.forEach(function (lb) { lb.ls = wrapLines(lb.m.label, r - 10, 11); lb.y = Math.max(lb.y, prev); prev = lb.y + lb.ls.length * 13.2 + 3; });
+    var floor = top + hh;
+    for (var j = labs.length - 1; j >= 0; j--) {
+      var lim = j === labs.length - 1 ? floor - (labs[j].ls.length - 1) * 13.2 : labs[j + 1].y - labs[j].ls.length * 13.2 - 3;
+      if (labs[j].y > lim) { labs[j].y = lim; }
+    }
+    if (!fits) { labs = []; }
+    labs.forEach(function (lb) {
+      var x = w - r + 8;
+      s += '<text x="' + x + '" y="' + lb.y + '" font-size="11" style="fill:' + TEXTCOL[lb.m.colour] + '" class="dlab" data-mark="' + esc(lb.m.id) + '">' + lb.ls.map(function (t, i) { return '<tspan x="' + x + '" dy="' + (i ? 13.2 : 0) + '">' + esc(t) + '</tspan>'; }).join('') + '</text>';
+    });
+    var yb = top + hh, xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Roll surface temperature over one turn at three places') + s + xt.s + '</svg>';
+  }
+
+  // heat share per pass: entered and computed, with the measured range as a neutral area
+  function sharesChart(c) {
+    var me = markOf(c, 'entered'), mc = markOf(c, 'computed');
+    var w = Math.min(760, chartWidth()), lw = Math.min(200, w * 0.4);
+    var rl = rowLabels(c.rows, lw, 24);
+    function X(v) { return lw + v * (w - lw - 16); }
+    var lg = chartLegend(c, w, 0), top = lg.h + 20, yb = top + rl.total;
+    var s = lg.s;
+    if (c.band) {
+      s += markG(refArea(X(c.band[0]), top, X(c.band[1]) - X(c.band[0]), rl.total, 'measured'), refLabel(c, 'measured') + ': ' + sig(c.band[0] * 100, 2) + ' to ' + sig(c.band[1] * 100, 2) + ' % of the heat stays in the strip');
+      s += refText(X(c.band[1]) + 4, top - 8, refLabel(c, 'measured'));
+    }
+    s += xTicks([0, 0.25, 0.5, 0.75, 1], X, top, yb, function (t) { return Math.round(t * 100); });
+    c.rows.forEach(function (r, i) {
+      var y = top + rl.tops[i] + rl.hs[i] / 2;
+      s += rowLabel(rl.lines[i], lw - 8, y);
+      if (isNum(r.entered)) { s += markG(glyph(me, X(r.entered), y), r.label + ', entered: ' + sig(r.entered * 100, 2) + ' % of the heat stays in the strip'); }
+      s += markG(glyph(mc, X(Math.max(0, Math.min(1, r.computed))), y), r.label + ', computed by the tool: ' + sig(r.computed * 100, 2) + ' %');
+    });
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Heat share to the strip per pass, entered and computed') + s + xt.s + '</svg>';
+  }
+
+  // the published foil case on one line: two models, the published figure and the equations' range
+  function loadsChart(c) {
+    var w = Math.min(760, chartWidth()), l = 16, r = 16, y = 30;
+    var lo = Math.min(c.range[0], c.points[1].value) - 10, hi = Math.max(c.range[1], c.published) + 10;
+    function X(v) { return l + (v - lo) / (hi - lo) * (w - l - r); }
+    var s = '<line class="tick" x1="' + X(lo) + '" x2="' + X(hi) + '" y1="' + y + '" y2="' + y + '"/>';
+    s += markG(refArea(X(c.range[0]), y - 12, X(c.range[1]) - X(c.range[0]), 24, 'family'), refLabel(c, 'family') + ' give a load of ' + Math.round(c.range[0]) + ' to ' + Math.round(c.range[1]) + ' (no unit), depending on a detail the paper does not state');
+    s += markG(refLine(X(c.published), y - 16, X(c.published), y + 16, 'published'), 'Published figure: a load of ' + c.published + ' (no unit)');
+    s += refText(X(c.published), y + 30, refLabel(c, 'published'), 'middle');
+    var fam = refLabel(c, 'family') + ': ' + Math.round(c.range[0]) + ' to ' + Math.round(c.range[1]), fx = X(c.range[0]);
+    s += refText(fx + fam.length * 5.8 > w ? w - 2 : fx, y + 46, fam, fx + fam.length * 5.8 > w ? 'end' : null);
+    s += ticks(lo, hi, 5).map(function (t) { return '<text x="' + X(t) + '" y="' + (y + 64) + '" font-size="11" text-anchor="middle">' + sig(t, 3) + '</text>'; }).join('');
+    // the first model's label above the line, the second's below it: they never meet
+    c.points.forEach(function (p, k) {
+      var m = markOf(c, p.id), xl = X(p.value), left = xl < w * 0.6;
+      s += markG(glyph(m, xl, y), p.label + ': a load of ' + Math.round(p.value) + ' (no unit) on the published foil case');
+      s += labelText({id: m.id, label: p.label + ' ' + Math.round(p.value), colour: m.colour}, left ? Math.max(2, xl - 6) : Math.min(w - 2, xl + 6), k ? y + 30 : y - 18, left ? null : 'end', 11);
+    });
+    var xt = xTitle(c, y + 84, w);
+    return svgOpen(w, y + 74 + xt.h, 'Loads on the one published foil case') + s + xt.s + '</svg>';
+  }
+
+  // the one range chart: for each row a bar from low to high (the possible range), the value the
+  // scores or the model use as a distinct mark, other values as points; neutral reference lines
+  function rangeChart(c) {
+    var w = Math.min(760, chartWidth()), lw = Math.min(170, w * 0.32);
+    var rl = rowLabels(c.rows, lw, 30);
+    var vals = [];
+    c.rows.forEach(function (r) { [r.low, r.high].concat(r.points.map(function (p) { return p.value; })).forEach(function (v) { if (isNum(v)) { vals.push(v); } }); });
+    (c.references || []).forEach(function (x) { if (isNum(x.value)) { vals.push(x.value); } });
+    var log = !!c.log && vals.every(function (v) { return v > 0; });
+    var lo, hi, X, tk;
+    if (log) {
+      lo = Math.floor(Math.log10(Math.min.apply(null, vals))); hi = Math.ceil(Math.log10(Math.max.apply(null, vals)));
+      if (hi === lo) { hi += 1; }
+      X = function (v) { return lw + (Math.log10(v) - lo) / (hi - lo) * (w - lw - 20); };
+      tk = []; for (var e = lo; e <= hi; e++) { tk.push(Math.pow(10, e)); }
+    } else {
+      var rg = niceRange(Math.min.apply(null, vals), Math.max.apply(null, vals)); lo = rg[0]; hi = rg[1];
+      X = function (v) { return lw + (v - lo) / (hi - lo) * (w - lw - 20); };
+      tk = ticks(lo, hi, w < 500 ? 3 : 5);
+    }
+    var refs = (c.references || []).filter(function (x) { return isNum(x.value); });
+    var lg = chartLegend(c, w, 0), top = lg.h + 8 + refs.length * 14, yb = top + rl.total;
+    var s = lg.s + xTicks(tk, X, top, yb, function (t) { return sig(t, 3); });
+    refs.forEach(function (x, k) {
+      var xr = X(x.value), right = xr > w * 0.7;
+      s += markG(refLine(xr, top - 4, xr, yb, x.id), x.tip || (x.label + ': ' + sig(x.value, 3) + ' ' + axisWords(c.x_axis)));
+      s += refText(right ? xr - 4 : xr + 4, lg.h + 10 + k * 14, x.label, right ? 'end' : null);
+    });
+    var mr = markOf(c, 'range');
+    c.rows.forEach(function (r, i) {
+      var y = top + rl.tops[i] + rl.hs[i] / 2;
+      s += rowLabel(rl.lines[i], lw - 8, y);
+      if (isNum(r.low) && isNum(r.high) && r.high > r.low && (c.marks || []).some(function (m) { return m.id === 'range'; })) {
+        s += markG(barRect(mr, X(r.low), y - 7, X(r.high) - X(r.low), 14), r.label + ': from ' + sig(r.low, 3) + ' to ' + sig(r.high, 3) + ' ' + (r.unit || 'no unit') + (r.meaning ? '; ' + r.meaning : ''));
+      }
+      // the value the scores use is drawn last, so that no other point hides it
+      r.points.slice().sort(function (a, b) { return (a.id === 'used') - (b.id === 'used'); }).forEach(function (p) { s += markG(glyph(markOf(c, p.id), X(p.value), y), p.tip || (r.label + ': ' + sig(p.value, 3))); });
+    });
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Range: ' + axisWords(c.x_axis)) + s + xt.s + '</svg>';
+  }
+
+  // the valve map of the flatness loop: one row per valve, its level as the shade over time, and
+  // under it the largest zone error the flatness roll would read
+  function valveMap(c) {
+    var w = chartWidth(), l = 34, r = 8, mv = markOf(c, 'level'), me = markOf(c, 'error');
+    var n = (c.levels[0] || []).length, rowH = Math.max(5, Math.min(12, Math.floor(160 / Math.max(1, n))));
+    var lg = chartLegend(c, w, 0), top = lg.h + 22, mapH = n * rowH, gap = 30, errH = 70;
+    var t0 = 0, t1 = c.time_s[c.time_s.length - 1] || 1;
+    function X(t) { return l + (t - t0) / (t1 - t0) * (w - l - r); }
+    var s = lg.s + '<text x="4" y="' + (top - 8) + '" font-size="12" class="axis-title" data-axis="y">valve (control zone), 1 at the top</text>';
+    for (var z = 0; z < n; z++) {
+      var k0 = 0;
+      for (var k = 1; k <= c.time_s.length; k++) {
+        if (k === c.time_s.length || c.levels[k][z] !== c.levels[k0][z]) {
+          var lev = c.levels[k0][z], xa = X(k0 ? c.time_s[k0 - 1] : t0), xb = X(c.time_s[k - 1]);
+          // closed is a pale tint with an outline (never the card itself), open the full colour;
+          // the lightness ramp is steep in the upper half, where most valves sit
+          var op = 0.1 + 0.9 * Math.pow(lev, 2.2);
+          s += '<rect class="valve-outline" x="' + xa + '" y="' + (top + z * rowH) + '" width="' + Math.max(1, xb - xa) + '" height="' + (rowH - 1) + '"/>';
+          s += markG(barRect(mv, xa, top + z * rowH, xb - xa, rowH - 1).replace('/>', ' fill-opacity="' + op.toFixed(2) + '"/>'),
+            'Valve ' + (z + 1) + ': ' + Math.round(lev * 100) + ' % open from ' + Math.round(k0 ? c.time_s[k0 - 1] : 0) + ' s to ' + Math.round(c.time_s[k - 1]) + ' s');
+          if (k < c.time_s.length) { s += '<line class="valve-change" x1="' + xb + '" x2="' + xb + '" y1="' + (top + z * rowH) + '" y2="' + (top + z * rowH + rowH - 1) + '"/>'; }
+          k0 = k;
+        }
+      }
+      if (w >= 600 || z % Math.max(1, Math.ceil(n / 7)) === 0) { s += '<text x="' + (l - 4) + '" y="' + (top + z * rowH + rowH - 1) + '" font-size="10" text-anchor="end">' + (z + 1) + '</text>'; }
+    }
+    var e = c.error || {}, ey = top + mapH + gap, emax = Math.max.apply(null, (e.i_units || [1]).concat([1]));
+    function Y(v) { return ey + errH - v / emax * errH; }
+    s += '<text x="4" y="' + (ey - 8) + '" font-size="12" class="axis-title" data-axis="y2">' + esc(me.label) + '</text>';
+    s += '<line class="grid" x1="' + l + '" x2="' + (w - r) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"/><text x="' + (l - 4) + '" y="' + (Y(emax) + 4) + '" font-size="10" text-anchor="end">' + sig(emax, 2) + '</text><text x="' + (l - 4) + '" y="' + (Y(0) + 4) + '" font-size="10" text-anchor="end">0</text>';
+    if (e.time_s && e.time_s.length) {
+      s += lineOf(me, e.time_s.map(function (t, i) { return X(t).toFixed(1) + ',' + Y(e.i_units[i]).toFixed(1); }));
+      var ip = 0; e.i_units.forEach(function (v, i) { if (v > e.i_units[ip]) { ip = i; } });
+      s += markG(glyph({id: me.id, shape: 'circle', fill: 'solid', colour: me.colour}, X(e.time_s[ip]), Y(e.i_units[ip])), 'Largest zone error ' + sig(e.i_units[ip], 3) + ' I-units at ' + Math.round(e.time_s[ip]) + ' s');
+    }
+    var yb = ey + errH;
+    s += ticks(t0, t1, w < 500 ? 3 : 6).map(function (t) { return '<text x="' + X(t) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round(t) + '</text>'; }).join('');
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Valve levels over time and the largest zone error') + s + xt.s + '</svg>';
+  }
+
+  // the zone step test: what the flatness roll zone would read after the zone was closed
+  function stepResponse(c) {
+    var w = Math.min(860, chartWidth()), l = 40, r = Math.round(Math.min(170, w * 0.3)), hh = 150;
+    var fits = c.curves.every(function (cv, k) { return wrapLines(markOf(c, 'c' + k).label, r - 10, 11).length === 1; });
+    if (!fits) { c = Object.assign({}, c, {legend: c.curves.map(function (cv, k) { return 'c' + k; })}); r = 12; }
+    var lg = chartLegend(c, w, 0), top = lg.h + 26, all = [0], tmax = 0;
+    c.curves.forEach(function (cv) { all = all.concat(cv.i_units); tmax = Math.max(tmax, cv.time_s[cv.time_s.length - 1]); });
+    var rg = niceRange(Math.min.apply(null, all), Math.max.apply(null, all));
+    function X(t) { return l + t / tmax * (w - l - r); }
+    function Y(v) { return top + (rg[1] - v) / (rg[1] - rg[0]) * hh; }
+    var s = lg.s + yTitle(c, 4, top - 12);
+    ticks(rg[0], rg[1], 4).forEach(function (t) { s += '<line class="grid" x1="' + l + '" x2="' + (w - r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text x="' + (l - 4) + '" y="' + (Y(t) + 4) + '" font-size="11" text-anchor="end">' + sig(t, 3) + '</text>'; });
+    (c.references || []).forEach(function (x) {
+      if (!isNum(x.value)) { return; }
+      s += markG(refLine(X(x.value), top, X(x.value), top + hh, x.id), x.tip || (x.label + ': ' + sig(x.value, 3) + ' s'));
+      s += refText(X(x.value) + 4, top + 12, x.label);
+    });
+    c.curves.forEach(function (cv, k) {
+      var m = markOf(c, 'c' + k), step = Math.max(1, Math.floor(cv.time_s.length / 300));
+      s += lineOf(m, cv.time_s.filter(function (t, i) { return i % step === 0; }).map(function (t, j) { var i = j * step; return X(t).toFixed(1) + ',' + Y(cv.i_units[i]).toFixed(1); }));
+      var e = cv.time_s.length - 1;
+      s += markG(glyph({id: m.id, shape: 'circle', fill: 'solid', colour: m.colour}, X(cv.time_s[e]), Y(cv.i_units[e])), cv.label + ': ' + sig(cv.i_units[e], 3) + ' I-units after ' + Math.round(cv.time_s[e]) + ' s');
+      if (fits) { s += labelText({id: m.id, label: cv.label, colour: m.colour}, w - r + 6, Y(cv.i_units[e]) + 4 + (k - 1) * 13, null, 11); }
+    });
+    var yb = top + hh;
+    s += ticks(0, tmax, w < 500 ? 3 : 6).map(function (t) { return '<text x="' + X(t) + '" y="' + (yb + 15) + '" font-size="11" text-anchor="middle">' + Math.round(t) + '</text>'; }).join('');
+    var xt = xTitle(c, yb + 32, w);
+    return svgOpen(w, yb + 22 + xt.h, 'Zone step test: flatness roll reading over time') + s + xt.s + '</svg>';
+  }
+
+  function chartSvg(c) {
+    if (!c) { return ''; }
+    if (c.type === 'zones') { return shapemeterSvg(c, false, c); }
+    if (c.type === 'width_lines') { return widthLines(c); }
+    if (c.type === 'bars') { return barsChart(c); }
+    if (c.type === 'pass_levels') { return passLevels(c); }
+    if (c.type === 'records') { return recordsChart(c); }
+    if (c.type === 'cycle') { return cycleChart(c); }
+    if (c.type === 'shares') { return sharesChart(c); }
+    if (c.type === 'loads') { return loadsChart(c); }
+    if (c.type === 'range') { return rangeChart(c); }
+    if (c.type === 'valve_map') { return valveMap(c); }
+    if (c.type === 'step_response') { return stepResponse(c); }
+    return '';
+  }
+
+  // ------------------------------------------------------------------ the one add-on card pattern
+  function addonCard(card) {
+    var h = '<section class="card addon noprint" id="' + card.id + '"><h2>' + esc(card.title) + '</h2>';
+    h += '<p class="takeaway-line">' + gloss(card.takeaway) + '</p>';
+    if (card.left_out) {
+      return h + (S.run ? '<button type="button" class="btn" data-rerun="' + S.run.id + '" data-profile="detailed">Run in detail</button>' : '') + '</section>';
+    }
+    if (card.chart) { h += '<div class="fig">' + chartSvg(card.chart) + '</div>'; }
+    h += '<p class="howto">' + gloss(card.how_to_read) + '</p>';
+    if (card.caveat) { h += '<p class="warnline">' + gloss(card.caveat) + '</p>'; }
+    // one fold: the details, then the chart as a list (its text alternative)
+    h += '<details class="more"><summary>' + (card.details.length ? 'Details, and the chart as a list' : 'The chart as a list') + '</summary>' +
+      (card.details.length ? '<ul class="small">' + card.details.map(function (d) { return '<li>' + gloss(d) + '</li>'; }).join('') + '</ul>' : '') +
+      (card.details.length ? '<p class="small"><strong>The chart as a list</strong></p>' : '') + '<ul class="small">' + card.text_alternative.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul></details>';
+    return h + '<p class="small soft">From "' + esc(card.group_title) + '" in step 3.</p></section>';
+  }
+  function addonCards(sum) {
+    var cards = sum.addon_cards || [], by = {};
+    cards.forEach(function (c) { by[c.id] = c; });
+    var h = (sum.addon_sections || []).map(function (sec) {
+      var open = S.openSections && S.openSections[sec.group];
+      return '<details class="addon-section card noprint" id="sec-' + sec.group + '" data-section="' + sec.group + '"' + (open ? ' open' : '') + '><summary><span class="s-title">' + esc(sec.title) + '</span> <span class="small soft">' +
+        sec.cards.length + (sec.cards.length === 1 ? ' card' : ' cards') + '</span><span class="s-line">' + esc(sec.summary) + '</span></summary>' +
+        sec.cards.map(function (id) { return addonCard(by[id]); }).join('') + '</details>';
+    }).join('');
+    if (sum.addon_more && sum.addon_more.text) { h += '<p class="small soft quietline noprint">' + esc(sum.addon_more.text) + '</p>'; }
+    return h;
+  }
+
+  // the index near the top: one link per heading (nothing when nothing was added)
+  function addonIndex(sum) {
+    var secs = sum.addon_sections || [];
+    if (!secs.length) { return ''; }
+    return '<nav class="addon-index noprint" aria-label="From what you added"><span class="small">From what you added:</span> ' + secs.map(function (sec) {
+      return '<a href="#sec-' + sec.group + '" data-open-section="' + sec.group + '">' + esc(sec.title) + '</a>';
+    }).join('<span class="sep" aria-hidden="true"> · </span>') + '</nav>';
+  }
+
+  // ------------------------------------------------------------------ the add-on area of step 3
+  function addonStatusHtml(gid) {
+    var st = (model().addons || {})[gid] || {filled: false, summary: 'not filled in'};
+    return '<span class="g-state ' + (st.filled ? 'filled' : 'empty') + '">' + (st.filled ? '<span aria-hidden="true">●</span> ' : '<span aria-hidden="true">○</span> ') + esc(st.summary) + '</span>';
+  }
+  function addonClearHtml(gid) {
+    var st = (model().addons || {})[gid] || {}, g = M.addon_groups.filter(function (x) { return x.id === gid; })[0];
+    return st.filled && g ? '<button type="button" class="btn link g-clear" data-clear-group="' + gid + '" aria-label="Clear ' + esc(g.title) + '">Clear</button>' : '';
+  }
+  function addonCountHtml() {
+    var a = model().addons || {}, n = Object.keys(a).filter(function (k) { return a[k].filled; }).length;
+    return n ? n + ' of ' + M.addon_groups.length + ' in use' : 'none in use';
+  }
+  function addonArea() {
+    resetGloss();
+    var open = S.openMore && S.openMore.addons;
+    var h = '<details class="addons" data-more="addons"' + (open ? ' open' : '') + '><summary><span class="a-title">Add what else you have (optional)</span> <span class="small soft" data-view="addoncount">' + addonCountHtml() + '</span></summary>' +
+      '<p class="howto">A flatness roll, a gauge, a scan, pass records, oil data, or a model choice: each adds what it would show to the result. None of them changes the shortlist unless a model choice says so.</p><ul class="groups">';
+    M.addon_groups.forEach(function (g) {
+      var qs = g.questions.map(function (id) { return Q[id]; }).filter(function (q) { return q && shown(q) && visible(q); });
+      var gopen = S.openGroups && S.openGroups[g.id];
+      h += '<li class="addon-group"><details data-group="' + g.id + '"' + (gopen ? ' open' : '') + '><summary><span class="g-title">' + esc(g.title) + '</span><span data-view="addon:' + g.id + '">' + addonStatusHtml(g.id) + '</span></summary>' +
+        '<p class="help">' + gloss(g.help) + '</p>' + qs.map(function (q) { return renderQ(q); }).join('') +
+        '</details><span data-view="addonclear:' + g.id + '">' + addonClearHtml(g.id) + '</span></li>';
+    });
+    return h + '</ul></details>';
+  }
+  function clearGroup(gid) {
+    var g = M.addon_groups.filter(function (x) { return x.id === gid; })[0];
+    if (!g) { return; }
+    g.questions.forEach(function (id) {
+      var q = Q[id]; if (!q) { return; }
+      if (q.origin_tracked) { S.answers.values[id] = clone(pv(id)); S.answers.origins[id] = 'preset'; }
+      else { S.answers.values[id] = null; }
+      S.touched[id] = true;
+    });
+    touch(); render(); checkNow();
+    announce(g.title + ': cleared');
   }
   // ------------------------------------------------------------------ render and navigation
   function render() {
@@ -1910,7 +2598,7 @@ APP_JS = r''''use strict';
 
   // ------------------------------------------------------------------ events
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-step],[data-run],[data-cause],[data-answer],[data-check],[data-update],[data-discard],[data-open-run],[data-rerun],[data-cancel],[data-back-input],[data-goto],[data-report],[data-download],[data-print],[data-drawer],[data-trywhatif],[data-wstep],[data-list-add],[data-list-del],[data-route-use],[data-band-add],[data-band-del],[data-band-clear],[data-noz],[data-noz-reset],[data-noz-init],[data-defaults],[data-new],[data-mark]');
+    var t = e.target.closest('[data-step],[data-run],[data-cause],[data-answer],[data-check],[data-update],[data-discard],[data-open-run],[data-rerun],[data-cancel],[data-back-input],[data-goto],[data-report],[data-download],[data-print],[data-drawer],[data-trywhatif],[data-wstep],[data-list-add],[data-list-del],[data-route-use],[data-band-add],[data-band-del],[data-band-clear],[data-noz],[data-noz-reset],[data-noz-init],[data-defaults],[data-new],[data-mark],[data-clear-group],[data-open-section]');
     if (!t) { var m = e.target.closest('.mark'); if (m) { showTip(m); } return; }
     var d = t.dataset;
     if (d.step) { goStep(d.step); }
@@ -1970,6 +2658,12 @@ APP_JS = r''''use strict';
     else if (d.nozReset) { sendEdit({op: 'clear'}); }
     else if (d.nozInit) { sendEdit({op: 'all_healthy'}); }
     else if (d.defaults) { productDefaults(); }
+    else if (d.clearGroup) { clearGroup(d.clearGroup); }
+    else if (d.openSection) {
+      e.preventDefault();
+      var sec = document.getElementById('sec-' + d.openSection);
+      if (sec) { sec.open = true; sec.scrollIntoView({block: 'start'}); sec.querySelector('summary').focus({preventScroll: true}); }
+    }
     else if (d.new) { newScreening(); }
   });
 
@@ -2045,6 +2739,8 @@ APP_JS = r''''use strict';
     if (t.dataset && t.dataset.other) { S.otherOpen = t.open; }
     if (t.dataset && t.dataset.trust) { S.trustOpen = t.open; }
     if (t.dataset && t.dataset.nozlist) { S.nozListOpen = t.open; }
+    if (t.dataset && t.dataset.group) { S.openGroups = S.openGroups || {}; S.openGroups[t.dataset.group] = t.open; }
+    if (t.dataset && t.dataset.section) { S.openSections = S.openSections || {}; S.openSections[t.dataset.section] = t.open; }
   }, true);
   document.addEventListener('input', function (e) {
     var t = e.target, d = t.dataset;
@@ -2081,6 +2777,11 @@ APP_JS = r''''use strict';
   });
   document.addEventListener('focusin', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-tip')) { showTip(e.target); } });
   document.addEventListener('focusout', hideTip);
+  // a tooltip never stays behind at an old place: it follows its focused mark, or goes
+  window.addEventListener('scroll', function () {
+    var a = document.activeElement;
+    if (a && a.getAttribute && a.getAttribute('data-tip')) { showTip(a); } else { hideTip(); }
+  }, {passive: true});
   document.addEventListener('pointerover', function (e) { var m = e.target.closest && e.target.closest('[data-tip]'); if (m && e.pointerType === 'mouse') { showTip(m); } });
   document.addEventListener('pointerout', function (e) { if (e.target.closest && e.target.closest('[data-tip]')) { hideTip(); } });
 

@@ -1,11 +1,17 @@
 """EXPERIMENTAL thin-gauge roll bite with an elastic-foundation ("mattress") roll (SI, stdlib).
 
 Status: ``UNVALIDATED_EXPERIMENTAL_MATTRESS_FOIL_BITE``. The equations are the planner's
-reduction [D] in the spirit of Fleck & Johnson (1987, Int. J. Mech. Sci. 29:507; read only
-through a poor OCR copy) and of the MISG report "A simple model for the cold rolling of metal
-foil" [V, non-dimensional form (h - G2)p' + mu*p = x]. It is NOT the Fleck-Johnson hybrid
+reduction [D]: a plain Winkler-foundation ("mattress") bite, in the non-dimensional form of the
+MISG report "A simple model for the cold rolling of metal foil" [V, (h - G2)p' + mu*p = x].
+Fleck & Johnson (1987, Int. J. Mech. Sci. 29:507) used a foundation only for the perturbation
+of a Hertzian pressure and rejected the plain mattress [BT-S2 FT]; Fleck et al. (1992)
+abandoned it because it under-predicts load by up to a factor 2 and torque by up to a factor
+10 [BT-S1 FT]. Fleck & Johnson's modulus is K_p = 8E*/(3*pi*a0) = 0.849 E*/a0; this module
+uses (3*pi/8)E*/a = 1.178 E*/a (below). It is NOT the Fleck-Johnson hybrid
 model: the strip is rigid-perfectly-plastic (no elastic strip zones), the roll is a local
-Winkler foundation, and no benchmark with fully known inputs was found. Software-verified
+Winkler foundation. On the one published foil-bite case with every input stated (Fleck et al.
+1992, Fig. 9, BT-V1 [FT]) it returns 0.42 of the half-space reference load [run]: a recorded
+discrepancy, see ``physicroll/benchmarks.py``. Software-verified
 for internal consistency only (rigid limit, junction continuity, Coulomb limits, energy
 identity, grid convergence, trends); no plant or literature validation is claimed.
 
@@ -133,15 +139,31 @@ BASIS = {
                           'the spec quoted 1.18*E*/a from memory [M]',
     'stone_minimum_thickness': '[M] t_min = 3.58*mu*D*(Y - sigma_mean)/E_roll, context only',
     'non_dimensional_form': '[V] MISG foil report: (h - G2)p\' + mu*p = x',
+    'literature_context': '[BT-S2 FT] Fleck & Johnson used a foundation only for the '
+                          'perturbation of a Hertzian pressure (K_p = 8E*/(3*pi*a0) = '
+                          '0.849E*/a0) and rejected the plain mattress; [BT-S1 FT] Fleck et al. '
+                          '1992 abandoned it (load under-predicted by up to 2x, torque by up '
+                          'to 10x)',
 }
 
+# X20 [SPEC17]: the cause of large forward slip, worded once and used everywhere.
+LARGE_SLIP_FLAG = 'FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL'   # threshold 0.15
+LARGE_SLIP_EXPLANATION = (
+    'Large forward slip is what a constant Coulomb friction model with a no-slip zone gives. One '
+    'published model computes 5 % to 45 % on a 50 -> 25 um pass and describes such values as '
+    'met in practice (model output) [BT-S3 EX]; mill trials show that constant friction '
+    'over-estimates forward slip and that friction varying through the bite repairs it '
+    '[BT-S5 AB]. Elastic strip zones are not the cause: they are negligible for reductions '
+    'above 10 % [BT-S1 FT].')
+
 _LIMITATIONS = [
-    'EXPERIMENTAL planner reduction: rigid-plastic strip on a local Winkler roll; not the '
-    'Fleck-Johnson hybrid model and not benchmarked against any case with fully known inputs.',
+    'EXPERIMENTAL planner reduction: rigid-plastic strip on a local Winkler roll, a plain '
+    'mattress that Fleck & Johnson rejected [BT-S2 FT]; on the one published case with fully '
+    'stated inputs it returns 0.42 of the half-space reference load (physicroll.benchmarks, '
+    'BT-V1).',
     'The foundation modulus is a Hertz line-contact calibration applied to a non-Hertzian bite; '
     'force scales strongly with it.',
-    'No elastic strip zones: in the foil regime the roll recovery after the no-slip zone is '
-    'taken up by plastic thinning, which can give implausibly large forward slip.',
+    LARGE_SLIP_EXPLANATION,
     'Coulomb friction with a constant coefficient; no lubricant film, no friction capped at '
     'shear yield (rejected instead), no hardening, rate or thermal effects.',
     'Numerical convergence and internal consistency are not physical validation.',
@@ -610,7 +632,7 @@ def solve_mattress_bite(entry_thickness_m, exit_thickness_m, width_m, work_roll_
     if force_change > 1e-4 or slip_change > 1e-6:
         flags.append('GRID_REFINEMENT_NOT_MET')
     if core['forward_slip_fraction'] > 0.15:
-        flags.append('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES')
+        flags.append(LARGE_SLIP_FLAG)
     if h1 < 2 * core['limiting_thickness_m']:
         flags.append('NEAR_MATTRESS_LIMITING_THICKNESS')
     flags += _domain_flags(h0, h1)
@@ -788,7 +810,7 @@ def derive_bite_response_mattress(bite_pass, *, roll_youngs_modulus_pa=210e9,
             1e-4 * abs(fine['force_per_width_n_m']):
         flags.append('GRID_REFINEMENT_NOT_MET')
     if nominal['forward_slip_fraction'] > 0.15:
-        flags.append('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES')
+        flags.append(LARGE_SLIP_FLAG)
     ratio = nominal['contact_length_m'] ** 2 / (p.work_roll_radius_m * (h0 - h1))
     if ratio < 1:
         ratio = 1.0

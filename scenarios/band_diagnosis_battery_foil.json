@@ -9,7 +9,12 @@
     "At 30 um the mill is in or near closed-gap rolling, which the tool does not model: see the foil-regime block. The lever table and the gauge-control section assume an open gap.",
     "Phase-1 coolant section kept consistent with width_model.spray_header; its geometric screen can only represent a FULLY blocked nozzle, so nozzle 11 is listed as blocked there although width_model gives it flow level 0.45.",
     "worse_at_lower_tension is left null although the model in-mill onset of the stripe falls with tension (6.8 um at 40 MPa, 1.6 um at 8 MPa at the case pass): a band hidden under tension is also \"worse at lower tension\", so this observation does not separate foil tension lines from a latent thermal stripe.",
-    "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check."
+    "Final pass F2 0.030 -> 0.018 mm (plant final gauge 17-19 um) and the thinnest product's alternative route ALT1 0.050 -> 0.025 mm and ALT2 0.025 -> 0.012 mm (52 %): the passes below 20 um get experimental mattress bites in the extended domain, flagged; the 12 um bite is expected to lie outside the force range reported for battery-foil passes and is then marked not credible and excluded from every trend statement. Speeds follow published practice: 450-650 m/min on the single-sheet final pass, 550-1000 m/min on earlier passes. The plant rolls the final pass single-sheet (plant statement; material.final_pass_doubled false). material.product battery_collector_foil drives the evidence-neutral product check.",
+    "measurement.shapemeter (SPEC17, synthetic): 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone, no neighbour spreading; it shows what such a shapemeter would read for the modelled bands, not a plant record.",
+    "width_model.strip_temperature (SPEC17, synthetic): +3 K at the partly blocked nozzle, an assumption, not a model output; it shows how the strip-temperature term changes the flatness a shapemeter measures hot.",
+    "width_model.local_coupling (SPEC19, synthetic): inlet temperature weight 0.5 (the mean of roll and strip surface, an assumption), softening 0.15 %/K (derived from 1100-H18 strengths at 20 and 100 C [PT-T31, PT-T39]) and 10 l/min of oil per nozzle (assumed); it shows the oil viscosity, film, friction, flow stress and strip exit temperature across the width as differences from a healthy header, and changes no score.",
+    "width_model.flatness_control (SPEC19, synthetic): a closed spray loop with valves in 5 % steps, 10 s minimum on and off times, a 2 I-unit dead band and 14 control zones of two nozzles, on the shapemeter above; an assumption, not a plant setting. It shows what such a loop would do on this model with the tool's own control law, not what the plant's controller does, and changes no score.",
+    "width_model.zone_step_test (SPEC19, synthetic): the zone of the demo's valve event (nozzles 18-19) closed for 120 s, 2 m to the shapemeter and a 1 s display filter assumed; it shows which first-order time constant a plant step test of 20 to 120 s would fit on this model, with and without the strip-side terms, beside the published 20 s, and changes no score."
   ],
   "pass": {
     "entry_thickness_m": 5e-05,
@@ -291,7 +296,105 @@
     "cooling_zone_pitch_m": 0.104,
     "deflector_roll_radius_m": 0.125,
     "lateral_compressive_stress_pa": null,
-    "shape_inputs": null
+    "shape_inputs": null,
+    "strip_temperature": {
+      "positions_m": [
+        0.15,
+        0.2,
+        0.25,
+        0.3,
+        0.35,
+        0.4,
+        0.45,
+        0.5,
+        0.55,
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9,
+        0.95,
+        1.0,
+        1.05,
+        1.1,
+        1.15,
+        1.2,
+        1.25,
+        1.3,
+        1.35
+      ],
+      "temperature_k": [
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.151,
+        353.197,
+        353.849,
+        355.757,
+        355.583,
+        353.717,
+        353.183,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15,
+        353.15
+      ],
+      "expansion_coefficient_per_k": null,
+      "provenance": "synthetic: +3 K at the partly blocked nozzle, an assumption, not a model output (Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at 50 mm pitch)"
+    },
+    "friction_stripe_screen": {
+      "reference_half_peak_width_m": null,
+      "stripes": []
+    },
+    "local_coupling": {
+      "inlet_roll_temperature_weight": 0.5,
+      "flow_stress_temperature_coefficient_per_k": 0.0015,
+      "strip_roll_temperature_coupling": null,
+      "oil_flow_per_nozzle_m3_s": 0.00016667,
+      "oil_capture_fraction": 1.0,
+      "provenance": "synthetic: inlet weight 0.5 (two-surface mean, assumed); softening 0.15 %/K from the 1100-H18 strengths at 20 and 100 C [PT-T31, PT-T39; coefficient derived]; 10 l/min per nozzle (assumed)"
+    },
+    "flatness_control": {
+      "valve_levels": [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0],
+      "initial_level": 1.0,
+      "minimum_on_time_s": 10.0,
+      "minimum_off_time_s": 10.0,
+      "dead_band_i_units": 2.0,
+      "control_zone_nozzles": null,
+      "integral_gain": 0.1,
+      "control_interval_s": 2.0,
+      "low_order_removed": 2,
+      "target_i_units": null,
+      "supplied_actuators": null,
+      "horizon_s": 1800.0,
+      "shapemeter_distance_m": null,
+      "display_time_constant_s": 0.0,
+      "include_local_sources": false,
+      "provenance": "synthetic: modulating valves in 5 % steps, 14 zones of two nozzles; an assumption, not a plant setting"
+    },
+    "zone_step_test": {
+      "nozzle_indices": [18, 19],
+      "level": 0.0,
+      "hold_s": 120.0,
+      "fit_windows_s": [20, 40, 60, 120],
+      "time_step_s": 0.5,
+      "shapemeter_distance_m": 2.0,
+      "display_time_constant_s": 1.0,
+      "provenance": "synthetic: the zone of the demo's valve event; 2 m to the shapemeter and a 1 s display filter assumed"
+    }
   },
   "tribology": {
     "lubricant": {
@@ -331,5 +434,18 @@
       600000.0
     ]
   },
-  "incoming_variation": null
+  "incoming_variation": null,
+  "measurement": {
+    "shapemeter": {
+      "zone_width_m": 0.052,
+      "zone_count": 24,
+      "edge_zone_width_m": null,
+      "edge_zone_count_per_side": 0,
+      "centre_m": null,
+      "neighbour_spreading_fraction": 0.0,
+      "resolution_i_units": null,
+      "provenance": "synthetic: 24 zones of 52 mm centred on the mill centre line, one spray nozzle per zone"
+    },
+    "thickness_gauge": null
+  }
 }

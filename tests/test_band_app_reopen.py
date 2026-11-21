@@ -12,6 +12,7 @@ import unittest
 
 from physicroll import band_diagnosis as bd
 from tests.test_band_app import ROOT, ServerCase, fake_engine
+from tests.test_band_app_drawing import Api, model_zones
 
 REBUILT_FIELDS = ('provenance', 'notes')
 
@@ -261,3 +262,112 @@ class DependentAnswersTest(ServerCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ShapemeterRunTest(ServerCase):
+    """SPEC17 package 9: a run with a shapemeter stores it, the result card shows the zones the
+    page drew before the run (the zones the engine reports), and the run reopens with it."""
+    engine = None                                   # the real engine (quick profile)
+
+    def test_shapemeter_run_stores_draws_and_reopens(self):
+        api = Api(self)
+        lv = [1.0] * 28
+        lv[11] = 0.0
+        api.answers['values'].update(shapemeter_zone_width=52.0, shapemeter_zone_count=24,
+                                     nozzle_levels=lv)
+        st, out = api.check()
+        self.assertEqual(st, 200, out)
+        drawn = model_zones(out)
+        self.assertEqual(len(drawn), 24)
+        st, run = self.client.json('POST', '/api/runs', api.body(profile='quick'))
+        self.assertEqual(st, 202, run)
+        done, _ = self.wait(run['id'])
+        self.assertEqual(done['run']['status'], 'done', done['run'].get('error'))
+        rid = run['id']
+        case = json.loads((self.tmp / rid / 'case.json').read_text())
+        self.assertEqual((case['measurement']['shapemeter']['zone_width_m'],
+                          case['measurement']['shapemeter']['zone_count']), (0.052, 24))
+        result = json.loads((self.tmp / rid / 'result.json').read_text())
+        sm = result['measurement']['shapemeter']
+        self.assertEqual([(z['start_m'], z['end_m'], [i + 1 for i in z['nozzle_indices']])
+                          for z in sm['zones']], drawn)
+        sv = done['summary']['shapemeter_view']
+        self.assertTrue(sv['available'])
+        self.assertEqual([(z['start_m'], z['end_m']) for z in sv['zones']],
+                         [(a, b) for a, b, _ in drawn])
+        st, ro = self.client.json('GET', f'/api/runs/{rid}/reopen')
+        self.assertEqual(st, 200, ro)
+        self.assertEqual((ro['answers']['values']['shapemeter_zone_width'],
+                          ro['answers']['values']['shapemeter_zone_count']), (52.0, 24))
+        st, chk = self.client.json('POST', '/api/case/check',
+                                   {'preset': ro['preset'], 'answers': ro['answers']})
+        self.assertEqual(st, 200, chk)
+        self.assertEqual(chk['case']['measurement'], case['measurement'])
+        self.assertEqual(model_zones(chk), drawn)
+
+
+class PassRecordsRunTest(ServerCase):
+    """SPEC18 package 12: a run with pass records (and the other Phase 1 answers) stores them
+    in its case and reopens with the same answers."""
+    engine = staticmethod(fake_engine)
+
+    def test_pass_records_run_stores_and_reopens(self):
+        api = Api(self)
+        records = [{'label': 'coil 4711', 'separating_force_n': 1200.0,
+                    'forward_slip_fraction': 6.0, 'torque_per_work_roll_nm': None,
+                    'exit_speed_m_s': None}]
+        api.answers['values'].update(pass_records=records,
+                                     spray_arcs=[{'start_rad': 90.0, 'arc_rad': 60.0}])
+        st, out = api.check()
+        self.assertEqual(st, 200, out)
+        self.assertEqual(out['model']['addons']['pass_records'],
+                         {'filled': True, 'summary': '1 record', 'needs': []})
+        st, run = self.client.json('POST', '/api/runs', api.body(profile='quick'))
+        self.assertEqual(st, 202, run)
+        done, _ = self.wait(run['id'])
+        self.assertEqual(done['run']['status'], 'done')
+        case = json.loads((self.tmp / run['id'] / 'case.json').read_text())
+        self.assertEqual(case['measurement']['pass_records'][0]['separating_force_n'], 1.2e6)
+        st, ro = self.client.json('GET', f'/api/runs/{run["id"]}/reopen')
+        self.assertEqual(st, 200, ro)
+        self.assertEqual(ro['answers']['values']['pass_records'], records)
+        st, chk = self.client.json('POST', '/api/case/check',
+                                   {'preset': ro['preset'], 'answers': ro['answers']})
+        self.assertEqual(st, 200, chk)
+        self.assertEqual(chk['case']['measurement'], case['measurement'])
+        self.assertEqual(chk['case']['width_model']['circumferential_layout'],
+                         case['width_model']['circumferential_layout'])
+
+
+class FlatnessControlRunTest(ServerCase):
+    """SPEC19 package 15: a run with a flatness control on the sprays (and its flatness roll)
+    stores the valves in its case and reopens with the same answers."""
+    engine = staticmethod(fake_engine)
+
+    def test_flatness_control_run_stores_and_reopens(self):
+        api = Api(self)
+        api.answers['values'].update(shapemeter_zone_width=52.0, shapemeter_zone_count=24,
+                                     valve_levels_kind=[0.0, 1.0], valve_min_on=10.0,
+                                     valve_min_off=10.0, flatness_dead_band=2.0,
+                                     control_zone_size=2)
+        st, out = api.check()
+        self.assertEqual(st, 200, out)
+        self.assertTrue(out['model']['addons']['flatness_control']['filled'])
+        self.assertEqual(len(out['model']['control_zones']['valves']),
+                         len(out['case']['width_model']['flatness_control'][
+                             'control_zone_nozzles']))
+        st, run = self.client.json('POST', '/api/runs', api.body(profile='quick'))
+        self.assertEqual(st, 202, run)
+        done, _ = self.wait(run['id'])
+        self.assertEqual(done['run']['status'], 'done')
+        case = json.loads((self.tmp / run['id'] / 'case.json').read_text())
+        fc = case['width_model']['flatness_control']
+        self.assertEqual((fc['valve_levels'], fc['control_zone_nozzles'][0]), ([0.0, 1.0], [0, 1]))
+        st, ro = self.client.json('GET', f'/api/runs/{run["id"]}/reopen')
+        self.assertEqual(st, 200, ro)
+        for k in ('valve_levels_kind', 'valve_min_on', 'control_zone_size'):
+            self.assertEqual(ro['answers']['values'][k], api.answers['values'][k], k)
+        st, chk = self.client.json('POST', '/api/case/check',
+                                   {'preset': ro['preset'], 'answers': ro['answers']})
+        self.assertEqual(st, 200, chk)
+        self.assertEqual(chk['case']['width_model']['flatness_control'], fc)

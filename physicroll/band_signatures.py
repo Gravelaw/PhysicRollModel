@@ -39,12 +39,17 @@ Lubrication screens: forward-slip screen (Reid & Schey 1978 for full-film negati
 herringbone (Komori 1996; Szucs et al. 2020; Alcoa US 5,508,119 citing Schey); inlet film
 ``h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))`` attributed in the project
 spec to Wilson & Walowit (1972) and QUOTED FROM MEMORY (not in the verified source list;
-flagged in every result); film ratio ``Lambda = h_s/sqrt(Rq_r^2+Rq_s^2)`` with boundary
-< 1 <= mixed <= 3 < hydrodynamic (Sutcliffe 2002).
+flagged in every result); film ratio ``Lambda = h_s/sqrt(Rq_r^2+Rq_s^2)`` labelled as in
+``bite_tribology``: mixed with substantial asperity contact below 1 (the normal condition for
+a roll imprint), mixed with first contact 1-3, hydrodynamic above 3 (Sutcliffe 2002; BT-S9
+EX); common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX). No boundary-regime threshold.
 
 Coolant sprays (Lloyd, Lechler 2010; Tucker, Lechler 2006): flat-fan footprint
-``W = 2*s*tan(angle/2)``; along-header width ``W_eff = W*cos(offset)``; overlap
-``(W_eff - pitch)/W_eff``; free thermal radius growth ``dR = alpha*R*dT`` (upper bound);
+``W = 2*s*tan(angle/2)`` [D] geometric; neither paper prints it [SN1 FT; SN3 FT]; catalogue
+widths are 6-14 % larger [SN5 VP; computed]; along-header width ``W_eff = W*cos(offset)``, taken
+from ``roll_thermal.SprayHeader.effective_footprint_width_m`` (a supplied pattern width replaces
+it); overlap ``(W_eff - pitch)/W_eff`` (definition varies between sources; 10-30 % or 10-50 %
+of the pattern width [PT-T21; PT-T22; SN7; SN13]); free thermal radius growth ``dR = alpha*R*dT`` (upper bound);
 local gap closure fraction ``2*dR/h_exit`` (both work rolls grow).
 
 NOT modelled: roll-stack dynamics (see ``physicroll.chatter``), strip wave propagation,
@@ -57,6 +62,9 @@ from dataclasses import dataclass
 import json
 import math
 import re
+
+from .bite_tribology import (REGIME_BOUNDARIES, _REGIME_WORDS, _regime,
+                             in_common_industrial_window)
 
 SOURCES = {
     'kim_2012': 'Kim, Kim, Park et al. (2012) ISIJ Int. 52:2042, '
@@ -340,6 +348,53 @@ def _keys(name, item, required):
         raise ValueError(f'{name} entries must be dicts with exactly keys {sorted(required)}')
 
 
+# SPEC20 part 2: grinder chatter leaves n = f/n_roll marks per roll circumference
+# [RG25 AB, RG26 AB, RG24 VP]; f = the vibration frequency when given, else the wheel rotation
+# frequency (once-per-wheel-revolution forcing). The count need not be an integer: grinder
+# chatter is a spiral on the roll and the strip carries its local pitch circumference/n.
+GRINDER_SETTING_KEYS = ('wheel_rotation_hz', 'roll_rotation_hz', 'vibration_frequency_hz')
+GRINDER_COUNT_BASIS = '[RG25 AB, RG26 AB, RG24 VP] n = f/n_roll'
+
+
+def grinder_mark_count(g, index=0):
+    """(count, how obtained, basis) of one validated ``grinder_marks`` entry."""
+    if g.get('marks_per_circumference') is not None:
+        return float(g['marks_per_circumference']), 'supplied', 'supplied count'
+    nr = g['roll_rotation_hz']
+    if g.get('vibration_frequency_hz') is not None:
+        return (g['vibration_frequency_hz'] / nr,
+                'computed from vibration frequency and roll speed', GRINDER_COUNT_BASIS)
+    return (g['wheel_rotation_hz'] / nr, 'computed from wheel and roll speed',
+            GRINDER_COUNT_BASIS)
+
+
+def validate_grinder_mark(g, i):
+    """One ``grinder_marks`` entry: ``roll`` and EITHER ``marks_per_circumference`` OR the
+    grinder's last-pass settings (``roll_rotation_hz`` with ``wheel_rotation_hz`` and/or
+    ``vibration_frequency_hz``)."""
+    where = f'grinder_marks[{i}]'
+    allowed = {'roll', 'marks_per_circumference'} | set(GRINDER_SETTING_KEYS)
+    if not isinstance(g, dict) or 'roll' not in g or set(g) - allowed:
+        raise ValueError(f'{where} must be a dict with roll and either marks_per_circumference '
+                         'or wheel_rotation_hz / vibration_frequency_hz with roll_rotation_hz')
+    if g['roll'] not in ('work_roll', 'backup_roll'):
+        raise ValueError(f"{where}: grinder mark roll must be 'work_roll' or 'backup_roll'")
+    count = g.get('marks_per_circumference')
+    settings = {k: g.get(k) for k in GRINDER_SETTING_KEYS if g.get(k) is not None}
+    if (count is None) == (not settings):
+        raise ValueError(f'{where}: give exactly one of marks_per_circumference or the '
+                         'grinder settings (roll_rotation_hz with wheel_rotation_hz or '
+                         'vibration_frequency_hz)')
+    if count is not None:
+        _int(f'{where}.marks_per_circumference', count, lo=1, hi=100000)
+        return
+    if 'roll_rotation_hz' not in settings or len(settings) < 2:
+        raise ValueError(f'{where}: the grinder settings need roll_rotation_hz and '
+                         'wheel_rotation_hz or vibration_frequency_hz')
+    for k, v in settings.items():
+        _num(f'{where}.{k}', v, positive=True, hi=1e5)
+
+
 @dataclass(frozen=True)
 class MillKinematics:
     """Rotating-element geometry of one stand; diameters in m, all optional lists as tuples."""
@@ -380,11 +435,8 @@ class MillKinematics:
                 raise ValueError("bearing shaft must be 'work_roll' or 'backup_roll'")
             bearing_defect_orders(b['elements'], b['element_diameter_m'], b['pitch_diameter_m'],
                                   b['contact_angle_rad'])
-        for g in _seq('grinder_marks', self.grinder_marks):
-            _keys('grinder_marks', g, ('roll', 'marks_per_circumference'))
-            if g['roll'] not in ('work_roll', 'backup_roll'):
-                raise ValueError("grinder mark roll must be 'work_roll' or 'backup_roll'")
-            _int('marks_per_circumference', g['marks_per_circumference'], lo=1, hi=100000)
+        for i, g in enumerate(_seq('grinder_marks', self.grinder_marks)):
+            validate_grinder_mark(g, i)
         for i, d in enumerate(_seq('deflector_roll_diameters_m', self.deflector_roll_diameters_m)):
             _diameter(f'deflector_roll_diameters_m[{i}]', d)
         for label in ('entry_coil_diameter_m', 'exit_coil_diameter_m'):
@@ -459,11 +511,12 @@ def source_catalogue(mill, exit_speed_m_s, forward_slip_fraction, *,
             locked(f'bearing:{label}:{key}', f"{b['shaft']} bearing {label} {desc}",
                    mult * scale, 'bearing', [SOURCES['randall_antoni_2011'], SOURCES['innoval']])
     for i, g in enumerate(mill.grinder_marks):
-        n = g['marks_per_circumference']
+        n, how, _ = grinder_mark_count(g, i)
         scale = 1.0 if g['roll'] == 'work_roll' else dw / db
-        locked(f"grinder_marks:{g['roll']}:{i}",
-               f"{n} grinder/chatter marks per circumference on the {g['roll']}",
-               n * scale, 'grinder_marks')
+        text = (f"{g['marks_per_circumference']} grinder/chatter marks per circumference on the "
+                f"{g['roll']}" if how == 'supplied' else
+                f"{n:.4g} grinder/chatter marks per circumference on the {g['roll']} ({how})")
+        locked(f"grinder_marks:{g['roll']}:{i}", text, n * scale, 'grinder_marks')
     for i, d in enumerate(mill.deflector_roll_diameters_m):
         d = float(d)
         freq = ux / (math.pi * d)
@@ -806,7 +859,12 @@ def inlet_film_thickness_wilson_walowit(viscosity_pa_s, pressure_viscosity_coeff
 
 
 def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_m):
-    """Film ratio ``Lambda = h/sqrt(Rq_r^2+Rq_s^2)``: < 1 boundary, 1-3 mixed, > 3 hydrodynamic."""
+    """Film ratio ``Lambda = h/sqrt(Rq_r^2+Rq_s^2)`` and its label.
+
+    ``< 1`` MIXED_SUBSTANTIAL_CONTACT (normal for a roll imprint), ``1-3`` MIXED_FIRST_CONTACT,
+    ``> 3`` HYDRODYNAMIC [Sutcliffe 2002; BT-S9 EX]; ``in_common_industrial_window`` for
+    0.01-0.5 [BT-S3 EX, BT-S9 EX]. No boundary-regime label: no source read gives a threshold.
+    """
     h = _num('film_thickness_m', film_thickness_m, nonnegative=True, hi=1e-3)
     rr = _num('roll_roughness_rq_m', roll_roughness_rq_m, nonnegative=True, hi=1e-4)
     rs = _num('strip_roughness_rq_m', strip_roughness_rq_m, nonnegative=True, hi=1e-4)
@@ -814,13 +872,8 @@ def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_
     if rq <= 0:
         raise ValueError('composite roughness must be > 0')
     lam = h / rq
-    if lam < 1:
-        regime = 'BOUNDARY'
-    elif lam <= 3:
-        regime = 'MIXED'
-    else:
-        regime = 'HYDRODYNAMIC'
-    reasons = [f'Film ratio {lam:.3f}: {regime.lower()} lubrication.',
+    regime = _regime(lam)
+    reasons = [f'Film ratio {lam:.3f}: {_REGIME_WORDS[regime]}.',
                'Film thickness rises with speed and viscosity, lowering friction; lower '
                'friction shrinks the chatter margin.']
     flags = []
@@ -831,9 +884,13 @@ def film_ratio_regime(film_thickness_m, roll_roughness_rq_m, strip_roughness_rq_
     return _checked({
         'status': f'{regime}_LUBRICATION', 'regime': regime, 'film_ratio': lam,
         'composite_roughness_rq_m': rq, 'film_thickness_m': h,
-        'regime_boundaries': {'boundary_below': 1.0, 'hydrodynamic_above': 3.0},
-        'threshold_basis': 'Conventional regime boundaries (Sutcliffe 2002); transitions are '
-                           'gradual, not sharp.',
+        'in_common_industrial_window': in_common_industrial_window(lam),
+        'regime_boundaries': dict(REGIME_BOUNDARIES),
+        'threshold_basis': 'Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 '
+                           'substantial asperity contact inside the mixed regime, the normal '
+                           'condition for a roll imprint; common industrial window 0.01-0.5 '
+                           '(BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions '
+                           'are gradual, not sharp.',
         'reasons': reasons, 'flags': flags,
         'limitations': ['Rq-based ratio ignores roughness lay/orientation and asperity '
                         'flattening in the bite.'],
@@ -850,7 +907,7 @@ def flat_fan_footprint_width_m(standoff_m, spray_angle_rad):
 
 def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
                    offset_angle_rad=0.0, blocked_nozzle_indices=(), first_nozzle_position_m=None,
-                   resolution_m=0.002):
+                   resolution_m=0.002, footprint_width_m=None):
     """Overlap count of flat fans along a header; under-covered stripes -> lengthwise bands.
 
     Positions are along the barrel from 0 to L. Default layout: n = floor(L/pitch) nozzles
@@ -863,7 +920,7 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         raise ValueError('nozzle_pitch_m must not exceed barrel_length_m')
     width = flat_fan_footprint_width_m(standoff_m, spray_angle_rad)
     offset = _num('offset_angle_rad', offset_angle_rad, nonnegative=True,
-                  hi=math.radians(60))
+                  hi=math.radians(70))
     res = _num('resolution_m', resolution_m, positive=True, hi=0.1 * length)
     if first_nozzle_position_m is None:
         count = max(1, int(math.floor(length / pitch + 1e-9)))
@@ -877,7 +934,12 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         raise ValueError('blocked_nozzle_indices must be a tuple of ints')
     blocked = sorted({_int('blocked nozzle index', i, lo=0, hi=count - 1)
                       for i in blocked_nozzle_indices})
-    w_eff = width * math.cos(offset)
+    # SPEC22: the width from the ONE property of the header (geometric unless supplied)
+    from .roll_thermal import SprayHeader
+    w_eff = SprayHeader(nozzle_pitch_m=pitch, standoff_m=standoff_m,
+                        spray_angle_rad=spray_angle_rad, offset_angle_rad=offset,
+                        spray_mean_htc_w_m2k=0.0,
+                        footprint_width_m=footprint_width_m).effective_footprint_width_m
     active = [x for i, x in enumerate(positions) if i not in blocked]
     cuts = {0.0, length}
     for x in active:
@@ -955,6 +1017,9 @@ def spray_coverage(barrel_length_m, nozzle_pitch_m, standoff_m, spray_angle_rad,
         'nozzle_positions_m': positions, 'blocked_nozzle_indices': blocked,
         'footprint_width_m': width, 'effective_footprint_width_m': w_eff,
         'overlap_fraction': (w_eff - pitch) / w_eff,
+        'overlap_definition_note': ('overlap (W_eff - pitch)/W_eff; the definition varies '
+                                    'between sources: 10-30 % or 10-50 % of the pattern width '
+                                    '[PT-T21; PT-T22; SN7; SN13]'),
         'min_coverage_count': min(counts), 'max_coverage_count': max(counts),
         'modal_coverage_count': modal, 'fully_covered': min(counts) >= 1,
         'stripes': stripes, 'resolution_m': res,

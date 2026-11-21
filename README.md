@@ -71,7 +71,13 @@ the default answer, runs the screening, and shows the shortlist of causes that f
 bands sit against the coolant nozzles, and what to check next. Answering one of the checks
 updates the shortlist and shows what changed. The result is a screening shortlist from a model
 that has not been compared with plant data, and its trust level stays low until your own mill
-values are entered. See [the band app guide](docs/band-app.md).
+values are entered. One optional entry point in step 3 groups what else you may have (a
+flatness roll, a thickness gauge, a strip temperature scan, a grinder report, pass records, oil
+data, the spray nozzles, a flatness control or zone step test, the coil and its cooling, a
+roller alignment survey, gauge control and coil run-out, model choices), and the result shows
+its cards under one heading per group, saying what each would show (for example what each
+shapemeter zone would read, or which friction your logged force corresponds to). See
+[the band app guide](docs/band-app.md).
 
 ### Use it on your own case
 
@@ -115,6 +121,17 @@ values are entered. See [the band app guide](docs/band-app.md).
 - Every result carries the status `SCREENING_RESULT_NOT_PLANT_VALIDATED`.
 
 Section 12 of [band diagnosis](docs/band-diagnosis.md) describes every part of the report.
+
+If the case describes the mill's shapemeter (`measurement.shapemeter`: zone width and count),
+the report also shows what each zone would read for every modelled band, with a table of how
+much a band narrower than a zone is diluted. These are zone means of the model, not a forecast
+of the shapemeter screen: no flatness controller is modelled (section 7.6 of the guide).
+A supplied strip temperature scan across the width (`width_model.strip_temperature`) adds
+the flatness a shapemeter measures hot beside the flatness after cooling (section 7.7).
+With `width_model.flatness_control` the tool also simulates a closed spray loop on that
+shapemeter with its own control law (section 7.12): whether such a loop would settle with the
+entered valve steps and times, and which valve events it would make. It is not what the plant's
+controller did, and it changes no score.
 
 ### Product, alloy and temper lookups
 
@@ -169,6 +186,7 @@ are taken from your file.
 | Path | What it is |
 |---|---|
 | [`docs/band-diagnosis.md`](docs/band-diagnosis.md) | The guide: battery foil first (section 3), how to run (4), filling in the template and using your own mill (5, 5.3), evidence rules (6), equations with source tags (7-11), how to read the report (12), limitations (14) |
+| [`docs/limitations.md`](docs/limitations.md) | The register of limitations and exceptions: what the band screening tool assumes, where it cannot decide, the analyst choices, the recorded discrepancies with published values and the flag index, kept in step with the code by a test |
 | [`docs/band-app.md`](docs/band-app.md) | The guided app: starting it, the three steps, how to read each picture, quick and detailed runs, the trust rule, where runs are kept, safeguards |
 | [`docs/thin-gauge-products.md`](docs/thin-gauge-products.md) | Product reference, generated from the catalogue |
 | [`docs/simulation-coverage-gaps.md`](docs/simulation-coverage-gaps.md) | What the simulation does not cover yet, from a literature review |
@@ -446,6 +464,11 @@ assess there:
   in a flagged, unvalidated extended domain. A bite there whose force lies outside the
   0.9-2.3 kN/mm reported for battery-foil passes is marked not credible and kept out of every
   trend statement.
+- As an option (`model_options.bite_model: "half_space"` or `"auto_half_space"`) the roll bite
+  comes from a reduced half-space foil model instead, so you can see how far the conclusions
+  depend on the roll-bite model; it is not validated, its loads at foil gauge are 40 to 110 %
+  above the experimental model's, and `python -m physicroll.benchmarks --bite-comparison
+  CASE.json` prints the models side by side.
 - It adds six foil observations and a tension-line hypothesis built on the published
   description (no physical model).
 - With `material.product` it makes an evidence-neutral check of every pass against a
@@ -471,14 +494,23 @@ stock passes and stays hidden on the foil passes); see section 3 of the doc.
 
 ### Demos
 
-Four synthetic demos; their committed outputs are in `artifacts/band_diagnosis/`:
+Five synthetic demos; their committed outputs are in `artifacts/band_diagnosis/`:
 
 ```bash
 python -m physicroll.band_cli scenarios/band_diagnosis_battery_foil.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_lengthwise_bands.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
+python -m physicroll.band_cli scenarios/band_diagnosis_realistic_header.json --out artifacts/band_diagnosis
 ```
+
+The fifth (SPEC22) is the battery-foil demo with a spray header chosen to match nozzle makers'
+overlap practice (footprint 1.3 nozzle pitches, a parabolic stand-in fan profile); it shows how
+much a wide-overlap header smooths a blocked nozzle (`docs/band-diagnosis.md`, section 7.1).
+
+A coil can also be wound lane by lane (`width_model.coil_winding`, opt-in, beside the present
+coil check): it needs the radial stack stiffness of the wound foil, for which no value is
+published, so the stack law must be entered (section 7.15).
 
 Start a real case from `scenarios/band_diagnosis_template.json` (schema
 `physicroll.band_case.v2`; leave an observation `null` when nobody has looked); the steps are
@@ -507,5 +539,6 @@ the machine, the product and the observations.
 - The demo observations were generated from the model itself, so the demos test the screening
   logic, not the physics.
 
-The full list is in section 14 of [band diagnosis](docs/band-diagnosis.md); what is missing
-compared with the literature is in the [gap study](docs/simulation-coverage-gaps.md).
+The full list is in section 14 of [band diagnosis](docs/band-diagnosis.md) and, one row per
+limitation, exception, analyst choice and flag, in the [register of limitations](docs/limitations.md);
+what is missing compared with the literature is in the [gap study](docs/simulation-coverage-gaps.md).

@@ -189,8 +189,9 @@ class Source:
 
     def validate(self):
         _text('Source.id', self.id)
-        if not self.id.startswith(('BF-', 'PK-', 'HX-', 'BG-', 'PT-')):
-            raise ValueError(f'source id {self.id!r} must start with BF-, PK-, HX-, BG- or PT-')
+        if not self.id.startswith(('BF-', 'PK-', 'HX-', 'BG-', 'PT-', 'TM-')):
+            raise ValueError(f'source id {self.id!r} must start with BF-, PK-, HX-, BG-, PT- '
+                             'or TM-')
         _text('Source.title', self.title)
         if not isinstance(self.urls, tuple) or not self.urls:
             raise ValueError(f'source {self.id}: urls must be a nonempty tuple')
@@ -1376,6 +1377,29 @@ _SOURCE_LIST = (
        'https://www.xjishu.com/zhuanli/23/201220412752.html', _FT, 'FT'),
     _S('PT-T39', 'Toei Denka, typical mechanical properties of aluminium alloys',
        'https://toeidenka.co.jp/refer/mechanical_strength_of_aluminum.html', _EX, 'EX'),
+    # ---- thermal, material and dynamics gap report (SPEC17 B3, B4; ids and read tags as in
+    # section 9 of docs/simulation-coverage-gaps.md)
+    _S('TM-LB1', 'Bonatti, Mohr, anisotropic viscoplasticity and fracture of fine grained '
+       'metallic aluminum foil used in Li-ion batteries', 'https://old.mohr.ethz.ch/papers/56.pdf',
+       _EX, 'EX', 'excerpt of the full paper'),
+    _S('TM-LB2', 'Hara, Egusa, Mihara, Tanaka, Ohnuma, Abe, Mater. Trans. 62(4) (2021)',
+       'https://www.jstage.jst.go.jp/article/matertrans/62/4/62_MT-M2020349/_pdf/-char/en',
+       _EX, 'EX', 'most of the text'),
+    _S('TM-LB3', 'Liu, Huang, Lloyd, Hansen, Acta Mater. 50 (2002) 3789',
+       'https://doi.org/10.1016/s1359-6454(02)00174-x', _AB, 'AB'),
+    _S('TM-LB6', 'Hasenclever, ICAA9 (2004), AlFe alloys AA1050-AA8021',
+       'http://www.icaa-conference.net/ICAA9/data/papers/GP%20124.pdf', _EX, 'EX'),
+    _S('TM-LB10', 'Allazadeh (2020), rate sensitivity of AA1050-H14',
+       'https://strathprints.strath.ac.uk/74717/1/Allazadeh_ISSJ_2020_Computing_strain_rate_'
+       'sensitivity_of_aluminium_alloy_1050.pdf', _EX, 'EX', '= PT-T33'),
+    _S('TM-LB12', 'Ha, Fones, Kinsey, Korkolis, Materials (2020), AA1100-O',
+       'https://pmc.ncbi.nlm.nih.gov/articles/PMC7579055/', _EX, 'EX'),
+    _S('TM-LB13', 'Batorfi et al., Appl. Sci. 13 (2023) 4359',
+       'https://www.mdpi.com/2076-3417/13/7/4359', _EX, 'EX', '= PT-T7'),
+    _S('TM-LB15', 'Zhang, Chen, Fan, Chen, Xiao, Coatings 15 (2025) 472',
+       'https://www.mdpi.com/2079-6412/15/4/472', _EX, 'EX', 'excerpt of the full paper'),
+    _S('TM-LB18', 'Chen et al., Mater. Res. Express (2020), AA8021 foil',
+       'https://google.iopscience.iop.org/article/10.1088/2053-1591/abb7ab', _EX, 'EX'),
 )
 _SOURCES = {s.id: s for s in _SOURCE_LIST}
 
@@ -2238,12 +2262,16 @@ HEAT_STRIP_SHARE = _r(11, 33, '%', 'PT-T16', 'measured foil-mill heat partition,
 HEAT_ROLL_SHARE = _r(67, 89, '%', 'PT-T16', 'measured foil-mill heat partition, roll share '
                      '(abstract only; net balance); the roll share rises with cooling')
 SPRAY_ROLL = _r(2.5, 4.3, 'kW/m2K', 'PT-T18', 'kerosene spray on a work roll, SIMULATED (1800 mm '
-                'cold mill, 34 nozzles at 52 mm, roll 50 °C), 200–700 kPa')
-SPRAY_JET = _r(3.0, 4.0, 'kW/m2K', 'PT-T18', 'jet zone at 500 kPa, simulated')
+                'cold mill, two rows of 34 nozzles at 52 mm per work roll, entry side only, '
+                'kerosene [SN14 FT], roll 50 °C), 200–700 kPa; an average over the roll-wall '
+                'patch of one cooling zone [SN14 FT]')
+SPRAY_JET = _r(3.0, 4.0, 'kW/m2K', 'PT-T18', 'at 500 kPa, simulated: the value rises from 3.0 to '
+               '4.0 in time as the coolant spreads over the wall, not across space [SN14 FT]')
 SPRAY_MODEL_OVERALL = _r(4.65, 5.5, 'kW/m2K', 'PT-T20', 'overall value in a cold-mill model '
                          'example; coolant not named')
 OIL_VS_WATER = _r(3, 6, 'ratio', 'PT-T19', 'water spray coefficient over oil at equal impingement '
-                  'density (measured on a steel plate)')
+                  'density (measured on a steel plate); the text says 3-6, the conclusions '
+                  '"about 3-5 times" [SN16 FT]')
 SPRAY_PLATE = Range(_q(31e3 / 6), _q(38e3 / 3), 'W/m^2K', ('PT-T19',), 'computed: water about '
                     '31–38 kW/m²K at 5 bar divided by 3–6 (steel plate at 25–250 °C, not a roll)',
                     'span', 'computed', 'kW/m2K')
@@ -2454,12 +2482,15 @@ PT_SIMULATION = (
     _s('Heat partition, foil mill: strip 0.11–0.33, rolls 0.67–0.89; the roll share rises with '
        'cooling. Basis: measured strip surface temperature, three nozzle states. Abstract only; '
        'a net balance.', 'PT-T16', HEAT_STRIP_SHARE, HEAT_ROLL_SHARE, topic='heat_partition'),
-    _s('Spray coefficient, kerosene on a work roll: 3.0 rising to 4.0 kW/m²K in the jet zone at '
-       '500 kPa; 2.5–4.3 over 200–700 kPa. Simulated (1800 mm cold mill, 34 nozzles at 52 mm, roll '
+    _s('Spray coefficient, kerosene on a work roll: at 500 kPa it rises from 3.0 to 4.0 kW/m²K in '
+       'time as the coolant spreads over the wall (not across space); 2.5–4.3 over 200–700 kPa, '
+       'an average over the roll-wall patch of one cooling zone. Simulated (1800 mm cold mill, '
+       'two rows of 34 nozzles at 52 mm per work roll, entry side only, kerosene [SN14 FT]; roll '
        '50 °C); viscosity ranks first among spray factors.', 'PT-T18 PT-T17', SPRAY_ROLL,
        SPRAY_JET, topic='spray_coefficient'),
-    _s('Oil against water spray: oil 3–6 times lower at equal impingement density (measured on a '
-       'steel plate, full-cone nozzle); water about 31–38 kW/m²K at 5 bar, so oil about '
+    _s('Oil against water spray: oil 3–6 times lower at equal impingement density (the text; the '
+       'conclusions say "about 3–5 times" [SN16 FT]) (measured on a steel plate, full-cone '
+       'nozzle); water about 31–38 kW/m²K at 5 bar, so oil about '
        '5–13 kW/m²K (computed; a plate at 25–250 °C, not a roll).', 'PT-T19', OIL_VS_WATER,
        SPRAY_PLATE, topic='oil_vs_water'),
     _s('Thermal crown, foil mill: 30 µm maximum, "from measured values"; 260 × 900 mm work roll.',
@@ -4655,6 +4686,128 @@ def process_temperature_reference():
         'check_thermal_items': list(THERMAL_ITEMS)})
 
 
+# --------------------------------------------------------------------------- SPEC17 B3, B4
+# Appendix A.1 part B of docs/simulation-coverage-gaps.md, as printed (values are text; nothing
+# is fitted and nothing is passed to a hardening law)
+_ALLOY_GROUP_ROWS = (
+    ('1235-H18 foil, 16 um', 'stress at 2 % strain 160 to 200 MPa over 1e-5 to 1e-2 /s; m about '
+     '0.027; r = 0.2 / 1.5 / 1.1; transverse stress +10 %; fracture strain 0.023-0.028',
+     'Micro-tensile, three directions; Yld2000-2d fit', 'EX', ('TM-LB1',)),
+    ('AA1200 to strain 5', 'no saturation of flow stress or boundary spacing',
+     'Tensile tests on rolled sheet, reductions 40-99 %', 'AB', ('TM-LB3',)),
+    ('Hardness against reduction', 'A1050 peak at 80 %, about 43 HV; Al-0.69 mol% Fe peak at '
+     '60 %, softening beyond 80 %', 'Cold rolled 40-95 % after 330 C anneal', 'EX', ('TM-LB2',)),
+    ('As-rolled strength at 50 um by alloy; Fe in solution', '405-469 ppm as rolled without '
+     'intermediate anneal; softening start 200-220 C (8079 / 8021), above 260 C (1050)',
+     '1050, 1200, 8079, 8021, industrial route', 'EX (figure values partly unreadable)',
+     ('TM-LB6',)),
+    ('1100-H18 against temperature', '165 / 150 MPa at RT; 145 / 130 at 100 C; 125 at 150 C',
+     'Long holding', 'AB / EX', ('PT-T31', 'PT-T39')),
+    ('m against temperature, 1050-H14', '0.04 at 100 C, 0.07 at 200 C', 'Slow tensile tests',
+     'EX', ('TM-LB10',)),
+    ('1100-O Voce', 'sigma = 133 - 81*exp(-6.1*eps) MPa', 'Tension to 0.2', 'EX', ('TM-LB12',)),
+    ('1050 annealed', 'E = 69.8 GPa, K = 144.6 MPa, n = 0.3', 'Tensile and Brinell', 'EX',
+     ('TM-LB13',)),
+    ('8021 foil, 40 um', '47.6 HV as rolled; softening from 180 C at 40 C/h',
+     '92 % cold reduction', 'EX', ('TM-LB18',)),
+    ('Pinhole onset', 'interface opens above 38 % cumulative reduction; 10-70 um foreign '
+     'particles perforate 40 um foil', '8021 pilot rolling', 'EX', ('TM-LB15',)),
+)
+ALLOY_GROUP_LIMITATIONS = (
+    'Values as printed in the gap study (Appendix A.1, part B); nothing is fitted and nothing is '
+    'passed to a hardening law or a bite.',
+    'A positive stage-IV hardening slope is wrong in sign for purified Al-Fe and high-purity '
+    'grades beyond 80 % reduction [TM-LB2 EX] (gap study X2); the engine\'s Voce laws accept a '
+    'negative late slope, entered by the user (band-diagnosis 8.3); none is selected by alloy '
+    'group.')
+
+
+def alloy_group_reference():
+    """Hardening and softening data by alloy group (gap study Appendix A.1 part B), as printed."""
+    rows = []
+    for quantity, value, cond, read, srcs in _ALLOY_GROUP_ROWS:
+        rows.append({'quantity': quantity, 'value': value, 'conditions': cond,
+                     'read_tag': read,
+                     'read_status': _weakest(_SOURCES[s].read_status for s in srcs),
+                     'sources': list(srcs)})
+    return _checked({'status': STATUS, 'rows': rows,
+                     'limitations': list(ALLOY_GROUP_LIMITATIONS),
+                     'sources': {s: _SOURCES[s].to_dict() for r in _ALLOY_GROUP_ROWS
+                                 for s in r[4]}})
+
+
+def plane_strain_factor_hill48(r_0, r_90):
+    """Plane-strain yield / uniaxial yield under Hill's 1948 criterion.
+
+    [D, re-derived in SPEC17] Hill 1948 in plane stress on the principal axes of anisotropy:
+    ``sx^2 - (2*r_0/(1+r_0))*sx*sy + (r_0*(1+r_90)/(r_90*(1+r_0)))*sy^2 = s_0^2`` (``s_0`` the
+    uniaxial yield in the rolling direction). Plane strain in the width direction means
+    ``d(eps_y) ~ df/d(sy) = 0``, i.e. ``sy = sx*r_90/(1+r_90)``; substituting gives
+    ``sx/s_0 = sqrt((1+r_0)(1+r_90)/(1+r_0+r_90))``. Rolling adds a hydrostatic stress, which a
+    pressure-independent criterion ignores. ``r_0 = r_90 = R`` gives ``(1+R)/sqrt(1+2R)``;
+    ``R = 1`` gives the isotropic ``2/sqrt(3)``.
+    """
+    r0 = _num('r_0', r_0, positive=True, hi=100.0)
+    r90 = _num('r_90', r_90, positive=True, hi=100.0)
+    return math.sqrt((1 + r0) * (1 + r90) / (1 + r0 + r90))
+
+
+ANISOTROPY_R_VALUES = (0.2, 1.5, 1.1)          # 16 um 1235-H18 [TM-LB1 EX]
+HILL_POOR_FOR_ALUMINIUM = ('Hill-type criteria are known to be poor for aluminium [M, from '
+                           'memory, as in the report].')
+
+
+def anisotropy_reference():
+    """Measured r-values of one 16 um 1235-H18 foil and the plane-strain factors they imply."""
+    r0, r45, r90 = ANISOTROPY_R_VALUES
+    iso = 2 / math.sqrt(3)
+    rbar = (r0 + 2 * r45 + r90) / 4
+    cases = (
+        ('isotropic (the engine\'s value)', 'isotropic', iso, '[D]'),
+        ('normal anisotropy R = 0.2 (the report\'s bound)', 'normal_r_0_2',
+         plane_strain_factor_hill48(r0, r0), '[computed in the report; D]'),
+        ('Hill 1948 with r_0 = 0.2 and r_90 = 1.1', 'hill48_r0_r90',
+         plane_strain_factor_hill48(r0, r90), '[D, re-derived in SPEC17]'),
+        (f'mean normal anisotropy (r_0 + 2 r_45 + r_90)/4 = {rbar:.4g}', 'mean_normal',
+         plane_strain_factor_hill48(rbar, rbar), '[D, re-derived in SPEC17]'))
+    return _checked({
+        'status': STATUS,
+        'r_values': {'values': list(ANISOTROPY_R_VALUES), 'transverse_stress_higher_fraction': 0.1,
+                     'material': '1235-H18 foil, 16 um', 'sources': ['TM-LB1'],
+                     'read_status': _SOURCES['TM-LB1'].read_status,
+                     'note': ('The report prints them for "three directions"; 0 / 45 / 90 '
+                              'degrees in that order is an assumption')},
+        'factors': [{'label': lab, 'id': i, 'factor': f, 'relative_to_isotropic': f / iso - 1,
+                     'tag': tag} for lab, i, f, tag in cases],
+        'caveat': HILL_POOR_FOR_ALUMINIUM,
+        'engine': 'The engine keeps the isotropic 2/sqrt(3); no bite uses these factors.'})
+
+
+def _alloy_md():
+    a = alloy_group_reference()
+    L = ['## Alloy groups: hardening and softening data found', '',
+         'From the thermal, material and dynamics gap report (sources `TM-`; gap study Appendix '
+         'A.1, part B), values as printed.', '',
+         '| Quantity | Value | Conditions | Read | Sources |', '|---|---|---|---|---|']
+    for r in a['rows']:
+        L.append(f'| {_esc(r["quantity"])} | {_esc(r["value"])} | {_esc(r["conditions"])} | '
+                 f'{_esc(r["read_tag"])} | {", ".join(r["sources"])} |')
+    L += [''] + [f'- {x}' for x in a['limitations']] + ['']
+    n = anisotropy_reference()
+    rv = n['r_values']
+    L += ['## Anisotropy and the plane-strain factor', '',
+          f'Measured r-values of {rv["material"]}: {" / ".join(f"{x:g}" for x in rv["values"])}; '
+          f'transverse stress about 10 % higher [TM-LB1; {rv["read_status"]}]. {rv["note"]}.', '',
+          'Plane-strain factor (plane-strain yield / uniaxial yield) under Hill\'s 1948 '
+          'criterion, `sqrt((1 + r_0)(1 + r_90)/(1 + r_0 + r_90))`:', '',
+          '| Case | Factor | Against isotropic | Tag |', '|---|---|---|---|']
+    for f in n['factors']:
+        L.append(f'| {_esc(f["label"])} | {f["factor"]:.6f} | '
+                 f'{100 * f["relative_to_isotropic"]:+.1f} % | {f["tag"]} |')
+    L += ['', f'{n["caveat"]} {n["engine"]}', '']
+    return L
+
+
 THERMAL_ITEMS = ('coil_temperature_entering_final_pass', 'coil_temperature_leaving_final_pass',
                  'oil_supply_temperature', 'oil_viscosity_40c', 'strip_heat_fraction',
                  'spray_heat_transfer_coefficient', 'thermal_crown', 'stripe_height_on_diameter',
@@ -5358,7 +5511,7 @@ def render_reference_markdown():
          'are kept as ranges, and the reports\' disagreements and "not found" lists are kept '
          'below.', '',
          'Source ids: `BF-` battery report, `BG-` second battery report (alloy and temper by '
-         'gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report. A citation such as [PK-S20] shows the sources; a fact whose own read '
+         'gauge), `PT-` process-temperature report, `PK-` packaging report, `HX-` heat-exchanger and litho report, `TM-` thermal, material and dynamics gap report. A citation such as [PK-S20] shows the sources; a fact whose own read '
          'status is weaker than its sources shows it, e.g. [PK-S14; vendor_or_trade_page]. '
          'Read-status legend:', '',
          '| Read status | Meaning | Report tags mapped onto it |', '|---|---|---|',
@@ -5388,6 +5541,7 @@ def render_reference_markdown():
     L += _general_md()
     L += _grades_md()
     L += _pt_md()
+    L += _alloy_md()
     for n, p in enumerate(_PRODUCT_LIST, 1):
         L += _product_md(p, n)
     L += ['## Minor products (one-liners, low confidence)', '']

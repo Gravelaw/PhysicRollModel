@@ -125,10 +125,35 @@ class FrictionTests(unittest.TestCase):
         fd = (friction_coefficient(1 + d)['friction_coefficient']
               - friction_coefficient(1 - d)['friction_coefficient']) / (2 * d)
         self.assertAlmostEqual(r['dmu_dlambda'], fd, places=7)
-        self.assertEqual(friction_coefficient(0.5)['regime'], 'BOUNDARY')
-        self.assertEqual(friction_coefficient(2.0)['regime'], 'MIXED')
+        self.assertEqual(friction_coefficient(0.5)['regime'], 'MIXED_SUBSTANTIAL_CONTACT')
+        self.assertEqual(friction_coefficient(2.0)['regime'], 'MIXED_FIRST_CONTACT')
         self.assertEqual(friction_coefficient(4.0)['regime'], 'HYDRODYNAMIC')
         self.assertIn(PLACEHOLDER_FLAG, r['flags'])
+
+    def test_regime_labels_and_window(self):
+        """SPEC17 BT-G8: a film ratio below 1 is mixed lubrication with substantial asperity
+        contact (BT-S9 EX); 0.01-0.5 is the common industrial window (BT-S3 EX, BT-S9 EX); no
+        boundary label is produced anywhere."""
+        for lam, window in ((0.005, False), (0.01, True), (0.5, True), (0.99, False)):
+            r = friction_coefficient(lam)
+            self.assertEqual(r['regime'], 'MIXED_SUBSTANTIAL_CONTACT')
+            self.assertIs(r['in_common_industrial_window'], window)
+        for lam in (1.0, 3.0):
+            self.assertEqual(friction_coefficient(lam)['regime'], 'MIXED_FIRST_CONTACT')
+        self.assertEqual(friction_coefficient(3.01)['regime'], 'HYDRODYNAMIC')
+        self.assertEqual(friction_coefficient(0.3)['regime_boundaries'],
+                         {'substantial_contact_below': 1.0, 'hydrodynamic_above': 3.0,
+                          'common_industrial_window': [0.01, 0.5]})
+        results = [friction_coefficient(x) for x in (0.0, 0.005, 0.3, 0.99, 1.0, 2.0, 3.0, 10.0)]
+        results.append(friction_at_speed(kerosene(), FINISH, None, **case()))
+        results.append(friction_speed_curve(
+            kerosene(), FINISH, FrictionClosure(), exit_speeds_m_s=[0.01, 2, 16, 150],
+            entry_thickness_m=0.30e-3, exit_thickness_m=0.21e-3, contact_radius_m=0.29,
+            plane_strain_yield_pa=2 * 270e6 / math.sqrt(3), back_tension_pa=25e6,
+            inlet_temperature_k=C0 + 50))
+        for r in results:
+            self.assertNotIn('BOUNDARY', json.dumps(r))
+        self.assertIn('substantial asperity contact', results[2]['reasons'][0])
 
     def test_friction_falls_monotonically_with_speed(self):
         curve = friction_speed_curve(
@@ -296,6 +321,448 @@ class ValidationAndJsonTests(unittest.TestCase):
                 self.assertIn(key, r)
             self.assertTrue(all(f == f.upper() for f in r['flags']))
 
+
+class OilPropertyTests(unittest.TestCase):
+    """SPEC18 package 5: viscosity table, Roelands pressure law, Eyring and limiting stress.
+    Worked numbers of the planner's standard-library prototype (s23/v_p5.py), pinned."""
+
+    def setUp(self):
+        from physicroll import bite_tribology as bt
+        self.bt = bt
+        ex = bt.EXAMPLE_KEROSINE_BASE_OIL['viscosity_pa_s_at_0_mpa'][0]
+        self.table = tuple((float(k), v) for k, v in ex.items())
+
+    def rel(self, a, b, tol=1e-6):
+        self.assertLessEqual(abs(a / b - 1), tol, (a, b))
+
+    def test_table_interpolation_and_extrapolation(self):
+        lub = Lubricant(1.409e-3, C0 + 40, 0.015, 10.40e-9, viscosity_table=self.table)
+        for t, want, extrap in ((50, 1.206440e-3, False), (80, 8.07995e-4, False),
+                                (120, 4.94340e-4, True), (20, 1.921860e-3, True)):
+            self.rel(lub.zero_pressure_viscosity_pa_s(C0 + t), want)
+            self.assertEqual(lub.viscosity_table_extrapolated(C0 + t), extrap)
+        self.rel(lub.temperature_viscosity_coefficient_at(C0 + 50), 0.0155207, 5e-6)  # 6 digits
+        self.rel(lub.temperature_viscosity_coefficient_at(C0 + 80), 0.0122833, 5e-6)
+        nu = kinematic_cst_to_dynamic_viscosity_pa_s
+        sheet = ((C0 + 20, nu(3.0, 800.0)), (C0 + 70, nu(1.4, 800.0)), (C0 + 130, nu(0.7, 800.0)))
+        lub2 = Lubricant(1e-3, C0 + 40, 0.015, 1e-8, viscosity_table=sheet)
+        self.rel(lub2.zero_pressure_viscosity_pa_s(C0 + 40), 1.76935e-3)
+        self.rel(lub2.temperature_viscosity_coefficient_at(C0 + 40), 0.0152428, 5e-6)
+        self.rel(lub2.temperature_viscosity_coefficient_at(C0 + 100), 0.0115525, 5e-6)
+        for t in (C0 + 30, C0 + 65, C0 + 125):       # coefficient = -d ln eta0/dT
+            d = 1e-4
+            fd = -(math.log(lub.zero_pressure_viscosity_pa_s(t + d))
+                   - math.log(lub.zero_pressure_viscosity_pa_s(t - d))) / (2 * d)
+            self.rel(lub.temperature_viscosity_coefficient_at(t), fd, 1e-6)
+        self.assertEqual(FOIL_OIL.temperature_viscosity_coefficient_at(C0 + 70),
+                         FOIL_OIL.temperature_viscosity_coefficient_per_k)
+
+    def test_two_point_table_equals_the_exponential_law(self):
+        law = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        pts = tuple((t, law.dynamic_viscosity_pa_s(t)) for t in (C0 + 20, C0 + 90))
+        tab = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, viscosity_table=pts)
+        for t in (C0 + 10, C0 + 45, C0 + 120):
+            for p in (0.0, 50e6):
+                self.rel(tab.dynamic_viscosity_pa_s(t, p), law.dynamic_viscosity_pa_s(t, p), 1e-12)
+        kw = dict(roll_surface_speed_m_s=10.0, strip_entry_speed_m_s=7.0,
+                  entry_thickness_m=50e-6, exit_thickness_m=30e-6, contact_radius_m=0.135,
+                  plane_strain_yield_pa=200e6, back_tension_pa=35e6, inlet_temperature_k=C0 + 45,
+                  thermal_correction=True)
+        a, b = inlet_film_thickness(law, **kw), inlet_film_thickness(tab, **kw)
+        self.rel(b['film_thickness_m'], a['film_thickness_m'], 1e-12)
+        self.assertIn('VISCOSITY_FROM_TABLE', b['flags'])
+        self.assertNotIn('VISCOSITY_TABLE_EXTRAPOLATED', b['flags'])
+        self.assertNotIn('VISCOSITY_FROM_TABLE', a['flags'])
+        self.assertIn('reference viscosity is not used', b['basis']['viscosity_law'])
+        c = inlet_film_thickness(tab, **dict(kw, inlet_temperature_k=C0 + 120))
+        self.assertIn('VISCOSITY_TABLE_EXTRAPOLATED', c['flags'])
+
+    def test_table_validation(self):
+        for bad in (((300.0, 1e-3),), ((300.0, 1e-3), (300.0, 9e-4)),
+                    ((300.0, 1e-3), (320.0, 2e-3)), ((200.0, 1e-3), (320.0, 9e-4)),
+                    ((300.0, 0.0), (320.0, 0.0)), ((300.0, True), (320.0, 1e-3))):
+            with self.assertRaises(ValueError):
+                Lubricant(1e-3, 313.15, 0.015, 1e-8, viscosity_table=bad).validate()
+
+    def test_roelands_numbers_and_slope(self):
+        for t, eta0, alpha, z, rows in (
+                (40, 1.409e-3, 10.40e-9, 0.657133,
+                 ((100e6, 3.98637e-3, 3.69913e-3), (625e6, 0.937185, 0.180001),
+                  (945e6, 26.1311, 1.22828), (1510e6, 9312.6, 24.363))),
+                (60, 1.033e-3, 9.60e-9, 0.673959, ((100e6, 2.69788e-3, 2.52609e-3),))):
+            barus = Lubricant(eta0, C0 + t, 0.0155, alpha)
+            roel = Lubricant(eta0, C0 + t, 0.0155, alpha, pressure_law='roelands')
+            self.rel(roel.roelands_index(C0 + t), z, 1e-6)
+            for p, want_b, want_r in rows:
+                self.rel(barus.dynamic_viscosity_pa_s(C0 + t, p), want_b, 1e-5)  # quoted digits
+                self.rel(roel.dynamic_viscosity_pa_s(C0 + t, p), want_r, 1e-5)
+        roel = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, pressure_law='roelands')
+        for t in (C0 + 40, C0 + 80):                 # slope at p = 0 equals alpha
+            d = 1e3
+            fd = math.log(roel.dynamic_viscosity_pa_s(t, d)
+                          / roel.dynamic_viscosity_pa_s(t, 0.0)) / d
+            self.rel(fd, 1.2e-8, 1e-6)
+        fixed = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, pressure_law='roelands', roelands_z=0.6)
+        self.assertEqual(fixed.roelands_index(C0 + 80), 0.6)
+        with self.assertRaises(ValueError):       # ln(eta0) + 9.67 <= 0
+            Lubricant(5e-5, C0 + 40, 0.015, 1e-8,
+                      pressure_law='roelands').dynamic_viscosity_pa_s(C0 + 40, 1e8)
+        for bad in (dict(pressure_law='wlf'), dict(roelands_z=0.0), dict(roelands_z=2.5)):
+            with self.assertRaises(ValueError):
+                Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, **bad).validate()
+
+    def test_eyring_and_limiting_stress_are_supplied_only(self):
+        lub = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        for f in ('eyring_stress_pa', 'eyring_stress_pressure_coefficient',
+                  'limiting_shear_stress_pa', 'limiting_shear_pressure_coefficient'):
+            self.assertIsNone(getattr(lub, f))
+        self.assertIsNone(lub.eyring_stress_at(1e9))
+        self.assertIsNone(lub.limiting_shear_stress_at(1e9))
+        self.assertEqual(lub.limiting_shear_check(1e9), ([], []))
+        ey = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, eyring_stress_pa=1e6,
+                       eyring_stress_pressure_coefficient=0.007)
+        self.rel(ey.eyring_stress_at(1e9), 8e6)
+        low = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.03)
+        flags, notes = low.limiting_shear_check(1e9)
+        self.assertEqual(flags, ['LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND'])
+        self.assertIn('0.045', notes[0])
+        high = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.06)
+        self.assertEqual(high.limiting_shear_check(1e9), ([], []))
+        for bad in (dict(eyring_stress_pa=1e3), dict(eyring_stress_pressure_coefficient=0.0),
+                    dict(eyring_stress_pressure_coefficient=0.2),
+                    dict(limiting_shear_stress_pa=1e10),
+                    dict(limiting_shear_pressure_coefficient=1.5)):
+            with self.assertRaises(ValueError):
+                Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, **bad).validate()
+
+    def test_example_oil_is_tagged_and_not_a_default(self):
+        ex = self.bt.EXAMPLE_KEROSINE_BASE_OIL
+        for key, (value, tag) in ex.items():
+            self.assertIn('E6 FT', tag, key)
+        self.assertIn('not a plant', ex['note'][0])
+        self.assertEqual(ex['limiting_shear_lower_bound_over_pressure'][0], 0.045)
+        self.assertEqual(ex['eyring_stress_pa_at_313_k'][0],
+                         {'625e6': 4.5e6, '945e6': 6.0e6, '1510e6': 11.7e6})
+        lub = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8)
+        self.assertEqual(lub.pressure_law, 'barus')
+        self.assertIsNone(lub.viscosity_table)
+
+
+class LoadSharingClosureTests(unittest.TestCase):
+    """SPEC18 package 6: load sharing on the published contact-ratio curve (s23/v_fric2.py)."""
+
+    def setUp(self):
+        from physicroll import bite_tribology as bt
+        self.bt = bt
+
+    def closure(self, mu_c, **kw):
+        return FrictionClosure(model='load_sharing_curve', contact_friction=mu_c, **kw)
+
+    def rel(self, a, b, tol=1e-5):
+        self.assertLessEqual(abs(a - b), tol * max(abs(b), 1e-300), (a, b))
+
+    def test_worked_table(self):
+        rows = ((0.1, 0.8800, 0.08016, 0, 0.02736, 0, 0.08220, -0.07420),
+                (0.2, 0.8082, 0.07428, -0.08248, 0.02578, -0.02213, 0.07514, -0.06714),
+                (0.380072, 0.6695, 0.06290, -0.08145, 0.02273, -0.02185, 0.06407, -0.05607),
+                (0.5, 0.5660, 0.05441, -0.06191, 0.02045, -0.01661, 0.05774, -0.04974),
+                (1.0, 0.2708, 0.03021, -0.02478, 0.01396, -0.00665, 0.03817, -0.03017),
+                (2.0, 0.0613, 0.01303, -0.01239, 0.00935, -0.00332, 0.01910, -0.01110),
+                (3.0, 0.0100, 0.00882, 0, 0.00822, 0, 0.01208, -0.00408))
+        for lam, a, m9, s9, m3, s3, mp, sp in rows:
+            r9 = friction_coefficient(lam, self.closure(0.09))
+            r3 = friction_coefficient(lam, self.closure(0.03))
+            rp = friction_coefficient(lam)
+            self.assertAlmostEqual(r9['contact_area_ratio'], a, delta=5e-5)
+            for got, want in ((r9['friction_coefficient'], m9), (r9['dmu_dlambda'], s9),
+                              (r3['friction_coefficient'], m3), (r3['dmu_dlambda'], s3),
+                              (rp['friction_coefficient'], mp), (rp['dmu_dlambda'], sp)):
+                self.assertAlmostEqual(got, want, delta=5e-6)
+            held = lam in (0.1, 3.0)
+            self.assertEqual('FILM_RATIO_OUTSIDE_CONTACT_RATIO_CURVE' in r9['flags'], held)
+            self.assertEqual(r9['status'],
+                             'UNVALIDATED_LOAD_SHARING_ON_A_PUBLISHED_CONTACT_RATIO_CURVE')
+            self.assertIn('CONTACT_FRICTION_IS_AN_ENTERED_VALUE', r9['flags'])
+            self.assertNotIn(PLACEHOLDER_FLAG, r9['flags'])
+        # the five published points are returned exactly (a software identity, not a benchmark)
+        for lam, a in self.bt.PUBLISHED_FOIL_CONTACT_RATIO_CURVE:
+            self.assertEqual(self.bt.contact_ratio_at(lam)[0], a)
+            for d in (1e-9, -1e-9):                       # continuity across each point
+                self.assertAlmostEqual(
+                    friction_coefficient(lam * (1 + d), self.closure(0.09))[
+                        'friction_coefficient'],
+                    friction_coefficient(lam, self.closure(0.09))['friction_coefficient'],
+                    delta=1e-9)
+        a = self.bt.contact_ratio_at(0.380072)[0]
+        self.assertAlmostEqual((0.03 - (1 - a) * 0.008) / a, 0.04086, delta=5e-6)
+        self.assertAlmostEqual((0.027 - (1 - a) * 0.008) / a, 0.03638, delta=5e-6)
+        got = [friction_coefficient(lam, self.closure(0.0135))['friction_coefficient']
+               for lam, _ in self.bt.PUBLISHED_FOIL_CONTACT_RATIO_CURVE]
+        for g, w in zip(got, (0.01284, 0.01179, 0.01091, 0.00954, 0.00805)):
+            self.assertAlmostEqual(g, w, delta=5e-6)
+        for lam, w in ((0.1, 0.42), (0.2, 0.486548), (0.380072, 0.639534), (1.0, 1.125779),
+                       (3.0, 2.746835)):
+            self.assertAlmostEqual(self.bt.valley_film_over_rq_at(lam), w, delta=5e-7)
+
+    def test_valley_models(self):
+        lub = Lubricant(1.0e-3, C0 + 60, 0.015, 1.0e-8, eyring_stress_pressure_coefficient=0.007)
+        fin = SurfaceFinish(0.1e-6, 0.0)
+        st = {'mean_pressure_pa': 4e8, 'mean_sliding_speed_m_s': 0.3,
+              'inlet_temperature_k': C0 + 60}
+        self.rel(lub.dynamic_viscosity_pa_s(C0 + 60, 4e8), 0.0545982)
+        ey = friction_coefficient(0.36, self.closure(0.09, valley_model='eyring'),
+                                  lubricant=lub, finish=fin, bite_state=st)
+        self.rel(ey['valley_film_thickness_m'], 62e-9)
+        self.rel(ey['valley_shear_stress_pa'], 263794.2)
+        self.rel(ey['valley_friction'], 6.59485e-4)
+        self.rel(ey['friction_coefficient'], 0.0623044)
+        self.assertIsNone(ey['valley_shear_capped'])
+        newt = 0.0545982 * 0.3 / 62e-9
+        self.rel(newt, 264184.6)
+        lub2 = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, eyring_stress_pressure_coefficient=0.007,
+                         limiting_shear_pressure_coefficient=0.045)
+        fin2 = SurfaceFinish(0.3e-6, 0.0)
+        st2 = {'mean_pressure_pa': 6e8, 'mean_sliding_speed_m_s': 2.0,
+               'inlet_temperature_k': C0 + 40}
+        self.rel(lub2.dynamic_viscosity_pa_s(C0 + 40, 6e8), 3.348577)
+        e2 = friction_coefficient(0.2, self.closure(0.09, valley_model='eyring'),
+                                  lubricant=lub2, finish=fin2, bite_state=st2)
+        self.rel(e2['valley_film_thickness_m'], 145.964e-9)
+        self.rel(e2['valley_shear_stress_pa'], 1.296215e7)
+        self.rel(e2['valley_friction'], 0.0216036)
+        self.rel(e2['friction_coefficient'], 0.0768848)
+        self.assertFalse(e2['valley_shear_capped'])
+        n2 = friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                  lubricant=lub2, finish=fin2, bite_state=st2)
+        self.assertTrue(n2['valley_shear_capped'])
+        self.rel(n2['valley_friction'], 0.045)
+        self.rel(n2['friction_coefficient'], 0.0813711)
+        self.rel(3.348577 * 2.0 / 145.964e-9, 4.58821e7, 2e-5)
+        low = Lubricant(2.5e-3, C0 + 40, 0.015, 1.2e-8, limiting_shear_pressure_coefficient=0.03)
+        n3 = friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                  lubricant=low, finish=fin2, bite_state=st2)
+        self.assertIn('LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND', n3['flags'])
+        with self.assertRaisesRegex(ValueError, 'valley shear needs the bite state'):
+            friction_coefficient(0.2, self.closure(0.09, valley_model='eyring'),
+                                 lubricant=lub2, finish=fin2)
+        with self.assertRaisesRegex(ValueError, 'needs a limiting shear stress'):
+            friction_coefficient(0.2, self.closure(0.09, valley_model='newtonian_capped'),
+                                 lubricant=lub, finish=fin, bite_state=st)
+        d = 1e-4 * 0.2
+        fd = (friction_coefficient(0.2 + d, self.closure(0.09, valley_model='eyring'),
+                                   lubricant=lub2, finish=fin2, bite_state=st2)
+              ['friction_coefficient']
+              - friction_coefficient(0.2 - d, self.closure(0.09, valley_model='eyring'),
+                                     lubricant=lub2, finish=fin2, bite_state=st2)
+              ['friction_coefficient']) / (2 * d)
+        self.rel(e2['dmu_dlambda'], fd, 1e-9)
+
+    def test_validation_and_default_identity(self):
+        with self.assertRaisesRegex(ValueError, 'contact_friction is required'):
+            FrictionClosure(model='load_sharing_curve').validate()
+        for bad in (dict(model='mixed'), dict(valley_model='x'),
+                    dict(model='load_sharing_curve', contact_friction=0.0),
+                    dict(contact_ratio_curve=((0.1, 0.5),)),
+                    dict(contact_ratio_curve=((0.1, 0.5), (0.2, 0.6))),
+                    dict(contact_ratio_curve=((0.2, 0.5), (0.1, 0.4))),
+                    dict(valley_film_curve=((0.1, 0.5), (0.2, 0.4))),
+                    dict(valley_film_curve=((0.1, 0.0), (0.2, 0.4)))):
+            with self.assertRaises(ValueError):
+                FrictionClosure(**bad).validate()
+        default = FrictionClosure()
+        self.assertEqual(default.model, 'placeholder_exponential')
+        self.assertIsNone(default.contact_friction)
+        for lam in (0.05, 0.38, 2.0):
+            r = friction_coefficient(lam)
+            self.assertEqual(r['friction_coefficient'],
+                             0.008 + (0.09 - 0.008) * math.exp(-lam / 1.0))
+            self.assertEqual(r['flags'], [PLACEHOLDER_FLAG])
+        r = friction_at_speed(FOIL_OIL, SurfaceFinish(1.5e-7, 2e-7), self.closure(0.05),
+                              roll_surface_speed_m_s=10.0, strip_entry_speed_m_s=7.0,
+                              entry_thickness_m=50e-6, exit_thickness_m=30e-6,
+                              contact_radius_m=0.135, plane_strain_yield_pa=200e6,
+                              back_tension_pa=35e6, inlet_temperature_k=C0 + 45)
+        self.assertIn('REDUCED_LOAD_SHARING_CLOSURE_NO_INLET_ANALYSIS', r['flags'])
+        self.assertLess(r['dmu_dspeed_per_m_s'], 0)
+        self.assertIn('contact_area_ratio', r)
+
+
+
+class FlowStressRateTemperatureTests(unittest.TestCase):
+    """SPEC18 package 8: rate and temperature factor, law forms, fit to pass strengths."""
+
+    def test_worked_numbers(self):
+        from physicroll import bite_tribology as bt
+        self.assertAlmostEqual((1e-2 / 1e-5) ** 0.027, 1.205036, delta=1e-6)
+        self.assertAlmostEqual(160 * (1e-2 / 1e-5) ** 0.027, 192.806, delta=1e-3)
+        self.assertAlmostEqual((2.6e3 / 1e-3) ** 0.027, 1.490062, delta=1e-6)
+        for want, got in ((1.5152e-3, (1 - 145 / 165) / 80), (1.6667e-3, (1 - 130 / 150) / 80),
+                          (1.8648e-3, (1 - 125 / 165) / 130)):
+            self.assertAlmostEqual(got, want, delta=1e-7)
+        rate = bt.mean_bite_strain_rate_per_s(10.0, 2e-3, 30e-6, 18e-6)
+        self.assertAlmostEqual(rate, 2554.128, delta=1e-3)
+        f = bt.RateTemperatureFactor(0.027, 1e-3, 0.0015, 293.15, provenance='test')
+        fr, ft, m = f.parts(rate, 293.15)
+        self.assertAlmostEqual(fr, 1.489346, delta=1e-6)
+        self.assertEqual((ft, m), (1.0, 0.027))
+        self.assertAlmostEqual(f.factor(rate, 293.15 + 60), 1.355305, delta=1e-6)
+
+    def test_rate_sensitivity_slope_and_limits(self):
+        from physicroll import bite_tribology as bt
+        f = bt.RateTemperatureFactor(0.02, 1.0, 0.0, 300.0, rate_sensitivity_slope_per_k=0.0003)
+        self.assertAlmostEqual(f.rate_sensitivity_at(400.0), 0.05, delta=1e-12)
+        self.assertEqual(f.rate_sensitivity_at(200.0), 0.0)          # floored at 0
+        with self.assertRaises(ValueError):                          # factor above 5
+            bt.RateTemperatureFactor(0.2, 1e-8 * 1.0001, 0.0, 300.0).factor(1e6, 300.0)
+        with self.assertRaises(ValueError):                          # factor below 0.2
+            bt.RateTemperatureFactor(0.0, 1.0, 0.01, 250.0).factor(1.0, 700.0)
+        for bad in (dict(rate_sensitivity=0.3), dict(reference_strain_rate_per_s=1e-8),
+                    dict(temperature_coefficient_per_k=0.02),
+                    dict(reference_temperature_k=200.0),
+                    dict(rate_sensitivity_slope_per_k=0.003)):
+            kw = dict(rate_sensitivity=0.02, reference_strain_rate_per_s=1.0,
+                      temperature_coefficient_per_k=0.001, reference_temperature_k=300.0)
+            kw.update(bad)
+            with self.assertRaises(ValueError):
+                bt.RateTemperatureFactor(**kw).validate()
+
+    def test_negative_late_slope(self):
+        from physicroll import bite_tribology as bt
+        law = bt.VoceHardening(100e6, 180e6, 0.4, -5e6, 'test')
+        law.validate()
+        res = bt.schedule_flow_stress([1e-3, 1e-4, 1e-5], law)
+        self.assertIn(bt.NEGATIVE_SLOPE_FLAG, res['flags'])
+        with self.assertRaises(ValueError):          # sigma(10) = 180 - 200 < 0
+            bt.VoceHardening(100e6, 180e6, 0.4, -20e6, 'test').validate()
+        with self.assertRaises(ValueError):
+            bt.VoceHardening(100e6, 180e6, 0.4, -6e9, 'test').validate()
+        ok = bt.schedule_flow_stress([1e-3, 1e-4], bt.VoceHardening(100e6, 180e6, 0.4, 5e6, 'x'))
+        self.assertNotIn(bt.NEGATIVE_SLOPE_FLAG, ok['flags'])
+
+    def test_tome_voce(self):
+        from physicroll import bite_tribology as bt
+        t = bt.TomeVoceHardening(150e6, 20e6, 2e9, 'test')
+        self.assertAlmostEqual(t.stress(1.0), 169999724, delta=1.0)
+        self.assertAlmostEqual(t.stress(1.0), 170e6 * (1 - math.exp(-2e9 / 150e6)), delta=1e-6)
+        # 64 panels against 512: 1e-9 on a pass away from the steep start (see the guide)
+        for a, b in ((0.6, 1.2), (1.0, 1.6), (2.0, 2.5)):
+            self.assertAlmostEqual(t.mean_stress(a, b) / t.mean_stress(a, b, 512), 1,
+                                   delta=1e-9)
+        res = bt.schedule_flow_stress([1e-3, 5e-4, 2e-4], t)
+        self.assertEqual(res['law_type'], 'tome_voce_stage_iv')
+        with self.assertRaises(ValueError):
+            bt.TomeVoceHardening(150e6, -20e6, 2e9, 'test').validate()   # 150 - 200 < 0
+        bt.TomeVoceHardening(150e6, -10e6, 2e9, 'test').validate()
+
+    def test_fit_recovers_voce(self):
+        from physicroll import bite_tribology as bt
+        k = 2 / math.sqrt(3)
+        hs = [100e-6 * 0.6 ** i for i in range(6)]
+        for th4 in (8e6, -5e6):
+            law = bt.VoceHardening(100e6, 180e6, 0.55, th4, 'truth')
+            ys = [law.stress(0.05 + k * math.log(100e-6 / h)) for h in hs]
+            r = bt.fit_voce_to_pass_strengths(hs, ys, reference_thickness_m=100e-6,
+                                              prior_equivalent_strain=0.05)
+            for key, want in (('initial_stress_pa', 100e6), ('saturation_stress_pa', 180e6),
+                              ('characteristic_strain', 0.55), ('stage_iv_slope_pa', th4)):
+                self.assertAlmostEqual(r['parameters'][key] / want, 1, delta=1e-3, msg=key)
+            self.assertLess(r['rms_residual_pa'], 1.0)
+            self.assertEqual(r['stage_iv_slope_sign'], 1 if th4 > 0 else -1)
+            self.assertEqual(len(r['residuals_pa']), 6)
+            self.assertNotIn('FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS', r['flags'])
+            self.assertIn('TENSILE_STRENGTH_USED_AS_FLOW_STRESS', r['flags'])
+        self.assertIn(bt.NEGATIVE_SLOPE_FLAG, r['flags'])
+        r4 = bt.fit_voce_to_pass_strengths(hs[:4], ys[:4], reference_thickness_m=100e-6,
+                                           strength_is='flow_stress')
+        self.assertIn('FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS', r4['flags'])
+        self.assertNotIn('TENSILE_STRENGTH_USED_AS_FLOW_STRESS', r4['flags'])
+        r3 = bt.fit_voce_to_pass_strengths(hs[:3], ys[:3], reference_thickness_m=100e-6)
+        self.assertTrue(r3['stage_iv_slope_fixed_to_zero'])
+        self.assertEqual(r3['parameters']['stage_iv_slope_pa'], 0.0)
+        with self.assertRaises(ValueError) as ctx:
+            bt.fit_voce_to_pass_strengths(hs[:2], ys[:2], reference_thickness_m=100e-6)
+        self.assertTrue(str(ctx.exception).startswith(bt.FIT_UNDERDETERMINED))
+        with self.assertRaises(ValueError):
+            bt.fit_voce_to_pass_strengths(hs[::-1], ys, reference_thickness_m=100e-6)
+
+
+class HeatPartitionTests(unittest.TestCase):
+    """SPEC18 package 9: the computed bite heat partition (planner's s23/heat.py numbers)."""
+
+    @staticmethod
+    def run_case(hc, plastic=1.0, friction=0.0, steps=400, h1=24e-6, ld=2e-3, v=10.0,
+                 t_strip=300.0, t_roll=300.0, **kw):
+        from physicroll import bite_tribology as bt
+        return bt.heat_partition(
+            plastic_power_per_width_w_m=plastic, friction_power_per_width_w_m=friction,
+            contact_length_m=ld, roll_surface_speed_m_s=v, exit_thickness_m=h1,
+            exit_speed_m_s=v, entry_thickness_m=kw.pop('h0', 1.5 * h1),
+            strip_entry_temperature_k=t_strip, roll_entry_surface_temperature_k=t_roll,
+            interface_conductance_w_m2k=hc, roll_conductivity_w_mk=43.0,
+            roll_density_kg_m3=7200.0, roll_specific_heat_j_kgk=500.0, steps=steps, **kw)
+
+    def test_closed_form_and_scheme(self):
+        from physicroll import bite_tribology as bt
+        r = self.run_case(1e12)
+        self.assertAlmostEqual(r['roll_effusivity'], 12441.86, delta=0.01)
+        self.assertAlmostEqual(r['strip_capacity_j_m2k'], 29.16, delta=1e-9)
+        self.assertAlmostEqual((29.16 / r['roll_effusivity']) ** 2, 5.4929e-6, delta=1e-10)
+        exact = bt.perfect_contact_strip_share(29.16, r['roll_effusivity'], 2e-4)
+        self.assertAlmostEqual(exact, 0.162070, delta=1e-6)
+        self.assertAlmostEqual(r['strip_heat_fraction_computed'], exact, delta=1e-5)
+        for n, want in ((50, 0.162060), (400, 0.162069), (800, 0.162070)):
+            self.assertAlmostEqual(self.run_case(1e12, steps=n)['strip_heat_fraction_computed'],
+                                   want, delta=1e-6)
+        self.assertAlmostEqual(r['roll_transient_resistance_m2k_w'], 1.0073e-6, delta=1e-10)
+        # asymptotic branch of exp(x^2)*erfc(x) is continuous with the direct one
+        self.assertAlmostEqual(bt._exp_erfc(25.0 + 1e-12) / bt._exp_erfc(25.0), 1, delta=5e-6)
+
+    def test_worked_numbers(self):
+        for hc, want in ((0.13 / 70e-9, 0.2254), (0.13 / 200e-9, 0.3352), (40e3, 0.8775),
+                         (0.125 / 70e-9, 0.2279), (0.125 / 200e-9, 0.3414),
+                         (0.25 / 70e-9, 0.1952), (0.25 / 200e-9, 0.2553)):
+            self.assertAlmostEqual(self.run_case(hc)['strip_heat_fraction_computed'], want,
+                                   delta=1e-4, msg=hc)
+        self.assertAlmostEqual(self.run_case(0.13 / 70e-9, 0.6, 0.4)
+                               ['strip_heat_fraction_computed'], 0.2113, delta=1e-4)
+        self.assertAlmostEqual(70e-9 / 0.13, 5.385e-7, delta=1e-10)
+        # sheet check: 0.25 mm, 0.4 ms, perfect contact, lumped
+        sheet = self.run_case(1e12, h1=0.25e-3, ld=4e-3)
+        self.assertAlmostEqual(sheet['contact_time_s'], 4e-4, delta=1e-15)
+        self.assertAlmostEqual(sheet['strip_heat_fraction_computed'], 0.6063, delta=1e-4)
+        self.assertIsNone(sheet['fourier_number'])
+        # Fourier number 2.42 for a mean thickness of 0.25 mm and k_strip 230 W/mK (the
+        # conductivity is not stated beside the planner's number: inferred)
+        f = self.run_case(1e12, h1=0.24e-3, h0=0.26e-3, ld=4e-3, strip_conductivity_w_mk=230.0)
+        self.assertAlmostEqual(f['fourier_number'], 2.42, delta=5e-3)
+        self.assertEqual(f['flags'], [])
+        thick = self.run_case(1e12, h1=2e-3, h0=3e-3, ld=4e-3, strip_conductivity_w_mk=230.0)
+        self.assertIn('STRIP_NOT_THERMALLY_THIN_LUMPED_MODEL_INDICATIVE', thick['flags'])
+
+    def test_energy_balance_and_limits(self):
+        r = self.run_case(0.13 / 70e-9, 0.6, 0.4)
+        # strip energy C_s*(T_s - T_e) is f_s times the input by definition of f_s
+        strip = r['strip_heat_fraction_computed'] * r['heat_input_per_area_j_m2']
+        self.assertAlmostEqual((strip + r['roll_heat_per_area_j_m2'])
+                               / r['heat_input_per_area_j_m2'], 1, delta=1e-9)
+        self.assertAlmostEqual(self.run_case(1e-6)['strip_heat_fraction_computed'], 1,
+                               delta=1e-6)
+        z = self.run_case(1e6, plastic=0.0, friction=0.0)
+        self.assertIsNone(z['strip_heat_fraction_computed'])
+        self.assertEqual((z['strip_exit_temperature_k'], z['roll_surface_exit_temperature_k']),
+                         (300.0, 300.0))
+        hot = self.run_case(1e6, t_roll=400.0)
+        self.assertGreater(hot['strip_heat_fraction_computed'], 1)
+        self.assertIn('HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES', hot['flags'])
+        self.assertIn('asperity', ' '.join(r['limitations']))
+        self.assertIn('phi = 0.5', r['basis']['friction_heat_side'])
+
+    def test_validation(self):
+        for kw in (dict(hc=0.0), dict(hc=1e6, steps=0), dict(hc=1e6, ld=0.0),
+                   dict(hc=1e6, friction_heat_to_strip_side_fraction=1.5)):
+            hc = kw.pop('hc')
+            with self.assertRaises(ValueError):
+                self.run_case(hc, **kw)
 
 if __name__ == '__main__':
     unittest.main()

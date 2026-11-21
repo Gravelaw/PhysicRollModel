@@ -286,7 +286,7 @@ class LargeForwardSlipTests(unittest.TestCase):
                               exit_tension_pa=40e6, exit_speed_m_s=13.0)]
         r = diagnose(c)
         self.assertGreaterEqual(r['bite']['forward_slip_fraction'], 0.5)
-        for f in ('FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES',
+        for f in ('FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL',
                   'FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS'):
             self.assertIn(f, r['flags'])
         self.assertEqual(r['signatures']['forward_slip_fraction_used'], 0.0)

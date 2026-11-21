@@ -522,6 +522,8 @@ def page_meta(store):
             'causes': {k: {'name': v[0], 'description': v[1], 'pictogram': v[2]}
                        for k, v in bpl.CAUSES.items()},
             'glossary': bpl.GLOSSARY, 'standing_words': bpl.STANDING_WORDS,
+            'addon_groups': [{'id': g[0], 'title': g[1], 'help': g[2], 'questions': list(g[3])}
+                             for g in bpl.ADDON_GROUPS],
             'sections': list(bpl.SECTIONS),
             'weak_nozzle_level': bpl.WEAK_NOZZLE_LEVEL,
             'trust_rule': bpl.TRUST_RULE, 'limitations': list(bpl.STANDING_LIMITATIONS),

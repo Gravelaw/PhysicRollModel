@@ -23,6 +23,11 @@
   },
   "bite_derivations": 29,
   "bite_error": null,
+  "bite_extras": {
+    "not_supplied": true,
+    "reason": "only the reduced half-space bite returns these",
+    "status": "NOT_SUPPLIED"
+  },
   "case_name": "lengthwise_bands_demo",
   "case_schema": "physicroll.band_case.v2",
   "chatter": {
@@ -375,6 +380,11 @@
       "Symmetric (gap-changing) mode only; no roll bending, cross-width or drive dynamics."
     ],
     "operating_exit_speed_m_s": 12.0,
+    "rate_sensitivity_damping": {
+      "not_supplied": true,
+      "reason": "hardening.rate_temperature is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "reliability": "WITHIN_SPAN_WAVE_LIMIT",
     "span_wave_limit_basis": "c/(2L) of the shorter span, c = sqrt(E/rho), rho = 2700 kg/m3",
     "span_wave_limit_hz": 636.4688465216444,
@@ -387,11 +397,12 @@
       "forward_slip_fraction_held": 0.051523016370145,
       "friction_law": "mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)], floored at the closure mu_v: the placeholder closure supplies the slope, the friction used at the operating point the level",
       "friction_used_at_operating_speed": 0.03,
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "lowest_assessable_exit_speed_m_s": {
         "with_bite_damping": 19.905358527674867,
         "without_bite_damping": 19.905358527674867
       },
-      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the contact radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
+      "note": "Solves u = u_crit(mu(u)) by a log-speed scan and Illinois regula falsi in log speed (bracket below 1 % or 6 iterations); mu(u) from the placeholder closure with the inlet-angle radius and forward slip held at the operating bite. Friction falling with speed lowers the critical speed.",
       "placeholder_closure_friction_at_operating_speed": 0.07648428324495296,
       "relative_tolerance": 0.01,
       "scan": [
@@ -714,11 +725,21 @@
     "BITE_MODEL_AUTO",
     "CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED",
     "FLOW_STRESS_FROM_HARDENING_LAW",
+    "FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE",
+    "KERNEL_CLOSURES_DISAGREE_IN_SIGN",
+    "KERNEL_STEADY_STATE_NOT_DEFINED",
     "LUDERS_STRAIN_NOT_SUPPLIED_ZERO_USED_IN_WINDOWS",
     "MODEL_STEADY_THERMAL_STRIPES_PRESENT",
+    "SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE",
     "SYNTHETIC_INPUTS",
-    "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN"
+    "THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN",
+    "WIDTH_COUPLING_KERNEL_REPORTED"
   ],
+  "foil_gauge_control": {
+    "not_supplied": true,
+    "reason": "foil_gauge_control is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "foil_regime": null,
   "forced_response": {
     "entry_thickness": {
@@ -2618,128 +2639,6 @@
       "title": "Tension troughs or creases"
     },
     {
-      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
-      "evidence": [
-        {
-          "basis": "observation",
-          "criterion": "orientation",
-          "expected": "longitudinal",
-          "observed": "longitudinal",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "appearance",
-          "expected": "gloss_or_shade",
-          "observed": "loose_or_buckle",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "gauge variation",
-          "expected": "not detected",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions repeat across coils",
-          "expected": "false",
-          "observed": "true",
-          "verdict": "CONTRADICTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "continuity",
-          "expected": "intermittent or both",
-          "observed": "both",
-          "verdict": "SUPPORTS",
-          "weight": "moderate"
-        },
-        {
-          "basis": "observation",
-          "criterion": "worse at higher speed",
-          "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "model",
-          "criterion": "tribology regime / exit strip temperature at the operating point",
-          "expected": "BOUNDARY or above the temperature limit",
-          "observed": "regime BOUNDARY; exit temperature above limit: False",
-          "verdict": "SUPPORTS",
-          "weight": "weak"
-        },
-        {
-          "basis": "observation",
-          "criterion": "positions change after work-roll change",
-          "expected": "false",
-          "observed": "false",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "tracks speed changes",
-          "expected": "true",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        },
-        {
-          "basis": "model",
-          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
-          "expected": "0.3-3",
-          "observed": "Lambda = 0.18 (tribology inlet film at the operating point)",
-          "verdict": "NEUTRAL",
-          "weight": null
-        },
-        {
-          "basis": "observation",
-          "criterion": "changes with exit air blow-off",
-          "expected": "n/a",
-          "observed": "not observed",
-          "verdict": "NOT_OBSERVED",
-          "weight": null
-        }
-      ],
-      "family": "lengthwise",
-      "id": "heat_streak_or_film_variation",
-      "levers": [
-        "lower the oil inlet temperature",
-        "increase coolant flow",
-        "reduce speed",
-        "regrind for uniform roll roughness"
-      ],
-      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
-      "model_prediction": {
-        "exit_temperature_above_limit": false,
-        "film_ratio_at_operating_point": 0.18011497000136134,
-        "film_ratio_basis": "tribology inlet film at the operating point",
-        "regime_at_operating_point": "BOUNDARY"
-      },
-      "rank": 4,
-      "score": 4,
-      "standing": "CONSISTENT",
-      "tallies": {
-        "contradiction_points": 1,
-        "contradicts": 1,
-        "neutral": 3,
-        "not_observed": 4,
-        "observation_supports": 2,
-        "strong_contradictions": 0,
-        "support_points": 5,
-        "supports": 3
-      },
-      "title": "Heat streak / friction or oil-film band (no roll bump)"
-    },
-    {
       "confirming_test": "Entry and exit profile measurements; shapemeter map; compare the relative crowns.",
       "evidence": [
         {
@@ -2809,7 +2708,7 @@
       "model_prediction": {
         "crown_classification": null
       },
-      "rank": 5,
+      "rank": 4,
       "score": 4,
       "standing": "CONSISTENT",
       "tallies": {
@@ -2823,6 +2722,128 @@
         "supports": 3
       },
       "title": "Profile / flatness mismatch (edge wave, centre buckle)"
+    },
+    {
+      "confirming_test": "Compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel.",
+      "evidence": [
+        {
+          "basis": "observation",
+          "criterion": "orientation",
+          "expected": "longitudinal",
+          "observed": "longitudinal",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "appearance",
+          "expected": "gloss_or_shade",
+          "observed": "loose_or_buckle",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "gauge variation",
+          "expected": "not detected",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions repeat across coils",
+          "expected": "false",
+          "observed": "true",
+          "verdict": "CONTRADICTS",
+          "weight": "weak"
+        },
+        {
+          "basis": "observation",
+          "criterion": "continuity",
+          "expected": "intermittent or both",
+          "observed": "both",
+          "verdict": "SUPPORTS",
+          "weight": "moderate"
+        },
+        {
+          "basis": "observation",
+          "criterion": "worse at higher speed",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "tribology regime / exit strip temperature at the operating point",
+          "expected": "above the temperature limit (a film ratio below 1 is normal mixed-regime operation and no longer counts [BT-S3 EX, BT-S9 EX])",
+          "observed": "regime MIXED_SUBSTANTIAL_CONTACT; exit temperature above limit: False",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "positions change after work-roll change",
+          "expected": "false",
+          "observed": "false",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "tracks speed changes",
+          "expected": "true",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        },
+        {
+          "basis": "model",
+          "criterion": "film ratio at the operating point (0.3-3: friction sensitive to local differences)",
+          "expected": "0.3-3",
+          "observed": "Lambda = 0.18 (tribology inlet film at the operating point)",
+          "verdict": "NEUTRAL",
+          "weight": null
+        },
+        {
+          "basis": "observation",
+          "criterion": "changes with exit air blow-off",
+          "expected": "n/a",
+          "observed": "not observed",
+          "verdict": "NOT_OBSERVED",
+          "weight": null
+        }
+      ],
+      "family": "lengthwise",
+      "id": "heat_streak_or_film_variation",
+      "levers": [
+        "lower the oil inlet temperature",
+        "increase coolant flow",
+        "reduce speed",
+        "regrind for uniform roll roughness"
+      ],
+      "mechanism": "Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without any geometric roll bump and tracks speed changes [V S11, S17; mechanism D].",
+      "model_prediction": {
+        "exit_temperature_above_limit": false,
+        "film_ratio_at_operating_point": 0.18011497000136134,
+        "film_ratio_basis": "tribology inlet film at the operating point",
+        "regime_at_operating_point": "MIXED_SUBSTANTIAL_CONTACT"
+      },
+      "rank": 5,
+      "score": 3,
+      "standing": "CONSISTENT",
+      "tallies": {
+        "contradiction_points": 1,
+        "contradicts": 1,
+        "neutral": 4,
+        "not_observed": 4,
+        "observation_supports": 2,
+        "strong_contradictions": 0,
+        "support_points": 4,
+        "supports": 2
+      },
+      "title": "Heat streak / friction or oil-film band (no roll bump)"
     },
     {
       "confirming_test": "Entry profile scan of the incoming coil and an outside-profile scan of the wound coil; check whether the band is worse toward the outer wraps and follows the mother coil.",
@@ -3155,6 +3176,22 @@
       ],
       "mechanism": "PUBLISHED DESCRIPTION, NOT A MODEL: longitudinal stripes at 5-20 mm pitch that appear below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk]; wider and more visible at low strip tension and vanishing above a threshold tension [V S27, S28]; listed with ridge marks as typical battery-foil flatness defects [V S5]. The tool has no physical model of them.",
       "model_prediction": {
+        "candidate_shell_buckling_pitch": {
+          "basis": "entrained-air corrugation in winding has the same remedies and thin-gauge trend [SS-S53 EX, SS-S66 EX]; wavelength formula re-derived (classical shell); no onset condition, no air-film model (G9, G10)",
+          "formula": "pitch = 2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4) [D, re-derived in SPEC17; reported from memory as 3.47*sqrt(R*t)]",
+          "how_to_test": "Measure the pitch at two coil radii and two gauges: this candidate predicts pitch proportional to sqrt(radius x gauge).",
+          "note": "not evidence: almost any foil coil gives a candidate pitch inside the published 5-20 mm",
+          "observed_inside_candidate_range": null,
+          "observed_spacing_m": 0.368,
+          "pitch_range_m": null,
+          "poisson_ratio": 0.33,
+          "published_pitch_m": [
+            0.005,
+            0.02
+          ],
+          "rows": [],
+          "status": "NOT_APPLICABLE_ABOVE_FOIL_GAUGE"
+        },
         "case_exit_thickness_m": 0.00021,
         "model": "NONE: rule-based hypothesis, the tool has no physical model of tension lines (5-20 mm pitch reported, vanishing above a threshold tension)",
         "reported_onset_exit_gauge_m": [
@@ -3457,8 +3494,8 @@
         {
           "basis": "model",
           "criterion": "film regime",
-          "expected": "boundary (Lambda < 1)",
-          "observed": "Lambda = 0.529 (BOUNDARY)",
+          "expected": "substantial asperity contact (Lambda < 1)",
+          "observed": "Lambda = 0.529 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "SUPPORTS",
           "weight": "weak"
         }
@@ -3695,8 +3732,8 @@
         },
         {
           "basis": "observation",
-          "criterion": "regular fine spacing (CV < 0.15, spacing < 30 mm)",
-          "expected": "regular and < 30 mm",
+          "criterion": "regular fine spacing (CV < 0.15, spacing < 60 mm)",
+          "expected": "regular and < 60 mm",
           "observed": "CV 0.158, spacing 368 mm",
           "verdict": "NEUTRAL",
           "weight": null
@@ -3734,6 +3771,7 @@
       ],
       "mechanism": "Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution.",
       "model_prediction": {
+        "feed_range_note": "Printed final-pass traverse feeds per roll revolution: 9-25 mm on an aluminium cold-mill roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings]; the law pitch = traverse per roll revolution is confirmed [RG8 FT, RG11 VP]. A wide, irregular spiral from table float does not follow the feed law and belongs with roll_surface_band [RG8 FT].",
         "grinding_feed_pitch_m": 0.008
       },
       "rank": 15,
@@ -4015,7 +4053,7 @@
           "basis": "model",
           "criterion": "film regime",
           "expected": "hydrodynamic (Lambda > 3)",
-          "observed": "Lambda = 0.529 (BOUNDARY)",
+          "observed": "Lambda = 0.529 (MIXED_SUBSTANTIAL_CONTACT)",
           "verdict": "NEUTRAL",
           "weight": null
         },
@@ -4237,6 +4275,7 @@
         1500000.0
       ]
     },
+    "foil_gauge_control": null,
     "gauge_control": {
       "bandwidth_hz": 25.0,
       "compensation_gain": 0.9,
@@ -4248,6 +4287,7 @@
       "law": "voce",
       "prior_equivalent_strain": 0.0,
       "provenance": "synthetic Voce parameters (not fitted)",
+      "rate_temperature": null,
       "reference_thickness_m": 0.0022,
       "saturation_stress_pa": 260000000.0,
       "stage_iv_slope_pa": 10000000.0,
@@ -4298,6 +4338,7 @@
       "yield_stress_pa": 285000000.0,
       "youngs_modulus_pa": 70000000000.0
     },
+    "measurement": null,
     "model_options": {
       "bite_damping_transit_fraction": 0.5,
       "bite_model": "auto",
@@ -4440,14 +4481,24 @@
     "tribology": {
       "friction_closure": null,
       "inlet_temperature_k": 318.15,
+      "interface_conductance_w_m2k": null,
       "lubricant": {
         "conductivity_w_mk": null,
+        "eyring_stress_pa": null,
+        "eyring_stress_pressure_coefficient": null,
+        "limiting_shear_pressure_coefficient": null,
+        "limiting_shear_stress_pa": null,
         "name": "kerosene-based rolling oil (synthetic)",
+        "pressure_law": "barus",
         "pressure_viscosity_coefficient_per_pa": 1.2e-08,
         "reference_temperature_k": 313.15,
+        "roelands_z": null,
         "temperature_viscosity_coefficient_per_k": 0.015,
-        "viscosity_ref_pa_s": 0.0018
+        "viscosity_ref_pa_s": 0.0018,
+        "viscosity_table": null
       },
+      "oil_flash_point_k": null,
+      "oil_supply_temperature_cap_k": null,
       "strip_entry_temperature_k": 313.15,
       "strip_heat_fraction": 0.84,
       "surface_finish": {
@@ -4456,20 +4507,25 @@
       },
       "temperature_limit_k": 393.15,
       "thermal_correction": false,
-      "use_computed_friction": false
+      "use_computed_friction": false,
+      "use_computed_heat_partition": null
     },
     "width_model": {
       "bite_heat_per_width_w_m": null,
       "blocked_nozzle_indices": [],
+      "circumferential_layout": null,
       "coil": {
         "compaction_factor": 0.5,
         "inner_radius_m": 0.3,
         "outer_radius_m": 0.9,
         "winding_tension_pa": 20000000.0
       },
+      "coil_thermal": null,
+      "coil_winding": null,
       "coolant_temperature_k": 318.15,
       "cooling_zone_pitch_m": 0.104,
       "deflector_roll_radius_m": 0.15,
+      "deflector_roll_roughness_rq_m": null,
       "entry_crown_m": null,
       "events": [
         {
@@ -4492,6 +4548,8 @@
           "start_s": 300.0
         }
       ],
+      "flatness_control": null,
+      "friction_stripe_screen": null,
       "gap_crown_m": null,
       "grinding": {
         "roll_rotation_hz": 0.5,
@@ -4500,6 +4558,7 @@
       "heredity_coefficient": null,
       "incoming_ridges": [],
       "lateral_compressive_stress_pa": null,
+      "local_coupling": null,
       "nozzle_levels": [
         1.0,
         1.0,
@@ -4545,10 +4604,12 @@
         "poisson_ratio": 0.3,
         "specific_heat_j_kgk": 470.0
       },
+      "roll_ground_profile": null,
       "roll_heat_fraction_per_roll": null,
       "rolls_carrying_stripe": 1,
       "shape_disturbing_coefficient": null,
       "shape_inputs": null,
+      "span_alignment": null,
       "spray_header": {
         "background_htc_w_m2k": 50.0,
         "nozzle_pitch_m": 0.052,
@@ -4557,7 +4618,10 @@
         "spray_mean_htc_w_m2k": 3000.0,
         "standoff_m": 0.2
       },
-      "strip_centre_m": null
+      "spray_wetted_arc_rad": null,
+      "strip_centre_m": null,
+      "strip_temperature": null,
+      "zone_step_test": null
     }
   },
   "leading_hypotheses": [
@@ -4727,10 +4791,22 @@
     "Friction is an input unless tribology.use_computed_friction is set; the friction-speed closure of bite_tribology is an unfitted placeholder whose slope, not level, is used.",
     "Fifth-octave regeneration (backup-roll marking) is screened kinematically, not simulated in time; the antisymmetric mode frequency is an undamped lumped estimate.",
     "Spray coverage is a geometric footprint count; the phase-1 thermal growth is a free-expansion upper bound with no axial conduction (the v2 width_model solves the roll temperature field instead).",
-    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation."
+    "The lengthwise physics (roll thermal stripes, shape chain, coil ridges, troughs) rests on planner-derived and memory formulas flagged in each result; no plant validation.",
+    "The plane-strain factor is the isotropic 2/sqrt(3); published r-values of one 16 um 1235-H18 foil would move it by -12 % to +1 % under Hill's 1948 criterion (table in docs/thin-gauge-products.md)."
   ],
+  "measurement": {
+    "not_supplied": true,
+    "reason": "measurement is null or absent",
+    "status": "NOT_SUPPLIED"
+  },
   "process": {
     "flow_stress": {
+      "alloy_group_context": {
+        "alloy": "AA3104",
+        "reason": "band_products.alloy_group_reference has no alloy matching of its own; see that table (thin-gauge products guide) for the rows by alloy group",
+        "row": null,
+        "sentence": "A positive stage-IV (late) hardening slope is right for 1200-type and solute-bearing grades [TM-LB3 AB] and wrong in sign for purified-matrix Al-Fe alloys and high-purity grades beyond 80 % reduction [TM-LB2 EX]; it is temperature-dependent in 8079 [TM-LB7 AB]. Nothing selects a law by alloy group: the law and its sign are your entry."
+      },
       "flags": [
         "STRAIN_RATE_SENSITIVITY_IGNORED",
         "UNCALIBRATED_FOR_ROLLING"
@@ -4839,7 +4915,7 @@
       "flags": [
         "PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED"
       ],
-      "note": "PLACEHOLDER friction closure (not fitted): with ground-roll roughness it stays near the boundary regime; read the absolute friction as a placeholder and the slope with speed (dmu/du) as the useful output. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
+      "note": "PLACEHOLDER friction closure (not fitted): its end values 0.09 and 0.008 match the one abstract on aluminium [BT-S6 AB], but it keeps friction near 0.09 over most of the common industrial film-ratio window (0.01-0.5), so neither its level nor its slope with speed (dmu/du) is supported. With use_computed_friction the friction is a fixed point friction -> bite -> R' -> friction (at most 5 passes, tolerance 0.0001); otherwise it is evaluated once at the contact radius of the supplied-friction bite.",
       "operating": {
         "bite_source": "derived_slab_hitchcock",
         "computed_friction_coefficient": 0.07648428324495296,
@@ -4848,13 +4924,16 @@
         "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
         "dmu_droll_speed_per_m_s": -0.001080881944069587,
         "exit_speed_m_s": 12.0,
+        "film_inlet_radius_ratio": 1.4860253458546073,
         "film_ratio": 0.18011497000136134,
         "film_thickness_m": 7.033714430395345e-08,
         "forward_slip_fraction": 0.051523016370145,
+        "in_common_industrial_window": true,
+        "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
         "iterations": [],
         "label": "case pass",
         "method": "single evaluation at the contact radius of the supplied-friction bite",
-        "regime": "BOUNDARY",
+        "regime": "MIXED_SUBSTANTIAL_CONTACT",
         "supplied_friction_coefficient": 0.03,
         "used_friction_coefficient": 0.03
       },
@@ -4867,13 +4946,16 @@
           "dmu_dexit_speed_per_m_s": -0.00037535217374077645,
           "dmu_droll_speed_per_m_s": -0.0003947674417063135,
           "exit_speed_m_s": 3.0,
+          "film_inlet_radius_ratio": 1.071734482443758,
           "film_ratio": 0.013924957223301492,
           "film_thickness_m": 5.437869632015224e-09,
           "forward_slip_fraction": 0.051725470967820986,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P1 2.20->1.40 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.08,
           "used_friction_coefficient": 0.08
         },
@@ -4885,13 +4967,16 @@
           "dmu_dexit_speed_per_m_s": -0.000442538367478873,
           "dmu_droll_speed_per_m_s": -0.0004681919609806093,
           "exit_speed_m_s": 5.0,
+          "film_inlet_radius_ratio": 1.1423459863413128,
           "film_ratio": 0.02774315054674,
           "film_thickness_m": 1.083404662831528e-08,
           "forward_slip_fraction": 0.05796919631598052,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P2 1.40->0.90 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.07,
           "used_friction_coefficient": 0.07
         },
@@ -4903,13 +4988,16 @@
           "dmu_dexit_speed_per_m_s": -0.0005719142952738862,
           "dmu_droll_speed_per_m_s": -0.0006061250648220883,
           "exit_speed_m_s": 7.5,
+          "film_inlet_radius_ratio": 1.2266523083760932,
           "film_ratio": 0.055282442490909994,
           "film_thickness_m": 2.15884839273979e-08,
           "forward_slip_fraction": 0.05981800040829355,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P3 0.90->0.60 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.06,
           "used_friction_coefficient": 0.06
         },
@@ -4921,13 +5009,16 @@
           "dmu_dexit_speed_per_m_s": -0.0007444430662334467,
           "dmu_droll_speed_per_m_s": -0.0007859552559525033,
           "exit_speed_m_s": 10.0,
+          "film_inlet_radius_ratio": 1.318197748953203,
           "film_ratio": 0.10037098901141879,
           "film_thickness_m": 3.9196124219843195e-08,
           "forward_slip_fraction": 0.055762746141340136,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P4 0.60->0.42 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.05,
           "used_friction_coefficient": 0.05
         },
@@ -4939,13 +5030,16 @@
           "dmu_dexit_speed_per_m_s": -0.0008890440672217378,
           "dmu_droll_speed_per_m_s": -0.0009360188001255639,
           "exit_speed_m_s": 13.0,
+          "film_inlet_radius_ratio": 1.4124243947530781,
           "film_ratio": 0.1664763513122636,
           "film_thickness_m": 6.501109344413645e-08,
           "forward_slip_fraction": 0.05283735040336324,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P5 0.42->0.30 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.04,
           "used_friction_coefficient": 0.04
         },
@@ -4957,19 +5051,27 @@
           "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
           "dmu_droll_speed_per_m_s": -0.001080881944069587,
           "exit_speed_m_s": 12.0,
+          "film_inlet_radius_ratio": 1.4860253458546073,
           "film_ratio": 0.18011497000136134,
           "film_thickness_m": 7.033714430395345e-08,
           "forward_slip_fraction": 0.051523016370145,
+          "in_common_industrial_window": true,
+          "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
           "iterations": [],
           "label": "P6 0.30->0.21 mm",
           "method": "single evaluation at the contact radius of the supplied-friction bite",
-          "regime": "BOUNDARY",
+          "regime": "MIXED_SUBSTANTIAL_CONTACT",
           "supplied_friction_coefficient": 0.03,
           "used_friction_coefficient": 0.03
         }
       ],
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
       "use_computed_friction": false
+    },
+    "friction_identification": {
+      "not_supplied": true,
+      "reason": "measurement.pass_records is null or absent",
+      "status": "NOT_SUPPLIED"
     },
     "friction_speed_curve": {
       "contact_radius_m": 0.2972050691709215,
@@ -4980,6 +5082,7 @@
         "OIL_CONDUCTIVITY_DEFAULT_FROM_MEMORY"
       ],
       "forward_slip_fraction": 0.051523016370145,
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "mean_slope_per_m_s": -0.0010100341442443974,
       "mean_slope_speeds_m_s": [
         2.0,
@@ -4995,7 +5098,7 @@
           "film_ratio": 0.015009580833446777,
           "film_thickness_m": 5.861428691996121e-09,
           "friction_coefficient": 0.08877840511929816,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0012073868245714423,
@@ -5003,7 +5106,7 @@
           "film_ratio": 0.01919431259950867,
           "film_thickness_m": 7.49561868797818e-09,
           "friction_coefficient": 0.08844107547070734,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001200942809895194,
@@ -5011,7 +5114,7 @@
           "film_ratio": 0.02454576448575303,
           "film_thickness_m": 9.585427455986683e-09,
           "friction_coefficient": 0.08801174871098633,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011943875290881811,
@@ -5019,7 +5122,7 @@
           "film_ratio": 0.030019161666893553,
           "film_thickness_m": 1.1722857383992241e-08,
           "friction_coefficient": 0.08757500894655432,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001192752265627536,
@@ -5027,7 +5130,7 @@
           "film_ratio": 0.03138922277453568,
           "film_thickness_m": 1.2257883350088951e-08,
           "friction_coefficient": 0.08746606097139004,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011823595054365574,
@@ -5035,7 +5138,7 @@
           "film_ratio": 0.04014066487769457,
           "film_thickness_m": 1.567543074258458e-08,
           "friction_coefficient": 0.08677365254492148,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001169201039494776,
@@ -5043,7 +5146,7 @@
           "film_ratio": 0.05133204438978712,
           "film_thickness_m": 2.004580415294804e-08,
           "friction_coefficient": 0.08589698143331087,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011525870932671454,
@@ -5051,7 +5154,7 @@
           "film_ratio": 0.0656436257163066,
           "film_thickness_m": 2.563465532380606e-08,
           "friction_coefficient": 0.08479009201025503,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0011316846395641959,
@@ -5059,7 +5162,7 @@
           "film_ratio": 0.0839453337268576,
           "film_thickness_m": 3.278170077670327e-08,
           "friction_coefficient": 0.08339748458662996,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.001105505897366605,
@@ -5067,7 +5170,7 @@
           "film_ratio": 0.10734963185866478,
           "film_thickness_m": 4.192137137164176e-08,
           "friction_coefficient": 0.08165334912554625,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010729088860477337,
@@ -5075,7 +5178,7 @@
           "film_ratio": 0.1372791428489356,
           "film_thickness_m": 5.3609219047232126e-08,
           "friction_coefficient": 0.07948160217954561,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010326203134046585,
@@ -5083,7 +5186,7 @@
           "film_ratio": 0.17555312240055293,
           "film_thickness_m": 6.855568586666598e-08,
           "friction_coefficient": 0.07679741178748353,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0010279203852339713,
@@ -5091,7 +5194,7 @@
           "film_ratio": 0.18011497000136134,
           "film_thickness_m": 7.033714430395345e-08,
           "friction_coefficient": 0.07648428324495296,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.000983295735384646,
@@ -5099,7 +5202,7 @@
           "film_ratio": 0.2244980420550642,
           "film_thickness_m": 8.766928801011217e-08,
           "friction_coefficient": 0.07351120555660118,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0009236368397566129,
@@ -5107,7 +5210,7 @@
           "film_ratio": 0.28708900301734913,
           "film_thickness_m": 1.1211183963863078e-07,
           "friction_coefficient": 0.06953648458809517,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0008525888189645875,
@@ -5115,7 +5218,7 @@
           "film_ratio": 0.3671305767258305,
           "film_thickness_m": 1.4336907339441702e-07,
           "friction_coefficient": 0.06480297326309957,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0008457031792558077,
@@ -5123,7 +5226,7 @@
           "film_ratio": 0.3752395208361695,
           "film_thickness_m": 1.4653571729990304e-07,
           "friction_coefficient": 0.06434422362893318,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0007696377137963717,
@@ -5131,7 +5234,7 @@
           "film_ratio": 0.4694880645041485,
           "film_thickness_m": 1.8334095018177838e-07,
           "friction_coefficient": 0.05927642950548148,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         },
         {
           "dmu_dexit_speed_per_m_s": -0.0006752106619534876,
@@ -5139,7 +5242,7 @@
           "film_ratio": 0.6003832333378712,
           "film_thickness_m": 2.3445714767984487e-07,
           "friction_coefficient": 0.052985310984957554,
-          "regime": "BOUNDARY"
+          "regime": "MIXED_SUBSTANTIAL_CONTACT"
         }
       ],
       "status": "UNVALIDATED_PLACEHOLDER_FRICTION_CLOSURE",
@@ -5158,12 +5261,81 @@
         ],
         "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
         "friction_power_per_width_w_m": 113051.19105706201,
+        "heat_partition": {
+          "basis": {
+            "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+            "measured_strip_share_foil_mill": [
+              [
+                0.11,
+                0.33
+              ],
+              "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+            ],
+            "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+            "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+          },
+          "contact_time_s": 0.0004531797112326563,
+          "film_thickness_m": 7.033714430395345e-08,
+          "flags": [
+            "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+          ],
+          "fourier_number": null,
+          "friction_heat_to_strip_side_fraction": 0.5,
+          "gap_row_series_roll_flux_w_m2": 9330649.710091326,
+          "heat_input_per_area_j_m2": 17802.085799488006,
+          "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 7.034e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+          "interface_conductance_w_m2k": 1848241.0863628574,
+          "interface_conductance_with_strip_conduction_w_m2k": 1848241.0863628574,
+          "limitations": [
+            "Heat released uniformly over the contact.",
+            "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+            "Roll curvature neglected (half-space over the contact time).",
+            "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+            "Film thickness from the smooth inlet formula.",
+            "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+          ],
+          "measured_strip_share_foil_mill": {
+            "range": [
+              0.11,
+              0.33
+            ],
+            "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+          },
+          "perfect_contact_strip_share": 0.5653782357481814,
+          "roll_effusivity": 12148.250902907792,
+          "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+          "roll_entry_surface_temperature_k": 318.15,
+          "roll_heat_fraction_per_roll_computed": 0.16918277950584865,
+          "roll_heat_per_area_j_m2": 6023.612713118044,
+          "roll_properties_basis": "width_model.roll",
+          "roll_surface_exit_temperature_k": 349.28955531651695,
+          "roll_transient_resistance_m2k_w": 1.5529819815129466e-06,
+          "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+          "steps": 400,
+          "strip_capacity_j_m2k": 268.29609762684254,
+          "strip_exit_temperature_k": 357.0510227526754,
+          "strip_heat_fraction_at_published_oil_conductivities": [
+            {
+              "oil_conductivity_w_mk": 0.125,
+              "strip_heat_fraction": 0.6634189367211578,
+              "tag": "[E6 FT] ambient pressure"
+            },
+            {
+              "oil_conductivity_w_mk": 0.25,
+              "strip_heat_fraction": 0.6380849531648825,
+              "tag": "[E6 FT] in the nip"
+            }
+          ],
+          "strip_heat_fraction_computed": 0.6616344409883027,
+          "supplied_strip_heat_fraction": 0.84
+        },
         "heat_to_each_work_roll_per_width_w_m": 32505.236882979763,
         "label": "case pass",
         "plastic_power_per_width_w_m": 293264.26998018497,
         "roll_heat_fraction_per_roll": 0.08000000000000002,
         "strip_heat_fraction": 0.84,
         "strip_temperature_rise_k": 55.73600288576775,
+        "supplied_minus_computed_strip_heat_fraction": 0.17836555901169726,
         "temperature_limit_k": 393.15
       },
       "schedule": [
@@ -5178,12 +5350,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 129628.1137459391,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.004588619253747631,
+            "film_thickness_m": 5.437869632015224e-09,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 2883788.9691494917,
+            "heat_input_per_area_j_m2": 82563.69581796504,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 5.438e-09 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 23906420.85912295,
+            "interface_conductance_with_strip_conduction_w_m2k": 23906420.85912295,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.7364969290311867,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.11164501284687639,
+            "roll_heat_per_area_j_m2": 18435.649760563985,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 348.83740705974583,
+            "roll_transient_resistance_m2k_w": 4.941652465056759e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 1788.9850261162635,
+            "strip_exit_temperature_k": 348.9960496433651,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.7767451317318368,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.7762864904681914,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.7767099743062472,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 37681.48160960131,
           "label": "P1 2.20->1.40 mm",
           "plastic_power_per_width_w_m": 341390.40637407714,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 38.766956388478704,
+          "supplied_minus_computed_strip_heat_fraction": 0.06329002569375275,
           "temperature_limit_k": 393.15
         },
         {
@@ -5197,12 +5438,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 220303.83423871224,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0022609086254730825,
+            "film_thickness_m": 1.083404662831528e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 6226261.922373377,
+            "heat_input_per_area_j_m2": 77378.60254553896,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 1.083e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 11999209.940654954,
+            "interface_conductance_with_strip_conduction_w_m2k": 11999209.940654954,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.7198096420633211,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.12443288954795045,
+            "roll_heat_per_area_j_m2": 19256.886207848216,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 362.76086227820053,
+            "roll_transient_resistance_m2k_w": 3.4687475444914833e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 1156.8893161715248,
+            "strip_exit_temperature_k": 363.3896517326589,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.7512377150578685,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.7498798279744925,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.7511342209040991,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 58511.04384890126,
           "label": "P2 1.40->0.90 mm",
           "plastic_power_per_width_w_m": 511084.21387255343,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 56.18344402500805,
+          "supplied_minus_computed_strip_heat_fraction": 0.08886577909590088,
           "temperature_limit_k": 393.15
         },
         {
@@ -5216,12 +5526,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 242729.65331593956,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0012121043204983905,
+            "film_thickness_m": 2.15884839273979e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 8598380.333457135,
+            "heat_input_per_area_j_m2": 54777.67790366875,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 2.159e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 6021729.012430431,
+            "interface_conductance_with_strip_conduction_w_m2k": 6021729.012430431,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.700307846195291,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.1317362759468409,
+            "roll_heat_per_area_j_m2": 14432.414584090202,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 363.61915974826854,
+            "roll_transient_resistance_m2k_w": 2.5398097572920417e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 772.6073222976459,
+            "strip_exit_temperature_k": 365.3696232875412,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.7368113592406063,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.7330312466409813,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.7365274481063182,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 62023.11477921575,
           "label": "P3 0.90->0.60 mm",
           "plastic_power_per_width_w_m": 532559.2814242571,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 59.5558029430055,
+          "supplied_minus_computed_strip_heat_fraction": 0.10347255189368176,
           "temperature_limit_k": 393.15
         },
         {
@@ -5235,12 +5614,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 200093.2486004493,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0007272283468689176,
+            "film_thickness_m": 3.9196124219843195e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 9139119.519220646,
+            "heat_input_per_area_j_m2": 34994.37685223399,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 3.92e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 3316654.454681695,
+            "interface_conductance_with_strip_conduction_w_m2k": 3316654.454681695,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.67707949434985,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.1353822089731913,
+            "roll_heat_per_area_j_m2": 9475.2320797913,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 356.8375996936626,
+            "roll_transient_resistance_m2k_w": 1.9672818590649125e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 538.755729355926,
+            "strip_exit_temperature_k": 360.5168183593151,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.7299002183309736,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.720792035405379,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.7292355820536174,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 53033.69830789484,
           "label": "P4 0.60->0.42 mm",
           "plastic_power_per_width_w_m": 462827.9802482361,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 54.56141801223746,
+          "supplied_minus_computed_strip_heat_fraction": 0.11076441794638259,
           "temperature_limit_k": 393.15
         },
         {
@@ -5254,12 +5702,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 171124.61568628583,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.00047150151736677175,
+            "film_thickness_m": 6.501109344413645e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 9386324.80319354,
+            "heat_input_per_area_j_m2": 23876.534824118557,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 6.501e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1999658.7215027853,
+            "interface_conductance_with_strip_conduction_w_m2k": 1999658.7215027853,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.648782501251524,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.13713543584407012,
+            "roll_heat_per_area_j_m2": 6548.638019103583,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 351.4794430453989,
+            "roll_transient_resistance_m2k_w": 1.584064039683953e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 383.75921422202583,
+            "strip_exit_temperature_k": 358.3030443122863,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.7269887189497937,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.7088715375731532,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.7257291283118598,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 47170.811726179396,
           "label": "P5 0.42->0.30 mm",
           "plastic_power_per_width_w_m": 418510.5308909564,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 52.26269105464636,
+          "supplied_minus_computed_strip_heat_fraction": 0.11427087168814021,
           "temperature_limit_k": 393.15
         },
         {
@@ -5273,12 +5790,81 @@
           ],
           "friction_power_basis": "slab solid_slip_dissipation_both_interfaces_w at the Hitchcock contact radius / width",
           "friction_power_per_width_w_m": 113051.19105706201,
+          "heat_partition": {
+            "basis": {
+              "friction_heat_side": "half of the friction heat released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]",
+              "measured_strip_share_foil_mill": [
+                [
+                  0.11,
+                  0.33
+                ],
+                "[V abstract: Yin et al. 2003; TM-LA19 AB]"
+              ],
+              "model": "[D, re-derived in SPEC18] lumped strip on a half-space roll over the contact time; the gap row A3 series formula q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e)) is its time-averaged form",
+              "strip_capacity": "C_s = rho_c*h1*u1/(2*V_r): half the neutral thickness per roll side [D, SPEC18]"
+            },
+            "contact_time_s": 0.0004531797112326563,
+            "film_thickness_m": 7.033714430395345e-08,
+            "flags": [
+              "ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL"
+            ],
+            "fourier_number": null,
+            "friction_heat_to_strip_side_fraction": 0.5,
+            "gap_row_series_roll_flux_w_m2": 9330649.710091326,
+            "heat_input_per_area_j_m2": 17802.085799488006,
+            "interface_conductance_basis": "k_oil/h = 0.13 W/mK / 7.034e-08 m [row A3]; k_oil [M] default 0.13 W/mK (published for a kerosine foil base oil: 0.125 W/mK at ambient pressure, 0.25 W/mK in the nip [E6 FT]); film: smooth inlet film of the friction row (derived_slab_hitchcock bite, placeholder_exponential closure)",
+            "interface_conductance_w_m2k": 1848241.0863628574,
+            "interface_conductance_with_strip_conduction_w_m2k": 1848241.0863628574,
+            "limitations": [
+              "Heat released uniformly over the contact.",
+              "One lumped strip temperature (strip thermally thin); a strip conductivity adds only the slab's mean-to-surface resistance.",
+              "Roll curvature neglected (half-space over the contact time).",
+              "No asperity conduction: the gap row's \"asperity term\" has no formula in the reports; the film conductance k_oil/h is the whole interface conductance.",
+              "Film thickness from the smooth inlet formula.",
+              "Not coupled back: the computed strip temperature does not enter the flow stress or the film."
+            ],
+            "measured_strip_share_foil_mill": {
+              "range": [
+                0.11,
+                0.33
+              ],
+              "source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract"
+            },
+            "perfect_contact_strip_share": 0.5653782357481814,
+            "roll_effusivity": 12148.250902907792,
+            "roll_entry_surface_temperature_basis": "width_model.coolant_temperature_k",
+            "roll_entry_surface_temperature_k": 318.15,
+            "roll_heat_fraction_per_roll_computed": 0.16918277950584865,
+            "roll_heat_per_area_j_m2": 6023.612713118044,
+            "roll_properties_basis": "width_model.roll",
+            "roll_surface_exit_temperature_k": 349.28955531651695,
+            "roll_transient_resistance_m2k_w": 1.5529819815129466e-06,
+            "status": "UNVALIDATED_COMPUTED_HEAT_PARTITION",
+            "steps": 400,
+            "strip_capacity_j_m2k": 268.29609762684254,
+            "strip_exit_temperature_k": 357.0510227526754,
+            "strip_heat_fraction_at_published_oil_conductivities": [
+              {
+                "oil_conductivity_w_mk": 0.125,
+                "strip_heat_fraction": 0.6634189367211578,
+                "tag": "[E6 FT] ambient pressure"
+              },
+              {
+                "oil_conductivity_w_mk": 0.25,
+                "strip_heat_fraction": 0.6380849531648825,
+                "tag": "[E6 FT] in the nip"
+              }
+            ],
+            "strip_heat_fraction_computed": 0.6616344409883027,
+            "supplied_strip_heat_fraction": 0.84
+          },
           "heat_to_each_work_roll_per_width_w_m": 32505.236882979763,
           "label": "P6 0.30->0.21 mm",
           "plastic_power_per_width_w_m": 293264.26998018497,
           "roll_heat_fraction_per_roll": 0.08000000000000002,
           "strip_heat_fraction": 0.84,
           "strip_temperature_rise_k": 55.73600288576775,
+          "supplied_minus_computed_strip_heat_fraction": 0.17836555901169726,
           "temperature_limit_k": 393.15
         }
       ],
@@ -6046,6 +6632,7 @@
       ],
       "formula": "h_s = 3*eta0*alpha*(U_r+U_s)/(theta*(1-exp(-alpha*Y_ps)))",
       "formula_attribution": "Wilson & Walowit (1972) as named in the project spec; quoted from memory, not in the verified source list",
+      "inlet_angle_basis": "inlet slope of the deformed circular arc theta0 = sqrt(draft/R') [D]",
       "inlet_angle_rad": 0.017401758948267957,
       "limitations": [
         "Smooth surfaces, isothermal Barus-viscosity inlet, no starvation, no inlet shear heating (which thins the film at high speed).",
@@ -6063,24 +6650,29 @@
       "film_ratio": 0.5287353969348801,
       "film_thickness_m": 2.0647777312755117e-07,
       "flags": [],
+      "in_common_industrial_window": false,
       "limitations": [
         "Rq-based ratio ignores roughness lay/orientation and asperity flattening in the bite."
       ],
       "reasons": [
-        "Film ratio 0.529: boundary lubrication.",
+        "Film ratio 0.529: mixed lubrication with substantial asperity contact (the normal condition for a roll imprint).",
         "Film thickness rises with speed and viscosity, lowering friction; lower friction shrinks the chatter margin."
       ],
-      "regime": "BOUNDARY",
+      "regime": "MIXED_SUBSTANTIAL_CONTACT",
       "regime_boundaries": {
-        "boundary_below": 1.0,
-        "hydrodynamic_above": 3.0
+        "common_industrial_window": [
+          0.01,
+          0.5
+        ],
+        "hydrodynamic_above": 3.0,
+        "substantial_contact_below": 1.0
       },
       "sources": [
         "Sutcliffe (2002) in Lenard (ed.) Metal Forming Science and Practice, doi:10.1016/b978-008044024-8/50004-7 (film ratio regimes)",
         "Reid & Schey (1978) ASLE Trans. 21(3), doi:10.1080/05698197808982874 (full-film lubrication, negative forward slip, matte surface)"
       ],
-      "status": "BOUNDARY_LUBRICATION",
-      "threshold_basis": "Conventional regime boundaries (Sutcliffe 2002); transitions are gradual, not sharp."
+      "status": "MIXED_SUBSTANTIAL_CONTACT_LUBRICATION",
+      "threshold_basis": "Labels of the film ratio (Sutcliffe 2002; BT-S9 EX): below about 1 substantial asperity contact inside the mixed regime, the normal condition for a roll imprint; common industrial window 0.01-0.5 (BT-S3 EX, BT-S9 EX); no boundary-regime threshold; transitions are gradual, not sharp."
     },
     "forward_slip": {
       "flags": [],
@@ -6222,6 +6814,7 @@
         1.6039999999999999,
         1.656
       ],
+      "overlap_definition_note": "overlap (W_eff - pitch)/W_eff; the definition varies between sources: 10-30 % or 10-50 % of the pattern width [PT-T21; PT-T22; SN7; SN13]",
       "overlap_fraction": 0.6880238768612186,
       "reasons": [
         "31 of 32 nozzles active; effective footprint 0.1667 m vs pitch 0.0520 m (overlap fraction 0.688).",
@@ -6815,7 +7408,75 @@
       "entering_final_pass": 75.0,
       "leaving_final_pass": 80.0
     },
-    "flags": [],
+    "computed_heat_partition": {
+      "computed_strip_heat_fraction": 0.6616344409883027,
+      "measured_source": "[V abstract: Yin et al. 2003; TM-LA19 AB] measurement on a foil mill, a net balance; gauge and speed not in the abstract",
+      "measured_strip_share_foil_mill": [
+        0.11,
+        0.33
+      ],
+      "supplied_strip_heat_fraction": 0.84,
+      "text": "Strip share of the bite heat: entered 0.84, computed 0.662 by the interface model (measured on a foil mill: 0.11 to 0.33, abstract only). The entered value drives the thermal results.",
+      "used": "supplied"
+    },
+    "fire_limits": {
+      "context": [
+        {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "PT-T15",
+            "PT-T14"
+          ],
+          "text": "Fire: the chance rises sharply once strip reaches the flash point; ignition comes from strip breaks, static, hot bearings and electrics.",
+          "topic": "fire"
+        },
+        {
+          "read_status": "vendor_or_trade_page",
+          "sources": [
+            "PT-T9",
+            "PT-T10",
+            "PT-T11"
+          ],
+          "text": "Flash point: \u226574 \u00b0C (Somentor 29); 105\u2013110 \u00b0C open cup (grades 80, 110); 80\u2013111 \u00b0C for additive concentrates.",
+          "topic": "flash_point"
+        }
+      ],
+      "levers_that_raise_temperature": [
+        {
+          "basis": "pass-heating formula [D]",
+          "effect": "more plastic work per pass",
+          "lever": "higher pass reduction"
+        },
+        {
+          "basis": "[D]",
+          "effect": "more slip dissipation",
+          "lever": "higher friction"
+        },
+        {
+          "basis": "roll thermal model [D]",
+          "effect": "less heat taken from the rolls",
+          "lever": "a closed or weak coolant zone, a lower coolant flow"
+        },
+        {
+          "basis": "direct",
+          "effect": "hotter oil at the bite",
+          "lever": "a higher oil supply temperature"
+        },
+        {
+          "basis": "[D]; PT-T1, PT-T2",
+          "effect": "more heat per unit time into the rolls; the model's strip temperature rise per pass does not depend on speed [D]; plant reports give 77 C at 550 m/min and 98-100 C at 600 m/min [PT-T1, PT-T2 EX]",
+          "lever": "higher speed"
+        }
+      ],
+      "not_supplied": true,
+      "note": "A modelled strip exit temperature is an indicator (EXIT_IS_NOT_COIL); no oil-mist or vapour model; limits are the user's.",
+      "reason": "no oil flash point and no oil supply temperature cap given (tribology.oil_flash_point_k, tribology.oil_supply_temperature_cap_k)",
+      "rows": [],
+      "status": "NOT_SUPPLIED"
+    },
+    "flags": [
+      "SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE"
+    ],
     "growth": {
       "axial_decay_time_constant_s": 22.8310400474,
       "event_time_to_half_peak_s": [
@@ -6853,8 +7514,12 @@
       },
       {
         "basis": "kerosene spray on a work roll, SIMULATED 2.5\u20134.3 kW/m\u00b2K [PT-T18]; no measured value on a roll was found",
+        "basis_comparable": "NOT_COMPARABLE",
+        "basis_comparable_reason": "the published value is an average over the roll-wall patch of one cooling zone [SN14 FT], not a circumferential mean like the model's coefficient, so the two are not comparable; converting it needs the wetted arc of the plant: for arcs of 20 to 90 degrees its circumferential mean is 0.14 to 1.07 kW/m2K [computed]",
+        "basis_comparable_source": "SN14 FT (= PT-T18); docs/research/band-screening-2026-11/spray-nozzles.md, section 3 (c)",
         "item": "spray_heat_transfer_coefficient",
         "note": "wider published values: 4.65\u20135.5 kW/m\u00b2K in a cold-mill model example (coolant not named) [PT-T20]; about 5\u201313 kW/m\u00b2K computed from a plate test [PT-T19]",
+        "published_basis": "jet zone: the published kerosene value is the CFD average over the roll-wall patch of one cooling zone with two nozzles [SN14 FT, garbled mirror; = PT-T18]",
         "published_high": 4300.0,
         "published_low": 2500.0,
         "read_status": "excerpt",
@@ -6863,6 +7528,7 @@
         ],
         "unit": "W/m^2K",
         "value": 3000.0,
+        "value_basis": "circumferential mean under a healthy header (model definition, roll_thermal.py)",
         "verdict": "WITHIN_PUBLISHED_RANGE"
       },
       {
@@ -6912,7 +7578,7 @@
         "verdict": "NO_PUBLISHED_RANGE"
       },
       {
-        "basis": "footprint overlap (W_eff - pitch) / W_eff of the spray screen against the published 10-30 %, never above 50 % [PT-T22, PT-T21]; the spray screen itself has no overlap threshold (it only flags gaps between fans)",
+        "basis": "footprint overlap (W_eff - pitch) / W_eff of the spray screen against the published 10-30 %, never above 50 % [PT-T22, PT-T21]; the definition varies between sources: 10-30 % or 10-50 % of the pattern width [PT-T21; PT-T22; SN7; SN13]; the spray screen itself has no overlap threshold (it only flags gaps between fans)",
         "item": "spray_footprint_overlap",
         "note": "",
         "published_high": 0.3,
@@ -13032,14 +13698,30 @@
   },
   "width": {
     "barrel_length_m": 1.7,
+    "coil_winding": {
+      "not_supplied": true,
+      "reason": "width_model.coil_winding is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "failures": [],
     "flags": [
       "BARREL_ENDS_ADIABATIC",
       "AXIAL_MECHANICAL_COUPLING_IGNORED",
       "CIRCUMFERENTIALLY_AVERAGED",
       "NOZZLES_REDUCED_OR_OFF",
-      "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
+      "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC",
+      "FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE"
     ],
+    "flatness_control": {
+      "not_supplied": true,
+      "reason": "width_model.flatness_control is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
+    "friction_stripes": {
+      "not_supplied": true,
+      "reason": "width_model.friction_stripe_screen is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "gauge_trend": {
       "evaluation_grid_m": 0.009970588235294118,
       "own_stripe_text": "The text above holds the case-pass stripe on every pass. The stripe each pass would itself produce scales with that pass's bite heat (same spray, same nozzle, steady state; the roll needs minutes to reach it, radial time constant about 4-7 min computed for a 260 mm roll [PT-T25]): at the case heat share it would buckle in the mill on P2, P3, P4, P5, P6; it would stay latent on P1. (width.thermal_sensitivity.per_pass)",
@@ -13067,6 +13749,7 @@
           "exit_thickness_m": 0.0014,
           "feedback_i_units": 33.171186502308224,
           "friction_coefficient": 0.08,
+          "kernel_feedback_ratio_to_pointwise": 0.6389921695474997,
           "label": "P1 2.20->1.40 mm",
           "linear_feedback_i_units": 33.171186502308224,
           "manifest_onset_height_reference_m": 4.646205604630885e-06,
@@ -13112,6 +13795,7 @@
           "exit_thickness_m": 0.0009,
           "feedback_i_units": 34.69574273567437,
           "friction_coefficient": 0.07,
+          "kernel_feedback_ratio_to_pointwise": 0.6512526044933226,
           "label": "P2 1.40->0.90 mm",
           "linear_feedback_i_units": 34.69574273567437,
           "manifest_onset_height_reference_m": 4.133122960928498e-06,
@@ -13157,6 +13841,7 @@
           "exit_thickness_m": 0.0006,
           "feedback_i_units": 36.24324853716758,
           "friction_coefficient": 0.06,
+          "kernel_feedback_ratio_to_pointwise": 0.6828528309336953,
           "label": "P3 0.90->0.60 mm",
           "linear_feedback_i_units": 36.24324853716758,
           "manifest_onset_height_reference_m": 3.3983973097636546e-06,
@@ -13202,6 +13887,7 @@
           "exit_thickness_m": 0.00042,
           "feedback_i_units": 39.586085694048045,
           "friction_coefficient": 0.05,
+          "kernel_feedback_ratio_to_pointwise": 0.7222751445673383,
           "label": "P4 0.60->0.42 mm",
           "linear_feedback_i_units": 39.586085694048045,
           "manifest_onset_height_reference_m": 3.342390987995567e-06,
@@ -13247,6 +13933,7 @@
           "exit_thickness_m": 0.0003,
           "feedback_i_units": 43.84478625642266,
           "friction_coefficient": 0.04,
+          "kernel_feedback_ratio_to_pointwise": 0.7336711283545471,
           "label": "P5 0.42->0.30 mm",
           "linear_feedback_i_units": 43.84478625642266,
           "manifest_onset_height_reference_m": 2.821348817375919e-06,
@@ -13293,6 +13980,7 @@
           "exit_thickness_m": 0.00021,
           "feedback_i_units": 148.30178874794694,
           "friction_coefficient": 0.03,
+          "kernel_feedback_ratio_to_pointwise": 0.6897298835567909,
           "label": "P6 0.30->0.21 mm",
           "linear_feedback_i_units": 50.728691537782964,
           "manifest_onset_height_reference_m": 2.332619264836023e-06,
@@ -13351,6 +14039,16 @@
       "Stripe detection by differencing against a healthy-header solution; the stripe threshold is an analyst choice.",
       "Not plant-validated."
     ],
+    "local_sources": {
+      "not_supplied": true,
+      "reason": "width_model.local_coupling is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
+    "local_state": {
+      "not_supplied": true,
+      "reason": "width_model.local_coupling is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "not_supplied": false,
     "positions": {
       "observed_gaps_basis": "gaps between observed band positions",
@@ -13679,6 +14377,16 @@
       "steady_stripes_basis": "roll thermal steady state",
       "tolerance_basis": "one quarter of the nozzle pitch",
       "tolerance_m": 0.013
+    },
+    "roll_profile": {
+      "not_supplied": true,
+      "reason": "width_model.roll_ground_profile is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
+    "roll_surface_cycle": {
+      "not_supplied": true,
+      "reason": "width_model.circumferential_layout is null or absent",
+      "status": "NOT_SUPPLIED"
     },
     "shape": {
       "crown": {
@@ -16822,7 +17530,497 @@
             "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE"
           }
         }
-      ]
+      ],
+      "width_coupling": {
+        "basis": {
+          "closure_of_the_kernel_level": "no_lateral_velocity [D, SPEC19: analyst choice]",
+          "development": "1 - (1 + c*kappa*x)*exp(-kappa*x), c = b/(kappa*a) of the closure, kappa = 2*pi/wavelength",
+          "kernel": "[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the pass, mass flow with xi, half-infinite exit and entry spans with a decaying plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + (E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e"
+        },
+        "closures": [
+          {
+            "basis": "[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the pass, mass flow with xi, half-infinite exit and entry spans with a decaying plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + (E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e",
+            "closure": "no_lateral_velocity",
+            "closure_words": "the strip leaves the roll gap moving straight (no lateral velocity change)",
+            "defined": true,
+            "denominator_per_pa": 1.6963544415326796e-10,
+            "effective_stiffness_over_strip_stiffness": 59.65185534388494,
+            "entry_stress_per_thickness_over_e_per_h": 0.19754655131031595,
+            "entry_stress_per_thickness_pa_m": 65848850436771.98,
+            "exit_stress_per_thickness_over_e_per_h": 0.25980894887726713,
+            "exit_stress_per_thickness_pa_m": 86602982959089.03,
+            "feedback_stiffness_per_width_pa": 695658505873.8767,
+            "pointwise_feedback_stiffness_per_width_pa": 1008595571191.5992,
+            "ratio_to_pointwise": 0.6897298835567909,
+            "span_strain_ratio": 1.0663963963963965,
+            "strip_stiffness_per_width_pa": 11860809889.049934
+          },
+          {
+            "basis": "[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the pass, mass flow with xi, half-infinite exit and entry spans with a decaying plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + (E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e",
+            "closure": "uniaxial",
+            "closure_words": "no lateral stress at the roll gap exit",
+            "defined": true,
+            "denominator_per_pa": 1.68686924204748e-10,
+            "effective_stiffness_over_strip_stiffness": 21.508706216898716,
+            "entry_stress_per_thickness_over_e_per_h": 0.07593006607736427,
+            "entry_stress_per_thickness_pa_m": 25310022025788.09,
+            "exit_stress_per_thickness_over_e_per_h": 0.07593006607736427,
+            "exit_stress_per_thickness_pa_m": 25310022025788.09,
+            "feedback_stiffness_per_width_pa": 243249865509.01215,
+            "pointwise_feedback_stiffness_per_width_pa": 1008595571191.5992,
+            "ratio_to_pointwise": 0.24117681304274025,
+            "span_strain_ratio": 1.0,
+            "strip_stiffness_per_width_pa": 11860809889.049934
+          },
+          {
+            "basis": "[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the pass, mass flow with xi, half-infinite exit and entry spans with a decaying plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + (E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e",
+            "closure": "shear_free",
+            "closure_words": "no shear stress at the roll gap exit",
+            "defined": false,
+            "denominator_per_pa": 1.639726384904623e-10,
+            "effective_stiffness_over_strip_stiffness": -289.55212029500007,
+            "entry_stress_per_thickness_over_e_per_h": -0.9206545138543248,
+            "entry_stress_per_thickness_pa_m": -306884837951441.6,
+            "exit_stress_per_thickness_over_e_per_h": -1.4131918272871609,
+            "exit_stress_per_thickness_pa_m": -471063942429053.56,
+            "feedback_stiffness_per_width_pa": -3446183461679.363,
+            "pointwise_feedback_stiffness_per_width_pa": 1008595571191.5992,
+            "ratio_to_pointwise": -3.4168139937476525,
+            "reason": "Q + K is not positive: no linear steady state for this closure",
+            "span_strain_ratio": 0.6699999999999999,
+            "strip_stiffness_per_width_pa": 11860809889.049934
+          }
+        ],
+        "development": {
+          "distance_to_95_percent_m": 0.21327128277606053,
+          "fraction_at_shapemeter": null,
+          "shapemeter_distance_m": null,
+          "wavelength_basis": "twice the half-peak width of the largest band of the with-feedback level",
+          "wavelength_m": 0.3400000000000001
+        },
+        "finding": "An independent estimate of the tension feedback gives 0.69, 0.24, not defined of the value used by the standard levels (closures no_lateral_velocity, uniaxial, shear_free). With the first, the band would read 71.6 I-units instead of 50.7 (linear, no saturation).",
+        "flags": [
+          "WIDTH_COUPLING_KERNEL_REPORTED",
+          "KERNEL_CLOSURES_DISAGREE_IN_SIGN",
+          "KERNEL_STEADY_STATE_NOT_DEFINED"
+        ],
+        "kernel_level": {
+          "bands": [
+            {
+              "band_buckling_stress_pa": 83250.18903943256,
+              "band_buckling_width_basis": "REPORTING_CONTOUR_WIDTH_NOT_IN_NET_COMPRESSION",
+              "buckling_margin_pa": 31849860.029089175,
+              "buckling_utilisation": 0.0,
+              "center_m": 0.28500000000000003,
+              "effective_buckling_mean_compression_pa": null,
+              "effective_buckling_start_m": null,
+              "effective_buckling_width_m": null,
+              "end_m": 0.47000000000000003,
+              "local_total_stress_pa": 39459829.16267655,
+              "net_compression_peak_pa": -31766609.840049744,
+              "peak_i_units": -13.514041660966503,
+              "peak_position_m": 0.1075,
+              "released_buckling_mean_compression_pa": null,
+              "released_buckling_start_m": null,
+              "released_buckling_stress_pa": null,
+              "released_buckling_utilisation": 0.0,
+              "released_buckling_width_m": null,
+              "released_compression_peak_pa": -1766609.8400497432,
+              "released_global_buckling_utilisation": 0.0,
+              "released_global_buckling_width_m": null,
+              "released_half_peak_width_m": null,
+              "residual_stress_at_peak_pa": 9459829.162676552,
+              "sense": "TIGHT_SHORT",
+              "start_m": 0.1,
+              "state": "LATENT_UNDER_TENSION",
+              "state_after_tension_release": "FLAT_AFTER_TENSION_RELEASE",
+              "width_m": 0.37
+            },
+            {
+              "band_buckling_stress_pa": 97083.50400208416,
+              "band_buckling_width_basis": "RAYLEIGH_QUOTIENT_SINE_MODE",
+              "buckling_margin_pa": -9136110.621586027,
+              "buckling_utilisation": 95.10569504567839,
+              "center_m": 0.6675,
+              "effective_buckling_mean_compression_pa": 9233194.125588112,
+              "effective_buckling_start_m": 0.4967187500000002,
+              "effective_buckling_width_m": 0.3426270261978888,
+              "end_m": 0.8400000000000001,
+              "local_total_stress_pa": -20120488.572002478,
+              "net_compression_peak_pa": 20120488.572002478,
+              "peak_i_units": 71.60069796000353,
+              "peak_position_m": 0.6675,
+              "released_buckling_mean_compression_pa": 38914609.76415989,
+              "released_buckling_start_m": 0.49374999999999997,
+              "released_buckling_stress_pa": 93812.53865399284,
+              "released_buckling_utilisation": 414.8124581479238,
+              "released_buckling_width_m": 0.3485490424622233,
+              "released_compression_peak_pa": 50120488.57200248,
+              "released_global_buckling_utilisation": 1549.327162853016,
+              "released_global_buckling_width_m": 1.211641779759904,
+              "released_half_peak_width_m": 0.17427452123111165,
+              "residual_stress_at_peak_pa": -50120488.57200248,
+              "sense": "LOOSE_LONG",
+              "start_m": 0.495,
+              "state": "MANIFEST_BUCKLE",
+              "state_after_tension_release": "MANIFEST_AFTER_TENSION_RELEASE",
+              "width_m": 0.3450000000000001
+            },
+            {
+              "band_buckling_stress_pa": 21096.674310700746,
+              "band_buckling_width_basis": "REPORTING_CONTOUR_WIDTH_NOT_IN_NET_COMPRESSION",
+              "buckling_margin_pa": 31684237.238172926,
+              "buckling_utilisation": 0.0,
+              "center_m": 1.2325,
+              "effective_buckling_mean_compression_pa": null,
+              "effective_buckling_start_m": null,
+              "effective_buckling_width_m": null,
+              "end_m": 1.6,
+              "local_total_stress_pa": 39724696.715124056,
+              "net_compression_peak_pa": -31663140.563862227,
+              "peak_i_units": -13.892423878748644,
+              "peak_position_m": 1.5975000000000001,
+              "released_buckling_mean_compression_pa": null,
+              "released_buckling_start_m": null,
+              "released_buckling_stress_pa": null,
+              "released_buckling_utilisation": 0.0,
+              "released_buckling_width_m": null,
+              "released_compression_peak_pa": -1663140.563862225,
+              "released_global_buckling_utilisation": 0.0,
+              "released_global_buckling_width_m": null,
+              "released_half_peak_width_m": null,
+              "residual_stress_at_peak_pa": 9724696.715124052,
+              "sense": "TIGHT_SHORT",
+              "start_m": 0.865,
+              "state": "LATENT_UNDER_TENSION",
+              "state_after_tension_release": "FLAT_AFTER_TENSION_RELEASE",
+              "width_m": 0.7350000000000001
+            }
+          ],
+          "closure": "no_lateral_velocity",
+          "i_units": [
+            -13.396566169313504,
+            -13.514041660966503,
+            -13.496114705554822,
+            -13.502186059250251,
+            -13.488992304892802,
+            -13.482202661806538,
+            -13.46823360460006,
+            -13.456828716520985,
+            -13.441826508521098,
+            -13.427645142932164,
+            -13.411270957956319,
+            -13.394851040558114,
+            -13.37690180158915,
+            -13.358432854039842,
+            -13.338733836211755,
+            -13.317589852325929,
+            -13.29481723847353,
+            -13.270906668049863,
+            -13.245756155885108,
+            -13.218942043724372,
+            -13.190717744769355,
+            -13.160496873584037,
+            -13.128670955460437,
+            -13.09455905601875,
+            -13.058896125104406,
+            -13.01992646031376,
+            -12.977908815390062,
+            -12.93294259604497,
+            -12.885577230293078,
+            -12.834943048406373,
+            -12.781425226861993,
+            -12.72429365675742,
+            -12.663950918746538,
+            -12.59973977064948,
+            -12.532316818505349,
+            -12.46034138053407,
+            -12.38300373858467,
+            -12.30018943139429,
+            -12.213604262398691,
+            -12.1221982985079,
+            -12.026103580011998,
+            -11.924785461854622,
+            -11.818309430411096,
+            -11.706301545519056,
+            -11.588806539123635,
+            -11.466200776500125,
+            -11.33470580116064,
+            -11.19356007030551,
+            -11.046371938789749,
+            -10.891851195607707,
+            -10.72939617779584,
+            -10.558457298094268,
+            -10.378340062394235,
+            -10.18868079840875,
+            -9.98863025524448,
+            -9.779157330426475,
+            -9.554909062602981,
+            -9.312952390690365,
+            -9.055181455727853,
+            -8.783881012520316,
+            -8.496169872600602,
+            -8.191248221744512,
+            -7.867126393048288,
+            -7.523125567248775,
+            -7.157319986659571,
+            -6.770061316897199,
+            -6.358115505756636,
+            -5.910916952742911,
+            -5.425655574070261,
+            -4.914614973924333,
+            -4.370789050607164,
+            -3.7929621877188646,
+            -3.1777333869915663,
+            -2.5237283429282042,
+            -1.828264665568968,
+            -1.0897716236603299,
+            -0.3122477465634981,
+            0.530215953950397,
+            1.4463051308666937,
+            2.4184081686232304,
+            3.44748393001657,
+            4.540454699694565,
+            5.7025402371475495,
+            6.939545507759372,
+            8.256117746323994,
+            9.659789730065414,
+            11.146864336175295,
+            12.752581425797912,
+            14.525787333403711,
+            16.47629084287398,
+            18.560651058546384,
+            20.83618867125842,
+            23.32451928370134,
+            26.10283313193527,
+            29.21017430906508,
+            32.83495821850741,
+            37.097871351978554,
+            42.88558747913114,
+            47.25843605770444,
+            51.77758649037375,
+            55.3372601573616,
+            58.32685670458816,
+            60.79405364633643,
+            62.84252577347795,
+            64.49142503438118,
+            65.75630732302638,
+            66.64414257787374,
+            66.91144704954817,
+            67.49100208717797,
+            68.78511400253576,
+            70.11866599716241,
+            70.9328352836827,
+            71.4227753612096,
+            71.60069796000353,
+            71.48564034094017,
+            71.06521121736237,
+            70.32002242979802,
+            69.1334277711126,
+            67.67865468346469,
+            66.94774660251763,
+            66.81877481118207,
+            65.99993769879431,
+            64.8105418435857,
+            63.23255088135438,
+            61.26473631753149,
+            58.88325717188318,
+            56.00017175901281,
+            52.57783916222298,
+            48.1750329835401,
+            43.810950543081994,
+            38.35496090579473,
+            33.71468072121927,
+            29.973244784296433,
+            26.75707647654218,
+            23.91170720568558,
+            21.36231729395677,
+            19.042583434149464,
+            16.917684107669174,
+            14.939901481917559,
+            13.124653150061404,
+            11.484254528315093,
+            9.978851592742357,
+            8.555264208208152,
+            7.220158550741139,
+            5.966032690003532,
+            4.7880304034134555,
+            3.6804458972080187,
+            2.6378155868205955,
+            1.6551245254313802,
+            0.7220889851693587,
+            -0.1351823002906202,
+            -0.923356798341802,
+            -1.6712555459219776,
+            -2.3759150912317497,
+            -3.0389611809115467,
+            -3.6624576619056413,
+            -4.248389987110271,
+            -4.799465319838754,
+            -5.317624295478721,
+            -5.8084361868627195,
+            -6.263948132693873,
+            -6.683325893064128,
+            -7.075143232198382,
+            -7.44573379214196,
+            -7.7944281987893325,
+            -8.122774554738495,
+            -8.43182795561583,
+            -8.72317017672394,
+            -8.99800960269432,
+            -9.25843493055779,
+            -9.504627342132574,
+            -9.732629003793342,
+            -9.944308466700999,
+            -10.146749497863993,
+            -10.33869718326509,
+            -10.520963625610234,
+            -10.693939025871083,
+            -10.858312440492952,
+            -11.014618785871061,
+            -11.163429288730528,
+            -11.306264777064609,
+            -11.43983256904562,
+            -11.564428240472644,
+            -11.68314731776139,
+            -11.796467507536436,
+            -11.904337531044554,
+            -12.006890302013653,
+            -12.104336537524002,
+            -12.19688138465218,
+            -12.28475118786206,
+            -12.368485209974207,
+            -12.447385155058656,
+            -12.520641215134425,
+            -12.589099017886424,
+            -12.654205244985969,
+            -12.715645529819557,
+            -12.773599500099698,
+            -12.828152647660598,
+            -12.879517393922105,
+            -12.927833408105622,
+            -12.973357411841299,
+            -13.016448651064328,
+            -13.056140891525892,
+            -13.092616856595992,
+            -13.127219033886156,
+            -13.159766261863595,
+            -13.1904694369971,
+            -13.219353097941818,
+            -13.246647902152816,
+            -13.272399984567961,
+            -13.29683433682254,
+            -13.320126220551781,
+            -13.342019896812587,
+            -13.36237205051077,
+            -13.381699124799756,
+            -13.400209914994896,
+            -13.417957439588331,
+            -13.434917526847139,
+            -13.451205252169956,
+            -13.466804442366652,
+            -13.481814680055042,
+            -13.496257774612003,
+            -13.51015769394631,
+            -13.523243100898853,
+            -13.53559893905376,
+            -13.547545651194731,
+            -13.558986423867887,
+            -13.56994434100711,
+            -13.580385979047742,
+            -13.590357593166429,
+            -13.599813167047987,
+            -13.608823918863704,
+            -13.617377538850869,
+            -13.625371895445701,
+            -13.632712755156708,
+            -13.639665736043211,
+            -13.646132715923219,
+            -13.652238389957809,
+            -13.657854812866814,
+            -13.66314183562904,
+            -13.667967356425768,
+            -13.672507171631615,
+            -13.676643218470002,
+            -13.680509532419155,
+            -13.68391637851989,
+            -13.68708051392518,
+            -13.689940345397739,
+            -13.692641479860637,
+            -13.695067057817269,
+            -13.697366457150617,
+            -13.699444622711608,
+            -13.701427070517303,
+            -13.703248705252877,
+            -13.705011320611112,
+            -13.70661889221487,
+            -13.708119550849537,
+            -13.70958543834009,
+            -13.710993187299396,
+            -13.712403937690366,
+            -13.71374676762043,
+            -13.715140787701952,
+            -13.716451802823553,
+            -13.717860888876972,
+            -13.719172148652188,
+            -13.720606550568768,
+            -13.721879605878234,
+            -13.723322125037845,
+            -13.724597323868755,
+            -13.726077823268168,
+            -13.727345121777168,
+            -13.728838449931278,
+            -13.730076634712157,
+            -13.731553729673104,
+            -13.732737768742606,
+            -13.734162144347422,
+            -13.735241723409617,
+            -13.73653854474305,
+            -13.737485927889976,
+            -13.738635243005854,
+            -13.739422523603398,
+            -13.74036477728604,
+            -13.740965640351352,
+            -13.741650124193116,
+            -13.742058362599144,
+            -13.74244692188469,
+            -13.742684818619844,
+            -13.742731936852415,
+            -13.742879833613312,
+            -13.742597471953637,
+            -13.742848070830753,
+            -13.742257670931874,
+            -13.74298993753884,
+            -13.742141386577476,
+            -13.744188122132918,
+            -13.743122579902021,
+            -13.748672930420296,
+            -13.747112361076857,
+            -13.764758864427685,
+            -13.758407441793556,
+            -13.892423878748644
+          ],
+          "note": "linear, no band-wise saturation (as the linear-feedback level)",
+          "peak_i_units": 71.60069796000353,
+          "peak_ratio_to_linear_feedback": 1.4131409134557957,
+          "released_status": "MANIFEST_AFTER_RELEASE_BANDS",
+          "status": "MANIFEST_BUCKLE_BANDS"
+        },
+        "limitations": [
+          "Linear, small perturbations of a uniform pass; half-infinite spans (a span shorter than about half a band wavelength is not covered).",
+          "The lateral closure (how the strip is held at the roll gap) is an analyst choice [D]; the kernel level uses no_lateral_velocity; all three closures are printed, none is picked to agree with the pointwise value.",
+          "Slip sensitivities of a constant-friction bite (at foil gauge the experimental mattress or the reduced half-space model); no roll stack, no closed gap, no lateral metal flow.",
+          "The literature neither supports nor contradicts the pointwise exit-tension feedback (gap study X17); this kernel is a re-derivation, not a validation, and it does not confirm the feedback at foil gauge.",
+          "The three present levels, the band states, the friction screen, the local sources, the flatness loop, the step test and every evidence item still use the pointwise feedback."
+        ],
+        "meaning": "For bands the kernel is not wavenumber-dependent: it reduces to a factor on the tension feedback. A smaller feedback suppresses a band less, so with the kernel a band reads larger than with the full (pointwise) feedback; the rigid bound, the compliance-only level, the kernel level and the with-feedback level bracket the answer.",
+        "pointwise": {
+          "effective_stiffness_over_strip_stiffness": 86.03597820269835,
+          "feedback_stiffness_per_width_pa": 1008595571191.5992
+        },
+        "status": "SECOND_ESTIMATE_OF_THE_TENSION_FEEDBACK_NOT_VALIDATED",
+        "used_by_the_evidence": "the with-feedback level (pointwise exit-tension feedback): every band state, onset, gauge-trend row, screen and evidence item uses it; the kernel level is a second estimate beside it and enters no tally"
+      }
     },
     "shape_chain": {
       "basis": "derived_bite",
@@ -16849,6 +18047,11 @@
       "status": "EVALUATED"
     },
     "status": "SCREENING_RESULT_NOT_PLANT_VALIDATED",
+    "strip_temperature": {
+      "not_supplied": true,
+      "reason": "width_model.strip_temperature is null or absent",
+      "status": "NOT_SUPPLIED"
+    },
     "thermal_events": {
       "attribution_definition": "event metrics use the monitor history from the event start to attribution_window_end_s: the start of the next event switching nozzles within the isolation margin (0.1 m) of this one, else the end of the run; a fade beyond it gives only a lower bound (flag FADE_BEYOND_ATTRIBUTION_WINDOW), a later event starting during this one truncates its peak (flag PEAK_TRUNCATED_BY_LATER_EVENT); an earlier event in the same neighbourhood leaves its residual in the history (flag EARLIER_EVENT_IN_SAME_REGION)",
       "band_life_definition": "band_life_s = event duration + time after the event ends for the stripe to fall below the manifest threshold (or the reporting threshold when it never becomes manifest)",
@@ -17404,6 +18607,11 @@
           "level": 0.0,
           "local_htc_before_w_m2k": 3793.713477665377,
           "local_htc_during_w_m2k": 1921.8567388326885,
+          "local_sources": {
+            "not_supplied": true,
+            "reason": "width_model.local_coupling is null or absent",
+            "status": "NOT_SUPPLIED"
+          },
           "manifest_threshold_m": 2.230876079642318e-06,
           "monitor_position_m": 1.1099999999999999,
           "net_surface_flux_change_w_m2": 14804.953829204549,
@@ -20537,6 +21745,11 @@
           "level": 0.0,
           "local_htc_before_w_m2k": 2857.7851082490333,
           "local_htc_during_w_m2k": 1921.8567388326885,
+          "local_sources": {
+            "not_supplied": true,
+            "reason": "width_model.local_coupling is null or absent",
+            "status": "NOT_SUPPLIED"
+          },
           "manifest_threshold_m": 2.3170406978561895e-06,
           "monitor_position_m": 0.35600000000000004,
           "net_surface_flux_change_w_m2": 8184.736778167899,
@@ -23169,8 +24382,14 @@
       "case_spray_htc_w_m2k": 3000.0,
       "case_strip_heat_share": 0.84,
       "combinations_changing_a_state": [],
+      "computed_strip_share": {
+        "note": "strip share of the bite heat partition of the case pass (process.heating.operating.heat_partition); the rows above are evaluated at their own shares",
+        "roll_heat_fraction_per_roll": 0.16918277950584865,
+        "strip_heat_share": 0.6616344409883027,
+        "used_by_the_rows_above": false
+      },
       "linearity_check_max_relative_difference": 5.579081990502478e-13,
-      "linearity_note": "stripe and event histories scaled with the roll heat share for a fixed spray coefficient (linear roll thermal model, coolant temperature as the zero); checked by one direct solve: maximum relative difference 5.6e-13",
+      "linearity_note": "stripe and event histories scaled with the roll heat share for a fixed spray coefficient (linear roll thermal model, coolant temperature as the zero); checked by one direct solve: maximum relative difference below 1e-9 (rounding level)",
       "literature_check_of_case_inputs": [
         {
           "basis": "strip share of the heat against the only measured foil-mill partition (abstract only; a net balance, not necessarily the split inside the bite) [PT-T16]",
@@ -23733,8 +24952,16 @@
         "AXIAL_MECHANICAL_COUPLING_IGNORED",
         "CIRCUMFERENTIALLY_AVERAGED",
         "NOZZLES_REDUCED_OR_OFF",
-        "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC"
+        "TOP_HAT_FOOTPRINTS_GIVE_PITCH_PERIODIC_HTC",
+        "FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE"
       ],
+      "footprint_notes": [
+        "fans overlap more than makers recommend (1.1 to 1.5 nozzle pitches [SN2; SN7; SN13]); a blocked nozzle is smoothed more than on such a header",
+        "cooling is taken as proportional to flow; published exponents are 0.5 to 1.0, with which the stripe of this partly blocked nozzle would be 7 to 45 % smaller [computed]"
+      ],
+      "footprint_profile": "tophat",
+      "footprint_width_over_pitch": 3.2053735072384164,
+      "footprint_width_source": "geometric",
       "healthy_radius_growth_m": [
         5.815369881146617e-06,
         5.828545591553947e-06,
@@ -24762,6 +25989,7 @@
         0.0,
         0.0
       ],
+      "htc_flow_exponent": 1.0,
       "htc_w_m2k": [
         985.9283694163443,
         985.9283694163443,
@@ -26924,7 +28152,13 @@
         "flags": [
           "FORMULAS_RECONSTRUCTED_CROSS_CHECKED"
         ],
+        "generators": {
+          "not_supplied": true,
+          "reason": "no width_model.span_alignment",
+          "status": "NOT_SUPPLIED"
+        },
         "lateral_compressive_stress_pa": null,
+        "lateral_stress_basis": null,
         "observed_spacing_consistent": null,
         "observed_spacing_to_wavelength_ratio": null,
         "roller_radius_m": 0.15,
@@ -26942,7 +28176,13 @@
         "flags": [
           "FORMULAS_RECONSTRUCTED_CROSS_CHECKED"
         ],
+        "generators": {
+          "not_supplied": true,
+          "reason": "no width_model.span_alignment",
+          "status": "NOT_SUPPLIED"
+        },
         "lateral_compressive_stress_pa": null,
+        "lateral_stress_basis": null,
         "observed_spacing_consistent": null,
         "observed_spacing_to_wavelength_ratio": null,
         "roller_radius_m": 0.15,
@@ -26956,6 +28196,11 @@
         "wrinkle_wavelength_m": 0.3948770094320911
       }
     },
-    "two_tone": null
+    "two_tone": null,
+    "zone_step_test": {
+      "not_supplied": true,
+      "reason": "width_model.zone_step_test is null or absent",
+      "status": "NOT_SUPPLIED"
+    }
   }
 }

@@ -104,10 +104,13 @@ class RunBundleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'runtime differs'):
                     verify_run_bundle(path)
             manifest_path = path / 'manifest.json'
-            manifest = json.loads(manifest_path.read_text())
-            manifest['originating_runtime']['python_major_minor'] = '3.13'
-            manifest['originating_runtime']['python_version'] = '3.13.0'
-            manifest_path.write_text(canonical_json(manifest) + '\n')
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            # a major.minor that differs from the running interpreter's (whatever it is)
+            other = f'{sys.version_info.major}.{sys.version_info.minor + 1}'
+            self.assertNotEqual(manifest['originating_runtime']['python_major_minor'], other)
+            manifest['originating_runtime']['python_major_minor'] = other
+            manifest['originating_runtime']['python_version'] = other + '.0'
+            manifest_path.write_text(canonical_json(manifest) + '\n', encoding='utf-8')
             with self.assertRaisesRegex(ValueError, 'Python implementation or major.minor'):
                 verify_run_bundle(path)
 

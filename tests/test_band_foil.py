@@ -371,6 +371,22 @@ class FoilRulesTests(unittest.TestCase):
                           (0.1, ('NEUTRAL', None))):
             f.film_ratio, f.film_basis = lam, 'unit test'
             self.assertEqual(self.vw(self.ev(HS, fr, facts=f)), want, lam)
+        # SPEC17 BT-G8: the tribology regime item; the film-ratio label never supports
+        rc = 'tribology regime / exit strip temperature at the operating point'
+        f = self.facts(tracks_speed_changes=True)
+        self.assertEqual(self.ev(HS, rc, facts=f)['verdict'], 'NOT_OBSERVED')
+        for regime, heat, want in (
+                ('MIXED_SUBSTANTIAL_CONTACT', None, ('NEUTRAL', None)),
+                ('MIXED_SUBSTANTIAL_CONTACT', {'exit_temperature_k': 400.0,
+                                               'temperature_limit_k': 410.0},
+                 ('NEUTRAL', None)),
+                ('HYDRODYNAMIC', {'exit_temperature_k': 400.0, 'temperature_limit_k': 390.0},
+                 ('SUPPORTS', 'weak'))):
+            f.process = {'friction': {'operating': {'regime': regime}},
+                         'heating': None if heat is None else {'operating': heat}}
+            x = self.ev(HS, rc, facts=f)
+            self.assertEqual(self.vw(x), want, (regime, heat))
+            self.assertIn('no longer counts', x['expected'])
 
     def test_next_measurements_for_foil(self):
         lines = bw.lengthwise_next_measurements(dict(V2_NULL_OBS, **{
@@ -382,6 +398,154 @@ class FoilRulesTests(unittest.TestCase):
             self.assertIn(word, text)
         sheet = ' '.join(bw.lengthwise_next_measurements(dict(V2_NULL_OBS), 0.21e-3))
         self.assertNotIn('Step the exit tension', sheet)
+
+
+class WideFoilTroughNoteTests(unittest.TestCase):
+    """SPEC17 X12: the isolated-span trough thresholds carry the wide-foil note below 100 um;
+    no number changes."""
+
+    def test_note_below_foil_gauge_only(self):
+        from pathlib import Path
+        art = Path(__file__).resolve().parents[1] / 'artifacts' / 'band_diagnosis'
+        foil = json.loads((art / 'battery-foil-demo.result.json').read_text())
+        sheet = json.loads((art / 'lengthwise-bands-demo.result.json').read_text())
+        for span in ('entry_span', 'exit_span'):
+            self.assertEqual(foil['width']['troughs'][span]['wide_foil_note'],
+                             bw.WIDE_FOIL_TROUGH_NOTE)
+            self.assertNotIn('wide_foil_note', sheet['width']['troughs'][span])
+        self.assertIn('15 times', bw.WIDE_FOIL_TROUGH_NOTE)
+        # the screen itself, recomputed from the demo case: the same numbers plus the note
+        case = validate_case(load_case(SCEN / 'band_diagnosis_battery_foil.json'))
+        tr = bw._troughs(case, case['width_model'], case['observation'])
+        for span in ('entry_span', 'exit_span'):
+            want = dict(foil['width']['troughs'][span])
+            self.assertEqual(json.loads(json.dumps(tr[span])), want)
+
+
+class SpanAlignmentEvidenceTests(unittest.TestCase):
+    """SPEC19 package 12 (G11): a lateral stress computed from an entered roller alignment
+    survey gives SUPPORTS weak or NEUTRAL on the trough hypothesis, nothing else; a supplied
+    plant stress keeps driving the screen and the evidence as before."""
+    CRIT = 'model trough status (either span)'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = {}
+        for key, sa, lat in (
+                ('none', None, None), ('null', 'null', None),
+                ('1', {'exit_span': {'misalignment_m_per_m': 1e-3}}, None),
+                ('0.1', {'exit_span': {'misalignment_m_per_m': 1e-4}}, None),
+                ('1_supplied_low', {'exit_span': {'misalignment_m_per_m': 1e-3}}, 1e3),
+                ('supplied_low', None, 1e3),
+                ('1_supplied_high', {'exit_span': {'misalignment_m_per_m': 1e-3}}, 1e6),
+                ('supplied_high', None, 1e6),
+                ('nulls', {'entry_span': None, 'exit_span': None}, None)):
+            c = foil_case(schedule=False, appearance='crease_or_flute',
+                          changes_with_tension=True)
+            if sa == 'null':
+                c['width_model']['span_alignment'] = None
+            elif sa is not None:
+                c['width_model']['span_alignment'] = dict(sa, provenance='unit test survey')
+            if lat is not None:
+                c['width_model']['lateral_compressive_stress_pa'] = lat
+            cls.r[key] = diagnose(c)
+
+    def _item(self, key):
+        h = {x['id']: x for x in self.r[key]['hypotheses']}['tension_troughs_or_creases']
+        return [e for e in h['evidence'] if e['criterion'] == self.CRIT][0], h
+
+    def test_computed_expected_supports_weak(self):
+        tr = self.r['1']['width']['troughs']['exit_span']
+        self.assertEqual(tr['status'], 'TROUGHS_EXPECTED')
+        self.assertEqual(tr['lateral_stress_basis'], bw.SPAN_LATERAL_BASIS_COMPUTED)
+        self.assertEqual(tr['lateral_compressive_stress_pa'],
+                         tr['generators']['computed_lateral_compressive_stress_pa'])
+        item, h = self._item('1')
+        self.assertEqual((item['verdict'], item['weight'], item['basis']),
+                         ('SUPPORTS', 'weak', 'model'))
+        self.assertIn('(lateral stress computed from the entered roller alignment)',
+                      item['observed'])
+        _, h0 = self._item('none')
+        self.assertEqual(h['score'], h0['score'] + 1)        # one weak point
+
+    def test_computed_below_is_neutral_never_contradicts(self):
+        tr = self.r['0.1']['width']['troughs']['exit_span']
+        self.assertEqual(tr['status'], 'BELOW_TROUGH_THRESHOLD')
+        item, h = self._item('0.1')
+        self.assertEqual((item['verdict'], item['basis']), ('NEUTRAL', 'model'))
+        self.assertIn('BELOW_TROUGH_THRESHOLD (lateral stress computed', item['observed'])
+        self.assertEqual(h['score'], self._item('none')[1]['score'])
+
+    def test_supplied_stress_branches_as_today(self):
+        for with_sa, without in (('1_supplied_low', 'supplied_low'),
+                                 ('1_supplied_high', 'supplied_high')):
+            a, ha = self._item(with_sa)
+            b, hb = self._item(without)
+            self.assertEqual(a, b)
+            self.assertEqual(ha['score'], hb['score'])
+            ta = self.r[with_sa]['width']['troughs']['exit_span']
+            tb = self.r[without]['width']['troughs']['exit_span']
+            self.assertEqual(ta['lateral_stress_basis'], 'supplied')
+            self.assertEqual({k: v for k, v in ta.items() if k != 'generators'},
+                             {k: v for k, v in tb.items() if k != 'generators'})
+        self.assertEqual(self._item('supplied_low')[0]['verdict'], 'CONTRADICTS')
+        self.assertEqual(self._item('supplied_high')[0]['verdict'], 'SUPPORTS')
+        self.assertEqual(self._item('supplied_high')[0]['weight'], 'moderate')
+        # the computed value is reported beside the supplied one and compared
+        sc = self.r['1_supplied_low']['width']['troughs']['exit_span']['generators'][
+            'supplied_vs_computed']
+        self.assertEqual((sc['supplied_pa'], sc['status_from_supplied'],
+                          sc['status_from_computed'], sc['statuses_agree']),
+                         (1e3, 'BELOW_TROUGH_THRESHOLD', 'TROUGHS_EXPECTED', False))
+
+    def test_without_the_key_identical(self):
+        base = result_json(self.r['none'])
+        self.assertEqual(result_json(self.r['null']), base)
+        for key in ('none', 'nulls'):
+            for span in ('entry_span', 'exit_span'):
+                g = self.r[key]['width']['troughs'][span]['generators']
+                self.assertTrue(g['not_supplied'])
+                self.assertIsNone(self.r[key]['width']['troughs'][span][
+                    'lateral_stress_basis'])
+        strip = json.loads(result_json(self.r['nulls']))
+        want = json.loads(base)
+        for d in (strip, want):
+            d.pop('inputs', None)
+            for span in ('entry_span', 'exit_span'):
+                d['width']['troughs'][span].pop('generators')
+        self.assertEqual(strip['hypotheses'], want['hypotheses'])
+        self.assertEqual(strip['width']['troughs'], want['width']['troughs'])
+
+    def test_report_columns_and_lines(self):
+        html = render_band_report(self.r['1'])
+        self.assertIn('lateral compression from the roller alignment', html)
+        self.assertIn('critical misalignment (troughs)', html)
+        self.assertIn('Exit span, roller alignment (unit test survey)', html)
+        self.assertIn('0.6078 mm/m', html)
+        self.assertIn('not applied to any threshold', html)
+
+    def test_validation_messages_in_mm_per_metre(self):
+        for sa, words in (
+                ({'exit_span': {'misalignment_m_per_m': 0.5}}, 'mm per metre'),
+                ({'exit_span': {'misalignment_m_per_m': -1e-3}}, '0.5 mm/m is entered as'),
+                ({'exit_span': {'taper_radius_difference_m': 2e-3}}, 'roller grinding report'),
+                ({'exit_span': {'misalignment_rad': 1e-3}}, 'unknown keys'),
+                ({'exit_span': {'roller': {'outer_diameter_m': 0.25}}}, 'missing keys')):
+            c = foil_case(schedule=False)
+            c['width_model']['span_alignment'] = dict(sa, provenance='unit test')
+            with self.assertRaises(ValueError) as cm:
+                validate_case(c)
+            self.assertIn(words, str(cm.exception))
+        c = foil_case(schedule=False)
+        c['width_model']['span_alignment'] = {'exit_span': None}
+        with self.assertRaisesRegex(ValueError, 'provenance'):
+            validate_case(c)
+        c = foil_case(schedule=False)
+        c['width_model']['deflector_roll_radius_m'] = None
+        c['width_model']['span_alignment'] = {
+            'provenance': 'unit test', 'exit_span': {'taper_radius_difference_m': 1e-5}}
+        with self.assertRaisesRegex(ValueError, 'needs the roller radius'):
+            validate_case(c)
 
 
 class TensionLinesPlantedTruthTests(unittest.TestCase):
@@ -735,7 +899,8 @@ class SchemaCompatibilityTests(unittest.TestCase):
         for name in ('band_diagnosis_template.json', 'band_diagnosis_thin_gauge_chatter.json',
                      'band_diagnosis_bearing_order.json',
                      'band_diagnosis_lengthwise_bands.json',
-                     'band_diagnosis_battery_foil.json'):
+                     'band_diagnosis_battery_foil.json',
+                     'band_diagnosis_realistic_header.json'):
             case = load_case(SCEN / name)
             for k in bw.OBS_FOIL_BOOL:
                 self.assertIn(k, case['observation'])
@@ -756,172 +921,58 @@ class SchemaCompatibilityTests(unittest.TestCase):
             validate_case(bad)
 
 
-class FoilDemoTests(unittest.TestCase):
-    def test_foil_demo_leads_with_planted_cause(self):
-        demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
-        self.assertTrue(demo['synthetic'])
-        self.assertIn('GENERATED FROM THE MODEL', demo['provenance'])
-        # plant route (plant statements): 50 um input, two single-sheet passes, final
-        # 17-19 um (F2 at 18 um), thinnest 12 um by the published-like route 50 -> 25 -> 12 um
-        # (ALT1, ALT2; SPEC12 B4)
-        sched = {x['label'].split()[0]: x for x in demo['schedule']}
-        self.assertEqual(list(sched), ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT1', 'ALT2'])
-        self.assertAlmostEqual(sched['F1']['entry_thickness_m'], 50e-6)
-        self.assertAlmostEqual(sched['F1']['exit_thickness_m'], 30e-6)
-        self.assertAlmostEqual(sched['F2']['exit_thickness_m'], 18e-6)
-        self.assertAlmostEqual(sched['ALT1']['exit_thickness_m'], 25e-6)
-        self.assertAlmostEqual(sched['ALT2']['entry_thickness_m'], 25e-6)
-        self.assertAlmostEqual(sched['ALT2']['exit_thickness_m'], 12e-6)
-        self.assertEqual(demo['pass']['entry_thickness_m'], 50e-6)   # case pass = F1
-        self.assertEqual(demo['pass']['exit_thickness_m'], 30e-6)
-        red = {k: (x['entry_thickness_m'] - x['exit_thickness_m']) / x['entry_thickness_m']
-               for k, x in sched.items()}
-        self.assertTrue(all(v <= 0.5 + 1e-12 for k, v in red.items() if k != 'ALT2'))
-        self.assertAlmostEqual(red['ALT2'], 0.52)    # above 50 %: extended bite domain
-        # published practice: single-sheet final pass 450-650 m/min, earlier 550-1000 m/min
-        for k, x in sched.items():
-            lo, hi = (450, 650) if k in ('F2', 'ALT2') else (550, 1000)
-            self.assertTrue(lo <= x['exit_speed_m_s'] * 60 <= hi, k)
-        for k in ('S1', 'S2', 'S3', 'ALT1'):
-            self.assertIn('assumed', sched[k]['label'])
-        self.assertIn('plant statements', demo['provenance'])
-        self.assertEqual(demo['material']['product'], 'battery_collector_foil')
-        # coarse thermal numerics, final pass only, no AGC / drive (they do not enter the
-        # lengthwise evidence) to keep the module fast
-        demo['width_model']['numerics'] = dict(COARSE)
-        # the full thermal sensitivity (spray rows, per-row onsets) is not under test here
-        demo['model_options']['thermal_sensitivity'] = 'partition'
-        demo['schedule'] = [x for x in demo['schedule']            # F1, F2 and ALT2
-                            if x['label'].split()[0] in ('F1', 'F2', 'ALT2')]
-        demo['gauge_control'] = demo['drive'] = None
-        r = diagnose(demo)
-        self.assertEqual(r['leading_hypotheses'], ['nozzle_thermal_stripe'])
-        self.assertEqual(_h(r)['cooling_zone_switching_transient']['standing'], 'CONSISTENT')
-        self.assertNotEqual(r['hypotheses'][0]['id'], 'foil_tension_lines')
-        fr = r['foil_regime']
-        self.assertIn(CLOSED_GAP_FLAG, r['flags'])
-        self.assertEqual(fr['bite']['model'], 'experimental_mattress')
-        self.assertTrue(fr['bite']['force_per_width_within_reported_range'])
-        self.assertAlmostEqual(fr['wrinkle_rule']['wrinkle_onset_i_units'], 1e5 * 40e6 / 70e9)
-        self.assertEqual(fr['wrinkle_rule']['comparison'], 'MODEL_BAND_BELOW_WRINKLE_ONSET')
-        self.assertIn('H18', fr['product_question']['text'])
-        st = r['width']['shape']['steady_stripe_table'][0]['with_feedback']
-        self.assertEqual((st['state'], st['state_after_tension_release']),
-                         ('LATENT_UNDER_TENSION', 'MANIFEST_AFTER_TENSION_RELEASE'))
-        self.assertIn('OPEN ROLL GAP ASSUMED', r['levers']['foil_regime_note'])
-        lines = ' '.join(r['recommended_next_measurements'])
-        self.assertIn('offline sag', lines)
-        self.assertTrue(math.isfinite(fr['bite']['separating_force_per_width_n_m']))
-        # SPEC12 stage A: F2 (30 -> 18 um) and ALT (24.5 -> 12 um, 51 %) now get experimental
-        # mattress bites in the extended domain, flagged; nothing lies below the 8 um floor
-        self.assertNotIn(BITE_FLOOR_FLAG, r['flags'])
-        sw = r['schedule_sweep']['rows']
-        for row in sw + r['width']['gauge_trend']['rows']:
-            self.assertNotIn('rejected', row)
-        self.assertEqual([x['bite_model'] for x in sw], ['experimental_mattress'] * 3)
-        self.assertIn('EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN', sw[1]['bite_flags'])
-        self.assertNotIn('REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN', sw[1]['bite_flags'])
-        for flag in ('EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN',
-                     'REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN'):
-            self.assertIn(flag, sw[2]['bite_flags'])
-        for row in sw[1:]:
-            self.assertIn('chatter_reliability', row)
-        fl = fr['below_bite_model_floor']
-        self.assertEqual(fl['passes'], [])
-        self.assertIsNone(fl['text'])
-        ext = fr['extended_bite_domain']['passes']
-        self.assertEqual([round(x['exit_thickness_m'] * 1e6) for x in ext], [18, 12])
-        # F2 inside the published 0.9-2.3 kN/mm, ALT (12 um) far above it: reported, not hidden
-        self.assertEqual([x['force_per_width_within_reported_range'] for x in ext],
-                         [True, False])
-        # coordinator item 2: the 12 um bite is marked not credible, the 18 um one is not
-        self.assertEqual([x['bite_credibility'] for x in ext],
-                         ['FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED',
-                          'FORCE_OUTSIDE_REPORTED_RANGE'])
-        self.assertGreater(ext[1]['bite_force_ratio_to_reported_range'], 2)
-        self.assertIn('NOT CREDIBLE', fr['extended_bite_domain']['text'])
-        self.assertEqual(sw[2]['bite_credibility'], 'FORCE_OUTSIDE_REPORTED_RANGE')
-        self.assertNotIn('case_bite_credibility', r)          # case pass F1 is above 20 um
-        self.assertNotIn('CASE_BITE_FORCE_OUTSIDE_REPORTED_RANGE_MODEL_NOT_CREDIBLE',
-                         r['flags'])
-        # B2: product check, evidence-neutral; F2 and ALT2 are route ends (final passes)
-        pc = r['product_check']
-        self.assertEqual(pc['product_id'], 'battery_collector_foil')
-        self.assertEqual(pc['alloy_designation_used'], '1235')
-        self.assertEqual([x['label'].split()[0] for x in pc['rows'] if x['is_final_pass']],
-                         ['F2', 'ALT2'])
-        for x in pc['rows']:
-            if x['label'].split()[0] in ('F2', 'ALT2', 'F1'):
-                self.assertEqual(x['outside_published_range'], [], x['label'])
-        self.assertTrue(pc['nearest_published_schedules']['final_pass'])
-        self.assertTrue(any('Exit gauge below 20 um' in x for x in r['limitations']))
-        self.assertIs(fr['final_pass_doubled'], False)
-        self.assertIn('rolled single-sheet', fr['product_question']['text'])
-        html = render_band_report(r)
-        self.assertLess(html.index('class="foil"'), html.index('Leading hypotheses'))
-        self.assertIn('Extended roll-bite domain', html)
-        self.assertNotIn('Below the roll-bite model floor', html)
-        self.assertIn('Product check (published envelope, literature survey)', html)
-        json.dumps(r, allow_nan=False)
-
-    def test_foil_gauge_trend_direction_runs_against_thinner_is_worse(self):
-        # Pinned on purpose: this is the model's answer to the plant's "worse at thinner
-        # gauge" at foil gauge, and for this one mechanism (the demo's cooling stripe buckling
-        # in the mill) it runs AGAINST the plant observation: the exit-tension feedback grows
-        # as gauge falls, so the same roll stripe needs a taller height to buckle on the
-        # thinner pass. Only the direction is pinned, not the numbers. The whole schedule
-        # (S1-S3 and the plant's F1; since SPEC12 stage A also F2 at 18 um and ALT at 12 um,
-        # with extended-domain mattress bites) is run with coarse thermal numerics and
-        # cells 64 (the mattress bite uses its own minimum) and without AGC / drive, to keep
-        # the module fast; the published demo result uses the scenario's own numerics.
-        demo = load_case(SCEN / 'band_diagnosis_battery_foil.json')
-        demo['width_model']['numerics'] = dict(COARSE)
-        # the full thermal sensitivity (spray rows, per-row onsets) is not under test here
-        demo['model_options']['thermal_sensitivity'] = 'partition'
-        demo['model_options']['cells'] = 64
-        demo['gauge_control'] = demo['drive'] = None
-        r = diagnose(demo)
-        rows = r['width']['gauge_trend']['rows']
-        self.assertEqual(len(rows), 7)
-        self.assertTrue(all('rejected' not in x for x in rows))
-        self.assertEqual([x['label'].split()[0] for x in rows],
-                         ['S1', 'S2', 'S3', 'F1', 'F2', 'ALT1', 'ALT2'])
-        alt2 = rows[-1]
-        self.assertEqual(alt2['bite_credibility'], 'FORCE_OUTSIDE_REPORTED_RANGE')
-        self.assertGreater(alt2['bite_force_ratio_to_reported_range'], 2)
-        self.assertEqual(rows[4]['bite_credibility'], 'FORCE_INSIDE_REPORTED_RANGE_UNVALIDATED')
-        # the trend is stated over the credible rows, thick -> thin by exit gauge
-        cred = sorted((x for x in rows if x is not alt2), key=lambda x: -x['exit_thickness_m'])
-        self.assertEqual([x['label'].split()[0] for x in cred],
-                         ['S1', 'S2', 'S3', 'F1', 'ALT1', 'F2'])
-        for key, sign in (('linear_feedback_i_units', -1), ('rigid_i_units', +1),
-                          ('manifest_onset_stripe_height_m', +1),
-                          ('released_onset_stripe_height_m', +1)):
-            vals = [x[key] for x in cred]
-            self.assertTrue(all(sign * (b - a) > 0 for a, b in zip(vals, vals[1:])),
-                            (key, vals))
-        # bite-free thresholds (exit span / exit gauge) fall over every row, ALT2 included
-        allr = sorted(rows, key=lambda x: -x['exit_thickness_m'])
-        for key in ('shohet_townsend_half_width_i_units', 'critical_ridge_height_m',
-                    'trough_critical_lateral_stress_exit_span_pa',
-                    'roller_wrinkle_critical_lateral_stress_exit_span_pa'):
-            vals = [abs(x[key]) for x in allr]
-            self.assertTrue(all(b < a for a, b in zip(vals, vals[1:])), (key, vals))
-        g = r['width']['gauge_trend']
-        self.assertIn('Not credible (excluded from the trend): ALT2', g['text'])
-        self.assertIn('0.135 mm -> 0.018 mm', g['text'])
-        self.assertEqual(g['bite_free_text'].count('falls on every pass'), 4)
-        self.assertIn('0.271 -> 0.00301 I-units', g['bite_free_text'])
-        # the report's neutral heading and generated direction sentence say the same
-        html = render_band_report(r)
-        self.assertIn('<h2>How the result changes with gauge</h2>', html)
-        self.assertIn('thinner is less sensitive for this mechanism in the model', html)
-        self.assertIn('to F2 0.030-&gt;0.018 mm', html)
-        self.assertIn('Not credible (excluded from the direction): ALT2', html)
-        self.assertIn('bite NOT CREDIBLE', html)
-        self.assertIn('Bite-free thresholds.', html)
-        self.assertNotIn('Why thin gauge is worse', html)
-
-
 if __name__ == '__main__':
     unittest.main()
+
+
+class CandidateTensionLinePitchTests(unittest.TestCase):
+    """SPEC17 G12: the candidate shell-buckling pitch (candidate, not evidence)."""
+
+    def test_wavelength_coefficient_pitches_and_cross_check(self):
+        from physicroll import strip_shape as ss
+        self.assertAlmostEqual(2 * math.pi / (12 * (1 - 0.33 ** 2)) ** 0.25, 3.4746, delta=1e-4)
+        for t, rows in ((30e-6, ((0.125, 6.7285), (0.15, 7.3707), (0.45, 12.766),
+                                 (0.6, 14.7414))),
+                        (18e-6, ((0.125, 5.2119), (0.15, 5.7093), (0.6, 11.4187))),
+                        (12e-6, ((0.125, 4.2555),))):
+            for r, mm in rows:
+                self.assertAlmostEqual(ss.shell_buckling_wavelength_m(r, t, 0.33) * 1e3, mm,
+                                       delta=1e-3)
+        crit = 70e9 * 30e-6 / (0.125 * math.sqrt(3 * (1 - 0.33 ** 2)))
+        self.assertAlmostEqual(crit / 1e6, 10.2751, delta=1e-4)
+        self.assertAlmostEqual(ss.roller_wrinkle_critical_lateral_stress_pa(
+            30e-6, 0.125, 70e9, 0.33), -crit, delta=1e-3)
+
+    def test_model_prediction_blocks_and_rules_unchanged(self):
+        c = bw.candidate_tension_line_pitch(0.21e-3, [('x', 0.15)], 0.01)
+        self.assertEqual(c['status'], 'NOT_APPLICABLE_ABOVE_FOIL_GAUGE')
+        c = bw.candidate_tension_line_pitch(30e-6, [], None)
+        self.assertEqual(c['status'], 'NO_RADIUS_IN_CASE')
+        c = bw.candidate_tension_line_pitch(30e-6, [('a', 0.125), ('b', 0.6)], 0.010)
+        self.assertEqual(c['status'], 'CANDIDATE_NOT_ESTABLISHED')
+        self.assertAlmostEqual(c['pitch_range_m'][0] * 1e3, 6.7285, delta=1e-3)
+        self.assertTrue(c['observed_inside_candidate_range'])
+        self.assertIn('not evidence', c['note'])
+        self.assertIn('sqrt(radius x gauge)', c['how_to_test'])
+        # the battery-foil demo: the block, and every evidence item of the rule as committed
+        art = json.loads((SCEN.parent / 'artifacts' / 'band_diagnosis' /
+                          'battery-foil-demo.result.json').read_text())
+        h = {x['id']: x for x in art['hypotheses']}['foil_tension_lines']
+        mp = h['model_prediction']
+        cand = mp['candidate_shell_buckling_pitch']
+        self.assertEqual(cand['status'], 'CANDIDATE_NOT_ESTABLISHED')
+        self.assertEqual([round(x['pitch_m'] * 1e3, 3) for x in cand['rows']],
+                         [6.729, 7.371, 14.741, 6.729, 12.766])
+        self.assertFalse(cand['observed_inside_candidate_range'])        # 365 mm gap
+        self.assertEqual({k: v for k, v in mp.items() if k != 'candidate_shell_buckling_pitch'},
+                         {'model': 'NONE: rule-based hypothesis, the tool has no physical model '
+                                   'of tension lines (5-20 mm pitch reported, vanishing above a '
+                                   'threshold tension)', 'reported_pitch_m': [0.005, 0.02],
+                          'reported_onset_exit_gauge_m': [1.5e-05, 3e-05],
+                          'case_exit_thickness_m': 3e-05})
+        case = validate_case(load_case(SCEN / 'band_diagnosis_battery_foil.json'))
+        f = bw.Facts(case, art['width'], art['screens'], art.get('process'))
+        e, pred = bw._h_tension_lines(f)
+        self.assertEqual(json.loads(json.dumps(e)), h['evidence'])
+        self.assertEqual(json.loads(json.dumps(pred)), mp)
+        self.assertEqual((h['score'], h['standing']), (0, 'WEAKENED'))

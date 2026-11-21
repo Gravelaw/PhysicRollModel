@@ -345,16 +345,23 @@ and `schedule_sweep.rows` (friction 0.03 supplied on every pass, `bite_model: au
   "inside the reported range" holds because friction 0.03 was supplied, and says nothing about
   whether the friction is right.
 - **Forward slip** of the mattress bite is 0.190 at the case pass and 0.308-0.422 on the
-  thinner passes; it carries the flag `FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES`
-  (the model has no elastic strip zones; section 10.2). The slip enters the interface slip
+  thinner passes; it carries the flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL`
+  (renamed in SPEC17 from `FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES`; threshold
+  0.15 unchanged). Large forward slip is what a constant Coulomb friction model with a
+  no-slip zone gives: one published model computes 5 % to 45 % on a 50 -> 25 um pass and
+  describes such values as met in practice (model output) [BT-S3 EX]; mill trials show that
+  constant friction over-estimates forward slip and that friction varying through the bite
+  repairs it [BT-S5 AB]. Elastic strip zones are not the cause: they are negligible for
+  reductions above 10 % [BT-S1 FT]. The slip enters the interface slip
   dissipation, so the pass heating is inflated [D]: at the case pass friction power 47.1 kW/m
   against 40.3 kW/m plastic power, strip exit temperature 333.4 K (+20.3 K) at the strip
   heat share 0.22 (`process.heating.operating`; 390.6 K at the former 0.84); F2, ALT1 and ALT2
   reach 339.2 K, 345.6 K and 346 K (`process.heating.schedule`), all below the 393.15 K limit
-  supplied in the demo and below the published 80 C battery coil limit (section 3.12). The
-  heat-streak rule "boundary regime or exit temperature above the limit" is met at the case
-  pass by the boundary regime alone, so the inflated temperature does not change the demo
-  ranking, but it could on a case in the mixed regime.
+  supplied in the demo and below the published 80 C battery coil limit (section 3.12). Since
+  SPEC17 the heat-streak rule supports only on an exit temperature above the supplied limit
+  (a film ratio below 1 is normal mixed-regime operation, section 6.4), so the inflated
+  temperature could raise that hypothesis on a case with a lower limit; in the demo it does
+  not reach the limit.
 - **The extended roll-bite domain.** `chatter.BitePass.validate` keeps a 20 um floor and a
   50 % reduction limit for the slab and Hitchcock path; the mattress model
   (`foil_bite.py`) accepts an exit gauge down to 8 um (`BITE_FLOOR_M`) and a reduction up to
@@ -402,6 +409,31 @@ and `schedule_sweep.rows` (friction 0.03 supplied on every pass, `bite_model: au
 Where Hitchcock still solves at foil gauge (S1-S3 here) it carries
 `THIN_GAUGE_BELOW_REVIEWED_SLAB_DOMAIN`; its numbers are indicative only and assume an open
 gap. Mattress numbers are order of magnitude only (section 10.2).
+
+**The third model: the reduced half-space bite** (opt-in, `model_options.bite_model:
+"half_space"` or `"auto_half_space"`, section 10.3). The same passes, the same friction 0.03
+[run, `python -m physicroll.benchmarks --bite-comparison` on the demo; pinned in
+`tests/test_halfspace_bite_sensitivity.py`]:
+
+| pass | Hitchcock | experimental mattress | reduced half-space | half-space zone structure |
+|---|---|---|---|---|
+| F1 50 -> 30 um (case pass) | rejected | 0.96 kN/mm, slip 0.190 | 1.37 kN/mm, slip 0.237 | `A F` (at the regime boundary) |
+| F2 30 -> 18 um | rejected (below 20 um) | 1.54 kN/mm, slip 0.308 | 3.24 kN/mm, slip 0.367: NOT CREDIBLE | `A B E F` |
+| ALT2 25 -> 12 um | rejected | 6.19 kN/mm, slip 0.422: NOT CREDIBLE | 10.13 kN/mm, slip 0.553: NOT CREDIBLE | `A B F` |
+
+On the sheet-like passes S1-S3 the three models agree within 6 to 9 % in force. At foil gauge
+the half-space loads are 43 % (30 um) to 111 % (18 um) above the mattress loads and its strip
+stiffness 2.6 times higher; with friction 0.03 the 18 um and 12 um loads leave the reported
+battery-foil range, and the existing credibility mark says so (`FORCE_OUTSIDE_REPORTED_RANGE`).
+With a load exponent in friction of about 3 at these gauges, the 18 um pass would return into
+the range at a friction of about 0.027 [computed, SPEC18 prototype]: friction is the larger
+unknown, and the spread between the models measures what is not known. The half-space model
+is not the default: its published reference value is itself not a defined number (section
+10.3), and switching would move every foil force, stiffness, slip and heat.
+
+Measured roll force, forward slip and torque of your own passes can narrow the friction:
+section 8.5 identifies it from entered pass records with any of the three bite models, reports
+which measurement carries the information at these gauges, and applies nothing.
 
 ### 3.4 What still runs without a roll bite, and supplying shape inputs
 
@@ -547,7 +579,12 @@ What the model does make easier at thinner gauge:
   micrometres only because a stripe gives fewer I-units per micrometre at thinner gauge; read
   them as "every reported band is visible on the coil, at the slitter or on the table", not as
   a falling trend. (At sheet gauge the same onsets fell with gauge, section 7.3; across the
-  foil passes they do not.)
+  foil passes they do not.) On a table the dead load changes this at sheet gauge and not at
+  foil gauge (SPEC19 finding 4; the opt-in estimate of section 7.13): with the demos' profiles
+  a band below about 2.2 I-units of peak lies flat on a table under its own weight for the
+  0.21 mm sheet demo, against about 0.75 I-units for the 30 um battery-foil profile, so at foil
+  gauge a reportable band (2 I-units) still lifts. "Lies flat on a table" is not "no defect":
+  the length difference is still there and may show when the sheet is hung or slit.
 - **The flatness dead band** half-width falls from 0.271 to 0.115 to 0.0428 to 0.0165 I-units
   at 30 um, 0.0118 at 25 um, 0.00639 at 18 um and 0.00301 at 12 um: a relative crown change
   that lateral flow absorbs in thicker strip shows as flatness in foil.
@@ -569,7 +606,9 @@ What this implies for where to look first on the mill (a screening order, not a 
 if your bands get worse as the gauge thins, a cooling stripe that buckles **in the mill** is
 not the first candidate in this model, because a given stripe is hidden more, not less, at
 thinner gauge (at the measured heat partition it shows in the mill on the thick stock passes
-and not on the foil passes). The thin-gauge-sensitive candidates are bands seen only after tension
+and not on the foil passes). This rests on the pointwise exit-tension feedback: the
+independent width-coupling kernel of section 7.14 gives only 0.10 of it at the battery-foil
+case pass, and the steady band would then read about nine times larger. The thin-gauge-sensitive candidates are bands seen only after tension
 release (a thermal stripe can be one of them), tension troughs and creases in the spans and
 at the ironing roll, coil ridges, a crown change outside the shrinking dead band, and tension
 lines. The first observations to take are therefore: is the band visible in the mill or only
@@ -578,6 +617,36 @@ does it fade above some exit tension (step the exit tension); then the ironing-r
 blow-off, wiper and speed tests of section 3.8. Note that the rule weights for
 `worse_at_thinner_gauge` are inherited from sheet gauge: "true" still supports the nozzle and
 zone hypotheses weakly although the foil model trend runs the other way (section 14).
+The trough and roller-wrinkle thresholds come from isolated-span formulas: for aluminium
+and copper foil below 25 um and wider than 0.6-1 m, wrinkles needed about 15 times the
+predicted roller misalignment [SS-S55 EX], so at foil gauge these thresholds are
+conservative screening values (key `wide_foil_note` on each span of `width.troughs` below
+100 um, printed under the trough table; SPEC17 X12).
+A roller alignment survey (`width_model.span_alignment`, misalignment in mm/m, taper from the
+roller grinding report) gives the lateral stress that misalignment and taper put into each
+span (section 7.2; SPEC19 package 12); at foil gauge the same factor 15 is quoted beside the
+critical misalignments and not applied, and a computed stress that reaches the trough
+threshold counts only as weak support.
+
+**A second band source: a friction or oil-film stripe** (section 7.8). The bite report argues
+that a local friction difference at one width position grows as gauge falls. With the existing
+models that holds for the load exponent in friction (0.64 at 135 um to 2.16 at 18 um in the
+battery demo) and for the compliance-only level (55 to 566 I-units per 1 % friction), and not
+with the exit-tension feedback (2.7 to 4.4 I-units per 1 %, no trend). So whether this source
+explains "worse at thinner gauge" depends on the feedback, the least supported element of the
+shape chain; the screen changes no score.
+
+**A hot roll stripe at foil gauge: three parts, two signs** (SPEC19 package 2, section 7.11).
+With `width_model.local_coupling` the battery-foil demo shows what the stripe of the weak
+nozzle does besides growing the roll: roll growth +25.1 I-units (loose), the thinner oil film
+-3.7 (tight; -7.5 with the inlet weight 1), the softer metal +0.57, the strip temperature +4.1
+read while hot; mechanical net +21.9 (+18.2 with weight 1), loose either way. Twenty seconds
+after zone 18-19 closes the parts are +18.0, -10.0 (-19.7), +1.5 and +11.0, and the net is
++9.5 at weight 0.5 but -0.2 (below the reporting threshold) at weight 1: in the first tens of
+seconds the sign depends on an input nobody has measured. Every part rests on the exit-tension
+feedback (compliance only the film part is -463 I-units against -3.7) and the film part on a
+friction slope with no support in data. The terms are reported beside the band; they change no
+score and no band state.
 
 ### 3.6 The wrinkle rule of thumb
 
@@ -609,6 +678,22 @@ from the sources given.
 | EAFA grooves | sharp flatness deviations in the rolling direction [V S26] | no dedicated hypothesis; the model's thermal stripes are smooth, so a sharp groove points away from them; nearest are `roll_surface_band` and `grinding_feed_marks` |
 | creasing | possible at any exit gauge below 50 um; from a local loose band, ironing-roll pressure imbalance or misalignment, low rewind tension [V S25] | `tension_troughs_or_creases` |
 | friction or oil-film band | in foil the oil film is comparable to the roughness (film ratio 1.76 at 40 m/s falling to 0.22 at 5 m/s in Sutcliffe's case [V S11]), so a cross-width difference in roughness or oil film gives a flatness band without a roll bump; it tracks speed changes [V S17 for the roughness cause; mechanism D] | `heat_streak_or_film_variation` |
+
+**Tension lines: no established model; one candidate pitch is reported** (SPEC17 G12, X16).
+Entrained-air corrugation in winding has the same remedies and the same thin-gauge trend as
+foil tension lines [SS-S53 EX, SS-S66 EX], so the shell-buckling wavelength of a wound lap or
+of the strip on a roller is a candidate pitch: `2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4)`, about
+`3.47*sqrt(R*t)` for nu = 0.33 (quoted from memory in the shape report; re-derived in SPEC17
+from the axisymmetric buckling of a thin cylindrical shell, `D*w'''' + N*w'' + (E*t/R^2)*w = 0`,
+least `N` at `k^4 = 12*(1-nu^2)/(R^2*t^2)`; its critical stress is the roller-wrinkle value
+the tool already uses). `foil_tension_lines` reports it per radius of the case (deflector
+roll, coil inner and outer radius, exit coil) in `model_prediction.candidate_shell_buckling_
+pitch`; in the battery demo (30 um) it gives 6.7 mm at the 0.125 m deflector roll, 7.4 mm and
+14.7 mm at the coil radii, 12.8 mm at the exit coil. **It is a candidate, not evidence**: almost
+any foil coil gives a pitch inside the published 5-20 mm, so a match proves nothing. What it
+offers is a ruler test: measure the pitch at two coil radii and two gauges; this candidate
+predicts a pitch proportional to sqrt(radius x gauge). No onset condition and no air-film model
+(G9, G10); the rule set and its weights are unchanged.
 
 ### 3.8 Which observations to record at foil gauge, and why each discriminates
 
@@ -702,8 +787,8 @@ stable over the whole scanned speed range; without it the critical speed is 6.36
 | 1 | `nozzle_thermal_stripe` | CONSISTENT_LEADING | 19 (19) |
 | 2 | `cooling_zone_switching_transient` | CONSISTENT | 16 (16) |
 | 3 | `profile_flatness_mismatch` | CONSISTENT | 5 (5) |
-| 4 | `heat_streak_or_film_variation` | CONSISTENT | 4 (4) |
-| 5 | `tension_troughs_or_creases` | CONSISTENT | 4 (4) |
+| 4 | `tension_troughs_or_creases` | CONSISTENT | 4 (4) |
+| 5 | `heat_streak_or_film_variation` | CONSISTENT | 3 (4; 4 before SPEC17) |
 | 6 | `incoming_ridge_coil_buildup` | CONSISTENT | 1 (1) |
 | 7 | `oil_carryover_drips_or_stain` | CONSISTENT | 1 (1) |
 | 8 | `coil_or_mandrel_locked_marks` | NOT_ASSESSABLE | 0 (0) |
@@ -713,9 +798,11 @@ stable over the whole scanned speed range; without it the critical speed is 6.36
 Both planted causes come first and second. The nozzle hypothesis matches the position
 0.623 m and the zone hypothesis 0.988 m; the gap 0.365 m is 7 nozzle pitches. Also consistent:
 the profile / flatness mismatch scores 5 from the orientation, the loose / buckle appearance
-and "visible only after tension release"; the heat-streak hypothesis scores 4 from the
-continuity, the boundary regime and the film ratio 0.551 (inside 0.3-3), less two weak
-contradictions (positions repeat, does not track speed changes); tension troughs score 4 from
+and "visible only after tension release"; the heat-streak hypothesis scores 3 from the
+orientation, the continuity and the film ratio 0.38 (inside 0.3-3), less two weak
+contradictions (positions repeat, does not track speed changes); the tribology regime item is
+`NEUTRAL` since SPEC17 (score 4 before, film ratio 0.551 with the former inlet angle,
+section 8.1); tension troughs score 4 from
 the orientation, the continuity and the exit gauge below 50 um (weak, counted because the
 continuity supports): the 365 mm gap lies at 2.27 x the entry-span and 3.03 x the exit-span
 trough wavelength, outside the 0.5-2 band, so it gives no spacing support.
@@ -724,6 +811,11 @@ section 6.2, moderate before; hence 0 instead of -1) and the loose / buckle appe
 and its gauge support is gated (section 6.1). `roll_surface_band` is contradicted strongly by
 "positions do not change after a work-roll change". Adding the alternative route and the
 product did not change any other score.
+
+**Shapemeter** (`measurement.shapemeter`, section 7.6; 24 synthetic zones of 52 mm): the
+loose band would show 24.49 of its 25.09 I-units in zone 9 (97.6 %), the tight edges almost all
+of theirs; the event's two tight side bands would probably not show (1.83 of 3.51 I-units); the
+nozzle-pattern ripple reads at most 0.53. No flatness controller is modelled.
 
 **Product check** (`product_check`, section 3.1): alloy designation used `1235`, temper H18;
 no flag. The final passes are F2 (the last pass of the plant's route) and ALT2 (the thinnest);
@@ -758,6 +850,13 @@ statements, while its bite-free thresholds stand; the 30 um case pass lies below
 closed-gap onset (`BELOW_EVERY_REPORTED_ONSET`) with no roll-kissing model, and the lever and
 gauge-control sections carry the open-gap note. The CLI run of this demo took about 56 s on
 this container (the full thermal sensitivity block included). It tests the screening logic at foil gauge, not the physics.
+
+Since SPEC19 the demo also carries a synthetic closed spray loop (`width_model.flatness_control`:
+valves in 5 % steps, 10 s minimum on and off times, a 2 I-unit dead band, 14 control zones of
+two nozzles; an assumption, not a plant setting). With the tool's own control law the loop
+reduces the largest zone error from 19.3 to 2.4-4.6 I-units and keeps trimming
+(`TRIMMING_WITHIN_BAND`, 89 valve changes in 1800 s); the smooth overall shape it leaves is the
+bender's and the tilt's (section 7.12). It changes no score.
 
 ### 3.10 Product survey
 
@@ -896,6 +995,11 @@ literature statements, not model outputs.
 | Hot edge spray | Oil up to 120 °C in 25 mm zones. [PT-T21, PT-T5] | - |
 | Work-roll surface and bulk | Not found measured; a cold-mill model uses 50 °C surface with 35 °C oil. [PT-T18] | Thermal load 40–50 kcal/m²s of roll surface (167–209 kW/m², computed by the report). [PT-T4] |
 
+**Fitting the spray coefficient to your roll.** With a roll surface temperature scan after a
+stop or a measured thermal camber, `--calibrate-spray` fits the circumferential-mean spray
+coefficient of this model for your mill (section 7.1); the value is entered by hand, and it is
+not comparable with the published coefficients above, whose basis is not established.
+
 **How cooling becomes a band in this tool** (one chain, section 7 for the physics): bite heat
 per width (plastic work plus interface slip, section 8.2) -> the share that goes into each work
 roll, `(1 - strip share) / 2` -> the spray header (nozzle footprints, flow level of each
@@ -927,7 +1031,9 @@ event scaled linearly with the roll heat at a fixed spray coefficient, checked b
 solve; the stripe is detected on every row's own scaled profile and its flatness states and, in
 `full` mode, its onsets over its own extent are recomputed for every row, as a direct run at that
 share would; in the default `partition` mode one onset window per spray coefficient is used, about
-1 % from a direct run):
+1 % from a direct run). The share the interface model computes for the case pass, 0.338
+(section 8.2), is shown beside these rows as `computed_strip_share`; it moves no stripe unless
+`tribology.use_computed_heat_partition` is set):
 
 | strip share (per roll) | spray [kW/m2K] | stripe [um] | I-units | in mill / after release | stripe / in-mill onset | event peak [um] | event visible after release [s] |
 |---|---|---|---|---|---|---|---|
@@ -995,7 +1101,9 @@ diameter 20 revolutions after a zone change [PT-T18]) because a partly blocked n
 permanent, not a 20-revolution, disturbance; the thermal crown is inside the 30 um maximum
 measured on a foil mill [PT-T25] (whether that is on diameter or radius is not stated). The
 spray footprint overlap of the demo header, 69 %, is above the published 10-30 % (never above
-50 %) [PT-T22, PT-T21]; the tool's spray screen has no overlap threshold (it flags only gaps
+50 %) [PT-T22, PT-T21]; the definition varies between sources: 10-30 % or 10-50 % of the
+pattern width [PT-T21; PT-T22; SN7; SN13], and the demo verdict stands under every reading
+(0.69, 2.2 or 3.2 [SN; computed]); the tool's spray screen has no overlap threshold (it flags only gaps
 between fans) and is left as it is. The oil viscosity is not compared: the case gives a dynamic
 viscosity, the literature a kinematic one, and the density is not a case input. Growth: the short event reaches half its peak in 9.25 s (axial decay time constant of a 52 mm stripe about 23 s, computed); the steady stripe builds up to 50 % in 116 s and to 90 % in 551 s (radial time constant 4-7 min computed for a 260 mm roll). A plant-identified flatness response of about 20 s is of the order of the short local (axial) time scale and of an event's rise, not of the minutes a steady stripe needs to build.
 `thermal_check.quarter_barrel_note` is a positional note only (bands at 1/5-1/4 of the barrel from
@@ -1003,6 +1111,47 @@ each end, the quarter looseness of [PT-T38]); it changes no score. If
 `width_model.roll_heat_fraction_per_roll` is given and disagrees with
 `tribology.strip_heat_fraction` the result flags `HEAT_PARTITION_INPUTS_INCONSISTENT` (the roll
 thermal model uses the first, pass heating the second); leave it null to derive it.
+
+**Basis of the spray coefficient (SPEC17 A5, X3).** The model applies
+`spray_mean_htc_w_m2k` as a mean around the roll circumference (`roll_thermal.py`). The
+published 2.5-4.3 kW/m2K [PT-T18, simulated; = SN14 FT, read from a garbled mirror] is the CFD
+average over the roll-wall patch of one cooling zone with two nozzles (a sprayed-area basis;
+the mill has two rows of 34 nozzles at 52 mm per work roll, entry side only, and the rise from
+3.0 to 4.0 kW/m2K is in time, not across space) [SN14 FT]: since SPEC22 the basis is settled as
+far as the sources allow, and the two are NOT comparable. The spray finding of `thermal_check`
+keeps its verdict word (which must not be read as agreement) and carries `value_basis`,
+`published_basis`, `basis_comparable: NOT_COMPARABLE`, `basis_comparable_reason` and
+`basis_comparable_source`, with the flag `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE` (renamed from
+`SPRAY_COEFFICIENT_BASIS_NOT_ESTABLISHED`); the report prints "The two are not on the same basis
+and are not comparable". For arcs of 20 to 90 degrees the circumferential mean of the published
+value is 0.14 to 1.07 kW/m2K [computed]. Conversion [D, re-derived in SPEC17]: a
+spray wetting an arc `phi` of the circumference with `h_fp` and leaving the rest at `h_bg` has
+the mean `h_bg + (h_fp - h_bg)*phi/(2pi)`; the model writes `h_bg + spray_mean_htc`, so
+`h_fp = h_bg + spray_mean_htc*2pi/phi`. With the optional `width_model.spray_wetted_arc_rad`
+the finding also gives `footprint_equivalent_w_m2k` and its verdict against the same range.
+For the battery-foil demo values (3400 and 50 W/m2K) a 60 degree arc would give 20450 W/m2K,
+`ABOVE_PUBLISHED_RANGE` (pinned by `test_wetted_arc_conversion_and_range`); conversely 2.5-4.3
+kW/m2K inside a 60 degree jet zone is a mean of 0.42-0.72 kW/m2K [D]. The demo carries no arc
+(no plant value) and no coefficient was changed.
+
+**Strip temperature across the width** (SPEC17 A1): a supplied scan gives the flatness a
+shapemeter measures hot against the flatness after cooling, about 2.4 I-units per kelvin
+[computed]; section 7.7.
+
+**Fire limits (SPEC17 A10).** With `tribology.oil_flash_point_k` and / or
+`tribology.oil_supply_temperature_cap_k` (user limits, 250-700 K, never defaulted)
+`thermal_check.fire_limits` compares the oil inlet temperature and the coolant temperature
+(read as the oil supply) with both, and the modelled strip exit temperature of every pass with
+a pass-heating row with the flash point: rows with value, limit, margin and `BELOW_LIMIT` /
+`AT_OR_ABOVE_LIMIT`, flags `STRIP_EXIT_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT`,
+`OIL_TEMPERATURE_AT_OR_ABOVE_OIL_FLASH_POINT`, `OIL_SUPPLY_TEMPERATURE_ABOVE_SITE_CAP`
+(evidence-neutral). Without either input the block is `NOT_SUPPLIED` and the report says "not
+checked: no flash point given"; the catalogue's flash-point and fire statements (`context`,
+[PT-T9, PT-T10, PT-T11, PT-T15, PT-T14]) and the levers that raise temperature (reduction,
+friction, a weak coolant zone or flow, oil supply temperature, speed) are shown either way.
+A modelled strip exit temperature is an indicator, not a coil temperature (EXIT_IS_NOT_COIL);
+there is no oil-mist or vapour model. Hand check: flash point 80 C against a 45 C oil inlet
+gives a margin of 35.0 K. Since SPEC19 package 11 an opt-in `width_model.coil_thermal` estimates the coil temperature after winding (an upper bound at winding: it starts from the modelled strip exit temperature) and its time to fall below each published coil limit, beside these verdicts, which are unchanged (section 7.15).
 
 **Roll wear and surface finish (literature, not modelled).** More aluminium fines with higher oil
 temperature, speed, reduction and roll roughness [PT-T15]; adsorbed films desorb as temperature
@@ -1027,7 +1176,12 @@ python -m physicroll.band_cli scenarios/band_diagnosis_thin_gauge_chatter.json -
 python -m physicroll.band_cli scenarios/band_diagnosis_bearing_order.json --out artifacts/band_diagnosis
 python -m physicroll.band_cli my_case.json --out my_output_dir
 python -m physicroll.band_cli --product-survey --out artifacts/band_diagnosis   # section 3.10
+python -m physicroll.band_cli my_case.json --calibrate-spray my_scan.json        # section 7.1
+python -m physicroll.band_cli --fit-hardening my_strengths.json                   # section 8.3
 ```
+
+`--calibrate-spray` and `--fit-hardening` only print a JSON result; they never write into a
+case, and `diagnose` never runs them.
 
 Each run validates the case, writes `<case-name-slug>.result.json` (deterministic: sorted
 keys, no timestamps) and `<case-name-slug>.report.html` atomically, and prints the ranked
@@ -1192,7 +1346,10 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 |---|---|---|---|
 | `pass.work_roll_radius_m` | work-roll radius (half the ground diameter; use the current roll, not the new-roll size) | m | roll shop records, roll grinder log |
 | `pass.width_m` | strip width rolled on this mill (one value for the survey) | m | production schedule, order book |
-| `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model |
+| `width_model.circumferential_layout` | optional: where the sprays (and a backup-roll contact) sit around the work roll, as angles in the direction of rotation measured from the bite exit (section 7.10); a wrong arc changes the surface cycle, so the layout used is printed in the result | rad | header position and fan width on the stand drawing (angle of the header centre from the bite exit, fan opening angle at the roll), the direction of rotation of the top work roll |
+| `tribology.interface_conductance_w_m2k`, `tribology.use_computed_heat_partition` | optional: a heat-transfer coefficient between strip and roll in the bite (else oil conductivity over film thickness), and whether the computed heat share replaces the entered one (section 8.2) | W/(m2 K), - | leave empty unless measured |
+| `hardening.rate_temperature` | optional strain-rate and temperature factor of the flow stress (section 8.3); no default number; enter the rate and temperature terms together or not at all | – | rate-jump and warm tensile tests on your stock |
+| `pass.friction_coefficient` | Coulomb friction in the roll bite; no catalogue value exists, the demos use 0.03 | – | back-calculated from measured roll force and forward slip, or the mill's setup model; enter measured passes in `measurement.pass_records` and the tool reports the friction they imply (section 8.5) |
 | `stand.work_roll_mass_kg`, `stand.backup_roll_mass_kg` | moving mass of one work-roll and one backup-roll assembly (roll, necks, chocks, bearings) | kg | roll and chock drawings |
 | `stand.work_backup_contact_stiffness_n_m` | stiffness of the work-roll / backup-roll contact | N/m | stand designer's data, or a roll-contact calculation |
 | `stand.housing_stiffness_n_m` | stiffness of housing, screws or cylinders: the mill modulus | N/m | mill-modulus (stretch) test at commissioning, the AGC setup |
@@ -1207,8 +1364,18 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `gauge_control` | gaugemeter AGC compensation gain, cylinder bandwidth, force filter | –, Hz | AGC commissioning sheet |
 | `drive` | drive-train inertias and shaft stiffnesses (torsional modes) | kg m², N m/rad | drive-train data, torsional analysis |
 | `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
+| `tribology.friction_closure.model: "load_sharing_curve"`, `contact_friction`, `valley_model`, `contact_ratio_curve`, `valley_film_curve` | the second friction law (section 8.1); the contact friction is REQUIRED with it; the curves default to the published foil pass | – | contact friction from your measured force, torque or slip, or a strip-drawing test; no default |
+| `tribology.lubricant.viscosity_table`, `pressure_law`, `roelands_z`, `eyring_stress_pa`, `eyring_stress_pressure_coefficient`, `limiting_shear_stress_pa`, `limiting_shear_pressure_coefficient` | oil viscosity at several temperatures (list of `{"temperature_k", "viscosity_pa_s"}`); the pressure law (`barus` default, `roelands` option); the oil's Eyring and limiting shear stress (no defaults) | K, Pa s, Pa, – | oil supplier data sheet; the shear stresses only from oil tests (section 8.1) |
+| `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
+| `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
-| `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map |
+| `foil_gauge_control.reels` (`entry`, `exit`: `coil_radius_m`, `core_radius_m`, `motor_inertia_kg_m2`, `gear_ratio` (1), `runout_m`, `regulator` `"none"`/`"direct"`, `regulator_bandwidth_hz`; `strip_density_kg_m3` (2700)), `ripple_pitches_m` | reels and coil run-out, and the pitches a ripple is chained with through the schedule (section 9.5) | m, kg m², –, m, Hz, kg/m³ | coil and core radii, motor inertia and gear ratio from the drive data; run-out of the coil (dial gauge on the coil surface); the tension regulator's bandwidth |
+| `foil_gauge_control` (`gap_mode` required: `"constant_force"`, `"position"` or `"supplied_modulus"` with `effective_mill_modulus_n_m`; `kiss_stiffness_n_m`; `gauge_distance_m`, `gauge_time_constant_s` (or from `measurement.thickness_gauge`), `tension_loop_bandwidth_hz`, `tension_trim_limit_fraction` required; `integral_crossover_rad_s`, `smith_predictor`, `speed.ramp_limit_m_s2`; `provenance` required) | foil gauge control by speed and entry tension beside the gaugemeter section: sensitivities at constant force and constant tension and the tool's own loop (section 9.5) | –, N/m, m, s, Hz, –, rad/s, m/s² | the distance from the roll gap to the thickness gauge and its response time; the tension loop's bandwidth and how far the entry tension may be trimmed (controller documentation); the speed ramp limit; the roll-to-roll stiffness is not known (Phase 3) |
+| `width_model.span_alignment` (`entry_span`, `exit_span`: each null or `misalignment_m_per_m` 0 to 0.1, `taper_radius_difference_m` 0 to 1e-3, `roller_radius_m` (default `deflector_roll_radius_m`), `roller` {`outer_diameter_m`, `wall_thickness_m`, `face_length_m`, `youngs_modulus_pa`, `wrap_angle_rad`}; `provenance` required) | the lateral stress that roller misalignment and taper put into the span, for the trough and roller-wrinkle screens; the roller deflection as beam quantities only (section 7.2) | m/m (a survey reading of 0.5 mm/m is 0.0005), m, Pa, rad | roller alignment survey in mm per metre (laser tracker or optical survey of the deflector, idler and coiler rollers); taper from the roller grinding report (radius difference across the strip width) |
+| `width_model.coil_winding.ironing_roll` (`load_per_width_n_m`, `traction_coefficient`), `.air` (`mode`, `viscosity_pa_s`); `width_model.deflector_roll_roughness_rq_m`; `width_model.coil_thermal` (`surface_htc_w_m2k`, `ambient_temperature_k`, `strip_conductivity_w_mk`, `gap_medium`, `interlayer_gap_m`, `hold_times_s`, `provenance`) | the ironing roll and air in the coil (the two bounds of the nip effect), traction on the deflector roll, and the coil temperature after winding against the published coil limits (section 7.15) | N/m, –, m, W/m2K, K, W/mK, m, s | ironing-roll load from the coiler set-up; coil surface temperature against time with a contact probe after winding; the traction coefficient and the surface coefficient are assumptions unless measured |
+| `width_model.coil_winding` (`radial_law` required, `provenance` required; `core_stiffness_pa`, `lane_width_m`, `layers`, `tension_taper`, `thickness_profile`, `include_length_profile`, `air_gap_m`, `allocation_radius`) | the coil wound lane by lane beside the present criterion (section 7.15) | Pa, m, – | the stack law from a press test on 50 to 200 laps of the oily foil (pressure against strain); winding tension and taper from the coiler set-up; no stack value for aluminium foil is published |
+| `width_model.spray_header.footprint_profile` (`"tophat"` default / `"parabolic"`), `footprint_width_m` (null = geometric), `htc_flow_exponent` (0.5 to 1.0, default 1) | SPEC22 opt-in header options: the fan profile (parabolic is a stand-in, no measured profile is published), the pattern width along the barrel as built, how cooling follows flow (section 7.1) | –, m, – | nozzle data sheet: the catalogue spray width at your standoff; leave the profile and the exponent at their defaults unless a pressure-film print or a measurement says otherwise |
+| `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
 | `width_model.coil`, `width_model.deflector_roll_radius_m`, `width_model.grinding` | coil inner and outer radius, winding tension and compaction; deflector (or ironing) roll radius; grinder traverse | m, Pa, m/s, Hz | winder data, line drawing, roll-grinder settings |
 
 **(b) The product and the pass.** `pass` gauges (`entry_thickness_m`, `exit_thickness_m`),
@@ -1306,6 +1473,73 @@ every case. What the code shows the results depend on most:
   gauge, the coil radii, the yield stress minus the winding tension and the compaction factor
   (section 7.2), and the dead band with gauge over width.
 
+Optional section added in SPEC17 package 4: `measurement` (v2 only; `null` = not supplied)
+with `shapemeter`: `zone_width_m` (0-0.5 m) and `zone_count` (1-400) from the shapemeter data
+sheet or the level-2 configuration, optional narrower `edge_zone_width_m` with
+`edge_zone_count_per_side`, `centre_m` (null = the strip centre of the width section),
+`neighbour_spreading_fraction` (0-0.25, keep 0 unless the vendor states it),
+`resolution_i_units` (null unless the vendor gives one; then the tool's 2 I-unit band
+threshold is used) and `provenance`. `thickness_gauge` (SPEC17 package 5, section 11.6):
+`spot_length_m` along the strip (0-1 m) and `time_constant_s` of the first-order response
+(0-10 s) from the gauge data sheet, optional `sample_interval_s`, `position_m` on the barrel
+(null = strip centre), `spot_width_m` across the width, and `provenance`. Section 7.6.
+
+Optional keys added in SPEC17 package 3 (absent and `null` give the same result; the template
+lists them with `null`): `width_model.spray_wetted_arc_rad` (arc of the circumference the spray
+wets, in (0, 2*pi]; only expresses the spray coefficient on a jet-zone basis, section 3.12; it
+does not enter the roll thermal model), `tribology.oil_flash_point_k` (oil data sheet) and
+`tribology.oil_supply_temperature_cap_k` (a site or insurer cap), both 250-700 K, used only by
+the fire-limit check (section 3.12); the guided app asks for the two oil limits.
+`width_model.strip_temperature` (SPEC17 package 6, section 7.7; null = no scan):
+`positions_m` (at least 3, increasing, on the barrel), `temperature_k` (one per position,
+250-700 K), `expansion_coefficient_per_k` (null = the textbook 23.6e-6 /K, flagged) and
+`provenance`. Take the scan at the exit, near the shapemeter, with a line-scan pyrometer or a
+contact probe across the strip, or on the coil face; the low and variable emissivity of
+aluminium makes pyrometer readings difficult (gap study section 7.4), so calibrate against a
+contact probe. `width_model.friction_stripe_screen` (SPEC17 package 7, section 7.8; null = no
+screen): `reference_half_peak_width_m` (null = 0.1 m) and `stripes` (may be empty), each
+`position_m` on the barrel, `half_peak_width_m`, `friction_change_fraction` (relative change of
+the pass friction, -0.9 to 5, not 0) and an optional `label`; a stripe can come from a roll
+roughness or coating map, an oil-flow or oil-temperature map per zone.
+`width_model.roll_ground_profile` (SPEC17 package 8, section 7.9; null = none): `positions_m`
+(at least 5, increasing, on the barrel), `radius_deviation_m` (radius, one per position, within
++-1 mm), `detrend_order` (0-6 or null, default 4 since SPEC20; 2 before), `rolls_carrying` (1 or
+2, default 1) and `provenance`; from a roll grinder's profile report of the work roll in the
+mill (grinder gauges read diameter: halve the deviations). A profile that lies entirely outside
+the strip is `NOT_ASSESSABLE` (its held end values would read as a flat roll). `kinematics.grinder_marks` entries
+(SPEC20) give the roll and EITHER `marks_per_circumference` (counted around the roll) OR the
+grinder's last-pass settings: `roll_rotation_hz` with `wheel_rotation_hz` (or
+`vibration_frequency_hz`), from the grinder's program sheet; the guided app asks for them in
+r/min in the group "A roll grinder report".
+`measurement.shapemeter.temperature_compensated` (true / false / null) says
+whether the shapemeter corrects for strip temperature.
+`width_model.flatness_control` (SPEC19 package 4, section 7.12; null = none; needs
+`measurement.shapemeter`): `valve_levels` (the steps a valve can take: two for on / off, 21 for
+5 % steps), `initial_level`, `minimum_on_time_s`, `minimum_off_time_s`, `dead_band_i_units`,
+optional `control_zone_nozzles`, `integral_gain`, `control_interval_s`, `low_order_removed`,
+`target_i_units`, `supplied_actuators` (influence vectors of bender or tilt, measured or from a
+roll-stack model; not modelled here), `horizon_s`, `shapemeter_distance_m`,
+`display_time_constant_s`, `include_local_sources` and `provenance`. The loop needs at least
+max(2, p + 2) shapemeter zones over the strip (p = `low_order_removed`; 4 for the default 2) and
+a supplied actuator with an effect on some zone; otherwise it is `NOT_ASSESSABLE` (a zone reads
+its mean minus the strip mean; with fewer zones nothing is left to control). The valve steps, dead band
+and minimum times are in the flatness control system's parameter list or commissioning report;
+the grouping of nozzles into zones in the coolant piping drawing.
+`width_model.zone_step_test` (SPEC19 package 5, section 7.1; null = none; needs
+`measurement.shapemeter`): describe the plant's own test: `nozzle_indices` (the zone switched),
+`level`, `hold_s` (the test length), `fit_windows_s`, `time_step_s`, `shapemeter_distance_m`
+(from the roll gap to the shapemeter; the line drawing) and `display_time_constant_s` (the
+shapemeter display or controller input filter, from its parameter list) and `provenance`.
+`width_model.local_coupling` (SPEC19 package 1, section 7.11; null = none):
+`inlet_roll_temperature_weight` ([0, 1], default 0.5: the share of a roll surface temperature
+difference that reaches the oil at the inlet; an assumption, no measurement exists),
+`flow_stress_temperature_coefficient_per_k` ([0, 0.01] /K or null = the coefficient of
+`hardening.rate_temperature` when that is given, else no flow-stress change; from tensile tests
+of your alloy at 20 and 100 C), `strip_roll_temperature_coupling` ([0, 1.5] or null = computed
+from the bite heat partition), `oil_flow_per_nozzle_m3_s` ((0, 0.1] m3/s or null = no supply
+check; the oil flow per zone from the coolant system display divided by the nozzles of the
+zone), `oil_capture_fraction` ((0, 1], default 1) and `provenance`. It changes no score.
+
 ## 6. Hypotheses and evidence rules
 
 ### 6.1 Scoring
@@ -1365,11 +1599,11 @@ the nozzle pitch (analyst choice). "S" = supports, "C" = contradicts, with the w
 | `nozzle_thermal_stripe` | A blocked, partly blocked or mis-aimed nozzle leaves an under-cooled stripe; the work roll grows there and over-rolls the strip into a loose band (latent under tension, manifest once it buckles). | position on a modelled stripe or a weak nozzle, or (without a width model) inside a coverage band-risk interval widened by the tolerance (S str); continuity continuous or both (S mod); positions repeat across coils (S mod); positions stay after a work-roll change (S mod); gaps all multiples of the nozzle pitch (S mod); appearance loose_or_buckle (S mod); model band at an observed position (S mod, model); tension-release observation agrees with the model states (S mod); loose_or_buckle with a band manifest in the mill (S mod); worse at thinner gauge (S weak); both faces (S weak); tracks speed changes NEUTRAL (a thermal stripe follows heat input slowly) | no observed position on a predicted one (C weak); only intermittent (C weak); positions do not repeat (C mod); positions move after a work-roll change (C mod); stain or crease (C weak); tension-release observation disagrees with the model (C weak); changes after roll wiper cleaning (C weak) | spray footprint check and header inspection; band positions on three consecutive coils against nozzle positions; shapemeter zone map |
 | `cooling_zone_switching_transient` | Zone cooling valves or an intermittently blocking nozzle switch a zone off and on; each switch grows a stripe for tens of seconds and it fades over about a minute: short-lived bands. | continuity intermittent or both (S str); changes with zone switching (S str); observed duration within 0.3-3 x the model visible time (S mod, model; without events, 0.3-3 x the 20-120 s literature range, S weak); position on an event nozzle or event stripe (S str); gaps multiples of the zone pitch (S weak); positions do not repeat (S weak); loose_or_buckle or tight (S weak); worse at thinner gauge (S weak); tension-release rules as above | only continuous (C mod); does not change with zone switching (C str); tension-release disagreement (C weak) | log valve states against shapemeter zones and band times; compare band duration with valve-off intervals |
 | `roll_surface_band` | A wear band, pick-up streak or two-tone step at the edges of earlier narrower strip prints at a fixed width position until the rolls are changed; in foil also wiper debris, a wide coil after a narrow one and backup-roll lines printed through the work roll [V S25, S17]. | positions change (or band disappears) after a work-roll change (S str); follows previous strip edges or on a two-tone position (S str); repeat across coils (S mod); continuous (S mod); gloss_or_shade (S mod); one face (S mod); changes after roll wiper cleaning (S str); appeared after a narrower coil (S str); disappears after a backup-roll change (S mod) | positions stay after a work-roll change (C str; "does not disappear" C mod; both only C weak when the band disappeared after a backup-roll change, see below); intermittent (C mod); loose_or_buckle (C weak); changes with zone switching (C mod); does not change after wiper cleaning (C weak) | roll-surface inspection at the band positions; work-roll change test; compare with earlier narrower widths |
-| `grinding_feed_marks` | Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution. | every gap within 10 % of 1-3 x the feed pitch (S str); regular spacing (CV < 0.15) below 30 mm (S weak); positions change after a work-roll change (S mod); gloss_or_shade (S mod); continuous (S weak) | gaps not matching (C mod); positions stay after a work-roll change (C str) | measure the spacing against the grinder traverse per revolution; roll inspection; roll change |
+| `grinding_feed_marks` | Helical feed lines from the roll grinder; the lateral pitch is the traverse per roll revolution. | every gap within 10 % of 1-3 x the feed pitch (S str); regular spacing (CV < 0.15) below 60 mm (S weak; SPEC20: printed final-pass feeds are 9-25 mm on an aluminium cold-mill roll [RG5] and 24-53 mm on a foil roll [RG7, computed from the printed settings], so the ceiling sits just above the largest, an analyst choice [D]; the prediction's `feed_range_note` says so and that a wide, irregular spiral from table float does not follow the feed law and belongs with `roll_surface_band` [RG8 FT]); positions change after a work-roll change (S mod); gloss_or_shade (S mod); continuous (S weak) | gaps not matching (C mod); positions stay after a work-roll change (C str) | measure the spacing against the grinder traverse per revolution; roll inspection; roll change |
 | `incoming_ridge_coil_buildup` | A local high spot in the incoming profile stacks up wrap by wrap in the coil, stretches the band beyond yield and leaves a tight-then-loose band, worse toward the outer wraps. | positions do not repeat across coils (S mod); worse toward outer wraps (S str); position on a supplied ridge (S str); model ridge yields the strip (S mod, model); intermittent with 5-95 % of the coil length affected (S weak); worse at thinner gauge (S mod); visible only after release (S weak) | positions repeat (C mod); positions change after a work-roll change (C weak); not worse toward outer wraps (C mod); model ridge does not yield (C weak, model) | entry profile scan of the incoming coil and outside-profile scan of the wound coil |
-| `tension_troughs_or_creases` | Lateral buckling of thin strip under tension in a free span (troughs), which a roll can iron into a crease. | spacing 0.5-2 x the computed trough wavelength of either span (S str when the spacing is established: a stated `band_spacing_m` or at least two regular gaps, CV <= 0.1; S weak for one gap or irregular gaps, with the text "cannot establish a spacing"); crease_or_flute (S str); changes with tension (S str); model troughs expected (S mod, model; needs `lateral_compressive_stress_pa`); intermittent or both (S weak); worse at thinner gauge (S mod); changes with ironing-roll pressure (S mod); exit gauge below 50 um, creasing possible [V S25] (S weak, input, gated) | spacing outside 0.25-4 x both wavelengths (C mod, only for an established spacing); stain (C mod); does not change with tension (C str); model below the trough threshold (C weak); positions change after a work-roll change (C weak); worse at lower tension (C weak: troughs need tension; a crease from a loose band is the exception, so it stays weak) | vary the span tension and watch the bands; check deflector / idler alignment and crown; measure the trough spacing |
+| `tension_troughs_or_creases` | Lateral buckling of thin strip under tension in a free span (troughs), which a roll can iron into a crease. | spacing 0.5-2 x the computed trough wavelength of either span (S str when the spacing is established: a stated `band_spacing_m` or at least two regular gaps, CV <= 0.1; S weak for one gap or irregular gaps, with the text "cannot establish a spacing"); crease_or_flute (S str); changes with tension (S str); model troughs expected (S mod, model; needs `lateral_compressive_stress_pa`; rule extended in SPEC19: from a stress computed from `width_model.span_alignment` S weak, model, "(lateral stress computed from the entered roller alignment)"); intermittent or both (S weak); worse at thinner gauge (S mod); changes with ironing-roll pressure (S mod); exit gauge below 50 um, creasing possible [V S25] (S weak, input, gated) | spacing outside 0.25-4 x both wavelengths (C mod, only for an established spacing); stain (C mod); does not change with tension (C str); model below the trough threshold (C weak; supplied stress only: below from a computed stress is NEUTRAL, since the computed stress covers only misalignment and taper); positions change after a work-roll change (C weak); worse at lower tension (C weak: troughs need tension; a crease from a loose band is the exception, so it stays weak) | vary the span tension and watch the bands; check deflector / idler alignment and crown; measure the trough spacing |
 | `profile_flatness_mismatch` | Relative crown change between entry and exit outside the Shohet-Townsend dead band: smooth edge waves or a centre buckle rather than narrow stripes. | crown change outside the dead band (S str, model); all positions within 15 % of the width of an edge or of the centre (S mod); band width > 150 mm (S weak); loose_or_buckle (S mod); visible only after release (S weak); worse at thinner gauge (S mod) | crown change inside the dead band (C mod, model); two or more interior positions (C mod); band width < 60 mm (C weak) | entry and exit profile measurements; shapemeter map; compare relative crowns |
-| `heat_streak_or_film_variation` (title "Heat streak / friction or oil-film band (no roll bump)") | Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without a geometric roll bump and tracks speed changes [V S11, S17; mechanism D]. | gloss_or_shade (S mod); no gauge variation (S weak); positions do not repeat (S mod); intermittent or both (S mod); worse at higher speed (S mod); tracks speed changes (S str); boundary film regime or exit temperature above a supplied limit (S weak, model, gated); film ratio 0.3-3 at the operating point, from `tribology` or else the phase-1 lubrication screen (S weak, model, gated); exit air blow-off NEUTRAL | crease_or_flute (C mod); positions repeat (C weak); positions change after a work-roll change (C weak); does not track speed changes (C weak) | compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel |
+| `heat_streak_or_film_variation` (title "Heat streak / friction or oil-film band (no roll bump)") | Local oil-film or friction variation across the width: milky heat streaks that wander in width and position (QCA-1), or, in foil where the oil film is comparable to the roughness, a cross-width difference in roughness or oil film that gives a flatness band without a geometric roll bump and tracks speed changes [V S11, S17; mechanism D]. | gloss_or_shade (S mod); no gauge variation (S weak); positions do not repeat (S mod); intermittent or both (S mod); worse at higher speed (S mod); tracks speed changes (S str); exit temperature above a supplied limit (S weak, model, gated; otherwise NEUTRAL: since SPEC17 the film-ratio label no longer counts, a film ratio below 1 being normal mixed-regime operation [BT-S3 EX, BT-S9 EX]; the film-collapse test of the gap study is not built, it needs BT-G3 / BT-G11); film ratio 0.3-3 at the operating point, from `tribology` or else the phase-1 lubrication screen (S weak, model, gated); exit air blow-off NEUTRAL | crease_or_flute (C mod); positions repeat (C weak); positions change after a work-roll change (C weak); does not track speed changes (C weak) | compare band appearance with oil temperature and speed (does the band appear, move or fade with a speed change?); check whether the bands wander between coils; measure the work-roll roughness across the barrel |
 | `oil_carryover_drips_or_stain` | Coolant carried past the wipers, drips, or staining seen after annealing. | stain (S str); one face (S mod); intermittent (S weak); positions repeat (S weak) | loose_or_buckle or crease_or_flute (C mod); changes with tension (C weak) | anneal a sample and look for stain; inspect wipers and drip shields |
 | `foil_tension_lines` | **Published description, not a model** (the mechanism text says so): longitudinal stripes at 5-20 mm pitch that appear below 15 um and worsen as gauge falls; drivers tension, roll roughness, roll parallelism, roll pressure and pass reduction [BF-S21, excerpt of a trade report of a producer talk; catalogue `TENSION_LINES`]; wider and more visible at low strip tension and vanishing above a threshold tension [V S27, S28]. The tool has no physical model of them (`model_prediction.model` says so); rule weights [D]. | spacing (`band_spacing_m`, else the mean observed gap) regular 5-20 mm (S str; a stated spacing counts as regular), 3-30 mm or irregular (S weak); exit gauge below 15 um (S mod, input, gated), 15-30 um (S weak, input, gated); worse at lower tension (S str); changes with tension (S mod, used only when `worse_at_lower_tension` is null); changes with ironing-roll pressure (S mod); changes with exit air blow-off (S mod); positions do not repeat across coils (S weak); gloss_or_shade or crease_or_flute (S weak); worse at thinner gauge (S weak) | spacing above 60 mm (C weak); exit gauge above 100 um (C mod, input); not worse at lower tension (C str); loose_or_buckle or stain (C weak) | raise the exit tension in steps and note the tension at which the lines vanish; vary the ironing-roll pressure per side and the exit air blow-off one at a time; check roll parallelism |
 
@@ -1420,7 +1654,7 @@ Notation: `f_obs = u/p` per pitch observation (plus `measured_vibration_hz` when
 |---|---|---|
 | 1 | `third_octave_self_excited_chatter` | transverse S mod; longitudinal C str; diagonal/chevron C mod. law FIXED_FREQUENCY S str; SPEED_INDEPENDENT C str. `f_obs` within +-15 % of model dominant/onset frequency S str, else 90-300 Hz S mod, outside 60-400 Hz C str. gauge variation detected S str, not detected C mod. faces both S weak, one C mod. `u_op >= u_crit(beta)` S str; `u_crit(0) <= u_op < u_crit(beta)` S weak; `u_op < u_crit(0)` C mod. onset speed within 0.6-1.6 x `u_crit(beta)` S mod, otherwise S weak. disappears after any roll change C mod. worse at thinner gauge S weak. **Phase 2:** when the model onset or dominant frequency lies above the span-wave limit `c/(2L)` the speed-margin item is NEUTRAL and the model-frequency match is skipped (flag `CHATTER_NOT_RELIABLE_ABOVE_SPAN_WAVE_LIMIT`). **Scan range:** the critical speeds come from a search over 0.05-60 m/s, so "no crossing" (`STABLE_OVER_SCANNED_RANGE`) says nothing about an operating speed outside it; there the speed-margin item is decided by the operating-point stability with and without bite damping (unstable with beta S str; unstable only with beta = 0 S weak; stable in both C mod, the text saying it rests on the operating point; stability unavailable NEUTRAL), the result carries `chatter.operating_speed_outside_scanned_range`, the flag `OPERATING_SPEED_OUTSIDE_SCANNED_RANGE` and a note on such schedule rows, and the report's chatter section warns that the scan status does not mean stable at the operating speed. |
 | 2 | `fifth_octave_roll_stack_resonance` | orientation as 1. `f_obs` within +-15 % of the antisymmetric upper mode S str, else 500-1200 Hz S mod, below 300 Hz C str. pitch 10-40 mm S mod. gauge variation not detected S mod, detected C weak. law FIXED_FREQUENCY S mod; SPEED_INDEPENDENT S mod if `pi*D_b*(1+f)/p` within 0.05 of an integer, else NEUTRAL. order-locked source within +-10 % of the antisymmetric upper mode at `u_op` S mod. disappears after backup-roll change S mod. faces both S weak. |
-| 3 | `work_roll_borne_marks` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. pitch = `pi*D_w*(1+f)/n` within 3 % for ONE n (1..8 or a supplied grinder-mark count) that fits every pitch best (smallest worst mismatch; a supplied count preferred on a tie), S str, no match C mod; the same n in the prediction and the strip map. work-roll change: disappears S str, persists C str. faces one S mod, both C weak. longitudinal C str. |
+| 3 | `work_roll_borne_marks` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. pitch = `pi*D_w*(1+f)/n` within 3 % for ONE n (1..8 or a grinder-mark count, supplied or computed) that fits every pitch best (smallest worst mismatch; a grinder count preferred on a tie), S str, no match C mod; SPEC20: a grinder count may be computed as `f/n_roll` from the grinder's last-pass wheel (or vibration) and roll speeds [RG25 AB, RG26 AB, RG24 VP] and is not rounded (grinder chatter is a spiral on the roll); with grinder data entered the test is decisive as before; without it, on the work roll, a pitch that fits no n in 1..8 but implies 12-240 marks per circumference for every pitch (the typical range of printed grinder settings, [computed]) gives NEUTRAL, not C, with the flag `GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA`; the range bounds what cannot be excluded and is never used as a default grinder; `grinder_pitch_check` in the prediction lists the implied count per pitch and says that entering the wheel and roll speeds turns it into a test; orientation: wheel-spindle vibration leaves a spiral on the roll, work-rest, tailstock or headstock an axial one [RG24 VP], so a slightly oblique transverse mark is compatible with a grinder source; the same n in the prediction and the strip map. work-roll change: disappears S str, persists C str. faces one S mod, both C weak. longitudinal C str. |
 | 4 | `backup_roll_borne_marks` | as 3 with `D_b`; backup-roll change disappears S str, persists C str; disappears after work-roll change C str. |
 | 5 | `order_locked_drive_or_bearing_excitation` | law SPEED_INDEPENDENT S str, FIXED_FREQUENCY C str. best gear / bearing / spindle source within 5 % S str (named). The spindle / coupling candidate `work_roll_2x` is scored whether or not gear or bearing geometry is supplied: with no gear and no bearing supplied, a spindle match S str (the text says only the spindle was checked) and no match NOT_OBSERVED; with geometry supplied but no match C weak. No pitch and no vibration frequency observed: NOT_OBSERVED. persists after both roll changes S weak. faces both S weak. longitudinal C str. |
 | 6 | `torsional_or_low_frequency_drive_vibration` | `f_obs` 5-30 Hz S str, above 60 Hz C str. **Phase 2:** with a `drive` section, within +-15 % of ONE computed torsional mode (the best single fit to every observed frequency) S str, above max(60 Hz, 1.5 x highest mode) C str. pitch 0.1-3 m S weak. law FIXED_FREQUENCY S mod. longitudinal C str. **Phase 3:** when it leads and torsional modes are computed, the strip map draws the pitch `u_op / f` with `f` the computed mode that best matches the observed frequencies (else the lowest mode) [D]. |
@@ -1471,8 +1705,8 @@ backup-roll barrel inspection; tensile test for a yield plateau; ...).
 - **Bite derivation failure.** Chatter-dependent criteria become `NEUTRAL` with expected
   text `NOT_ASSESSABLE: <reason>`; forward slip is then taken as 0 in the kinematics (flag
   `FORWARD_SLIP_UNKNOWN_ZERO_USED_IN_KINEMATICS`). A bite whose forward slip is 0.5 or more
-  (the experimental mattress model reports such values because it has no elastic strip
-  zones; a supplied bite may too) keeps two values: zero is used only in the roll-borne pitch
+  (the experimental mattress model reports such values, as a constant-friction model with a
+  no-slip zone does, section 3.3; a supplied bite may too) keeps two values: zero is used only in the roll-borne pitch
   kinematics (source catalogue, roll-mark and order-locked pitches, the work- and backup-roll
   hypotheses; `band_signatures` accepts |slip| < 0.5), flag
   `FORWARD_SLIP_OUTSIDE_KINEMATICS_DOMAIN_ZERO_USED_IN_KINEMATICS` and a limitation sentence;
@@ -1489,6 +1723,17 @@ backup-roll barrel inspection; tensile test for a yield plateau; ...).
   scores: a gated item contributes nothing. In the foil demo it holds the tension-line gauge
   support at `NEUTRAL`; in the sheet lengthwise demo the trough gauge item is `NEUTRAL`
   anyway (210 um is not below 50 um).
+- **Rule changed in SPEC17: the film-ratio label no longer supports the heat-streak
+  hypothesis** (BT-G8, X21). A film ratio below 1 was labelled `BOUNDARY` and counted as weak
+  support; in the sources it is the condition for a good roll imprint inside the mixed regime
+  and 0.01-0.5 is the common industrial window [BT-S3 EX, BT-S9 EX]. The item now supports
+  (weak, model, gated) only when the exit temperature exceeds a supplied limit, else it is
+  `NEUTRAL`; the criterion string is unchanged. Score changes: battery-foil demo
+  `heat_streak_or_film_variation` 4 -> 3 (rank 4 -> 5, `tension_troughs_or_creases` moves up),
+  lengthwise demo 4 -> 3 (rank 4 -> 5, `profile_flatness_mismatch` moves up); leaders, every
+  other score and every standing are unchanged. The herringbone rule keeps its film-ratio
+  `Lambda < 1` item (weak support) with the wording "substantial asperity contact" (section
+  14).
 - **A hypothesis that cannot be evaluated does not stop the diagnosis.** A domain error
   (`ValueError`) raised while one hypothesis is evaluated makes that hypothesis
   `NOT_ASSESSABLE` with score 0 and one `NEUTRAL` item carrying the reason; the result lists
@@ -1507,11 +1752,15 @@ The lengthwise result (`result['width']`) is built in this order: steady roll te
 and radius with the actual and with a healthy spray header (7.1); the difference between
 the two gives the stripes; each stripe goes through the strip-shape chain to thickness,
 elongation, flatness and buckling (7.2); the same stripe shape is carried through every
-pass of the schedule (7.3); switching events are simulated in time (7.4). Integration code:
+pass of the schedule (7.3); switching events are simulated in time (7.4); with an angular
+layout the roll surface within one revolution is added on top (7.10). Integration code:
 `physicroll/band_width.py`; equations: `physicroll/roll_thermal.py`,
 `physicroll/strip_shape.py`.
 
 ### 7.1 Roll thermal model (`roll_thermal.py`)
+
+*Calibrating the spray coefficient* (SPEC18 package 11, gap row A5): see the end of this
+section.
 
 Circumferentially averaged, axisymmetric conduction in a solid work roll of radius `R` and
 barrel length `B`; `z` along the barrel, `r` radial [V: Yamaguchi et al. 2016; Li et al.
@@ -1526,9 +1775,28 @@ h = background_htc + spray_mean_htc * weight(z,t)                        [D]
 ```
 
 Spray header: nozzle `i` at `z_i` with flow level `s_i` in [0, 1] adds `s_i*pitch/W_eff`
-to `weight` inside its footprint, `W_eff = 2*standoff*tan(angle/2)*cos(offset)` [V: Lloyd
-2010; Tucker 2006]. The footprint is a top hat, so a healthy header averages to 1 away from
-the barrel ends. Default layout: `n = floor(B/pitch)` nozzles centred on the barrel, index 0
+to `weight` inside its footprint, `W_eff = 2*standoff*tan(angle/2)*cos(offset)` [D] geometric;
+neither paper prints it [SN1 FT; SN3 FT]; catalogue widths are 6-14 % larger [SN5 VP; computed].
+The footprint is a top hat by default, so a healthy header averages to 1 away from the barrel
+ends. Three opt-in header keys (SPEC22; defaults reproduce the earlier numbers bit for bit):
+`footprint_profile: "parabolic"` uses the density `1.5*(1 - (2x/W)^2)` on `[-W/2, W/2]` (same
+total as the top hat; cell averages by the exact integral): "parabolic" is the makers' word
+[SN2 FT; SN5 VP], the function is a STAND-IN, no measured profile is published (flag
+`FOOTPRINT_PROFILE_STAND_IN`); `footprint_width_m` is the pattern width along the barrel as
+built (the catalogue width at the standoff) in place of the geometric one; `htc_flow_exponent`
+`n` (0.5 to 1.0) makes a nozzle at level `s` cool as `s^n` (flag `SPRAY_FLOW_EXPONENT_APPLIED`;
+published exponents are 0.5 to 1.0, for water and one kerosene CFD [computed from SN4, SN16,
+SN14]). Every reader of the header takes the width from one property
+(`SprayHeader.effective_footprint_width_m`): the bulk model, the surface layer, the controlled
+run and its influence matrix, the spray coverage check, the spray layout, the nozzle map and
+the app's drawing. `width.thermal_steady` and the spray layout report `footprint_profile`,
+`footprint_width_source`, `footprint_width_over_pitch` and `htc_flow_exponent`; a footprint
+wider than 1.5 nozzle pitches sets `FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE` ("fans overlap more
+than makers recommend (1.1 to 1.5 nozzle pitches [SN2; SN7; SN13]); a blocked nozzle is
+smoothed more than on such a header"): the four older demos' headers have 3.2 and carry it. With
+`n = 1` and a nozzle level strictly between 0 and 1 the section notes that the stripe of that
+partly blocked nozzle would be 7 to 45 % smaller with the published exponents [computed]. The
+offset angle may reach 70 degrees (catalogue nozzles [SN5 VP]). Default layout: `n = floor(B/pitch)` nozzles centred on the barrel, index 0
 nearest the header start. A blocked nozzle is level 0, a partly blocked one a level between
 0 and 1 (`nozzle_levels`), and a switching event sets the listed nozzles to `level` for
 `duration_s`.
@@ -1557,13 +1825,42 @@ de-trended.
 
 **Nozzle-pattern ripple.** With idealised top-hat footprints, a healthy header gives a
 heat-transfer coefficient that varies at the nozzle pitch whenever the overlap is not a
-whole number of pitches. Real fans have a tapered flow distribution, so this ripple is an
-artefact of the idealisation. It is reported separately (healthy growth minus its moving
+whole number of pitches. The ripple is of unknown size: with a parabolic profile a healthy
+header still ripples by about -12 % / +7 % at 1.43 pitches and about +/-5 % at 3.2 [computed];
+the top-hat value is not representative. It is reported separately (healthy growth minus its moving
 average over one nozzle pitch) and fed through the shape chain so that its size can be
 judged, but it is never counted as a band. In the lengthwise demo it is 0.242 um peak to
 peak in radius, 6.48 I-units with the exit-tension feedback (58.8 compliance only, 70.6
 rigid bound), 35 latent bands above the 2 I-unit reporting threshold, flat after tension
 release (`width.shape.nozzle_pattern_ripple`).
+
+**Realistic-header demo (SPEC22).** `scenarios/band_diagnosis_realistic_header.json` is the
+battery-foil demo with one change, the spray header: pitch 0.052 m, spray angle 30 degrees and
+offset 15 degrees (catalogue values [SN5 VP]), standoff 0.1306 m so that the geometric footprint
+is 1.300 nozzle pitches (vendor practice 1.1 to 1.5), the parabolic stand-in profile, exponent
+1.0, the same partly blocked nozzle 11 (level 0.45) and the same valve event (the flatness loop,
+step test and friction screen are left out and the heat-share table uses its default; the
+observations are the battery-foil demo's, generated for its header). The header is synthetic:
+chosen to match vendor overlap practice, not a mill specification. Blocked-nozzle results of
+the two artifacts (`artifacts/band_diagnosis/*.result.json`; cooling deficit = (background +
+spray mean - `htc_w_m2k`) / spray mean around nozzle 11):
+
+| quantity (nozzle 11, level 0.45) | battery-foil demo (top hat, 3.21 pitches) | realistic-header demo (parabolic, 1.30 pitches) |
+|---|---|---|
+| cooling deficit peak, of the spray mean | 0.236 | 0.599 |
+| cooling deficit half-width | 135 mm | 45 mm |
+| steady stripe height (radius) | 2.96 um | 6.83 um |
+| stripe half-peak width | 180 mm | 90 mm |
+| band, linear feedback | 25.1 I-units | 63.4 I-units |
+| band, with feedback (after the band-wise saturation) | 25.1 I-units | 772 I-units |
+| 52 mm shapemeter zone reading / band peak | 0.976 | 0.985 |
+| state in the mill; after release | latent; visible after release | buckled in the mill; visible after release |
+
+The wide-overlap headers of the older demos smooth a blocked nozzle: on the realistic header
+the same partly blocked nozzle gives a deficit 2.5 times deeper and a third as wide, a stripe
+2.3 times higher and half as wide, and a band that buckles in the mill. The zone reading of
+this band stays near its peak (98.5 %) because the band is still wider than one 52 mm zone; a
+narrower source would read less (the dilution table of section 7.6).
 
 Numerics: conservative finite volumes (uniform axial cells, geometric radial cells refined
 toward the surface), Peaceman-Rachford ADI with a backward-Euler start-up after each
@@ -1599,8 +1896,53 @@ peak in 9.25 s in the battery demo). The literature's computed time scales are a
 axial decay of a 52 mm stripe and 4-7 min radially for a 260 mm roll [PT-T18, PT-T25,
 computed]: the plant's 20 s is of the order of the axial (local) scale, the model's steady
 build-up of the radial one. Plant time constants themselves were not found (abstract only,
-[PT-T26]). Partly open. Possible causes, none modelled: bite heat that depends
-on the roll surface temperature, emulsion-level heat transfer, per-revolution effects.
+[PT-T26]). Partly open (the per-revolution layer of 7.10 gives a surface-film scale of 15.9 s
+for this demo's inputs: a comparison, not a resolution). Possible causes, none modelled: bite heat that depends
+on the roll surface temperature, emulsion-level heat transfer, per-revolution effects. The
+literature adds two candidates (gap study X5): the surface time scale of the roll, and the
+strip-temperature term in measured flatness (section 7.7; a hot fibre reads loose while hot).
+
+**The emulated step test (SPEC19 package 5, `width.zone_step_test`; finding 2).** With
+`width_model.zone_step_test` the tool emulates the plant's test: one zone switched from the
+steady state, the reading of the shapemeter zone over it (the operator of 7.12), a transport
+delay `distance/speed` and a display filter, and a first order plus dead time fitted per test
+length [D, SPEC19: least squares on a fixed grid of time constants with ratio 1.08; no plant
+fitting protocol is recorded]. It fits each combination of terms: roll growth alone (the roll
+body), roll growth plus the strip temperature term read hot, roll growth plus the film and
+flow-stress terms (`mechanical_net`), and all four (`as_measured_hot`); the surface terms
+follow the roll surface (the circumferential mean of the bulk model; the per-revolution layer
+of 7.10 is not used in the test). Battery-foil, nozzles 18-19, shapemeter zone 17, no delay,
+1 s filter (`tests/test_band_step_test_demos.py`, the planner's table reproduced exactly).
+The record runs in whole time steps to the first step at or after the hold time (hold 10 s at
+3 s steps: 12 s), so every fit window is covered. A window that holds too few points
+(`RECORD_TOO_SHORT_FOR_WINDOW`) or a constant at an end of the search grid is named in the
+finding as such, not as a value; nozzles already at the test level give `NOT_ASSESSABLE`
+(nothing is switched). Any failure inside the section is its `FAILED` status with the message
+(the exception type is named for a programming error); the diagnosis goes on.
+
+| series | 20 s test | 40 s | 60 s | 120 s | 600 s |
+|---|---|---|---|---|---|
+| roll growth alone | 63.8 s | 63.8 | 74.4 | 101.3 | 173.5 |
+| + strip temperature, coupling 1.0 | 16.0 | 25.3 | 34.5 | 59.1 | 137.8 |
+| + strip temperature, coupling 0.5 | 23.5 | 34.5 | 46.9 | 68.9 | - |
+| lengthwise demo, nozzles 20-21, roll growth alone | 109.4 | 93.8 | 93.8 | 118.1 | - |
+| lengthwise, + strip temperature, coupling 1.0 | 29.6 | 43.4 | 59.1 | 86.8 | - |
+
+What this shows: the fitted constant depends on the test length (a first-order fit to a
+response with several time scales: it grows over longer tests) and on which physics is on. Roll
+growth alone gives about a minute or more; the plant's 20 s lies inside the range only with the
+strip-temperature term on and a test of 20 to 40 s. What it does not show: that this is what the
+plant measured. The coupling factor (0.84 computed on the battery-foil pass, 0.51 on the sheet
+pass), the inlet weight and the display filter are assumptions; no plant protocol is recorded.
+The fit over a short test is also ill-conditioned: dead time and constant trade off, and the
+demo's own 2 m to the shapemeter (0.15 s at 13 m/s) moves the 20 s roll-growth fit from 63.8 to
+43.4 s (the demo artifact: 43.4 s roll growth alone, 18.6 s with the strip term at the computed
+coupling 0.84, 34.5 s as measured hot with the film and flow-stress terms; 60 s: 74.4, 37.2 and
+63.8 s). The film term of the battery-foil pass opposes the roll path and makes the mechanical
+net response not first order (flagged). This supports the reading of gaps A6 and X5; it is not a
+resolution. Benchmark `A6-ZONE-TIME-CONSTANT` records both 20 s ratios
+(`INDICATIVE_ASSUMED_INPUTS`). Cost: about 3 s per test of 120 s at full numerics, 1.0 s on the
+quick grid.
 
 Not modelled: the per-revolution surface temperature cycle, the bite contact conductance
 and roll-strip temperature coupling (`q` is supplied or computed from the pass, not coupled
@@ -1609,6 +1951,52 @@ neck and chock losses, axial mechanical coupling of the expansion, roll wear, be
 flattening. No measured spray heat-transfer coefficient for kerosene-based coolant was found
 (planner estimate 0.5-2 kW/m2K [D]; an Innoval blog gives 4.65-5.5 kW/m2K overall for an
 unspecified coolant); the coefficients are inputs.
+
+**Fitting the spray coefficient to a measurement (A5).**
+`python -m physicroll.band_cli my_case.json --calibrate-spray my_scan.json [--numerics case]`
+(`band_thermal.calibrate_spray_coefficient`) fits the ONE coefficient
+`width_model.spray_header.spray_mean_htc_w_m2k` of the case's steady roll thermal problem
+(built exactly as the width section builds it, `band_width.thermal_heat_inputs` and
+`_Thermal`) to an entered measurement: `kind` `roll_surface_temperature_after_stop` (a barrel
+surface temperature scan `seconds_after_stop` after the mill stopped; the model then runs that
+long with sprays off and no bite heat) or `thermal_camber` (radius growth; both profiles
+reduced by their own mean, because the reference of a measured camber is unknown [D]);
+`positions_m` (at least 5, on the barrel), `values` (K or m), `provenance`, optionally
+`search_range_w_m2k` (default 500-20000) and `uncertainty` (one standard deviation of a
+measured value). Search: 9 geometric values, then golden section in `ln h` until the bracket
+is within 2 % (at most 12 more evaluations) [D, SPEC18]. **The fitted value is the
+circumferential-mean coefficient of this model for this mill** (top-hat footprints, the case's
+background coefficient, heat share and bite heat), not a jet-zone value; it is not compared with
+published spray coefficients, whose basis is not established (X3); with
+`spray_wetted_arc_rad` the result also gives the footprint equivalent
+`background + h*2*pi/arc`.
+
+*What it holds fixed, and how to read the result.* The background coefficient, the coolant
+temperature, the roll properties, the heat share and the bite heat come from the case
+(`assumed_inputs`), so their errors go into the fitted value; `heat_share_sensitivity` refits
+with a 10 % higher roll heat fraction and gives the exponent `d ln h / d ln(heat fraction)`
+(about 0.95 for a camber and 1.08 for a scan 30 s after a stop on the battery-foil roll [run]:
+a heat share 10 % too high gives a coefficient about 10 % too high, and the stripe heights
+scale with that heat share). `misfit_curve` lists every evaluation; a flat curve means the
+measurement does not determine the coefficient. With `uncertainty` the result gives
+`range_within_measurement_uncertainty_w_m2k`, the coefficients whose RMS misfit stays within
+`sqrt(minimum^2 + u^2)` [D]. Refusals, with a named `outcome` and no number: `TOO_FEW_POINTS`
+(fewer than 5), `NO_CONTRAST` (a profile that spans no more than the entered uncertainty),
+`NOT_DETERMINED_FLAT_MISFIT` (the misfit within 10 % of its minimum over the whole range, e.g.
+the header was off), `AT_SEARCH_LIMIT` (the minimum at an end of the range: widen the range or
+check the inputs). Twin tests (the model at 3400 W/m2K as the measurement) recover 3390
+W/m2K with both kinds (the 2 % bracket), and with noise of the stated uncertainty the true value
+lies inside the reported interval. Cost on the battery-foil roll: 5 s for the case-pass bite
+heat, then 37 evaluations of 0.012-0.016 s with quick numerics (20 mm cells, 6 radial cells) or
+0.20-0.26 s on the case grid. The grid matters by a few per cent (3390 quick against 3269
+W/m2K on the case grid for the same camber): fit with `--numerics case` for the value you enter.
+*To use it*, enter the value by hand as `width_model.spray_header.spray_mean_htc_w_m2k`;
+nothing is changed automatically.
+
+*How to take the scan* (gap study 7.4): a barrel surface temperature scan at 25-50 mm pitch
+within 60 s of roll-out, with the preceding 30 min of spray-zone states, flows and oil
+temperature logged, the time after the stop noted; or the roll's thermal camber measured after
+a pass.
 
 ### 7.2 Strip shape and flatness (`strip_shape.py`)
 
@@ -1651,7 +2039,9 @@ stripe on both rolls, 0.21 mm exit gauge, 30 MPa tension, `Q` = 1.1e10 Pa,
 the test's inputs through `thermal_stripe_flatness`; the test asserts 410.58 I-units without
 the feedback, the latent state with it and a ratio below 0.1). In the lengthwise demo the
 feedback stiffness per width is 76 to 140 times `Q` on every pass (gauge-trend table, 7.3).
-The engine always applies it and reports all three levels.
+The engine always applies it and reports all three levels. An independent estimate of the
+feedback (the width-coupling kernel, section 7.14) gives 0.69 of it at sheet gauge and 0.10 at
+foil gauge in the demos; it is reported beside the levels and the tally keeps this one.
 
 When the feedback term dominates, `eps -> n*dR/(2*C*N_x'*E_strip)`, independent of gauge
 [D]: the raw elongation from a given stripe no longer rises as `1/h`.
@@ -1687,7 +2077,7 @@ sigma_cr(b) = k*pi^2*E/(12*(1-nu^2))*(t/b)^2,  k = 4                            
 
 The band's utilisation `U` is the maximum of `q_w/sigma_cr(b)` over intervals overlapping
 it; `U >= 1` is `MANIFEST_BUCKLE`, else `LATENT_UNDER_TENSION` (a latent band is a stress
-stripe a shapemeter can see). Tension enters with its sign, so a compressed zone flanked by
+stripe a shapemeter can see when the band is at least about one zone wide (section 7.6)). Tension enters with its sign, so a compressed zone flanked by
 tension is held flat. Latent / manifest description [V: Abdelkhalek et al. 2008; Lloyd
 2010].
 
@@ -1720,7 +2110,7 @@ classification needs `gap_crown_m`, `entry_crown_m` and `heredity_coefficient`.
 analyst choice (default 0.5; interwrap gaps vary by up to about 4 um under load [V: Zhu et
 al. 2009]). Incoming ridges pass the bite as
 `dh = 2*C*(F_hin/W + N_x'*E*xi/H)*dH/(1 + 2*C*Q_eff)` [D, integration layer], then wind into
-the coil.
+the coil. The lane winding model of section 7.15 (opt-in) computes the factor instead: 0.02 to 0.77 for a 0.1 um lane depending on the radial stack stiffness, for which no aluminium value is published; the coil verdicts keep this linear criterion.
 
 **Tension troughs and roller wrinkles.** Wavelength and amplitude
 `lam = sqrt(2*pi*L*t)/(3*(1-nu^2)*gamma)^(1/4)`,
@@ -1729,7 +2119,57 @@ Cerda & Mahadevan 2003, cross-checked against Panaitescu et al.]; trough onset i
 `sigma_y_cr = -(pi*h/a)*sqrt(E*sigma_x/(3*(1-nu^2)))` and roller wrinkle
 `sigma_y_cr = -E*h/(R*sqrt(3*(1-nu^2)))` [V: Good, Beisel & Yurtcu 2009, isotropic
 reduction]. A status other than "thresholds only" needs a supplied
-`lateral_compressive_stress_pa`.
+`lateral_compressive_stress_pa` or a roller alignment survey (below). The trough and roller-wrinkle thresholds come from isolated-span formulas: for aluminium
+and copper foil below 25 um and wider than 0.6-1 m, wrinkles needed about 15 times the
+predicted roller misalignment [SS-S55 EX], so at foil gauge these thresholds are
+conservative screening values (key `wide_foil_note` on each span of `width.troughs` below
+100 um, printed under the trough table; SPEC17 X12).
+
+**Lateral stress from roller misalignment and taper** (SPEC19 package 12, G11, opt-in
+`width_model.span_alignment`; [D, re-derived in SPEC19], `strip_shape.span_lateral_stress`).
+The thresholds above need an acting lateral stress, which a plant cannot measure. Two of the
+generators the literature lists are computed from a roller alignment survey: the span of
+length `a` is a beam bending in its own plane (`I = t*W^3/12`). A downstream roller
+misaligned by `theta` in the strip plane: the strip leaves the upstream roller straight
+(`v(0) = v'(0) = 0`), enters the downstream roller normal to its axis (`v'(a) = theta`) and
+carries no moment there (`v''(a) = 0`), so `v = theta*x^2/a - theta*x^3/(3*a^2)`, shear force
+`V = 2*E*I*theta/a^2` and mean shear stress `tau = E*W^2*theta/(6*a^2)`. A roller taper (radius
+difference `dR` across the width on radius `R`) is a curvature `m = dR/(R*W)` of the strip at
+the roller and gives the shear of a misalignment `m*a`; the two angles add in magnitude
+(worst case). The lateral compression is the second principal stress
+`sigma_2 = sigma_x/2 - sqrt(sigma_x^2/4 + tau^2)` (about `-tau^2/sigma_x`); the critical
+misalignment for a threshold `s` is `theta_cr = (6*a^2/(E*W^2))*sqrt(s*(sigma_x + s))`.
+Tension stiffening is neglected: its parameter `K*a = (a/W)*sqrt(12*sigma_x/E)` is 0.19-0.21
+in the demos (flag `SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE` above 0.5); a span shorter than
+the width is flagged `SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE`. Worked numbers
+(E 70 GPa, nu 0.33):
+
+| span | trough threshold | critical shear | critical misalignment (troughs) | wrinkle threshold | critical misalignment (wrinkles) | x 15 |
+|---|---|---|---|---|---|---|
+| battery-foil exit: 30 um, 3 m, 1.2 m, 40 MPa, roller radius 0.125 m | 32152 Pa | 1.1345 MPa | 0.6078 mm/m | 10.275 MPa | 12.18 mm/m | 183 mm/m |
+| battery-foil entry: 50 um, 35 MPa | 50125 Pa | 1.3255 MPa | 0.7101 mm/m | 17.125 MPa | 16.01 mm/m | 240 mm/m |
+| lengthwise exit: 0.21 mm, 4 m, 1.5 m, 30 MPa, 0.15 m | 146182 Pa | 2.0992 MPa | 1.2795 mm/m | 59.94 MPa | 44.75 mm/m | 671 mm/m |
+
+On the battery-foil exit span 0.1 mm/m gives a shear of 186667 Pa and `sigma_2` = -871.1 Pa,
+below the trough threshold; a 10 um taper over 1.2 m on a 0.125 m roller is equivalent to
+0.2 mm/m. Without a supplied `lateral_compressive_stress_pa` the computed stress drives the
+trough screen of that span (`lateral_stress_basis`: "computed from span_alignment
+(misalignment and taper only)"); a supplied plant value keeps driving the screen exactly as
+before (`"supplied"`), and the computed value is then reported beside it with the status it
+would give (`generators.supplied_vs_computed`). Each span of `width.troughs` carries
+`generators` (`NOT_SUPPLIED` without the key). The factor 15 (copper 7-10) of the wide-foil
+trials [SS-S55 EX] is quoted beside the critical angles (`foil_factor_context`) and applied
+to no threshold: isolated-span theory over-predicts wrinkling of wide aluminium foil by about
+fifteen times, so a computed stress above a threshold is a screening result, not a
+prediction that the foil wrinkles. With a `roller` (outer diameter, wall, face length,
+modulus, wrap angle) the roller deflection is reported as beam quantities only: load
+`q = 2*T*sin(wrap/2)`, `I_r = pi*(D^4 - (D - 2*w)^4)/64`, mid-length curvature
+`q*L^2/(8*E_r*I_r)`, end slope `q*L^3/(24*E_r*I_r)`, mid deflection `5*q*L^4/(384*E_r*I_r)`
+(a 0.25 m x 10 mm x 1.5 m steel tube under 1200 N/m at 90 degrees wrap: `q` 1697.06 N/m,
+`I_r` 5.4381e-5 m4, curvature 4.179e-5 1/m, end slope 2.090e-5 rad, 0.021 mm/m). No lateral
+stress is derived from the deflection. Not covered: roller deflection, a tension drop over a
+driven roller, a bent coil or a baggy lane as a source of lateral stress, moment transfer to
+the next span, a slack edge, the traction limit on the rollers.
 
 **Positions and spacing.** Two-tone band edges at the edges of earlier narrower strips [V:
 QCA-1]; grinding feed pitch = traverse per revolution [V: EN 12258-1 grinding streak; trade
@@ -1830,7 +2270,16 @@ simulated rate over the first 5 s, the time to each threshold (in-mill manifest 
 after-release onset, reporting threshold, all as stripe heights from the peak profile
 scaled), the time above the in-mill threshold (`visible_time_s`), the fade time after the
 event, and the band life (event duration plus the time after the event to fall below the
-manifest threshold). These are integration choices of `band_width.py` [D]:
+manifest threshold). Valve events can now also be predicted by a simulated flatness loop
+(section 7.12), and a zone step test emulated (7.1); only the typed `width_model.events` drive
+this section and the evidence.
+With `width_model.local_coupling` each event row also carries
+`local_sources` (section 7.11): the film, flow-stress and strip-temperature terms beside the
+roll-growth term at the snapshot nearest `start + min(20 s, duration)` (the fast path,
+`FAST_PATH_TIME_S` [D, SPEC19: analyst choice; the surface time scale is 8-25 s]) and at the
+peak snapshot, from the surface temperature and radius differences against the starting steady
+state; the simulation and every other event value are the same with and without the key.
+These are integration choices of `band_width.py` [D]:
 
 - **Stripes.** Each connected group of adjacent switched nozzles is one stripe with its own
   monitor; an event that switches separated nozzles therefore gives several stripes. The
@@ -1918,8 +2367,8 @@ bound, manifest in the mill and after release. Ranking:
 | 1 | `nozzle_thermal_stripe` | CONSISTENT_LEADING | 20 |
 | 2 | `cooling_zone_switching_transient` | CONSISTENT | 17 |
 | 3 | `tension_troughs_or_creases` | CONSISTENT | 6 |
-| 4 | `heat_streak_or_film_variation` | CONSISTENT | 4 |
-| 5 | `profile_flatness_mismatch` | CONSISTENT | 4 |
+| 4 | `profile_flatness_mismatch` | CONSISTENT | 4 |
+| 5 | `heat_streak_or_film_variation` | CONSISTENT | 3 (4 before SPEC17, section 6.4) |
 | 6 | `incoming_ridge_coil_buildup` | CONSISTENT | 2 |
 | 7 | `oil_carryover_drips_or_stain` | CONSISTENT | 1 |
 | 8 | `coil_or_mandrel_locked_marks` | NOT_ASSESSABLE | 0 |
@@ -1939,6 +2388,996 @@ of the three positions (0.667 m), the zone hypothesis the other two; the "least 
 rule (6.4) is not applied to position matching, so each coolant hypothesis is supported by
 the positions it explains.
 
+### 7.6 What a shapemeter would show
+
+`physicroll/band_sensors.py` (SPEC17 package 4; gap rows C7 zone part, G5 sensor part, X9).
+With the optional case section `measurement.shapemeter` the result gains
+`measurement.shapemeter`: what each zone of a flatness roll with that zone width **would show**
+for every modelled band. It is a measurement operator only: it applies **no flatness controller** (no actuator
+fitting, no valve logic), so it does not predict what the plant's control would have done with
+these readings (a spray-zone loop with the tool's own control law is the separate opt-in
+section `width.flatness_control`, section 7.12), and the readings are not a forecast of the
+operator's screen. No hypothesis reads the section.
+
+What the literature says about shapemeters [SS-S29, SS-S30 VP; SS-S31, SS-S32 EX]: zones of 26
+or 52 mm on rolls, 25-100 mm on rotors, with force spreading to the neighbouring zones; a band
+narrower than a zone is diluted, and a tight edge beside a loose pocket in one zone is missed.
+Vendor accuracy is quoted as 0.5 I-units typical [SS-S29 VP]; it is never used as a default.
+This qualifies the sentence of section 7.2 that a latent band is a stripe a shapemeter can
+see: that holds when the band is at least about one zone wide.
+
+The operator [D, re-derived in SPEC17]: a stress-measuring roll senses the radial force per
+zone, i.e. the mean tension over the zone, and shows its deviation from the mean over the
+zones. Zone edges `e_0 = centre - sum(widths)/2`, `e_{j+1} = e_j + w_j` (optional narrower edge
+zones; the centre defaults to the width section's strip centre). Each sample of the modelled
+profile is constant over its cell, clipped to the strip; the zone mean is
+`m_j = sum_i(I_i*o_ij)/sum_i(o_ij)` with `o_ij` the overlap of cell, zone and strip; coverage
+`c_j` = fraction of the zone over the strip (an uncovered zone reads null); roll mean
+`m_bar = sum(c_j*w_j*m_j)/sum(c_j*w_j)`; reading `u_j = m_j - m_bar`. Neighbour spreading
+`r_j = (1 - 2s)*u_j + s*(u_{j-1} + u_{j+1})` is an interpretation of the vendor sentence
+"max. 2 x 12.5 % force spreading to adjacent measurement zones" [SS-S29 VP; the vendor
+algorithm was not read], **off by default** (`neighbour_spreading_fraction` 0). Each band of
+`levels.with_feedback` is read in the zone holding its peak; it "would show" when the reading
+reaches the threshold (`resolution_i_units` if supplied, else the tool's own 2 I-unit band
+threshold) and "would probably not show" otherwise; a band below the threshold can still be on the
+strip. Profiles read: the steady stripe profile, each cooling-zone event at its peak,
+and the healthy header's nozzle-pattern ripple. The compliance-only and rigid levels are not
+read.
+
+**Dilution table** (always printed; zone mean of a band of peak 1): a top-hat of width `b`
+reads `min(b, w)/w` centred in a zone and `min(b/2, w)/w` on a zone boundary; a Gaussian of
+half-peak width `b` reads `(b/w)*k*erf(sqrt(ln 2)*w/b)` centred and
+`(b/(2w))*k*erf(2*sqrt(ln 2)*w/b)` on a boundary, `k = sqrt(pi/(4 ln 2))`. For a 52 mm zone:
+a 20 mm top-hat reads 0.3846 centred and 0.1923 on a boundary (25 I-units read 9.6 and 4.8; the
+report's "about 10" [D]); a 20 mm Gaussian 0.4085 / 0.2047, 40 mm 0.7158 / 0.4085, 80 mm
+0.9104 / 0.7158; a 26 mm zone reads a 20 mm Gaussian at 0.7158 / 0.4085. A narrow source matters:
+a 20 mm band of 3.1 I-units centred in a 52 mm zone reads 1.2 (pinned by
+`test_narrow_band_reads_a_fraction_of_its_peak`).
+
+**Nozzle map.** From the width section's own geometry (`band_width.spray_layout`): the nozzles
+inside each zone with their effective levels, nozzles per zone, zones without a nozzle and the
+ratio of `width_model.cooling_zone_pitch_m` to the zone width. Cooling zones are built at the
+shapemeter pitch and each spray is driven by its zone [SS-S31 EX, SS-S33 EX, SS-S34 EX]; the
+tool has one header row and no controller.
+
+**Battery-foil demo** (`measurement.shapemeter`: 24 synthetic zones of 52 mm on the mill
+centre line, edges 0.126-1.374 m over the 0.15-1.35 m strip, the two end zones 54 % covered;
+each zone holds exactly one nozzle at its centre, zone j nozzle j + 2). Steady profile: the
+loose band of 25.09 I-units at 0.6225 m (half-peak width 160 mm) reads 24.49 in zone 9, 97.6 %
+of its peak, so the demo's thermal stripe is wide enough for a 52 mm shapemeter; zones 7-11
+read 6.60, 20.45, 24.49, 20.45, 6.60; the tight edges -5.18 and -5.22 read -5.18 and -5.21. With
+spreading 0.125 zone 9 would read 23.48 (93.6 %). The 20 s valve event at its peak: 21.01
+I-units read 19.33 in zone 16; its two tight side bands (-3.51) read -1.83, below the 2 I-unit
+threshold, so the result carries `MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD`. The nozzle-pattern
+ripple of the healthy header (3.14 I-units peak) reads at most 0.53: a pattern at the nozzle
+pitch is averaged out by zones of the same pitch. The 98 % of the demo stripe must not be read
+as "dilution never matters": it matters for narrow sources (ground marks, friction stripes),
+see the dilution table.
+
+Not modelled: roll wrap, measurement noise, calibration, temperature compensation, shapemeter
+dynamics and filters, the stress evolution between bite and shapemeter [SS-S22 EX], the stress
+relief of a buckled band, vendor edge rules, any controller.
+
+The thickness gauge of the same `measurement` section (the transverse side: what a gauge keeps
+of a mark pitch) is described in section 11.6.
+
+### 7.7 Strip temperature across the width
+
+SPEC17 package 6 (gap rows A1, G6; `strip_shape.thermal_flatness_term`,
+`band_width.strip_temperature_section`). A strip fibre hotter than its neighbours at the
+shapemeter is longer by `alpha*dT`: it reads loose in the mill and the difference disappears
+when the coil cools [TM-LA13 EX; for steel 1 C = 1.2 I-units, TM-LA30 EX; SS-S40 VP]. With the
+optional `width_model.strip_temperature` (a measured or assumed scan across the width; **the
+profile is supplied, not computed**: the per-width heat balance that would compute it needs the
+heat split, gap A3, Phase 1) the result gains `width.strip_temperature`.
+
+Formula [TM report gap A1]: `eps_T(z) = alpha*(T(z) - mean(T))` (arithmetic mean over the strip
+samples), `I_T = 1e5*eps_T`. The default `alpha = 23.6e-6 /K` is a textbook value used by the
+gap reports and tagged from memory there [M]; it is used with the flag
+`STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT` unless `expansion_coefficient_per_k` is
+supplied. That gives 2.36, about 2.4, I-units per kelvin [computed], above the tool's 2 I-unit
+band threshold. The scan is interpolated linearly onto the strip samples of the steady shape;
+outside its range the end value is held (`scan_coverage.extrapolated_width_m`, flag
+`STRIP_TEMPERATURE_SCAN_DOES_NOT_COVER_STRIP` when that exceeds one grid cell).
+
+Which profile means what [D, re-derived in SPEC17]: with `eps_m` the model's mechanical
+elongation (what the roll gap printed, referred to a uniform temperature), the stress a
+shapemeter senses in the hot strip follows `eps_m + eps_T`; after the coil has cooled to a
+uniform temperature only `eps_m` is left. The model has no flatness controller, so:
+
+| profile | elongation | meaning |
+|---|---|---|
+| `mechanical` | `eps_m` | the model's flatness as it is today (`width.shape.steady`, with feedback) |
+| `as_measured_hot` | `eps_m + eps_T` | what a shapemeter without temperature compensation senses; also the strip in the mill and a sample released while hot |
+| `after_cooling` | `eps_m` | equal to `mechanical` (no controller in the model); listed so that the reader sees it |
+| `after_cooling_if_hot_reading_held_flat` | `-eps_T` | BOUNDING CASE only: if a flatness control had removed everything the hot shapemeter showed, the cold strip would carry the negative of the thermal term (a hot fibre becomes tight); it needs the controller of G5 to be more than a bound |
+
+Each profile is evaluated by `flatness_from_elongation` (bands, in-mill state, state after
+release). `state_changes` compares every band of `mechanical` and `as_measured_hot` with the
+band of the other at its peak (flag `STRIP_TEMPERATURE_CHANGES_A_BAND_STATE`). The term is
+reported beside the width section: it is not added to `width.shape.steady`, the onsets, the
+gauge trend or any evidence item, so no latent / manifest verdict and no score moves. Without a
+mechanical profile the hot profile is the thermal term alone (flag
+`STRIP_TEMPERATURE_TERM_WITHOUT_MECHANICAL_PROFILE`). The shapemeter of section 7.6 also reads
+`steady_as_measured_hot`; with `measurement.shapemeter.temperature_compensated: true` that
+profile is labelled "before the shapemeter's own temperature compensation; a compensated system
+shows the mechanical profile" (flag `SHAPEMETER_TEMPERATURE_COMPENSATED`).
+
+**Battery-foil demo** (synthetic scan, marked so in its provenance and notes: +3 K at the partly
+blocked nozzle, a Gaussian of 0.10 m half-peak width at 0.6225 m on 353.15 K, 25 points at
+50 mm pitch; an assumption, not a model output). Mean 353.416 K, largest deviation 2.33 K;
+thermal term +5.50 / -0.63 I-units (alone: one loose band 0.560-0.685 m, peak 5.50 at
+0.6025 m, latent in the mill, manifest after release). `mechanical` equals the steady profile
+(peak 25.09 I-units at 0.6225 m, latent / manifest after release). `as_measured_hot`: 30.47
+I-units at 0.6175 m (band 0.495-0.745 m), latent / manifest after release, tight edges -5.81
+and -5.85; no band state changes. Bounding case: one tight band of -5.50 I-units, latent, flat
+after release. A 24-zone shapemeter reads 29.81 I-units hot in zone 9 against 24.49 for the
+mechanical profile. The report's warning: flatness measured hot and after cooling differ by
+5.5 I-units at 602.5 mm.
+
+Limits: the temperature profile is an input; the thermal strain is not fed back into the bite
+or the exit-tension feedback; where the mechanical profile was saturation-scaled the sum is
+indicative; the temperature at the shapemeter is taken equal to the scan; the after-cooling
+profile assumes no creep or set in the coil (A8); no target-curve offset [TM-LA30], no
+controller, no coil cooling model.
+
+### 7.8 A friction or oil-film stripe as a band source
+
+SPEC17 package 7 (gap BT-G4, screening version; `strip_shape.transfer_force_profile`,
+`band_width.friction_stripes_section`). The roll bump is the only band source of the shape
+chain. The bite report argues that a local difference of friction at one width position
+(roughness, roll coating, oil supply or oil temperature) acts like a roll bump, because the
+load depends on friction with an exponent of about 2 to 2.6 [derived, slope read by eye from
+BT-S1 Fig. 6a], and that it "grows as gauge falls" [BT-S1 FT, BT-S3 EX; mechanism derived].
+The full model needs BT-G1 and BT-G3; this is the screening version from the existing bites.
+
+Transfer [D, re-derived in SPEC17]: a local change of roll force per width at an unchanged gap,
+`dp0'(z) = M_mu*dmu(z)` with `M_mu = (dF/dmu)/width` of the pass's bite (central difference
++-2 %, `band_process.friction_force_sensitivity`), is answered by the strip with
+`-Q_eff*dh`; both rolls indent under the net force, so per Fourier component
+`dh_k = G(lam_k)*dp0'_k`, `G = 2*C/(1 + 2*C*Q_eff)`, with the compliance `C`, the clamps and
+`Q_eff` of the roll-bump transfer (section 7.2). More friction makes the strip locally thicker,
+the fibre shorter: tight. With the feedback dominant the elongation tends to
+`-dp0'/(N_x'*E_strip)`, independent of gauge. The elongation and I-units follow as in the
+shape chain; the band-wise saturation is not applied (flag
+`FRICTION_STRIPE_LINEAR_FEEDBACK_NOT_SATURATED` when a supplied stripe buckles in the mill).
+
+With the optional `width_model.friction_stripe_screen` the result gains
+`width.friction_stripes`: per pass the load exponent `M_mu*mu/(F/width)` and the I-units at the
+centre of a 1 % friction stripe (Gaussian, half-peak width 0.1 m by default) with the
+exit-tension feedback and compliance only (both levels always together), the trend text, the
+sign note and each supplied stripe with its band states. The battery-foil demo carries an empty
+screen (no stripe; the table only):
+
+| pass | exit gauge [um] | F/w [N/m] | load exponent | I per +1 %, with feedback | compliance only |
+|---|---|---|---|---|---|
+| S1 | 135 | 709291 | 0.637 | -4.13 | -54.6 |
+| S2 | 85 | 612275 | 0.666 | -3.01 | -78.0 |
+| S3 | 50 | 736445 | 1.194 | -4.44 | -235.2 |
+| F1 (case pass) | 30 | 958605 | 1.609 | -3.15 | -392.0 |
+| ALT1 | 25 | 1487662 | 1.917 | -3.47 | -596.6 |
+| F2 | 18 | 1536047 | 2.159 | -2.74 | -566.1 |
+| ALT2 (not credible, excluded from the trend) | 12 | 6187753 | 6.870 | -2.29 | -871.4 |
+
+**The finding, reported by the tool:** the bite report's "grows as gauge falls" holds for the
+load exponent (0.64 to 2.16, rising on every credible pass) and for the compliance-only level
+(55 to 566 I-units per 1 %; along the plant's route S1-S3, F1, F2 it rises on every pass, and
+across the two routes it is not monotonic because ALT1 at 25 um gives 597), and it does NOT hold
+with the exit-tension feedback (2.7 to 4.4 I-units per 1 %, no trend). The trend text says
+so and ends: "Whether a friction stripe grows as gauge falls therefore depends on the
+exit-tension feedback, the least supported element of the shape chain." Case pass: about
+0.64 % of friction difference reaches the 2 I-unit threshold with the feedback; the feedback
+limit is -3.49 I-units per 1 %. A supplied stripe of -10 % friction (half-peak width 60 mm at
+0.988 m) on the case pass gives a thickness change of -78.7 nm and a loose band 0.935-1.04 m of
++32.9 I-units, latent in the mill and manifest after release; +10 % gives -32.7, tight, latent,
+flat after release (`tests/test_band_friction_stripes.py`).
+
+Sign: a locally higher friction makes the strip locally thicker and the fibre tight; a locally
+lower friction makes it loose. For a hot roll stripe the film path (thinner film, more friction)
+acts against the roll-growth path (larger roll, thinner strip). With
+`width_model.local_coupling` the model gives the film, flow-stress and strip-temperature terms
+of a hot roll stripe beside the roll-growth term, each on its own and summed, with two inlet
+weights (section 7.11, second part); their sign rests on an assumed inlet weight. With `tribology` a separate, flagged block (`PLACEHOLDER_FRICTION_CLOSURE_NOT_FITTED`)
+converts the placeholder closure's slope into a friction change per kelvin of oil temperature
+(`dmu/dLambda*Lambda*(-beta)`: +3.2e-4, about 1.1 % of the friction 0.03 at the case pass) and
+per +10 % roll roughness; the closure's slope is not supported by data (X22), so these are
+orders of magnitude only.
+
+What it rests on: `dF/dmu` of a constant-friction bite, at foil gauge the experimental mattress
+bite, which returns 0.42 of the reference load on the one published benchmark (section 10.2);
+an exit-tension feedback the literature neither supports nor contradicts (X17); friction uniform
+through the bite, no film model across the width, no starvation (BT-G12), no coupling to the
+roll temperature (A2). No evidence item: `heat_streak_or_film_variation` gets no model item from
+this screen (SPEC17 open decision 3); the supplied stripes are also read by the shapemeter
+(section 7.6) as `friction_stripe_<k>`. The screen derives its perturbed bites in a cache of its
+own, so the result's `bite_derivations` count is unchanged.
+
+### 7.9 A measured roll profile
+
+SPEC17 package 8 (gap G13; `band_width.roll_profile_section`). Grinding residuals and local
+wear are narrow diameter deviations that transfer like thermal stripes and that bending cannot
+remove [SS-S3 FT, model output; SS-S72 EX]. With the optional `width_model.roll_ground_profile`
+a measured profile goes through the existing transfer (`shape_levels`, the same function as the
+steady thermal stripe; `transfer_radius_profile` is unchanged) and the result gains
+`width.roll_profile`.
+
+How to enter a grinder report: give the RADIUS deviation (half of a diameter deviation) from
+the intended ground shape, positive where the roll is larger, at `positions_m` measured from the
+barrel end where the spray header starts (the width section's barrel coordinate);
+`detrend_order` (default 4 since SPEC20; 2 before) removes the crown or camber by a polynomial over the strip, which
+belongs to the crown model and is only reported (`removed_polynomial_m`, drawn in the report);
+use `null` to keep the whole profile, a higher order only for a wavy roll. `rolls_carrying` is
+1 for a profile of one roll, 2 when both work rolls carry it.
+
+The profile is interpolated onto the width grid (end values held), de-trended by
+`roll_thermal.local_stripes`, and the local deviation gives the three levels (rigid bound,
+compliance only, with exit-tension feedback), the stripe table with states and onsets, the
+combination with the thermal stripes of the same roll, the observed-position match (information
+only) and a stiffness indicator: the strip foundation modulus `(F/width)/(h_entry - h_exit)`
+(Patel's `kf1` as the report restates it [SS-S3 FT]) against the roll term `1/(2*C(lam))` at
+twice the half-peak width of the largest stripe (the project's analogue, not Patel's `kf2`,
+whose definition was not recorded), with the published ratios (thin aluminium 0.236 mm: 176 /
+57.8 kN/mm2, ratio 3.04; thin stainless: ratio 28, transfer almost negligible; model output).
+
+**De-trending order (SPEC20).** A polynomial of order 2 removes a parabolic crown only. On a
+cosine-ground roll (80 um crown on diameter, 70 degree half angle) it leaves a W-shaped residual
+of 0.68 um peak to peak on radius, order 4 under 0.02 um [computed, curve form assumed; the
+unit test reproduces 0.660 um and 0.006 um on a 1.7 m barrel with the strip over 0.79 of it]:
+larger than the 0.3 um bump below. The default is therefore 4, and the section always reports
+`detrend_sensitivity`: the bands with order 2 and with order 4, the largest difference of the
+local deviation and `bands_depend_on_order`; when the bands differ (by position within the
+position tolerance, or by state) the flag `ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER` is set and
+the report says: subtract the grinder's target curve before entering the profile, or state the
+curve. **Grid (SPEC20).** A 21-station grinder report has stations 70-100 mm apart on a foil
+barrel [RG16 VP, computed]; `grid` reports the largest station spacing inside the strip and the
+smallest resolvable width (two samples per feature [D]), and the flag
+`ROLL_PROFILE_GRID_TOO_COARSE` is set when that exceeds the observed band width, or 30 mm when
+none is given (the narrow stripe of this worked case [D]): "this profile cannot show a mark
+narrower than X mm; a missing band here does not mean the roll has none". No band computation
+changes with the grid.
+
+**Worked case** (`tests/test_band_roll_profile.py` keeps the 2 um crown and order 2; no demo
+carries a profile): a hand profile on the battery-foil mill with an example crown of 40 um on
+radius (an example from plant-level sources that cannot be defended as a default; report
+section 2.2), a 0.3 um bump of 20 mm half-peak width at 0.50 m and a -0.2 um dip of 30 mm at
+0.95 m, 10 mm stations, one roll, with the committed demo's shape parameters [run].
+`detrend_order: 2`: the local deviation peaks at +0.258 um at 0.5025 m (half-peak width
+22.7 mm) and -0.182 um at 0.9475 m; with feedback a loose band of +3.13 I-units at 0.5025 m
+(latent in the mill, manifest after release) and a tight one of -2.04 at 0.9475 m (latent, flat
+after release); compliance only 361 I-units, rigid bound 861. `detrend_order: 4` (the default):
++0.243 um and -0.169 um; one loose band of +2.98 I-units at 0.5025 m (latent / manifest after
+release), the dip now below the reporting threshold; compliance only 341, rigid bound 811. The
+two orders differ in the local deviation by up to 0.038 um, the dip's band depends on the order
+and the flag is set: the parabolic crown is removed by either order, the order-4 polynomial also
+takes part of the narrow dip. The 10 mm grid resolves 20 mm (no grid flag). With order 2 (the
+2 um crown of the test case gives the same local deviation to 0.1 nm): **a shapemeter of 23
+zones of 52 mm reads 1.18 (38 % of the peak) and -1.10 (54 %): both below 2 I-units, so the shapemeter would
+probably not show a band that is there** (section 7.6; this is the narrow-band case where zone
+dilution matters). Stiffness indicator: strip foundation 47.9 kN/mm2 against a roll term of
+62.1 kN/mm2 at 45 mm (ratio 0.77).
+
+Limits: one roll's ground shape, measured cold and off the mill; marks narrower than about two
+grid cells or than 4a are smoothed; no wear growth during the campaign; no barrel-position
+modulation by roll bending (G1). `roll_surface_band` and `grinding_feed_marks` stay rule-based
+and do not read the section; it is never evidence. A report taken on a roll not thermally
+settled carries a thermal profile of the size of the grinding tolerance: 3.3 um per K on a
+280 mm roll [computed; rest time about a day, RG5]; grinder gauges measure diameter, so
+deviations are halved for the radius input.
+
+### 7.10 Roll surface within one revolution
+
+The roll model of 7.1 is a circumferential mean: the temperature the oil and the strip see at
+the bite is the surface value after the last spray, not the mean (gap rows A4, G8). With
+`width_model.circumferential_layout` (null by default; no demo has one, because no plant value
+of the angles exists) `width.roll_surface_cycle` adds a periodic surface layer per axial
+station (`physicroll/roll_skin.py`) [D, re-derived in SPEC18; the reports name a Fourier method
+and a "phase shift" method without equations]: one-dimensional conduction under the surface,
+curvature neglected, the deep boundary at `D = 6*sqrt(a*t_rev)` held at the steady
+circumferential-mean temperature; the revolution `t_rev = 2*pi*R/V_r` is a sequence of arcs:
+the bite (the roll's share of the bite heat over the contact length, no cooling), the spray
+arcs (coefficient `background + spray_mean_htc*weight*2*pi/phi`, so that its angular mean is
+the mean model's), an optional backup-roll contact (entered conductance and backup
+temperature) and air (background coefficient). 24 geometric cells, backward Euler, at least 8
+steps per arc, revolutions marched until the history changes by less than 1e-3 K. The scheme
+is linear, so per station `T_s - T_c = q_b*A + (T_D - T_c)*B` (+ the backup term), with `A`
+and `B` computed for 9 spray weights and interpolated [D].
+
+**Layout input.** `{"spray_arcs": [{"start_rad", "arc_rad"}], "backup_contact": null | {...},
+"provenance"}`: angles in the direction of rotation measured from the bite exit; 1 to 6 spray
+arcs, sorted, overlapping neither each other, the backup contact nor the bite (the bite's arc
+is the case-pass contact length over the radius); a region crossing the bite or one revolution
+is rejected with a message naming the two regions; when `spray_wetted_arc_rad` is entered the
+spray arcs must add up to it. The result tabulates the layout used (`layout_used`) and the
+report draws the three cycles against the angle.
+
+**Checks** (`tests/test_roll_skin.py`; k 40 W/mK, `rho*c` 7850*470, R 0.135 m, 10 m/s:
+`t_rev` 0.0848230 s, `e` 12148.25, skin depth 0.5410 mm): a flux `q1*cos(omega*t)` gives the
+half-space amplitude `q1/(e*sqrt(omega))` = 0.95643 K for 1e5 W/m2 to 0.13 % with a lag of
+45.2 degrees; a constant flux 1e7 W/m2 for 0.2 ms raises the surface by 13.154 K against the
+exact 13.136 K (13.136 with 48 cells); after a step in `h` the surface covers 0.57264 of its
+change at `t* = k*rho*c/h^2` (12.766 s at 3400 W/m2K) against the exact 0.5724. Cycle with a
+2 mm bite at 1e7 W/m2, one spray arc from 90 to 150 degrees at 20450 W/m2K, background 50,
+coolant 313.15 K, deep 330 K: 327.154 K before the bite, 340.545 K after it, lowest 325.05 K,
+mean 327.06 K, mean flux -20533 W/m2 (the deep flux within 0.74 %), 60 revolutions; mean
+coefficient 3450 W/m2K, effective `<h*(T_s - T_c)>/(<T_s> - T_c)` 3171.2 W/m2K, ratio 0.919:
+**the circumferential-mean model over-states the cooling of this layout by 8 %**.
+Superposition: `313.15 + 0.713895*16.85 + 1.966099 = 327.145 K` (converged cycle 327.145 K).
+With sprays all round, averaged over a nozzle pitch, the layer mean equals the mean model
+within 1 % of the surface excess in the strip interior (pointwise up to 0.4 K at the nozzle
+scale and 0.5 K at the strip edges: the layer has no axial conduction).
+
+**What it says about X3 and the "20 s" question.** The bias of the mean coefficient
+(`mean_coefficient_ratio`, flag `CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED` beyond 5 %) is the
+error of the circumferential averaging for a given layout; the bulk model is not corrected with
+it. The section's `time_scales` are the model's own three: one revolution (`per_revolution_s`,
+the skin cycle), the surface film `k*rho*c/h_mean^2` (`surface_film_s`, a step in the spray
+coefficient reaches 0.57 of its surface change) and the roll body `rho*c*R/(2*h_mean)`
+(`bulk_s`), each event's duration divided by each. The published "three thermal effects" have
+no numbers in the abstract read [TM-LA9 AB]. For the demos' own inputs the surface-film scale
+of this model is **15.9 s** (lengthwise demo, `h_mean` 3050 W/m2K; body 121 s, revolution
+0.11 s) and **12.4 s** (battery demo, 3450 W/m2K; body 72 s, revolution 0.078 s) [run, with a
+scratch layout]: of the order of the plant's 20 s, as a comparison, not an explanation; the
+emulation of the plant's step test that could support a claim (A6) is not built.
+
+The case pass's computed heat partition (8.2) takes its roll entry temperature from the cycle
+at the strip centre when the section exists (one pass, no iteration; flag
+`ROLL_ENTRY_TEMPERATURE_FROM_SURFACE_CYCLE`; reported values only). Nothing else uses the
+cycle: not the bulk, the stripes, the shape, the viscosity, the film or the flow stress. Cost:
+about 2.0 s (lengthwise demo) and 1.6 s (battery demo) per diagnosis with a layout; nothing
+without one.
+
+### 7.11 What a hot roll stripe does besides growing the roll: local state
+
+SPEC19 package 1 (gap rows A2 inputs, BT-G12, A1 / G6 computed; `physicroll/band_local.py`).
+A roll stripe that is hotter than its neighbours does more than grow the roll: the oil at that
+width position is warmer and thinner, the film and the friction change, the metal is softer,
+and the strip leaves the bite hotter. SPEC18 built the single-station pieces (viscosity law,
+friction closure, heat partition, roll surface cycle); with the optional
+`width_model.local_coupling` the result gains `width.local_state`, which evaluates them at every
+strip sample of the steady thermal grid. **It makes no band** (SPEC19 package 2 turns the
+changes into I-units) and feeds nothing back into the bite, the heat row or the roll
+temperature.
+
+**Difference method.** Every quantity is a difference from the healthy header at the same pass,
+as the radius stripes are (section 7.1): a healthy header gives zero everywhere, and the levels
+(the pass friction, the inlet temperature, the film of the friction row) stay those of the pass.
+
+The nine formulas, per strip sample `z` (`ref` = healthy header):
+
+| # | formula | tag |
+|---|---|---|
+| 1 | `dT_r = T_r,actual - T_r,healthy`: the roll surface the bite meets, from `width.roll_surface_cycle` (bite entry minus the new `healthy_bite_entry_temperature_k`, same unit solutions) when a layout is entered, else the circumferential-mean surface (flag `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE`) | [D, SPEC19] |
+| 2 | `T_in = tribology.inlet_temperature_k + w_in*dT_r` | `w_in` [D, SPEC19: analyst choice] |
+| 3 | `v = eta0(T_in)/eta0(T_in,ref)` with the oil's temperature law (exponential or table) | SPEC18 |
+| 4 | `h_s = h_s,ref*v`, `Lambda_s = Lambda_ref*v` (the inlet film is proportional to `eta0`) | [BT-S9 EX eq. 4.1 as coded] |
+| 5 | `h_sup = Q*capture*weight/(pitch*u_bar)`, `u_bar = (V_r + u_entry)/2`; `h = min(h_s, h_sup)`, `Lambda = Lambda_s*h/h_s`, starved where `h_sup < h_s` | [D, re-derived in SPEC19: volume balance] |
+| 6 | `dmu = mu_cl(Lambda) - mu_cl(Lambda_ref)` with the case's closure (placeholder or load sharing); `Lambda <= 0` evaluated at 1e-6 | closure as section 8.1 |
+| 7 | `dY_rel = -c_T*dT_b`, `dT_b = 0.5*eta_x*dT_r` | form: gap A2; mid-bite temperature as SPEC18 |
+| 8 | `eta_x = T_x(T_r0 + 1 K) - T_x(T_r0)` from the case pass's heat partition (section 8.2); exact, the model is linear in `T_r0` | [D, SPEC19] |
+| 9 | `dT_x = eta_x*dT_r`, `T_x = T_x,ref + dT_x` (`T_x,ref` the pass heating exit temperature); the change of friction heat with `dmu` is left out (second order) | [D, SPEC19] |
+
+**The inlet weight is an assumption.** The film forms between the roll and the strip; the strip
+enters at one temperature across the width, so `w_in = 0.5` is the mean of the two surfaces and
+`w_in = 1` is the bound the bite report uses ("a roll surface that is locally hotter thins the
+film at once", gap BT-G4 [derived]). Nobody has measured the oil temperature at the inlet
+across the width; package 2 always evaluates 0, the entered value and 1.
+
+**Oil supply (BT-G12) is a volume balance, not a starvation model.** Oil arriving per unit
+barrel length `q' = Q*capture*weight/pitch` cannot form a film thicker than `q'/u_bar`. On the
+battery-foil demo (10 l/min per nozzle, assumed) a healthy nozzle delivers a film of 3.42e-4 m,
+3602 times the smooth inlet film (95.0 nm): a nozzle is a film band by supply only when its
+level falls below 2.78e-4, that is when it is practically dry; the weak nozzle at 0.45 is not
+starved (2.62e-4 m supplied under it). A fully blocked nozzle gives zero supplied film because
+the model has no spreading or carry-over (flag
+`ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL`); no inlet meniscus position is
+computed. So gap BT-G12 reduces to a flag (SPEC19 finding 9).
+
+**Strip temperature (A1 computed).** `strip_exit_temperature_k` across the width goes through
+the strip-temperature term of section 7.7 (`thermal_flatness`, about 2.4 I-units per K); the
+supplied-scan section `width.strip_temperature` is not changed or replaced.
+
+**Battery-foil demo** (synthetic `local_coupling`: weight 0.5, softening 0.15 %/K from the
+1100-H18 strengths at 20 and 100 C [PT-T31, PT-T39; coefficient derived], 10 l/min per nozzle
+assumed; no circumferential layout, so the circumferential-mean surface is used): the largest
+`dT_r` is 2.358 K at 0.6225 m (the weak nozzle). There the inlet oil is 1.179 K warmer, the
+viscosity ratio 0.982469, the film ratio 0.373409 (from 0.380072), the friction 3.7487e-4
+higher (1.25 % of the pass friction 0.03, placeholder closure, flag
+`LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE`), the flow stress 0.149 % lower; the
+strip-to-roll coupling is 0.8442 (contact time 0.218 ms, `C_s` 43.4 J/m2K, film conductance
+1.37e6 W/m2K) and the strip leaves 1.991 K hotter (335.42 K against 333.43 K). The
+strip-temperature term of this computed profile peaks at 4.06 I-units at 0.6225 m (mean
+removed; -0.64 elsewhere). Planner's prototype (s25/local.py, eta.py): 2.358 K, 0.982470,
+0.373410, +3.748e-4, 0.844, -1.49e-3; with weight 1.0 the ratio is 0.965246 and the friction
+change +7.45e-4 (both reproduced in `tests/test_band_local.py`). Lengthwise demo (not carried by its scenario; run with a
+scratch key): 1.664 K at 0.6675 m, coupling 0.510. Cost: about 0.06 s per diagnosis.
+
+Limits: differences from the healthy header only; the inlet weight is an assumption; one-way
+(the local force, slip and heat changes do not return to the roll temperature: loop I1 stays
+open); friction heat change left out; no lateral spreading or carry-over of oil; roughness
+uniform across the barrel (a rougher or coated zone is entered through the friction stripe
+screen of section 7.8); the strip entry temperature is uniform. Flags (also on the top-level
+list): `LOCAL_STATE_COMPUTED`, `LOCAL_STATE_FROM_CIRCUMFERENTIAL_MEAN_SURFACE_TEMPERATURE`,
+`LOCAL_FRICTION_FROM_PLACEHOLDER_CLOSURE_SLOPE`, `OIL_SUPPLY_BELOW_SMOOTH_FILM` (a starved
+station under a nozzle whose level is above 0), `ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL`,
+`LOCAL_FRICTION_CHANGE_ABOVE_20_PERCENT_LINEAR_SOURCE_INDICATIVE`.
+
+**Second part: the local sources as a band** (SPEC19 package 2; gap rows A2, BT-G4 in full,
+I2; `band_local.source_terms`, `width.local_sources`). The film and flow-stress changes act as
+a local change of roll force per width at an unchanged gap, transferred as in section 7.8
+[D, re-derived in SPEC17]:
+
+```
+dp0'_film(z) = M_mu*dmu(z),   dp0'_flow(z) = M_Y*Y_pass*dY_rel(z)       M = (dF/dX)/width
+dh_X,k = G(lam_k)*dp0'_X,k,   G = 2*C/(1 + 2*C*Q_eff)                   (with the feedback)
+I_X = 1e5*(eps_X - mean),     eps_X = -xi*dh_X/h_exit                    (flat entry)
+I_T = thermal_flatness_term(z, T_x)                                     (first part)
+I_roll = width.shape.steady.i_units_linear_feedback                      (before saturation)
+mechanical_net = I_roll + I_film + I_flow       (what stays after the coil has cooled)
+as_measured_hot = mechanical_net + I_T          (a shapemeter without temperature compensation)
+```
+
+`M_mu` and `M_Y` come from the case-pass bite: central differences of its model (+-2 % friction,
++-0.5 % flow stress) in the friction screen's own bite cache, or the analytic derivatives of the
+reduced half-space bite (`bite_extras`) when that is the operating bite; the section names the
+model (`sensitivities.sensitivity_bite_model`). Every term is reported **separately**, with what
+it rests on (`terms_rest_on`) and the time scale it follows (`time_scales`: roll growth the roll
+body, `bulk_s`; film, flow stress and strip temperature the roll surface, `surface_film_s`, both
+from `roll_skin.time_scales`), and at both transfer levels (with the exit-tension feedback,
+used in the sums, and compliance only). The sums are never printed alone: every band row and
+event row carries the net at the inlet weights 0, entered and 1 with their sign words (`LOOSE`
+/ `TIGHT` at +-2 I-units, else `BELOW_REPORTING_THRESHOLD`), `sign_depends_on_inlet_weight`,
+the size of the mechanical terms against the net, and a `net_text` sentence. A term that cannot
+be evaluated (no softening coefficient, no strip-to-roll coupling) counts as zero, is named in
+`missing_terms`, and the sentence says "the net is incomplete" (flag
+`LOCAL_NET_INCOMPLETE_TERM_MISSING`, added beside the brief's flags). Two profiles go to the
+shapemeter (`local_mechanical_net`, `local_as_measured_hot`).
+
+Battery-foil demo (regenerated artifact; `M_mu` 5.1403e7 N/m, `M_Y` 0.011165 m, load
+exponents 1.609 in friction and 2.038 in flow stress, experimental mattress bite):
+
+| I-units at the band of 0.6225 m | roll growth | film (w 0.5 / 1.0) | flow stress | strip temperature | mechanical net (w 0.5 / 1.0) | as measured hot |
+|---|---|---|---|---|---|---|
+| steady stripe, `dT_r` 2.36 K | +25.1 | -3.7 / -7.5 | +0.57 | +4.1 | +21.9 / +18.2 | +26.0 |
+| 20 s after zone 18-19 closes, `dT_r` 6.47 K | +18.0 | -10.0 / -19.7 | +1.5 | +11.0 | +9.5 / -0.2 | +20.5 |
+| planner (peak estimates, SPEC19), steady | +25.1 | -4.3 / -8.6 | +0.7 | +4.7 | +21.5 / +17.2 | +26.2 |
+| planner, 20 s | +19.2 | -11.5 / -22.6 | +1.8 | +12.5 | +9.5 / -1.6 | +22.0 |
+
+The planner used one transfer gain at the stripe's dominant wavelength and no mean removal;
+the implementation works on whole profiles with the mean removed (the strip term's background
+is -0.64 I-units), and its flow-stress term uses formula 7 (`0.5*eta_x*dT_r`, 0.42 of `dT_r`)
+where the prototype took half of `dT_r`. Compliance only, the steady film term is -463 I-units
+(planner about -590). **Read the signs, not the digits.** Roll growth makes the strip thinner
+and the fibre loose; a thinner oil film raises friction and force, makes the strip thicker and
+the fibre tight; softer metal lowers the force and makes it loose; a hotter fibre reads loose
+while hot and that part is gone after cooling. In the steady state the net is loose with
+either weight. Twenty seconds after a zone closes the surface under it is 6.5 K hotter; the
+film term then nearly cancels the roll path at weight 1, and the mechanical net is +9.5 or
+-0.2: its sign in the first tens of seconds depends on an input nobody has measured (SPEC19
+finding 7; flag `LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT`). All of it rests on the exit-tension
+feedback, which an independent check does not confirm at foil gauge (SPEC19 package 8), and on
+the friction-closure slope of X22. No evidence item reads these terms (open decision 2); the
+steady shape, the band states, the onsets, the gauge trend and every score are unchanged.
+Flags: `LOCAL_SOURCES_COMPUTED`, `LOCAL_NET_SIGN_DEPENDS_ON_INLET_WEIGHT`,
+`LOCAL_SOURCES_REVERSE_A_BAND` (a roll-growth band whose net has the other sign or falls below
+the threshold), `LOCAL_SOURCES_SUMMED_ON_LINEAR_PROFILE_SATURATION_NOT_APPLIED`,
+`LOCAL_NET_INCOMPLETE_TERM_MISSING`. No published case of a film or flow-stress band exists
+(benchmarks `NOT_ENCODED` `A2-LOCAL-SOURCES`).
+
+### 7.12 Flatness control loop (parts)
+
+SPEC19 package 3 (gap row G5 core; `roll_thermal.ControlledRun`, `physicroll/flatness_control.py`).
+Nothing in the diagnosis uses these parts yet; SPEC19 package 4 wires them into the width
+section. **The control law is the tool's own** [D, SPEC19: analyst design]: the reports give the
+structure of a flatness controller in words only (least squares on actuator influence vectors,
+dead bands, valve minimum on / off times, a target curve [SS-S34 EX, SS-S33 EX, SS-S31 EX]) and
+no law. What the loop does is therefore what this tool simulates, not what a vendor's system or
+the plant's controller does.
+
+**Thermal run with changing valves.** `ControlledRun(roll, header, base_segment, initial=...)`
+steps the roll temperature field with the operators of `simulate`; `advance(levels, duration,
+time_step)` may change the nozzle levels at every call. The first step after a change is the
+start-up of `simulate` (two backward-Euler half steps), the others Peaceman-Rachford steps.
+Driven with the levels of a list of segments it reproduces `simulate` bit for bit (the test asks
+1e-12 K and m and the energy ledger to 1e-9). Cost on the battery-foil roll (300 x 16 cells):
+about 1.9 ms per step, 0.11 s per simulated minute at 1 s steps [run], against 12 ms for each
+call of `simulate`.
+
+**Control law** (per control zone: a demand, a valve level, the time of its last change):
+
+1. zone error `e = reading - target` (zones without strip left out);
+2. supplied actuators (the interface for the bender and tilt of Phase 3; not modelled here):
+   their least-squares part is removed, settings clipped to their limits;
+3. the low-order part (order 2: mean, tilt, parabola) is removed "as if by ideal bending and
+   tilt"; its coefficients are reported, never controlled;
+4. correction `d = G*rho`, `G = (B^T W B + lam*I)^-1 B^T W` with the influence matrix `B` of
+   the spray zones (one-sided difference of steady readings per unit level; the diagonal is
+   negative: more cooling, smaller roll, tight fibre) and `lam = 0.01 x max diag(B^T W B)`;
+5. dead band: a correction whose largest reading change is within the dead band is dropped;
+6. demand `u* <- clip(u* - 0.1*d, lowest, highest level)`;
+7. the valve takes the allowed level nearest the demand only if it is closer by more than 0.1 of
+   the step between the levels and the valve has held its level for the minimum on time (after
+   going up) or off time (after going down).
+
+The three analyst constants (integral gain 0.1, hysteresis 0.1, regularisation 0.01) are
+[D, SPEC19: analyst choice] and are named in the result's `basis`. The loop runs on a fixed
+control interval over a fixed horizon (no adaptive step, no wall-clock limit) with an optional
+transport delay and display filter; its status is `SETTLED` (no valve change in the last
+window), `TRIMMING_WITHIN_BAND` (changes, but the largest residual there within 3 x the dead
+band) or `NOT_SETTLED`, with the flags `CONTROL_INCREASES_RESIDUAL` and `CONTROL_ZONE_AT_LIMIT`.
+A loop that does not settle is a result, never an error, and the dwell times bound the valve
+changes by horizon / dwell per zone. On a synthetic first-order plant (four zones, diagonal
+influence -10 I-units per unit level, time constant 20 s, a demand of 0.5) valves in 5 % steps
+settle and two-level valves switch at the dwell bound without settling
+(`tests/test_flatness_control.py`).
+
+**In the engine (SPEC19 package 4).** With `width_model.flatness_control` (it needs
+`measurement.shapemeter`) the result gains `width.flatness_control`: **what such a loop would do
+with these settings on this model**, never what the plant's controller did. The plant: each
+nozzle's effective level is its own level (weak and blocked nozzles stay so) times the valve
+level of its control zone (default: groups of `cooling_zone_pitch_m/nozzle_pitch_m` adjacent
+nozzles). The run starts at the steady state with every valve at `initial_level`; the flat
+reference is the steady radius growth of a HEALTHY header at the same valve levels. The loop
+reads the mechanical flatness by default: the linear exit-tension-feedback transfer of the
+radius difference (no band-wise saturation), then the zone means, roll-mean removal and
+neighbour spreading of the shapemeter operator of section 7.6, as one matrix (the transfer is
+symmetric; the operator equals the direct route to 1e-9). With `include_local_sources` (needs
+`local_coupling`) it reads as measured hot: plus the film and flow-stress terms and, unless the
+shapemeter is temperature-compensated, the strip temperature term of section 7.11. The
+influence matrix comes from steady solves (one per control zone); the thermal run is
+`ControlledRun`. The section reports the status and its sentence, the valve changes in total
+and per control zone, the history of the largest zone error, a valve map, up to four zone
+histories, the zone outcomes (`REMOVED`, `REMAINS`, `MADE`: a band the switching itself makes,
+above the 2 I-unit reporting threshold for more than 20 s [D, analyst choice; the literature
+band life is 20-120 s], so a shapemeter would show it; `NONE`), for an unsettled loop an
+estimate of the repeating pattern's period and amplitude and the sentence that its end state is
+not the flatness the mill would have, the low-order part left to bending and tilt, and the
+predicted valve events.
+
+**Predicted events** are the intervals in which a control zone's valve is away from its initial
+level, in the key names of `width_model.events` (`start_s`, `duration_s` — null when still open
+at the horizon —, `nozzle_indices`, `level` = the time-weighted mean valve level). They are
+predicted by the loop with the tool's own law, not a log; they never enter
+`width.thermal_events` or any evidence item (open decision 3). To see the short-lived-band
+analysis of one, copy it into `width_model.events` (with a duration).
+
+| demo (full numerics) | valves | start: largest residual / reading [I] | status | valve changes | last change | last 300 s residual [I] | end reading [I] |
+|---|---|---|---|---|---|---|---|
+| battery-foil, 24 zones, 14 control zones | 5 % steps | 19.27 / 24.33 | `TRIMMING_WITHIN_BAND` | 89 | 1756 s | 2.39 - 4.60 | 79.3 |
+| battery-foil | on / off | 19.27 / 24.33 | `NOT_SETTLED`, `CONTROL_INCREASES_RESIDUAL` | 425 | - | 9.3 - 35.5 | 71.0 |
+| lengthwise (29 assumed zones of 52 mm), 16 control zones | 5 % steps | 39.02 / 47.97 | `TRIMMING_WITHIN_BAND` | 121 | 1738 s | 2.24 - 3.35 | 128.1 |
+| lengthwise | on / off | 39.02 / 47.97 | `NOT_SETTLED`, `CONTROL_INCREASES_RESIDUAL` | 431 | - | 24.6 - 54.4 | 331.9 |
+
+Findings (SPEC19 finding 1). **On / off valves do not settle on either demo**: hundreds of
+switches in 1800 s and a zone error at the end larger than at the start; the control makes the
+flatness worse. **Valves in 5 % steps reduce the zone error from about 19 (39) to 2-5 I-units
+and keep trimming by single steps**: a quantisation limit cycle against a residual the zones
+cannot reach (one weak nozzle inside a two-nozzle zone). The planner's prototype settled on the
+battery-foil demo (65 changes, last at 1382 s, 2.46-2.56 I-units, end reading 59.07); it
+weighted every covered zone equally and let the first valve change happen at once. The
+engine's law weights the zones by their coverage (the two edge zones cover half their width)
+and counts the initial level as set at time 0; with the prototype's choices the same code
+reproduces the planner's numbers exactly (`tests/test_band_flatness_demos.py`). **Whether the
+loop settles therefore depends on choices of the control law nobody has measured**: read the
+status as a property of this law, not of the plant. In every run the low-order part grows
+(battery-foil: edge minus centre -116 I-units at the end) because the mean cooling falls: that
+part belongs to the bender and the tilt (Phase 3). The battery-foil run with the demo's 5 %
+valves predicts 12 valve events and three zones where the switching itself makes a band for a
+while (zones 1, 11 and 19). Benchmark `SS-V8-LOOP` records the end residual (3.25 I-units)
+against a published control band of 6 I-units on another foil mill [SS-S31 EX; MEASUREMENT]:
+`INDICATIVE_ASSUMED_INPUTS`, order of magnitude only. Cost: about 6.5 s (battery-foil) and 9 s
+(lengthwise) per loop at full numerics, 0.7 s on the quick profile's grid (battery-foil
+diagnosis 17.1 s quick).
+
+### 7.13 Buckling with a wavelength search (`strip_buckling.py`)
+
+**Opt-in, beside the present states.** With `model_options.buckling_model: "sine_mode_and_fe"`
+the result gains `width.shape.buckling_fe` (absent otherwise; `"sine_mode"` gives a not-supplied
+section). The present band states (`state`, `state_after_tension_release`), onsets, gauge trend
+and every score are unchanged and stay the ones the evidence uses; the section says so in
+`used_by_the_evidence` and `not_in_the_tally`. Since SPEC19 package 7 it also gives a wave
+height, the saturated stress profile and the dead load on a table (second part below).
+
+**Model** `[D, re-derived in SPEC19]`; the reports describe the method [SS-S15 EX, SS-S12 AB] and
+give no equations. A long strip with a longitudinal pre-stress `sigma(z) = sigma_T +
+lambda*sigma_res(z)` across the width, mode `w = f(z)*cos(k*x)`, second variation of the plate
+energy
+
+    P(f, k) = D*Int[ f''^2 + k^4*f^2 - 2*nu*k^2*f*f'' + 2*(1 - nu)*k^2*f'^2 ] dz
+            + t*k^2*Int[ sigma(z)*f^2 ] dz
+
+The critical multiplier at one `k` is the smallest positive `lambda` of `A(k)*a =
+lambda*G(k)*a` (bending plus tension against the residual stress); the critical state is the
+minimum over `k`. Utilisation = 1/multiplier: at or above 1 the given profile waves.
+
+**Method** (standard library): Hermite cubic elements across the width (`f` and `f'` per node),
+exact 4-point Gauss integrals, free / simply supported / clamped edges, banded storage; the
+largest eigenvalue of `G*a = mu*A*a` by bisection on the inertia of `G - mu*A` (Sylvester,
+banded `L*D*L^T`), relative tolerance 1e-6; 14 wavenumbers geometric between `pi/L_long` and
+`pi/L_short`, then 10 golden-section steps in `ln k`; the mode by three inverse iterations. Cost
+one critical-mode search: 0.2-0.3 s at 120 nodes, 0.4-0.6 s at 200 nodes; in the engine
+0.25-0.3 s per profile and state (battery-foil demo with the option: 1.0 s for the steady
+profile and its event, lengthwise 1.8 s for the steady profile and two events; at most four
+events are searched).
+
+**Closed forms recovered** (`tests/test_strip_buckling.py`): uniform compression of a long plate
+with simply supported edges, `4*pi^2*D/(t*b^2)` = 8435559.3 Pa for steel 0.5 mm, 150 mm: 1.9e-7
+relative with 16 elements (8.8e-6 with 8), half-wave `b`; the same with 20 MPa tension, shifted by
+exactly the tension (7e-8); clamped edges, coefficient 6.971 and half-wave 0.661 `b` against the
+textbook 6.97 and 0.66 [M]; simply supported / free at a half-wave of 20 `b`, 0.42796 against
+`0.425 + (b/a)^2` = 0.4275 [M].
+
+**In the engine.** The profile is `i_units_linear_feedback` of the steady shape and of each
+event's peak shape (the modelled far-field profile before the band-wise saturation, not a
+measured one), `sigma_res = -E*1e-5*I` on a node grid of at least 10 mm, free strip edges. In
+the mill: the exit tension held fixed, half-waves from four node spacings to twice the strip
+width. After release: tension zero, half-waves up to the strip width (`RELEASED_SAMPLE_LENGTH_FACTOR`
+1.0, an analyst choice: a square sample). Per profile and state: utilisation, critical peak,
+half-wave and wavelength, mode peak, mode width at 10 % and 50 % of its peak, `LOCAL` or
+`WHOLE_SHEET`. Per present band: its sine-mode states beside what the search says. The search
+gives ONE mode, the most critical: when it waves, the band it peaks in is "waves" and the other
+bands are "not decided (one mode)"; when it does not, every band is flat. After release the mode
+is nearly always a whole-sheet mode at the longest half-wave searched; it is compared with the
+sine mode's whole-sheet indicator (`released_global_status`), not with a band. A disagreement
+is written per band ("the wavelength search says ..., the sine mode says ...; the evidence uses
+the sine mode") and flagged (`BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE`,
+`BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE`); `BUCKLING_FE_REPORTED_BESIDE_SINE_MODE` is
+always set.
+
+| demo (committed profiles) | in the mill | after release |
+|---|---|---|
+| battery-foil (30 µm, 40 MPa, peak 25.09 I-units) | utilisation 0.435, flat; half-wave 40 mm (the shortest searched), mode 30 mm wide at 0.623 m; the sine mode also says latent: agree | whole-sheet mode, utilisation 29810 (search limit 1.19 m); the sine mode's whole-sheet indicator also buckles |
+| lengthwise (0.21 mm, 30 MPa, peak 50.59) | utilisation 1.113, waves; half-wave 107 mm, mode 130 mm wide at 0.672 m, in the band the sine mode calls buckled: agree; the two tight bands are not decided | whole-sheet mode, utilisation 1800 (search limit 1.49 m) |
+
+**Finding (SPEC19 finding 3), unsoftened: linear buckling under tension does not reproduce the
+measured short wavelengths.** For SS-V2 (steel 0.5 x 1000 mm) and SS-V3 (aluminium 0.3 x
+270 mm) a Gaussian loose band in a free-edged strip under tension buckles with a half-wave of
+0.80 to 0.81 of the width over which the mode exceeds 10 % of its peak; the measurements are 0.40
+and 0.36 of the buckle width, the present sine mode 1.0. The model is closer, not close. As a
+LOCAL plate of the buckle width (150 mm) with a Gaussian compression of half-peak width 75 mm (an
+assumption), it gives 5.34 I-units simply supported and 8.65 clamped against the published 5.3
+and 8.92, with half-waves 2.49 and 1.66 times the measured one: the published critical values are
+local-plate values without tension. Without tension both wide strips buckle in the longest
+half-wave searched (a whole-sheet mode) at 0.7 and 1.6 I-units. No benchmark row supports
+replacing the present band states; the new model is reported beside them.
+
+| benchmark | inputs (ASSUMED where not in the reports) | project | reference | verdict |
+|---|---|---|---|---|
+| `SS-V2-LOCAL-PLATE` | steel 0.5 mm, E 210 GPa, nu 0.3 (ASSUMED), plate 150 mm, no tension, Gaussian compression of half-peak width 75 mm (ASSUMED), 60 elements | 5.341 / 8.649 I-units (simply supported / clamped); half-waves 149.5 / 99.6 mm | 5.3 / 8.92 computed [SS-S19 FT, formulas garbled]; half-wave 60 mm measured | `INDICATIVE_ASSUMED_INPUTS`; ratios 1.008 / 0.970; half-waves 2.49 / 1.66 times the measured |
+| `SS-V2-WIDE-STRIP` | the same strip 1000 mm wide, free edges, mean-free Gaussian loose band of half-peak width 75 mm, tension 10 / 30 MPa (ASSUMED), 200 elements | critical peak 12.30 / 27.22 I-units; half-wave 176.7 / 128.8 mm; mode width 220 / 160 mm; ratio 0.80 / 0.81 | waves at 7.5-8 I-units; half-wave 60 mm on a 150 mm buckle (0.40) | `RECORDED_DISCREPANCY` (ratio about 2.0 times the measured) |
+| `SS-V3-WIDE-STRIP` | aluminium 0.3 mm, E 70 GPa, nu 0.33, 270 mm wide, free edges, half-peak width 50 mm, tension 5 / 15 MPa (ASSUMED), 108 elements | critical peak 18.85 / 42.80 I-units; half-wave 91.6 / 68.9 mm; mode width 115 / 85 mm; ratio 0.80 / 0.81 | buckle width 105 mm, wavelength about 75 mm (0.357) | `RECORDED_DISCREPANCY` |
+
+`SS-V1` stays not encoded (geometry and temperatures are in the study; the bifurcation force is
+not); `SS-V4` needs the stress profile of the paper. Not used by any band state, onset, gauge
+trend row or evidence item. Limits: linear bifurcation of a flat, infinitely long strip; one
+mode; longitudinal pre-stress only (no lateral stress, no shear); elastic; the wavelength of a
+wave seen after buckling can differ from the critical one; no edge restraint "between simply
+supported and clamped" (the published one is not in the reports).
+
+**Second part (SPEC19 package 7): wave height, saturated stress, dead load on a table.** The gap
+row's Koiter expansion and its "elastic foundation for the table" are not in the reports; the
+planner replaced them by a ONE-MODE RITZ ESTIMATE and a GRAVITY CRITERION `[D, re-derived in
+SPEC19]`, and the result carries those labels.
+
+*Wave height.* Fibre membrane model: each fibre carries longitudinal stress only. A wave
+`w = a*f(z)*cos(k*x)` of the frozen critical mode lengthens a fibre by `k^2*a^2*f^2/4`, so at
+fixed tension `sigma(z; a) = sigma_T + sigma_res(z) + (E*k^2*a^2/4)*(f^2 - m)`, `m = Int f^2/W`.
+The energy per length `Pi(a) = -(t*k^2/4)*(N - R)*a^2 + (E*t*k^4*Phi/32)*a^4` (`N` the net
+compression the mode carries, `R` its value at buckling, `Phi = Int f^4 - (Int f^2)^2/W`) gives
+`a^2 = 4*(N - R)/(E*k^2*Phi)` above the critical state and 0 below; peak to valley `H = 2*a`.
+Self-check (`tests/test_strip_buckling.py`, to 1e-6): a top-hat mode over a band of compression
+`sigma_c` gives `(pi*H/(2*L_w))^2 = (sigma_c - sigma_cr)/(E*(1 - m))` (the I-unit wave formula
+for a narrow band) and `sigma = -sigma_cr` inside the band: the Counhaye rule [SS-S8 EX], here a
+consequence. The mode shape is frozen, the fibres are independent (no in-plane shear, no lateral
+stress, softer than a plate): the amplitude is an UPPER ESTIMATE, written "of the order of",
+with the mode it belongs to and the support (in the mill under tension; hanging free after
+release, weightless; on a table). It is not a height a person would measure on a sample.
+
+*Saturated stress* (interaction I12): the stress of the buckled band from the same estimate. For
+a steady profile that buckles in the mill, `measurement.shapemeter` gets one ADDITIONAL reading,
+`steady_saturated`; the existing readings are unchanged and nothing reads it. It is not fed
+into the thickness transfer (the bite is hardly changed by buckling [SS-S8 EX]).
+
+*Dead load on a rigid table.* The sheet can only lift: `w = a*|f|*(1 + cos(k*x))`. Gravity adds
+`g1*a`, `g1 = rho*g*t*Int |f|`, and the bending of the mean lift adds `R_s = 2*D*Int f''^2/(t*k^2)`.
+With `c2 = t*k^2*(N - R - R_s)/2` and `c4 = E*t*k^4*Phi/8`, `Pi_t(a) = -(c2/2)*a^2 + (c4/4)*a^4 +
+g1*a`; the sheet lifts when the lowest `Pi_t` is below the flat state, i.e. `N - R - R_s >=
+(2/(t*k^2))*(3*g1*sqrt(3*c4/2))^(2/3)`. The lift limit is the smallest scale of the profile at
+which some wavenumber lifts (24 wavenumbers, half-waves 1/40 to 4 times the strip width);
+height on the table: the largest root of `c4*a^3 - c2*a + g1 = 0`. A gravity criterion, not an
+elastic foundation; weightless mode shape at each wavenumber; aluminium 2700 kg/m3 [M, flag
+`DENSITY_FROM_MEMORY_DEFAULT`]; no friction, adhesion or finite sample length.
+
+Per band (one mode): the band the in-mill mode peaks in gets the wave height when it buckles;
+on a table the band the lifting mode peaks in "lifts", the others are "not decided (one mode)";
+when the profile lies flat every band does, and a band the sine mode calls visible after
+release is then flagged `DEAD_LOAD_KEEPS_REPORTED_BAND_FLAT_ON_TABLE` with "lies flat on a table
+under its own weight in this estimate; the length difference is still there". None of this
+changes a band state, onset, gauge-trend row, evidence item or score.
+
+| demo (committed profiles) | in the mill | released, weightless, half-wave up to the width | on a table |
+|---|---|---|---|
+| battery-foil (30 um, 40 MPa, peak 25.09) | multiplier 2.301, flat; no wave | whole-sheet mode at 1.19 m (search limit); of the order of 21 mm peak to valley; reading at the peak 17.3 instead of 25.1 I-units | lifts above about 0.75 I-units of peak (scale 0.0298, at the shortest half-wave searched, 30 mm); of the order of 0.72 mm on the table |
+| lengthwise (0.21 mm, 30 MPa, peak 50.59) | multiplier 0.898, buckles; half-wave 107 mm; of the order of 1.2 mm peak to valley (amplitude 0.584 mm); reading 43.6 instead of 50.6 I-units | whole-sheet mode at 1.49 m (search limit); of the order of 34 mm | lifts above about 2.2 I-units (scale 0.0435); half-wave 90 mm; of the order of 3 mm |
+
+Beside, for the lengthwise demo: the project's saturation step raises the same band to 147.5
+I-units with sine-mode utilisation of 1 or more (it calls it buckled); the wavelength search on
+the unsaturated profile has it just buckled (0.898) with a wave of the order of 1.2 mm. Both
+are printed. **Finding 4 (SPEC19), unsoftened: on a table the dead load does not hide a
+reportable foil band** (lift limit below 0.75 I-units at the battery-foil profile), while at
+sheet gauge a band below about 2.2 I-units lies flat. No amplitude or table measurement with its
+stress profile is in the reports (`SS-S14-TABLE` not encoded). Cost of the second part: about
+0.3 s per profile for the table scan (battery-foil section 1.3 s, lengthwise 2.6 s in all).
+
+### 7.14 Width coupling: a second estimate of the tension feedback (`strip_shape.width_coupling_kernel`)
+
+**Why.** The exit-tension feedback of section 7.2 multiplies the strip stiffness 76 to 386 times
+in the demos and decides every thin-gauge band height, yet it is pointwise and uses the
+far-field stress; the literature neither supports nor contradicts it (gap study X17). The gap
+row asks for a plane-stress solution of the span that maps the exit velocity profile to the
+stress. It is derived here `[D, re-derived in SPEC19]` from the eight bite sensitivities the
+engine already has.
+
+**Model.** Per Fourier component `cos(kappa*z)` across the width, small perturbations of a
+uniform pass; unknowns `dh`, the exit and entry stress at the bite `ds_x`, `ds_e`, and the
+relative exit and entry speeds `d_x`, `d_e`:
+
+- (K1) `dF' = -Q*dh - N_x'*ds_x - N_e'*ds_e`, `N_e' = -F_se/width`;
+- (K2) `d_x = f_h*dh + f_sx*ds_x + f_se*ds_e` (roll speed uniform);
+- (K3) `d_e = d_x + xi*dh/h`;
+- (K4) exit span: far downstream `s_inf = -E*e`, `e = -xi*dh/h` (the pointwise value); near
+  the bite a decaying plane-stress field `phi = (a + b*x)*exp(-kappa*x)*cos(kappa*z)`; in a
+  steady flow the speed excess is the total strain: `d_x = chi*(ds_x - s_inf)/E`;
+- (K5) entry span (flat incoming strip): `d_e = chi*ds_e/E`.
+
+`chi = E*eps_xx/sigma_xx` of the field at the bite depends on how the strip is held laterally
+there, the LATERAL CLOSURE, an analyst choice:
+
+| closure | condition at the bite | `chi` | `nu` 0.33 |
+|---|---|---|---|
+| `no_lateral_velocity` (the kernel level) | the strip leaves the bite moving straight, `d(u_z)/dx = 0` | `(3 - nu)*(1 + nu)/(3 + nu)` | 1.066396 |
+| `uniaxial` | `sigma_zz = 0` | 1 | 1.0 |
+| `shear_free` | `sigma_xz = 0` | `1 - nu` | 0.67 |
+
+Solution: `A_x = ds_x/dh = (f_h + chi*xi/h + f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx -
+f_se)`, `A_e = A_x + (E*xi/h)*(1 - chi)/chi`, feedback stiffness `K = N_x'*A_x + N_e'*A_e`
+against the pointwise `N_x'*E*xi/h`; `Q_eff = Q + K`. **No wavenumber remains**: a
+half-infinite span has no length but `1/kappa`, so for bands the kernel is a factor on the
+feedback, not the wavenumber-dependent kernel the gap row supposed. `kappa` only sets where the
+far-field stress is reached: `sigma_xx(x) = s_inf + (ds_x - s_inf)*(1 + c*kappa*x)*exp(-kappa*x)`,
+`c = b/(kappa*a)`, 95 % at `kappa*x = 3.94` (0.63 wavelengths) for the first closure [the
+profile "keeps changing outside the bite", SS-S22 EX]. A non-positive denominator or `Q + K`
+means no linear steady state for that closure: reported, never clipped.
+
+| demo | `Q` Pa | pointwise | `no_lateral_velocity` | `uniaxial` | `shear_free` |
+|---|---|---|---|---|---|
+| lengthwise (0.21 mm, Hitchcock bite) | 1.186e10 | 1.009e12 | 6.957e11, ratio 0.690; `A_x*h/E` 0.260, `A_e*h/E` 0.198 | 2.432e11, ratio 0.241 | -3.446e12 (not defined) |
+| battery-foil (30 um, mattress bite) | 7.389e10 | 1.472e13 | 1.500e12, ratio 0.102; `A_x*h/E` 0.0864, `A_e*h/E` 0.0241 | 1.280e11, ratio 0.0087 | -1.074e13 (not defined) |
+
+**Finding 6 (SPEC19), unsoftened: the independent check of the exit-tension feedback does not
+confirm it at foil gauge.** The kernel gives 0.69 of the pointwise feedback on the sheet demo
+and 0.10 on the battery-foil demo; the result depends on the lateral closure (0.24 and 0.009
+uniaxial, negative and undefined shear-free). With the kernel level the steady band reads 71.6
+instead of 50.7 I-units on the lengthwise demo (1.41 times) and 230 instead of 25.1 on the
+battery-foil demo (9.2 times; the planner's single-gain estimate gave 1.43 and 9.2). The
+feedback is what suppresses a band, so a smaller feedback means a larger band: the rigid bound,
+the compliance-only level, the kernel level and the with-feedback level bracket the answer.
+Neither estimate is validated; a roll stack with a closed gap or a plant test with a known
+stripe would decide it.
+
+**In the engine (always on, beside).** `width.shape.width_coupling` for every v2 case with a
+derived case-pass bite (`NOT_ASSESSABLE` with supplied shape inputs, which carry no slip
+sensitivities): the three closures, the pointwise value, the kernel level (the linear chain of
+section 7.2 with `Q_eff = Q + K`, no band-wise saturation), the development length (wavelength
+twice the half-peak width of the largest band, distance to 95 %, the share reached at a
+`shapemeter_distance_m` of the flatness loop or step test when given: 1.0 at 2 m on the
+battery-foil demo, distance to 95 % 0.19 m), a plain `finding` sentence, `meaning`,
+`used_by_the_evidence` (the with-feedback level), basis, flags and limitations. Every gauge-trend
+row gains `kernel_feedback_ratio_to_pointwise` (0.64 to 0.73 on the lengthwise schedule, 0.10 to
+0.50 on the battery-foil schedule, not defined for its pass without a roll gap). Flags: `WIDTH_COUPLING_KERNEL_REPORTED`,
+`KERNEL_FEEDBACK_BELOW_HALF_OF_POINTWISE`, `KERNEL_CLOSURES_DISAGREE_IN_SIGN`,
+`KERNEL_STEADY_STATE_NOT_DEFINED`. **No level, state, onset, screen, local source, loop, step
+test or evidence item reads it**; the demo artifacts changed only additively. Cost: about 0.05 s
+per diagnosis (quick profile the same or less).
+
+Limits: linear; lateral closure assumed; half-infinite spans; slip sensitivities of a
+constant-friction bite (mattress or reduced half-space at foil gauge); no roll stack, closed gap
+or lateral metal flow (G3 in full is Phase 3).
+
+### 7.15 Winding model (`wound_roll.py`)
+
+SPEC19 package 9 (gap G9 core, G10 film): the module; package 10 (second part below) winds
+lanes in the engine; the nip, air and coil temperature of package 11 follow. The present
+coil criterion (`strip_shape.coil_ridge_buildup`, compaction factor 0.5) and every coil verdict
+and score are unchanged.
+
+**Model** `[D, re-derived in SPEC19]` (the gap rows quote the classical model from memory; the
+equation is restated in SS-S42 EX). Axisymmetric wound roll, pressure `P = -sigma_r`; one added
+lap gives the increments `y = d_sigma_r`, `d_sigma_t = y + r*y'`, with equilibrium and an
+orthotropic law `eps_t = (d_sigma_t - nu*d_sigma_r)/E_t`, `eps_r = d_sigma_r/E_r -
+nu*d_sigma_t/E_t`:
+
+    r^2*y'' + 3*r*y' - (E_t/E_r - 1)*y = 0,   y(s) = -T_w*h/s,   r_c*y'(r_c) = y*(E_t/E_c - 1 + nu)
+
+(rigid core `E_t/E_c = 0`; a thin-walled tube `E_c = E_core*wall/r_c` [D]). After a lap
+`sigma_r += y`, the hoop stress of every lap below `+= y + r*y'`, the radial displacement
+`u = r*((y + r*y') - nu*y)/E_t` accumulates per node.
+
+**The radial stack law is an input, and no value exists for aluminium foil.** `radial_law` is
+required (no default): `constant` (`E_r`), `ratio_of_hoop_modulus` (`E_r = E_t/ratio`; context
+only: "about two orders of magnitude softer than the bulk" for metal coils [SS-S40 VP, a
+retelling]) or `pfeiffer` (`E_r = K2*(P + K1)` [SS-S42 EX]). What to measure: a press test on a
+stack of 50 to 200 laps of the oily foil; pressure against strain gives `K1` and `K2`. The
+validation message says so. No demo or scenario carries a stack law. The planner's lane model
+(package 10, SPEC19 finding 5) shows why this matters: one 0.1 um thicker lane gives a radius
+difference of 0.77 of laps x thickness difference with an isotropic stack, 0.12 with
+`E_r = E_t/100` and 0.02 with an assumed Pfeiffer stack (`K2` 30): the project's constant 0.5
+lies inside this range and is neither supported nor contradicted. That range holds for a lane
+that differs in thickness only. A lane that is also longer than its neighbours (a model band is
+both thinner and longer) is wound at a lower tension, and with a soft stack it is then pressed
+in less than they are: the factor can be negative, which means the thin lane stands higher on the
+coil, not lower. One run of the battery-foil demo with a stack law added gave 0.41 with an
+isotropic stack and -1.08 with `E_r = E_t/100` in every lane `[computed, one run 2026-11-21, not
+a committed artifact]`. The sign of the build-up therefore depends on the stack law as well as
+its size; the lane model's verdicts are reported beside the linear criterion and move no score.
+The effective compaction
+factor of a given stack is reported by the lane model (package 10), not by this single-lane
+module. Flag (on every result) `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`.
+
+**Air layer** `[D: isothermal gas law and springs in series; the idea in SS-S49 EX, SS-S50 AB]`:
+an air gap `g0` per lap at 101325 Pa thins to `g(P) = g0*P_a/(P + P_a)` with modulus `P + P_a`;
+`1/E_r,eq = (h/(h + g))/E_r + (g/(h + g))/(P + P_a)`. The gap enters the stiffness only, not the
+radius [D, analyst choice].
+
+**Method.** Laps lumped into layers of `n_l` laps; nodes at the layer tops; central differences
+at interior nodes with `E_r` from the present pressure, a one-sided core condition, the outer
+condition at the top node; a tridiagonal (Thomas) solve per layer; hoop increment at mid layer;
+first order in the layer thickness. Cost O(layers^2): 150 layers about 0.05 s, 400 about 0.2 s.
+A failed solve (zero pivot) is returned as `SOLVE_FAILED` with the layer reached.
+
+**Closed form and checks** (`tests/test_wound_roll.py`). `E_r = E_t`, rigid core, constant
+`T_w`: `sigma_r(r) = -(T_w/2)*(1 + beta*r_c^2/r^2)*ln((R^2 + beta*r_c^2)/(r^2 + beta*r_c^2))`,
+`beta = (1 - nu)/(1 + nu)`. Core 0.15 m, outer 0.60 m, 30 MPa, `nu` 0.33, 30 um strip, at 0.15 /
+0.2625 / 0.375 / 0.4875 m: exact -54.04 / -26.76 / -14.48 / -6.28 MPa; 100 layers -54.24 /
+-26.71 / -14.43 / -6.26 (within 0.4 %); 400 layers -54.09 / -26.75 / -14.47 / -6.28 (the error
+falls as 1/layers). Hoop stress of the first layer: exact 11.79, model 13.46 MPa (100 layers);
+12.07 against 12.50 (400). Uniform strip with `E_r = E_t/100`: largest pressure 5.779 MPa,
+lowest hoop stress -2.98 MPa (inner laps in hoop compression, flag
+`INNER_LAPS_IN_HOOP_COMPRESSION`).
+
+**Entrained air film** `[D, re-derived in SPEC19; formula quoted in SS-S58 EX/AB]`: a web of
+tension `T` [N/m] on a cylinder of radius `R`, surfaces moving at `U`:
+`h0 = C*R*(6*mu_g*U/T)^(2/3)`, `C` from `H''' = (1 - H)/H^3` integrated by RK4 (step 1e-3, from
+`1 + 1e-6*exp(-xi)` until `H > 1e4`): 0.6430393 (0.6430399 with `1e-8` and `1e5`). Air
+viscosity 1.8e-5 Pa s [M]. `R` 0.125 m, 10 + 10 m/s, 720 N/m: 16.72 um; `R` 0.30 m: 40.12 um.
+An UPPER BOUND: smooth, wide, impermeable web, no side leakage or roughness venting (gap study,
+note to G10); no nip film.
+
+Limits: elastic laps; plane model per lane (no axial stress); no interlayer slip; stack law
+supplied; lumped layers; no thermal or creep term.
+
+**Second part (SPEC19 package 10): winding by lanes in the engine.** With
+`width_model.coil_winding` (needs `width_model.coil`; null = none) the result gains
+`width.coil_winding`: the exit profile of the case pass wound lane by lane, BESIDE the present
+linear criterion (`coil_ridge_buildup` with its compaction factor), which the coil verdicts, the
+ridge hypothesis and every score keep using. Keys: `radial_law` (REQUIRED, the three laws of the
+first part; the message says that no stack stiffness for aluminium foil is published and how to
+measure one), `core_stiffness_pa` (null = rigid), `lane_width_m` (default the shapemeter zone
+width, else 0.05 m [D]), `layers` (20 to 400, default 150; a coil with fewer laps than that is
+wound in one layer per whole lap, `floor(laps)`, the fractional lap shared among them, so the
+undeformed outer radius is always the entered one: `layers_requested`, `layers_used`), `tension_taper`,
+`thickness_profile` (null = the model's own exit profile), `include_length_profile` (true),
+`air_gap_m` (0), `allocation_radius` (`mid_layer`, the specification; `layer_top` reproduces the
+planner's prototype [D, analyst choice]) and `provenance`. No committed demo carries a stack
+law.
+
+Lanes: equal lanes across the strip (the last one shortened, at least four); per lane the exit
+thickness plus the lane mean of `width.shape.steady.local_thickness_change_m` (with feedback)
+plus the exit ridge height of every incoming ridge over the lane, and a natural-length excess
+`1e-5` times the lane mean of `i_units_linear_feedback`. Tension allocation `[D, re-derived in
+SPEC19: the "relaxation radius" of the pseudo-2D models, SS-S44 AB, SS-S45 EX, written as a
+strain allocation]`: a new layer lies on lane `j` at mid radius `s_j`; all lanes of one lap share
+the unstrained circumference `2*pi*s0` apart from their length excess, so
+`eps_j = (s_j - s0)/s0 - e_j`, `sigma_j = min(max(E*eps_j, 0), sigma_y)` (no compression, yield
+cap), `eps_p,j = max(0, eps_j - sigma_y/E)`, and `s0` balances the force (bisection, 80 halvings).
+Self-check: a uniform profile gives the mean tension in every lane and reproduces the single-lane
+result. Section: lanes, wound-on tension, hoop stress, pressure and plastic strain per lane at up
+to 60 radii, per lane the largest wound-on tension, lowest hoop stress, largest pressure, first
+yield radius and laps, yielding and slack length shares, outer radius deviation and the
+EFFECTIVE COMPACTION FACTOR (radius deviation over laps x thickness deviation, beside the present
+0.5); `after_unwinding` (the plastic stretch of the outer wraps and its length mean per lane, and
+the mechanical lane profile plus it: an ADDITIONAL profile, not read by the shapemeter section,
+which describes the strip in the mill); `beside_linear_criterion` (for each incoming ridge and the
+largest model band: the linear status, critical height and factor beside the lane model's
+`YIELDS` / `ELASTIC`, its effective factor and `agrees`; a disagreement is written out and flagged
+`WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION`, and the tally uses the linear criterion). Flags:
+`COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION`, `WINDING_LANE_YIELDS`, `WINDING_LANE_SLACK`,
+`WINDING_INNER_LAPS_IN_HOOP_COMPRESSION`, `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`.
+Cost: lanes x layers single-lane solves, about 0.5 s for 24 lanes of 150 layers (budget 2 s); the
+quick profile leaves it as it is.
+
+Worked case (24 lanes of 50 mm, 30 um, coil 0.15 -> 0.6 m, 30 MPa, yield 165 MPa, 150 layers of
+100 laps, one lane thicker; `tests/test_band_coil_winding.py`). Effective compaction factor and
+wound-on tension of the thicker lane at 1000 / 5000 / 15000 laps:
+
+| thicker by | stack (stated assumption) | mid-layer allocation (the specification) | layer-top allocation (planner's prototype) |
+|---|---|---|---|
+| 0.1 um | isotropic `E_r = E_t` | factor 0.772; 65.6 / 131.6 / 159.8 MPa | 0.772; 67.1 / 132.1 / 159.9 |
+| 0.1 um | `E_t/100` | 0.124; 53.0 / 51.9 / 51.3 | 0.121; 53.8 / 51.9 / 51.3 |
+| 0.1 um | Pfeiffer `K2` 100, `K1` 10 kPa | 0.066; 46.4 / 44.1 / 41.7 | 0.062; 47.2 / 44.1 / 41.7 |
+| 0.1 um | Pfeiffer `K2` 30, `K1` 10 kPa | 0.023; 38.3 / 36.1 / 34.5 | 0.019; 38.5 / 36.1 / 34.5 |
+| 1 um | isotropic | 0.970; yields from the 4th layer (by 400 laps), 98 % of the layers, up to 2227 I-units | 0.970; the same, up to 2229 |
+| 1 um | `E_t/100` | 0.437; yields by 400 laps, 98 %, up to 899 I-units | 0.437; up to 904 |
+| 1 um | Pfeiffer `K2` 100 | 0.493; yields by 400 laps, 98 %, up to 1051 I-units | 0.494; up to 1058 |
+| 1 um | Pfeiffer `K2` 30 | 0.034; does NOT yield (peak 158.4 MPa, 4 % below yield); 155.7 / 120.6 / 93.4 | 0.031; yields in 5 % of the layers, up to 17 I-units; 165 / 120.6 / 93.4 |
+
+**Finding 5 (SPEC19), unsoftened: the winding result hangs on the radial stack stiffness, for
+which no aluminium value exists.** For a 0.1 um thicker lane the coil takes up between about 0.02
+and 0.77 of laps x thickness difference depending on the stack; the project's constant 0.5 lies
+inside this range and has no better and no worse support than before (X8: contradicted in form,
+confirmed in that the factor is an outcome). A 1 um thicker lane yields the strip within the first
+few hundred laps with every stack but the softest; with the softest the two allocation radii
+disagree on whether it yields at all. The answer turns on the stack stiffness: a press test on a
+stack of the oily foil decides it.
+
+**Verdict of a lane (decision after package 10).** The other allocation point is run beside
+the chosen one (`allocation_sensitivity`: per lane the effective compaction factor and the yield
+verdict under both). A lane whose verdict differs reads "not decided: depends on the allocation
+point" (flag `WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT`); a lane whose peak stress is
+within 5 % of the yield stress without yielding reads "close to yield, not decided"
+(`CW_CLOSE_TO_YIELD_FRACTION`, an analyst choice [D]). The softest stack's 1 um lane of the table
+above (158.4 against 165 MPa mid layer, yielding at the layer top) is such a lane. Cost: the
+winding runs twice (about 1 s for 24 lanes of 150 layers).
+
+**Third part (SPEC19 package 11): ironing roll, air in the coil, coil temperature.**
+`width_model.coil_winding` takes `ironing_roll` (`load_per_width_n_m`, `traction_coefficient`):
+the wound-in tension `T_w + mu_n*N/h` [gap row G10, from SS-S49 EX; no formula for `mu_n`, it is
+an input], capped just below yield (`WOUND_IN_TENSION_CAPPED_AT_YIELD`), and `air` (`mode`
+`entrained_film`, `none` or `both`; `viscosity_pa_s`). With `entrained_film` each layer carries
+the foil-bearing film at its radius at twice the exit speed and the winding tension per width
+(upper bound); its gap closes under pressure in the stack (first part). NO nip film formula is in
+the reports: with an ironing roll and no mode the section is computed for the two BOUNDS, "the nip
+removes all the air" (`none`, the main result) and "the nip removes none of the air" (the full
+entrained film), and `air_cases` gives both (`AIR_CASES_BRACKET_THE_NIP_EFFECT`); a coil diameter
+profile across the width, or a measured air content of the wound coil, would narrow them. The
+section also gives `air_entrainment` (film at the core and the outer radius, over the strip
+thickness; `ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS`; 20.6 and 82.4 um at the battery-foil
+coil, 13 m/s and 900 N/m, 0.69 to 2.7 strip thicknesses) and `deflector_roll` (film on
+`deflector_roll_radius_m`; with the strip roughness and the new
+`width_model.deflector_roll_roughness_rq_m` the traction is `LIKELY_LOST` above three times the
+combined roughness [SS-S58 EX/AB], else `KEPT`; without them `NOT_ASSESSABLE`).
+
+Coil temperature: `width_model.coil_thermal` (`surface_htc_w_m2k`, `ambient_temperature_k`,
+`strip_conductivity_w_mk`, `gap_medium` oil / air, `interlayer_gap_m`, `hold_times_s`,
+`provenance`; no defaults for the coefficient, gap or conductivity). The coil starts at the
+modelled strip exit temperature of the case pass (`process.heating`, from the heat partition):
+an UPPER BOUND at winding (no loss between roll gap and coil;
+`COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND`); per lane the lane mean of
+`width.local_state.strip_exit_temperature_k` when package 1 ran. `k_r = (h + g)/(h/k_s + g/k_g)`
+(series), `k_z = k_s*h/(h + g)` (parallel), `rho*c` of aluminium times `h/(h + g)` [D, SPEC19;
+`k_r << k_z`: gap A8, TM-LA33 EX, TM-LA32 EX]; the gap is supplied, or the mean gap under pressure
+of the winding section when it ran with air (it then couples to the wound-roll model; with the
+two bounds, the entrained-film bound's gap). Cooling of a uniformly hot hollow cylinder (core side
+adiabatic, convection on the outer surface and both end faces) as the product of a radial and an
+axial 1-D solution, exact for this start and these conditions [D, classical]; backward Euler on 40
+cells, integrated hold time by hold time: 400 equal steps from each hold time to the next (from 0 to
+the first), so a step ends exactly on every hold time and a row does not depend on which later hold
+times are asked for (`COOLING_STEPS`; with one hold time, 400 equal steps to it). Rows per hold time: hottest point, coil mean,
+outer surface at mid width; `limit_rows` against the published coil limits read from
+`thermal_check.coil_limits_c` (75 C entering the final pass, 80 C leaving it, 90 C elongation
+decay, with their sources): above or below at winding and the time for the hottest point to fall
+below, with `time_to_fall_below_status` (`FOUND`, `BELOW_AT_WINDING`, `LIMIT_BELOW_AMBIENT`: the
+limit is under the surrounding temperature and is never reached, `NOT_REACHED_WITHIN_LONGEST_HOLD`
+beside `longest_hold_time_s`), each worded on its own in the report and the app. `thermal_check` gains `coil_temperature_beside` with these rows; its verdicts, which
+compare the strip exit temperature, are unchanged. Stress between lanes on cooling to a common
+temperature: `E*alpha*(T_j - mean T)` (1.652 MPa per K), added to the lane's hoop stress of the
+winding section and compared with yield (`COIL_COOLING_STRESS_REACHES_YIELD`), an upper bound.
+Worked numbers (30 um, `k_s` 200 W/mK): oil gap 0.5 um, `k_r` 7.63 W/mK; air gap 2 um, 0.415 W/mK.
+Coil 0.15 -> 0.6 m, 1.2 m wide, 8 W/m2K, oil: radial time scale 17.6 h, axial 1.22 h, lumped
+15.9 h, Biot 0.47 radial and 0.024 axial (the planner's 17.9 h and 16.2 h leave the gap share out
+of `rho*c`). Not modelled: heat from the next laps while winding, radiation beyond the
+coefficient, creep of the hoop stress and recovery of the foil properties in the coil (A8 stress
+part and B7, Phase 3). Cost below 0.05 s; the quick profile is unchanged.
+
 ## 8. Process models
 
 Integration code: `physicroll/band_process.py`; equations: `physicroll/bite_tribology.py`.
@@ -1949,8 +3388,11 @@ These sections appear only in v2 cases with `tribology` and/or `hardening`.
 ```
 eta0(T) = eta_ref*exp(-beta*(T - T_ref)),   eta(T,p) = eta0(T)*exp(alpha*p)                 [D]
 h_s = 6*eta0*alpha*U_mean/(theta0*(1 - exp(-alpha*(Y_ps - sigma_back))))                     [V restated]
-U_mean = (u_roll + u_strip_entry)/2,  theta0 = sqrt((h_entry - h_exit)/R_contact) [D],  Y_ps = 2Y/sqrt(3)
-Lambda = h_s/sqrt(Rq_roll^2 + Rq_strip^2);  BOUNDARY < 1 <= MIXED <= 3 < HYDRODYNAMIC        [V: Sutcliffe 2002]
+U_mean = (u_roll + u_strip_entry)/2,  theta0 = sqrt((h_entry - h_exit)/R_c) [D],  Y_ps = 2Y/sqrt(3)
+R_c = R' (Hitchcock arc) or R (mattress bite: undeformed roll)                [BT-S3 EX; D, SPEC17]
+Lambda = h_s/sqrt(Rq_roll^2 + Rq_strip^2)
+  MIXED_SUBSTANTIAL_CONTACT < 1 <= MIXED_FIRST_CONTACT <= 3 < HYDRODYNAMIC   [V: Sutcliffe 2002; BT-S9 EX]
+  common industrial window 0.01 <= Lambda <= 0.5                             [BT-S3 EX, BT-S9 EX]
 mu(Lambda) = mu_v + (mu_b - mu_v)*exp(-Lambda/Lambda0)                                        [D] PLACEHOLDER
 ```
 
@@ -1967,16 +3409,131 @@ default) [V: Ghosh & Hamrock 1985 for the loading parameter; M for the factor fo
 **The friction closure is a labelled placeholder, not fitted.** No closed-form mixed-film
 law was found in a read source. Defaults: `mu_b` = 0.09 [V: Tabary, Sutcliffe et al. 1996,
 abstract: about 0.09 at lowest speeds on aluminium strip, below 0.01 at the highest];
-`mu_v` = 0.008 [D within 0.005-0.01]; `Lambda0` = 1.0 [D]. With ground-roll roughness it stays
-near the boundary regime, so **its absolute values are placeholders; its slope with speed is
-the usable output**. The computed friction is shown beside the supplied one and replaces it
+`mu_v` = 0.008 [D within 0.005-0.01]; `Lambda0` = 1.0 [D]. Its end values 0.09 and 0.008
+match the one abstract on aluminium [BT-S6 AB], but it keeps friction near 0.09 over most of
+the common industrial window, so **neither its level nor its slope with speed is supported**
+(only the slope was ever meant to be used, and that is not supported either). The computed friction is shown beside the supplied one and replaces it
 only with `tribology.use_computed_friction: true` (then by a fixed point friction -> bite ->
 contact radius -> friction).
 
 Lengthwise demo (`process.friction`, `process.friction_speed_curve`): final pass film
-70.3 nm, film ratio 0.180, BOUNDARY; placeholder friction 0.0765 against 0.03 supplied (not
-used); slope -1.03e-3 per m/s at 12 m/s, mean -1.01e-3 per m/s between 2 and 25 m/s. Every
-schedule pass is in the boundary regime (film ratio 0.0139 to 0.180).
+70.3 nm, film ratio 0.180, `MIXED_SUBSTANTIAL_CONTACT`; placeholder friction 0.0765 against
+0.03 supplied (not used); slope -1.03e-3 per m/s at 12 m/s, mean -1.01e-3 per m/s between 2
+and 25 m/s. Every schedule pass has a film ratio below 1 (0.0139 to 0.180).
+
+**Two corrections of SPEC17.** (1) Regime labels (BT-G8, X21): a film ratio below 1 was
+labelled `BOUNDARY`. In the sources it is the condition for a good roll imprint inside the
+mixed regime, and 0.01-0.5 is the common industrial window [BT-S3 EX, BT-S9 EX]; no source
+read gives a film-ratio threshold for boundary lubrication, so no result carries that label.
+The labels are `MIXED_SUBSTANTIAL_CONTACT` (< 1), `MIXED_FIRST_CONTACT` (1-3) and
+`HYDRODYNAMIC` (> 3), with `in_common_industrial_window` beside every film ratio. (2) Inlet
+angle (BT-G7, X23): for a mattress bite the film used `R*contact_radius_ratio`, but that ratio
+is `L^2/(R*draft)`, not a radius, so the angle was `draft/L`, the mean slope of the whole bite.
+The literature uses the undeformed-roll inlet slope [BT-S3 EX]: for a bite
+`h = h1 + x^2/R_c` the inlet slope of each roll is `sqrt(draft/R_c)` [D, re-derived in
+SPEC17], with `R_c = R` for a mattress bite and `R'` (unchanged) for a Hitchcock bite
+(`band_process.film_radius_ratio`; key `inlet_angle_basis` in the results). The film was
+over-stated by `sqrt(contact_radius_ratio)`. Battery-foil demo, before -> after (regenerated
+artifact): case pass F1 film ratio 0.551 -> 0.380, film 137.9 -> 95.0 nm, placeholder friction
+0.0552 -> 0.0641 (not used); F2 / ALT1 / ALT2 film ratio 0.647 / 0.444 / 0.979 -> 0.356 /
+0.296 / 0.293; screen film ratio 0.564 -> 0.389, inlet angle 8.39e-3 -> 1.217e-2 rad; mean
+friction-speed slope -2.04e-3 -> -1.65e-3 per m/s; speed-consistent critical speed 16.29 ->
+16.77 m/s (beta 0.5), and without bite damping from "unstable at the lowest assessable speed"
+to 5.16 m/s; speed-change gauge shift -8.28 -> -6.48 um. S1-S3 (Hitchcock) and the whole
+lengthwise demo keep their film numbers; the demos use `use_computed_friction: false`, so no
+bite or force moves.
+
+**Oil properties (SPEC18 package 5, all optional; nothing changes unless a case enters them).**
+
+| oil property | what is available | read tag | how the tool uses it |
+|---|---|---|---|
+| viscosity against temperature | data-sheet points of your oil; one published example (below) | data sheet; E6 FT | `tribology.lubricant.viscosity_table`: `ln eta0` linear in T between the points, the end slope outside [D] (flags `VISCOSITY_FROM_TABLE`, `VISCOSITY_TABLE_EXTRAPOLATED`); the single value and rate are then not used for `eta0` |
+| viscosity against pressure | Barus (default); Roelands `eta = eta0*exp{(ln eta0 + 9.67)*[(1 + p/196.2 MPa)^z - 1]}`, `z` entered or `196.2 MPa*alpha/(ln eta0 + 9.67)` | E5 FT (L.3), (4.194) | `pressure_law: "roelands"` (flag `ROELANDS_PRESSURE_LAW`) changes the viscosity at pressure only; the inlet film formula keeps its Barus closed form |
+| Eyring stress | 4.5 / 6.0 / 11.7 MPa at 625 / 945 / 1510 MPa and 40 C for one kerosine base oil | E6 FT | `eyring_stress_pa` + `eyring_stress_pressure_coefficient*p`: supplied only, no default |
+| limiting shear stress | no value in any source; for that oil none was seen up to 0.045 of the pressure | E6 FT | `limiting_shear_stress_pa` + `limiting_shear_pressure_coefficient*p`: supplied only; below 0.045 of the mean pressure the flag `LIMITING_SHEAR_BELOW_PUBLISHED_LOWER_BOUND` |
+| oil conductivity | 0.125 W/mK at ambient pressure (assumed equal to another oil by the source), 0.25 W/mK in the nip | E6 FT | context for the heat partition (a later package) |
+
+What to enter: the viscosity table and the pressure coefficient come from your oil supplier's
+data sheet. The published example (`bite_tribology.EXAMPLE_KEROSINE_BASE_OIL`, Somentor 31,
+every value tagged [E6 FT]) is a base oil with no additives, not the rolling oil of a plant: it
+illustrates the inputs and is never a default.
+
+**Which pressure law.** The one foil-rolling oil with published high-pressure data
+(`A9-PRESSURE-LAWS-KEROSINE`, 40 C, `eta0` 1.409e-3 Pa s, `alpha` 10.40e-9 /Pa, `z` 0.657):
+
+| pressure [MPa] | measured [Pa s] (E6 FT) | Barus (ratio) | Roelands (ratio) |
+|---|---|---|---|
+| 100 (viscometer) | 3.985e-3 | 3.986e-3 (1.000) | 3.699e-3 (0.928) |
+| 625 (disc machine) | 2.5 | 0.937 (0.375) | 0.180 (0.072) |
+| 945 | 15.0 | 26.1 (1.742) | 1.228 (0.082) |
+| 1510 | 740 | 9313 (12.6) | 24.4 (0.033) |
+
+Neither law carries this oil from the inlet to bite pressure; the textbook Roelands law with
+the index from the low-pressure slope is low by a factor 12 to 30 there (the thesis says the
+same of its own fit). Barus therefore stays the default and Roelands is an option; every
+result names the law used (`viscosity_law` in the friction rows when it is not the default).
+If you need the viscosity at bite pressure, enter `roelands_z` or a Barus coefficient fitted
+at the pressure of interest, and read any friction built on it as an order of magnitude.
+
+The film formula is also compared with the published table of a foil pass
+(`BT-G3-FILM-E6-T42`: 0.3242 / 0.1081 / 0.0540 / 0.0324 / 0.0108 um at 30 / 10 / 5 / 3 / 1 m/s
+against 0.323 / 0.108 / 0.054 / 0.032 / 0.011, with one assumed speed ratio) and with the
+film ratios of another (`BT-V4-FILM`: 0.209 and 1.675 against 0.22 and 1.76 at 5 and 40 m/s,
+speeds and inlet temperature assumed) [run]: the same closed form, not a check of the film
+physics.
+
+**The second friction law: load sharing on a published curve (SPEC18 package 6, opt-in:
+`tribology.friction_closure.model: "load_sharing_curve"`).** `mu = A*mu_c + (1 - A)*mu_v`
+[BT-S9 EX; E7 FT]: `A` is the share of the surface where roll and strip touch, read from a
+curve of `A` against the film ratio; `mu_c` the friction on those contacts; `mu_v` the friction
+of the oil between them (`valley_model`: `constant` = `mu_v` 0.008, `eyring` = the Eyring shear
+of the valley film [E6 FT (4.32)], `newtonian_capped` = a Newtonian shear capped at the oil's
+limiting stress; the last two need the oil data of package 5 and the bite's mean pressure and
+sliding speed). The default curve is the only published one: five points of contact ratio
+against film ratio for one foil pass (20 -> 15 um, roughness 0.1 um, wavelength 15 um, one oil)
+[E6 FT, Table 4.2], interpolated linearly in `ln(Lambda)`; outside its range (0.14 to 2.37) the
+end value is held, not extrapolated, with the flag `FILM_RATIO_OUTSIDE_CONTACT_RATIO_CURVE`.
+
+| film ratio | contact ratio | load sharing, `mu_c` 0.09 (slope) | load sharing, `mu_c` 0.03 (slope) | placeholder (slope) |
+|---|---|---|---|---|
+| 0.1 (below the curve) | 0.880 | 0.0802 (0) | 0.0274 (0) | 0.0822 (-0.074) |
+| 0.2 | 0.808 | 0.0743 (-0.082) | 0.0258 (-0.022) | 0.0751 (-0.067) |
+| 0.380 (battery-foil case pass) | 0.670 | 0.0629 (-0.081) | 0.0227 (-0.022) | 0.0641 (-0.056) |
+| 0.5 | 0.566 | 0.0544 (-0.062) | 0.0205 (-0.017) | 0.0577 (-0.050) |
+| 1.0 | 0.271 | 0.0302 (-0.025) | 0.0140 (-0.007) | 0.0382 (-0.030) |
+| 2.0 | 0.061 | 0.0130 (-0.012) | 0.0094 (-0.003) | 0.0191 (-0.011) |
+| 3.0 (above the curve) | 0.010 | 0.0088 (0) | 0.0082 (0) | 0.0121 (-0.004) |
+
+[run, `tests/test_bite_tribology.py`] **The contact friction must be entered; there is no
+default.** The sources give 0.013 to 0.1 (a boundary-film shear strength over pressure 0.013 to
+0.036 [E6 FT p.72, derived], 0.09 [BT-S6 AB], 0.1 or a factor 0.25 [E4 EX]); the demo's
+supplied 0.03 at its film ratio needs `mu_c` 0.041, 0.027 needs 0.036. It is best taken from
+your mill's own records: measured roll force, torque or forward slip (friction identification,
+a later package), or a strip-drawing test with your oil and roll finish. A missing value is a
+validation error that says so.
+
+**What this closure is and is not.** It is a REDUCED closure, not a mixed-lubrication model:
+its shape is the published curve and its level is your entered number, so read the change of
+friction with speed, not the level. Because the published curve is its INPUT, it returns the
+published contact ratios exactly at the five points; that is a software identity, not a
+benchmark, and no independent published friction value exists to compare it with. The
+inlet analysis that would compute the curve is not built: the transcribed height-distribution
+relation gives 0.91 to 0.50 of the source table's own mean film, and the four transcribed
+asperity-crushing laws differ by up to two orders of magnitude away from one point
+(`BT-G3-CRUSHING-LAWS`; `physicroll/asperity_contact.py` holds them as tested functions that
+nothing uses). The film ratio entered is the smooth inlet film over the composite roughness,
+while the table's abscissa came from the thesis's full inlet integration (its own closed-form
+film is 0.79 to 1.36 of that), so the abscissa carries that much mismatch. The curve belongs
+to one foil pass: another roughness, oil, wavelength or reduction has another curve.
+
+**X22 answered.** The placeholder's level and slope have no support; the new closure has a
+published shape for one foil pass and an entered level. Under the option every place that
+takes friction from the closure uses it: the friction rows and the fixed point (with either
+bite model), the friction-speed curve and its slope in the speed-consistent critical speed
+(floored at the closure's valley friction), the speed-change gauge shift, the friction stripe
+screen's conversion block; each says so (`status`, flags, `friction_closure` /
+`closure_note` keys). Pass heating takes the friction used for the pass, which is the closure's
+only when `tribology.use_computed_friction` replaces the supplied value.
 
 ### 8.2 Pass heating
 
@@ -1988,12 +3545,71 @@ each work roll receives (1 - f_s)/2 of Q             [D]
 ```
 
 `P_friction` is the interface slip dissipation of the slab (or mattress) solution. The
-strip heat fraction `f_s` is **supplied**, not computed: foil mills put 0.11-0.33 of the
+strip heat fraction `f_s` is **supplied** (a computed one is reported beside it, below): foil mills put 0.11-0.33 of the
 bite heat into the foil [V abstract: Yin et al. 2003]; thicker strip keeps much more [M]. The
 roll heat fraction derived from it drives the roll thermal model, so the stripe heights scale
 with this guess. Lengthwise demo (`process.heating.operating`): plastic power 293 kW/m,
 friction power 113 kW/m, total 406 kW/m; strip 313.15 -> 368.9 K (+55.7 K); 32.5 kW/m to each
 work roll.
+
+**Computed heat partition (SPEC18 package 9, gap row A3).** Beside the entered share each
+heating row carries `heat_partition`: the strip's share computed by an interface model
+(`bite_tribology.heat_partition`) [D, re-derived in SPEC18; the gap row's series formula
+`q = (T_s - T_r)/(1/h_c + sqrt(pi*t)/(2*e))` is its time-averaged form]. One roll side per unit
+contact area, over the contact time `t_c = l_d/V_r`: a lumped strip of capacity
+`C_s = rho_c*h1*u1/(2*V_r)` (half the neutral thickness per side) on a roll that is a half-space
+(effusivity `e = sqrt(k*rho*c)`), coupled through the interface conductance `h_c`; plastic heat
+`P_pl/(2*l_d)` released in the strip, friction heat `P_f/(2*l_d)` at the interface with **half
+of it released on the strip side of the film (phi = 0.5) [D, SPEC18 analyst choice]**. 400
+time steps, the half-space response exact for a flux constant over a step, the strip by
+backward Euler; the share is `f_s = C_s*(T_s(t_c) - T_e)/(heat input)`, reported as computed
+even outside [0, 1] (flag `HEAT_SHARE_OUTSIDE_0_1_TEMPERATURE_DIFFERENCE_DOMINATES`). With
+perfect contact and equal entry temperatures it has the closed form
+`T(t) = (g/e)*(2*sqrt(t/pi) - sqrt(tau)*(1 - exp(t/tau)*erfc(sqrt(t/tau))))`, `tau = (C_s/e)^2`
+(`perfect_contact_strip_share`, the test of the scheme).
+
+Inputs in the engine: contact length and forward slip of the pass's bite; the film thickness
+of the pass's friction row (smooth inlet film at that bite with the case's friction closure;
+the row's `interface_conductance_basis` names the bite model and the closure); `h_c =
+k_oil/h_film` [row A3] with the oil conductivity of the case (default 0.13 W/mK [M], unchanged),
+or `tribology.interface_conductance_w_m2k` when entered (1e3 to 1e9; models use 25-40 kW/m2K,
+measurements span 7-800 [PT-T34]); roll properties of `width_model.roll` (else the defaults of
+`roll_thermal.RollThermalProperties`); roll surface at bite entry = the coolant temperature
+(else the oil inlet temperature), flag `ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL`. The
+row also gives the share at the two published conductivities of a kerosine foil base oil,
+**0.125 W/mK at ambient pressure and 0.25 W/mK in the nip [E6 FT]**
+(`strip_heat_fraction_at_published_oil_conductivities`). No interface-conductance
+correlation is coded: a mixed-lubrication conductance model was found only as a publisher
+preview without its equations (E12 AB), the Tseng papers as abstracts (E14 AB), and the
+Cooper-Mikic-Yovanovich correlation on teaching pages (E13 VP), where it is a correlation for
+dry rough contacts at far lower pressures than a roll bite. The gap row's "asperity term" has
+no formula in the reports and is not built.
+
+Worked numbers (the thermal report's check case: steel `k` 43 W/mK, `rho*c` 3.6e6 J/m3K,
+24 um, `t_c` 0.2 ms; `C_s` 29.16 J/m2K, `tau` 5.4929e-6 s): perfect contact 0.162070 (the
+scheme 0.162060 / 0.162069 / 0.162070 with 50 / 400 / 800 steps; the report's capacity-ratio
+estimate gives 0.128); a 70 nm film with 0.13 W/mK 0.2254, 200 nm 0.3352, 40 kW/m2K 0.8775,
+60 % plastic and 40 % friction heat at 70 nm 0.2113; with 0.125 W/mK 0.2279 (70 nm) and
+0.3414 (200 nm), with 0.25 W/mK 0.1952 and 0.2553. The roll's transient resistance
+`sqrt(pi*t_c)/(2e)` is 1.0073e-6 m2K/W against 5.385e-7 for the 70 nm film: the roll, not the
+film, limits the heat flow. Sheet check, 0.25 mm and 0.4 ms, perfect contact: 0.6063.
+Benchmark `TM-LA19-HEAT-SPLIT`: 0.1621, 0.2279 and 0.1952, inside the measured 0.11-0.33
+(film and conductivity assumed).
+
+**The entered share keeps driving every result** unless `tribology.use_computed_heat_partition`
+is true: then pass heating uses `min(1, max(0, f_s))` of each pass (flag
+`STRIP_HEAT_FRACTION_COMPUTED_FROM_INTERFACE_MODEL` instead of
+`STRIP_HEAT_FRACTION_SUPPLIED_NOT_COMPUTED`) and the width model's default roll heat fraction
+becomes the case pass's computed `(1 - f_s)/2` (basis "computed"). Otherwise each heating row
+gains `supplied_minus_computed_strip_heat_fraction`, `width.thermal_sensitivity.
+computed_strip_share` shows the computed share beside the rows (which keep their own shares) and
+`thermal_check.computed_heat_partition` states both and the measured range.
+
+**X4.** The entered 0.84 of the sheet demo is not supported: the computed value for that pass is
+0.662 (0.663 / 0.638 at the published oil conductivities; earlier passes 0.73 to 0.78) [run,
+`artifacts/band_diagnosis/lengthwise-bands-demo.result.json`]. For the battery demo the computed
+share of the case pass F1 is 0.338 against the entered 0.22 (F2 0.210, ALT2 0.117); the stripe
+heights stay those of the entered 0.22.
 
 ### 8.3 Work hardening
 
@@ -2001,7 +3617,7 @@ Equivalent strain `eps = prior + (2/sqrt(3))*ln(h_ref/h)` (as `physicroll.materi
 power `sigma = sigma_y + K*eps^n` and a generalised Voce law with a stage-IV term
 `sigma = s0 + (ss - s0)*(1 - exp(-eps/eps_c)) + theta4*eps` [D form; Hirsch et al., Ryen et
 al. 2006, read second-hand], with the analytic pass mean. Strain-rate sensitivity is taken as
-zero [M]. Literature fits shipped for reference:
+zero [M] unless a rate and temperature factor is entered (below). Literature fits shipped for reference:
 
 | fit id | alloy, temper | law | yield [MPa] | K [MPa] | n | tag |
 |---|---|---|---|---|---|---|
@@ -2014,12 +3630,105 @@ Warning carried with every fit: tensile-fitted power laws over-predict beyond `e
 `eps` well above 2. The demo Voce parameters are synthetic (not fitted); final-pass flow
 stress 282.6 MPa computed against 270 MPa supplied (`process.flow_stress`).
 
+Hardening and softening data found by alloy group (gap study B3) and the anisotropy table
+(B4) are in `docs/thin-gauge-products.md` ("Alloy groups: hardening and softening data found",
+"Anisotropy and the plane-strain factor"; `band_products.alloy_group_reference`,
+`anisotropy_reference`). They are tables only: nothing is fitted or passed to a hardening law
+or a bite. A positive stage-IV slope is wrong in sign for purified Al-Fe and high-purity
+grades beyond 80 % reduction [TM-LB2 EX] (gap study X2); since SPEC18 package 8 the slope may
+be entered negative (below). The plane-strain
+factor stays the isotropic `2/sqrt(3)`; the r-values 0.2 / 1.5 / 1.1 of one 16 um 1235-H18 foil
+[TM-LB1 EX] would move it by -12 % to +1 % under Hill's 1948 criterion
+(`plane_strain_factor_hill48`, [D, re-derived in SPEC17]); Hill-type criteria are known to be
+poor for aluminium [M].
+
+**Strain rate and temperature (SPEC18 package 8, gap rows B1 and X1).** The optional
+`hardening.rate_temperature` (null by default; no demo has one) multiplies the computed flow
+stress of each pass by
+
+    factor = (rate/rate_ref)^m(T) * (1 - c_T*(T - T_ref)),   m(T) = m + dm/dT*(T - T_ref) >= 0
+
+[form: TM report gap B1, "as the minimum"]; keys `rate_sensitivity`,
+`reference_strain_rate_per_s`, `temperature_coefficient_per_k`, `reference_temperature_k`,
+`rate_sensitivity_slope_per_k`, `provenance`, `use_rate_temperature` (true needs
+`use_computed_flow_stress`). There is no default number: what has been measured, each with its
+source, is
+
+| quantity | value | conditions | source |
+|---|---|---|---|
+| rate sensitivity m | about 0.027 | 16 um 1235-H18 foil, 1e-5 to 1e-2 /s | TM-LB1 EX |
+| m against temperature | 0.04 at 100 C, 0.07 at 200 C | 1050-H14, slow tensile tests | TM-LB10 EX |
+| c_T | 0.0015 to 0.0019 /K | 1100-H18: 165 -> 145 and 150 -> 130 MPa between about 20 and 100 C, 165 -> 125 MPa at 150 C | [D from PT-T31, PT-T39]; the report states 0.15-0.3 %/K |
+
+Worked numbers: `(1e-2/1e-5)^0.027 = 1.205036` (160 -> 192.806 MPa over the measured range;
+the source reads "about 200"); `(2.6e3/1e-3)^0.027 = 1.490062` (the report's "about 1.5");
+`c_T` 1.5152e-3, 1.6667e-3 and 1.8648e-3 /K from the three pairs above; at 10 m/s, contact
+length 2 mm and 30 -> 18 um the mean bite strain rate `(u/l_d)*ln(h0/h1)` is 2554.128 /s, the
+rate factor (m 0.027, reference 1e-3 /s) 1.489346 and, with `c_T` 0.0015 and 60 K above the
+reference, the combined factor 1.355305. **The measurement stops at 1e-2 /s; rolling rates are
+five decades higher** (flag `RATE_SENSITIVITY_EXTRAPOLATED_BEYOND_MEASURED_RATES` on every real
+pass, by design). Rate raises and temperature lowers the flow stress: **the net of rate and
+temperature at rolling conditions is not known; enter both or neither.**
+
+Each row of `process.flow_stress.passes` then carries `strain_rate_per_s` (contact length of
+the undeformed arc `sqrt(R*(h0 - h1))`, flag `STRAIN_RATE_FROM_UNDEFORMED_ARC`: strain rate
+from the undeformed arc, which avoids a fixed point with the bite [D, SPEC18]),
+`bite_temperature_k` (strip entry temperature plus half the strip's share of the plastic work
+of the unfactored flow stress, the mid-bite strip temperature [D, SPEC18]; without `tribology`
+the reference temperature and flag `BITE_TEMPERATURE_NOT_AVAILABLE_REFERENCE_USED`; the
+computed heat partition of package 9 is not used here), `rate_factor`, `temperature_factor`,
+`rate_temperature_factor` and `flow_stress_with_rate_temperature_pa`; a factor outside 0.2 to
+5 is not used (`rate_temperature_rejected`, flag `RATE_TEMPERATURE_FACTOR_REJECTED`). With
+`use_rate_temperature` true the factored value becomes the pass flow stress (flag
+`FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED`, also at the top level). Which consumers take it
+(`process.flow_stress.rate_temperature.consumers`):
+
+| consumer | uses the factored flow stress | how the result shows it |
+|---|---|---|
+| `schedule_flow_stress` | no | unchanged; its `STRAIN_RATE_SENSITIVITY_IGNORED` stays in its own result |
+| every bite model (Hitchcock, mattress, half-space), case pass and schedule | yes | the effective pass flow stress (`effective_inputs`, `used_mean_flow_stress_pa`) |
+| bite sensitivities | yes, perturbed about it | the rate term is not a force term of the stability calculation; `chatter.rate_sensitivity_damping` reports it (section 11.4) |
+| speed-change gauge shift | yes, through the bite | the factor is not re-evaluated at the changed speed |
+| pass heating | yes | plastic work from the effective flow stress |
+| shape inputs and yield checks | yes | through the bite and the effective flow stress |
+| the bite temperature of the factor | no | plastic work from the unfactored flow stress |
+
+**Law forms (B2, X2).** The late (stage-IV) slope of the Voce law may be negative (down to
+-5e9 Pa; the flow stress must stay positive up to strain 10), for the work softening of
+purified-matrix Al-Fe and high-purity grades beyond 80 % reduction [TM-LB2 EX]; flag
+`NEGATIVE_LATE_HARDENING_SLOPE_WORK_SOFTENING`. A second form, `law: tome_voce`,
+`sigma = (s_v + theta4*eps)*(1 - exp(-theta0*eps/s_v))` [form: TM-LB4 EX] (keys
+`saturation_scale_pa`, `stage_iv_slope_pa`, `initial_hardening_rate_pa`; pass mean by
+composite Simpson with 64 panels [D]: within 1e-9 of 512 panels on passes away from the steep
+start, 2e-7 to 5e-7 on a first pass from zero strain with `theta0/s_v` 13). Nothing selects a
+law by alloy group: `process.flow_stress.alloy_group_context` gives the X2 sentence and no
+table row, because the alloy-group table has no alloy matching of its own. No recovery term:
+the gap row gives no formula for it. The logarithmic rate law of E10 is not added (no parameter
+set for a foil alloy).
+
+**Fit to pass strengths.** `python -m physicroll.band_cli --fit-hardening FILE.json` (keys
+`gauges_m`, `strengths_pa`, `reference_thickness_m`, `prior_equivalent_strain`) fits the
+generalised Voce law (`bite_tribology.fit_voce_to_pass_strengths`): for 60 characteristic
+strains from 0.05 to 5 the law is linear in `(s0, d, theta4)` and solved by least squares
+(`theta4` 0 with 3 points), the best one refined by repeated parabolas in `ln(eps_c)` (one
+parabola leaves `theta4` about 1e-3 off on exact data). It prints the parameters, residuals,
+RMS, the sign of the late slope and flags (`FIT_TO_ENTERED_STRENGTHS_NOT_VERIFIED`,
+`FIT_UNDERDETERMINED_FEWER_THAN_5_POINTS`, `TENSILE_STRENGTH_USED_AS_FLOW_STRESS`: an
+as-rolled tensile strength of a hard temper is taken as the flow stress at that strain [D]);
+with fewer than 3 points it refuses (`NOT_FITTED`, outcome
+`UNDERDETERMINED_FEWER_POINTS_THAN_PARAMETERS`) and returns no number. When the fitted saturation
+stress equals the initial one (identical strengths: no rise) the characteristic strain has no
+effect: it is null, flag `FIT_CHARACTERISTIC_STRAIN_NOT_DETERMINED` with
+`characteristic_strain_reason`, and `law_rejected_by_validation` says so. Nothing is written into
+a case.
+
 ### 8.4 Speed-consistent chatter critical speed
 
 With friction falling as speed rises, the critical speed is the speed `u` with
 `u = u_crit(mu(u))` [D], where `mu(u) = mu_used + [mu_closure(u) - mu_closure(u_op)]` (the
 placeholder supplies the slope, the operating friction the level), scanned and bisected in
-log speed with the contact radius and forward slip held at the operating bite. The perturbed
+log speed with the inlet-angle radius of the film (section 8.1) and forward slip held at
+the operating bite. The perturbed
 bites use the operating bite's model (review fix; section 10.2); scan speeds that model cannot
 solve are rejected rows, and when the lowest assessable speed is already unstable the status
 is `UNSTABLE_AT_LOWEST_ASSESSABLE_SPEED` with `lowest_assessable_exit_speed_m_s` (the crossing
@@ -2030,10 +3739,115 @@ and without bite damping, so no speed-consistent critical speed is given (fixed 
 0.03: 13.85 m/s, beta 0.5; 5.16 m/s, beta 0). Before the fix those slow scan speeds fell back
 to the mattress model and gave 13.30 and 8.79 m/s, mixing the two bite models.
 
+The same placeholder slope sets the speed effect on foil gauge, `dh/du = g_mu*dmu/du` at
+constant force and constant tension (section 9.5): -3.8 % of gauge per m/s on the battery-foil
+case pass; the number is what the closure implies, not a mill's speed effect, and neither
+closure's speed slope has been checked against a mill.
+
+### 8.5 Friction from load, torque and forward slip
+
+`measurement.pass_records` (case schema v2, null by default; no demo has records) takes 1 to 8
+records of a measured pass: `label`, `separating_force_n` and `provenance` (required),
+`forward_slip_fraction` (-0.2 to 1) and `torque_per_work_roll_nm` (optional), the pass values
+that differ from the case pass (`exit_speed_m_s`, gauges, tensions, `mean_flow_stress_pa`; null
+takes the case pass) and three uncertainties: force 5 %, slip 0.01 absolute and torque 10 % by
+default (analyst choices [D], stated in the result). The result is
+`process.friction_identification`; it is REPORTED only: no pass, lever, sensitivity or evidence
+item uses it, and `declaration.calibrated` stays false because the tool cannot verify the
+entered numbers. To use a value, enter it as `pass.friction_coefficient`.
+
+**Method.** Each record is solved with the bite model of the operating bite (Hitchcock, the
+experimental mattress bite or the reduced half-space bite; `bite_model` in the result), one
+nominal solve at a time (`_BiteCache.state`, no sensitivities):
+
+1. `friction_from_force`: the friction whose model force equals the measured force (secant in
+   `ln mu` from the case friction, tolerance 1e-4 relative in force, at most 12 solves, inside
+   0.003 to 0.3; otherwise `NOT_FOUND` with the reason).
+2. `friction_from_slip`, `friction_from_torque`: the same for the measured slip and torque, on a
+   9-point scan from 0.4 to 2.5 times the friction from force, the root nearest it refined by
+   regula falsi; `multiple_roots` when the scan holds several.
+3. `friction_joint`: the minimiser of the sum of squared normalised residuals (force and torque
+   in `ln`, slip absolute, each divided by its uncertainty) over the scan, refined by repeated
+   parabolas; `consistent` when every normalised residual is at most 2 in magnitude. (One
+   parabola through the scan points, as first specified, lands 6 % off on exact half-space data
+   and is repeated until it moves less than 1e-4 in `ln mu`.)
+4. `friction_and_flow_stress`: with force and slip, the pair (friction, flow-stress scale)
+   that reproduces both exactly (Newton, scale 0.5 to 2) - two unknowns from two numbers: there
+   is no redundancy to check them.
+5. `load_exponent_in_friction`, `slip_exponent_in_friction` (and the torque exponent) at the
+   friction from force, by central differences at +-1 %.
+
+Every single-quantity value carries a first-order interval `mu*exp(+-u)`, `u` = the entered
+uncertainty divided by the local sensitivity `|d(quantity)/d ln mu|` [D, first-order
+propagation]. `agreement.outcome` names the result: `MEASUREMENTS_AGREE` (joint fit
+consistent and every pair within twice its combined uncertainty), `MEASUREMENTS_CONTRADICT`,
+`SINGLE_MEASUREMENT` or `FORCE_NOT_MATCHED`.
+
+**What a disagreement means.** The three values come from one constant-friction bite. When they
+disagree, either a measurement is off or the bite cannot reproduce the pass with one friction
+value: foil forward slip is over-estimated by constant friction, and a friction varying
+through the bite is the published remedy [BT-S5 AB] (not built). A slip residual above 2 at the
+friction from force gives `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`. An
+identified friction also absorbs the bite model's own error: on the published foil case the
+printed model gives W_bar 78 to 134 depending on an unstated end length, about 12 % in a
+friction from load and 30 % in one from slip.
+
+**Which measurement carries the friction information.** It depends on the regime (reduced
+half-space bite [run], `tests/test_band_friction_identification.py`):
+
+| case | structure | load exponent | forward-slip exponent |
+|---|---|---|---|
+| published foil case, 20 -> 15 um, friction 0.03, strip spring 80 GPa | A B F | 2.461 | 0.378 |
+| same, strip rigid in thickness | A B E F | 2.455 | 0.436 |
+| BT-V2, 73 -> 31.39 um, friction 0.026, R 89 mm | A F | 1.570 | 2.473 |
+
+With a no-slip zone the forward slip hardly depends on friction; the force is the better
+indicator there (flag `FORWARD_SLIP_INSENSITIVE_TO_FRICTION_IN_THIS_REGIME` when the slip
+exponent is below 0.5, and the slip value is marked `weakly_determined`: its interval is several
+times wider than the force-based one). Without a no-slip zone the slip is the sharper indicator.
+The forward slip of the reduced half-space bite is defined to elastic order only (section 10);
+records whose bite carries `NO_SLIP_ZONE_CREEP_ABOVE_ONE_PERCENT` add that limitation.
+
+**BT-V2 inverted** (benchmark `BT-V2-FRICTION-HS`): the reduced half-space bite reproduces the
+measured W_bar 58 with friction 0.03063 for an assumed roll radius of 89 mm (forward slip
+0.1965; 4 solves) and 0.02488 for 135 mm (slip 0.2594; 5 solves), ratios 1.178 and 0.957 to the
+0.026 the source infers with its own model ("about 0.03" from mill tests [BT-S1 FT]); verdict
+`INDICATIVE_ASSUMED_INPUTS`. (The root itself is 0.030636; the secant stops at 1e-4 in force.)
+
+**Summary and contact friction.** `summary` lists the frictions from force, their median and
+spread, and with two or more exit speeds the least-squares slope `d mu / d ln(u)`; the flag
+`IDENTIFIED_FRICTION_DIFFERS_FROM_CASE_FRICTION` marks a median more than 20 % from the case
+friction. With `tribology`, each record gets the film ratio of the bite at its friction, the
+contact ratio `A` of the closure's curve (the published one by default, section 8.1) and the
+contact friction `mu_c = (mu - (1 - A)*mu_v)/A` (constant valley friction, 0.008 by default;
+null below `A` 0.05) [D, SPEC18: package 6's load sharing solved for the contact friction]: for
+example friction 0.03 at film ratio 0.380072 gives `A` 0.6695 and `mu_c` 0.04086.
+`suggested_contact_friction` is their median, with the slope against `ln(Lambda)` when the film
+ratios differ by more than 20 % (one value does not fit a speed range, E7 FT); entering it in
+`tribology.friction_closure.contact_friction` is your choice.
+
+**Cost.** One record with force, slip and torque: 18 solves, 0.4 s with the mattress bite on the
+battery-foil case pass; 21 solves, 5.4 s with the half-space bite (budget 42 solves, 3 s and
+10 s). The app does not ask for records yet.
+
+**How to log a record.** Take a steady window of 5-10 s at constant speed and tensions; average
+the roll force (both sides) and the motor torque per work roll net of losses; measure forward
+slip from the exit strip speed (laser velocimeter) and the work-roll surface speed to 0.1 %
+absolute; note the gauges, tensions, speed and coil, and the oil temperature; see section 7.4
+of the [coverage study](simulation-coverage-gaps.md) for the measurements the gap rows ask
+for.
+
 ## 9. Mill dynamics (`mill_dynamics.py`)
 
 Status `UNVALIDATED_LINEAR_MILL_DYNAMICS_SCREEN`; wraps `chatter.py` without changing it.
 The results never change hypothesis evidence.
+
+> **Not for foil passes.** Gaugemeter control acts through roll force and an open gap. At foil
+> gauge the gauge is controlled by speed and tension [TM-LC18 VP]. Do not read this section
+> for passes below the closed-gap onset (section 3.2); the result carries `foil_regime_note`
+> on the gauge-control section there (SPEC17 X7). Gauge control by speed and entry tension is
+> [section 9.5](#95-foil-gauge-control-by-speed-and-tension-foil_gaugepy) (opt-in, SPEC19
+> package 13).
 
 **Gaugemeter AGC** [V: BISRA gaugemeter `h = S + F/M`, correction `dS = -alpha*dF/M`, IJCA
 9(2); cylinder closed-loop bandwidth 20-30 Hz, Scheidl et al. 2016, Karl et al. 2011]. The
@@ -2086,7 +3900,8 @@ operating pass (`sensitivity_bite_model`), so it also works for a pass solved by
 model (10.2); static gauge change by the bite-input formula above (tension held constant); decoiler
 frequency `n*u_e/(pi*D_coil)`, exit pitch `pi*D_coil*h0/(h1*n)` [D]. Demo
 (`incoming_variation`): 2 % = 5.65 MPa flow-stress amplitude; static exit-gauge change 3.68 um
-without AGC, 1.22 um with it; decoiler 2.23 Hz, exit pitch 5.39 m (first harmonic).
+without AGC, 1.22 um with it; decoiler 2.23 Hz, exit pitch 5.39 m (first harmonic). A coil-locked
+mark from reel run-out through the tension (not the hardness) is in section 9.5 (reels).
 
 **Drive torsional modes** [D; benchmark V: J. Phys. Conf. Ser. 2419 (2022) 012027; first-mode
 guidance 10-20 Hz V: Gao et al.]: free-free chain `J*theta'' + K*theta = 0`; reel inertia
@@ -2102,12 +3917,164 @@ slope; `dF/dmu` is a central difference (+-2 % of the friction) through the bite
 operating bite model, as for `dF/dY`. In the demo both sensitivities report
 `sensitivity_bite_model` `derived_slab_hitchcock`. Demo (`gauge_control.speed_change_gauge_shift`, 6 -> 12 m/s): placeholder friction
 0.0829 -> 0.0765, force -242 kN, exit gauge -4.68 um with AGC, -14.2 um without; the
-absolute friction values are placeholders (8.1).
+absolute friction values are placeholders (8.1). At foil gauge the speed effect at constant
+force and constant tension is in section 9.5 (`foil_gauge_control.speed`).
 
 Not modelled: the cylinder as anything but a first-order loop, AGC monitor / feed-forward /
 mass-flow AGC, eccentricity compensation, tension regulators between the two idealisations,
 motor and drive control loops, gear backlash, strip elastic recovery, thermal effects, roll
 bending and cross-width variation.
+
+### 9.5 Foil gauge control by speed and tension (`foil_gauge.py`)
+
+Status `UNVALIDATED_FOIL_GAUGE_LOOP_ANALYST_CONTROL_LAW`; opt-in (case section
+`foil_gauge_control`, SPEC19 package 13, gaps C1 and BT-G13); evidence-neutral. The
+gaugemeter section above describes gauge control by roll force at an open roll gap and stays as
+it is; this section describes the gauge steered by entry tension and speed, the actuators at
+foil gauge [TM-LC18 VP; TM-LC19 AB; TM-LA36 EX], and says so in `regime`.
+
+**Sensitivities** [D, re-derived in SPEC19]. Static force balance of the linearised bite with
+two extra inputs, `dF = F_h*dh + F_hin*dh_in + F_se*ds_e + F_sx*ds_x + F_mu*dmu + F_Y*dY`,
+against the structure `dF = M_eff*(dh - dS) + K_kiss*dh`; with `den = M_eff + K_kiss - F_h`,
+`g_X = dh/dX = F_X/den` and `dh/dS = M_eff/den`. `M_eff` is 0 for a mill run at constant strip
+force (`gap_mode: "constant_force"`), the stand's mill modulus for position control
+(`"position"`), or an entered value (`"supplied_modulus"`); both standard modes are always
+printed side by side. `K_kiss` stands for the stiffness of the roll-to-roll contact outside
+the strip at a closed gap: the model has **no closed-gap load path** (roll kiss is Phase 3,
+gap BT-G2), so `kiss_stiffness_n_m` is an input, zero when not given (flag
+`KISS_STIFFNESS_NOT_MODELLED_ZERO_USED` in or below the closed-gap onset range). What this
+section may claim about closed gap is only this: the sensitivities at constant force and
+constant tension of the open-gap foil bite. `F_mu` and `F_Y` come from the bite model actually
+selected (analytic derivatives of the reduced half-space bite, else central differences of the
+operating bite model; `sensitivity_bite_model`, `sensitivity_basis`), and the bite's flags are
+repeated in the section. Battery-foil case pass (mattress bite of the demo; mill modulus
+2.3077e9 N/m, strip modulus 8.8665e10 N/m, `dh/dS` 0.0254):
+
+| sensitivity | constant strip force | position control |
+|---|---|---|
+| `dh/ds_e` | -5.4948e-14 m/Pa (-0.183 % of gauge per MPa) | -5.3555e-14 |
+| `dh/ds_x` | -8.5384e-14 m/Pa | -8.3218e-14 |
+| `dh/dmu` | 6.9569e-4 m (0.696 % per 1 % friction) | 6.7804e-4 |
+| `dh/dY` | 1.5110e-13 m/Pa (0.881 % per 1 % flow stress) | 1.4727e-13 |
+| `dh/dh_in` | 0.4397 | 0.4286 |
+
+**Speed and oil temperature.** `dh/du = g_mu*dmu/du + g_Y*Y*m/u`, with `dmu/du` the mean
+slope of the friction closure's speed curve (`process.friction_speed_curve`, needs
+`tribology`) and `m` the rate sensitivity of `hardening.rate_temperature` (else the rate term
+is 0); `dh/dT_oil = g_mu*dmu/dLambda*Lambda*(-beta)` (section 7.8). The speed effect rests
+entirely on how friction falls with speed: by default that slope is the placeholder closure's,
+which is fitted to no mill, or the load-sharing closure's with the contact friction you enter;
+neither has been checked against a mill. The result says this in plain words beside the number
+(`speed.words`, flag `SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE`). On the battery-foil case
+pass the placeholder slope -0.0016462 per m/s gives -1.145e-6 m per m/s, -3.8 % of gauge per
+m/s: what this closure implies, not this mill's speed effect.
+
+**The loop** [D, SPEC19: analyst design; the sources give the structure, no gains or
+equations]. Exit gauge -> integral entry-tension trim (fast, limited to
+`tension_trim_limit_fraction` of the entry tension) -> speed (slow, at most
+`speed.ramp_limit_m_s2`, while the trim is held at its limit). Per unit of gauge error, without
+limits, `L(s) = (w_c/s)*1/(1 + s/w_T)*G_gauge(s)*exp(-s*theta)`, `theta =
+gauge_distance_m/u_exit`, `w_T = 2*pi*tension_loop_bandwidth_hz`, `G_gauge` the thickness-gauge
+transfer of section 11.6 (`band_sensors.gauge_transfer`: the first-order lag, and the spot
+average when `measurement.thickness_gauge` describes the gauge), `w_c` entered or
+`0.5/(theta + tau_g + 1/w_T)` (about 60 degrees). `S = 1/(1 + L)` is the gauge error left of a
+disturbance; with `smith_predictor` and a perfect model `S = 1 - T0*exp(-s*theta)`,
+`T0 = L0/(1 + L0)`, `L0` without the delay and `w_c = 0.5/(tau_g + 1/w_T)`. Margins, the band
+the loop reduces and the peak of `|S|` from a scan of 1200 frequencies (1 % resolution;
+bisection-refined values beside). A slow loop whose crossing lies below the first scan point
+(0.01 rad/s) is bracketed below it (down by decades to 1e-9 rad/s, then the same bisection): the
+refined value is then given in both the scan and the refined keys, with
+`crossover_below_scan_start` (likewise `phase_crossover_below_scan_start`,
+`attenuation_edge_below_scan_start`) true, and the peak of `|S|` is searched from a decade below
+the lowest such crossing. A gain crossover not found within the bound leaves the phase margin
+null and `stable` null (not assessed, not unstable); the time runs are then not made, with the
+reason "the gain crossover was not found". Three numbers the plant must supply: where the gauge is
+(`gauge_distance_m`), how fast it reads (`gauge_time_constant_s`, under 10 ms [TM-LC24 VP]),
+and how fast and how far the tension can be trimmed (`tension_loop_bandwidth_hz`,
+`tension_trim_limit_fraction`). Battery-foil case pass, gauge 1.5 m at 13 m/s, 10 ms, tension
+loop 5 Hz (assumed): `theta` 0.1154 s, `w_c` 3.180 rad/s (0.506 Hz), phase margin 61.4
+degrees, gain margin 3.34 at 10.08 rad/s; `|S| < 1` below 0.521 Hz; peak 1.565 at 1.132 Hz.
+**Finding 8**: at the entry coil's once-per-revolution frequency (7.8 m/s, 1.0 m: 2.483 Hz) the
+loop amplifies a tension ripple 1.123 times (a 20 s time run: 1.13); a ripple from 0.1 mm of
+coil run-out (93966 Pa, SPEC19 package 14, an input here) gives 0.0172 % gauge ripple open loop,
+0.019 % with the loop (`foil_gauge.tension_ripple_gauge`). A 1 % entry gauge step (0.5 um)
+gives 0.2199 um at the exit at first, within 5 % after 0.54 s with 4 % overshoot without
+limits, and needs 4.00 MPa of trim, 114 % of a 10 % limit on 35 MPa: the trim saturates.
+Time runs: explicit steps `dt = min(1 ms, theta/40)` for 20 s (at most `TIME_RUN_MAX_STEPS`
+= 200000 steps: a dead time below 4 ms gives `TIME_RUN_NOT_MADE_TOO_MANY_STEPS` and no time run,
+the frequency results kept); statuses `SETTLED`,
+`TRIM_SATURATED_HELD_BY_SPEED`, `TRIM_SATURATED_ERROR_REMAINS`, `OSCILLATING`,
+`NOT_SETTLED_WITHIN_HORIZON`; settings with phase margin at or below 0 (or gain margin at or
+below 1) are reported as `UNSTABLE_LOOP_SETTINGS` with the crossover frequency and not run.
+With no entry tension (or a zero trim fraction) the trim range is zero: each disturbance row
+has `trim_share_of_limit` null, `trim_saturates` true whenever a trim is needed and the reason
+"no entry tension to trim: the tension trim cannot compensate for this disturbance", flag
+`FOIL_GAUGE_NO_TENSION_TRIM_RANGE` ("The entry tension is zero (or no trim was allowed), so
+there is no tension to trim: the tension trim cannot correct a gauge change here."); the run
+with limits holds the trim at zero, so only speed acts. When the gauge does not respond to entry
+tension (`dh/d(entry tension)` zero) the trim rows are null with a reason, flag
+`FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE` ("The gauge does not respond to entry tension in this
+bite, so the tension trim needed for a gauge change cannot be worked out."), and no time run;
+the sensitivities and the loop analysis are given in both cases.
+The result also gives the gauge error left at the roll, coil and chatter-onset frequencies and
+rows for a 1 % entry gauge, 1 % flow stress, 1 % friction, 1 K oil and a 10 % speed change
+(open-loop gauge change, trim needed and its share of the limit, the speed change that would
+replace it). Report: block "Gauge control by speed and tension" after the gaugemeter block,
+which then points to it.
+
+**Reels and coil run-out** (SPEC19 package 14, gap C2; `foil_gauge_control.reels`) [D,
+re-derived in SPEC19]. The strip spans of the chatter model end at constant-speed nodes and
+stay so; this block adds, beside them, what is at the far end: the reel with its inertia
+`J = mill_dynamics.reel_inertia_kg_m2` (it changes with the coil radius), the span as a
+spring, the bite as a damper and coil run-out `e_c` as the input. Entry side (the exit side
+with its own signs, the exit gauge and the exit slip sensitivity):
+`s_e' = (E/L_e)*(du_e - R*dw - v_d)`, `du_e = k_e*s_e`,
+`k_e = u_e*((f_se + f_h*g_se)/(1 + f) + g_se/h1)` (negative: the bite gives way),
+`J*dw' = A*R*s_e - dM`, `v_d = w_rev*e_c*sin(w_rev*t)`, `w_rev = u_e/R`, so
+`s_e(jw)/v_d = -(E/L_e)/(jw + lam_b + (E/L_e)*A*R^2/(J*jw))`, `lam_b = -(E/L_e)*k_e`,
+coil-on-span frequency `w_n = sqrt((E*A/L_e)*R^2/J)`, damping ratio `lam_b/(2*w_n)`, gauge
+ripple `|g_se|*|s_e|*|S(j*w_rev)|`. The regulator is the tool's own: `"none"` or `"direct"`, an
+ideal high-pass `s/(s + w_b)` on the tension with the entered bandwidth [D: the simplest form
+of "cannot attenuate a once-per-revolution disturbance near its own bandwidth"]. A resonance
+of the coil on the span is a result: its frequency, its damping and where during the coil it
+meets the once-per-revolution forcing (`radius_sweep`, 8 radii from the coil radius to the
+core, `resonance_crossing` where the two frequencies come within 10 % while the damping ratio
+is below 0.5, or cross between two radii; flag `COIL_ON_SPAN_RESONANCE_CROSSED_DURING_COIL`).
+Battery-foil case pass, entry coil radius 0.5 m, core 0.15 m, motor 50 kg m² (assumed), span
+3 m, run-out 0.1 mm: `k_e` -1.649e-8 m/s per Pa; leak rate 384.7 1/s (2.6 ms); reel inertia
+365.5 kg m²; coil-on-span 4.925 Hz, damping ratio 6.2; once per revolution 2.483 Hz; run-out
+speed 1.56e-3 m/s; tension ripple 93966 Pa (94551 Pa with the reel speed held); gauge ripple
+5.163e-9 m (0.0172 %) open loop, 5.798e-9 m with the loop. **Finding 8, second part**: the
+resonance is overdamped here because the bite's slip and gauge give way to tension (the leak
+rate); a bite much less sensitive to tension, as at a closed gap, would lower the damping and
+let the resonance show. What a plant person would see (`band_connection`): a tension ripple
+the regulator cannot remove writes a gauge mark locked to the coil, one per revolution, at an
+exit pitch that changes with the coil diameter (`exit_strip_pitch_m` per sweep radius: shorter
+as an entry coil unwinds, longer as the exit coil builds). The coil-locked hypothesis keeps
+its own rules (6.3); this block does not enter the tally.
+
+**Pass chaining** (gap C8; `foil_gauge_control.pass_chain`). A thickness ripple of pitch `p`
+on the entry strip of a pass passes at `f = u_e/p`; exit amplitude `a_out =
+|g_hin|*|S(j*2*pi*f)|*a_in`, exit pitch `p*h0/h1`; the exit ripple of pass `n` is the entry
+ripple of pass `n + 1`, and the relative ripple `a/h` changes by `|g_hin|*(h0/h1)*|S|` per pass
+(0.733 statically on the battery-foil case pass: `|g_hin|` 0.4397, `h0/h1` 1.667). Chained:
+the schedule rows in order from the first, each starting at the previous row's exit gauge
+(the chain ends at a row without a bite, with its reason, or at the first row that does not
+continue the route); ripples: the first pass's entry-coil circumference (from `reels.entry`,
+else `kinematics.entry_coil_diameter_m`) and each of `ripple_pitches_m`. Assumed: the whole
+coil passes from one pass to the next (no trimming or splicing, amplitudes only, phases not
+tracked); the case pass's loop settings and crossover for every pass, the dead time following
+each pass's exit speed; the gauge sensor's transfer is not applied in the chain. A chained
+ripple within 10 % of a pass's chatter onset frequency (`schedule_sweep`) or of its loop's
+peak is flagged (`ENTRY_RIPPLE_NEAR_STAND_RESONANCE`, `ENTRY_RIPPLE_NEAR_TENSION_LOOP_PEAK`)
+and listed in `resonance_meetings` with the pass and the speed; a cumulative relative ratio
+above 1 sets `RELATIVE_RIPPLE_GROWS_FROM_PASS_TO_PASS`. Cost: a few milliseconds; the bites
+are the schedule sweep's (no new bite derivation), so the quick profile changes nothing here.
+
+Not modelled: a closed-gap load path; decoupling, adaptive and feed-forward control and any
+vendor's controller; reel friction, binding and ovality harmonics; a speed slope of friction measured
+on a mill. Benchmark: `BT-G13-SPEED-EFFECT` is a reference record (the BT-V4 speed curves
+[BT-S3 EX] are not digitised; section 13).
 
 ## 10. Thin-gauge roll bite
 
@@ -2145,10 +4112,14 @@ bite exists for the pass, whatever `bite_model` says.
 
 ### 10.2 Experimental mattress (elastic-foundation) model (`foil_bite.py`)
 
-Status `UNVALIDATED_EXPERIMENTAL_MATTRESS_FOIL_BITE`. A planner reduction [D] in the spirit of
-Fleck & Johnson (1987; read only through a poor OCR copy) and of the MISG report "A simple
-model for the cold rolling of metal foil" [V for the non-dimensional form
-`(h - G2)p' + mu*p = x`]. It is **not** the Fleck-Johnson hybrid model: the strip is
+Status `UNVALIDATED_EXPERIMENTAL_MATTRESS_FOIL_BITE`. A planner reduction [D]: a plain
+Winkler-foundation ("mattress") bite, in the non-dimensional form of the MISG report "A simple
+model for the cold rolling of metal foil" [V, `(h - G2)p' + mu*p = x`]. Fleck & Johnson
+(1987) used a foundation only for the perturbation of a Hertzian pressure and rejected the
+plain mattress [BT-S2 FT]; Fleck et al. (1992) abandoned it because it under-predicts load by
+up to a factor 2 and torque by up to a factor 10 [BT-S1 FT]. Fleck & Johnson's modulus is
+`8E*/(3*pi*a0) = 0.849 E*/a0`; this module uses `(3*pi/8)E*/a = 1.178 E*/a`. It is **not** the
+Fleck-Johnson hybrid model: the strip is
 rigid-perfectly-plastic (no elastic strip zones) and the roll a local Winkler foundation.
 
 ```
@@ -2189,21 +4160,99 @@ and within a factor 5). The same 0.30 -> 0.21 mm pass at friction 0.05, rejected
 Hitchcock, solves in the conventional regime.
 
 **Where it rejects** (ValueError, never numbers): exit gauge at or below the limiting gauge
-`2K/K_p`; Coulomb shear above the shear yield in any slip zone (the published high-friction
-foil case, 50 -> 25 um at friction 0.10, is rejected for this reason); an exit that would have
+`2K/K_p`; Coulomb shear above the shear yield in any slip zone (a 50 -> 25 um pass at a
+NOMINAL friction of 0.10 is rejected for this reason; this is not the published case, where
+0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at
+shear yield [BT-S3 EX]); an exit that would have
 to stick (zero forward slip); a fixed point that does not converge; a force that changes by
 more than 1e-3 on grid refinement.
 
 **How far to trust it.** The model is verified for internal consistency only (rigid limit,
-junction continuity, Coulomb limits, energy identity, grid convergence, trends). No benchmark
-with fully known inputs was found. In the foil regime it can give implausibly large forward
-slip because there are no elastic strip zones (flag
-`FORWARD_SLIP_IMPLAUSIBLY_LARGE_NO_ELASTIC_STRIP_ZONES`). Treat foil-regime numbers as order
+junction continuity, Coulomb limits, energy identity, grid convergence, trends). One
+published foil-bite case has every input stated: Fleck, Johnson, Mear & Zhang 1992, Fig. 9
+(BT-V1 [FT]: entry 20 um, 25 %, R 89 mm, `Y_s` 230 MPa, `E_R*` 230 GPa, friction 0.03, no
+tensions). On it the mattress bite returns `W_bar = W*E_R*/(R*Y_s^2)` = 49.77 [run], **0.42 of
+the half-space reference load** of 118 and 0.80 of the authors' own mattress value 62. This is
+a recorded discrepancy, not a validation; the model is not tuned towards 118. The caption value
+118 is itself not a grid-independent number: the printed end conditions of the source (a
+pressure step at the exit with zero slope there) give 78 to 134 for end lengths of 40 to 2.5 um
+in two independent re-implementations [computed, re-implementation of E1; computed, SPEC18
+prototype]; 118 corresponds to about 5 um, and the element size the paper states (about 21 um)
+to 88-89. Against every member of that family the mattress value 49.8 is low by a factor 1.6 to
+2.7, so the verdict stays a recorded discrepancy. The contact length of the same published
+solution, 2.14 mm (`b/R` = 0.0241 [E6 FT, thesis p.54]), gives a second reference row: 1.474 mm
+[run], ratio 0.689. The source's strip modulus `E_s*` = 80 GPa enters only its longitudinal
+no-slip equations and none of its loads [E1 FT].
+`python -m physicroll.benchmarks` prints the encoded cases (`physicroll/benchmarks.py`, status
+`SOFTWARE_COMPARISON_WITH_PUBLISHED_VALUES_NOT_PHYSICAL_VALIDATION`; agreement band 0.9-1.1 on
+the ratio project / reference, an analyst choice [D]); the rows of `benchmarks.table_rows()`
+(a row without a published value has the row verdict `NO_REFERENCE_VALUE`: project value
+recorded only; the case verdict is unchanged):
+
+| id | quantity | project [run] | reference (kind, read) | ratio | verdict |
+|---|---|---|---|---|---|
+| `BT-V1` | `W_bar` | 49.7724 | 118, half-space (model output, FT) | 0.4218 | `RECORDED_DISCREPANCY` |
+| `BT-V1` | `W_bar` | 49.7724 | 120, perturbation (model output, FT) | 0.41477 | `RECORDED_DISCREPANCY` |
+| `BT-V1` | `W_bar` | 49.7724 | 62, Fleck-Johnson mattress (model output, FT) | 0.802781 | `RECORDED_DISCREPANCY` |
+| `BT-V1` | force per width [N/m] | 1.01884e6 | 2.42e6 [derived from 118] | 0.421009 | `RECORDED_DISCREPANCY` |
+| `BT-V1` | forward slip | 0.169779 | - | - | `NO_REFERENCE_VALUE` |
+| `BT-V1` | contact length [m] | 1.47447e-3 | 2.14e-3, same published solution (model output, E6 FT) | 0.689005 | `RECORDED_DISCREPANCY` |
+| `BT-V2-R89` | `W_bar` | 41.0688 | 58 measured (FT); radius 89 mm assumed | 0.708083 | `INDICATIVE_ASSUMED_INPUTS` |
+| `BT-V2-R135` | `W_bar` | 51.0529 | 58 measured (FT); radius 135 mm assumed | 0.880223 | `INDICATIVE_ASSUMED_INPUTS` |
+| `BT-V3-FIG1-140UM` | `W_bar` | 45.9683 | "about 50", Fig. 4 read by eye | 0.919367 | `REFERENCE_READ_BY_EYE` |
+| `BT-V3-EQ29` | `h_0c` [m], BT-V1 mill | 3.62386e-5 | - | - | `NO_REFERENCE_VALUE` |
+| `BT-V3-EQ29` | `h_0c` [m], Fig. 1 case | 5.12491e-5 | - | - | `NO_REFERENCE_VALUE` |
+| `BT-V3-EQ29` | `h_0c` [m], demo mill, 175 MPa | 5.63468e-5 | - | - | `NO_REFERENCE_VALUE` |
+| `BT-V3-EQ29` | `h_0c` [m], demo mill, 202 MPa | 6.28559e-5 | - | - | `NO_REFERENCE_VALUE` |
+| `SS-V2` | critical stress [Pa] | 8.43556e6 | - | - | `NO_REFERENCE_VALUE` |
+| `SS-V2` | critical I-units | 4.01693 | 5.3 simply supported (SS-S19 FT) | 0.757912 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2` | critical I-units | 4.01693 | 6.38 elastic restraint (FT) | 0.629613 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2` | critical I-units | 4.01693 | 8.92 clamped (FT) | 0.450329 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2` | half-wave [m] | 0.15 | 0.06 measured (FT) | 2.5 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V3` | half-wave [m] | 0.105 | 0.0375 (half of about 75 mm measured, FT) | 2.8 | `RECORDED_DISCREPANCY` |
+| `SS-V2-LOCAL-PLATE` | critical I-units, simply supported / clamped | 5.34112 / 8.64894 | 5.3 / 8.92 (FT) | 1.00776 / 0.969612 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2-LOCAL-PLATE` | half-wave [m], simply supported / clamped | 0.149457 / 0.0995553 | 0.06 measured (FT) | 2.49095 / 1.65926 | `INDICATIVE_ASSUMED_INPUTS` |
+| `SS-V2-WIDE-STRIP` | half-wave / mode width (10 %), 10 / 30 MPa | 0.803347 / 0.805223 | 0.4 measured (FT) | 2.00837 / 2.01306 | `RECORDED_DISCREPANCY` (critical peak 12.3003 / 27.2209 I-units against 7.5 and half-waves, `INDICATIVE_ASSUMED_INPUTS`; section 7.13) |
+| `SS-V3-WIDE-STRIP` | half-wave / mode width (10 %), 5 / 15 MPa | 0.796932 / 0.810249 | 0.357 measured (FT) | 2.23141 / 2.2687 | `RECORDED_DISCREPANCY` (section 7.13) |
+| `BT-G13-SPEED-EFFECT` | load ratio between 10 and 40 m/s, foil 50 -> 25 um | - | up to 40 (model output, BT-S3 EX) | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` (curves not digitised; section 9.5) |
+| `SS-V14` | measured / isolated-span critical misalignment, aluminium foil; copper low / high | - | 15; 7 / 10 (measurement, SS-S55 EX) | - | `REFERENCE_ONLY_INPUTS_NOT_RECORDED` (quoted beside the critical misalignments, section 7.2; `SS-V15` not encoded: critical values not quoted in the reports) |
+| `TM-LC7`* | equivalent Coulomb friction | 0.0265664 | - (substitution 2) | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | separating force [N] | 4.10437e6 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | forward slip | 0.0293589 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | contact length [m] | 5.14983e-3 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | strip modulus `Q_s` [N/m] | 2.00515e10 | - (2.1325e10 would put the mode at 124.6 Hz [D]) | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | lower loaded symmetric mode [Hz] | 121.878 | 124.6 measured (E9 FT) | 0.978157 | `WITHIN_AGREEMENT_BAND` |
+| `TM-LC7`* | onset frequency, bite damping 0.5 [Hz] | 122.303 | 124.6 measured (E9 FT); paper's model 129 / 132 | 0.981567 | `WITHIN_AGREEMENT_BAND` |
+| `TM-LC7`* | critical exit speed, bite damping 0.5 [m/s] | 8.10139 | 8.715, if 5.81 is the speed between the stands [D] | 0.929592 | `INDICATIVE_ASSUMED_INPUTS` |
+| `TM-LC7`* | critical exit speed, bite damping 0.5 [m/s] | 8.10139 | 5.81 measured (E9 FT), if it is stand 2's exit speed; paper's model 6.42 / 6.57 | 1.39439 | `INDICATIVE_ASSUMED_INPUTS` |
+| `TM-LC7`* | critical exit speed, no bite damping [m/s] | 0.517673 | - | - | `NO_REFERENCE_VALUE` |
+| `TM-LC7`* | onset frequency, no bite damping [Hz] | 481.149 | - | - | `NO_REFERENCE_VALUE` |
+
+\* `TM-LC7` project values rest on three substitutions: (1) rigid rolls (roll modulus 1e14 Pa;
+the paper has no flattening, and Hitchcock flattening rejects this pass with real rolls);
+(2) a Coulomb coefficient with the same mean friction stress as the paper's friction factor
+0.054 on the shear yield stress; (3) stand 2 alone with its two spans instead of the paper's two
+stands with stress waves. Case verdict `INDICATIVE_ASSUMED_INPUTS`; the speed rows are
+indicative only (section 11.4).
+
+`BT-V3-EQ29` evaluates the regime boundary `h_0c = 12*R*r^0.5*mu^1.24*(Y_s/E_R*)^0.76` (eq. 29
+[FT]): 36.24 um for the BT-V1 mill (entry 20 um below it; the project's regime is `foil`) and
+51.25 um for the Fig. 1 case (entry 140 um above it; regime `conventional`), verdict
+`CONSISTENT_REGIME`; for the battery-foil demo mill 56.35 um (`Y_s` 175 MPa) and 62.86 um
+(175*2/sqrt(3) MPa), where the bite report gives "54-63 um" [derived] (its lower end is not
+reproduced with these inputs). The steel chatter onset `TM-LC7` is run with the paper's stand-2
+inputs and three substitutions; what it shows is in section 11.4. In the foil regime the model gives large forward slip (flag
+`FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL`, above 0.15): that is what a constant
+Coulomb friction model with a no-slip zone gives (section 3.3); elastic strip zones are not
+the cause, they are negligible above 10 % reduction [BT-S1 FT]. Treat foil-regime numbers as order
 of magnitude only.
 
 **`model_options.bite_model`**: `hitchcock` (default; slab + circular flattening), `mattress`
-(always the experimental model, at least 200 cells) or `auto` (Hitchcock, and the mattress
-model only when Hitchcock rejects the pass; the reason is kept in `bite_fallback_reason`).
+(always the experimental model, at least 200 cells), `auto` (Hitchcock, and the mattress
+model only when Hitchcock rejects the pass; the reason is kept in `bite_fallback_reason`),
+`half_space` (the reduced half-space model, section 10.3, for every pass) or
+`auto_half_space` (Hitchcock, and the half-space model where Hitchcock rejects). `auto` never
+falls back to the half-space model.
 Mattress bites carry the flag `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL`, and the report's key
 numbers name their source `experimental_mattress`. The perturbed bites of the flow-stress and
 friction sensitivities (section 9) use the model of the operating bite: the mattress model
@@ -2219,6 +4268,171 @@ uses `auto`; S1-S3 derive with Hitchcock and the case pass F1 falls back to the 
 model in its foil regime (section 3.3). A bite from a plant or foil-mill model can still be
 supplied in `model_options.bite_response_override`; for the strip-shape chain alone,
 `width_model.shape_inputs` is the lighter alternative (section 3.4).
+
+### 10.3 Reduced half-space model (`halfspace_bite.py`)
+
+Status `UNVALIDATED_REDUCED_HALF_SPACE_FOIL_BITE`. Opt-in: `diagnose()` uses it only with
+`model_options.bite_model` set to `half_space` or `auto_half_space`; the default and the
+demos are unchanged. It is a REDUCED form of the foil-bite model of Fleck,
+Johnson, Mear & Zhang (1992) [E1 FT, transcribed in
+`docs/research/band-screening-2026-11/phase1-equations.md`].
+
+**Model.** The rigid-plastic strip runs between two rolls that deform as elastic half-spaces:
+the roll gap is `g = g0 + x^2/R - (4/(pi*E_R*)) Int p ln|x - x'| dx'` [E1 eq. (8)], so the
+pressure at one point flattens the roll everywhere, not only under itself as in the mattress.
+Equilibrium, yield and Coulomb slip are E1 eqs (1), (3a), (9a), with the friction stress
+capped at `m*K/2`. The zones are those of E1: an entry contact zone, A (plastic reduction,
+backward slip), B (no-slip zone of constant thickness, E1 eq. (16)), E (a short backward-slip
+zone before the pressure peak), F (plastic reduction, forward slip) and an exit contact zone.
+A pass is solved as `A F` (E1's regime I, sheet-like), `A B F` or `A B E F` (regimes II and
+III); the zone boundaries are unknowns of one Newton system on a grid fitted to them. The
+start comes from the mattress bite, whose Winkler roll is blended into the half-space in
+steps; where the mattress bite rejects the pass (high friction), the solver starts at a
+friction of 0.03, 0.02 or 0.01 and steps the friction to the entered value (flag
+`COLD_START_BY_FRICTION_CONTINUATION`). A solution of a neighbouring pass can be given as a
+warm start.
+
+**Which zone structure is used.** The candidate is tested by six rules in a fixed order, and
+the first that passes is used: (1) `A F` if the strip never thickens in A and F; (2) `A B F`
+if the shear the no-slip zone needs (E1 eq. (16)) stays within the friction limit in every
+element; (3) otherwise zone E is inserted where the no-slip zone first needs more than the
+limit, accepted if the pressure in the no-slip zone stays under the two friction hills (within
+`0.02*K`, an analyst tolerance); (4) otherwise `A F` again from the middle of B and E; (5)
+`A B E F` built from that `A F` where its thickness rises; (6) otherwise the pass is rejected
+with every step listed. Every candidate must also pass a rule of this project's own
+(`SLIP_CONSISTENCY`, from E1 eq. (9a) and its zone description): the strip must leave faster
+than the roll and enter slower (forward and backward slip positive), and every reduction zone
+must have a length. It rejects a degenerate branch the Newton iteration can reach, in which
+zone F collapses to nothing, the strip leaves at roll speed and the load is 8.6 to 12.5 times
+the mattress load; the discrete equations hold there only because the rows of a zone without
+length hold trivially. With the rule the result does not depend on the Newton budget (tests
+with 20, 40 and 80 iterations per step). Every step of the selection is in the result
+(`structure_selection`); at the regime boundary, where neither the no-slip structure nor
+zone E is admissible and `A F` is used (rule 4 or 5), the result carries
+`ZONE_STRUCTURE_AT_REGIME_BOUNDARY` and the nearest rejected candidate with its force: on the
+battery-foil case pass F1 (50 -> 30 um) the `A B F` candidate is 1.7 % above the `A F` load
+that is used [run].
+
+**Three misprints of E1** are not used: its influence coefficient (30) has the wrong sign
+(the kernel here is re-derived and recovers Hertz line contact to 2.6e-3 of the indentation
+depth on 80 elements, 1.1e-3 on 160 [run]); its element formula (20) has the friction terms
+with the wrong sign; its finite-difference form (36) of eq. (16) has a misprinted bracket.
+
+**Why the bite ends are closed by contact zones.** The printed model ends the bite with a
+pressure step from `Y_s - sigma` to zero and asks for a zero thickness slope there. On a
+half-space a pressure step has a logarithmically infinite surface slope, so that condition
+depends on the length over which the step is smeared, which the source does not state: two
+independent re-implementations give `W_bar` 78 to 134 on the published case for end lengths
+of 40 to 2.5 um [computed]. This model keeps the strip in contact beyond the plastic zone at
+constant thickness until the pressure has fallen to zero (E1's elastic end zones, eq. (13),
+which E1 neglects), and its load is grid-converged: 0.37 % change when every zone count is
+doubled [run].
+
+The printed end conditions are kept as a benchmark mode only (never reachable from the
+engine): one pressure element of prescribed length outside each end, rigid strip, `A B F`.
+On the published case [run, tests/test_halfspace_bite_cases.py]:
+
+| end length [um] | 40 | 30 | 21 | 15 | 10 | 7 | 5 | 3.5 | 2.5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `W_bar` | 78.01 | 82.57 | 88.62 | 94.73 | 102.62 | 110.04 | 117.47 | 125.82 | 134.15 |
+| thickening before the exit, of the exit gauge | 0.00026 | 0.00064 | 0.00118 | 0.00175 | 0.00252 | 0.00326 | 0.00401 | 0.00485 | 0.00568 |
+
+The load has no limit as the end shortens. The caption value 118 corresponds to an end of
+about 5 um; at the element size the paper states (about 21 um) the printed model gives 88.6,
+the value this model gives with a rigid strip (88.86) [run]. So "118" is the result of one
+unstated numerical length, not a target; and every member of the family makes the strip
+thicken before the exit, which the model itself forbids.
+
+**The strip thickness spring is the planner's addition, not the source's.** The strip is
+given a thickness compliance `h_p = g + c_s*p`, `c_s = (h0 + h1)/2/E_s*`. E1 neglects the
+elastic thickness change of the strip. It is kept because the strip does compress and because
+without it the entry contact zone has no length; it raises the load on the published case by
+4.6 % (`W_bar` 88.86 with a rigid strip [computed, SPEC18 prototype], 92.94 at 80 GPa [run]).
+Every result carries the flag `STRIP_THICKNESS_SPRING_NOT_IN_PUBLISHED_MODEL` unless
+`strip_plane_strain_modulus_pa` is 1e13 Pa, which switches the spring off.
+
+Numbers [run, tests/test_halfspace_bite.py] (R 89 mm, `Y_s` 230 MPa, `E_R*` 230 GPa,
+`E_s*` 80 GPa, friction 0.03, no tensions unless stated):
+
+| pass | structure | `W_bar` | force [N/m] | forward slip | contact length [mm] | `p_max/K` |
+|---|---|---|---|---|---|---|
+| 20 -> 15 um (published case) | A B F | 92.936 | 1902401 | 0.2037 | 2.038 | 7.33 |
+| 140 -> 70 um | A F | 46.820 | 958396 | 0.0709 | 3.058 | 2.20 |
+| 60 -> 30 um | A F | 68.034 | 1392662 | 0.2180 | 2.446 | 5.75 |
+| 30 -> 15 um | A B F | 207.127 | 4239893 | 0.4769 | 3.156 | 11.30 |
+| 20 -> 10 um | A B F | 408.602 | 8364086 | 0.5091 | 4.217 | 11.86 |
+| 73 -> 31.39 um, friction 0.026, tensions 0.107 / 0.132 `Y_s`, R 89 / 135 mm | A F | 42.800 / 67.125 | 876108 / 2084239 | 0.1295 / 0.3103 | 2.490 / 3.618 | 3.10 / 6.48 |
+| battery-foil demo ALT2, 25 -> 12 um | A B F | - | 10128540 | 0.5527 | 5.710 | 11.86 |
+
+Regime boundary [run, tests/test_halfspace_bite_cases.py] (`W_bar`, structure, rule):
+
+| reduction | thicker entry | thinner entry | E1 eq. (29) |
+|---|---|---|---|
+| 0.5 | 56 um: 75.68 `A F` (1); 54 um: 81.20 `A F` (4) | 52 um: 87.86 `A B E F` (3); 48 um: 100.19; 44 um: 114.74 | 51.2 um |
+| 0.25 | 36 um: 40.19 `A F` (1); 34 um: 43.98 `A F` (4) | 32 um: 48.35 `A B E F` (3); 28 um: 58.00 | 36.2 um |
+| 0.10 | 30 um: 21.86 `A F` (1); 28 um: 23.71 `A F` (4) | 26 um: 25.92 `A B E F` (3); 22 um: 31.51 | 22.9 um |
+
+The no-slip zone appears between 54 and 52 um, 34 and 32 um and 28 and 26 um, close to eq. (29)
+of E1, and the load is continuous across the boundary. Zone E changes the load by under 0.1 %
+(rigid strip, published case: 88.86 against 88.94 for the `A B F` candidate) but makes the
+passage between the regimes continuous. Forward slip with zone E is taken at the slip reversal
+(the E/F boundary); the no-slip zone is thicker by an elastic-order amount, which raises the
+slip by 1 to 2.5 % of its value if that thickness is used instead (the planner's prototype
+quoted the latter).
+
+Shear cap (50 -> 25 um, `K` 150 MPa, tensions 20 MPa, R 135 mm [E4 EX, Table I pass]; the
+mattress bite rejects it at friction 0.05): 1.52 MN/m at friction 0.03, 7.72 MN/m at 0.05,
+48.65 MN/m at 0.10 with a contact length of 12.15 mm and a peak of 34 times `K` (flags
+`SHEAR_CAP_ACTIVE`, `PEAK_PRESSURE_ABOVE_16_PLANE_STRAIN_YIELD`) [run]. As X24 says, a nominal
+friction of 0.10 is not the published case: no mill runs a foil pass at 32 times the load of
+0.03.
+
+On the published case the mattress bite gives 49.77, the reduced half-space 92.94 (88.86
+with a rigid strip [computed, SPEC18 prototype]); the caption value 118 is one member of the
+family 78-134 and is not a target (section 10.2). Left out: the longitudinal elastic equations of E1 ((4), (10)-(14)), hence stress
+and traction inside the no-slip zone and the regime-III zones C and D; friction varying
+through the bite; hardening, rate and temperature inside the bite; the lubricant film; the
+closed gap. One cold solve with the selection takes 0.3 to 2.5 s, a warm start about 0.2 s.
+
+**What "118" means (finding 1 of the Phase 1 brief, in full).** The printed model ends the
+bite with a pressure step from `Y_s` to zero and asks for `db/dx = 0` there. A pressure step on
+a half-space has a logarithmically infinite surface slope, so the condition means something
+only relative to the length over which the step is smeared. Two independent
+re-implementations (the research note's in numpy, the planner's in the standard library) give
+the same family: 78 to 134 for 40 to 2.5 um, no limit. 118 is obtained at about 5 um; at the
+element size the paper states, 88 to 89. "118" is the caption value of one unstated end length;
+it is recorded, not used as a target.
+
+**In the engine.** `derive_bite_response_half_space` returns the same `BiteResponse` as the
+other models: force, slip, contact length and the eight sensitivities, by central differences
+whose perturbed solutions are found by chord iterations with the factorised Jacobian of the
+nominal solution (half steps of 1e-3; the planner checked chord against full Newton to 7
+digits, a test to 1e-6). It also returns, in `result.bite_extras`, the friction and
+flow-stress derivatives (`dforce_dfriction_n`, `dforce_dflow_stress_m2`, the slip and
+contact-length derivatives, the load exponents), the torque and the slip dissipation; for any
+other bite `bite_extras` is `NOT_SUPPLIED`. Every consumer of the bite uses the half-space
+model when the operating bite is a half-space bite: the friction fixed point, the lever rows
+and the speed-consistent critical speed (`perturbed_bite_model: reduced_half_space`), pass
+heating (its own slip dissipation), the gauge trend, the schedule sweep and the friction
+stripe screen (`bite_model` / `sensitivity_bite_model: reduced_half_space` per row). With
+`auto_half_space` a pass Hitchcock solves stays Hitchcock and says so in its row. A pass the
+half-space model cannot solve is a rejected row with the solver's reason (stage and rule), as
+for the other models; it never stops `diagnose`. Derivations within one run warm-start from
+the nearest solved pass. Cost per derivation on the 13 demo passes: cold 0.89 s mean, 1.74 s worst; warm-started 0.49 s mean, 1.58 s worst on F2 (30 -> 18 um), where the zone-E selection re-runs, above the 0.6 s the Phase 1 brief budgets [run]; the
+battery-foil demo with `auto_half_space` took 92 s (88 s with `half_space`) against 105 s
+with the default [run, one core].
+
+**Benchmarks** (`python -m physicroll.benchmarks`, section 13): `BT-V1-HS` (the published case:
+`W_bar` 88.86 with a rigid strip and 92.94 with the 80 GPa spring against the caption 118,
+verdict `REFERENCE_NOT_GRID_INDEPENDENT`, ratio recorded and not judged; contact length 1.961
+and 2.038 mm against 2.14 mm of the same published solution, 0.917 and 0.953, within the
+agreement band; peak, peak position and contact ends against the figure read by eye; the
+printed-end family 78.0 / 88.6 / 102.6 / 117.5 / 134.2 at 40 / 21 / 10 / 5 / 2.5 um),
+`BT-V2-*-HS` (42.80 and 67.13 against the measured 58 with an assumed radius),
+`BT-V3-FIG1-140UM-HS` (46.82 against about 50 by eye), `BT-V3-EQ29-HS` (the regime boundary:
+consistent for r 0.5 and 0.25, 14-22 % above eq. 29 for r 0.10, recorded) and
+`BT-X29-LOAD-EXPONENT-HS` (load exponent in friction 2.461, inside the 2 to 2.6 read from the
+master curve).
 
 ## 11. Transverse physics (chatter)
 
@@ -2262,6 +4476,7 @@ n marks on a roll of dia. D:  p = pi*D*(1+f)/n                  [V: Krueger, Ric
 order k of work-roll speed:   p = pi*D_w*(1+f)/k                [V: Krueger, Richard & Peretic 2019]
 exit coil:                    p = pi*D_coil;  entry coil: p = pi*D_coil*h0/h1     [D]
 later pass:                   p_out = p_in*h_in/h_out                            [D]
+                              (amplitude carried through the gauge loop: 9.5, pass chaining)
 bearing orders, r = (d/D)*cos(phi):  BPFO = n/2*(1-r), BPFI = n/2*(1+r),
                               FTF = (1-r)/2, BSF = D/(2d)*(1-r^2)                 [V: Randall & Antoni 2011]
 ```
@@ -2270,7 +4485,8 @@ Other screens: bending strain `t/D` against the yield-point window
 `[t/(eps_y+eps_L), t/(eps_y - sigma_t/E)]` [V sources: QCA-1; Choi, Jin & Kang 1998; de Codes
 et al. 2011]; herringbone pitch about the arc of contact at reduction >= 0.40 [V: Komori 1996;
 Szucs et al. 2020]; forward slip <= 0 skidding [V: Reid & Schey 1978]; inlet film [M] (8.1);
-flat-fan coverage `W = 2*s*tan(angle/2)`, `W_eff = W*cos(offset)` [V: Lloyd 2010; Tucker 2006];
+flat-fan coverage `W = 2*s*tan(angle/2)`, `W_eff = W*cos(offset)` [D] geometric (neither Lloyd
+2010 nor Tucker 2006 prints it [SN1 FT; SN3 FT]; a supplied pattern width replaces it);
 free thermal growth `dR = alpha*R*dT` (upper bound) and gap closure `2*dR/h_exit` [D]. In v2
 cases with a `width_model` the solved roll temperature field (7.1) replaces the free-growth
 screen for the lengthwise hypotheses.
@@ -2333,6 +4549,33 @@ interior neutral point).
   stripe rises from 0.017 to 0.114; the bending strain `t/D` falls (yield-point bending marks
   become less likely at thin gauge).
 
+**The one measured chatter onset with mill parameters (`TM-LC7`, X31).** Niroomand, Forouzan &
+Salimi (2015) [E9 FT] give a two-stand steel mill with every structural input and a measured
+onset of 124.6 Hz and 5.81 m/s. Its stand structure is the one of `chatter.py`; its process
+model is not, so `benchmarks.py` runs stand 2 with three substitutions (rigid rolls; a Coulomb
+coefficient 0.026566 with the paper's mean friction stress; stand 2 alone) [run]. The frequency
+agrees (lower loaded symmetric mode 121.88 Hz, onset 122.30 Hz, ratio 0.98) because it is set by
+the stand and the strip stiffness. The critical speed does not settle anything: 8.10 m/s is 0.93
+of the reference if the paper's 5.81 m/s is the strip speed between the stands (stand 2 then
+exits at 8.715 m/s [D]) and 1.39 of it if 5.81 m/s is stand 2's exit speed; it moves from 5.73
+to 9.26 m/s for a Coulomb coefficient of 0.02 to 0.03 [run] and rests on the bite-damping
+heuristic: without it the model is unstable from about 0.52 m/s in its upper mode (481 Hz), at
+the low end of the scanned speeds. So the case checks the stand and strip-stiffness part of the screen on a steel mill; it
+does not check the speed at which chatter starts, and it is not a validation on an aluminium
+foil mill.
+
+**The rate share of the bite damping (B1; C3 itself is not implemented).** A rate-sensitive
+flow stress gives a force in phase with gap velocity [D, re-derived in SPEC18]: the bite strain
+rate gains `-h_dot/h_mean` when the gap moves, so `F_hdot_rate = -F_Y*Y*m*l_d/(h_mean*u*
+ln(h0/h1))` and the transit fraction it alone would justify is
+`beta_rate = F_Y*Y*m/(Q*h_mean*ln(h0/h1))` (`F_Y = dF/dY` of the operating bite model,
+`Q = -F_h`). With `hardening.rate_temperature` the result carries it as
+`chatter.rate_sensitivity_damping` beside the heuristic `bite_damping_transit_fraction`;
+reported only, the stability results use the heuristic unchanged. On the published foil case
+(half-space bite, 80 GPa strip spring, m 0.027: `F_Y*Y` 4.8213e6 N/m, `Q` 5.57561e11 Pa)
+`beta_rate` is 0.046375, 9.3 % of a heuristic 0.5: the measured rate sensitivity explains a
+tenth of the damping the heuristic assumes.
+
 ### 11.5 Levers and coolant for chatter
 
 Lever table of the thin-gauge demo (`levers`; baseline 13.27 m/s, 4.83 m/s with beta 0):
@@ -2359,6 +4602,46 @@ tension effects (section 15). Coolant acts on chatter through friction and film 
 with a `tribology` section the friction-speed slope enters the speed-consistent critical speed
 (8.4). It acts on lengthwise bands through the roll temperature field (section 7).
 
+### 11.6 What the thickness gauge keeps of a mark (`measurement.thickness_gauge`)
+
+SPEC17 package 5 (gap C7, gauge part; `physicroll/band_sensors.py`). A gauge with a
+few-millisecond response at 10 m/s averages over centimetres, so 10-40 mm marks are invisible
+to it (gap study C7; foil gauge response under 10 ms [TM-LC24 VP]). With
+`measurement.thickness_gauge` the result gives, for every pitch observation at its own speed,
+the measured vibration frequency and the modelled chatter onset frequency at the operating
+speed, about how much of a mark of that pitch the gauge keeps [D, re-derived in SPEC17]: a mark
+`A*cos(2*pi*x/p)` passing at `u` has frequency `f = u/p`; a spot of length `L` keeps
+`|sin(pi*L/p)/(pi*L/p)|`, a first-order response with time constant `tau` keeps
+`1/sqrt(1 + (2*pi*f*tau)^2)` (an averaging length `u*tau`); sampling at `dt` aliases when
+`f > 1/(2*dt)`. A pitch is resolvable when the product is at least 0.5 (analyst choice [D])
+and it is not aliased; the shortest resolvable pitch at the operating speed is given in the same
+sense: every pitch at or above it is resolvable, every shorter one is not
+(`band_sensors.resolvable_pitch`: the one root of `G = 0.5` on `[L, 10 m]`, exact by bisection,
+since `G` rises monotonically with the pitch there and the side lobes of the spot average stay
+below 0.5; with a sample interval at least `2*u*dt`). `shortest_resolvable_pitch_status` is
+`FOUND` or `NONE_IN_SEARCH_RANGE` (no pitch up to 10 m), `shortest_resolvable_pitch_limited_by`
+names the limit (`spot_and_time_constant` or `sampling`), and the report and the app word each
+outcome on its own. With
+`gauge_variation_amplitude_m` each row gives the amplitude before the gauge, a lower bound of
+the true amplitude if the mark has that pitch; below a gain of 0.01 (`GAUGE_AMPLITUDE_MIN_GAIN`,
+analyst choice [D]: near a zero of the spot average the ratio grows without bound) it is null
+with a note. This is a spot average and a first-order lag
+only; real gauges have other filters (scanning frames, digital filters, noise), which are not
+modelled. Worked numbers (spot 10 mm, 5 ms, 1 ms sampling; `tests/test_band_sensors_gauge.py`):
+the thin-gauge demo's 84.08 mm pitch at 16 m/s (190.3 Hz) is kept at 0.161 (spot 0.977, time
+constant 0.165), 76.47 mm at 14.5 m/s at 0.161, the bearing demo's 24.92 mm at 7.83 m/s
+(314.3 Hz) at 0.076; `u*tau` at 10 m/s is 50 mm.
+
+Flags: `GAUGE_TRANSFER_APPLIED`; `GAUGE_KEEPS_LESS_THAN_HALF_OF_OBSERVED_MARK`;
+`GAUGE_NOT_DETECTED_BUT_MARK_NOT_RESOLVABLE` when `gauge_variation_detected` is false and no
+observed pitch is resolvable: "not detected" then carries no information, the note names the
+hypotheses whose evidence uses that observation, and **the tally is not changed** (SPEC17 open
+decision 2: flag only; the item "gauge variation not detected" counts as before); and
+`LENGTHWISE_MODEL_BAND_NOT_UNDER_GAUGE` when modelled lengthwise bands exist and none passes
+under the gauge (`bands_under_gauge`, from the steady profile of section 7.6). No demo carries
+a gauge description. Not built: accelerometer position and detection lead time (no formula in
+the reports), gauge noise, calibration, scanning frames.
+
 ## 12. The report
 
 `<slug>.report.html` is a self-contained page (inline SVG, no scripts), produced by
@@ -2379,12 +4662,16 @@ case". Sections of the lengthwise demo report
 | Which family of causes | the `family_summary` text, the observed family and the family of the leading hypothesis, the number of non-contradicted hypotheses per family, and a one-line summary of the key observations as entered |
 | Leading hypotheses | each `CONSISTENT_LEADING` hypothesis with the criteria that support and contradict it; up to three other `CONSISTENT` hypotheses of the observed family with theirs |
 | Next measurements | `recommended_next_measurements` (the confirming tests of the top three and the key missing observations), then the result flags |
-| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines |
+| Across the width: predicted against observed bands | upper panel: steady roll radius growth with the actual and with a healthy header, nozzle positions; lower panel: flatness at the three levels of the shape chain (the thick line is the linear-feedback level), dashed lines at the observed positions; a note on a saturated band and on the whole-sheet indicator. Tables: Steady stripes (peak, half-peak width, I-units per level, state in the mill and after tension release, buckling utilisation, stripe heights for a band in the mill, after release and at 2 I-units); the nozzle-pattern ripple; Flatness levels of the steady profile (rigid, compliance only, with width coupling (kernel), with feedback) with the warn paragraph of section 7.14; Which predicted source each observed band matches; Which pitch the gaps are multiples of; Tension troughs (span wrinkling); then two-tone, grinding feed, incoming ridges and crown lines; with an angular layout, the block "Roll surface within one revolution" (the layout used, a chart of the surface temperature against the angle at three stations, a table before / after the bite, lowest, mean and the mean model's value, the time-scale line beside the published 20 s, the bias sentence) |
+| What the flatness control would do (SPEC19 package 4) | at the end of the shapemeter section, only with `width_model.flatness_control`: the statement that this is what such a loop would do with the tool's own law on this model, the set-up, the status sentence, the end-state warning for an unsettled loop, the repeating pattern, a chart of the largest zone error against time with the dead band, a valve map, the zone outcomes ("could the control" remove, make or leave a band), the first ten predicted events and the low-order sentence |
+| A zone step test, emulated (SPEC19 package 5) | after the flatness-control block, only with `width_model.zone_step_test`: the test set-up, the reading of the zone for each series with its 60 s fit, the table of fitted constants per series and test length, the finding with the window dependence and the statement that a match is not evidence, the model's three time scales |
+| Measured roll profile (SPEC20 additions) | inside the width section: the bands with de-trending orders 2 and 4 and the largest difference, the warning "subtract the grinder's target curve before entering the profile, or state the curve" with `ROLL_PROFILE_BANDS_DEPEND_ON_DETREND_ORDER`, and "this profile cannot show a mark narrower than X mm" with `ROLL_PROFILE_GRID_TOO_COARSE`; `GRINDER_CHATTER_NOT_EXCLUDED_NO_GRINDER_DATA` appears in the flag list when a work-roll pitch fits no simple count but a grinder pattern |
+| A hot stripe: roll growth, oil film, softer metal, strip temperature | only with `width_model.local_coupling` (inside the width section, after the friction-stripe block): the local state at the largest roll surface difference and the oil supply, a chart of the four terms and both sums, the band and event tables (both transfer levels, the net at inlet weights 0 / entered / 1 and the sign words), one sentence per row, the force sensitivities with their bite model and time scales, the sign note, and the warning "Read the signs, not the digits." |
 | Short-lived bands (cooling-zone switching events) | per event: radius deviation against time with the in-mill, after-release and reporting thresholds, and the event table of 7.4 (rows for the stripes of an event with several groups of adjacent nozzles, and for attribution flags, appear only when present; a fade beyond the attribution window reads "not attributable after ... s: a later event switches nozzles in the same neighbourhood"); the growth-rate note and the open discrepancy |
 | How the result changes with gauge | a generated direction sentence, then the gauge-trend text, two charts and the table of 7.3 |
 | Hypotheses | every hypothesis grouped by family (observed family first) with standing, score, evidence items and confirming test |
 | Transverse-band (chatter) screening: supporting detail | Key model numbers, What the model predicts on the strip, Chatter stability, Pass-schedule sweep, Frequency-speed map, Forced response and time trace, Levers (with coolant spray coverage and other screens) |
-| Process: friction, flow stress, pass heating | section 8: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed |
+| Process: friction, flow stress, pass heating | section 8: friction against speed, flow stress per pass (supplied, computed, used), pass heating, speed-consistent critical speed; with pass records, the block "Friction from your pass records" (section 8.5: one row per record with the friction from force, slip and torque and their first-order intervals, the joint value, the agreement, the load and slip exponents; the summary sentence; the implied contact friction; a warning that nothing is applied) |
 | Gauge control, drive and incoming variation | section 9 |
 | Limitations and sources | result limitations, known disagreements in the literature, sources |
 
@@ -2417,7 +4704,37 @@ verdict per pass) with the indicator-only caveat, flags and limitations. For a v
 width model or tribology, a **"Process temperatures"** section follows the process section:
 the case's thermal inputs and the modelled outputs against the literature (`thermal_check`,
 section 3.12), the battery coil limit line, the growth-time text, any property-risk statement,
-the quarter-barrel note and the heat-partition / spray sensitivity table. Further down, the
+the quarter-barrel note and the heat-partition / spray sensitivity table; since SPEC17 a line
+under the inputs table on the basis of the spray coefficient ("The two are not on the same
+basis", with the jet-zone equivalent when `spray_wetted_arc_rad` is given) and a "Fire limits"
+table (or "Fire limits not checked: no flash point given"). The width section prints the
+wide-foil note under the tension-trough table below 100 um; since SPEC19 package 12 the table has two more columns (the lateral compression from the roller alignment and the critical misalignment for troughs in mm/m, "no alignment survey" without one) and, for each span with a survey, one line with the misalignment, the taper and its equivalent angle, the critical misalignments, the roller deflection (beam quantities, no stress derived), the foil factor and, with a supplied plant stress, the comparison of the two. Since SPEC19 package 13 the section "Gauge control, drive and incoming variation" has, when the case has `foil_gauge_control`, the block **"Gauge control by speed and tension"** after the gaugemeter block (which then ends with a pointer to it): the regime sentence, the bite model, sensitivity basis and friction closure, the sensitivity table for both gap modes (with percent of gauge), the speed effect with its basis in plain words, the loop line (dead time, crossover, margins, attenuation band, peak), the gauge error left at the roll, coil and chatter frequencies, the disturbance table with the trim needed and whether it saturates, the step response, with `reels` the table "Reels and coil run-out" (per reel the once-per-revolution and coil-on-span frequencies, damping, tension and gauge ripple, the mark pitch at the coil radius and at the core, whether the resonance is met) and with a schedule the table "Ripple carried from pass to pass", and the limitations; without the section nothing is printed. A v2 report has a section **"What a
+shapemeter would show"** right after the width section (section 7.6): the set-up sentence, a
+chart of the zone readings of the steady profile (bars) over the fine model profile (line) with
+the threshold (dashed) and the nozzles (ticks), a table per profile (band position, model peak,
+half-peak width, zone, zone reading, reading / peak, "would show" or "would probably not
+show"), the dilution table, the nozzle map sentence and the "no flatness controller" warning.
+Without a shapemeter the section is one paragraph ("No shapemeter was described ...", with the
+38 % of a 20 mm band in a 52 mm zone computed by the top-hat formula). With a thickness gauge
+the section adds a table "What the thickness gauge keeps" (source, pitch, speed, frequency,
+spot, time-constant and combined fraction kept, aliased, resolvable), the shortest resolvable
+pitch, the not-detected note (the tally is not changed) and the bands under the gauge
+(section 11.6). The width section ends with
+"Strip temperature and flatness" (section 7.7): with a scan, the scan points, a chart of the
+mechanical and the as-measured-hot profiles with the thermal term, the table of the four
+profiles (meaning, largest band, in-mill state, state after release) and the warning "The
+temperature profile was supplied, not computed. Flatness measured hot and flatness after the
+coil has cooled differ by the thermal term: X I-units at Y mm."; without a scan one line ("a
+1 K hotter fibre reads about 2.4 I-units loose", the textbook coefficient). Then "A friction or
+oil-film stripe as a band source" (section 7.8): the per-pass table (gauge, force, load
+exponent, I-units per 1 % with feedback and compliance only, marks), the trend text, the sign
+note, the supplied stripes with their states, the flagged placeholder conversion and the
+limitations; without a screen one line. Then "Measured roll profile" (section 7.9): the profile
+chart (measured, removed polynomial, local deviation), the stripe table with I-units and
+states, the shapemeter readings and the stiffness indicator in one sentence; without a profile
+one line. In a v2 report the tension-lines hypothesis shows the candidate pitch as a short
+table (radius, candidate pitch, "candidate, not evidence", the ruler test). The v1 report is
+unchanged. Further down, the
 Levers and Gauge control sections carry the warning "OPEN ROLL GAP ASSUMED ..."; when
 the shape chain is not assessable the width section opens with "Strip-shape chain not
 assessable: <reason>" and lists what is still evaluated; with supplied shape inputs it says
@@ -2461,15 +4778,18 @@ step limit) its section shows the failed state with the reason.
 supplied one (computed flow stress, or computed friction with
 `tribology.use_computed_friction`) the supplied value follows in brackets, as in the demo:
 "2.826e+08 Pa (computed; supplied 2.7e+08 Pa)". The "bite source" row reads
-`experimental_mattress` for a mattress bite, otherwise the bite's own source
+`experimental_mattress` for a mattress bite, `reduced_half_space` for a half-space bite
+(option `half_space` or `auto_half_space`), otherwise the bite's own source
 (`derived_slab_hitchcock` in the lengthwise demo; `experimental_mattress` in the foil
 demo). In the result JSON a mattress bite's own `source` field reads `supplied` (for example
 `chatter.critical_speed.bite_source` and the gauge-trend `bite_source` of the foil case pass);
-the `bite_model` fields (`experimental_mattress`) are the ones to read.
+the `bite_model` fields (`experimental_mattress`, `reduced_half_space`) are the ones to read.
+With a half-space operating bite the result also carries `bite_extras` (section 10.3).
 
 **Reading in-mill against after-release.** Every band state comes in pairs, written in plain
 words in the tables. *In the mill*: "hidden under mill tension" (`LATENT_UNDER_TENSION`: flat,
-a stress stripe a shapemeter can see) or "buckled in the mill" (`MANIFEST_BUCKLE`; "(feedback
+a stress stripe a shapemeter can see when the band is at least about one zone wide, section
+7.6) or "buckled in the mill" (`MANIFEST_BUCKLE`; "(feedback
 saturated)" is added when the saturation step of 6.2 applied). *After tension release*:
 "visible after tension release" (`MANIFEST_AFTER_TENSION_RELEASE`) or "flat after tension
 release" (`FLAT_AFTER_TENSION_RELEASE`), from the local mode. A band hidden in the mill and
@@ -2499,21 +4819,54 @@ real mill.
 | module / test file | what is checked |
 |---|---|
 | `chatter.py` / `tests/test_chatter.py` | eigenvalue solver (diagonal, rotation, companion, defective cases); single-DOF critical speed and onset frequency with and without bite damping against the Routh-Hurwitz closed form; closed-form undamped modes; bite-derived force against the independent contact solver; sensitivity signs; time trace against eigenvalues; static and resonant frequency-response limits |
-| `band_signatures.py` / `tests/test_band_signatures.py` | pitch doubling with speed; exponent classification and the < 5 % speed-spread guard; bearing-order identities; catalogue pitches and resonance round trip; AA5182 bending window; spray coverage of uniform, non-overlapping and blocked headers; free thermal growth rising with thinner gauge |
+| `band_signatures.py` / `tests/test_band_signatures.py` | pitch doubling with speed; exponent classification and the < 5 % speed-spread guard; bearing-order identities; catalogue pitches and resonance round trip; AA5182 bending window; spray coverage of uniform, non-overlapping and blocked headers; free thermal growth rising with thinner gauge; film-ratio labels and status strings `MIXED_SUBSTANTIAL_CONTACT_LUBRICATION` / `MIXED_FIRST_CONTACT_LUBRICATION` / `HYDRODYNAMIC_LUBRICATION` and the common-industrial-window flag (SPEC17) |
 | `roll_thermal.py` / `tests/test_roll_thermal.py` | steady uniform `T = Tc + q/h` at every radius; lumped-limit exponential approach and axial decay length `sqrt(k_z*R/(2h))`; pure radial transient against the Bessel series; long transient reaching steady state; energy conservation to round-off; grid and time-step convergence; blocked-nozzle stripe position and size; zone-off-then-on growth law `2*alpha*dh*(Ts-Tc)/(rho*c)` in the resolved and lumped models, faster surface temperature and faster decay in the resolved model (`test_zone_off_then_on_grows_then_decays_and_skin_effects`); healthy header weight averages to 1; expansion constraints differ by `1 + nu`; difference-profile stripe detection |
 | `strip_shape.py` / `tests/test_strip_shape.py` | zero exit-tension force sensitivity reproduces the compliance-only transfer and I-units exactly and a tiny positive value is continuous with it, a negative value is rejected (`test_zero_sensitivity_is_the_compliance_only_limit`); compliance and transfer check values; sinusoid as eigenfunction; feedback-off numbers unchanged; `Q_eff` formula; gauge-independent feedback limit (`test_gauge_independent_limit`); mean component keeps `Q`; worked example latent with feedback; saturation formula; 3 um stripe states at three gauges; Rayleigh limits (uniform compression, embedded zone); released local / global modes and the top-hat edge-spike limit; heredity and Shohet-Townsend check values; coil-ridge formula, yield onset and thin-gauge scaling; trough and wrinkle check values and scalings; spacing and position matching |
-| `bite_tribology.py` / `tests/test_bite_tribology.py` | viscosity `beta` from the kerosene data points; film check case (62.8 nm, film ratio 0.209, within 5 % of the quoted 65 nm); film linear in speed and viscosity; closure limits and slope; friction falling monotonically with speed; pass heating check (49.35 K) and energy closure; Voce mean against quadrature; literature fits carry the warning |
+| `bite_tribology.py` / `tests/test_bite_tribology.py` | viscosity `beta` from the kerosene data points; film check case (62.8 nm, film ratio 0.209, within 5 % of the quoted 65 nm); film linear in speed and viscosity; closure limits and slope; friction falling monotonically with speed; pass heating check (49.35 K) and energy closure; Voce mean against quadrature; literature fits carry the warning; regime labels and window (`test_regime_labels_and_window`: 0.005, 0.01, 0.5, 0.99 `MIXED_SUBSTANTIAL_CONTACT` with the window false / true / true / false, 1.0 and 3.0 `MIXED_FIRST_CONTACT`, 3.01 `HYDRODYNAMIC`, no result contains `BOUNDARY`; SPEC17) |
 | `mill_dynamics.py` / `tests/test_mill_dynamics.py` | static run-out and stroke transfer; full compensation prints run-out through; amplification rising with `alpha`; entry-thickness limit; mass-flow limit with tension coupling; `alpha = 0` reproduces `chatter.py`; first-order loop interaction reported and removed by roll-off; neutral mode at `alpha = 1`; hardness sensitivity and static limit; coil-synchronous frequencies; three-mass torsional benchmark; reel inertia; roll-speed DC limit; speed-change gauge shift |
-| `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of the high-friction foil case, the limiting gauge and a sticking exit; force trends; sensitivity signs match Hitchcock |
+| `foil_bite.py` / `tests/test_foil_bite.py` | rigid limit reproduces the slab force, slip and torque within 1e-3; sheet case conventional and of the same order as Hitchcock; foundation modulus is the fixed point of the contact length; end-zone equilibrium and smooth exit junction; work identity and grid convergence; Hitchcock-rejected pass solves; foil regime with shear within Coulomb; rejection of a 50 -> 25 um pass at a nominal friction of 0.10 (not the published case, where 0.1 acts on asperity contact areas only, weighted by the contact-area ratio and capped at shear yield [BT-S3 EX]), the limiting gauge and a sticking exit; the large-slip flag `FORWARD_SLIP_LARGE_CONSTANT_FRICTION_NO_SLIP_ZONE_MODEL` (renamed in SPEC17); force trends; sensitivity signs match Hitchcock |
+| `halfspace_bite.py` / `tests/test_halfspace_bite.py` | influence coefficients against the uniform-grid closed form (`kappa`) and a quadrature of one hat, their slope against a central difference; Hertz line contact recovered (80 elements: 2.6e-3 of the indentation depth at all nodes, 7.6e-4 inside 0.8a; 160 elements 1.1e-3 and 2.7e-4); equations equal unknowns for `A F`, `A B F`, `A B E F`; the Winkler limit reproduces the mattress solver (force within 1 %, slip within 0.002); the planner's worked numbers pinned (published case `W_bar` 92.936, seven sheet and foil rows, a sheet pass within 8 % of the mattress); work identity below 1e-4; the three A B F candidates beyond the friction limit (eq. (16) shear 1.446, 1.030, 2.941) replaced by A B E F or A F; the strip-modulus trend (40 GPa 96.751, 160 GPa A B F candidate 90.933); a doubled grid moves the load by 0.37 %. `tests/test_halfspace_bite_cases.py`: the selection table of fifteen passes (structure, rule, `W_bar` to 1e-4 of the planner's values), the regime boundary against E1 eq. (29), load continuity, zone E under 0.3 % of the load, path independence and warm start equal to cold start, rule 6 message, the battery-foil and lengthwise schedules (13 passes in under 30 s), the shear-cap march where the mattress rejects, the printed-end family (W_bar 88.62 / 102.62 / 117.47 at 21 / 10 / 5 um, thickening before the exit). `tests/test_halfspace_bite_branch.py`: the same three passes with a Newton budget of 20, 40 and 80 per march step give the same load; the degenerate branch is rejected by rule `SLIP_CONSISTENCY`. Software checks only: a value near a published load would not validate the model |
+| friction closure and fits / `tests/test_bite_tribology.py` (`LoadSharingClosureTests`), `tests/test_asperity_contact.py`, `tests/test_band_v2_sections.py` (`LoadSharingClosureSectionTests`) | the closure table of section 8.1 (contact ratios, friction and slopes at `mu_c` 0.09 and 0.03, the placeholder beside it) to 5e-6; the five published points returned exactly (an identity, not a benchmark) and continuity across each; valley films; the Eyring, Newtonian and capped valley numbers; the 0.045 flag on a low cap; the required contact friction, bite state and cap; the default closure unchanged; the Christensen, Wilson-Sheu, crushing-rate and flow-factor values, and that no engine module imports the fits; with the new closure the friction rows carry its keys and flags while bite and scores stay those of the placeholder case, and the fixed point converges; `tests/test_benchmarks.py`: `BT-G3-CRUSHING-LAWS` |
+| oil properties / `tests/test_bite_tribology.py` (`OilPropertyTests`), `tests/test_band_v2_sections.py` (`ViscosityTableSectionTests`) | viscosity table: the planner's interpolated and extrapolated values (1.206440e-3 Pa s at 50 C ... 1.921860e-3 at 20 C) and segment coefficients, the local coefficient against a finite difference, a two-point table equal to the exponential law to 1e-12 (also through the friction section), flags, validation; Roelands: the index 0.657133 and the viscosities of section 8.1, its slope at zero pressure equal to the Barus coefficient, its domain error; Eyring and limiting stresses default to none, validate, and the flag below 0.045; the example oil carries a tag on every entry; `tests/test_benchmarks.py`: `BT-G3-FILM-E6-T42`, `BT-V4-FILM`, `A9-PRESSURE-LAWS-KEROSINE` |
+| half-space bite in the engine / `tests/test_halfspace_bite_sensitivity.py`, `tests/test_band_halfspace.py`, `tests/test_band_halfspace_default.py` | the sensitivity tables of the published case (spring and rigid strip) and 140 -> 70 um pinned and within 1e-3 of the planner's prototype; chord equals full Newton (1e-6); signs; the one-sided tension flag; the three-model comparison on the battery-foil demo within 1 % of the planner's table; with `half_space` (coarse battery-foil case, S3 and F2) the operating bite, `bite_extras`, the levers, the speed-consistent block, gauge trend, schedule sweep, friction stripe screen and pass heating all name the half-space model, and F2 (3.24 kN/mm) is marked not credible; `auto_half_space` falls back where Hitchcock stops; the template case with the default option gives the same result as before this package apart from the not-supplied `bite_extras` (sha256 pinned); a solver failure makes the bite not assessable without stopping `diagnose`. Software checks only |
+| roll surface cycle / `tests/test_roll_skin.py` | the half-space closed forms (sinusoid amplitude within 0.5 % and lag within 1 degree; constant flux within 4 % and 1.5 % with 48 cells; step in `h` 0.5724 within 0.5 %); the planner's cycle (before / after the bite, lowest, mean, flux, 60 revolutions, mean coefficient and its ratio); energy (deep flux within 1.5 %); superposition to 2e-3 K; nine unit solutions within the 3 s budget; layout validation messages naming the two regions and the wetted-arc consistency; in the engine (template case, supplied bite) the section, `not_supplied` without a layout, every other width result, the bite and the hypotheses identical with and without it, the reduction to the mean model with sprays all round (pitch-averaged, 1 % of the surface excess) and the report block |
+| spray calibration / `tests/test_band_spray_calibration.py` | twin tests on the battery-foil roll (quick numerics): both kinds recover 3400 W/m2K within 2 % and the misfit curve has its minimum there; with noise of the stated uncertainty the true value lies inside the reported interval; footprint equivalent with a wetted arc; a measurement beyond the range gives `AT_SEARCH_LIMIT`, a header-off scan an hour after the stop `NOT_DETERMINED_FLAT_MISFIT`; the refusals `TOO_FEW_POINTS` and `NO_CONTRAST`; validation messages; the CLI prints and writes nothing; `tests/test_benchmarks.py`: `TM-LA8-SPRAY-FIT` (reference only) |
+| heat partition / `tests/test_bite_tribology.py` (`HeatPartitionTests`), `tests/test_band_heat_partition.py` | the closed form against the scheme (1e-5) and its asymptotic branch; the worked numbers of section 8.2 (1e-4); energy balance to 1e-9; zero conductance gives share 1, zero heat changes nothing, a hotter roll gives a share above 1 and the flag; in the engine the heating rows carry the block, with the option absent the result without the new keys equals the result with the partition switched off, with it set pass heating and the width model's roll heat fraction follow; the report line; `tests/test_benchmarks.py`: `TM-LA19-HEAT-SPLIT` |
+| flow stress law forms / `tests/test_bite_tribology.py` (`FlowStressRateTemperatureTests`), `tests/test_band_rate_temperature.py` | the worked numbers of section 8.3 (1e-6); `m(T)` and its floor; factor limits; a negative late slope accepted with the positivity rule and its flag; the Tome form against a hand value (169999724 Pa to 1 Pa) and Simpson against 512 panels; the fit recovers a Voce law from 6 exact points (1e-3, positive and negative slope), flags 4 points and refuses 2; in the engine the rows carry the factor, `use_rate_temperature` needs computed flow stress, with it false nothing else differs, `chatter.rate_sensitivity_damping` equals the formula, and the worked damping share 0.046375 |
+| friction from pass records / `tests/test_band_friction_identification.py` | force, slip and torque generated at friction 0.027 on the battery-foil case pass return 0.027 from each quantity and jointly (1e-3), consistent, with a flow-stress scale of 1.000, for the mattress and the half-space bite (at most 42 solves); the load and slip exponents of the three regime cases of section 8.5 (1e-3) and the weak-slip mark on the published case; an unreachable slip gives `NOT_FOUND` and `MEASURED_SLIP_NOT_REPRODUCED_BY_CONSTANT_FRICTION_BITE`; two records at two speeds give the slope and a contact friction that reproduces each friction through the load-sharing closure (1e-6); the worked contact friction 0.04086; validation messages; `not_supplied` without records; hypotheses, scores, bite, chatter, levers, screens and process identical with and without records; the report block renders and escapes; `tests/test_benchmarks.py`: `BT-V2-FRICTION-HS` |
+| `benchmarks.py` / `tests/test_benchmarks.py` | software pins and recorded discrepancies against published cases (BT-V1 with the caveat that its caption value 118 is not grid-independent and a contact-length row, BT-V2 at two assumed radii, BT-V3 Fig. 1 and eq. 29, SS-V2, SS-V3, TM-LC7 run on stand 2 with three substitutions (rigid rolls, equivalent Coulomb friction, one stand): mode 121.878 Hz, onset 122.303 Hz against 124.6 Hz measured, critical exit speed 8.1014 m/s against 8.715 or 5.81 m/s, indicative only; `test_tm_lc7_hitchcock_rejects_the_pass_with_real_rolls` keeps substitution 1 necessary; the chatter harness reproduces the thin-gauge demo's 13.267836 / 4.829571 m/s and 189.109442 / 188.911169 Hz; the reduced half-space rows BT-V1-HS (verdict `REFERENCE_NOT_GRID_INDEPENDENT`; `test_bt_v1_hs_reference_not_grid_independent` passes because the load at a 5 um end is more than 1.3 times the load at 21 um, which records that the published value depends on an unstated end length and does not mean the physics is right), BT-V2-R89/R135-HS, BT-V3-FIG1-140UM-HS, BT-V3-EQ29-HS and BT-X29-LOAD-EXPONENT-HS, pinned on 2026-11-20). Each project value is pinned to a literal recorded with its date and commit (1e-6 relative): a failing pin is re-recorded deliberately, with a line here, never loosened. A separate verdict against the published value is asserted; `test_bt_v1_recorded_discrepancy_mattress_is_0_42_of_half_space_load` passes because the model is 0.42 of the reference, which records the gap and does not validate the physics |
 | `band_diagnosis.py` / `tests/test_band_diagnosis.py` | planted third-octave chatter, bearing order, backup-roll mark, yield-point bending and blocked-nozzle band lead; healthy header not a band risk; missing observations never contradict; scoring, standings and the leading rule of 6.4; graceful bite failure; supplied bite; lever directions computed; zero-tension lever not assessable; rejected damping variant is a row; strict validation; determinism; report escaping; v1 report unchanged; CLI; the three scenario files load and the two v1 demos lead; review fixes (`ReviewFindingTests`): the coil strip map uses the matching coil (`test_coil_strip_map_uses_the_matching_coil`), the spindle candidate is matched without drive geometry (`test_spindle_candidate_matched_without_drive_geometry`) |
-| `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`) |
-| `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`); speed margin beyond the 0.05-60 m/s scan (`SpeedMarginScanRangeTests`): the reviewer's case (supplied bite, damping 0.21, 100 m/s, scan `STABLE_OVER_SCANNED_RANGE`, operating point unstable) supports strongly with the basis named and the chatter score 5 instead of 0; 10 m/s with no crossing still contradicts as before; zero slip in the pitch kinematics only (`KinematicSlipOnlyTests`: a supplied slip of 0.6 gives a not-assessable screen showing 0.6 and no skidding support; a slip of -0.01 still skids); coverage band-risk stripes matched as intervals (`CoverageIntervalMatchTests`: the reviewer's 0.065 m band in the 0.06-0.14 m gap supports and agrees with the screen, a band 0.045 m from every interval contradicts, modelled point sources still match by centre); 100 m/s stable at the operating point (damping 0.6) contradicts with the new wording; supplied `shape_inputs` with a zero exit-tension force sensitivity (`ZeroFeedbackSensitivityTests`): the steady shape and the case-pass gauge-trend row are assessed, feedback-level numbers equal the compliance-only ones, no nan / inf, a negative value is rejected at validation |
-| foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions and the film-ratio gate (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Case-pass identity, zone-duration fallback, supplied-bite tables, sensitivity-mix flag** (`CasePassIdentityTests`, `ZoneDurationFallbackTests`, `SuppliedBiteGaugeTrendTests`, `SuppliedBiteScheduleTablesTests`, `SensitivityMixFlagTests`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (`FoilDemoTests`, coarse numerics, the plant's passes and the alternative route, no AGC or drive): the route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT1 50 -> 25 um and ALT2 25 -> 12 um at 52 %, assumed gauges labelled, every other pass at or below 50 %, speeds inside the published spans, `material.product`), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, no floor flag, mattress bites on F2, ALT1 and ALT2 with their extended-domain flags, `extended_bite_domain` listing 18 and 12 um with the credibility marks (ALT2 ratio above 2, "NOT CREDIBLE" in the text), no case-pass mark, the product check (alloy `1235`, final passes F2 and ALT2, nothing outside the published range on the case and final passes, nearest published passes present), the extended-domain limitation, single-sheet statement, foil box before the leading hypotheses, "Extended roll-bite domain" and "Product check" in the report (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`): seven rows, ALT2 marked not credible with ratio above 2, the credible rows ordered by exit gauge S1, S2, S3, F1, ALT1, F2, along which the in-mill onset and rigid bound rise and linear-feedback I-units fall, the exit-span bite-free thresholds fall on every row, the text names ALT2 after "Not credible (excluded from the trend):" and spans 0.135 -> 0.018 mm, and the report's direction sentence ends at F2, says "thinner is less sensitive for this mechanism in the model", names ALT2 as not credible and marks its table row. **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. The direction test also pins the **bite-free values**: dead band, ridge height, trough onset and roller-wrinkle thresholds of both spans on every row, and the bite-free sentence ("falls on every pass" four times; the two entry-span quantities are not monotonic across the two routes). The **product question** is worded from the case ("The thinnest pass in this case exits at 18 um" or "... 30 um, which fits ..."; no "16-18"; `FinalPassDoubledTests`, `test_foil_regime_block_without_bite`); a sheet schedule with every pass assessable gets no span-threshold keys and no bite-free sentence (`test_case_pass_row_keeps_the_supplied_bite`). **Rules** (`test_tension_lines_rules`) also pin the stage-B tension-line weights: regular 5-20 mm strong, 25 mm weak, 80 mm a weak contradiction, irregular weak; exit gauge 12 um moderate, 25 um weak, 45 and 80 um neutral, 210 um a contradiction. **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite and the friction at which the mattress model rejects |
+| `band_width.py` / `tests/test_band_lengthwise.py` | planted truth for each of the nine lengthwise hypotheses; three shape levels with the feedback always on; healthy header gives no stripes; gauge trend (buckling stress and dead band fall, after-release onset carries the trend, in-mill onset falls less); tension-release rule table; spacing beyond 8 pitches not comparable; any non-longitudinal orientation contradicts every lengthwise hypothesis; lengthwise demo leads with `nozzle_thermal_stripe` at coarse settings; event attribution (`EventAttributionTests`): a later event on the same nozzle is not attributed to the earlier one (`test_later_event_on_same_nozzle_not_attributed_to_earlier`), a short event's peak profile is the snapshot at the measured peak (`test_short_event_peak_profile_is_the_measured_peak`), separated nozzles are monitored per stripe (`test_separated_nozzles_monitored_per_stripe`); heat-streak tribology item (`test_heat_streak_regime_item`, SPEC17): with tribology and no temperature limit `NEUTRAL`, with a limit below the modelled exit temperature `SUPPORTS` / weak, the planted case still leads |
+| `band_process.py`, report / `tests/test_band_v2_sections.py` | computed values replace supplied ones only when flagged; speed-consistent critical speed; gauge-control amplification; drive and incoming sections; `auto` falls back to the mattress model; missing sections not supplied and v1 unchanged; v2 validation; determinism, report and CLI; report section order and escaping; key numbers show the values actually used (`test_key_numbers_show_the_values_actually_used`); the engine's central-difference sensitivities equal the `mill_dynamics` ones for a Hitchcock bite (`test_hitchcock_sensitivities_unchanged_by_engine_central_difference`); review fixes (`ReviewFindingTests`): a schedule row labelled like the case pass keeps its computed flow stress (`test_schedule_row_labelled_case_pass_keeps_operating_flow_stress`), mattress-bite sensitivities use the mattress model (`test_mattress_bite_sensitivities_use_the_mattress_model`); speed margin beyond the 0.05-60 m/s scan (`SpeedMarginScanRangeTests`): the reviewer's case (supplied bite, damping 0.21, 100 m/s, scan `STABLE_OVER_SCANNED_RANGE`, operating point unstable) supports strongly with the basis named and the chatter score 5 instead of 0; 10 m/s with no crossing still contradicts as before; zero slip in the pitch kinematics only (`KinematicSlipOnlyTests`: a supplied slip of 0.6 gives a not-assessable screen showing 0.6 and no skidding support; a slip of -0.01 still skids); coverage band-risk stripes matched as intervals (`CoverageIntervalMatchTests`: the reviewer's 0.065 m band in the 0.06-0.14 m gap supports and agrees with the screen, a band 0.045 m from every interval contradicts, modelled point sources still match by centre); 100 m/s stable at the operating point (damping 0.6) contradicts with the new wording; supplied `shape_inputs` with a zero exit-tension force sensitivity (`ZeroFeedbackSensitivityTests`): the steady shape and the case-pass gauge-trend row are assessed, feedback-level numbers equal the compliance-only ones, no nan / inf, a negative value is rejected at validation; inlet angle of the film (`InletAngleTests`, SPEC17): a mattress operating bite has `film_inlet_radius_ratio` 1.0 and its film ratio times `sqrt(contact_radius_ratio)` equals the former call to 1e-9; a Hitchcock bite keeps `film_inlet_radius_ratio == contact_radius_ratio` and the lengthwise demo's film ratio 0.180115 |
+| foil phase (`band_diagnosis.py`, `band_width.py`, `band_report.py`) / `tests/test_band_foil.py` | **width section without a bite** (`NoBiteWidthTests`, a 60 -> 30 um pass at friction 0.05 that both bite models reject as sticking): troughs, coil ridge (proportional estimate, ratio 0.5), positions and thermal stripes present, shape parts individually not assessable with the bite error, flag set (`test_width_section_runs_without_a_bite`); model-based and not-assessable items never contradict (`test_missing_model_parts_never_contradict`); without bite heat the thermal parts are not assessable and the rest runs (`test_without_bite_heat_thermal_not_assessable_rest_runs`); supplied shape inputs take precedence for the case pass, flag and report note, provenance escaped (`test_shape_inputs_supplied`); shape-input validation (`test_shape_inputs_validation`); `foil_regime` block, closed-gap flag, `BELOW_EVERY_REPORTED_ONSET`, wrinkle onset `1e5*40e6/70e9` (`test_foil_regime_block_without_bite`); determinism, foil box, no nan/inf in the report (`test_determinism_and_report`). **Rules** (`FoilRulesTests`): every `foil_tension_lines` branch including the gate (`test_tension_lines_rules`); the nozzle, roll-surface (backup-roll downgrade to weak), trough and heat-streak extensions, the film-ratio gate and the heat-streak tribology item (regime label never supports; exit temperature above the limit supports weakly; SPEC17) (`test_extended_rules`); foil measurement lines only below 100 um (`test_next_measurements_for_foil`); the wide-foil trough note below 100 um only, trough numbers unchanged (`WideFoilTroughNoteTests`, SPEC17 X12). **Planted truth**: regular 10 mm lines on 50 -> 25 um foil lead with `foil_tension_lines` (`test_tension_lines_lead`); orientation plus exit gauge, or plus film ratio, alone never lead (`test_orientation_and_gauge_alone_do_not_lead`). **Case-pass identity, zone-duration fallback, supplied-bite tables, sensitivity-mix flag** (`CasePassIdentityTests`, `ZoneDurationFallbackTests`, `SuppliedBiteGaugeTrendTests`, `SuppliedBiteScheduleTablesTests`, `SensitivityMixFlagTests`). **Torsional strip map**: 10 Hz mode, predicted pitch 1.0 m at 10 m/s, no foil block at sheet gauge (`test_torsional_strip_map_pitch`). **Schema**: v1 and earlier v2 files still load, a v1 case may not carry foil fields (`test_v1_and_existing_v2_files_still_load`). **Foil demo** (`FoilDemoTests`, coarse numerics, the plant's passes and the alternative route, no AGC or drive): the route in the file (S1-S3 assumed stock route, F1 50 -> 30 um = case pass, F2 to 18 um, ALT1 50 -> 25 um and ALT2 25 -> 12 um at 52 %, assumed gauges labelled, every other pass at or below 50 %, speeds inside the published spans, `material.product`), leads with `nozzle_thermal_stripe`, zone hypothesis consistent, mattress bite inside the reported load range, wrinkle comparison, latent in the mill and manifest after release, open-gap note, no floor flag, mattress bites on F2, ALT1 and ALT2 with their extended-domain flags, `extended_bite_domain` listing 18 and 12 um with the credibility marks (ALT2 ratio above 2, "NOT CREDIBLE" in the text), no case-pass mark, the product check (alloy `1235`, final passes F2 and ALT2, nothing outside the published range on the case and final passes, nearest published passes present), the extended-domain limitation, single-sheet statement, foil box before the leading hypotheses, "Extended roll-bite domain" and "Product check" in the report (`test_foil_demo_leads_with_planted_cause`); the **direction of the foil gauge trend** (`test_foil_gauge_trend_direction_runs_against_thinner_is_worse`): seven rows, ALT2 marked not credible with ratio above 2, the credible rows ordered by exit gauge S1, S2, S3, F1, ALT1, F2, along which the in-mill onset and rigid bound rise and linear-feedback I-units fall, the exit-span bite-free thresholds fall on every row, the text names ALT2 after "Not credible (excluded from the trend):" and spans 0.135 -> 0.018 mm, and the report's direction sentence ends at F2, says "thinner is less sensitive for this mechanism in the model", names ALT2 as not credible and marks its table row. **Final pass doubled or not** (`FinalPassDoubledTests`): absent or null keeps the question, `false` records single-sheet with the faces implication and no flag, `true` adds `DOUBLED_FINAL_PASS_NOT_MODELLED`, non-boolean values rejected, ignored at sheet gauge, the demo carries `false`. The direction test also pins the **bite-free values**: dead band, ridge height, trough onset and roller-wrinkle thresholds of both spans on every row, and the bite-free sentence ("falls on every pass" four times; the two entry-span quantities are not monotonic across the two routes). The **product question** is worded from the case ("The thinnest pass in this case exits at 18 um" or "... 30 um, which fits ..."; no "16-18"; `FinalPassDoubledTests`, `test_foil_regime_block_without_bite`); a sheet schedule with every pass assessable gets no span-threshold keys and no bite-free sentence (`test_case_pass_row_keeps_the_supplied_bite`). **Rules** (`test_tension_lines_rules`) also pin the stage-B tension-line weights: regular 5-20 mm strong, 25 mm weak, 80 mm a weak contradiction, irregular weak; exit gauge 12 um moderate, 25 um weak, 45 and 80 um neutral, 210 um a contradiction. **Not pinned by a test:** the forward-slip and pass-heating values of the mattress bite and the friction at which the mattress model rejects |
 | product survey (`band_survey.py`) / `tests/test_band_survey.py` | the survey computed once: every catalogue product appears, with its catalogue values (sources, read status) and assumptions, the as-rolled flow stress assumed for O temper (`test_every_catalogue_product_appears`); on the foil mill at equal flow stress a thinner product has a lower critical ridge height, trough onset and roller-wrinkle threshold, and the three bite-free rankings correlate with thinner gauge above 0.9 (`test_thinner_product_lower_ridge_and_trough_thresholds`); doubled products have no bite and keep their per-sheet thresholds (`test_doubled_products_have_no_bite`); credibility marks equal the engine's (`_bite_credibility`), the load range applied to battery collector foil only, no bite-dependent ranking contains a not-credible row, ranked plus excluded rows cover every product (`test_credibility_marks_consistent_with_the_engine`); one row recomputed is identical, and the committed result and report equal a fresh run (`test_determinism_and_committed_artifacts`); the report renders, escapes text and has no nan / inf (`test_report_renders_escapes_and_is_finite`); on the user's own mill (`UserMillSurveyTests`, three products): `--products` restricts and keeps catalogue numbers, unknown ids list the valid ones; a different mill (roll radius 0.11 m, housing 9e9 N/m, 2 m spans) changes the force per width, the strip-to-mill ratio and the trough onset while the catalogue provenance stays; overrides are applied and marked user-supplied, the replaced provenance dropped, and a pass too narrow for the bite model is a row with the reason; an invalid mill file and invalid override keys or values give clear errors; a starter case written with `--write-cases` loads and diagnoses |
 | packaging / `tests/test_band_products.py` | the packaged default survey mills equal the machine sections of the two demo scenarios (skipped when `scenarios/` is absent); a copy of the package run with `python -I` outside the checkout surveys a foil and a sheet product and renders the report, and `band_products --list` runs, with no `scenarios` directory (the code before the fix raised `FileNotFoundError` there) |
 | robustness / `tests/test_band_robustness.py` | the reviewer's duplicate positions on the lengthwise demo case (`[0.6, 0.6, 0.7]`, which raised `gaps_m[0] must be > 0`): returns, flag set, merged list `[0.6, 0.7]` used and recorded, nozzle spacing evidence on the 0.1 m gap; the merge rule; a planted `ValueError` in one lengthwise and one transverse hypothesis leaves the others intact and shows the escaped reason in the result and the report; a sweep of accepted degenerate observations on a small v1 and a small v2 case (duplicate, identical, single, unsorted, edge and out-of-strip positions; tiny spacing and spacing at the 10 m limit; band width larger than the strip; duplicate pitch observations, two pitches at one speed, a pitch larger than a coil circumference; a huge intermittent duration; duplicated and barrel-end blocked nozzles in the coolant screen and the width model; all observations null, every boolean true, every boolean false): `diagnose` returns and the report renders; the inputs rejected at validation are rejected with their message. Also the coil single-source, trough-spacing and perturbed-bite-model tests, moved here from `tests/test_band_v2_sections.py` |
 | extended domain, product check, credibility / `tests/test_band_extended_domain.py` | **extended domain** (`CollectorFoilExtendedDomainTests`, 30 -> 17 um case pass): `bite_model: "hitchcock"` keeps its 20 um floor (`test_hitchcock_only_keeps_its_20_um_floor`); the mattress bite, its extended-domain flags and limitation (`test_extended_bite_flags_and_limitations`); tension lines lead, no model contradiction (`test_tension_lines_lead_and_no_model_contradiction`); report renders (`test_report_renders`). **Below the 8 um floor** (`BelowBiteFloorTests`, 12 -> 7 um): loads and diagnoses, floor and closed-gap flags, chatter and levers not assessable, shape chain not assessable, bite-free parts present (`test_loads_diagnoses_and_flags`, `test_report_renders`). **Product check** (`ProductCheckTests`): unknown ids, non-string and v1 use rejected with the list of ids (`test_validation`); `NOT_SUPPLIED` with the ids at foil gauge, absent at sheet gauge (`test_not_supplied_at_foil_gauge_absent_at_sheet_gauge`); a 36 -> 30 um pass reads `BELOW_PUBLISHED_RANGE` for the per-pass reduction, with the case and final-pass flags, and every score equals the run without a product (`test_findings_flags_and_no_score_change`). **Credibility gate** (`CredibilityGateTests`, the demo's final-pass material on the foil mill): a 25 -> 12 um case pass gets no model-based support or contradiction from the bite-dependent items, the gated items keep their verdict without the gate, scores are the tally of the gated evidence and the leading rule is unchanged; a 30 -> 18 um case pass (force inside the range) keeps its model evidence. **Coil, trough spacing, perturbed bites** (now in `tests/test_band_robustness.py`): one coil for all pitches (`CoilSingleSourceTests`: the reviewer's pitches 1 m at 2 m/s and 1.4 m at 20 m/s on coils of 1 m and 1.4 m pitch no longer give two exact matches; the coil hypothesis contradicts weakly and does not lead; two pitches on one coil still support; a single pitch as before); trough spacing (`TroughSpacingEstablishedTests`: one gap weak and never contradicting, irregular gaps weak, regular or stated spacing strong, a stated spacing outside a factor 4 still contradicts); perturbed bites (`PerturbedBiteModelTests`: an `auto` case with a mattress operating bite has every lever row equal to a direct mattress derivation; a Hitchcock operating bite reports the friction x1.3 variant Hitchcock rejects as a rejected row). **Onset search** (`OnsetSearchDomainTests`): the reviewer's soft-strip case (1e9 Pa, 9 um bump) no longer reports the old 4.28 um in-mill onset: the reported onset is manifest with feedback and the scale just below is not; a stubbed feedback calculation that leaves its domain before buckling gives the domain-limit outcome with its height, one that buckles first gives the onset, one that stays latent gives not-reached; a sheet-gauge case gives exactly the onset of the old search. **Undefined bound levels** (`UndefinedBoundLevelTests`, the reviewer's 8 um pass, one striped roll, 9 um bump, shape inputs 1e12 Pa / 1 mm / 0.01 m): `shape_levels` keeps both compliant levels with the rigid bound not defined and its reason, a very soft strip (1e9 Pa) keeps the feedback level with the compliance-only level not defined, a normal bump reports the rigid bound exactly as the direct calculation; through `diagnose` the steady shape and the gauge-trend row are assessed, the trend text names the pass without a rigid bound, the report omits the rigid curve with a note and has no nan / inf. **Large forward slip** (`LargeForwardSlipTests`, the reviewer's 30 -> 12 um pass on a 0.14 m roll): the mattress slip is at least 0.5, `diagnose` returns, both slip flags are set, the signatures use slip 0, the schedule row keeps its slip; the forward-slip screen is not assessable with the actual slip, the skid evidence does not support. **Case-pass credibility** (`CaseBiteCredibilityTests`): a 25 -> 12 um case pass with `auto` gets `FORCE_OUTSIDE_REPORTED_RANGE` with ratio above 2, the top flag, the limitation, the gated items (`model not credible`, "NOT CREDIBLE BASIS", `NEUTRAL`) and only bite-free model items left with basis `model`, a failed time simulation instead of an exception, and a report (`test_not_credible_case_pass`); a 30 -> 18 um case pass is marked inside the range with no flag (`test_credible_case_pass_has_no_mark`) |
-| `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI |
+| `band_products.py` / `tests/test_band_products.py` | catalogue integrity (unique ids, sources with URLs and valid read status, every fact sourced and its status never upgraded, ordered ranges with units, products validate, JSON round trip, battery depth); published reductions of the battery, pouch, packaging, litho and heat-exchanger schedules; `check_pass` on 50 -> 30 um, the 30 -> 18 um final pass, a 70 % pass, mode checks, flow-stress, alloy and fallbacks, errors and JSON; nearest published passes; `docs/thin-gauge-products.md` matches the generator and is complete; CLI; alloy-group and anisotropy tables (`AlloyAndAnisotropyTests`, SPEC17): the nine `TM-` sources with the read tags of the gap study and never an upgraded read status, ten alloy-group rows, the Hill 1948 plane-strain factor 1.154701 / 1.014185 / 1.046734 / 1.169130 for (1, 1), (0.2, 0.2), (0.2, 1.1), (1.075, 1.075) and `ValueError` for r <= 0, both sections in the generated document |
+| `band_sensors.py` / `tests/test_band_sensors.py` | zone edges and coverage (body and edge zones, centre default, end zones 54 % covered); a 20 mm top-hat of 25 reads 9.6154 as the mean of a 52 mm zone; a 20 mm band of 3.1 I-units reads 1.19; a uniform profile reads zero; the roll mean of a mean-free, fully covered profile is zero; spreading conserves the sum and s = 0 is the identity; the dilution closed forms against the numbers of SPEC17 and a sampled Gaussian; on the committed battery-foil profile the zone readings 6.5973 / 20.4506 / 24.4912 / 20.4517 / 6.5979, the tight edges, the half-peak width 0.160 m, spreading 23.4812, the event 19.3326, the ripple 0.5296 and 23 zones 23.5348; one nozzle per zone (zone j holds nozzle j + 2 at its centre) from `band_width.spray_layout` and the boundary rule; every validation message, v1 and a non-null thickness gauge rejected; a small case with and without a shapemeter differs only in `measurement`, `inputs` and the new flags, hypotheses identical, the report escapes the provenance; no width model is not assessable with the dilution table |
+| `band_width.roll_profile_section` / `tests/test_band_roll_profile.py` | the hand profile of SPEC17: local deviation +2.5827e-7 m at 0.4975 m (half-peak 22.7 mm) and -1.8181e-7 m at 0.9525 m, bands +3.1289 (latent / manifest after release) and -2.0433 (latent / flat), compliance only 360.27, rigid 860.90; a 23-zone shapemeter reads 1.1780 (0.3765) and -1.0989 (0.5378), "would probably not show"; strip foundation modulus 958605/20e-6, roll term 6.212e10 Pa at 45.4 mm (the brief's 6.493e10 is the same formula at 40 mm); no de-trending keeps the crown, two rolls double the rigid bound, the combination with the thermal stripe, not assessable without shape parameters, validation; a small case with and without a profile differs only in `width.roll_profile`, `inputs` and its flags, hypotheses identical |
+| `band_width.candidate_tension_line_pitch` / `tests/test_band_foil.py` (`CandidateTensionLinePitchTests`) | coefficient 3.4746; the pitches 6.7285 / 7.3707 / 12.766 / 14.7414 mm at 30 um, 5.2119 / 5.7093 / 11.4187 at 18 um, 4.2555 at 12 um; the critical stress 10.2751 MPa = minus the roller-wrinkle value; the three statuses; the battery-foil block; every evidence item and the score of `foil_tension_lines` equal the committed ones |
+| `strip_shape.transfer_force_profile` / `tests/test_strip_shape.py` (`TransferForceProfileTests`) | a single sinusoid of force `-n*dR/(2*C(lam))` gives the roll-bump transfer of `dR` to 1e-9, with and without feedback; zero force gives zero; the mean component keeps Q; positive force gives a thicker strip; the feedback-dominated limit `-dp0'/(N_x'*E)` at two gauges; validation; the radius transfer unchanged |
+| `band_width.friction_stripes_section` / `tests/test_band_friction_stripes.py` | the battery-foil per-pass table (force, load exponent, I-units per 1 % with feedback and compliance only, pinned within 1 % of the planner's prototype); exponent and compliance-only magnitude rise along the plant's route S1-F2, the with-feedback values lie within a factor 2; the trend text and its fixed last sentence; the reporting-threshold fraction 0.00635 and the feedback limit -3.49; supplied stripes of -10 % / +10 % (-78.7 nm, +32.9 / -32.7 I-units, loose manifest after release / tight flat); the flagged placeholder conversion (+3.2e-4 per K); ALT2 marked not credible and left out of the trend; validation messages; not assessable without a bite; a small case with and without a screen differs only in `width.friction_stripes`, `inputs` and the flag, hypotheses identical; the report renders |
+| `strip_shape.thermal_flatness_term`, `band_width.strip_temperature_section` / `tests/test_band_strip_temperature.py` | a 1 K step over half the strip gives 2.36 I-units (1e-9), a custom coefficient scales linearly, the default sets the flag; a uniform temperature gives zero and equal profiles; on the committed battery-foil profile with the demo scan: 2.36 I-units/K, mean 353.416125 K, deviation 2.332175 K, thermal +5.5039 / -0.6281 (alone one band 0.560-0.685 m, peak 5.5039 at 0.6025 m), mechanical bands and states equal to the width section's, as measured hot 30.4694 at 0.6175 m (0.495-0.745 m) and tight -5.8106 / -5.8524, held-flat bound -5.5039, no state change, shapemeter zone 9 29.8136 hot against 24.4912; the committed section equals a fresh one; without a mechanical profile the thermal term alone with its flag; a hand case where the term lifts a 1.5 I-unit band above the threshold is a reported state change; a scan not covering the strip holds its end values and reports 0.6 m; every validation message; a small case with and without a scan differs only in `width.strip_temperature`, `measurement`, `inputs` and flags, hypotheses identical; the report renders |
+| `band_sensors.py` (gauge) / `tests/test_band_sensors_gauge.py` | the three worked gains of SPEC17 to 1e-6 (190.2950 Hz: 0.976894, 0.164980, 0.161168; 189.6168 Hz: 0.160936; 314.3253 Hz: 0.076109); limits (L -> 0 and tau = 0 give 1, L = p gives 0); aliasing; the shortest resolvable pitch is a root of G = 0.5 with every longer pitch kept; amplitude before the gauge; validation messages and the barrel check; bands under a gauge at 0.75 m on the battery-foil profile ([0.49, 0.75] m) and none at 0.77 m (flag); on a v2 copy of the thin-gauge chatter demo with "gauge variation not detected" the three flags are set, the note names the hypotheses, and every hypothesis, evidence item and score equals the run without the gauge; the report table renders and escapes |
+| `band_thermal.py` / `tests/test_band_thermal_check.py` | the thermal check against the literature (SPEC14); SPEC17 (`SprayBasisAndFireLimitTests`): the spray finding keeps `WITHIN_PUBLISHED_RANGE` and carries the basis keys and the flag; a 60 degree arc gives 20450 W/m2K `ABOVE_PUBLISHED_RANGE`, an arc outside (0, 2*pi] is rejected; fire limits not supplied without inputs (context sources present), a 80 C flash point gives a 35.0 K margin on the 45 C oil inlet, a pass at 95 C reads `AT_OR_ABOVE_LIMIT` with its flag, a 40 C site cap flags the oil, limits outside 250-700 K are rejected |
+| local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
+| step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
+| flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| ironing roll, air, coil temperature / `tests/test_wound_roll.py` (`CoilTemperature`), `tests/test_band_coil_temperature.py`; allocation sensitivity / `tests/test_band_coil_winding.py` | series and parallel conductivities (7.63 and 0.415 W/mK); slab alone and cylinder alone against their lumped limit at small Biot number (2 %); the product against an independent 2-D solve (1 %); monotone cooling; nip tension and its cap; the demo coil's entrained film; a per-layer air gap softens the stack; in the engine the two air bounds (the entrained case softer), the coil temperature with and without package 1, limit rows with their sources, absent keys and `thermal_check` unchanged, report, validation; the softest stack's 1 um lane not decided, the verdict rules |
+| lateral stress in spans (SPEC19 package 12) / `tests/test_strip_shape.py` (`SpanLateralStressTests`), `tests/test_band_foil.py` (`SpanAlignmentEvidenceTests`), `tests/test_benchmarks.py` | the beam solution meets its four conditions and `V = 2*E*I*theta/a^2`; every worked number of section 7.2 to its quoted digit and 1e-4 against the closed forms; `theta_cr` inserted forward returns the threshold (1e-9); taper equals a misalignment `m*a`; small-shear limit `-tau^2/sigma_x`; roller deflection beam quantities; flags, foil factor, limitations, rejections. In the engine: 1 mm/m on the exit span gives `TROUGHS_EXPECTED` and the item `SUPPORTS` weak (one point), 0.1 mm/m `NEUTRAL`, a supplied plant stress gives the branches of before with the computed value compared beside it, without the key every result identical; report columns and lines; validation messages in mm per metre; `SS-V14` reference only (factors 15 and 7-10), `SS-V15` not encoded |
+| foil gauge control (SPEC19 package 13) / `tests/test_foil_gauge.py` | the sensitivity table of section 9.5 (1e-4) from the committed battery-foil bite; an infinite mill modulus gives `dh/dS -> 1` and every `g_X -> 0`; a kiss stiffness lowers every `g_X`; signs; the rate term; the loop numbers (1e-3), `|S|` 1.123 at the entry coil frequency, the tension-ripple input (0.0172 %); `S -> j*w/w_c` at low frequency; the pure delay-integrator margins against their closed forms; the Smith identity at zero delay; the gauge transfer equals `band_sensors`; a time run equals the frequency response for a sinusoid (2 %); the step response (0.54 s, 4 %, 4.00 MPa), the trim clip, speed relief; unstable settings reported and not run. Reels (`ReelTests`, `ReelEngineTests`): the reel worked numbers (1e-3); an undamped resonance at `w_n` without bite response and regulator; the held reel and `J -> inf` against `(E/L)*v_d/sqrt(w^2 + lam^2)`; the regulator gain `w/sqrt(w^2 + w_b^2)`; the sweep monotonic in frequency and pitch, a lightly damped case flagged; the chain (product of `g_hin` with `|S| = 1`, pitch stretching, a pass without a bite ends the chain, a stand resonance met); in the engine both blocks, the chained passes, hypotheses, chatter, schedule sweep and bite derivations unchanged, the report tables. Engine: section present with the bite model and closure named, absent key identical, hypotheses and bite derivations unchanged, unstable settings, report block only with the section, v1 results not supplied with byte-identical HTML, validation; `tests/test_benchmarks.py`: `BT-G13-SPEED-EFFECT` reference only |
+| winding by lanes / `tests/test_band_coil_winding.py` | allocation: uniform lanes get the mean (1e-9), force balance (1e-9), a longer lane less, slack, yield cap and plastic strain; a uniform profile reproduces the single-lane model; the planner's table with the layer-top allocation; the specification's mid-layer values pinned; orderings (factor below 1, tension stops rising for soft stacks, softer stack smaller factor); the engine section beside the linear criterion; absent key changes nothing; report; validation; flag sentences |
+| winding model / `tests/test_wound_roll.py` | the closed form (radial stress within 0.5 % at 100 layers and 0.12 % at 400 at four radii; first-layer hoop within 2 and 0.5 MPa); first-order convergence (error ratio 200 -> 400 layers 1.7-2.3); outer and core conditions of the increment (1e-9); a soft core lowers the core pressure; a softer stack lowers the inner pressure and the lowest hoop stress (5.779 MPa, -2.98 MPa at `E_t/100`); the Pfeiffer modulus rises with pressure; air layer (no gap equals no air, a gap softens, it closes under pressure); taper; the film constant 0.6430 and the two films (1e-3); the stack law required with the press-test message; rejections; JSON safety |
+| spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
+| width coupling / `tests/test_strip_shape.py` (`WidthCouplingKernelTests`), `tests/test_band_width_coupling.py` | the three closures' `chi` in closed form and from the stress function (the closure condition zero to 1e-9 of the stress scale); both demo rows to 1e-3; the limits (`f_se = 0`, `chi = 1`; `f_sx -> -inf`); `xi` scaling; a negative denominator reported, not clipped; the development fraction (0 at the bite, 0.95 at `kappa*x = 3.94`, monotonic); a supplied stiffness equal to `N_x'*E*xi/h` reproduces the pointwise transfer to 1e-12; in the engine the demo sections (stiffnesses 0.1 %, kernel-level peak ratios 1.41 and 9.2 within 15 % of the planner's), the plain words and the level the tally uses, and with the kernel stubbed every other key equal |
+| wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; package 7: top-hat self-check (wave formula and saturated stress `-sigma_cr` to 1e-6), amplitude zero below and growing as the square root above the critical state, mean saturated stress equals the tension, lift scale above the weightless multiplier, the lift condition `Pi_t = 0`, `dPi_t/da = 0` (1e-6), heavier or thicker sheet raises the limit, table height below the weightless height, the planner's two demo rows (2 %), the saturated profile as an additional shapemeter reading only; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
+| flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
+| grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
+| local sources / `tests/test_band_local_sources.py` | a single sinusoid of friction gives `-1e5*xi*G(lam)*M_mu*dmu/h` to 1e-9 with the feedback and compliance only (compliance only larger); signs (more friction tight, softer metal loose, hotter fibre loose); zero changes give zero terms and the net equals the roll term; sums; a missing term named and "the net is incomplete"; the sign words; on a coarse case with a valve event: the section, event rows with the key and not-supplied rows without it, event histories and every other result identical, the report block only with the key and without `nan`; the battery-foil artifact against the planner's peaks (15 %, the flow-stress term 20 %) and pinned to 1e-6 |
+| absent optional inputs / `tests/test_band_absent_inputs.py` | the template diagnosed with the SPEC17 optional keys set to `null` and with them absent gives the identical `result_json` |
 
 `tests/test_band_diagnosis.py` also checks that twenty hypotheses are evaluated for every
 case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
@@ -2521,8 +4874,29 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 
 ## 14. Limitations and open discrepancies
 
+The register [`docs/limitations.md`](limitations.md) collects these limitations, the
+exceptions, the analyst choices, the recorded benchmark discrepancies and the flags in one
+place, one row each, and is kept in step with the code by a test; this section stays as the
+guide's own list.
+
 - **No plant validation.** Synthetic, uncalibrated stand, spans, bite, thermal and shape
   parameters; every demo's observations were generated from the model.
+- **Foil gauge control: an analyst loop on open-gap sensitivities** (SPEC19 package 13, C1,
+  BT-G13). The sensitivities are those of the open-gap foil bite at constant force and constant
+  tension; the model has no closed-gap load path, and the kiss stiffness is an input. The speed
+  effect follows the friction closure's speed slope (placeholder by default), which has not been
+  checked against a mill: `dh/du` is not a mill's speed effect. The loop is the tool's own
+  structure, not the plant's controller. Reels (package 14): linear span spring, the tool's
+  own ideal regulator, no reel friction or ovality; pass chaining carries amplitudes only with
+  the case pass's loop settings and assumes the whole coil passes on.
+- **Lateral stress in spans: misalignment and taper only** (SPEC19 package 12, G11). The
+  stress computed from `width_model.span_alignment` is a beam model of an isolated span; roller
+  deflection is reported as beam quantities with no stress derived from it, and a tension drop
+  over a driven roller, a bent coil or a baggy lane as a source, moment transfer, a slack edge
+  and the traction limit are not modelled. Isolated-span theory over-predicts wrinkling of
+  wide aluminium foil by about fifteen times [SS-S55 EX]; the factor is quoted, not applied.
+  So a computed "expected" counts as weak support only and a computed "below" never
+  contradicts.
 - **Evidence rules are engineering judgement.** Weights, thresholds (pitch exponent bands,
   0.005 slip, quarter-pitch position tolerance, 2 I-unit reporting threshold, 0.1 um stripe
   threshold, 0.3-3 x duration window, 15 % edge/centre band, 35 m/s resonance envelope) are
@@ -2530,6 +4904,32 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **Linear chatter model**: no limit cycle, mark severity or strip break; a forced response
   at an unstable operating point is formal only; lumped spans are unreliable near `c/(2L)`.
 - **Bite-damping closure** is a heuristic; beta = 0 results are always shown.
+- **The spray calibration fits one number of this model** (section 7.1): a circumferential-mean
+  coefficient for the whole header, with the background coefficient, heat share, bite heat,
+  coolant temperature and roll properties taken from the case (their errors go into the fit);
+  end effects not modelled; the after-stop phase uses the background coefficient only; the
+  grid changes the value by a few per cent; command line only, never applied.
+- **The roll surface cycle is one-way** (section 7.10): it never changes the bulk field, the
+  stripes or the shape; one-dimensional per axial station (no axial conduction in the layer);
+  uniform flux in the bite; no backup contact unless entered; wipers and oil carry-over not
+  modelled; the layout angles are entered, not measured by the tool; its time scales are a
+  comparison with the plant's 20 s, not an explanation (A6 not built).
+- **The computed heat partition is a reduced interface model** (section 8.2): lumped strip,
+  uniform heat over the contact, roll curvature neglected, no asperity conduction (no formula
+  in the reports), film from the smooth inlet formula, roll entry temperature assumed, not
+  coupled back into flow stress or film, not calibrated and not width-resolved; the entered
+  share drives every result unless the option is set.
+- **Flow stress against rate and temperature is a form without data** (section 8.3): the rate
+  sensitivity was measured five decades below rolling rates, the net of rate and temperature
+  at rolling conditions is not known, the strain rate uses the undeformed arc, the bite
+  temperature is a mid-bite estimate, no law is selected by alloy group, no recovery term,
+  and the rate share of the bite damping is reported only.
+- **Friction from pass records is reported, never applied** (section 8.5): it is identified
+  with a constant friction through the bite (a friction distribution is the published remedy
+  for foil slip and is not built), it absorbs the bite model's own error (12 % from load and
+  30 % from slip on the published case), the flow stress is taken as entered, the entered
+  numbers are not verified (`calibrated` false), and with a no-slip zone the slip carries
+  little friction information.
 - **Placeholder friction closure**: absolute friction values are placeholders; only the
   slope with speed is used.
 - **Alloy and temper selection is a literature synthesis.** The grade table by gauge band
@@ -2558,15 +4958,36 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   computed for a 260 mm roll [PT-T25]) and the lengthwise demo's events fade over about a
   minute (half-decay 57 s and 84 s). The 20 s is of the order of the local time scale, not of
   the steady build-up; plant time constants were not found (only an abstract, [PT-T26]).
-  Partly open.
-- **The roll thermal model** is circumferentially averaged, with top-hat footprints (the
-  nozzle-pattern ripple is an artefact), adiabatic barrel ends, constant properties, per-station
+  Partly open; the emulated step test (7.1, `width.zone_step_test`) puts the plant's 20 s
+  inside the model's range only with the strip-temperature term on and a test of 20-40 s, with
+  an assumed coupling and filter: a consistent reading, not evidence.
+  The strip-temperature term in measured flatness (section 7.7) is one of two
+  candidate causes the literature adds (X5); it is not tested here.
+- **The roll thermal model** is circumferentially averaged, with top-hat footprints by default
+  (the nozzle-pattern ripple is of unknown size; a parabolic profile is a stand-in), one row of
+  identical nozzles per roll (several rows, valve types and hot-edge sprays are Phase 3), adiabatic barrel ends, constant properties, per-station
   expansion with a source-dependent factor (1 or 1 + nu), and no coupling of roll temperature
   back into the bite heat.
+- **The tension feedback is not checked** (section 7.14): the literature neither supports nor
+  contradicts the pointwise exit-tension feedback that every thin-gauge band height, state and
+  the trend "hidden more in the mill" rest on; an independent width-coupling kernel gives 0.69
+  of it at sheet gauge and 0.10 at foil gauge in the demos (with an assumed lateral closure), so
+  at foil gauge a band may be several times larger than the with-feedback level shows. The tally
+  uses the with-feedback level.
 - **The flatness chain is elastic and local**: half-space roll compliance, linear exit-tension
   feedback with an approximate band-wise saturation step (one scale factor, no iteration), no
   roll bending, no entry-tension redistribution, no post-buckling relief, a single assumed
   buckle mode (Rayleigh quotient, k = 4 [M]), stresses above yield indicative only.
+- **Buckling with a wavelength search (opt-in, section 7.13) does not reproduce the measured
+  short wavelengths**: its half-wave is about 0.8 of the mode width against the measured 0.36 to
+  0.40 of the buckle width (`SS-V2-WIDE-STRIP`, `SS-V3-WIDE-STRIP`, recorded discrepancies); as a
+  local plate it gives 5.34 / 8.65 I-units against the published 5.3 / 8.92 with half-waves 2.5 /
+  1.7 times the measured one. One linear mode on the modelled (not measured) far-field profile,
+  no amplitude; reported beside the present states, which the evidence keeps using.
+- **Wave height and table (opt-in, section 7.13)**: a one-mode Ritz estimate with a fibre
+  membrane model (an upper estimate, of the order of) and a gravity criterion on a rigid table
+  (not an elastic foundation; density 2700 kg/m3 from memory); no amplitude or table
+  measurement exists to compare with; changes no band state or score.
 - **After-release whole-sheet mode** is an upper-bound indicator, not a band prediction; the
   local mode's width limit (2 x half-peak width) is an analyst choice.
 - **Sharp-edged stripes** can lock the local released width onto an edge spike and report
@@ -2574,8 +4995,50 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
 - **After-release onsets** limited by the reporting threshold are upper bounds.
 - **Gauge trend** carries one stripe shape through all passes; it does not re-solve the roll
   temperature for each pass.
-- **Mattress bite model is experimental**: no benchmark with known inputs, no elastic strip
-  zones, Hertz-calibrated foundation modulus; foil-regime numbers are order of magnitude only.
+- **Measured roll profile** (section 7.9): one roll, measured cold and off the mill; narrow
+  marks smoothed by the grid and by 4a; no wear growth, no roll-stack modulation; never
+  evidence.
+- **Candidate tension-line pitch** (section 3.7): a candidate, not evidence; no onset condition,
+  no air-film or winding model.
+- **Friction-stripe screen** (section 7.8): linear, from `dF/dmu` of a constant-friction bite
+  (at foil gauge the mattress bite, 0.42 of the reference load on the one benchmark) and an
+  unconfirmed exit-tension feedback; the with-feedback level shows no gauge trend while the
+  compliance-only level grows; no film model across the width, no starvation, no coupling to
+  the roll temperature; no evidence item.
+- **Strip temperature term** (section 7.7): the scan is supplied, not computed (no per-width
+  heat balance, A3); the expansion coefficient defaults to a textbook value from memory;
+  without a controller `after_cooling` equals the mechanical profile, and the held-flat case
+  is only a bound; no coil cooling or creep.
+- **Thickness gauge transfer** keeps about a fraction of a mark: a spot average and a
+  first-order lag only; real gauges have other filters; the evidence is not changed when the
+  gauge cannot resolve the observed pitch (flag only); no accelerometer model (section 11.6).
+- **Shapemeter readings are zone means of a model**: the shapemeter operator applies no flatness
+  controller (it does not predict what the plant's control would have done; the spray-zone loop
+  of section 7.12 is a separate opt-in section), no shapemeter dynamics, filter, noise,
+  calibration or temperature compensation; neighbour spreading is an interpretation of one
+  vendor sentence and off by default (section 7.6).
+- **Spray-coefficient basis not comparable**: the model's coefficient is a circumferential
+  mean, the published 2.5-4.3 kW/m2K is an average over the roll-wall patch of one cooling zone
+  [SN14 FT]; the `thermal_check` verdict compares two different bases (flag
+  `SPRAY_COEFFICIENT_BASIS_NOT_COMPARABLE`; section 3.12). For arcs of 20-90 degrees the published
+  value is a circumferential mean of 0.14-1.07 kW/m2K [computed]: the demos' coefficient would
+  then be several times too high and the modelled stripes too low.
+- **Fire limits are a rule check**: no oil-mist or vapour model; the limits are the user's and
+  the modelled strip exit temperature is not a coil temperature (inflated at foil gauge by the
+  mattress slip).
+- **Isotropic plane-strain factor** `2/sqrt(3)` in every bite; published r-values of one foil
+  would move it by -12 % to +1 % under Hill 1948 (section 8.3); no alloy-group hardening data
+  enters any law.
+- **No film-collapse test** for the heat-streak hypothesis: the gap study's test (film against
+  additive length or contact temperature) needs the friction closure BT-G3 and BT-G11; since
+  SPEC17 only a supplied exit-temperature limit can support that item. The herringbone rule
+  keeps its weak support for a film ratio below 1 (worded "substantial asperity contact"),
+  although a film ratio below 1 is normal mixed-regime operation [BT-S3 EX, BT-S9 EX] (open
+  decision 1 of SPEC17: scoring left, wording changed).
+- **Mattress bite model is experimental**: on the one published case with every input stated
+  (BT-V1, Fleck et al. 1992 Fig. 9 [FT]) it returns 0.42 of the half-space reference load
+  [run], a recorded discrepancy (10.2, `physicroll/benchmarks.py`); no elastic strip zones,
+  Hertz-calibrated foundation modulus; foil-regime numbers are order of magnitude only.
 - **Supplied bite with derived force sensitivities**: with `bite_response_override` the
   gauge-control speed-change shift and the incoming-variation hardness response take their
   force sensitivities from perturbed bites of the derived (slab or mattress) model while the
@@ -2583,7 +5046,9 @@ case. Run, for example, `python -m unittest tests.test_band_lengthwise -v` or
   `FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE` on both sections and in the top-level flags).
 - **Short-lived bands close together in width**: an event's metrics stop at the start of the
   next event in the same neighbourhood (7.4); what lies beyond is only a lower bound.
-- **Coil ridge compaction factor** is an analyst choice (default 0.5).
+- **Coil ridge compaction factor** is an analyst choice (default 0.5). The lane winding model
+  (opt-in, section 7.15) gives 0.02 to 0.77 for a 0.1 um lane depending on the radial stack
+  stiffness, which is not published for aluminium foil; the tally keeps 0.5.
 - **Mill dynamics**: first-order cylinder loop (the AGC-chatter result depends on the loop
   roll-off, 9.70 against 13.62 m/s in the demo); static formulas hold tension constant.
 - **Hardening**: literature fits are tensile fits, over-predicting beyond `eps` about 0.3; demo
@@ -2632,6 +5097,48 @@ At battery-foil gauge, in addition (each checked against the code and
 - **Domain limits**: below 8 um exit gauge or above 65 % reduction no bite at all; doubled
   passes are not modelled (`material.final_pass_doubled` true flags it; the plant rolls
   single-sheet).
+- **The friction level is not known.** Neither friction law has a published level for your
+  mill: the placeholder is unfitted, and the load-sharing closure takes its level from an
+  entered contact friction (0.013 to 0.1 in the sources) on a contact-ratio curve published for
+  one foil pass; no inlet analysis is built (section 8.1).
+- **Oil properties at bite pressure are not known.** For the one foil oil with data neither
+  the Barus law (default) nor the Roelands law (option) follows the measured viscosity above
+  100 MPa (Roelands low by a factor 12 to 30); no source gives a limiting shear stress for a
+  rolling oil (only a lower bound 0.045 of the pressure for one base oil); the Eyring stress
+  is known for one base oil without additives (section 8.1).
+- **The emulated step test fits a constant that belongs to the test** (section 7.1): it
+  grows with the test length, depends on which terms are on, and over a short test trades off
+  against the dead time (a 0.15 s delay moves it by a third); the coupling, inlet weight and
+  display filter are assumptions and no plant protocol is recorded.
+- **The simulated flatness loop is the tool's own law on this model** (section 7.12): one
+  header on one roll, spray zones only, the low-order part assumed removed by bending and tilt
+  (not modelled), linear readings, no feed-forward; whether it settles depends on analyst
+  choices (zone weights, the first dwell) that change the battery-foil outcome from settled to
+  trimming. It is never what the plant's controller did and never evidence.
+- **Grinding rules (SPEC20)**: no amplitude of grinder marks on foil rolls is published (the open
+  figures are for hot-mill rolls and slender shafts); the feed-mark ceiling of 60 mm and the
+  12-240 count range come from printed grinder settings in patents and trade pages; none of
+  this was checked on a mill.
+- **The local sources of a hot stripe are linear and rest on the exit-tension feedback**
+  (section 7.11): their sum is taken on the linear-feedback profile; `dF/dmu` and `dF/dY` are
+  those of a constant-friction bite; the film term's sign against the roll path depends on the
+  assumed inlet weight in the first tens of seconds after a valve change; nothing feeds back to
+  the roll temperature and no evidence item reads them.
+- **The local state across the width is one-way and rests on an assumed inlet weight**
+  (section 7.11): differences from the healthy header only; the share of a roll temperature
+  difference that reaches the inlet oil (default 0.5) has not been measured; the local friction,
+  force and heat changes do not return to the roll temperature (loop I1 open); no oil spreading
+  or carry-over, no inlet meniscus position (the oil supply is a volume balance); the friction
+  heat change is left out; the strip entry temperature and the roughness are uniform across the
+  width.
+- **The reduced half-space bite (`halfspace_bite.py`) is opt-in** (`model_options.bite_model`)
+  and unvalidated: it leaves out the longitudinal elastic equations of its source, closes
+  the bite ends by contact zones where the source uses a pressure step (the published loads
+  depend on an unstated end length), and carries a strip thickness spring that is the
+  planner's addition (+4.6 % load on the published case). At the regime boundary neither
+  the no-slip structure nor zone E is admissible and the sheet-like structure is used, with
+  the other candidate reported (1.7 % apart in force on the battery-foil case pass); its
+  rule against the degenerate branch (`SLIP_CONSISTENCY`) is the project's own (section 10.3).
 - **Extended-domain bites are unvalidated.** Between 8 and 20 um exit gauge and between 50 and
   65 % reduction the mattress model gives numbers only because its solution stays converged
   and continuous in probes; no source validates it there, and the closed-gap load path is
@@ -2661,9 +5168,10 @@ At battery-foil gauge, in addition (each checked against the code and
   `width.gauge_trend` only for a foil-regime case or a schedule with a pass without a roll
   bite, so that sheet results without such passes keep their exact content; a sheet case
   sees the roller-wrinkle threshold only for the case pass's spans (`width.troughs`).
-- **Tension lines have no physical model**; `foil_tension_lines` is a rule set with analyst
+- **Tension lines have no established model**; `foil_tension_lines` is a rule set with analyst
   weights [D] on a published description [BF-S21, excerpt of a trade report of a producer
-  talk; V S27, S28].
+  talk; V S27, S28]; one candidate pitch (shell buckling of the wound lap, section 3.7) is
+  reported for comparison only, never as evidence.
 - **Demo heat partition**: the foil demo uses the middle (0.22) of the only measured
   foil-mill strip share, 0.11-0.33 [PT-T16, abstract only, net balance], with 0.84 and the
   measured ends kept as sensitivity rows; the sheet-gauge lengthwise demo keeps 0.84 because no
@@ -2695,6 +5203,16 @@ Li et al. (2024) Metals 14(2):166; Dohmae & Okamura (2012) Trans. SICE 48(4),
 doi:10.9746/sicetr.48.193; Yin et al. (2003) (abstract only); Innoval roll-cooling blogs
 (coolant unspecified).
 
+Winding (section 7.15): the accretion equation as restated in SS-S42 [EX] (Pfeiffer stack law);
+"about two orders of magnitude softer" [SS-S40 VP, a retelling]; air in the stack [SS-S49 EX,
+SS-S50 AB]; foil-bearing film [SS-S58 EX/AB]; air viscosity [M].
+
+Buckling with a wavelength search (section 7.13): Rammerstorfer, Fischer & Friedl (2001) J.
+Appl. Mech. 68:399 [SS-S12 AB]; Fischer, Rammerstorfer & Friedl (2003) J. Appl. Mech.,
+doi:10.1115/1.1532322 [SS-S13 AB]; Kpogan & Potier-Ferry (2014) Key Eng. Mater. 611-612:221
+[SS-S15 EX]; Dai, Zhang & Qin (2011) Engineering Mechanics 28(10):236 [SS-S19 FT, formulas
+garbled]; the closed-form coefficients 6.97 and 0.425 are textbook values [M].
+
 Strip shape: Johnson, Contact Mechanics s13.2 (second-hand); Qu et al. (2025) ISIJ Int. 65(9),
 doi:10.2355/isijinternational.isijint-2024-371; Li et al. (2022) Int. J. Adv. Manuf. Technol.,
 doi:10.1007/s00170-022-08997-5; US 5,927,117; IHI Sheetflat; Vollmer (2019); QCA-1; Bailey;
@@ -2718,7 +5236,23 @@ Mill dynamics: IJCA 9(2) AGC paper; Scheidl et al. (2016); Karl et al. (2011); I
 Gao et al.; Soler, Isermann & Feldmann (2008); Zhang et al. (2017) IJCA 10(6).
 
 Thin-gauge bite: Fleck & Johnson (1987) Int. J. Mech. Sci. 29:507 (poor OCR copy only); MISG
-report "A simple model for the cold rolling of metal foil"; Stone (from memory).
+report "A simple model for the cold rolling of metal foil"; Stone (from memory); Fleck,
+Johnson, Mear & Zhang (1992) Cold rolling of foil, Proc. IMechE B 206:119-131 (full text, scan;
+read by the bite gap report, BT-S1; benchmark cases of `benchmarks.py`).
+
+Phase 1 equation note (`docs/research/band-screening-2026-11/phase1-equations.md`, prefix `E`;
+read tags as the note gives them): E1 Fleck, Johnson, Mear & Zhang (1992), the same paper as
+BT-S1 [FT, scan read as images; eqs (20), (30)-(32), (36), Appendix 3 and Fig. 9 re-read on
+enlarged crops; the governing set of `halfspace_bite.py`, section 10.3]; E6 Sutcliffe (1989) Friction and lubrication in metal rolling, PhD thesis,
+Cambridge [FT for chapter 2, sections 3.2.1 (part), 3.3, 3.4, 4.2-4.3, 4.7-4.8, Tables 2.1, 4.1,
+4.2, Fig. 2.7]; E9 Niroomand, Forouzan & Salimi (2015) ISIJ Int. 55(3):637-646, the TM-LC7 mill
+[FT, sections 3-5 and all tables; section 2 skimmed]; E5 Boemer (2020) Numerical modeling of
+friction in lubricated cold rolling, PhD thesis, Liege [FT for the sections read, among them
+4.8.1.3-4.8.3 and Appendix L: the Roelands law, and 4.7.1, 4.8.1.3: the crushing and
+flow-factor fits]; E4 Sutcliffe & Montmitonnet (2001) [EX: Table I, friction laws]; E7 Le &
+Sutcliffe, semi-empirical friction model (author manuscript) [FT of the manuscript text,
+equations partly damaged: the load-sharing law, its eq. 7]; E6 also for the kerosine base oil data
+(Table 2.1, Fig. 2.7) and the film table (Table 4.2).
 
 Battery foil (phase 3; labels as in the code's `FOIL_SOURCES`, read in a research pass for
 this project): [S3] alfoilworld.com, battery-foil rolling procedure

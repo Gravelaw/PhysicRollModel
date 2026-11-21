@@ -170,6 +170,8 @@ SOURCES = {
     'jacques_2007': 'Jacques et al. (2007) J. Mater. Process. Technol. (strip creasing)',
     'eafa_2020': 'EAFA (2020) (foil grooves)',
     'en_12258_1': 'EN 12258-1 (grinding streak)',
+    'walker_2011': 'Walker, Cole, Zagar & Quass (2011) IWEB, "Wrinkling of foils", '
+                   'hdl:11244/321981 [SS-S55 EX] (foil factor 15, copper 7-10)',
 }
 
 GAMMA_EULER = 0.5772156649015329
@@ -410,8 +412,13 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
                             roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU,
                             exit_tension_force_sensitivity_per_width_m=None,
                             exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA,
-                            xi=1.0):
+                            xi=1.0, feedback_stiffness_per_width_pa=None):
     """Apply ``T(lam)`` per DFT component of a de-trended local radius deviation [D].
+
+    ``feedback_stiffness_per_width_pa`` (SPEC19 package 8): a feedback stiffness per width given
+    directly (the width-coupling kernel), used exactly where the pointwise term
+    ``N_x'*E*xi/h`` is used otherwise; not together with
+    ``exit_tension_force_sensitivity_per_width_m``.
 
     ``z_m`` must be uniformly spaced (the window is treated as one period). Components with
     ``lam < 4a`` use ``T(4a)``, with ``lam > R`` (and the mean) use ``T(R)``. Short content is
@@ -420,6 +427,11 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     a uniform elongation does not redistribute the reel-controlled mean tension.
     """
     z = _grid(z_m, min_len=4)
+    _in_domain('local_radius_deviation_m', local_radius_deviation_m,
+               SHAPE_RADIUS_DEVIATION_RANGE_M,
+               'the roll would grow locally by {mm:.4g} mm, more than the {bound_mm:g} mm the '
+               'strip-shape model covers (too little cooling for this roll heat): outside the '
+               'model\'s range, so this screen does not cover it')
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
                lo=-1e-3, hi=1e-3)
     if len(dr) != len(z):
@@ -436,8 +448,18 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     n_r = _n_rolls(n_rolls)
     e = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
     nu = _poisson('roll_poisson_ratio', roll_poisson_ratio)
-    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
-                         strip_youngs_modulus_pa, xi)
+    if feedback_stiffness_per_width_pa is not None:
+        if exit_tension_force_sensitivity_per_width_m is not None:
+            raise ValueError('give feedback_stiffness_per_width_pa or '
+                             'exit_tension_force_sensitivity_per_width_m, not both')
+        q_fb = _num('feedback_stiffness_per_width_pa', feedback_stiffness_per_width_pa,
+                    lo=-1e15, hi=1e15)
+        if q + q_fb <= 0:
+            raise ValueError('feedback_stiffness_per_width_pa makes Q_eff non-positive')
+        nx = None
+    else:
+        nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                             strip_youngs_modulus_pa, xi)
     q_eff = q + q_fb
     lam_short = SHORT_WAVELENGTH_FACTOR * a
     if radius <= lam_short:
@@ -474,6 +496,8 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
     flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
     if nx:
         flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
+    if feedback_stiffness_per_width_pa is not None:
+        flags.append('FEEDBACK_STIFFNESS_SUPPLIED')
     if f_short > SPECTRUM_FLAG_FRACTION:
         flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
     if f_long > LONG_WAVELENGTH_FLAG_FRACTION:
@@ -513,6 +537,104 @@ def transfer_radius_profile(z_m, local_radius_deviation_m, *, bite_half_length_m
         'reasons': reasons, 'flags': flags,
         'limitations': _transfer_limitations(nx is not None)
         + ['The DFT treats the window as periodic: content near one end wraps to the other.'],
+        'sources': [SOURCES['johnson_contact']]})
+
+
+def transfer_force_profile(z_m, local_force_per_width_n_m, *, bite_half_length_m,
+                           strip_stiffness_per_width_pa, roll_radius_m,
+                           roll_youngs_modulus_pa=STEEL_E_PA, roll_poisson_ratio=STEEL_NU,
+                           exit_tension_force_sensitivity_per_width_m=None,
+                           exit_thickness_m=None, strip_youngs_modulus_pa=ALUMINIUM_E_PA,
+                           xi=1.0):
+    """Thickness change from a local change of roll force per width at an unchanged gap [D].
+
+    [D, re-derived in SPEC17; the same balance as the incoming-ridge formula of band_width]
+    ``dp0'(z)`` [N/m] is a local change of roll force per unit width at an unchanged gap (a
+    friction stripe: ``M_mu*dmu``). The strip answers a local thickness change ``dh`` with
+    ``-Q_eff*dh``, so the net local force change is ``dp' = dp0' - Q_eff*dh``; both roll
+    surfaces indent under it, ``dh = 2*C(lam)*dp'``, hence per Fourier component
+    ``dh_k = G(lam_k)*dp0'_k`` with ``G = 2*C/(1 + 2*C*Q_eff)``. ``C``, the clamps (``lam < 4a``
+    -> ``4a``, ``lam > R`` -> ``R``), ``Q_eff = Q + N_x'*E_strip*xi/h_exit`` and the mean
+    component keeping ``Q`` are as in ``transfer_radius_profile``. Signs: more friction -> more
+    local force -> the rolls indent more -> the strip is locally THICKER (``dh > 0``) -> a
+    shorter fibre -> tight. Limits: ``Q_eff -> inf`` gives ``dh -> dp0'/Q_eff``; with the
+    feedback dominant ``eps = -xi*dh/h -> -dp0'/(N_x'*E_strip)``, independent of gauge.
+    """
+    z = _grid(z_m, min_len=4)
+    dp = _list('local_force_per_width_n_m', local_force_per_width_n_m, min_len=4,
+               lo=-1e9, hi=1e9)
+    if len(dp) != len(z):
+        raise ValueError('local_force_per_width_n_m must have the same length as z_m')
+    if len(z) > MAX_DFT_POINTS:
+        raise ValueError(f'at most {MAX_DFT_POINTS} points (plain O(N^2) DFT)')
+    uniform, dz = _uniform(z)
+    if not uniform:
+        raise ValueError('z_m must be uniformly spaced for the DFT transfer')
+    a = _num('bite_half_length_m', bite_half_length_m, positive=True, hi=0.1)
+    q = _num('strip_stiffness_per_width_pa', strip_stiffness_per_width_pa, positive=True,
+             hi=1e14)
+    radius = _num('roll_radius_m', roll_radius_m, positive=True, hi=5.0)
+    e = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
+    nu = _poisson('roll_poisson_ratio', roll_poisson_ratio)
+    nx, q_fb = _feedback(exit_tension_force_sensitivity_per_width_m, exit_thickness_m,
+                         strip_youngs_modulus_pa, xi)
+    q_eff = q + q_fb
+    lam_short = SHORT_WAVELENGTH_FACTOR * a
+    if radius <= lam_short:
+        raise ValueError('roll_radius_m must exceed 4*bite_half_length_m')
+    n = len(z)
+    period = n * dz
+    spectrum = _dft(dp)
+    gains, energy = [], []
+    e_short = e_long = 0.0
+    for k in range(n):
+        kk = min(k, n - k)
+        lam = math.inf if kk == 0 else period / kk
+        pw = abs(spectrum[k]) ** 2
+        energy.append(pw)
+        if lam < lam_short:
+            e_short += pw
+            lam_eff = lam_short
+        elif lam > radius:
+            e_long += pw
+            lam_eff = radius
+        else:
+            lam_eff = lam
+        c = _compliance(lam_eff, a, e, nu)
+        gains.append(2 * c / (1 + 2 * c * (q if kk == 0 else q_eff)))
+    total = math.fsum(energy)
+    out = _dft([g * s for g, s in zip(gains, spectrum)], sign=+1)
+    dh = [v.real / n for v in out]
+    f_short = e_short / total if total > 0 else 0.0
+    f_long = e_long / total if total > 0 else 0.0
+    flags = ['RESTS_ON_PLANNER_DERIVED_FORMULA', 'PERIODIC_WINDOW_DFT']
+    if nx:
+        flags.append('EXIT_TENSION_FEEDBACK_LINEAR')
+    if f_short > SPECTRUM_FLAG_FRACTION:
+        flags.append('SHORT_WAVELENGTH_OUTSIDE_COMPLIANCE_VALIDITY')
+    if f_long > LONG_WAVELENGTH_FLAG_FRACTION:
+        flags.append('LONG_WAVELENGTH_BELONGS_TO_CROWN_MODEL')
+    j_pk = max(range(n), key=lambda i: abs(dh[i]))
+    i_pk = max(range(n), key=lambda i: abs(dp[i]))
+    return _checked({
+        'status': 'UNVALIDATED_LOCAL_TRANSFER_ESTIMATE',
+        'z_m': z, 'local_force_per_width_n_m': dp, 'local_thickness_change_m': dh,
+        'sample_spacing_m': dz, 'period_m': period, 'short_wavelength_limit_m': lam_short,
+        'long_wavelength_limit_m': radius,
+        'strip_stiffness_per_width_pa': q, **_feedback_keys(q, nx, q_fb),
+        'short_wavelength_energy_fraction': f_short, 'long_wavelength_energy_fraction': f_long,
+        'peak_local_force_per_width_n_m': dp[i_pk],
+        'peak_local_thickness_change_m': dh[j_pk],
+        'formula_basis': {'transfer': "[D, re-derived in SPEC17] dh_k = G(lam_k)*dp0'_k, "
+                                      'G = 2*C/(1 + 2*C*Q_eff)',
+                          'tension_feedback': FEEDBACK_BASIS + '; k = 0 keeps Q'},
+        'threshold_basis': 'lam < 4a -> C(4a), lam > R -> C(R); flags above 5 % (short) / '
+                           '75 % (long) of the spectrum energy (spec/analyst choices) [D].',
+        'flags': flags,
+        'limitations': _transfer_limitations(nx is not None)
+        + ['The DFT treats the window as periodic: content near one end wraps to the other.',
+           'The local force change is supplied (a friction stripe: dF/dmu times dmu); it is '
+           'not computed here.'],
         'sources': [SOURCES['johnson_contact']]})
 
 
@@ -859,6 +981,10 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
     no compression at its samples, or no positive U, gets U = 0 (LATENT / FLAT).
     """
     z = _grid(z_m)
+    _in_domain('elongation', elongation, SHAPE_ELONGATION_RANGE,
+               'at this gauge the strip would stretch unevenly across its width by '
+               '{pct:.3g} %, more than the {bound_pct:g} % the strip-shape model covers: '
+               'outside the model\'s range, so this screen does not cover it')
     eps = _list('elongation', elongation, min_len=2, lo=-0.5, hi=0.5)
     if len(eps) != len(z):
         raise ValueError('elongation must have the same length as z_m')
@@ -1018,12 +1144,93 @@ def flatness_from_elongation(z_m, elongation, *, youngs_modulus_pa, poisson_rati
                     SOURCES['timoshenko_plate'], SOURCES['lorin']]})
 
 
+# SPEC17 A1 / G6: the strip-temperature term of measured flatness
+# [M] textbook value used by the gap reports, not verified there
+ALUMINIUM_EXPANSION_PER_K = 23.6e-6
+EXPANSION_FROM_MEMORY_FLAG = 'STRIP_EXPANSION_COEFFICIENT_FROM_MEMORY_DEFAULT'
+
+
+def thermal_flatness_term(z_m, temperature_k, *,
+                          expansion_coefficient_per_k=ALUMINIUM_EXPANSION_PER_K):
+    """Thermal elongation across the width ``eps_T(z) = alpha*(T(z) - mean(T))``, I-units
+    ``1e5*eps_T`` [TM report gap A1; the mean is the arithmetic mean over the samples, as in
+    ``flatness_from_elongation``]. About 2.4 I-units per kelvin for aluminium [computed].
+
+    A hotter fibre is longer while hot and reads loose at a shapemeter without temperature
+    compensation; the difference disappears when the coil cools [TM-LA13 EX]. The temperature
+    profile is an input (supplied, not computed: no per-width heat balance, gap A3).
+    """
+    z = _grid(z_m, min_len=3)
+    t = _list('temperature_k', temperature_k, min_len=3, lo=1.0, hi=5000.0)
+    if len(t) != len(z):
+        raise ValueError('temperature_k must have one value per position')
+    a = _num('expansion_coefficient_per_k', expansion_coefficient_per_k, positive=True,
+             hi=1e-3)
+    mean = math.fsum(t) / len(t)
+    dev = [v - mean for v in t]
+    eps = [a * d for d in dev]
+    flags = [EXPANSION_FROM_MEMORY_FLAG] if expansion_coefficient_per_k == \
+        ALUMINIUM_EXPANSION_PER_K else []
+    return _checked({
+        'i_units': [e / I_UNIT for e in eps], 'elongation': eps, 'mean_temperature_k': mean,
+        'temperature_deviation_k': dev, 'i_units_per_kelvin': a / I_UNIT,
+        'expansion_coefficient_per_k': a,
+        'formula_basis': ('eps_T = alpha*(T - mean T), I = 1e5*eps_T [TM report gap A1]; '
+                          'alpha ' + ('23.6e-6 /K [M, textbook value used by the gap reports, '
+                                      'not verified there]' if flags else 'supplied')),
+        'flags': flags,
+        'limitations': ['The temperature profile is supplied, not computed.',
+                        'Linear thermal expansion only; no thermal stress in the bite.']})
+
+
 def _peak_abs(values):
     return max(abs(v) for v in values)
 
 
 def _signed_peak(values):
     return max(values, key=abs)
+
+
+SHAPE_RADIUS_DEVIATION_RANGE_M = 1e-3   # the largest local roll radius deviation the chain takes
+SHAPE_ELONGATION_RANGE = 0.5            # the largest differential elongation it takes
+
+
+class ShapeDomainError(ValueError):
+    """A roll profile or elongation outside the range the strip-shape chain covers (a
+    physical domain limit of the screen, not an input error). ``str()`` is the message of the
+    range check it replaces (results that quote it are unchanged); ``plain`` is the sentence
+    for a reader, which the shape section reports."""
+
+    def __init__(self, message, plain):
+        super().__init__(message)
+        self.plain = plain
+
+
+def _in_domain(name, values, bound, words):
+    vals = list(values) if isinstance(values, (list, tuple)) else None
+    if vals and all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                    for v in vals):
+        i = next((k for k, v in enumerate(vals) if abs(v) > bound), None)
+        if i is not None:
+            peak = max(vals, key=abs)
+            v = float(vals[i])
+            message = (f'{name}[{i}] must be >= {-bound}' if v < -bound
+                       else f'{name}[{i}] must be <= {bound}')
+            raise ShapeDomainError(message, words.format(
+                peak=peak, bound=bound, mm=abs(peak) * 1e3, bound_mm=bound * 1e3,
+                pct=abs(peak) * 100, bound_pct=bound * 100))
+
+
+STRIP_EDGE_REL_TOL = 1e-12             # a sample within this share of the half width of the
+                                       # strip edge counts as on the strip (rounding of a grid)
+
+
+def strip_sample_indices(z_m, centre_m, width_m):
+    """Indices of the samples on the strip: ``|z - centre| <= width/2*(1 + 1e-12)``. The one
+    rule for "inside the strip" (``band_width._inside`` and ``band_local`` call it): a cell
+    centre on the strip edge, or a rounding error either side of it, is on the strip."""
+    half = width_m / 2 * (1 + STRIP_EDGE_REL_TOL)
+    return [i for i, v in enumerate(z_m) if abs(v - centre_m) <= half]
 
 
 def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
@@ -1052,6 +1259,11 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     value); the band's samples are scaled by the peak ratio and flatness recomputed.
     """
     z = _grid(z_m, min_len=4)
+    _in_domain('local_radius_deviation_m', local_radius_deviation_m,
+               SHAPE_RADIUS_DEVIATION_RANGE_M,
+               'the roll would grow locally by {mm:.4g} mm, more than the {bound_mm:g} mm the '
+               'strip-shape model covers (too little cooling for this roll heat): outside the '
+               'model\'s range, so this screen does not cover it')
     dr = _list('local_radius_deviation_m', local_radius_deviation_m, min_len=4,
                lo=-1e-3, hi=1e-3)
     if len(dr) != len(z):
@@ -1065,7 +1277,7 @@ def thermal_stripe_flatness(z_m, local_radius_deviation_m, *, exit_thickness_m,
     sig_t = _num('mean_tension_pa', mean_tension_pa, nonnegative=True, hi=2e9)
     e_r = _modulus('roll_youngs_modulus_pa', roll_youngs_modulus_pa)
     nu_r = _poisson('roll_poisson_ratio', roll_poisson_ratio)
-    idx = [i for i, v in enumerate(z) if abs(v - c) <= w / 2 * (1 + 1e-12)]
+    idx = strip_sample_indices(z, c, w)
     if len(idx) < 4:
         raise ValueError('fewer than 4 samples lie inside the strip width')
     zs, drs = [z[i] for i in idx], [dr[i] for i in idx]
@@ -1325,6 +1537,27 @@ def trough_critical_lateral_stress_pa(thickness_m, span_length_m, tension_stress
     return -(math.pi * t / a) * math.sqrt(e * sx / (3 * (1 - nu * nu)))
 
 
+def shell_buckling_wavelength_m(radius_m, thickness_m, poisson_ratio=ALUMINIUM_NU):
+    """Axisymmetric shell-buckling wavelength ``2*pi*sqrt(R*t)/(12*(1 - nu^2))^(1/4)``.
+
+    [D, re-derived in SPEC17; the shape report quotes ``3.47*sqrt(R*t)`` from memory] Thin
+    cylindrical shell of radius ``R`` and wall ``t`` (a wound lap or the strip on a roller)
+    under axial, here width-direction, compression ``N`` per unit length:
+    ``D*w_xxxx + N*w_xx + (E*t/R^2)*w = 0``, ``D = E*t^3/(12*(1-nu^2))``. With
+    ``w = sin(k*x)``, ``N = D*k^2 + E*t/(R^2*k^2)``, least at
+    ``k^4 = E*t/(R^2*D) = 12*(1-nu^2)/(R^2*t^2)``; the full wavelength is ``2*pi/k``
+    (coefficient 3.4746 for nu = 0.33, 3.4564 for 0.3). The critical stress
+    ``N/t = E*t/(R*sqrt(3*(1-nu^2)))`` is the roller-wrinkle value of
+    ``roller_wrinkle_critical_lateral_stress_pa``. A CANDIDATE pitch for foil tension lines
+    (entrained-air corrugation in winding [SS-S53 EX, SS-S66 EX]), not an established model:
+    no onset condition, no air-film model.
+    """
+    r = _num('radius_m', radius_m, positive=True, hi=10.0)
+    t = _thickness('thickness_m', thickness_m)
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    return 2 * math.pi * math.sqrt(r * t) / (12 * (1 - nu * nu)) ** 0.25
+
+
 def roller_wrinkle_critical_lateral_stress_pa(thickness_m, roller_radius_m,
                                               youngs_modulus_pa=ALUMINIUM_E_PA,
                                               poisson_ratio=ALUMINIUM_NU):
@@ -1421,6 +1654,205 @@ def tension_trough_screen(thickness_m, span_length_m, tension_stress_pa, strip_w
                         NOT_VALIDATED],
         'sources': [SOURCES['cerda_2003'], SOURCES['panaitescu'], SOURCES['good_2009'],
                     SOURCES['jacques_2007'], SOURCES['aa_qca1'], SOURCES['eafa_2020']]})
+
+
+# --------------------------------------------------------------------------- SPEC19 package 12
+# Lateral stress in spans (G11) [D, re-derived in SPEC19]. The span between two rollers is a
+# beam bending in its own plane: length a, strip width W, thickness t, I = t*W^3/12, lateral
+# deflection v(x), v'''' = 0 (tension stiffening neglected, see SPAN_TENSION_STIFFENING_LIMIT).
+# - Misaligned downstream roller, in-plane angle theta: v(0) = v'(0) = 0 (the strip leaves the
+#   upstream roller straight), v'(a) = theta (enters the downstream roller normal to its axis),
+#   v''(a) = 0 (no moment there in the steady state). Then
+#   v = theta*x^2/a - theta*x^3/(3*a^2), shear force V = -E*I*v''' = 2*E*I*theta/a^2 (in
+#   magnitude), mean shear stress tau = V/(W*t) = E*W^2*theta/(6*a^2). Shear deformation does
+#   not change V under these four conditions (both slope conditions are on the total slope).
+# - Tapered roller, radius difference dR over the strip width on radius R: the surface speed
+#   varies by m = dR/(R*W) per metre of width, a curvature of the strip at the roller:
+#   v'(a) = 0, v''(a) = m give |V| = 2*E*I*m/a, the shear of a misalignment theta_eq = m*a.
+# - Lateral compression: sigma_2 = sigma_x/2 - sqrt(sigma_x^2/4 + tau^2), evaluated as
+#   -tau^2/(sigma_x/2 + sqrt(sigma_x^2/4 + tau^2)) (the same number without cancellation;
+#   about -tau^2/sigma_x). Troughs when -sigma_2 reaches the trough threshold s_tr of the
+#   span, wrinkles on the roller at the roller-wrinkle threshold. Critical angle
+#   theta_cr = (6*a^2/(E*W^2))*sqrt(s*(sigma_x + s)), s the threshold magnitude.
+# - Roller deflection: uniformly loaded, simply supported tube, q = 2*T*sin(wrap/2) (T tension
+#   per width), I_r = pi*(D^4 - (D - 2*w)^4)/64; curvature at mid length q*L^2/(8*E_r*I_r),
+#   end slope q*L^3/(24*E_r*I_r), mid deflection 5*q*L^4/(384*E_r*I_r). Beam quantities
+#   only: NO lateral stress is derived from them.
+# - Foil: wrinkles on wide aluminium foil below 25 um needed about 15 times the misalignment
+#   the isolated-span model predicts, copper 7-10 times [SS-S55 EX]; quoted beside the
+#   critical angles, never applied to a threshold.
+SPAN_TENSION_STIFFENING_LIMIT = 0.5      # analyst choice: flag K*a above this
+SPAN_FOIL_FACTOR_ALUMINIUM = 15.0        # [SS-S55 EX] aluminium foil below 25 um, wide
+SPAN_FOIL_FACTOR_COPPER = (7.0, 10.0)    # [SS-S55 EX] copper foil
+SPAN_FOIL_FACTOR_GAUGE_M = 25e-6         # the trials' gauge bound [SS-S55 EX]
+SPAN_ALIGNMENT_BASIS = (
+    '[D, re-derived in SPEC19] the span as a beam bending in its own plane (I = t*W^3/12): '
+    'misalignment theta gives tau = E*W^2*theta/(6*a^2); a taper dR over the width on radius '
+    'R gives the shear of a misalignment m*a, m = dR/(R*W); the two angles add in magnitude '
+    '(worst case); sigma_2 = sigma_x/2 - sqrt(sigma_x^2/4 + tau^2), compared with the trough '
+    'and roller-wrinkle thresholds of tension_trough_screen [Good 2009].')
+SPAN_ALIGNMENT_LIMITATIONS = (
+    'Beam model of an isolated span (two rollers, nothing upstream or downstream).',
+    'Misalignment and taper only: no roller deflection, tension drop over a driven roller, '
+    'bent coil or baggy lane as a source of lateral stress.',
+    'No moment transfer to the next span, no slack edge, no traction limit on the rollers.',
+    'Isolated-span theory over-predicts wrinkling of wide aluminium foil by about 15 times '
+    '(copper 7-10) [SS-S55 EX]: a computed stress above a threshold is a screening result, '
+    'not a prediction that the foil wrinkles.',
+    NOT_VALIDATED)
+SPAN_FLAG_STIFFENING = 'SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE'
+SPAN_FLAG_SHORT = 'SPAN_SHORTER_THAN_WIDTH_BEAM_MODEL_INDICATIVE'
+
+
+def _span_geometry(span_length_m, strip_width_m):
+    return (_num('span_length_m', span_length_m, positive=True, hi=100.0),
+            _num('strip_width_m', strip_width_m, positive=True, hi=10.0))
+
+
+def misalignment_shear_stress_pa(misalignment_rad, span_length_m, strip_width_m,
+                                 youngs_modulus_pa=ALUMINIUM_E_PA):
+    """Mean shear stress ``tau = E*W^2*theta/(6*a^2)`` of a span whose downstream roller is
+    misaligned by ``theta`` in the strip plane (magnitude) [D, re-derived in SPEC19]."""
+    th = _num('misalignment_rad', misalignment_rad, nonnegative=True, hi=0.1)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    e = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    return e * w * w * th / (6 * a * a)
+
+
+def taper_equivalent_misalignment_rad(radius_difference_m, roller_radius_m, strip_width_m,
+                                      span_length_m):
+    """Misalignment with the shear of a roller taper: ``m*a``, ``m = dR/(R*W)``
+    [D, re-derived in SPEC19]."""
+    dr = _num('radius_difference_m', radius_difference_m, nonnegative=True, hi=1e-3)
+    r = _num('roller_radius_m', roller_radius_m, positive=True, hi=5.0)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    return dr / (r * w) * a
+
+
+def second_principal_stress_pa(tension_stress_pa, shear_stress_pa):
+    """``sigma_x/2 - sqrt(sigma_x^2/4 + tau^2)`` (<= 0), written without cancellation."""
+    sx = _num('tension_stress_pa', tension_stress_pa, positive=True, hi=5e9)
+    tau = abs(_num('shear_stress_pa', shear_stress_pa, lo=-5e9, hi=5e9))
+    return -tau * tau / (sx / 2 + math.sqrt(sx * sx / 4 + tau * tau))
+
+
+def critical_misalignment_rad(threshold_stress_pa, tension_stress_pa, span_length_m,
+                              strip_width_m, youngs_modulus_pa=ALUMINIUM_E_PA):
+    """Misalignment at which ``-sigma_2`` reaches the threshold magnitude ``s``:
+    ``(6*a^2/(E*W^2))*sqrt(s*(sigma_x + s))``."""
+    s = abs(_num('threshold_stress_pa', threshold_stress_pa, lo=-5e9, hi=5e9))
+    sx = _num('tension_stress_pa', tension_stress_pa, positive=True, hi=5e9)
+    a, w = _span_geometry(span_length_m, strip_width_m)
+    e = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    return 6 * a * a / (e * w * w) * math.sqrt(s * (sx + s))
+
+
+def roller_deflection(outer_diameter_m, wall_thickness_m, face_length_m, youngs_modulus_pa,
+                      wrap_angle_rad, tension_per_width_n_m):
+    """Beam quantities of a roller tube under the strip load (simply supported, uniformly
+    loaded over its face). No lateral stress in the strip is derived from them."""
+    d = _num('outer_diameter_m', outer_diameter_m, positive=True, hi=5.0)
+    wt = _num('wall_thickness_m', wall_thickness_m, positive=True, hi=d / 2)
+    length = _num('face_length_m', face_length_m, positive=True, hi=20.0)
+    er = _modulus('youngs_modulus_pa', youngs_modulus_pa)
+    wrap = _num('wrap_angle_rad', wrap_angle_rad, positive=True, hi=math.pi)
+    t = _num('tension_per_width_n_m', tension_per_width_n_m, nonnegative=True, hi=1e7)
+    q = 2 * t * math.sin(wrap / 2)
+    i_r = math.pi * (d ** 4 - (d - 2 * wt) ** 4) / 64
+    ei = er * i_r
+    slope = q * length ** 3 / (24 * ei)
+    return _checked({
+        'load_per_length_n_m': q, 'second_moment_m4': i_r,
+        'mid_length_curvature_per_m': q * length * length / (8 * ei),
+        'end_slope_rad': slope, 'end_slope_mm_per_m': slope * 1e3,
+        'mid_deflection_m': 5 * q * length ** 4 / (384 * ei),
+        'basis': '[D] simply supported tube under a uniform load q = 2*T*sin(wrap/2): '
+                 'curvature q*L^2/(8*E*I), end slope q*L^3/(24*E*I), mid deflection '
+                 '5*q*L^4/(384*E*I), I = pi*(D^4 - (D - 2*w)^4)/64',
+        'note': 'Beam quantities only: no lateral stress in the strip is derived from the '
+                'roller deflection (a model of how a bent roller spreads or gathers the strip '
+                'is not in the tool).'})
+
+
+def span_lateral_stress(thickness_m, span_length_m, tension_stress_pa, strip_width_m,
+                        misalignment_rad=None, taper_radius_difference_m=None,
+                        roller_radius_m=None, roller=None, youngs_modulus_pa=ALUMINIUM_E_PA,
+                        poisson_ratio=ALUMINIUM_NU):
+    """Width-direction compressive stress that roller misalignment and taper put into a span
+    (SPEC19 package 12, G11), with the critical misalignments for troughs and roller wrinkles.
+
+    ``roller_radius_m`` is the radius of the downstream roller (needed for a taper and for the
+    wrinkle threshold); ``roller`` an optional dict ``{outer_diameter_m, wall_thickness_m,
+    face_length_m, youngs_modulus_pa, wrap_angle_rad}`` whose deflection is reported as beam
+    quantities only. The misalignment and the taper-equivalent angle add in magnitude (worst
+    case). The model and its limits are in the comment block above.
+    """
+    t, a, sx, e, nu = _trough_inputs(thickness_m, span_length_m, tension_stress_pa,
+                                     youngs_modulus_pa, poisson_ratio)
+    w = _num('strip_width_m', strip_width_m, positive=True, hi=10.0)
+    th = _opt('misalignment_rad', misalignment_rad, nonnegative=True, hi=0.1)
+    dr = _opt('taper_radius_difference_m', taper_radius_difference_m, nonnegative=True,
+              hi=1e-3)
+    rr = _opt('roller_radius_m', roller_radius_m, positive=True, hi=5.0)
+    if dr is not None and rr is None:
+        raise ValueError('a roller taper needs the roller radius (roller_radius_m)')
+    taper_eq = None if dr is None else taper_equivalent_misalignment_rad(dr, rr, w, a)
+    total = None
+    if th is not None or taper_eq is not None:
+        total = (th or 0.0) + (taper_eq or 0.0)
+    tau = None if total is None else misalignment_shear_stress_pa(total, a, w, e)
+    s2 = None if tau is None else second_principal_stress_pa(sx, tau)
+    trough = trough_critical_lateral_stress_pa(t, a, sx, e, nu)
+    wrinkle = None if rr is None else roller_wrinkle_critical_lateral_stress_pa(t, rr, e, nu)
+    th_tr = critical_misalignment_rad(trough, sx, a, w, e)
+    th_w = None if wrinkle is None else critical_misalignment_rad(wrinkle, sx, a, w, e)
+    ka = (a / w) * math.sqrt(12 * sx / e)
+    flags = []
+    if ka > SPAN_TENSION_STIFFENING_LIMIT:
+        flags.append(SPAN_FLAG_STIFFENING)
+    if a < w:
+        flags.append(SPAN_FLAG_SHORT)
+    defl = None
+    if roller is not None:
+        keys = ('outer_diameter_m', 'wall_thickness_m', 'face_length_m', 'youngs_modulus_pa',
+                'wrap_angle_rad')
+        if not isinstance(roller, dict) or set(roller) != set(keys):
+            raise ValueError(f'roller must be a dict with exactly the keys {list(keys)}')
+        defl = roller_deflection(*(roller[k] for k in keys), tension_per_width_n_m=sx * t)
+    gauge_in = t < SPAN_FOIL_FACTOR_GAUGE_M
+    foil = {
+        'aluminium_factor': SPAN_FOIL_FACTOR_ALUMINIUM,
+        'copper_factor_range': list(SPAN_FOIL_FACTOR_COPPER),
+        'critical_misalignment_wrinkles_times_aluminium_factor_rad':
+            None if th_w is None else SPAN_FOIL_FACTOR_ALUMINIUM * th_w,
+        'gauge_within_trials': gauge_in,
+        'note': ('Wrinkles on aluminium foil below 25 um wider than 0.6-1 m needed about 15 '
+                 'times the misalignment the isolated-span model predicts, copper 7-10 times '
+                 '[SS-S55 EX]; quoted for context, not applied to any threshold'
+                 + ('' if gauge_in else f'; this gauge ({t * 1e6:.4g} um) is outside the '
+                                        'gauges of those trials') + '.')}
+    return _checked({
+        'thickness_m': t, 'span_length_m': a, 'tension_stress_pa': sx, 'strip_width_m': w,
+        'misalignment_rad': th, 'taper_radius_difference_m': dr, 'roller_radius_m': rr,
+        'taper_equivalent_misalignment_rad': taper_eq,
+        'combined_misalignment_rad': total,
+        'combination': 'misalignment and taper-equivalent angle added in magnitude (worst '
+                       'case)',
+        'shear_stress_pa': tau, 'second_principal_stress_pa': s2,
+        'computed_lateral_compressive_stress_pa': None if s2 is None else -s2,
+        'trough_critical_lateral_stress_pa': trough,
+        'roller_wrinkle_critical_lateral_stress_pa': wrinkle,
+        'critical_shear_stress_troughs_pa': math.sqrt(-trough * (sx - trough)),
+        'critical_shear_stress_wrinkles_pa':
+            None if wrinkle is None else math.sqrt(-wrinkle * (sx - wrinkle)),
+        'critical_misalignment_troughs_rad': th_tr,
+        'critical_misalignment_wrinkles_rad': th_w,
+        'foil_factor_context': foil,
+        'tension_stiffening_parameter': ka,
+        'roller_deflection': defl,
+        'flags': flags, 'basis': SPAN_ALIGNMENT_BASIS,
+        'limitations': list(SPAN_ALIGNMENT_LIMITATIONS),
+        'sources': [SOURCES['good_2009'], SOURCES['walker_2011']]})
 
 
 # --------------------------------------------------------------------------- W2.5
@@ -1530,3 +1962,146 @@ def match_positions(predicted_positions_m, observed_positions_m, tolerance_m):
         'flags': [] if pred else ['NO_PREDICTED_POSITIONS'],
         'limitations': ['Positions must share one coordinate; tracking offsets are the '
                         "caller's to remove."], 'sources': []})
+
+
+# ------------------------------------------- width-coupling kernel (SPEC19 package 8, G3, X17)
+# [D, re-derived in SPEC19] Per Fourier component across the width, cos(kappa*z), small
+# perturbations of a uniform pass. Unknowns: dh exit thickness, ds_x, ds_e exit and entry
+# tensile stress AT the bite, d_x, d_e relative exit and entry speed.
+#  (K1) dF' = -Q*dh - N_x'*ds_x - N_e'*ds_e,  N_e' = -F_se/width
+#  (K2) d_x = f_h*dh + f_sx*ds_x + f_se*ds_e  (roll speed uniform)
+#  (K3) d_e = d_x + xi*dh/h  (mass flow with the shape-disturbing coefficient)
+#  (K4) exit span: far downstream s_inf = -E*e, e = -xi*dh/h (the pointwise value); near the
+#       bite a decaying plane-stress field phi = (a + b*x)*exp(-kappa*x)*cos(kappa*z) is added,
+#       and in a steady flow the speed excess equals the total strain: d_x = chi*(ds_x - s_inf)/E
+#  (K5) entry span (flat incoming strip): d_e = chi*ds_e/E
+# chi = E*eps_xx/sigma_xx of that field at x = 0 depends on how the strip is held laterally at
+# the bite (the LATERAL CLOSURE, an analyst choice [D]). No wavenumber remains in the stiffness
+# (a half-infinite span has no length but 1/kappa): for bands the kernel is a FACTOR on the
+# feedback, not a wavenumber-dependent kernel; kappa only sets where the far field is reached.
+LATERAL_CLOSURES = ('no_lateral_velocity', 'uniaxial', 'shear_free')
+KERNEL_CLOSURE = 'no_lateral_velocity'   # [D, SPEC19: analyst choice] closure of the kernel level
+CLOSURE_WORDS = {'no_lateral_velocity': 'the strip leaves the roll gap moving straight '
+                                        '(no lateral velocity change)',
+                 'uniaxial': 'no lateral stress at the roll gap exit',
+                 'shear_free': 'no shear stress at the roll gap exit'}
+KERNEL_BASIS = ('[D, re-derived in SPEC19] K1-K5: bite force and slip sensitivities of the '
+                'pass, mass flow with xi, half-infinite exit and entry spans with a decaying '
+                'plane-stress field at the bite; A_x = ds_x/dh = (f_h + chi*xi/h + '
+                'f_se*(E*xi/h)*(1 - chi)/chi)/(chi/E - f_sx - f_se), A_e = A_x + '
+                "(E*xi/h)*(1 - chi)/chi, K = N_x'*A_x + N_e'*A_e")
+
+
+def _closure_c(poisson_ratio, closure):
+    nu = poisson_ratio
+    if closure == 'no_lateral_velocity':
+        return (1 + nu) / (3 + nu)
+    if closure == 'uniaxial':
+        return 0.5
+    if closure == 'shear_free':
+        return 1.0
+    raise ValueError(f'closure must be one of {LATERAL_CLOSURES}')
+
+
+def span_strain_ratio(poisson_ratio, closure) -> float:
+    """``chi = E*eps_xx/sigma_xx`` at the bite plane: (3 - nu)*(1 + nu)/(3 + nu), 1 or 1 - nu."""
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    c = _closure_c(nu, closure)
+    # sigma_xx = -kappa^2*a, sigma_zz = kappa^2*a*(1 - 2*c): chi = 1 - nu*sigma_zz/sigma_xx
+    return 1 + nu * (1 - 2 * c)
+
+
+def closure_field_at_bite(poisson_ratio, closure, kappa=1.0, a=1.0):
+    """The stress-function field at x = 0 (self-check): amplitudes of sigma_xx, sigma_zz,
+    sigma_xz and E*d(u_z)/dx, and chi."""
+    nu = _poisson('poisson_ratio', poisson_ratio)
+    b = _closure_c(nu, closure) * kappa * a
+    sxx = -kappa ** 2 * a
+    szz = kappa ** 2 * a - 2 * b * kappa
+    sxz = kappa * (b - kappa * a)
+    # E*u_z = ((1 + nu)*kappa*(a + b*x) - 2*b)*exp(-kappa*x)*sin(kappa*z)
+    duz = (1 + nu) * kappa * b - kappa * ((1 + nu) * kappa * a - 2 * b)
+    return {'sigma_xx': sxx, 'sigma_zz': szz, 'sigma_xz': sxz, 'e_duz_dx': duz,
+            'chi': (sxx - nu * szz) / sxx}
+
+
+def width_coupling_kernel(*, strip_stiffness_per_width_pa,
+                          exit_tension_force_sensitivity_per_width_m,
+                          entry_tension_force_sensitivity_per_width_m,
+                          dslip_dexit_thickness_per_m, dslip_dexit_tension_per_pa,
+                          dslip_dentry_tension_per_pa, exit_thickness_m,
+                          strip_youngs_modulus_pa=ALUMINIUM_E_PA,
+                          strip_poisson_ratio=ALUMINIUM_NU, xi=1.0,
+                          closure=KERNEL_CLOSURE) -> dict:
+    """Feedback stiffness per width of the width-coupling kernel beside the pointwise value.
+
+    N_x' = -F_sx/width and N_e' = -F_se/width (positive when tension lowers the force).
+    ``defined`` is False when the denominator or ``Q + K`` is not positive (no linear steady
+    state for that closure): reported, never clipped.
+    """
+    q = _num('strip_stiffness_per_width_pa', strip_stiffness_per_width_pa, positive=True,
+             hi=1e14)
+    nx = _num('exit_tension_force_sensitivity_per_width_m',
+              exit_tension_force_sensitivity_per_width_m, lo=-10.0, hi=10.0)
+    ne = _num('entry_tension_force_sensitivity_per_width_m',
+              entry_tension_force_sensitivity_per_width_m, lo=-10.0, hi=10.0)
+    fh = _num('dslip_dexit_thickness_per_m', dslip_dexit_thickness_per_m, lo=-1e9, hi=1e9)
+    fsx = _num('dslip_dexit_tension_per_pa', dslip_dexit_tension_per_pa, lo=-1.0, hi=1.0)
+    fse = _num('dslip_dentry_tension_per_pa', dslip_dentry_tension_per_pa, lo=-1.0, hi=1.0)
+    h = _thickness('exit_thickness_m', exit_thickness_m)
+    e = _modulus('strip_youngs_modulus_pa', strip_youngs_modulus_pa)
+    x = _num('xi', xi, lo=0.0, hi=1.0, lo_open=True)
+    chi = span_strain_ratio(strip_poisson_ratio, closure)
+    den = chi / e - fsx - fse
+    pointwise = nx * e * x / h
+    out = {'closure': closure, 'closure_words': CLOSURE_WORDS[closure],
+           'span_strain_ratio': chi, 'denominator_per_pa': den,
+           'pointwise_feedback_stiffness_per_width_pa': pointwise,
+           'strip_stiffness_per_width_pa': q, 'basis': KERNEL_BASIS}
+    if den <= 0:
+        out.update(defined=False, reason='the denominator chi/E - f_sx - f_se is not positive',
+                   exit_stress_per_thickness_pa_m=None, entry_stress_per_thickness_pa_m=None,
+                   feedback_stiffness_per_width_pa=None, ratio_to_pointwise=None,
+                   effective_stiffness_over_strip_stiffness=None)
+        return out
+    ax = (fh + chi * x / h + fse * (e * x / h) * (1 - chi) / chi) / den
+    ae = ax + (e * x / h) * (1 - chi) / chi
+    k = nx * ax + ne * ae
+    defined = q + k > 0
+    out.update(defined=defined,
+               exit_stress_per_thickness_pa_m=ax, entry_stress_per_thickness_pa_m=ae,
+               exit_stress_per_thickness_over_e_per_h=ax * h / e,
+               entry_stress_per_thickness_over_e_per_h=ae * h / e,
+               feedback_stiffness_per_width_pa=k,
+               ratio_to_pointwise=(k / pointwise if pointwise else None),
+               effective_stiffness_over_strip_stiffness=(q + k) / q)
+    if not defined:
+        out['reason'] = 'Q + K is not positive: no linear steady state for this closure'
+    return out
+
+
+def stress_development_fraction(distance_m, wavelength_m, poisson_ratio,
+                                closure=KERNEL_CLOSURE) -> float:
+    """Share of the far-field change reached ``distance_m`` after the bite for a component of
+    wavelength ``wavelength_m``: 1 - (1 + c*kappa*x)*exp(-kappa*x), c = b/(kappa*a)."""
+    d = _num('distance_m', distance_m, lo=0.0, hi=1e3)
+    lam = _num('wavelength_m', wavelength_m, positive=True, hi=1e3)
+    c = _closure_c(_poisson('poisson_ratio', poisson_ratio), closure)
+    kx = 2 * math.pi / lam * d
+    return 1 - (1 + c * kx) * math.exp(-kx)
+
+
+def distance_to_development(fraction, wavelength_m, poisson_ratio, closure=KERNEL_CLOSURE):
+    """Distance after the bite at which ``fraction`` of the far-field change is reached."""
+    lo, hi = 0.0, 1.0
+    while stress_development_fraction(hi * wavelength_m, wavelength_m, poisson_ratio,
+                                      closure) < fraction:
+        hi *= 2
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if stress_development_fraction(mid * wavelength_m, wavelength_m, poisson_ratio,
+                                       closure) < fraction:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi) * wavelength_m
