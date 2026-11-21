@@ -300,6 +300,7 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `IDENT_PARABOLA_TOL` | 1e-4 | friction from pass records | joint-fit tolerance | numerical |
 | `IDENT_UNCERTAINTY_BASIS` | rule | friction from pass records | first-order spread of the identified friction | - |
 | `SPREADING_BASIS` | rule | shapemeter | the reading of one vendor sentence on neighbour spreading | off by default |
+| `MAX_ZONE_TIE_REL_TOL` | 1e-9 (relative) | shapemeter | zone readings closer than this count as tied for the largest; the lowest zone number is reported, so that the answer does not depend on the computer's rounding | not reported |
 | `GAUGE_RESOLVABLE_GAIN` | 0.5 | thickness gauge | when a gauge "cannot show" a mark | sets the flag only |
 | `MIN_LN_SPEED_SPREAD` | ln 1.05 | pitch-speed law | speeds within 5 % give no law | - |
 | `MAX_EXIT_SPEED_M_S` (signatures) | 200 m/s | input check | a sanity envelope far above real mills | - |

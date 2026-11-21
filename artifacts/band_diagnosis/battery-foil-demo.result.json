@@ -6982,8 +6982,8 @@
         {
           "bands": [],
           "label": "nozzle-pattern ripple of the healthy header",
-          "max_abs_reading_i_units": 0.5296394630489281,
-          "max_abs_zone_index": 22,
+          "max_abs_reading_i_units": 0.5296394630489198,
+          "max_abs_zone_index": 1,
           "name": "nozzle_pattern_ripple",
           "profile_max_abs_i_units": 3.1433163925378147,
           "readings_i_units": [

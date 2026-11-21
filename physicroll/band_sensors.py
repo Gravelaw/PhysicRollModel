@@ -50,6 +50,8 @@ SHAPEMETER_DEFAULTS = {'edge_zone_width_m': None, 'edge_zone_count_per_side': 0,
                        'resolution_i_units': None, 'temperature_compensated': None}
 DILUTION_BAND_WIDTHS_M = (0.010, 0.020, 0.040, 0.080, 0.160)
 EDGE_TOL_M = 1e-9
+# [D] analyst choice: zone readings closer than this (relative) count as tied for the largest
+MAX_ZONE_TIE_REL_TOL = 1e-9
 FLAG_APPLIED = 'SHAPEMETER_OPERATOR_APPLIED'
 FLAG_BELOW = 'MODEL_BAND_BELOW_SHAPEMETER_THRESHOLD'
 FLAG_UNCOVERED = 'SHAPEMETER_DOES_NOT_COVER_STRIP'
@@ -655,7 +657,14 @@ def read_profile(profile, edges, strip_start_m, strip_end_m, spreading_fraction,
         basis = ("the profile's reporting_threshold_i_units (the tool's own band threshold); "
                  'no vendor resolution is assumed')
     cov = [(j, x) for j, x in enumerate(r) if x is not None]
-    jmax = max(cov, key=lambda t: abs(t[1]))[0] if cov else None
+    # Zones that tie for the largest reading up to rounding (a symmetric profile gives mirror
+    # zones equal to about 1e-11) are resolved to the lowest zone index, so that the index
+    # does not depend on the platform's floating-point summation [D, analyst choice].
+    if cov:
+        top = max(abs(x) for _, x in cov)
+        jmax = min(j for j, x in cov if abs(x) >= top * (1.0 - MAX_ZONE_TIE_REL_TOL))
+    else:
+        jmax = None
     bands = []
     for b in profile['bands']:
         x = b.get('peak_position_m')

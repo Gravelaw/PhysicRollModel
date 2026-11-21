@@ -165,6 +165,11 @@ class DemoProfileTests(unittest.TestCase):
         rip = self._read('nozzle_pattern_ripple')
         self.assertAlmostEqual(rip['profile_max_abs_i_units'], 3.1433, delta=1e-4)
         self.assertAlmostEqual(rip['max_abs_reading_i_units'], 0.5296, delta=1e-4)
+        # mirror zones 1 and 22 tie to about 1e-11 on this symmetric ripple: the lowest zone
+        # index is reported whatever the platform's rounding (band_sensors.MAX_ZONE_TIE_REL_TOL)
+        r = rip['readings_i_units']
+        self.assertAlmostEqual(abs(r[1]), abs(r[22]), delta=1e-9)
+        self.assertEqual(rip['max_abs_zone_index'], 1)
         p23 = self._read('steady', n=23)
         self.assertAlmostEqual(p23['readings_i_units'][9], 23.5348, delta=1e-3)
         self.assertAlmostEqual(p23['roll_mean_i_units'], 0.01739, delta=1e-5)
