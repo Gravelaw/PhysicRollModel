@@ -348,6 +348,7 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `SPAN_TENSION_STIFFENING_LIMIT` | 0.5 | lateral stress in spans | the tension-stiffening parameter `K*a` above which the beam model of a span is flagged (0.19-0.21 in the demos) | sets the flag only (L-COIL-13) |
 
 | `CROSSOVER_RULE_FACTOR` | 0.5 | foil gauge loop | integral crossover `w_c = 0.5/(theta + tau_g + 1/w_T)` when none is entered (about 60 degrees phase margin) | 61.4 degrees, 1.57 peak amplification on the battery-foil case pass (L-DYN-11) |
+| `BELOW_SCAN_LIMIT_RAD_S` | 1e-9 rad/s | foil gauge loop analysis | lowest frequency searched for a crossing below the first scan point (0.01 rad/s) | a crossover not found within it leaves the phase margin and `stable` null (not assessed) |
 | `TIME_STEP_MAX_S` | 1 ms (and at most a fortieth of the dead time) | foil gauge loop time run | explicit step | numerical (the time run equals the frequency response within 0.5 % for a sinusoid) |
 | `SETTLED_FRACTION` | 5 % | foil gauge loop time run | "settled": within 5 % of the first value for the last 5 s | the status word only (L-DYN-11) |
 | `OSCILLATING_FRACTION` | 20 % | foil gauge loop time run | "oscillating": last 5 s peak-to-peak above 20 % of the first value | the status word only (L-DYN-11) |
@@ -372,7 +373,7 @@ Not caught by the search:
 | `CW_DEFAULT_LANE_WIDTH_M` | 50 mm (else the shapemeter zone width) | winding by lanes | lane width | not reported |
 | `CW_CLOSE_TO_YIELD_FRACTION` | 5 % | winding by lanes | how close to yield a lane must come to read "close to yield, not decided" | the verdict wording only (L-COIL-11) |
 | `AIR_CONDUCTIVITY_W_MK` | 0.026 W/mK (from memory) | coil temperature | air in the gap between laps | the radial conductivity (L-COIL-07) |
-| cooling grid | 40 cells, 400 equal steps | coil temperature | discretisation of the two 1-D cooling solutions | numerical |
+| cooling grid | 40 cells, 400 equal steps per hold-time segment (0 to the first hold time, then each to the next) | coil temperature | discretisation of the two 1-D cooling solutions | numerical |
 | wound-in tension cap | 1e-6 below yield | ironing roll | the allocation needs a mean below yield | L-COIL-12 |
 | `AIR_VISCOSITY_PA_S` | 1.8e-5 Pa s (from memory) | air film | air viscosity | L-COIL-10 |
 | air gap in the stiffness only | rule | winding model | whether the gap adds to the stack radius | not reported |
@@ -671,6 +672,8 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `FLOW_STRESS_FROM_HARDENING_LAW` | The flow stresses come from the hardening law, not from the values typed in. | L-MAT-04 |
 | `FLOW_STRESS_RATE_TEMPERATURE_FACTOR_APPLIED` | The flow stress of every pass was multiplied by your strain-rate and temperature factor; the measured rate sensitivity stops five decades below rolling rates. | L-MAT-01 |
 | `FOIL_GAUGE_LOOP_SIMULATED` | The gauge loop by entry tension and speed was simulated; it is the tool's own loop, not the plant's controller. | L-DYN-11 |
+| `FOIL_GAUGE_NO_TENSION_TRIM_RANGE` | The entry tension is zero (or no trim was allowed), so there is no tension to trim: the tension trim cannot correct a gauge change here. | L-DYN-11 |
+| `FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE` | The gauge does not respond to entry tension in this bite, so the tension trim needed for a gauge change cannot be worked out. | L-DYN-11 |
 | `FOOTPRINT_PROFILE_STAND_IN` | Each nozzle cools more in the middle of its fan than at its edges; the shape used is a stand-in, because no measured fan profile is published. | L-HEAT-13 |
 | `FOOTPRINT_WIDER_THAN_VENDOR_PRACTICE` | The fans overlap more than nozzle makers recommend (1.1 to 1.5 nozzle pitches); a blocked nozzle is smoothed more than on such a header. | L-HEAT-14 |
 | `FORCE_SENSITIVITY_DERIVED_NOT_FROM_SUPPLIED_BITE` | Some sensitivities come from the tool's roll-gap model, not from the supplied values. | L-BITE-18 |

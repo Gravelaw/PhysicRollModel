@@ -33,7 +33,8 @@ average), ``w_c`` entered or ``0.5/(theta + tau_g + 1/w_T)`` (about 60 degrees p
 ``L0 = L`` without the delay, ``w_c = 0.5/(tau_g + 1/w_T)``, ``S = 1 - T0*exp(-s*theta)``,
 ``T0 = L0/(1 + L0)``. Margins, the frequency below which ``|S| < 1`` and the peak of ``|S|``
 from a scan of 1200 frequencies ``0.01*1.01^i`` rad/s (1 % resolution; crossovers refined by
-bisection are reported beside). Time domain (limits make it non-linear): explicit steps
+bisection are reported beside; a crossing below the first scan point is bracketed below it,
+down to 1e-9 rad/s, and flagged ``*_below_scan_start``). Time domain (limits make it non-linear): explicit steps
 ``dt = min(1 ms, theta/40)`` for 20 s; delay as a FIFO; gauge filter and tension loop as
 first-order lags; the trim clipped at ``+-limit*entry tension``; while the trim is held at its
 limit the speed moves at the entered ramp limit in the direction that relieves it.
@@ -52,6 +53,7 @@ OPTIONAL = ('effective_mill_modulus_n_m', 'kiss_stiffness_n_m', 'gauge_time_cons
             'ripple_pitches_m')
 CROSSOVER_RULE_FACTOR = 0.5            # [D, SPEC19 analyst design] w_c*T_total, ~60 degrees
 SCAN_START_RAD_S, SCAN_RATIO, SCAN_POINTS = 0.01, 1.01, 1200
+BELOW_SCAN_LIMIT_RAD_S = 1e-9         # [D] lowest frequency searched below the scan start
 TIME_STEP_MAX_S = 1e-3                 # [D] explicit step, also <= theta/40
 DELAY_STEPS_MIN = 40
 HORIZON_S = 20.0
@@ -69,8 +71,15 @@ FLAG_TRIM_SATURATES = 'TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE'
 FLAG_PLACEHOLDER_SPEED = 'SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE'
 FLAG_KISS_ZERO = 'KISS_STIFFNESS_NOT_MODELLED_ZERO_USED'
 FLAG_UNSTABLE = 'UNSTABLE_LOOP_SETTINGS'
+FLAG_NO_TRIM_RANGE = 'FOIL_GAUGE_NO_TENSION_TRIM_RANGE'
+FLAG_TRIM_NOT_ASSESSABLE = 'FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE'
 FLAGS = (FLAG_SIMULATED, FLAG_STRIP_SETS_GAUGE, FLAG_COIL_AMPLIFIED, FLAG_TRIM_SATURATES,
-         FLAG_PLACEHOLDER_SPEED, FLAG_KISS_ZERO, FLAG_UNSTABLE)
+         FLAG_PLACEHOLDER_SPEED, FLAG_KISS_ZERO, FLAG_UNSTABLE, FLAG_NO_TRIM_RANGE,
+         FLAG_TRIM_NOT_ASSESSABLE)
+NO_RANGE_REASON = ('no entry tension to trim: the tension trim cannot compensate for this '
+                   'disturbance')
+NO_LEVER_REASON = ('the gauge does not respond to entry tension here: the tension trim is not '
+                   'assessable for this disturbance')
 
 REGIME_NOTE = (
     'Two regimes, two sections: the gaugemeter section (gauge_control) describes gauge control '
@@ -301,8 +310,26 @@ def scan_frequencies():
     return [SCAN_START_RAD_S * SCAN_RATIO ** i for i in range(SCAN_POINTS)]
 
 
+def _below_scan(f, start=None):
+    """Bracket a sign change of ``f`` below the scan: ``f(start) < 0``; step down by decades
+    to ``BELOW_SCAN_LIMIT_RAD_S`` until ``f >= 0``, then refine by bisection. None if no
+    change within the bound."""
+    hi = SCAN_START_RAD_S if start is None else start
+    lo = hi
+    while lo > BELOW_SCAN_LIMIT_RAD_S:
+        lo = max(hi / 10.0, BELOW_SCAN_LIMIT_RAD_S)
+        if f(lo) >= 0:
+            return _bisect(f, lo, hi)
+        hi = lo
+    return None
+
+
 def analyse_loop(loop):
-    """Margins, attenuation band and peak of ``|S|`` (scan, refined values beside)."""
+    """Margins, attenuation band and peak of ``|S|`` (scan, refined values beside). A crossing
+    that lies below the first scan point (a slow loop) is bracketed below the scan
+    (``_below_scan``) and its refined value reported in both the scan and the refined keys,
+    with ``*_below_scan_start`` true; a crossing not found within the bound is None and the
+    loop's stability is then None (not assessed), not False."""
     ws = scan_frequencies()
     mags = [abs(loop.open_loop(w)) for w in ws]
     out = {'dead_time_s': loop.theta, 'crossover_rad_s': loop.w_c,
@@ -310,16 +337,24 @@ def analyse_loop(loop):
            'smith_predictor': loop.smith, 'tension_loop_rad_s': loop.w_t,
            'gauge_time_constant_s': loop.tau, 'gauge_spot_length_m': loop.spot}
     ig = next((i for i, m in enumerate(mags) if m < 1), None)
-    if ig is None or ig == 0:
+    g_below = ig == 0
+    if ig is None:
         pm = wg = pm_ref = wg_ref = None
+    elif g_below:     # |L| < 1 already at the first scan point: the crossover is below it
+        wg = wg_ref = _below_scan(lambda w: abs(loop.open_loop(w)) - 1)
+        pm = pm_ref = None if wg is None else 180 + loop.phase_deg(wg)
     else:
         wg = ws[ig]
         pm = 180 + loop.phase_deg(wg)
         wg_ref = _bisect(lambda w: abs(loop.open_loop(w)) - 1, ws[ig - 1], ws[ig])
         pm_ref = 180 + loop.phase_deg(wg_ref)
     ip = next((i for i, w in enumerate(ws) if loop.phase_deg(w) < -180), None)
-    if ip is None or ip == 0:
+    p_below = ip == 0
+    if ip is None:
         gm = wp = gm_ref = wp_ref = None
+    elif p_below:     # phase below -180 already at the first scan point
+        wp = wp_ref = _below_scan(lambda w: loop.phase_deg(w) + 180)
+        gm = gm_ref = None if wp is None else 1 / abs(loop.open_loop(wp))
     else:
         wp = ws[ip]
         gm = 1 / abs(loop.open_loop(wp))
@@ -327,21 +362,44 @@ def analyse_loop(loop):
         gm_ref = 1 / abs(loop.open_loop(wp_ref))
     s_mag = [abs(loop.sensitivity(w)) for w in ws]
     ia = next((i for i, s in enumerate(s_mag) if s > 1), None)
-    att = None if ia is None else ws[ia] / (2 * math.pi)
-    att_ref = None if ia is None or ia == 0 else _bisect(
-        lambda w: abs(loop.sensitivity(w)) - 1, ws[ia - 1], ws[ia]) / (2 * math.pi)
-    k = max(range(len(ws)), key=lambda i: s_mag[i])
-    stable = (pm is not None and pm > 0) and (gm is None or gm > 1)
+    a_below = ia == 0
+    if ia is None:
+        att = att_ref = None
+    elif a_below:     # |S| > 1 already at the first scan point: the band edge is below it
+        wa = _below_scan(lambda w: 1 - abs(loop.sensitivity(w)))
+        att = att_ref = None if wa is None else wa / (2 * math.pi)
+    else:
+        att = ws[ia] / (2 * math.pi)
+        att_ref = _bisect(lambda w: abs(loop.sensitivity(w)) - 1, ws[ia - 1],
+                          ws[ia]) / (2 * math.pi)
+    peak_ws, peak_s = ws, s_mag
+    if g_below or p_below or a_below:
+        # the peak of |S| may lie below the scan too: extend the scan down (same ratio) to a
+        # decade below the lowest crossing found
+        low = min([x for x in (wg, wp, None if att is None else att * 2 * math.pi)
+                   if x is not None] or [SCAN_START_RAD_S]) / 10.0
+        n_low = max(0, int(math.ceil(math.log(SCAN_START_RAD_S / low) / math.log(SCAN_RATIO))))
+        extra = [SCAN_START_RAD_S * SCAN_RATIO ** -i for i in range(n_low, 0, -1)]
+        peak_ws = extra + ws
+        peak_s = [abs(loop.sensitivity(w)) for w in extra] + s_mag
+    k = max(range(len(peak_ws)), key=lambda i: peak_s[i])
+    if pm is None:
+        stable = None      # the gain crossover was not found: stability not assessed
+    else:
+        stable = pm > 0 and (gm is None or gm > 1)
     out.update({
         'phase_margin_deg': pm, 'gain_crossover_rad_s': wg,
         'gain_margin': gm, 'phase_crossover_rad_s': wp,
-        'attenuates_below_hz': att, 'peak_sensitivity': s_mag[k],
-        'peak_sensitivity_hz': ws[k] / (2 * math.pi),
+        'attenuates_below_hz': att, 'peak_sensitivity': peak_s[k],
+        'peak_sensitivity_hz': peak_ws[k] / (2 * math.pi),
         'refined': {'phase_margin_deg': pm_ref, 'gain_crossover_rad_s': wg_ref,
                     'gain_margin': gm_ref, 'phase_crossover_rad_s': wp_ref,
                     'attenuates_below_hz': att_ref},
         'stable': stable,
-        'instability_frequency_hz': None if stable or wg is None else wg / (2 * math.pi)})
+        'instability_frequency_hz': None if stable or wg is None else wg / (2 * math.pi),
+        'crossover_below_scan_start': g_below,
+        'phase_crossover_below_scan_start': p_below,
+        'attenuation_edge_below_scan_start': a_below})
     return out
 
 
@@ -560,11 +618,13 @@ def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, frict
     lp['sensitivity_at'] = rows
     if any(r['amplifies'] for r in coil_rows):
         flags.append(FLAG_COIL_AMPLIFIED)
-    if not lp['stable']:
+    if lp['stable'] is False:
         flags.append(FLAG_UNSTABLE)
     # disturbances
     g_se = sel['dh_dentry_tension_m_per_pa']
     limit_pa = fgc['tension_trim_limit_fraction'] * se
+    no_range = limit_pa == 0          # zero entry tension (or a zero trim fraction)
+    no_lever = g_se == 0              # the entry tension does not move the gauge
     dist = [('entry_thickness_1_percent', sel['dh_dentry_thickness'] * 0.01 * h0),
             ('flow_stress_1_percent', sel['dh_dflow_stress_m_per_pa'] * 0.01 * y_pa),
             ('friction_1_percent', sel['dh_dfriction_m'] * 0.01 * mu),
@@ -576,24 +636,49 @@ def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, frict
             drows.append({'disturbance': name, 'open_loop_gauge_change_m': None,
                           'reason': 'needs tribology'})
             continue
-        trim = -dh / g_se
-        drows.append({'disturbance': name, 'open_loop_gauge_change_m': dh,
-                      'open_loop_gauge_change_fraction': dh / h1,
-                      'trim_needed_pa': trim, 'trim_share_of_limit': abs(trim) / limit_pa,
-                      'trim_saturates': abs(trim) > limit_pa,
-                      'speed_change_to_replace_m_s': (None if not dh_du else -dh / dh_du)})
+        row = {'disturbance': name, 'open_loop_gauge_change_m': dh,
+               'open_loop_gauge_change_fraction': dh / h1,
+               'speed_change_to_replace_m_s': (None if not dh_du else -dh / dh_du)}
+        if no_lever:
+            row.update({'trim_needed_pa': None, 'trim_share_of_limit': None,
+                        'trim_saturates': None, 'reason': NO_LEVER_REASON})
+        else:
+            trim = -dh / g_se
+            row.update({'trim_needed_pa': trim,
+                        'trim_share_of_limit': None if no_range else abs(trim) / limit_pa,
+                        'trim_saturates': abs(trim) > limit_pa})
+            if no_range:
+                row['reason'] = NO_RANGE_REASON
+        drows.append(row)
     if drows[0]['trim_saturates']:
         flags.append(FLAG_TRIM_SATURATES)
+    if no_range and not no_lever:
+        flags.append(FLAG_NO_TRIM_RANGE)
+    if no_lever:
+        flags.append(FLAG_TRIM_NOT_ASSESSABLE)
     # time runs for the entry-gauge row
     d0 = dist[0][1]
-    if lp['stable']:
+    if lp['stable'] and no_lever:
+        step = {'status': 'NOT_ASSESSABLE', 'not_run': True,
+                'reason': 'the gauge does not respond to entry tension here (dh/d(entry '
+                          'tension) is zero): the tension trim cannot act; no time run'}
+    elif lp['stable']:
         lin = simulate(loop, g_se, lambda t: d0, history=False)
         lim = simulate(loop, g_se, lambda t: d0, trim_limit_pa=limit_pa,
                        dh_du_m_per_m_s=dh_du,
                        ramp_limit_m_s2=(fgc['speed'] or {}).get('ramp_limit_m_s2'))
         step = {'disturbance': 'entry_thickness_1_percent', 'linear_no_limits': _clean(lin),
                 'with_limits': _clean(lim), 'status': lim['status']}
+        if no_range:
+            step['note'] = ('no entry tension to trim: the run with limits holds the trim at '
+                            'zero, so only speed (if a ramp limit is given) acts')
         flags.insert(0, FLAG_SIMULATED)
+    elif lp['stable'] is None:
+        step = {'status': 'GAIN_CROSSOVER_NOT_FOUND', 'not_run': True,
+                'reason': 'the gain crossover was not found between '
+                          f'{BELOW_SCAN_LIMIT_RAD_S:g} and {scan_frequencies()[-1]:.4g} rad/s: '
+                          'the phase margin and the stability of the loop are not assessed; '
+                          'no time run'}
     else:
         step = {'status': FLAG_UNSTABLE, 'not_run': True,
                 'reason': f'the loop settings are unstable (phase margin '

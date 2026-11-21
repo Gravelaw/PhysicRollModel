@@ -498,37 +498,44 @@ def _tdma(a, b, c, d):
 
 def _cool_1d(edges, area_of, volume_of, k, rho_c, htc, area_out, times, inner_adiabatic=True):
     """theta(x, t) of a 1-D body from theta = 1, adiabatic at the first edge, convection
-    (htc) to theta = 0 at the last. Backward Euler, COOLING_STEPS equal steps to the last time.
-    Returns (profile at each time, hottest value at every step and its time)."""
+    (htc) to theta = 0 at the last. Backward Euler, integrated segment by segment through the
+    sorted requested times: segment k runs from the previous requested time (or 0) to requested
+    time k in COOLING_STEPS equal steps, so a step ends exactly on every requested time and the
+    profile at a time does not depend on which later times are requested (one requested time:
+    COOLING_STEPS equal steps from 0 to it).
+    Returns (cell centres, cell heat capacities, profile at each requested time, the hottest
+    value after every step of every segment with its time, monotone in time and starting at
+    (0, 1))."""
     n = len(edges) - 1
     xc = [0.5 * (edges[i] + edges[i + 1]) for i in range(n)]
     vol = [volume_of(edges[i], edges[i + 1]) * rho_c for i in range(n)]
     cond = [k * area_of(edges[i + 1]) / (xc[i + 1] - xc[i]) for i in range(n - 1)]
     last = 1.0 / (1.0 / (htc * area_out) + (edges[-1] - xc[-1]) / (k * area_out))
-    t_end = max(times)
-    dt = t_end / COOLING_STEPS
     theta = [1.0] * n
     out, hottest = {}, [(0.0, 1.0)]
-    targets = sorted(times)
-    ti = 0
-    for step in range(1, COOLING_STEPS + 1):
-        a, b, c, d = [0.0] * n, [0.0] * n, [0.0] * n, [0.0] * n
-        for i in range(n):
-            b[i] = vol[i] / dt
-            d[i] = vol[i] / dt * theta[i]
-            if i > 0:
-                a[i] = -cond[i - 1]
-                b[i] += cond[i - 1]
-            if i < n - 1:
-                c[i] = -cond[i]
-                b[i] += cond[i]
-        b[-1] += last
-        theta = _tdma(a, b, c, d)
-        t = step * dt
-        hottest.append((t, max(theta)))
-        while ti < len(targets) and t >= targets[ti] * (1 - 1e-12):
-            out[targets[ti]] = list(theta)
-            ti += 1
+    t_start = 0.0
+    for target in sorted(times):
+        span = target - t_start
+        if span <= 0:                   # a repeated time: the profile already reached
+            out[target] = list(theta)
+            continue
+        dt = span / COOLING_STEPS
+        for step in range(1, COOLING_STEPS + 1):
+            a, b, c, d = [0.0] * n, [0.0] * n, [0.0] * n, [0.0] * n
+            for i in range(n):
+                b[i] = vol[i] / dt
+                d[i] = vol[i] / dt * theta[i]
+                if i > 0:
+                    a[i] = -cond[i - 1]
+                    b[i] += cond[i - 1]
+                if i < n - 1:
+                    c[i] = -cond[i]
+                    b[i] += cond[i]
+            b[-1] += last
+            theta = _tdma(a, b, c, d)
+            hottest.append((t_start + step * dt, max(theta)))
+        out[target] = list(theta)
+        t_start = target
     return xc, vol, out, hottest
 
 
@@ -564,7 +571,8 @@ def coil_cooling(*, inner_radius_m, outer_radius_m, width_m, surface_htc_w_m2k, 
     return {'radius_m': rx, 'z_from_mid_width_m': zx, 'rows': rows, 'hottest_history': hottest,
             'time_scales': scales,
             'method': (f'product of two 1-D solutions, backward Euler, {COOLING_CELLS} cells, '
-                       f'{COOLING_STEPS} equal steps to the last hold time')}
+                       f'{COOLING_STEPS} equal steps from each hold time to the next '
+                       '(from 0 to the first)')}
 
 
 def time_to_fall_below(history, theta_limit):

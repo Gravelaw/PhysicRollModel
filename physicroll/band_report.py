@@ -3128,9 +3128,12 @@ def _foil_gauge_block(s):
         if d.get('open_loop_gauge_change_m') is None:
             rows.append([_e(d['disturbance']), f'<em>{_e(d.get("reason", ""))}</em>', '', '', ''])
             continue
+        share = (f'<em>{_e(d["reason"])}</em>' if d.get('reason') else
+                 _f(d['trim_share_of_limit'], 100, 3, '%'))
+        sat = d['trim_saturates']
         rows.append([_e(d['disturbance']), _um(d['open_loop_gauge_change_m'], 4),
-                     _mpa(d['trim_needed_pa'], 4), _f(d['trim_share_of_limit'], 100, 3, '%'),
-                     'yes' if d['trim_saturates'] else 'no'])
+                     _mpa(d['trim_needed_pa'], 4), share,
+                     'n/a' if sat is None else ('yes' if sat else 'no')])
     out.append(_table(('disturbance', 'gauge change without the loop', 'tension trim needed',
                        'share of the trim limit', 'trim saturates'), rows, 'num'))
     st = s.get('step_response') or {}

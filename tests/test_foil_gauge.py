@@ -6,6 +6,7 @@ import math
 import re
 from pathlib import Path
 import unittest
+from unittest import mock
 
 from physicroll import band_sensors
 from physicroll import foil_gauge as fg
@@ -198,6 +199,85 @@ class LoopTests(unittest.TestCase):
         self.assertIsNotNone(a['instability_frequency_hz'])
 
 
+def _log_bisect(f, lo, hi, n=200):
+    """Root of ``f`` between ``lo`` and ``hi`` (sign change), bisection on log frequency."""
+    flo = f(lo)
+    for _ in range(n):
+        m = math.sqrt(lo * hi)
+        if (f(m) > 0) == (flo > 0):
+            lo, flo = m, f(m)
+        else:
+            hi = m
+    return math.sqrt(lo * hi)
+
+
+class ScanStartTests(unittest.TestCase):
+    """Loops whose crossings lie below the first scan point (0.01 rad/s)."""
+
+    def test_slow_loop_crossover_below_the_scan_is_stable(self):
+        lp = fg.Loop(3.0, 0.05, 0.01, 5.0)       # gauge 3 m at 0.05 m/s: 60 s dead time
+        a = fg.analyse_loop(lp)
+        # independent: |L| = w_c/w/|1 + jw/w_T|/|1 + jw*tau|, phase -90 - atan - atan - w*theta
+        w_t, wc, th, tau = 2 * math.pi * 5.0, 0.5 / (0.01 + 1 / (2 * math.pi * 5.0) + 60.0), \
+            60.0, 0.01
+        mag = lambda w: wc / w / math.hypot(1, w / w_t) / math.hypot(1, w * tau)
+        wg = _log_bisect(lambda w: mag(w) - 1, 1e-6, 1e-2)
+        pm = 90 - math.degrees(math.atan(wg / w_t) + math.atan(wg * tau) + wg * th)
+        self.assertLess(abs(wg / 0.00833 - 1), 0.01)
+        self.assertLess(abs(pm - 61.35), 0.5)
+        self.assertTrue(a['stable'])
+        self.assertTrue(a['crossover_below_scan_start'])
+        self.assertIsNone(a['instability_frequency_hz'])
+        for v in (a, a['refined']):
+            self.assertLess(abs(v['gain_crossover_rad_s'] / wg - 1), 1e-9)
+            self.assertAlmostEqual(v['phase_margin_deg'], pm, places=6)
+        self.assertGreater(a['gain_margin'], 3)
+        # the band edge of |S| < 1 is below the scan too, and is a crossing of |S| = 1
+        self.assertTrue(a['attenuation_edge_below_scan_start'])
+        w_a = a['attenuates_below_hz'] * 2 * math.pi
+        self.assertLess(w_a, fg.SCAN_START_RAD_S)
+        self.assertAlmostEqual(abs(lp.sensitivity(w_a)), 1.0, places=9)
+        self.assertGreaterEqual(a['peak_sensitivity'], abs(lp.sensitivity(fg.SCAN_START_RAD_S)))
+        json.dumps(a, allow_nan=False)
+
+    def test_phase_crossover_below_the_scan(self):
+        lp = fg.Loop(20.0, 0.001, 0.01, 5.0)      # 20000 s: the phase is past -180 at 0.01
+        a = fg.analyse_loop(lp)
+        self.assertTrue(a['phase_crossover_below_scan_start'])
+        wp = a['phase_crossover_rad_s']
+        self.assertAlmostEqual(lp.phase_deg(wp), -180.0, places=6)
+        self.assertEqual(a['gain_margin'], a['refined']['gain_margin'])
+        # integrator with a delay: gain margin (pi/2)/(w_c*theta) = pi for the rule
+        self.assertLess(abs(a['gain_margin'] / math.pi - 1), 1e-3)
+        self.assertTrue(a['stable'])
+
+    def test_crossover_not_found_is_not_called_unstable(self):
+        lp = fg.Loop(3.0, 0.05, 0.01, 5.0, integral_crossover_rad_s=1e-12)
+        a = fg.analyse_loop(lp)
+        self.assertIsNone(a['phase_margin_deg'])
+        self.assertIsNone(a['refined']['phase_margin_deg'])
+        self.assertIsNone(a['stable'])
+        self.assertIsNone(a['instability_frequency_hz'])
+
+    def test_in_range_loop_unchanged(self):
+        # values of the analysis before the below-scan handling (battery-foil worked loop)
+        a = fg.analyse_loop(fg.Loop(1.5, U, 0.010, 5.0))
+        want = {'phase_margin_deg': 61.39866512873779, 'gain_crossover_rad_s': 3.17742581868008,
+                'gain_margin': 3.344586172135167, 'phase_crossover_rad_s': 10.077545761573363,
+                'attenuates_below_hz': 0.5210263327219001, 'peak_sensitivity': 1.5650044896836148,
+                'peak_sensitivity_hz': 1.1322095875929368}
+        ref = {'phase_margin_deg': 61.5304122159703, 'gain_crossover_rad_s': 3.1627690664300916,
+               'gain_margin': 3.337835412309002, 'phase_crossover_rad_s': 10.059105797152679,
+               'attenuates_below_hz': 0.5160147277052062}
+        for k, v in want.items():
+            self.assertAlmostEqual(a[k], v, places=10, msg=k)
+        for k, v in ref.items():
+            self.assertAlmostEqual(a['refined'][k], v, places=10, msg=k)
+        self.assertIs(a['stable'], True)
+        self.assertFalse(a['crossover_below_scan_start'])
+        self.assertFalse(a['phase_crossover_below_scan_start'])
+        self.assertFalse(a['attenuation_edge_below_scan_start'])
+
 def _case(fgc=None, **kw):
     c = v2(**LONG)
     c['tribology'] = dict(TRIBOLOGY)
@@ -243,6 +323,15 @@ class EngineTests(unittest.TestCase):
         self.assertIn(s['step_response']['status'], ('SETTLED', 'TRIM_SATURATED_HELD_BY_SPEED',
                                                      'TRIM_SATURATED_ERROR_REMAINS'))
         json.loads(result_json(self.on))
+        # a normal case: rows with a share of the limit and no reason, no zero-range flag
+        for d in s['disturbances']:
+            if d['open_loop_gauge_change_m'] is not None:
+                self.assertNotIn('reason', d)
+                self.assertGreater(d['trim_share_of_limit'], 0)
+                self.assertIs(d['trim_saturates'], d['trim_share_of_limit'] > 1)
+        self.assertNotIn(fg.FLAG_NO_TRIM_RANGE, s['flags'])
+        self.assertNotIn(fg.FLAG_TRIM_NOT_ASSESSABLE, s['flags'])
+        self.assertIs(s['loop']['crossover_below_scan_start'], False)
 
     def test_absent_key_changes_nothing(self):
         self.assertEqual(result_json(self.none), result_json(self.null))
@@ -305,6 +394,80 @@ class EngineTests(unittest.TestCase):
         c['foil_gauge_control'].pop('gauge_time_constant_s')
         self.assertIsNone(validate_case(c)['foil_gauge_control']['gauge_time_constant_s'])
 
+
+class EdgeEngineTests(unittest.TestCase):
+    """A slow, low-gain loop and a case without entry tension, in the engine."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.slow = diagnose(_case(FGC, integral_crossover_rad_s=0.005))
+        c = _case(FGC)
+        c['pass']['entry_tension_pa'] = 0.0
+        validate_case(c)                          # zero entry tension is a valid case
+        cls.zero = diagnose(c)
+
+    def test_slow_low_gain_loop_is_simulated(self):
+        s = self.slow['foil_gauge_control']
+        self.assertNotEqual(s['status'], 'FAILED')
+        lp = s['loop']
+        self.assertTrue(lp['crossover_below_scan_start'])
+        self.assertTrue(lp['stable'])
+        self.assertNotIn(fg.FLAG_UNSTABLE, s['flags'])
+        self.assertIn(fg.FLAG_SIMULATED, s['flags'])
+        self.assertFalse(s['step_response'].get('not_run', False))
+        self.assertIn('linear_no_limits', s['step_response'])
+        json.loads(result_json(self.slow))
+
+    def test_zero_entry_tension_keeps_the_section(self):
+        s = self.zero['foil_gauge_control']
+        self.assertEqual(s['status'], fg.STATUS)
+        self.assertNotIn('error', s)
+        self.assertTrue(s['sensitivities']['dh_dentry_tension_m_per_pa'])
+        self.assertIn('phase_margin_deg', s['loop'])
+        self.assertTrue(s['loop']['stable'])
+        self.assertEqual(s['trim_limit_pa'], 0.0)
+        self.assertIn(fg.FLAG_NO_TRIM_RANGE, s['flags'])
+        for d in s['disturbances']:
+            if d['open_loop_gauge_change_m'] is None:
+                continue
+            self.assertIsNone(d['trim_share_of_limit'])
+            self.assertIs(d['trim_saturates'], abs(d['trim_needed_pa']) > 0)
+            self.assertEqual(d['reason'], 'no entry tension to trim: the tension trim cannot '
+                                          'compensate for this disturbance')
+        # the run with a zero limit is made: the trim is held at zero
+        st = s['step_response']
+        self.assertEqual(st['with_limits']['final_trim_pa'], 0.0)
+        self.assertTrue(st['with_limits']['trim_reached_limit'])
+        self.assertIn('linear_no_limits', st)
+        text = result_json(self.zero)
+        self.assertNotIn('FAILED', json.dumps(s))
+        json.loads(text)
+        html = render_band_report(self.zero)
+        self.assertIn('no entry tension to trim', html)
+        self.assertIsNone(re.search(r'\bnan\b|\binf\b', html))
+
+    def test_zero_gauge_lever_is_not_assessable(self):
+        real = fg.gauge_sensitivities
+
+        def no_lever(forces, *a, **kw):
+            return real(dict(forces, s_e=0.0), *a, **kw)
+        with mock.patch.object(fg, 'gauge_sensitivities', no_lever):
+            r = diagnose(_case(FGC))
+        s = r['foil_gauge_control']
+        self.assertEqual(s['status'], fg.STATUS)
+        self.assertEqual(s['sensitivities']['dh_dentry_tension_m_per_pa'], 0.0)
+        self.assertIn('phase_margin_deg', s['loop'])
+        self.assertIn(fg.FLAG_TRIM_NOT_ASSESSABLE, s['flags'])
+        self.assertNotIn(fg.FLAG_SIMULATED, s['flags'])
+        for d in s['disturbances']:
+            if d['open_loop_gauge_change_m'] is None:
+                continue
+            self.assertIsNone(d['trim_needed_pa'])
+            self.assertIsNone(d['trim_saturates'])
+            self.assertIn('not assessable', d['reason'])
+        self.assertTrue(s['step_response']['not_run'])
+        json.loads(result_json(r))
+        render_band_report(r)
 
 class _Bite:
     """The committed battery-foil bite as attributes (flags empty)."""

@@ -3347,7 +3347,9 @@ of the winding section when it ran with air (it then couples to the wound-roll m
 two bounds, the entrained-film bound's gap). Cooling of a uniformly hot hollow cylinder (core side
 adiabatic, convection on the outer surface and both end faces) as the product of a radial and an
 axial 1-D solution, exact for this start and these conditions [D, classical]; backward Euler on 40
-cells and 400 equal steps to the last hold time. Rows per hold time: hottest point, coil mean,
+cells, integrated hold time by hold time: 400 equal steps from each hold time to the next (from 0 to
+the first), so a step ends exactly on every hold time and a row does not depend on which later hold
+times are asked for (`COOLING_STEPS`; with one hold time, 400 equal steps to it). Rows per hold time: hottest point, coil mean,
 outer surface at mid width; `limit_rows` against the published coil limits read from
 `thermal_check.coil_limits_c` (75 C entering the final pass, 80 C leaving it, 90 C elongation
 decay, with their sources): above or below at winding and the time for the hottest point to fall
@@ -3962,7 +3964,14 @@ average when `measurement.thickness_gauge` describes the gauge), `w_c` entered o
 disturbance; with `smith_predictor` and a perfect model `S = 1 - T0*exp(-s*theta)`,
 `T0 = L0/(1 + L0)`, `L0` without the delay and `w_c = 0.5/(tau_g + 1/w_T)`. Margins, the band
 the loop reduces and the peak of `|S|` from a scan of 1200 frequencies (1 % resolution;
-bisection-refined values beside). Three numbers the plant must supply: where the gauge is
+bisection-refined values beside). A slow loop whose crossing lies below the first scan point
+(0.01 rad/s) is bracketed below it (down by decades to 1e-9 rad/s, then the same bisection): the
+refined value is then given in both the scan and the refined keys, with
+`crossover_below_scan_start` (likewise `phase_crossover_below_scan_start`,
+`attenuation_edge_below_scan_start`) true, and the peak of `|S|` is searched from a decade below
+the lowest such crossing. A gain crossover not found within the bound leaves the phase margin
+null and `stable` null (not assessed, not unstable); the time runs are then not made, with the
+reason "the gain crossover was not found". Three numbers the plant must supply: where the gauge is
 (`gauge_distance_m`), how fast it reads (`gauge_time_constant_s`, under 10 ms [TM-LC24 VP]),
 and how fast and how far the tension can be trimmed (`tension_loop_bandwidth_hz`,
 `tension_trim_limit_fraction`). Battery-foil case pass, gauge 1.5 m at 13 m/s, 10 ms, tension
@@ -3978,6 +3987,16 @@ Time runs: explicit steps `dt = min(1 ms, theta/40)` for 20 s; statuses `SETTLED
 `TRIM_SATURATED_HELD_BY_SPEED`, `TRIM_SATURATED_ERROR_REMAINS`, `OSCILLATING`,
 `NOT_SETTLED_WITHIN_HORIZON`; settings with phase margin at or below 0 (or gain margin at or
 below 1) are reported as `UNSTABLE_LOOP_SETTINGS` with the crossover frequency and not run.
+With no entry tension (or a zero trim fraction) the trim range is zero: each disturbance row
+has `trim_share_of_limit` null, `trim_saturates` true whenever a trim is needed and the reason
+"no entry tension to trim: the tension trim cannot compensate for this disturbance", flag
+`FOIL_GAUGE_NO_TENSION_TRIM_RANGE` ("The entry tension is zero (or no trim was allowed), so
+there is no tension to trim: the tension trim cannot correct a gauge change here."); the run
+with limits holds the trim at zero, so only speed acts. When the gauge does not respond to entry
+tension (`dh/d(entry tension)` zero) the trim rows are null with a reason, flag
+`FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE` ("The gauge does not respond to entry tension in this
+bite, so the tension trim needed for a gauge change cannot be worked out."), and no time run;
+the sensitivities and the loop analysis are given in both cases.
 The result also gives the gauge error left at the roll, coil and chatter-onset frequencies and
 rows for a 1 % entry gauge, 1 % flow stress, 1 % friction, 1 K oil and a 10 % speed change
 (open-loop gauge change, trim needed and its share of the limit, the speed change that would

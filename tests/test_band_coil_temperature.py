@@ -93,6 +93,34 @@ class Sections(unittest.TestCase):
         beside = self.on['thermal_check']['coil_temperature_beside']
         self.assertIn('unchanged', beside['note'])
 
+    def test_each_hold_time_is_the_solution_at_that_time(self):
+        # the default three hold times: the first row equals a run of that hold time alone, the
+        # second a run of the first two (no later hold time changes an earlier row)
+        from physicroll import wound_roll as wr
+        ct = self.on['width']['coil_temperature']
+        cond = ct['conductivities']
+        coil = self.on['inputs']['width_model']['coil']
+        case = self.on['inputs']
+        ta, tw = CT['ambient_temperature_k'], ct['winding_temperature_k']
+        holds = [r['time_s'] for r in ct['cooling']]
+        self.assertEqual(holds, list(bw.CT_DEFAULT_HOLD_TIMES_S))
+        for k in (1, 2):
+            c = wr.coil_cooling(inner_radius_m=coil['inner_radius_m'],
+                                outer_radius_m=coil['outer_radius_m'],
+                                width_m=case['pass']['width_m'],
+                                surface_htc_w_m2k=CT['surface_htc_w_m2k'],
+                                k_radial_w_mk=cond['radial_w_mk'], k_axial_w_mk=cond['axial_w_mk'],
+                                rho_c_j_m3k=cond['volumetric_heat_capacity_j_m3k'],
+                                hold_times_s=holds[:k])
+            row, eng = c['rows'][-1], ct['cooling'][k - 1]
+            self.assertAlmostEqual(eng['time_s'], holds[k - 1])
+            self.assertAlmostEqual(eng['hottest_k'], ta + row['hottest'] * (tw - ta), places=9)
+            self.assertAlmostEqual(eng['mean_k'], ta + row['mean'] * (tw - ta), places=9)
+        # the time to fall below a limit is read from the segment-by-segment history
+        for r in ct['limit_rows']:
+            t = r['time_to_fall_below_s']
+            self.assertTrue(t is None or 0.0 <= t <= holds[-1], r)
+
     def test_coil_temperature_without_package_1(self):
         ct = self.no_local['width']['coil_temperature']
         self.assertEqual(ct['status'], bw.CT_STATUS)

@@ -3116,6 +3116,14 @@ FLAGS = {
     'UNSTABLE_LOOP_SETTINGS': (
         'The entered gauge-loop settings are unstable; the loop was not simulated.',
         'Lower the loop gain or check the gauge distance and speed.'),
+    'FOIL_GAUGE_NO_TENSION_TRIM_RANGE': (
+        'The entry tension is zero (or no trim was allowed), so there is no tension to trim: '
+        'the tension trim cannot correct a gauge change here.',
+        'Only speed can steer the gauge; check the entry tension you entered.'),
+    'FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE': (
+        'The gauge does not respond to entry tension in this bite, so the tension trim needed '
+        'for a gauge change cannot be worked out.',
+        'Read the trim rows as not assessed; check the bite inputs.'),
     'SPAN_TENSION_STIFFENING_NOT_NEGLIGIBLE': (
         'In the lateral stress from the roller alignment the span is long and tense enough '
         'that tension stiffening, which the beam model leaves out, is not small.',
@@ -4959,7 +4967,12 @@ def _gauge_loop_view(result):
                           'larger.' if 'LOOP_AMPLIFIES_COIL_FREQUENCY' in flags else
                           'The simulated loop does not make a coil\'s once-per-revolution '
                           'disturbance larger.'),
-            'trim_text': ('A 1 % entry gauge step needs more than the allowed tension trim.'
+            'trim_text': ('There is no entry tension to trim: the tension trim cannot correct '
+                          'a 1 % entry gauge step.'
+                          if 'FOIL_GAUGE_NO_TENSION_TRIM_RANGE' in flags else
+                          'The tension trim needed for a 1 % entry gauge step is not assessed.'
+                          if 'FOIL_GAUGE_TENSION_TRIM_NOT_ASSESSABLE' in flags else
+                          'A 1 % entry gauge step needs more than the allowed tension trim.'
                           if 'TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE' in flags else
                           'A 1 % entry gauge step is corrected within the tension trim'
                           + (f' in about {_f3(step["settling_time_s"])} s.' if isinstance(

@@ -238,6 +238,52 @@ class CoilTemperature(unittest.TestCase):
         self.assertAlmostEqual(ts['axial_s'] / 3600, 0.36 * 2.39e6 / 196.7 / 3600)
         t = wr.time_to_fall_below(c['hottest_history'], 0.5)
         self.assertTrue(t is None or 0 < t <= 86400)
+        # one entry per step of every segment (three hold times), times increasing
+        self.assertEqual(len(c['hottest_history']), 1 + 3 * wr.COOLING_STEPS)
+        times = [t for t, _ in c['hottest_history']]
+        self.assertTrue(all(b > a for a, b in zip(times, times[1:])))
+
+    # the reviewer's thin coil: a short and a long hold time requested together
+    THIN = dict(inner_radius_m=0.30, outer_radius_m=0.31, width_m=0.1, surface_htc_w_m2k=20.0,
+                k_radial_w_mk=1.0, k_axial_w_mk=220.0, rho_c_j_m3k=2.43e6)
+
+    def _at(self, t, times):
+        c = wr.coil_cooling(hold_times_s=times, **self.THIN)
+        return next(r for r in c['rows'] if r['time_s'] == t)
+
+    def test_short_hold_time_not_taken_from_a_later_step(self):
+        # before the fix the 10 s row with 86400 s also requested was 0.849 (the profile of the
+        # first step after 10 s of 400 steps to 86400 s, i.e. at 216 s), alone 0.999
+        alone = self._at(10.0, [10.0])['hottest']
+        both = self._at(10.0, [10.0, 86400.0])['hottest']
+        self.assertAlmostEqual(alone, 0.999070274052103, places=12)
+        self.assertAlmostEqual(both, alone, delta=1e-9)
+
+    def test_value_at_a_time_independent_of_later_times(self):
+        times = [60.0, 600.0, 7200.0]
+        for k, t in enumerate(times):
+            prefix = times[:k + 1]
+            ref = self._at(t, prefix)
+            for later in ([86400.0], [9000.0, 86400.0], times[k + 1:]):
+                req = prefix + [x for x in later if x > t]
+                r = self._at(t, req)
+                for key in ('hottest', 'mean', 'outer_surface_mid_width'):
+                    self.assertAlmostEqual(r[key], ref[key], delta=1e-12, msg=(t, req, key))
+
+    def test_one_hold_time_reproduces_the_previous_solver(self):
+        # values of the solver before segment-by-segment stepping (400 equal steps to the time)
+        r = self._at(10.0, [10.0])
+        self.assertAlmostEqual(r['mean'], 0.9902552878566271, places=14)
+        self.assertAlmostEqual(r['outer_surface_mid_width'], 0.9571814812217477, places=14)
+        c = self._cool(hold_times_s=[86400.0])
+        row = c['rows'][0]
+        self.assertAlmostEqual(row['hottest'], 0.28027454527752993, places=14)
+        self.assertAlmostEqual(row['mean'], 0.2517311309063244, places=14)
+        self.assertAlmostEqual(row['outer_surface_mid_width'], 0.22189127525023664, places=14)
+        self.assertEqual(len(c['hottest_history']), 1 + wr.COOLING_STEPS)
+        t, v = c['hottest_history'][137]
+        self.assertAlmostEqual(t, 29592.0, places=6)
+        self.assertAlmostEqual(v, 0.6913718590022591, places=14)
 
     def test_nip_tension_and_cap(self):
         t, capped = wr.wound_in_tension_pa(30e6, H, 500.0, 0.1, 165e6)
