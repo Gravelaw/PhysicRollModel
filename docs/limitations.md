@@ -191,6 +191,8 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-DYN-09 | Foil gauge control by speed and entry tension (a case option, beside the gaugemeter section): the gauge sensitivities are those of the open-gap foil bite at constant force (or position) and constant tension, from the bite model actually selected; the model has no closed-gap load path, the roll-to-roll (kiss) stiffness is an input and zero when not given. | At the battery-foil case pass 1 MPa of entry tension moves the gauge by 0.18 % and 1 % friction by 0.70 % at constant force; whether these hold at a closed gap is not known. | `GAUGE_SET_BY_STRIP_NOT_BY_GAP`, `KISS_STIFFNESS_NOT_MODELLED_ZERO_USED`; `foil_gauge_control.sensitivities` | a closed-gap load path (G2, BT-G2, Phase 3); gauge, tension and speed logs at 100 Hz | limitation |
 | L-DYN-10 | The speed effect on gauge rests entirely on how friction falls with speed: by default the placeholder friction closure's slope, or the load-sharing closure's with an entered contact friction; neither slope has been checked against a mill. The rate term of the flow stress enters only with a rate law. | -3.8 % of gauge per m/s on the battery-foil case pass with the placeholder slope; another slope gives another number, of either size. | `SPEED_EFFECT_FROM_PLACEHOLDER_FRICTION_SLOPE`; `foil_gauge_control.speed` | load and gauge against speed at constant tension on the plant (BT-G13) | limitation |
 | L-DYN-11 | The gauge loop is the tool's own structure (integral entry-tension trim, first-order tension loop, transport delay, the gauge's transfer, speed relief at the ramp limit while the trim is held at its limit, optional Smith predictor with a perfect model), not a vendor's controller: no decoupling, adaptive or feed-forward scheme. The crossover rule and the status thresholds are analyst choices; unstable settings are reported with their frequency and not run. A tension ripple is an input; reels, spans and run-out are not modelled here. | With the rule and a 5 Hz tension loop the loop reduces disturbances below about 0.5 Hz and amplifies them up to 1.57 times near 1.1 Hz: the entry coil's once-per-revolution ripple of the demo mill (2.5 Hz) is amplified 1.12 times. | `FOIL_GAUGE_LOOP_SIMULATED`, `LOOP_AMPLIFIES_COIL_FREQUENCY`, `TENSION_TRIM_SATURATES_FOR_ONE_PERCENT_ENTRY_GAUGE`, `UNSTABLE_LOOP_SETTINGS`; `foil_gauge_control.loop`, `step_response` | the plant's controller structure, gains, trim limits and gauge time constant (C1) | analyst choice |
+| L-DYN-12 | Reels and coil run-out (a case option inside the foil gauge section): the span is a linear spring between the bite and the reel, the bite a damper through its slip and gauge response to tension, the reel inertia changes with coil radius; the regulator is the tool's own ideal filter (none, or a high-pass with the entered bandwidth), not the plant's tension control; reel friction, binding, ovality harmonics and torque limits are not modelled. The existing chatter model and its spans are unchanged. | On the battery-foil case pass (entry coil 0.5 m, core 0.15 m, 50 kg m² motor assumed, 0.1 mm run-out) the coil-on-span resonance (4.9 Hz) is overdamped by the bite (damping ratio 6.2); the once-per-revolution tension ripple is 94 kPa and the gauge ripple 0.017 % of gauge open loop, 0.019 % with the loop. A bite much less sensitive to tension (closed gap) would lower the damping. | `REEL_RUNOUT_RIPPLE_COMPUTED`, `COIL_ON_SPAN_RESONANCE_CROSSED_DURING_COIL`; `foil_gauge_control.reels` | the plant's tension regulator and reel data; gauge and tension logs over a coil (C2) | limitation |
+| L-DYN-13 | Pass chaining: a thickness ripple of a pitch on the entry strip of the first schedule row is carried through the following rows (each starting at the previous exit gauge) with each pass's entry-gauge sensitivity and the case pass's loop settings; the whole coil is assumed to pass from one pass to the next (no trimming, splicing or phase tracking), the pitch stretching by entry over exit gauge; the gauge sensor's transfer is not applied. | The relative ripple changes by `|g_hin|*(h0/h1)*|S|` per pass: 0.733 statically on the battery-foil case pass; whether it grows over a route depends on the loop settings, which are the case pass's. | `RELATIVE_RIPPLE_GROWS_FROM_PASS_TO_PASS`, `ENTRY_RIPPLE_NEAR_STAND_RESONANCE`, `ENTRY_RIPPLE_NEAR_TENSION_LOOP_PEAK`; `foil_gauge_control.pass_chain` | gauge logs of the same coil on successive passes (C8) | limitation |
 ### 2.10 Roll grinding and roll surface
 
 | id | what the tool assumes or cannot do | what it means for a reader | how the result shows it | what would lift it | kind |
@@ -346,6 +348,10 @@ choice without a tag in the code). "Sensitivity" is given where the code or the 
 | `SETTLED_FRACTION` | 5 % | foil gauge loop time run | "settled": within 5 % of the first value for the last 5 s | the status word only (L-DYN-11) |
 | `OSCILLATING_FRACTION` | 20 % | foil gauge loop time run | "oscillating": last 5 s peak-to-peak above 20 % of the first value | the status word only (L-DYN-11) |
 | `GAUGE_SET_BY_STRIP_LIMIT` | 0.1 | foil gauge sensitivities | `dh/dS` below which the strip, not the gap, sets the gauge | sets the flag only (L-DYN-09) |
+| `RESONANCE_FREQUENCY_BAND` | 10 % | reels | "the once-per-revolution and coil-on-span frequencies meet" (also a sign change between two sweep radii) | sets the flag only (L-DYN-12) |
+| `RESONANCE_DAMPING_LIMIT` | 0.5 | reels | a resonance counts only when lightly damped | sets the flag only (L-DYN-12) |
+| `STAND_RESONANCE_BAND` | 10 % | pass chaining | a chained ripple "near" a stand (chatter onset) or tension-loop peak frequency | sets the flags only (L-DYN-13) |
+| regulator `"direct"` | `s/(s + w_b)` | reels | the simplest form of a regulator that cannot attenuate above its bandwidth | the tension ripple below the bandwidth (L-DYN-12) |
 Not caught by the search:
 
 | constant | value | where used | stands in for | sensitivity |
@@ -528,11 +534,9 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B5 | Particles and pinholes. | 3 |
 | B6 | Elastic data and yield for the strip's elastic zones. | 3 |
 | B7 | Recovery of the foil in the coil after rolling. | 3 |
-| C2 | Tension dynamics of spans and reels: regulators, coil eccentricity, coil-on-span resonance. | 2 |
 | C3 | Chatter beyond the linear screen: roll-gap damping from a dynamic model, film dynamics, limit cycles. | 3 |
 | C5 | Torsional self-excitation and drive loops. | 3 |
 | C6 | Eccentricity compensation and heat-induced run-out; behaviour at closed gap. | 3 |
-| C8 | Marks carried over from the previous pass or coil. | 2 |
 | G1 | The roll stack: deflection, roll-to-roll contact, bending, tilt, shifting, ground camber. | 3 |
 | G2 | The closed-gap (roll-kiss) shape path for foil. | 3 |
 | G7 | Thermal camber at the strip edge and edge actuators. | 3 |
@@ -564,7 +568,9 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | B3 | Alloy-group parameters inside a hardening law. |
 | B4 | An anisotropic yield law in the roll gap. |
 | C1 | A closed-gap load path; decoupling, adaptive or feed-forward control; the plant's controller; reels and run-out. |
+| C2 | The plant's tension regulator; reel friction, binding and ovality harmonics; tension dynamics inside the chatter model. |
 | C4 | The amplitude of grinder marks on foil rolls; marks as a forced-response and wear problem. |
+| C8 | Phase tracking of a ripple through trimming and splicing; the gauge sensor in the chain; each pass's own loop settings. |
 | C7 | The accelerometer position and detection lead time; gauge filters beyond a spot and a lag. |
 | G3 | Lateral metal flow and a strip-element model across the width; a non-uniform entry profile; finite spans; the roll stack and closed gap; which lateral hold at the roll gap is right. |
 | G4 | Interaction of several modes; lateral stress and shear; the path from mill tension to none; a finite sample; a measured wave height, table index or stress profile to compare with. |
@@ -632,6 +638,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED` | With the sprays on one arc the averaged cooling of the roll model differs by more than 5 % from the cooling the surface really gets. | L-HEAT-07 |
 | `CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED` | At this gauge the work rolls may touch beside the strip (closed-gap rolling), which the tool does not model; it assumes an open gap. | L-BITE-15 |
 | `COIL_COOLING_STRESS_REACHES_YIELD` | In this estimate a hotter lane would be stretched to yield when the coil cools. | L-COIL-07 |
+| `COIL_ON_SPAN_RESONANCE_CROSSED_DURING_COIL` | During the coil the once-per-revolution frequency meets the bounce of the coil on the strip span, and that bounce is lightly damped. | L-DYN-12 |
 | `COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION` | Beside the standard coil check, the page shows the strip wound into the coil lane by lane with the stack stiffness you entered; the shortlist uses the standard check. | L-COIL-11 |
 | `COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND` | The coil temperature starts from the modelled strip temperature leaving the roll gap, which is an upper bound: the strip cools a little before it reaches the coil. | L-COIL-07 |
 | `COLD_START_BY_FRICTION_CONTINUATION` | The half-space model reached the entered friction from a lower friction, because the simpler foil model could not start at it. | L-BITE-11 |
@@ -647,6 +654,8 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `DOUBLED_FINAL_PASS_NOT_MODELLED` | The thinnest pass is rolled doubled (two sheets), but the tool models one sheet. | L-BITE-16 |
 | `DUPLICATE_BAND_POSITIONS_MERGED` | Some band positions were closer than 1 mm and were merged into one band. | L-DATA-11 |
 | `ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS` | The air film the strip can carry into the coil (an upper estimate) is thicker than the strip itself at the outer wraps. | L-COIL-10 |
+| `ENTRY_RIPPLE_NEAR_STAND_RESONANCE` | A ripple carried into a later pass arrives near that pass's stand resonance. | L-DYN-13 |
+| `ENTRY_RIPPLE_NEAR_TENSION_LOOP_PEAK` | A ripple carried into a later pass arrives where the gauge loop amplifies most. | L-DYN-13 |
 | `EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN` | The exit gauge is below 20 µm, outside the range where the foil roll-gap model was probed; its numbers are unvalidated. | L-BITE-12 |
 | `EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR` | The exit gauge is below 8 µm, where no roll-gap model runs. | L-BITE-13 |
 | `EXPERIMENTAL_MATTRESS_FOIL_MODEL` | At this foil gauge the roll gap comes from an experimental model with no benchmark; its numbers are order of magnitude only. | L-BITE-02 |
@@ -724,7 +733,9 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `RATE_TEMPERATURE_FACTOR_REJECTED` | For at least one pass the rate and temperature factor fell outside 0.2 to 5 and was not used. | L-MAT-02 |
 | `REDUCED_HALF_SPACE_FOIL_MODEL` | The half-space foil model leaves out the stretching of strip and roll surface inside the contact. | L-BITE-05 |
 | `REDUCTION_ABOVE_50_PERCENT_EXTENDED_BITE_DOMAIN` | The pass reduces the gauge by more than half, outside the reviewed range of the roll-gap model. | L-BITE-12 |
+| `REEL_RUNOUT_RIPPLE_COMPUTED` | The tension and gauge ripple from coil run-out were computed for the entered reels. | L-DYN-12 |
 | `REGIME_CHANGE_WITHIN_FINITE_DIFFERENCE_STENCIL` | A small change of the pass moves it across the sheet / foil boundary of the roll-gap model, so its sensitivities straddle the two. | L-BITE-17 |
+| `RELATIVE_RIPPLE_GROWS_FROM_PASS_TO_PASS` | A gauge ripple carried from one pass to the next grows relative to the gauge. | L-DYN-13 |
 | `RIGID_BOUND_NOT_DEFINED_BUMP_REACHES_GAUGE` | One comparison level of the flatness model is not defined because the roll bump reaches the gauge. | L-SHAPE-02 |
 | `ROLL_ENTRY_TEMPERATURE_ASSUMED_COOLANT_OR_OIL` | The work-roll surface temperature entering the roll gap was taken as the coolant or oil temperature. | L-HEAT-04 |
 | `ROLL_ENTRY_TEMPERATURE_FROM_SURFACE_CYCLE` | The roll surface temperature entering the roll gap came from the surface cycle. | informational |

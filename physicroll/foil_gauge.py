@@ -200,10 +200,8 @@ def validate(section, thickness_gauge=None):
         speed = {'ramp_limit_m_s2': _num(f'{w}.speed.ramp_limit_m_s2',
                                          speed['ramp_limit_m_s2'], 0.0, 5.0, lo_open=True)}
     out['speed'] = speed
-    for key in ('reels', 'ripple_pitches_m'):
-        if section.get(key) is not None:
-            raise ValueError(f'{w}.{key} is not built yet (SPEC19 package 14): leave it null')
-        out[key] = None
+    out['reels'] = validate_reels(section.get('reels'))
+    out['ripple_pitches_m'] = validate_ripple_pitches(section.get('ripple_pitches_m'))
     prov = section['provenance']
     if not isinstance(prov, str) or not prov.strip():
         raise ValueError(f'{w}.provenance must be a nonempty text')
@@ -480,7 +478,8 @@ def _percent_block(g, h0, h1, mu, y_pa):
 def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, friction_closure,
                        friction_curve=None, oil=None, rate_sensitivity=None, roll_freqs=None,
                        chatter_onset_hz=None, thickness_gauge=None, closed_gap_range_m=None,
-                       sensitivity_bite_model=None, sensitivity_basis=None, bite_model=None):
+                       sensitivity_bite_model=None, sensitivity_basis=None, bite_model=None,
+                       chain_passes=None):
     """``result['foil_gauge_control']``. ``forces``: ``{'h', 'h_in', 's_e', 's_x', 'mu',
     'Y'}`` of the operating bite (N per unit input, whole width); ``friction_closure``:
     ``'placeholder'``, ``'load_sharing_curve'`` or None (no tribology); ``friction_curve``:
@@ -601,7 +600,22 @@ def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, frict
                           f'{lp["phase_margin_deg"]}, gain margin {lp["gain_margin"]}); '
                           'instability at about '
                           f'{lp["instability_frequency_hz"]} Hz; no time run'}
+    # package 14: reels and run-out; pass chaining
+    if fgc['reels'] is None:
+        reels = {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                 'reason': 'foil_gauge_control.reels is null or absent'}
+    else:
+        sp_ = case['spans']
+        reels = reel_section(fgc['reels'], bite, g_se, sel['dh_dexit_tension_m_per_pa'], loop,
+                             exit_speed_m_s=u, width_m=p['width_m'],
+                             modulus_pa=sp_['strip_youngs_modulus_pa'],
+                             entry_span_m=sp_['entry_span_length_m'],
+                             exit_span_m=sp_['exit_span_length_m'])
+        flags += [f for f in reels['flags'] if f not in flags]
+    chain = _pass_chain(case, fgc, chain_passes, sel, loop, by_mode, moduli, kiss)
+    flags += [f for f in chain.get('flags') or [] if f not in flags]
     return {'status': STATUS, 'not_supplied': False, 'inputs': dict(fgc),
+            'reels': reels, 'pass_chain': chain,
             'regime': REGIME_NOTE,
             'bite_model': bite_model, 'sensitivity_bite_model': sensitivity_bite_model,
             'sensitivity_basis': sensitivity_basis, 'bite_flags': list(bite.flags),
@@ -617,3 +631,328 @@ def foil_gauge_section(case, fgc, bite, forces, *, stand_mill_modulus_n_m, frict
                 'open-gap foil bite (no closed-gap load path in the model; the kiss stiffness '
                 f'{"entered" if kiss is not None else "is zero: not given"}).'),
             'basis': dict(BASIS), 'flags': flags, 'limitations': list(LIMITATIONS)}
+
+
+# ============================================================================= reels (package 14)
+# [D, re-derived in SPEC19 package 14] Entry side (the exit side with its own signs and the
+# exit quantities):
+#   s_e' = (E/L_e)*(du_e - R*dw - v_d)            span as a spring between bite and reel
+#   du_e = k_e*s_e, k_e = u_e*((f_se + f_h*g_se)/(1 + f) + g_se/h1)  (< 0: the bite gives way)
+#   J*dw' = A*R*s_e - dM                          reel; A = width*h0; J = reel_inertia_kg_m2
+#   v_d = w_rev*e_c*sin(w_rev*t), w_rev = u_e/R   run-out e_c of the coil radius
+# Exit side: s_x' = (E/L_x)*(R*dw - du_x - v_d), du_x = k_x*s_x, k_x = V_r*(f_sx + f_h*g_sx),
+# V_r = u_x/(1 + f), J*dw' = -A*R*s_x + dM, A = width*h1. Both give
+#   s(jw)/v_d = -(E/L)/(jw + lam_b + (E/L)*A*R^2/(J*jw)),  lam_b = -(E/L)*k_e or (E/L)*k_x
+#   w_n = sqrt((E*A/L)*R^2/J), damping ratio lam_b/(2*w_n)
+# Regulator 'none' (dM = 0) or 'direct': the response times s/(s + w_b) [D: the simplest form
+# of "cannot attenuate above its bandwidth"]. Gauge ripple = |g_s|*|s|*|S(j*w_rev)|.
+REEL_KEYS = ('coil_radius_m', 'core_radius_m', 'motor_inertia_kg_m2', 'runout_m', 'regulator')
+REEL_OPTIONAL = ('gear_ratio', 'regulator_bandwidth_hz')
+REGULATORS = ('none', 'direct')
+STRIP_DENSITY_DEFAULT_KG_M3 = 2700.0   # [M] aluminium
+RADIUS_SWEEP_POINTS = 8
+RESONANCE_FREQUENCY_BAND = 0.10        # [D, analyst choice] within 10 % of each other
+RESONANCE_DAMPING_LIMIT = 0.5          # [D, analyst choice] and lightly damped
+STAND_RESONANCE_BAND = 0.10            # [D, analyst choice] chain frequency near a resonance
+FLAG_REEL = 'REEL_RUNOUT_RIPPLE_COMPUTED'
+FLAG_RESONANCE = 'COIL_ON_SPAN_RESONANCE_CROSSED_DURING_COIL'
+FLAG_GROWS = 'RELATIVE_RIPPLE_GROWS_FROM_PASS_TO_PASS'
+FLAG_NEAR_STAND = 'ENTRY_RIPPLE_NEAR_STAND_RESONANCE'
+FLAG_NEAR_LOOP = 'ENTRY_RIPPLE_NEAR_TENSION_LOOP_PEAK'
+REEL_FLAGS = (FLAG_REEL, FLAG_RESONANCE, FLAG_GROWS, FLAG_NEAR_STAND, FLAG_NEAR_LOOP)
+FLAGS = FLAGS + REEL_FLAGS
+BAND_CONNECTION = (
+    'A tension ripple the regulator cannot remove writes a gauge mark locked to the coil: one '
+    'mark per coil revolution, at an exit pitch that changes with the coil diameter (shorter '
+    'as an entry coil unwinds, longer as the exit coil builds). That is how it is recognised on '
+    'the mill. The coil-locked hypothesis keeps its own rules; this is what the model expects '
+    'beside them, and nothing here enters the tally.')
+REEL_LIMITATIONS = (
+    'The regulator is the tool\'s own ideal filter (none, or a high-pass with the entered '
+    'bandwidth), not the plant\'s tension control; reel friction, binding, ovality harmonics '
+    'and motor torque limits are not modelled.',
+    'Linear span spring with the bite as a damper (its slip and gauge response to tension); '
+    'the existing chatter model, its spans and state matrix are unchanged and do not read '
+    'this.',
+    'Pass chaining: the loop settings of the case pass are used for every pass (dead time from '
+    'each pass\'s speed); a coil is assumed to pass whole from one pass to the next (no '
+    'trimming, splicing or phase tracking: amplitudes only); the pitch stretches by entry '
+    'over exit gauge; the gauge sensor\'s own transfer is not applied to the chain.',
+    '`incoming_variation` and the coil-locked evidence are unchanged; no ripple amplitude '
+    'enters any evidence item.')
+
+
+def validate_reels(reels):
+    if reels is None:
+        return None
+    w = 'foil_gauge_control.reels'
+    if not isinstance(reels, dict):
+        raise ValueError(f'{w} must be a JSON object or null')
+    unknown = set(reels) - {'entry', 'exit', 'strip_density_kg_m3'}
+    if unknown:
+        raise ValueError(f'{w}: unknown keys {sorted(unknown)}')
+    rho = reels.get('strip_density_kg_m3', STRIP_DENSITY_DEFAULT_KG_M3)
+    out = {'strip_density_kg_m3': _num(f'{w}.strip_density_kg_m3', rho, 1000.0, 20000.0)}
+    for side in ('entry', 'exit'):
+        r = reels.get(side)
+        if r is None:
+            out[side] = None
+            continue
+        ws = f'{w}.{side}'
+        if not isinstance(r, dict):
+            raise ValueError(f'{ws} must be a JSON object or null')
+        missing = set(REEL_KEYS) - set(r)
+        unknown = set(r) - set(REEL_KEYS) - set(REEL_OPTIONAL)
+        if missing or unknown:
+            raise ValueError(f'{ws}: missing keys {sorted(missing)}, unknown keys '
+                             f'{sorted(unknown)}')
+        core = _num(f'{ws}.core_radius_m', r['core_radius_m'], 0.0, 2.0, lo_open=True)
+        radius = _num(f'{ws}.coil_radius_m', r['coil_radius_m'], 0.0, 3.0, lo_open=True)
+        if radius < core:
+            raise ValueError(f'{ws}.coil_radius_m must be at least core_radius_m')
+        reg = r['regulator']
+        if reg not in REGULATORS:
+            raise ValueError(f'{ws}.regulator must be "none" or "direct"')
+        bw_hz = r.get('regulator_bandwidth_hz')
+        if reg == 'direct':
+            if bw_hz is None:
+                raise ValueError(f'{ws}.regulator_bandwidth_hz is needed with regulator '
+                                 '"direct"')
+            bw_hz = _num(f'{ws}.regulator_bandwidth_hz', bw_hz, 0.0, 100.0, lo_open=True)
+        elif bw_hz is not None:
+            raise ValueError(f'{ws}.regulator_bandwidth_hz is only used with regulator '
+                             '"direct"')
+        out[side] = {'coil_radius_m': radius, 'core_radius_m': core,
+                     'motor_inertia_kg_m2': _num(f'{ws}.motor_inertia_kg_m2',
+                                                 r['motor_inertia_kg_m2'], 0.0, 1e5,
+                                                 lo_open=True),
+                     'gear_ratio': _num(f'{ws}.gear_ratio', r.get('gear_ratio', 1.0), 0.0,
+                                        100.0, lo_open=True),
+                     'runout_m': _num(f'{ws}.runout_m', r['runout_m'], 0.0, 0.01),
+                     'regulator': reg, 'regulator_bandwidth_hz': bw_hz}
+    return out
+
+
+def validate_ripple_pitches(pitches):
+    if pitches is None:
+        return None
+    w = 'foil_gauge_control.ripple_pitches_m'
+    if not isinstance(pitches, list) or not 1 <= len(pitches) <= 6:
+        raise ValueError(f'{w} must be null or a list of 1 to 6 pitches')
+    return [_num(f'{w}[{i}]', p, 0.0, 20.0, lo_open=True) for i, p in enumerate(pitches)]
+
+
+def reel_inertia_kg_m2(motor_inertia_kg_m2, strip_density_kg_m3, width_m, coil_radius_m,
+                       core_radius_m, gear_ratio=1.0):
+    """``mill_dynamics.reel_inertia_kg_m2`` (one formula; a bare core is allowed here)."""
+    from . import mill_dynamics as md
+    if coil_radius_m == core_radius_m:
+        return motor_inertia_kg_m2
+    return md.reel_inertia_kg_m2(motor_inertia_kg_m2, strip_density_kg_m3, width_m,
+                                 coil_radius_m, core_radius_m, gear_ratio)
+
+
+def bite_speed_response(side, bite, g_s, exit_speed_m_s):
+    """``k_e`` (entry) or ``k_x`` (exit): strip speed change at the bite per Pa of tension."""
+    h0, h1, f = bite.entry_thickness_m, bite.exit_thickness_m, bite.forward_slip_fraction
+    fh = bite.dslip_dexit_thickness_per_m
+    if side == 'entry':
+        u_e = exit_speed_m_s * h1 / h0
+        return u_e * ((bite.dslip_dentry_tension_per_pa + fh * g_s) / (1 + f) + g_s / h1)
+    return exit_speed_m_s / (1 + f) * (bite.dslip_dexit_tension_per_pa + fh * g_s)
+
+
+def span_tension_response(frequency_rad_s, *, modulus_pa, span_length_m, area_m2, radius_m,
+                          inertia_kg_m2, leak_rate_per_s, regulator='none',
+                          regulator_bandwidth_hz=None):
+    """``s(jw)/v_d`` [Pa per m/s] of the module comment (``inertia_kg_m2`` None: held reel)."""
+    w = frequency_rad_s
+    c = modulus_pa / span_length_m
+    reel = 0.0 if inertia_kg_m2 is None else c * area_m2 * radius_m ** 2 / (inertia_kg_m2 * 1j * w)
+    resp = -c / (1j * w + leak_rate_per_s + reel)
+    if regulator == 'direct':
+        wb = 2 * math.pi * regulator_bandwidth_hz
+        resp *= 1j * w / (1j * w + wb)
+    return resp
+
+
+def reel_side(side, reel, bite, g_s, loop, *, exit_speed_m_s, width_m, modulus_pa,
+              span_length_m, strip_density_kg_m3, radius_m=None):
+    """One reel at one coil radius (the entered one when ``radius_m`` is None)."""
+    h0, h1 = bite.entry_thickness_m, bite.exit_thickness_m
+    r = reel['coil_radius_m'] if radius_m is None else radius_m
+    area = width_m * (h0 if side == 'entry' else h1)
+    speed = exit_speed_m_s * h1 / h0 if side == 'entry' else exit_speed_m_s
+    j = reel_inertia_kg_m2(reel['motor_inertia_kg_m2'], strip_density_kg_m3, width_m, r,
+                           reel['core_radius_m'], reel['gear_ratio'])
+    k = bite_speed_response(side, bite, g_s, exit_speed_m_s)
+    c = modulus_pa / span_length_m
+    lam = -c * k if side == 'entry' else c * k
+    w_rev = speed / r
+    w_n = math.sqrt(c * area * r * r / j)
+    kw = dict(modulus_pa=modulus_pa, span_length_m=span_length_m, area_m2=area, radius_m=r,
+              leak_rate_per_s=lam, regulator=reel['regulator'],
+              regulator_bandwidth_hz=reel['regulator_bandwidth_hz'])
+    v_d = w_rev * reel['runout_m']
+    s_amp = abs(span_tension_response(w_rev, inertia_kg_m2=j, **kw)) * v_d
+    s_held = abs(span_tension_response(w_rev, inertia_kg_m2=None, **kw)) * v_d
+    sens = abs(loop.sensitivity(w_rev))
+    open_ = abs(g_s) * s_amp
+    pitch = 2 * math.pi * r * (h0 / h1 if side == 'entry' else 1.0)
+    return {'side': side, 'coil_radius_m': r, 'reel_inertia_kg_m2': j,
+            'bite_speed_response_m_s_per_pa': k, 'bite_leak_rate_per_s': lam,
+            'once_per_revolution_hz': w_rev / (2 * math.pi), 'coil_on_span_hz':
+            w_n / (2 * math.pi), 'damping_ratio': lam / (2 * w_n),
+            'runout_speed_m_s': v_d, 'tension_ripple_pa': s_amp,
+            'tension_ripple_reel_speed_held_pa': s_held,
+            'gauge_ripple_open_loop_m': open_, 'gauge_ripple_closed_loop_m': open_ * sens,
+            'gauge_ripple_closed_loop_fraction': open_ * sens / h1,
+            'loop_sensitivity_magnitude': sens, 'exit_strip_pitch_m': pitch}
+
+
+def reel_section(reels, bite, g_se, g_sx, loop, *, exit_speed_m_s, width_m, modulus_pa,
+                 entry_span_m, exit_span_m):
+    out, flags = {}, []
+    for side, g, span in (('entry', g_se, entry_span_m), ('exit', g_sx, exit_span_m)):
+        reel = reels[side]
+        if reel is None:
+            out[side] = None
+            continue
+        kw = dict(exit_speed_m_s=exit_speed_m_s, width_m=width_m, modulus_pa=modulus_pa,
+                  span_length_m=span, strip_density_kg_m3=reels['strip_density_kg_m3'])
+        row = reel_side(side, reel, bite, g, loop, **kw)
+        n = RADIUS_SWEEP_POINTS
+        rs = [reel['coil_radius_m'] + (reel['core_radius_m'] - reel['coil_radius_m']) * i
+              / (n - 1) for i in range(n - 1)] + [reel['core_radius_m']]
+        sweep = [reel_side(side, reel, bite, g, loop, radius_m=r, **kw) for r in rs]
+        for a in sweep:
+            a['resonance_crossing'] = (abs(a['once_per_revolution_hz'] / a['coil_on_span_hz']
+                                           - 1) <= RESONANCE_FREQUENCY_BAND
+                                       and a['damping_ratio'] < RESONANCE_DAMPING_LIMIT)
+        for a, b in zip(sweep, sweep[1:]):     # a crossing between two sweep radii
+            if ((a['once_per_revolution_hz'] - a['coil_on_span_hz'])
+                    * (b['once_per_revolution_hz'] - b['coil_on_span_hz']) < 0
+                    and min(a['damping_ratio'], b['damping_ratio']) < RESONANCE_DAMPING_LIMIT):
+                a['resonance_crossing'] = b['resonance_crossing'] = True
+        row['radius_sweep'] = sweep
+        row['regulator'] = reel['regulator']
+        row['regulator_bandwidth_hz'] = reel['regulator_bandwidth_hz']
+        row['regulator_label'] = 'the tool\'s own ideal regulator, not the plant\'s'
+        if any(a['resonance_crossing'] for a in sweep):
+            flags.append(FLAG_RESONANCE)
+        out[side] = row
+    flags.insert(0, FLAG_REEL)
+    out.update({'status': 'COMPUTED', 'not_supplied': False, 'band_connection': BAND_CONNECTION,
+                'basis': '[D, re-derived in SPEC19 package 14] span spring between bite and '
+                         'reel, bite as a damper, reel inertia from mill_dynamics; regulator '
+                         '[D: ideal high-pass]', 'flags': flags,
+                'limitations': list(REEL_LIMITATIONS)})
+    return out
+
+
+def chain_rows(passes, pitch_m, sensitivity_of):
+    """C8: a thickness ripple of ``pitch_m`` on the entry strip of the first pass through the
+    passes in order. ``passes``: dicts ``label, entry_thickness_m, exit_thickness_m,
+    exit_speed_m_s, g_hin`` (None: no bite, ends the chain with ``reason``),
+    ``onset_frequency_hz``, ``loop_peak_hz``; ``sensitivity_of(pass, w)`` gives ``S(jw)``."""
+    rows, p, cum, cum_rel = [], pitch_m, 1.0, 1.0
+    for ps in passes:
+        if ps.get('g_hin') is None:
+            rows.append({'label': ps['label'], 'ends_chain': True,
+                         'reason': ps.get('reason') or 'no bite for this pass'})
+            break
+        h0, h1 = ps['entry_thickness_m'], ps['exit_thickness_m']
+        f = ps['exit_speed_m_s'] * h1 / h0 / p
+        s = abs(sensitivity_of(ps, 2 * math.pi * f))
+        ratio = abs(ps['g_hin']) * s
+        rel = ratio * h0 / h1
+        cum *= ratio
+        cum_rel *= rel
+        on = ps.get('onset_frequency_hz')
+        near_stand = bool(on) and abs(f / on - 1) <= STAND_RESONANCE_BAND
+        lp = ps.get('loop_peak_hz')
+        near_loop = bool(lp) and abs(f / lp - 1) <= STAND_RESONANCE_BAND
+        rows.append({'label': ps['label'], 'entry_pitch_m': p, 'exit_pitch_m': p * h0 / h1,
+                     'frequency_hz': f, 'entry_speed_m_s': ps['exit_speed_m_s'] * h1 / h0,
+                     'exit_speed_m_s': ps['exit_speed_m_s'], 'g_hin': abs(ps['g_hin']),
+                     'sensitivity_magnitude': s, 'amplitude_ratio': ratio,
+                     'cumulative_ratio': cum, 'relative_ripple_ratio': rel,
+                     'cumulative_relative_ratio': cum_rel,
+                     'near_stand_resonance': near_stand, 'near_tension_loop_peak': near_loop,
+                     'onset_frequency_hz': on})
+        p *= h0 / h1
+    return rows
+
+
+def _pass_chain(case, fgc, chain_passes, sel, loop, by_mode, moduli, kiss):
+    """C8 for the schedule rows: consecutive rows (each starting at the previous row's exit
+    gauge) from the first; ripples of the first pass's entry-coil circumference and of the
+    entered pitches."""
+    if not chain_passes:
+        return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                'reason': 'no schedule (pass chaining needs the schedule rows)'}
+    pitches, sources = [], []
+    reels = fgc['reels'] or {}
+    k = case.get('kinematics') or {}
+    if reels.get('entry') is not None:
+        pitches.append(2 * math.pi * reels['entry']['coil_radius_m'])
+        sources.append('entry coil circumference (foil_gauge_control.reels.entry)')
+    elif k.get('entry_coil_diameter_m'):
+        pitches.append(math.pi * k['entry_coil_diameter_m'])
+        sources.append('entry coil circumference (kinematics.entry_coil_diameter_m)')
+    for x in fgc['ripple_pitches_m'] or []:
+        pitches.append(x)
+        sources.append('foil_gauge_control.ripple_pitches_m')
+    if not pitches:
+        return {'status': 'NOT_SUPPLIED', 'not_supplied': True,
+                'reason': 'no pitch: give foil_gauge_control.ripple_pitches_m or an entry coil'}
+    passes, prev = [], None
+    for cp in chain_passes:
+        if prev is not None and abs(cp['entry_thickness_m'] / prev - 1) > 1e-9:
+            break                          # not the next pass of this route
+        row = dict(cp)
+        if cp.get('bite') is not None:
+            try:
+                f = {'h': cp['bite'].dforce_dexit_thickness_n_m,
+                     'h_in': cp['bite'].dforce_dentry_thickness_n_m,
+                     's_e': 0.0, 's_x': 0.0, 'mu': 0.0, 'Y': 0.0}
+                row['g_hin'] = gauge_sensitivities(f, moduli[fgc['gap_mode']], kiss)[
+                    'dh_dentry_thickness']
+                lp = Loop(fgc['gauge_distance_m'], cp['exit_speed_m_s'], loop.tau,
+                          fgc['tension_loop_bandwidth_hz'], loop.w_c, loop.smith, loop.spot)
+                row['loop'] = lp
+                row['loop_peak_hz'] = analyse_loop(lp)['peak_sensitivity_hz']
+            except ValueError as exc:
+                row['g_hin'], row['reason'] = None, str(exc)
+        else:
+            row['g_hin'] = None
+        passes.append(row)
+        prev = cp['exit_thickness_m']
+    chains, flags, meetings = [], [], []
+    for pitch, src in zip(pitches, sources):
+        rows = chain_rows(passes, pitch, lambda ps, w: ps['loop'].sensitivity(w))
+        for r in rows:
+            for key, flag, what in (('near_stand_resonance', FLAG_NEAR_STAND,
+                                     'stand (chatter onset)'),
+                                    ('near_tension_loop_peak', FLAG_NEAR_LOOP,
+                                     'tension-loop peak')):
+                if r.get(key):
+                    if flag not in flags:
+                        flags.append(flag)
+                    meetings.append({'pitch_m': pitch, 'pass': r['label'],
+                                     'exit_speed_m_s': r['exit_speed_m_s'],
+                                     'frequency_hz': r['frequency_hz'], 'resonance': what})
+        if any(r.get('cumulative_relative_ratio', 0) > 1 for r in rows) and FLAG_GROWS not in flags:
+            flags.append(FLAG_GROWS)
+        chains.append({'first_entry_pitch_m': pitch, 'pitch_source': src, 'rows': rows})
+    return {'status': 'COMPUTED', 'not_supplied': False,
+            'passes_chained': [ps['label'] for ps in passes],
+            'route_rule': ('schedule rows in order from the first, each starting at the '
+                           'previous row\'s exit gauge; the chain ends at a row without a '
+                           'bite or at the first row that does not continue the route'),
+            'length_tracking': ('the whole coil passes from one pass to the next (no '
+                                'trimming or splicing); the pitch stretches by entry over exit '
+                                'gauge; amplitudes only, phases not tracked'),
+            'loop_settings': ('the case pass\'s loop settings and crossover for every pass; '
+                              'the dead time follows each pass\'s exit speed'),
+            'chains': chains, 'resonance_meetings': meetings, 'flags': flags}

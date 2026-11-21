@@ -3142,7 +3142,61 @@ def _foil_gauge_block(s):
                    f'{_f(lin.get("settling_time_s"), digits=3)} s, overshoot '
                    f'{_f(lin.get("overshoot_fraction"), 100, 2, "%")}; with the trim limit: '
                    f'{_txt(lim.get("status"))}.</p>')
+    out.append(_reel_lines(s.get('reels'), s.get('pass_chain')))
     out.append(_ul([_e(x) for x in s.get('limitations') or []]))
+    return ''.join(out)
+
+
+def _reel_lines(reels, chain):
+    """SPEC19 package 14: reels and run-out, pass chaining (nothing when neither exists)."""
+    out = []
+    if isinstance(reels, dict) and not reels.get('not_supplied'):
+        out.append('<h4>Reels and coil run-out</h4>'
+                   f'<p class="note">{_e(reels.get("band_connection"))}</p>')
+        rows = []
+        for side in ('entry', 'exit'):
+            r = reels.get(side)
+            if not isinstance(r, dict):
+                continue
+            sw = r.get('radius_sweep') or []
+            rows.append([_e(side), _f(r['coil_radius_m'], digits=3),
+                         _f(r['once_per_revolution_hz'], digits=4),
+                         _f(r['coil_on_span_hz'], digits=4), _f(r['damping_ratio'], digits=3),
+                         _f(r['tension_ripple_pa'] / 1e3, digits=4),
+                         _um(r['gauge_ripple_closed_loop_m'], 4),
+                         _f(r['gauge_ripple_closed_loop_fraction'], 100, 3, '%'),
+                         _f(r['exit_strip_pitch_m'], digits=4) + ' m'
+                         + (f' ({_f(sw[-1]["exit_strip_pitch_m"], digits=4)} m at the core)'
+                            if sw else ''),
+                         'yes' if any(a.get('resonance_crossing') for a in sw) else 'no',
+                         _e(r.get('regulator'))])
+        out.append(_table(('reel', 'coil radius [m]', 'once per revolution [Hz]',
+                           'coil on span [Hz]', 'damping ratio', 'tension ripple [kPa]',
+                           'gauge ripple with the loop', 'share of gauge',
+                           'mark pitch on the exit strip', 'resonance met during the coil',
+                           'regulator (the tool\'s own)'), rows, 'num'))
+    if isinstance(chain, dict) and not chain.get('not_supplied'):
+        out.append('<h4>Ripple carried from pass to pass</h4>'
+                   f'<p>Passes chained: {_e(", ".join(chain.get("passes_chained") or []))}. '
+                   f'{_e(chain.get("length_tracking"))}; {_e(chain.get("loop_settings"))}.</p>')
+        rows = []
+        for c in chain.get('chains') or []:
+            for r in c.get('rows') or []:
+                if r.get('ends_chain'):
+                    rows.append([_f(c['first_entry_pitch_m'], digits=4), _e(r['label']),
+                                 f'<em>{_e(r.get("reason"))}</em>', '', '', '', ''])
+                    continue
+                note = ', '.join(x for x, k in (('near the stand resonance',
+                                                 'near_stand_resonance'),
+                                                ('near the tension-loop peak',
+                                                 'near_tension_loop_peak')) if r.get(k))
+                rows.append([_f(c['first_entry_pitch_m'], digits=4), _e(r['label']),
+                             _f(r['frequency_hz'], digits=4), _f(r['exit_pitch_m'], digits=4),
+                             _f(r['amplitude_ratio'], digits=3),
+                             _f(r['cumulative_relative_ratio'], digits=3), _e(note or '-')])
+        out.append(_table(('first entry pitch [m]', 'pass', 'frequency [Hz]',
+                           'exit pitch [m]', 'amplitude ratio', 'relative ripple, cumulative',
+                           'meets'), rows, 'num'))
     return ''.join(out)
 
 

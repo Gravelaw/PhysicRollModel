@@ -2725,6 +2725,23 @@ FLAGS = {
         'The lane-by-lane winding and the standard coil check disagree on whether a ridge '
         'stretches the strip in the coil; the shortlist uses the standard check.',
         'A coil diameter profile and a press test of the stack would decide it.'),
+    'REEL_RUNOUT_RIPPLE_COMPUTED': (
+        'The tension and gauge ripple from coil run-out were computed for the entered reels.',
+        'Look for a gauge mark once per coil revolution whose pitch changes with the coil '
+        'diameter.'),
+    'COIL_ON_SPAN_RESONANCE_CROSSED_DURING_COIL': (
+        'During the coil the once-per-revolution frequency meets the bounce of the coil on '
+        'the strip span, and that bounce is lightly damped.',
+        'Look for a coil-locked mark that grows at one diameter of the coil.'),
+    'RELATIVE_RIPPLE_GROWS_FROM_PASS_TO_PASS': (
+        'A gauge ripple carried from one pass to the next grows relative to the gauge.',
+        'Check the gauge of the same coil on successive passes.'),
+    'ENTRY_RIPPLE_NEAR_STAND_RESONANCE': (
+        'A ripple carried into a later pass arrives near that pass\'s stand resonance.',
+        'See the pass and speed named in the gauge-control section.'),
+    'ENTRY_RIPPLE_NEAR_TENSION_LOOP_PEAK': (
+        'A ripple carried into a later pass arrives where the gauge loop amplifies most.',
+        'See the pass and speed named in the gauge-control section.'),
     'FOIL_GAUGE_LOOP_SIMULATED': (
         'The gauge loop by entry tension and speed was simulated; it is the tool\'s own loop, '
         'not the plant\'s controller.',

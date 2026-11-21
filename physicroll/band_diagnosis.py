@@ -2608,7 +2608,26 @@ def _largest_model_band(width):
     return best
 
 
-def _foil_gauge_control(eff, result, bite, bite_error, stand, local_sens, trib, roll_freqs):
+def _chain_passes(eff, cache, bite, result):
+    """Schedule rows for the pass chain of SPEC19 package 14 (bites from the engine cache:
+    the schedule sweep has already derived them)."""
+    onsets = {r.get('label'): r.get('onset_frequency_hz')
+              for r in (result.get('schedule_sweep') or {}).get('rows') or []}
+    out = []
+    for row in eff['schedule']:
+        cp = {'label': row['label'], 'entry_thickness_m': row['entry_thickness_m'],
+              'exit_thickness_m': row['exit_thickness_m'], 'exit_speed_m_s': row['exit_speed_m_s'],
+              'onset_frequency_hz': onsets.get(row['label'])}
+        try:
+            cp['bite'] = _case_bite(eff, cache, bite, _bite_pass(eff, row), row)
+        except ValueError as exc:
+            cp['bite'], cp['reason'] = None, f'no bite: {exc}'
+        out.append(cp)
+    return out
+
+
+def _foil_gauge_control(eff, result, bite, bite_error, stand, local_sens, trib, roll_freqs,
+                        cache=None):
     fgc = eff.get('foil_gauge_control')
     if fgc is None:
         return bp.not_supplied('foil_gauge_control is null or absent')
@@ -2644,7 +2663,9 @@ def _foil_gauge_control(eff, result, bite, bite_error, stand, local_sens, trib, 
             roll_freqs=roll_freqs, chatter_onset_hz=onset, thickness_gauge=tg,
             closed_gap_range_m=CLOSED_GAP_ONSET_RANGE_M,
             sensitivity_bite_model=ls['bite_model'], sensitivity_basis=ls['basis'],
-            bite_model=bp.bite_source_word(bite))
+            bite_model=bp.bite_source_word(bite),
+            chain_passes=(_chain_passes(eff, cache, bite, result) if eff['schedule']
+                          and cache is not None else None))
     except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
         return bp.failed('foil_gauge_control', exc)
 
@@ -3879,7 +3900,8 @@ def diagnose(case):
     # SPEC19 package 13: foil gauge control by speed and entry tension (opt-in, beside the
     # gaugemeter section; evidence-neutral; its bites in the friction screen's own cache)
     result['foil_gauge_control'] = _foil_gauge_control(
-        eff, result, bite, bite_error, stand, local_sens, trib, _roll_freqs(eff, u_op, ctx.slip))
+        eff, result, bite, bite_error, stand, local_sens, trib, _roll_freqs(eff, u_op, ctx.slip),
+        cache)
     flags.extend(f for f in (result['foil_gauge_control'].get('flags') or [])
                  if f not in flags)
 
