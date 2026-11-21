@@ -167,6 +167,8 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-COIL-06 | Tension lines have no established model: a rule set with analyst weights on a published description; one candidate pitch (shell buckling of the wound lap) is reported for comparison only, never as evidence; no onset condition, air film or winding model. | Size not known. | `foil_tension_lines` model prediction | G12, G10, G9 | analyst choice |
 | L-COIL-07 | No coil temperature, coil cooling or creep model; the published battery-foil limits are coil temperatures and the model gives strip exit temperatures. | The comparison is indicative. | `MODELLED_EXIT_TEMPERATURE_ABOVE_BATTERY_COIL_LIMIT` | A8 (Phase 2) | limitation |
 | L-COIL-08 | "Worse at lower tension" is not specific to tension lines: a latent thermal stripe's in-mill onset also falls with tension. | 6.83 µm at 40 MPa against about 1.6 µm at 8 MPa in the demo's notes; the demo leaves the observation unanswered. | the tension observation in the evidence | - | limitation |
+| L-COIL-09 | The winding model (a separate module; the lane model and the engine section follow in later packages) needs the radial stack stiffness of the wound foil: how the stack of oily laps, with entrained air, compresses under pressure. No value for aluminium foil is published; the stack law is a required input with no default, and no demo carries one. The model is elastic, per lane, without interlayer slip; laps are lumped into layers; the air gap enters the stiffness only. | The answer depends on that stiffness: for one slightly thicker lane the radius difference in the coil is 0.77, 0.12 or 0.02 of laps × thickness difference for a stiff, a hundred times softer, or an assumed pressure-dependent stack; the present constant 0.5 lies inside that range and has no better or worse support than before. | `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`, `INNER_LAPS_IN_HOOP_COMPRESSION`, `LUMPED_LAYERS_FIRST_ORDER` (results of `wound_roll`) | a press test on a stack of 50 to 200 laps of the oily foil (pressure against strain); a coil diameter profile (G9, Phase 2 package 10) | limitation |
+| L-COIL-10 | The air film a web carries onto a roll or into the coil is a smooth-web estimate (no side leakage, no roughness venting, no nip film). | An upper bound: about 17 µm on a 0.125 m roll and 40 µm on 0.3 m at 20 m/s and 720 N/m; the real film is smaller by an unknown amount. | results of `wound_roll.entrained_air_film_m` | a nip model and venting (G10, Phase 2 package 11) | limitation |
 
 ### 2.9 Mill dynamics and chatter
 
@@ -243,6 +245,11 @@ These are the results whose answer, not only whose size, turns on something nobo
   the paper does not state (78 to 134 against the model's 88.9 to 92.9).
 - **The grinder chatter pitch test** (L-GRIND-02): without the grinder's speeds a grinder
   pattern cannot be ruled out and the test reads neutral.
+- **How a coil winds a thicker lane** (L-COIL-01, L-COIL-09): the radial stack stiffness of the
+  wound oily foil is not published; with a stiff, a hundred times softer or an assumed
+  pressure-dependent stack the coil takes up 0.77, 0.12 or 0.02 of a lane's thickness excess,
+  so whether a coil ridge yields the strip is not decided by the model. A press test on a stack
+  of the plant's foil decides it.
 - **The fitted step-test constant** (L-LOOP-07, L-HEAT-09): it grows with the test length, so it
   says nothing about the plant until the plant's test length and display filter are known.
 
@@ -323,7 +330,10 @@ Not caught by the search:
 | `ROLL_PROFILE_DETREND_ORDER_DEFAULT` | 4 | measured roll profile | crown removal | L-GRIND-04 |
 | `PASS_RECORD_UNCERTAINTY_DEFAULTS` | force 5 %, slip 0.01, torque 10 % | friction from pass records | uncertainties of records entered without one | the reported interval |
 | `NARROW_STRIPE_REFERENCE_WIDTH_M` | 30 mm | measured roll profile | the narrow stripe the grid check uses | sets a flag |
-| `DEFAULT_COMPACTION_FACTOR` | 0.5 | coil ridge | interwrap compaction | L-COIL-01 |
+| `DEFAULT_COMPACTION_FACTOR` | 0.5 | coil ridge | interwrap compaction | L-COIL-01; the winding model gives 0.02 to 0.77 with the stack stiffness (L-COIL-09) |
+| `BASIS` (wound roll) | rule | winding model | the re-derived accretion equation and its lumped layers | L-COIL-09 |
+| `AIR_VISCOSITY_PA_S` | 1.8e-5 Pa s (from memory) | air film | air viscosity | L-COIL-10 |
+| air gap in the stiffness only | rule | winding model | whether the gap adds to the stack radius | not reported |
 | `DEFAULT_REPORTING_THRESHOLD_I_UNITS` | 2 I-units | strip shape | the reporting onset of a band | L-SHAPE-05 |
 | `MARGINAL_FORWARD_SLIP` | 0.005 | forward-slip screen | a marginal slip | - |
 | `EDGE_OR_CENTRE_FRACTION` | 15 % | lengthwise rules | edge or centre band | - |

@@ -3117,6 +3117,70 @@ Limits: linear; lateral closure assumed; half-infinite spans; slip sensitivities
 constant-friction bite (mattress or reduced half-space at foil gauge); no roll stack, closed gap
 or lateral metal flow (G3 in full is Phase 3).
 
+### 7.15 Winding model (`wound_roll.py`)
+
+SPEC19 package 9 (gap G9 core, G10 film): a module, not yet called by the engine (the lane
+model of package 10 and the nip, air and coil temperature of package 11 follow). The present
+coil criterion (`strip_shape.coil_ridge_buildup`, compaction factor 0.5) and every coil verdict
+and score are unchanged.
+
+**Model** `[D, re-derived in SPEC19]` (the gap rows quote the classical model from memory; the
+equation is restated in SS-S42 EX). Axisymmetric wound roll, pressure `P = -sigma_r`; one added
+lap gives the increments `y = d_sigma_r`, `d_sigma_t = y + r*y'`, with equilibrium and an
+orthotropic law `eps_t = (d_sigma_t - nu*d_sigma_r)/E_t`, `eps_r = d_sigma_r/E_r -
+nu*d_sigma_t/E_t`:
+
+    r^2*y'' + 3*r*y' - (E_t/E_r - 1)*y = 0,   y(s) = -T_w*h/s,   r_c*y'(r_c) = y*(E_t/E_c - 1 + nu)
+
+(rigid core `E_t/E_c = 0`; a thin-walled tube `E_c = E_core*wall/r_c` [D]). After a lap
+`sigma_r += y`, the hoop stress of every lap below `+= y + r*y'`, the radial displacement
+`u = r*((y + r*y') - nu*y)/E_t` accumulates per node.
+
+**The radial stack law is an input, and no value exists for aluminium foil.** `radial_law` is
+required (no default): `constant` (`E_r`), `ratio_of_hoop_modulus` (`E_r = E_t/ratio`; context
+only: "about two orders of magnitude softer than the bulk" for metal coils [SS-S40 VP, a
+retelling]) or `pfeiffer` (`E_r = K2*(P + K1)` [SS-S42 EX]). What to measure: a press test on a
+stack of 50 to 200 laps of the oily foil; pressure against strain gives `K1` and `K2`. The
+validation message says so. No demo or scenario carries a stack law. The planner's lane model
+(package 10, SPEC19 finding 5) shows why this matters: one 0.1 um thicker lane gives a radius
+difference of 0.77 of laps x thickness difference with an isotropic stack, 0.12 with
+`E_r = E_t/100` and 0.02 with an assumed Pfeiffer stack (`K2` 30): the project's constant 0.5
+lies inside this range and is neither supported nor contradicted. The effective compaction
+factor of a given stack is reported by the lane model (package 10), not by this single-lane
+module. Flag (on every result) `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`.
+
+**Air layer** `[D: isothermal gas law and springs in series; the idea in SS-S49 EX, SS-S50 AB]`:
+an air gap `g0` per lap at 101325 Pa thins to `g(P) = g0*P_a/(P + P_a)` with modulus `P + P_a`;
+`1/E_r,eq = (h/(h + g))/E_r + (g/(h + g))/(P + P_a)`. The gap enters the stiffness only, not the
+radius [D, analyst choice].
+
+**Method.** Laps lumped into layers of `n_l` laps; nodes at the layer tops; central differences
+at interior nodes with `E_r` from the present pressure, a one-sided core condition, the outer
+condition at the top node; a tridiagonal (Thomas) solve per layer; hoop increment at mid layer;
+first order in the layer thickness. Cost O(layers^2): 150 layers about 0.05 s, 400 about 0.2 s.
+A failed solve (zero pivot) is returned as `SOLVE_FAILED` with the layer reached.
+
+**Closed form and checks** (`tests/test_wound_roll.py`). `E_r = E_t`, rigid core, constant
+`T_w`: `sigma_r(r) = -(T_w/2)*(1 + beta*r_c^2/r^2)*ln((R^2 + beta*r_c^2)/(r^2 + beta*r_c^2))`,
+`beta = (1 - nu)/(1 + nu)`. Core 0.15 m, outer 0.60 m, 30 MPa, `nu` 0.33, 30 um strip, at 0.15 /
+0.2625 / 0.375 / 0.4875 m: exact -54.04 / -26.76 / -14.48 / -6.28 MPa; 100 layers -54.24 /
+-26.71 / -14.43 / -6.26 (within 0.4 %); 400 layers -54.09 / -26.75 / -14.47 / -6.28 (the error
+falls as 1/layers). Hoop stress of the first layer: exact 11.79, model 13.46 MPa (100 layers);
+12.07 against 12.50 (400). Uniform strip with `E_r = E_t/100`: largest pressure 5.779 MPa,
+lowest hoop stress -2.98 MPa (inner laps in hoop compression, flag
+`INNER_LAPS_IN_HOOP_COMPRESSION`).
+
+**Entrained air film** `[D, re-derived in SPEC19; formula quoted in SS-S58 EX/AB]`: a web of
+tension `T` [N/m] on a cylinder of radius `R`, surfaces moving at `U`:
+`h0 = C*R*(6*mu_g*U/T)^(2/3)`, `C` from `H''' = (1 - H)/H^3` integrated by RK4 (step 1e-3, from
+`1 + 1e-6*exp(-xi)` until `H > 1e4`): 0.6430393 (0.6430399 with `1e-8` and `1e5`). Air
+viscosity 1.8e-5 Pa s [M]. `R` 0.125 m, 10 + 10 m/s, 720 N/m: 16.72 um; `R` 0.30 m: 40.12 um.
+An UPPER BOUND: smooth, wide, impermeable web, no side leakage or roughness venting (gap study,
+note to G10); no nip film.
+
+Limits: elastic laps; plane model per lane (no axial stress); no interlayer slip; stack law
+supplied; lumped layers; no thermal or creep term.
+
 ## 8. Process models
 
 Integration code: `physicroll/band_process.py`; equations: `physicroll/bite_tribology.py`.
@@ -4419,6 +4483,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| winding model / `tests/test_wound_roll.py` | the closed form (radial stress within 0.5 % at 100 layers and 0.12 % at 400 at four radii; first-layer hoop within 2 and 0.5 MPa); first-order convergence (error ratio 200 -> 400 layers 1.7-2.3); outer and core conditions of the increment (1e-9); a soft core lowers the core pressure; a softer stack lowers the inner pressure and the lowest hoop stress (5.779 MPa, -2.98 MPa at `E_t/100`); the Pfeiffer modulus rises with pressure; air layer (no gap equals no air, a gap softens, it closes under pressure); taper; the film constant 0.6430 and the two films (1e-3); the stack law required with the press-test message; rejections; JSON safety |
 | spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
 | width coupling / `tests/test_strip_shape.py` (`WidthCouplingKernelTests`), `tests/test_band_width_coupling.py` | the three closures' `chi` in closed form and from the stress function (the closure condition zero to 1e-9 of the stress scale); both demo rows to 1e-3; the limits (`f_se = 0`, `chi = 1`; `f_sx -> -inf`); `xi` scaling; a negative denominator reported, not clipped; the development fraction (0 at the bite, 0.95 at `kappa*x = 3.94`, monotonic); a supplied stiffness equal to `N_x'*E*xi/h` reproduces the pointwise transfer to 1e-12; in the engine the demo sections (stiffnesses 0.1 %, kernel-level peak ratios 1.41 and 9.2 within 15 % of the planner's), the plain words and the level the tally uses, and with the kernel stubbed every other key equal |
 | wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; package 7: top-hat self-check (wave formula and saturated stress `-sigma_cr` to 1e-6), amplitude zero below and growing as the square root above the critical state, mean saturated stress equals the tension, lift scale above the weightless multiplier, the lift condition `Pi_t = 0`, `dPi_t/da = 0` (1e-6), heavier or thicker sheet raises the limit, table height below the weightless height, the planner's two demo rows (2 %), the saturated profile as an additional shapemeter reading only; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
@@ -4743,6 +4808,10 @@ Roll thermal: Yamaguchi et al. (2016) ISIJ Int., doi:10.2355/isijinternational.i
 Li et al. (2024) Metals 14(2):166; Dohmae & Okamura (2012) Trans. SICE 48(4),
 doi:10.9746/sicetr.48.193; Yin et al. (2003) (abstract only); Innoval roll-cooling blogs
 (coolant unspecified).
+
+Winding (section 7.15): the accretion equation as restated in SS-S42 [EX] (Pfeiffer stack law);
+"about two orders of magnitude softer" [SS-S40 VP, a retelling]; air in the stack [SS-S49 EX,
+SS-S50 AB]; foil-bearing film [SS-S58 EX/AB]; air viscosity [M].
 
 Buckling with a wavelength search (section 7.13): Rammerstorfer, Fischer & Friedl (2001) J.
 Appl. Mech. 68:399 [SS-S12 AB]; Fischer, Rammerstorfer & Friedl (2003) J. Appl. Mech.,
