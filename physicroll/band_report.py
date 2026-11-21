@@ -1356,7 +1356,57 @@ def _width_section(r):
     body += _surface_cycle_block(w)
     body += _buckling_fe_block(w)
     body += _coil_winding_block(w)
+    body += _coil_temperature_block(w)
     return head + body + '</section>'
+
+
+def _cw_extra(cw):
+    out = []
+    if cw.get('nip'):
+        n = cw['nip']
+        out.append(f'Ironing roll: wound-in tension {_mpa(n["wound_in_tension_pa"])} against '
+                   f'{_mpa(n["winding_tension_pa"])} winding tension'
+                   + (' (capped at yield)' if n.get('capped_at_yield') else '') + '.')
+    if cw.get('air_cases'):
+        a = cw['air_cases']
+        out.append('Two bounds of the nip effect: ' + a['none']['words'] + ' (the table above) and '
+                   + a['entrained_film']['words'] + '. ' + cw.get('air_cases_note', ''))
+    if cw.get('air_entrainment'):
+        e = cw['air_entrainment']
+        out.append(f'Entrained air film {_um(e["film_at_core_m"])} at the core and '
+                   f'{_um(e["film_at_outer_radius_m"])} at the outer radius ({e["note"]}).')
+    if cw.get('deflector_roll'):
+        d = cw['deflector_roll']
+        out.append(f'Deflector roll: air film {_um(d["film_m"])}; traction '
+                   f'{_txt(d.get("traction"))}.')
+    return ''.join(f'<p>{_e(x)}</p>' for x in out)
+
+
+def _coil_temperature_block(w):
+    ct = w.get('coil_temperature')
+    if not isinstance(ct, dict):
+        return ''
+    head = '<h3>Coil temperature after winding</h3>'
+    if _bad(ct):
+        return head + _state_p('Coil temperature ' + _bad(ct))
+    rows = ''.join(f'<tr><td>{_f(r["time_s"] / 3600, digits=3)} h</td>'
+                   f'<td>{_f(r["hottest_k"] - 273.15, digits=3)} °C</td>'
+                   f'<td>{_f(r["mean_k"] - 273.15, digits=3)} °C</td>'
+                   f'<td>{_f(r["outer_surface_mid_width_k"] - 273.15, digits=3)} °C</td></tr>'
+                   for r in ct.get('cooling') or [])
+    lims = ''.join(f'<li>{_e(r["limit"].replace("_", " "))} {_f(r["limit_k"] - 273.15)} °C '
+                   f'[{_e(", ".join(r["source"] or []))}]: {_e(r["at_winding"].lower())} at '
+                   f'winding; falls below after '
+                   f'{_f(None if r["time_to_fall_below_s"] is None else r["time_to_fall_below_s"] / 3600)}'
+                   ' h</li>' for r in ct.get('limit_rows') or [])
+    return (head + f'<p>Winding temperature {_f(ct["winding_temperature_k"] - 273.15)} °C: the '
+            'modelled strip exit temperature of the case pass, an upper bound (no loss between '
+            'the roll gap and the coil). Radial conductivity '
+            f'{_f(ct["conductivities"]["radial_w_mk"])} W/mK, axial '
+            f'{_f(ct["conductivities"]["axial_w_mk"])} W/mK.</p><table><tr><th>after</th>'
+            '<th>hottest</th><th>mean</th><th>outer surface</th></tr>' + rows + '</table>'
+            + (f'<ul>{lims}</ul>' if lims else '') + '<p class="warn">'
+            + _e(' '.join(ct.get('limitations') or [])) + '</p>')
 
 
 def _coil_winding_block(w):
@@ -1390,7 +1440,7 @@ def _coil_winding_block(w):
             'verdict or score.</p><table><tr><th>lane centre</th><th>thickness deviation</th>'
             '<th>largest wound-on tension</th><th>lowest hoop stress</th><th>largest pressure'
             '</th><th>yielding length share</th><th>effective compaction factor</th></tr>'
-            + ''.join(rows) + '</table><table><tr><th>source</th><th>position</th>'
+            + ''.join(rows) + '</table>' + _cw_extra(cw) + '<table><tr><th>source</th><th>position</th>'
             '<th>linear criterion</th><th>its compaction factor</th><th>lane model</th>'
             '<th>effective factor</th><th>agree</th></tr>' + bes + '</table><p class="warn">'
             + _e(cw.get('stack_sentence', '')) + '</p>')

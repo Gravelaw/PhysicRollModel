@@ -2725,6 +2725,27 @@ FLAGS = {
         'The lane-by-lane winding and the standard coil check disagree on whether a ridge '
         'stretches the strip in the coil; the shortlist uses the standard check.',
         'A coil diameter profile and a press test of the stack would decide it.'),
+    'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT': (
+        'For at least one lane the lane-by-lane winding says "yields" with one numerical '
+        'choice and "does not yield" with the other; that lane is not decided.',
+        'Read the yield answer for that lane as open.'),
+    'WOUND_IN_TENSION_CAPPED_AT_YIELD': (
+        'With the ironing roll the tension wound into the coil would reach the yield stress; it '
+        'was capped there.', 'Check the ironing roll load and its traction.'),
+    'ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS': (
+        'The air film the strip can carry into the coil (an upper estimate) is thicker than the '
+        'strip itself at the outer wraps.', 'An ironing roll or a lower speed reduces it.'),
+    'AIR_CASES_BRACKET_THE_NIP_EFFECT': (
+        'How much air the ironing roll squeezes out is not known; the page shows the coil with '
+        'no air and with the full air film as the two limits.',
+        'A coil diameter profile across the width would narrow them.'),
+    'COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND': (
+        'The coil temperature starts from the modelled strip temperature leaving the roll gap, '
+        'which is an upper bound: the strip cools a little before it reaches the coil.',
+        'Measure the coil surface temperature with a contact probe after winding.'),
+    'COIL_COOLING_STRESS_REACHES_YIELD': (
+        'In this estimate a hotter lane would be stretched to yield when the coil cools.',
+        'Read it as an upper bound (no creep, no relaxation).'),
     'WINDING_INNER_LAPS_IN_HOOP_COMPRESSION': (
         'In the lane-by-lane winding the inner laps end in compression along their length.',
         'No action; it is common in soft stacks.'),

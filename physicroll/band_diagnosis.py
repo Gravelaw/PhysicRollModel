@@ -3868,6 +3868,19 @@ def diagnose(case):
     if tc is not None:
         result['thermal_check'] = tc
         flags.extend(tc.get('flags') or [])
+    # SPEC19 package 11: the coil temperature (after thermal_check, which holds the coil limits;
+    # key only with width_model.coil_thermal; thermal_check gains rows BESIDE its verdicts)
+    wsec = result.get('width')
+    if isinstance(wsec, dict) and (eff.get('width_model') or {}).get('coil_thermal') is not None:
+        try:
+            ctsec = bw.coil_temperature_section(eff, result)
+        except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+            ctsec = bp.failed('coil_temperature', exc)
+        wsec['coil_temperature'] = ctsec
+        flags.extend(f for f in (ctsec.get('flags') or []) if f in bw.CT_TOP_FLAGS
+                     and f not in flags)
+        if isinstance(tc, dict) and ctsec.get('status') == bw.CT_STATUS:
+            tc['coil_temperature_beside'] = bw.coil_temperature_beside_thermal_check(ctsec)
     if result['foil_regime'] is not None:
         note = ('OPEN ROLL GAP ASSUMED: at this exit gauge the mill is in or near closed-gap '
                 'rolling (not modelled), where load is no longer a gauge actuator.')

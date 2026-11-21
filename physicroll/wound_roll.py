@@ -170,6 +170,7 @@ class WoundLane:
         self.Ec = (None if core_stiffness_pa is None else
                    _num('core_stiffness_pa', core_stiffness_pa, positive=True, hi=1e13))
         self.gap = _num('air_gap_m', air_gap_m, lo=0.0, hi=1e-4)
+        self.layer_gaps = []          # air gap of each layer at ambient pressure (package 11)
         self.d = self.nl * self.h
         self.r = [self.rc]
         self.radial_stress = [0.0]
@@ -182,12 +183,21 @@ class WoundLane:
     def outer_radius_m(self):
         return self.r[-1] + self.displacement[-1]
 
-    def _er(self, p):
+    def _er(self, p, gap=None):
         return radial_modulus_pa(self.law, p, hoop_modulus_pa=self.Et, thickness_m=self.h,
-                                 air_gap_m=self.gap)
+                                 air_gap_m=self.gap if gap is None else gap)
 
-    def add_layer(self, tension_pa, plastic_strain=0.0):
+    def gap_under_pressure_m(self):
+        """Air gap of each layer at the pressure now on it (``g0*P_a/(P + P_a)``)."""
+        out = []
+        for k, g0 in enumerate(self.layer_gaps):
+            p = max(0.0, -0.5 * (self.radial_stress[k] + self.radial_stress[k + 1]))
+            out.append(g0 * AMBIENT_PRESSURE_PA / (p + AMBIENT_PRESSURE_PA))
+        return out
+
+    def add_layer(self, tension_pa, plastic_strain=0.0, air_gap_m=None):
         t = _num('tension_pa', tension_pa, lo=0.0, hi=5e9)
+        g_new = self.gap if air_gap_m is None else _num('air_gap_m', air_gap_m, lo=0.0, hi=1e-3)
         n = len(self.r) - 1
         s = self.r[-1] + self.d
         top = -t * self.d / s
@@ -204,7 +214,7 @@ class WoundLane:
             c[0] = self.rc / dl
             for i in range(1, n):
                 r = self.r[i]
-                g2 = self.Et / self._er(-self.radial_stress[i])
+                g2 = self.Et / self._er(-self.radial_stress[i], self.layer_gaps[i - 1])
                 a[i] = r * r / dl ** 2 - 1.5 * r / dl
                 b[i] = -2 * r * r / dl ** 2 - (g2 - 1)
                 c[i] = r * r / dl ** 2 + 1.5 * r / dl
@@ -235,6 +245,7 @@ class WoundLane:
         self.hoop_stress.append(t)
         self.wound_on.append(t)
         self.plastic_strain.append(float(plastic_strain))
+        self.layer_gaps.append(g_new)
         self.displacement.append(self.displacement[-1])
         self.last_increment = {'radial': ds, 'top': top, 'outer_radius_m': s}
         return ds
@@ -401,7 +412,7 @@ def allocate_tension(mid_radii_m, thicknesses_m, widths_m, length_excess, mean_t
 def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length_excess=None,
                winding_tension_pa, hoop_modulus_pa, poisson_ratio, yield_stress_pa, radial_law,
                core_stiffness_pa=None, layers=150, air_gap_m=0.0, tension_taper=None,
-               allocation_radius='mid_layer') -> dict:
+               allocation_radius='mid_layer', air_gap_of=None) -> dict:
     """Lanes wound together: the same number of laps per layer in every lane (laps from the
     nominal thickness, the mean of ``thicknesses_m``), each lane its own WoundLane, coupled only
     through ``allocate_tension`` per layer. ``radial_law`` is REQUIRED."""
@@ -438,8 +449,9 @@ def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length
             t = tw if tension_taper is None else _taper(tension_taper, smean)
             s0, alloc = allocate_tension(mids, thicknesses_m, widths_m, e, t,
                                          youngs_modulus_pa=E, yield_stress_pa=sy)
+            gap = None if air_gap_of is None else air_gap_of(smean, t)
             for ln, (sig, ep) in zip(lanes, alloc):
-                ln.add_layer(sig, ep)
+                ln.add_layer(sig, ep, gap)
             rows.append({'layer': k + 1, 'laps': (k + 1) * nl, 'relaxation_radius_m': s0})
     except ArithmeticError as exc:
         status, reason = 'SOLVE_FAILED', str(exc)
@@ -450,3 +462,117 @@ def wind_lanes(*, core_radius_m, outer_radius_m, thicknesses_m, widths_m, length
     if reason:
         out['reason'] = reason
     return out
+
+
+# ------------------------------------------------ nip and coil temperature (SPEC19 package 11)
+AIR_CONDUCTIVITY_W_MK = 0.026          # [M: textbook value, not in the reports]
+NIP_BASIS = ('wound-in tension T_w + mu_n*N/h with an ironing roll [gap row G10, from SS-S49 EX; '
+             'no formula for mu_n: it is an input]; no nip film formula is in the reports')
+COOLING_CELLS = 40
+COOLING_STEPS = 400
+
+
+def wound_in_tension_pa(winding_tension_pa, thickness_m, load_per_width_n_m, traction_coefficient,
+                        yield_stress_pa):
+    """(tension, capped) with an ironing roll; capped just below yield (the allocation needs a
+    mean below yield)."""
+    t = winding_tension_pa + traction_coefficient * load_per_width_n_m / thickness_m
+    cap = yield_stress_pa * (1 - 1e-6)
+    return (min(t, cap), t >= cap)
+
+
+def radial_conductivity_w_mk(thickness_m, gap_m, strip_conductivity_w_mk, gap_conductivity_w_mk):
+    """Laps and gaps in series: ``k_r = (h + g)/(h/k_s + g/k_g)``."""
+    h, g = thickness_m, gap_m
+    return (h + g) / (h / strip_conductivity_w_mk + g / gap_conductivity_w_mk)
+
+
+def axial_conductivity_w_mk(thickness_m, gap_m, strip_conductivity_w_mk):
+    """Laps in parallel along the width: ``k_z = k_s*h/(h + g)``."""
+    return strip_conductivity_w_mk * thickness_m / (thickness_m + gap_m)
+
+
+def _tdma(a, b, c, d):
+    return _thomas(a, b, c, d)
+
+
+def _cool_1d(edges, area_of, volume_of, k, rho_c, htc, area_out, times, inner_adiabatic=True):
+    """theta(x, t) of a 1-D body from theta = 1, adiabatic at the first edge, convection
+    (htc) to theta = 0 at the last. Backward Euler, COOLING_STEPS equal steps to the last time.
+    Returns (profile at each time, hottest value at every step and its time)."""
+    n = len(edges) - 1
+    xc = [0.5 * (edges[i] + edges[i + 1]) for i in range(n)]
+    vol = [volume_of(edges[i], edges[i + 1]) * rho_c for i in range(n)]
+    cond = [k * area_of(edges[i + 1]) / (xc[i + 1] - xc[i]) for i in range(n - 1)]
+    last = 1.0 / (1.0 / (htc * area_out) + (edges[-1] - xc[-1]) / (k * area_out))
+    t_end = max(times)
+    dt = t_end / COOLING_STEPS
+    theta = [1.0] * n
+    out, hottest = {}, [(0.0, 1.0)]
+    targets = sorted(times)
+    ti = 0
+    for step in range(1, COOLING_STEPS + 1):
+        a, b, c, d = [0.0] * n, [0.0] * n, [0.0] * n, [0.0] * n
+        for i in range(n):
+            b[i] = vol[i] / dt
+            d[i] = vol[i] / dt * theta[i]
+            if i > 0:
+                a[i] = -cond[i - 1]
+                b[i] += cond[i - 1]
+            if i < n - 1:
+                c[i] = -cond[i]
+                b[i] += cond[i]
+        b[-1] += last
+        theta = _tdma(a, b, c, d)
+        t = step * dt
+        hottest.append((t, max(theta)))
+        while ti < len(targets) and t >= targets[ti] * (1 - 1e-12):
+            out[targets[ti]] = list(theta)
+            ti += 1
+    return xc, vol, out, hottest
+
+
+def coil_cooling(*, inner_radius_m, outer_radius_m, width_m, surface_htc_w_m2k, k_radial_w_mk,
+                 k_axial_w_mk, rho_c_j_m3k, hold_times_s):
+    """Cooling of a uniformly hot hollow cylinder (core side adiabatic; convection on the outer
+    surface and both end faces) as the product of a radial and an axial 1-D solution (exact for a
+    uniform start and these conditions [D, classical]): ``theta = theta_r*theta_z``."""
+    ri, ro, w = inner_radius_m, outer_radius_m, width_m
+    redges = [ri + (ro - ri) * i / COOLING_CELLS for i in range(COOLING_CELLS + 1)]
+    zedges = [w / 2 * i / COOLING_CELLS for i in range(COOLING_CELLS + 1)]   # mid width -> face
+    rx, rvol, rprof, rhot = _cool_1d(redges, lambda r: 2 * math.pi * r,
+                                     lambda a, b: math.pi * (b * b - a * a), k_radial_w_mk,
+                                     rho_c_j_m3k, surface_htc_w_m2k, 2 * math.pi * ro, hold_times_s)
+    zx, zvol, zprof, zhot = _cool_1d(zedges, lambda z: 1.0, lambda a, b: b - a, k_axial_w_mk,
+                                     rho_c_j_m3k, surface_htc_w_m2k, 1.0, hold_times_s)
+    rows = []
+    for t in sorted(hold_times_s):
+        tr, tz = rprof[t], zprof[t]
+        mean_r = sum(v * m for v, m in zip(tr, rvol)) / sum(rvol)
+        mean_z = sum(v * m for v, m in zip(tz, zvol)) / sum(zvol)
+        rows.append({'time_s': t, 'hottest': max(tr) * max(tz), 'mean': mean_r * mean_z,
+                     'outer_surface_mid_width': tr[-1] * tz[0],
+                     'theta_r': tr, 'theta_z': tz})
+    hottest = [(t, a * b) for (t, a), (_, b) in zip(rhot, zhot)]
+    v = math.pi * (ro * ro - ri * ri) * w
+    area = 2 * math.pi * ro * w + 2 * math.pi * (ro * ro - ri * ri)
+    scales = {'radial_s': (ro - ri) ** 2 * rho_c_j_m3k / k_radial_w_mk,
+              'axial_s': (w / 2) ** 2 * rho_c_j_m3k / k_axial_w_mk,
+              'lumped_s': rho_c_j_m3k * v / (surface_htc_w_m2k * area),
+              'biot_radial': surface_htc_w_m2k * (ro - ri) / k_radial_w_mk,
+              'biot_axial': surface_htc_w_m2k * (w / 2) / k_axial_w_mk}
+    return {'radius_m': rx, 'z_from_mid_width_m': zx, 'rows': rows, 'hottest_history': hottest,
+            'time_scales': scales,
+            'method': (f'product of two 1-D solutions, backward Euler, {COOLING_CELLS} cells, '
+                       f'{COOLING_STEPS} equal steps to the last hold time')}
+
+
+def time_to_fall_below(history, theta_limit):
+    """First time the hottest point falls below ``theta_limit`` (linear between steps), or
+    None within the history."""
+    if history[0][1] < theta_limit:
+        return 0.0
+    for (t0, a), (t1, b) in zip(history, history[1:]):
+        if b < theta_limit <= a:
+            return t0 + (a - theta_limit) / (a - b) * (t1 - t0)
+    return None

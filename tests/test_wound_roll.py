@@ -1,6 +1,7 @@
 """Wound roll accretion model and the entrained air film (``physicroll.wound_roll``, SPEC19
 package 9). Software checks of the re-derived equations; nothing here validates a coil."""
 import json
+import math
 import unittest
 
 from physicroll import wound_roll as wr
@@ -152,6 +153,113 @@ class Rejections(unittest.TestCase):
     def test_json_safe(self):
         json.dumps(_wind(30, law={'kind': 'pfeiffer', 'k1_pa': 1e4, 'k2': 30.0},
                          air_gap_m=1e-6), allow_nan=False)
+
+
+class CoilTemperature(unittest.TestCase):
+    """SPEC19 package 11: conductivities, the cooling solutions and the nip tension."""
+
+    def test_series_and_parallel_conductivities(self):
+        self.assertAlmostEqual(wr.radial_conductivity_w_mk(H, 0.5e-6, 200.0, 0.13), 7.63,
+                               delta=0.01)
+        self.assertAlmostEqual(wr.radial_conductivity_w_mk(H, 2e-6, 200.0, 0.026), 0.415,
+                               delta=0.002)
+        self.assertAlmostEqual(wr.axial_conductivity_w_mk(H, 0.5e-6, 200.0), 200 * 30 / 30.5)
+        self.assertEqual(wr.radial_conductivity_w_mk(H, 0.0, 200.0, 0.13), 200.0)
+
+    def _cool(self, **kw):
+        base = dict(inner_radius_m=0.15, outer_radius_m=0.6, width_m=1.2, surface_htc_w_m2k=8.0,
+                    k_radial_w_mk=7.63, k_axial_w_mk=196.7, rho_c_j_m3k=2.39e6,
+                    hold_times_s=[3600.0, 14400.0, 86400.0])
+        base.update(kw)
+        return wr.coil_cooling(**base)
+
+    def test_lumped_limits_at_small_biot(self):
+        rc, h = 2.39e6, 8.0
+        # slab alone (radial very conductive): the axial solution against exp(-t*h/(rho*c*L))
+        c = self._cool(k_radial_w_mk=1e6, k_axial_w_mk=1e5)
+        for r in c['rows']:
+            tz = r['theta_z'][0]
+            ex = math.exp(-r['time_s'] * h / (rc * 0.6))
+            self.assertLess(abs(tz / ex - 1), 0.02)
+            tr = r['theta_r'][-1]
+            ex_r = math.exp(-r['time_s'] * 2 * 0.6 * h / (rc * (0.6 ** 2 - 0.15 ** 2)))
+            self.assertLess(abs(tr / ex_r - 1), 0.02)
+
+    def test_product_structure_against_a_two_dimensional_solve(self):
+        ri, ro, wd, h, kr, kz, rc, t_end = 0.15, 0.25, 0.2, 50.0, 2.0, 20.0, 2.0e6, 1500.0
+        c = wr.coil_cooling(inner_radius_m=ri, outer_radius_m=ro, width_m=wd,
+                            surface_htc_w_m2k=h, k_radial_w_mk=kr, k_axial_w_mk=kz,
+                            rho_c_j_m3k=rc, hold_times_s=[t_end])
+        prod = c['rows'][0]['mean']
+        # independent explicit 2-D finite volumes (r, z from mid width), coarse grid
+        nr, nz = 12, 12
+        dr, dz = (ro - ri) / nr, (wd / 2) / nz
+        rcs = [ri + (i + 0.5) * dr for i in range(nr)]
+        th = [[1.0] * nz for _ in range(nr)]
+        dt = 0.2 * min(rc * dr * dr / kr, rc * dz * dz / kz)
+        steps = int(t_end / dt) + 1
+        dt = t_end / steps
+        for _ in range(steps):
+            new = [row[:] for row in th]
+            for i in range(nr):
+                r = rcs[i]
+                vol = 2 * math.pi * r * dr * dz * rc
+                for j in range(nz):
+                    q = 0.0
+                    if i > 0:
+                        q += kr * 2 * math.pi * (r - dr / 2) * dz / dr * (th[i - 1][j] - th[i][j])
+                    if i < nr - 1:
+                        q += kr * 2 * math.pi * (r + dr / 2) * dz / dr * (th[i + 1][j] - th[i][j])
+                    else:
+                        a = 2 * math.pi * ro * dz
+                        q -= th[i][j] / (1 / (h * a) + (dr / 2) / (kr * a))
+                    a_z = 2 * math.pi * r * dr
+                    if j > 0:
+                        q += kz * a_z / dz * (th[i][j - 1] - th[i][j])
+                    if j < nz - 1:
+                        q += kz * a_z / dz * (th[i][j + 1] - th[i][j])
+                    else:
+                        q -= th[i][j] / (1 / (h * a_z) + (dz / 2) / (kz * a_z))
+                    new[i][j] = th[i][j] + dt * q / vol
+            th = new
+        vols = [[2 * math.pi * rcs[i] * dr * dz for _ in range(nz)] for i in range(nr)]
+        mean2 = sum(th[i][j] * vols[i][j] for i in range(nr) for j in range(nz)) / sum(
+            sum(v) for v in vols)
+        self.assertLess(abs(mean2 / prod - 1), 0.01)
+
+    def test_monotone_cooling_and_time_scales(self):
+        c = self._cool()
+        hot = [r['hottest'] for r in c['rows']]
+        self.assertEqual(hot, sorted(hot, reverse=True))
+        hist = [v for _, v in c['hottest_history']]
+        self.assertTrue(all(b <= a + 1e-12 for a, b in zip(hist, hist[1:])))
+        ts = c['time_scales']
+        self.assertAlmostEqual(ts['biot_radial'], 8 * 0.45 / 7.63)
+        self.assertAlmostEqual(ts['axial_s'] / 3600, 0.36 * 2.39e6 / 196.7 / 3600)
+        t = wr.time_to_fall_below(c['hottest_history'], 0.5)
+        self.assertTrue(t is None or 0 < t <= 86400)
+
+    def test_nip_tension_and_cap(self):
+        t, capped = wr.wound_in_tension_pa(30e6, H, 500.0, 0.1, 165e6)
+        self.assertAlmostEqual(t, 30e6 + 0.1 * 500.0 / H)
+        self.assertFalse(capped)
+        t, capped = wr.wound_in_tension_pa(30e6, H, 1e5, 1.0, 165e6)
+        self.assertTrue(capped)
+        self.assertLess(t, 165e6)
+
+    def test_entrained_film_of_the_demo_coil(self):
+        self.assertLess(abs(wr.entrained_air_film_m(0.15, 26.0, 900.0) / 20.6e-6 - 1), 2e-3)
+        self.assertLess(abs(wr.entrained_air_film_m(0.6, 26.0, 900.0) / 82.38e-6 - 1), 1e-3)
+
+    def test_per_layer_air_gap_softens_the_stack(self):
+        law = {'kind': 'constant', 'radial_modulus_pa': 1e9}
+        base = dict(core_radius_m=0.15, outer_radius_m=0.6, thicknesses_m=[H] * 4,
+                    widths_m=[0.05] * 4, winding_tension_pa=30e6, hoop_modulus_pa=E,
+                    poisson_ratio=NU, yield_stress_pa=165e6, radial_law=law, layers=40)
+        dry = wr.wind_lanes(**base)['lanes'][0]
+        wet = wr.wind_lanes(air_gap_of=lambda s, t: 5e-6, **base)['lanes'][0]
+        self.assertLess(max(-v for v in wet.radial_stress), max(-v for v in dry.radial_stress))
+        self.assertTrue(all(g < 5e-6 for g in wet.gap_under_pressure_m()))
 
 
 if __name__ == '__main__':

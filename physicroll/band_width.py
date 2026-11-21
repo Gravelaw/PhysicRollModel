@@ -144,7 +144,9 @@ WIDTH_DEFAULTS = {
     # SPEC19 package 5 (A6): emulation of a plant zone step test
     'zone_step_test': None,
     # SPEC19 package 10 (G9): the exit profile wound lane by lane (needs width_model.coil)
-    'coil_winding': None}
+    'coil_winding': None,
+    # SPEC19 package 11: deflector roll roughness (traction) and the coil temperature
+    'deflector_roll_roughness_rq_m': None, 'coil_thermal': None}
 CONTINUITY = ('continuous', 'intermittent', 'both')
 APPEARANCES = ('gloss_or_shade', 'loose_or_buckle', 'tight', 'stain', 'crease_or_flute')
 OBS_V2_BOOL = ('positions_repeat_across_coils', 'positions_change_after_work_roll_change',
@@ -628,6 +630,12 @@ def validate_width_model(w, pass_):
     else:
         out['coil'] = None
     out['coil_winding'] = validate_coil_winding(w.get('coil_winding'), out.get('coil'))
+    out['coil_thermal'] = validate_coil_thermal(w.get('coil_thermal'), out['coil_winding'])
+    if out['coil_thermal'] is not None and out.get('coil') is None:
+        raise ValueError('width_model.coil_thermal needs width_model.coil')
+    out['deflector_roll_roughness_rq_m'] = opt_num('width_model.deflector_roll_roughness_rq_m',
+                                                   w.get('deflector_roll_roughness_rq_m'),
+                                                   positive=True, hi=1e-4)
     out['shape_inputs'] = validate_shape_inputs(w.get('shape_inputs'))
     out['previous_strip_widths_m'] = num_list('width_model.previous_strip_widths_m',
                                               w.get('previous_strip_widths_m', []),
@@ -4086,11 +4094,69 @@ CW_FLAG_DISAGREES = 'WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION'
 CW_FLAG_HOOP = 'WINDING_INNER_LAPS_IN_HOOP_COMPRESSION'
 CW_FLAG_STACK = 'RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND'
 CW_TOP_FLAGS = (CW_FLAG_BESIDE, CW_FLAG_YIELDS, CW_FLAG_SLACK, CW_FLAG_DISAGREES, CW_FLAG_HOOP,
-                CW_FLAG_STACK)
+                CW_FLAG_STACK, 'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT',
+                'WOUND_IN_TENSION_CAPPED_AT_YIELD', 'ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS',
+                'AIR_CASES_BRACKET_THE_NIP_EFFECT')
 CW_KEYS = ('radial_law', 'core_stiffness_pa', 'lane_width_m', 'layers', 'tension_taper',
            'thickness_profile', 'include_length_profile', 'air_gap_m', 'provenance',
-           'allocation_radius')
+           'allocation_radius', 'ironing_roll', 'air')
+AIR_MODES = ('entrained_film', 'none', 'both')
+CW_FLAG_CAPPED = 'WOUND_IN_TENSION_CAPPED_AT_YIELD'
+CW_FLAG_FILM_THICK = 'ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS'
+CW_FLAG_BRACKET = 'AIR_CASES_BRACKET_THE_NIP_EFFECT'
+CW_AIR_NOTE = ('upper bound: smooth, wide, impermeable web, no side leakage [gap study, note to '
+               'G10]')
+CW_BOUND_WORDS = {'none': 'the nip removes all the air (bound: no air in the coil)',
+                  'entrained_film': 'the nip removes none of the air (bound: the full entrained '
+                                    'film in every lap)'}
+CW_NARROW = ('a coil diameter profile across the width, or a measured air content of the wound '
+             'coil, would narrow the two bounds; no nip film formula is in the reports')
 CW_DEFAULT_LANE_WIDTH_M = 0.05
+CW_CLOSE_TO_YIELD_FRACTION = 0.05   # [D, analyst choice] peak within 5 % of yield: not decided
+CW_FLAG_ALLOCATION = 'WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT'
+CW_VERDICTS = ('YIELDS', 'DOES_NOT_YIELD', 'CLOSE_TO_YIELD_NOT_DECIDED',
+               'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT')
+CW_VERDICT_WORDS = {'YIELDS': 'yields', 'DOES_NOT_YIELD': 'does not yield',
+                    'CLOSE_TO_YIELD_NOT_DECIDED': 'close to yield, not decided',
+                    'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT':
+                        'not decided: depends on the allocation point'}
+
+
+def _cw_variant_verdict(yielding_fraction, peak_pa, yield_pa):
+    if yielding_fraction > 0:
+        return 'YIELDS'
+    if peak_pa >= (1 - CW_CLOSE_TO_YIELD_FRACTION) * yield_pa:
+        return 'CLOSE_TO_YIELD_NOT_DECIDED'
+    return 'DOES_NOT_YIELD'
+
+
+def _cw_lane_verdict(a, b):
+    """Verdict of a lane from the verdicts under the two allocation points."""
+    if (a == 'YIELDS') != (b == 'YIELDS'):
+        return 'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT'
+    if a == 'YIELDS':
+        return 'YIELDS'
+    if 'CLOSE_TO_YIELD_NOT_DECIDED' in (a, b):
+        return 'CLOSE_TO_YIELD_NOT_DECIDED'
+    return 'DOES_NOT_YIELD'
+
+
+def _cw_lane_numbers(res, lanes):
+    """Effective compaction factor, yielding length share and peak stress per lane."""
+    wl, nl = res['lanes'], res['laps_per_layer']
+    nlayers = len(wl[0].wound_on)
+    h_mean = sum(x['thickness_m'] for x in lanes) / len(lanes)
+    outer_mean = sum(ln.outer_radius_m for ln in wl) / len(wl)
+    out = []
+    for x, ln in zip(lanes, wl):
+        lengths = [0.5 * (ln.r[k] + ln.r[k + 1]) for k in range(nlayers)]
+        yl = sum(L for L, ep in zip(lengths, ln.plastic_strain) if ep > 0) / sum(lengths)
+        ddh = x['thickness_m'] - h_mean
+        dR = ln.outer_radius_m - outer_mean
+        out.append({'yielding_length_fraction': yl, 'peak_stress_pa': max(ln.wound_on),
+                    'effective_compaction_factor': (dR / (nl * nlayers * ddh)
+                                                    if abs(ddh) > 1e-12 * h_mean else None)})
+    return out
 CW_MAX_RADII = 60
 CW_USED_BY_EVIDENCE = ('the present linear coil criterion (strip_shape.coil_ridge_buildup with '
                        'its compaction factor): the coil verdicts, the ridge hypothesis and every '
@@ -4177,6 +4243,25 @@ def validate_coil_winding(cw, coil):
     if ar not in wr.ALLOCATION_RADII:
         raise ValueError(f'{where}.allocation_radius must be one of {wr.ALLOCATION_RADII}')
     out['allocation_radius'] = ar
+    ir = cw.get('ironing_roll')
+    if ir is not None:
+        keys(f'{where}.ironing_roll', ir, ('load_per_width_n_m', 'traction_coefficient'))
+        ir = {'load_per_width_n_m': num(f'{where}.ironing_roll.load_per_width_n_m',
+                                        ir['load_per_width_n_m'], positive=True, hi=1e5),
+              'traction_coefficient': num(f'{where}.ironing_roll.traction_coefficient',
+                                          ir['traction_coefficient'], positive=True, hi=1.0)}
+    out['ironing_roll'] = ir
+    air = cw.get('air')
+    if air is not None:
+        keys(f'{where}.air', air, ('mode',), ('viscosity_pa_s',))
+        if air['mode'] not in AIR_MODES:
+            raise ValueError(f'{where}.air.mode must be one of {AIR_MODES}')
+        visc = air.get('viscosity_pa_s')
+        air = {'mode': air['mode'], 'viscosity_pa_s': None if visc is None else num(
+            f'{where}.air.viscosity_pa_s', visc, positive=True, hi=1.0)}
+        if air['mode'] != 'none' and out['air_gap_m'] > 0:
+            raise ValueError(f'{where}: give air_gap_m or an entrained air film, not both')
+    out['air'] = air
     return out
 
 
@@ -4188,12 +4273,47 @@ def _lane_mean(z, v, a, b):
     return sum(vals) / len(vals)
 
 
-def coil_winding_section(case, w, shape, centre, width):
-    """SPEC19 package 10: the exit profile wound lane by lane, BESIDE the linear criterion."""
+def _cw_air_mode(cw):
+    mode = (cw.get('air') or {}).get('mode')
+    if mode is None and cw.get('ironing_roll') is not None:
+        return 'both'      # no nip film formula: the two bounds
+    return mode or 'none'
+
+
+def _cw_summary(sec):
+    return {'flags': list(sec.get('flags') or []), 'per_lane': [
+        {k: p.get(k) for k in ('centre_m', 'verdict', 'effective_compaction_factor',
+                               'max_wound_on_tension_pa', 'max_pressure_pa',
+                               'yielding_length_fraction')} for p in sec.get('per_lane') or []],
+        'mean_air_gap_under_pressure_m': sec.get('mean_air_gap_under_pressure_m')}
+
+
+def coil_winding_section(case, w, shape, centre, width, _air=None):
+    """SPEC19 package 10: the exit profile wound lane by lane, BESIDE the linear criterion.
+    Package 11: an ironing roll (wound-in tension) and air (an entrained film per layer, none,
+    or both as the two bounds of the nip effect)."""
     from . import wound_roll as wr
     cw = w.get('coil_winding')
     if cw is None:
         return not_supplied('width_model.coil_winding is null or absent')
+    mode = _cw_air_mode(cw)
+    if mode == 'both' and _air is None:
+        lo = coil_winding_section(case, w, shape, centre, width, _air='none')
+        if lo.get('status') != CW_STATUS:
+            return lo
+        hi = coil_winding_section(case, w, shape, centre, width, _air='entrained_film')
+        lo['air_cases'] = {'none': dict(_cw_summary(lo), words=CW_BOUND_WORDS['none']),
+                           'entrained_film': dict(_cw_summary(hi),
+                                                  words=CW_BOUND_WORDS['entrained_film'])}
+        lo['air_cases_note'] = ('the main result above is the bound "' + CW_BOUND_WORDS['none']
+                                + '"; ' + CW_NARROW)
+        for f in hi.get('flags') or []:
+            if f not in lo['flags']:
+                lo['flags'].append(f)
+        if CW_FLAG_BRACKET not in lo['flags']:
+            lo['flags'].append(CW_FLAG_BRACKET)
+        return lo
+    run_mode = _air or mode
     coil = w['coil']
     st = shape.get('steady') if isinstance(shape, dict) else None
     has_steady = isinstance(st, dict) and isinstance(st.get('z_m'), list) and \
@@ -4237,14 +4357,37 @@ def coil_winding_section(case, w, shape, centre, width):
         lanes.append({'centre_m': 0.5 * (a + b), 'width_m': b - a, 'thickness_m': h0 + dh,
                       'thickness_deviation_m': dh, 'length_excess_i_units': e * 1e5,
                       '_e': e})
+    # package 11: wound-in tension with an ironing roll; air per layer
+    tw = coil['winding_tension_pa']
+    nip = None
+    capped = False
+    taper = cw['tension_taper']
+    if cw.get('ironing_roll') is not None:
+        ir = cw['ironing_roll']
+        tw, capped = wr.wound_in_tension_pa(tw, h0, ir['load_per_width_n_m'],
+                                            ir['traction_coefficient'], sy)
+        add = ir['traction_coefficient'] * ir['load_per_width_n_m'] / h0
+        if taper is not None:
+            taper = [(r, min(t + add, sy * (1 - 1e-6))) for r, t in taper]
+        nip = {'load_per_width_n_m': ir['load_per_width_n_m'],
+               'traction_coefficient': ir['traction_coefficient'],
+               'winding_tension_pa': coil['winding_tension_pa'], 'wound_in_tension_pa': tw,
+               'capped_at_yield': capped, 'basis': wr.NIP_BASIS}
+    u_exit = case['pass']['exit_speed_m_s']
+    visc = (cw.get('air') or {}).get('viscosity_pa_s') or wr.AIR_VISCOSITY_PA_S
+    gap_of = None
+    if run_mode == 'entrained_film':
+        def gap_of(radius, tension):
+            return min(1e-3, wr.entrained_air_film_m(radius, 2 * u_exit, max(tension, 1.0) * h0,
+                                                     visc))
     res = wr.wind_lanes(
         core_radius_m=coil['inner_radius_m'], outer_radius_m=coil['outer_radius_m'],
         thicknesses_m=[x['thickness_m'] for x in lanes], widths_m=[x['width_m'] for x in lanes],
-        length_excess=[x['_e'] for x in lanes], winding_tension_pa=coil['winding_tension_pa'],
+        length_excess=[x['_e'] for x in lanes], winding_tension_pa=tw,
         hoop_modulus_pa=E, poisson_ratio=wr_poisson(), yield_stress_pa=sy,
         radial_law=cw['radial_law'], core_stiffness_pa=cw['core_stiffness_pa'],
-        layers=cw['layers'], air_gap_m=cw['air_gap_m'], tension_taper=cw['tension_taper'],
-        allocation_radius=cw['allocation_radius'])
+        layers=cw['layers'], air_gap_m=cw['air_gap_m'], tension_taper=taper,
+        allocation_radius=cw['allocation_radius'], air_gap_of=gap_of)
     for x in lanes:
         x.pop('_e')
     flags = [CW_FLAG_BESIDE, CW_FLAG_STACK]
@@ -4298,6 +4441,45 @@ def coil_winding_section(case, w, shape, centre, width):
             flags.append(CW_FLAG_SLACK)
         if min(ln.hoop_stress) < 0 and CW_FLAG_HOOP not in flags:
             flags.append(CW_FLAG_HOOP)
+    # the other allocation point (decision after package 10): a verdict that flips with this
+    # discretisation choice is not reported as a plain yes or no
+    other = 'layer_top' if cw['allocation_radius'] == 'mid_layer' else 'mid_layer'
+    res2 = wr.wind_lanes(
+        core_radius_m=coil['inner_radius_m'], outer_radius_m=coil['outer_radius_m'],
+        thicknesses_m=[x['thickness_m'] for x in lanes], widths_m=[x['width_m'] for x in lanes],
+        length_excess=[1e-5 * x['length_excess_i_units'] for x in lanes],
+        winding_tension_pa=tw, hoop_modulus_pa=E,
+        poisson_ratio=wr_poisson(), yield_stress_pa=sy, radial_law=cw['radial_law'],
+        core_stiffness_pa=cw['core_stiffness_pa'], layers=cw['layers'],
+        air_gap_m=cw['air_gap_m'], tension_taper=taper, allocation_radius=other,
+        air_gap_of=gap_of)
+    main_n = _cw_lane_numbers(res, lanes)
+    other_n = _cw_lane_numbers(res2, lanes) if res2['status'] == wr.STATUS else None
+    sens = []
+    for j, (pl, a) in enumerate(zip(per_lane, main_n)):
+        va = _cw_variant_verdict(a['yielding_length_fraction'], a['peak_stress_pa'], sy)
+        if other_n is None:
+            vb, b = None, None
+            verdict = va
+        else:
+            b = other_n[j]
+            vb = _cw_variant_verdict(b['yielding_length_fraction'], b['peak_stress_pa'], sy)
+            verdict = _cw_lane_verdict(va, vb)
+        pl['verdict'] = verdict
+        pl['verdict_words'] = CW_VERDICT_WORDS[verdict]
+        sens.append({'centre_m': pl['centre_m'],
+                     cw['allocation_radius']: {'verdict': va, **a},
+                     other: None if b is None else {'verdict': vb, **b}})
+        if verdict == 'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT' and CW_FLAG_ALLOCATION not in flags:
+            flags.append(CW_FLAG_ALLOCATION)
+    allocation_sensitivity = {
+        'used': cw['allocation_radius'], 'other': other,
+        'other_status': res2['status'], 'lanes': sens,
+        'close_to_yield_fraction': CW_CLOSE_TO_YIELD_FRACTION,
+        'basis': ('the other allocation point run beside the chosen one; a lane whose verdict '
+                  'differs reads "not decided: depends on the allocation point"; a peak within '
+                  f'{CW_CLOSE_TO_YIELD_FRACTION:.0%} of the yield stress without yielding reads '
+                  '"close to yield, not decided" [D, analyst choice]')}
     # after unwinding: the plastic stretch as a length difference (an ADDITIONAL profile)
     zc = [x['centre_m'] for x in lanes]
     outer = [ln.plastic_strain[-1] for ln in wl]
@@ -4347,7 +4529,8 @@ def coil_winding_section(case, w, shape, centre, width):
     for label, pos, lin in targets:
         j = min(range(n), key=lambda k: abs(lanes[k]['centre_m'] - pos))
         pl = per_lane[j]
-        lane_state = 'YIELDS' if pl['yielding_length_fraction'] > 0 else 'ELASTIC'
+        lane_state = {'YIELDS': 'YIELDS', 'DOES_NOT_YIELD': 'ELASTIC'}.get(pl['verdict'],
+                                                                          pl['verdict'])
         row = {'source': label, 'position_m': pos, 'lane_centre_m': lanes[j]['centre_m'],
                'lane_model_state': lane_state,
                'effective_compaction_factor': pl['effective_compaction_factor'],
@@ -4358,23 +4541,263 @@ def coil_winding_section(case, w, shape, centre, width):
         if lin is not None:
             lin_yields = lin['status'] == 'RIDGE_YIELDS_STRIP'
             row['linear_yields'] = lin_yields
-            row['agrees'] = lin_yields == (lane_state == 'YIELDS')
-            if not row['agrees']:
+            if lane_state not in ('YIELDS', 'ELASTIC'):
+                row['agrees'] = None
+                row['note'] = (f'the lane model is {CW_VERDICT_WORDS[lane_state]}; the tally '
+                               'uses the linear criterion')
+            else:
+                row['agrees'] = lin_yields == (lane_state == 'YIELDS')
+            if row['agrees'] is False:
                 row['note'] = (f'the lane model says {lane_state.lower()}, the linear criterion '
                                f'says {str(lin["status"]).lower().replace("_", " ")}; the tally '
                                'uses the linear criterion')
                 if CW_FLAG_DISAGREES not in flags:
                     flags.append(CW_FLAG_DISAGREES)
         beside.append(row)
+    extra = {}
+    gaps = [g for ln in wl for g in ln.gap_under_pressure_m()]
+    extra['mean_air_gap_under_pressure_m'] = (sum(gaps) / len(gaps)) if gaps else 0.0
+    extra['air_mode'] = run_mode
+    if capped and CW_FLAG_CAPPED not in flags:
+        flags.append(CW_FLAG_CAPPED)
+    if nip is not None:
+        extra['nip'] = nip
+    if cw.get('air') is not None or cw.get('ironing_roll') is not None:
+        ri, ro = coil['inner_radius_m'], coil['outer_radius_m']
+        f0 = wr.entrained_air_film_m(ri, 2 * u_exit, coil['winding_tension_pa'] * h0, visc)
+        f1 = wr.entrained_air_film_m(ro, 2 * u_exit, coil['winding_tension_pa'] * h0, visc)
+        extra['air_entrainment'] = {
+            'film_at_core_m': f0, 'film_at_outer_radius_m': f1,
+            'film_over_strip_thickness': [f0 / h0, f1 / h0],
+            'surface_speed_sum_m_s': 2 * u_exit, 'viscosity_pa_s': visc,
+            'basis': ('foil-bearing film h0 = C*R*(6*mu*U/T)^(2/3) at the winding tension '
+                      '[D, re-derived in SPEC19; SS-S58 EX/AB]'), 'note': CW_AIR_NOTE}
+        if f1 > h0 and CW_FLAG_FILM_THICK not in flags:
+            flags.append(CW_FLAG_FILM_THICK)
+    dr = w.get('deflector_roll_radius_m')
+    if dr is not None and (cw.get('air') is not None or cw.get('ironing_roll') is not None):
+        t_exit = case['pass']['exit_tension_pa'] * h0
+        film = wr.entrained_air_film_m(dr, 2 * u_exit, max(t_exit, 1.0), visc)
+        sf = (case.get('tribology') or {}).get('surface_finish') or {}
+        rq_s, rq_d = sf.get('strip_roughness_rq_m'), w.get('deflector_roll_roughness_rq_m')
+        block = {'radius_m': dr, 'film_m': film, 'note': CW_AIR_NOTE}
+        if rq_s is not None and rq_d is not None:
+            ratio = film / math.hypot(rq_s, rq_d)
+            block.update(film_over_combined_roughness=ratio,
+                         traction='LIKELY_LOST' if ratio > 3 else 'KEPT',
+                         traction_basis='traction is lost when the film exceeds about three '
+                                        'times the combined roughness [SS-S58 EX/AB]')
+        else:
+            block['traction'] = 'NOT_ASSESSABLE'
+            block['traction_reason'] = ('needs tribology.surface_finish.strip_roughness_rq_m '
+                                        'and width_model.deflector_roll_roughness_rq_m')
+        extra['deflector_roll'] = block
     return dict(base, status=CW_STATUS, radius_m=mean_r, wound_on_tension_pa=wound,
                 hoop_stress_pa=hoop, pressure_pa=press, plastic_strain=plast,
                 per_lane=per_lane, after_unwinding=after, beside_linear_criterion=beside,
-                flags=flags)
+                allocation_sensitivity=allocation_sensitivity, **extra, flags=flags)
 
 
 def wr_poisson():
     """Hoop-radial Poisson ratio of the stack (the strip's, as the shape chain)."""
     return STRIP_POISSON_RATIO
+
+
+# ======================================== coil temperature (SPEC19 package 11, A8; I8 in part)
+CT_KEYS = ('surface_htc_w_m2k', 'ambient_temperature_k', 'strip_conductivity_w_mk', 'gap_medium',
+           'interlayer_gap_m', 'hold_times_s', 'provenance')
+CT_STATUS = 'UNVALIDATED_COIL_COOLING_ESTIMATE'
+CT_FLAG_UPPER = 'COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND'
+CT_FLAG_STRESS = 'COIL_COOLING_STRESS_REACHES_YIELD'
+CT_TOP_FLAGS = (CT_FLAG_UPPER, CT_FLAG_STRESS)
+CT_DEFAULT_HOLD_TIMES_S = (3600.0, 14400.0, 86400.0)
+CT_LIMITATIONS = (
+    'The temperature at winding is the modelled strip exit temperature of the case pass: an '
+    'upper bound (no loss between the roll gap and the coil).',
+    'No heat from the next laps while winding; no radiation beyond the surface coefficient; a '
+    'uniform gap between laps; the coil starts uniformly hot (per lane differences only for the '
+    'stress estimate).',
+    'No creep of the hoop stress and no recovery of the foil properties at coil temperature '
+    '(A8 stress part and B7 are Phase 3).',
+    'The surface coefficient, the ambient temperature, the strip conductivity and the gap are '
+    'inputs; the radial conductivity rests on the gap and its medium.',
+)
+
+
+def validate_coil_thermal(ct, coil_winding):
+    if ct is None:
+        return None
+    where = 'width_model.coil_thermal'
+    if not isinstance(ct, dict):
+        raise ValueError(f'{where} must be a JSON object or null')
+    keys(where, ct, ('surface_htc_w_m2k', 'ambient_temperature_k', 'strip_conductivity_w_mk',
+                     'gap_medium', 'provenance'), ('interlayer_gap_m', 'hold_times_s'))
+    out = {'surface_htc_w_m2k': num(f'{where}.surface_htc_w_m2k', ct['surface_htc_w_m2k'],
+                                    positive=True, hi=500.0),
+           'ambient_temperature_k': num(f'{where}.ambient_temperature_k',
+                                        ct['ambient_temperature_k'], lo=250.0, hi=400.0),
+           'strip_conductivity_w_mk': num(f'{where}.strip_conductivity_w_mk',
+                                          ct['strip_conductivity_w_mk'], lo=50.0, hi=300.0)}
+    if ct['gap_medium'] not in ('oil', 'air'):
+        raise ValueError(f'{where}.gap_medium must be "oil" or "air"')
+    out['gap_medium'] = ct['gap_medium']
+    prov = ct['provenance']
+    if not isinstance(prov, str) or not prov.strip():
+        raise ValueError(f'{where}.provenance must be a nonempty text')
+    out['provenance'] = prov
+    g = ct.get('interlayer_gap_m')
+    if g is None:
+        air = None if coil_winding is None else _cw_air_mode(coil_winding)
+        if air not in ('entrained_film', 'both') and not (coil_winding or {}).get('air_gap_m'):
+            raise ValueError(f'{where}.interlayer_gap_m is required unless width_model.'
+                             'coil_winding runs with air (its mean gap under pressure is used)')
+        out['interlayer_gap_m'] = None
+    else:
+        out['interlayer_gap_m'] = num(f'{where}.interlayer_gap_m', g, positive=True, hi=1e-4)
+    ht = ct.get('hold_times_s')
+    if ht is None:
+        ht = list(CT_DEFAULT_HOLD_TIMES_S)
+    else:
+        ht = num_list(f'{where}.hold_times_s', ht, positive=True, hi=1e7)
+        if not 1 <= len(ht) <= 8 or any(b <= a for a, b in zip(ht, ht[1:])):
+            raise ValueError(f'{where}.hold_times_s needs 1-8 increasing values')
+    out['hold_times_s'] = ht
+    return out
+
+
+def coil_temperature_section(case, result):
+    """SPEC19 package 11: cooling of the coil from the winding temperature (an upper bound),
+    against the published coil limits; never evidence. Called after thermal_check."""
+    from . import wound_roll as wr
+    from . import bite_tribology as bt
+    from . import band_products as bpr
+    w = case.get('width_model') or {}
+    ct = w.get('coil_thermal')
+    if ct is None:
+        return not_supplied('width_model.coil_thermal is null or absent')
+    coil = w.get('coil')
+    if coil is None:
+        return not_assessable('needs width_model.coil (the coil radii)')
+    proc = result.get('process') or {}
+    op = ((proc.get('heating') or {}).get('operating') or {}) if isinstance(proc, dict) else {}
+    t_wind = op.get('exit_temperature_k')
+    if t_wind is None:
+        return not_assessable('needs the modelled strip exit temperature of the case pass '
+                              '(process.heating, which needs tribology and hardening)')
+    width = result.get('width') or {}
+    cws = width.get('coil_winding') if isinstance(width.get('coil_winding'), dict) else {}
+    h = case['pass']['exit_thickness_m']
+    gap = ct['interlayer_gap_m']
+    gap_basis = 'supplied'
+    if gap is None:
+        gap = cws.get('mean_air_gap_under_pressure_m') or (
+            ((cws.get('air_cases') or {}).get('entrained_film') or {}).get(
+                'mean_air_gap_under_pressure_m'))
+        gap_basis = ('the mean air gap under pressure of width.coil_winding'
+                     + ('' if cws.get('mean_air_gap_under_pressure_m') else
+                        ' (its entrained-film bound)'))
+        if not gap:
+            return not_assessable('no interlayer gap: width.coil_winding did not run with air')
+    if ct['gap_medium'] == 'oil':
+        trib = case.get('tribology') or {}
+        lub = trib.get('lubricant') or {}
+        k_g = (lub.get('conductivity_w_mk') if lub.get('conductivity_w_mk') is not None
+               else bt.DEFAULT_OIL_CONDUCTIVITY_W_MK)
+        kg_basis = ('tribology.lubricant.conductivity_w_mk' if lub.get('conductivity_w_mk')
+                    is not None else 'default oil conductivity 0.13 W/mK [M]')
+    else:
+        k_g, kg_basis = wr.AIR_CONDUCTIVITY_W_MK, 'air 0.026 W/mK [M]'
+    ks = ct['strip_conductivity_w_mk']
+    kr = wr.radial_conductivity_w_mk(h, gap, ks, k_g)
+    kz = wr.axial_conductivity_w_mk(h, gap, ks)
+    rc = bt.ALUMINIUM_VOLUMETRIC_HEAT_CAPACITY_J_M3K * h / (h + gap)
+    cool = wr.coil_cooling(inner_radius_m=coil['inner_radius_m'],
+                           outer_radius_m=coil['outer_radius_m'], width_m=case['pass']['width_m'],
+                           surface_htc_w_m2k=ct['surface_htc_w_m2k'], k_radial_w_mk=kr,
+                           k_axial_w_mk=kz, rho_c_j_m3k=rc, hold_times_s=ct['hold_times_s'])
+    ta = ct['ambient_temperature_k']
+
+    def temp(theta):
+        return ta + theta * (t_wind - ta)
+    rows = [{'time_s': r['time_s'], 'hottest_k': temp(r['hottest']), 'mean_k': temp(r['mean']),
+             'outer_surface_mid_width_k': temp(r['outer_surface_mid_width'])}
+            for r in cool['rows']]
+    flags = [CT_FLAG_UPPER]
+    tc = result.get('thermal_check') if isinstance(result.get('thermal_check'), dict) else {}
+    limit_rows = []
+    if tc.get('battery_coil_limits_apply') and isinstance(tc.get('coil_limits_c'), dict):
+        srcs = {'entering_final_pass': bpr.COIL_IN_FINAL_LIMIT,
+                'leaving_final_pass': bpr.COIL_OUT_FINAL_LIMIT,
+                'elongation_decay_above': bpr.COIL_OUT_FINAL_LIMIT_LOOSE}
+        for key, lim_c in tc['coil_limits_c'].items():
+            lim_k = lim_c + 273.15
+            theta = (lim_k - ta) / (t_wind - ta) if t_wind != ta else None
+            above = t_wind > lim_k
+            tfall = (None if not above or theta is None or theta <= 0 else
+                     wr.time_to_fall_below(cool['hottest_history'], theta))
+            st = srcs.get(key)
+            limit_rows.append({'limit': key, 'limit_k': lim_k,
+                               'source': None if st is None else list(st.sources),
+                               'at_winding': 'ABOVE' if above else 'BELOW',
+                               'time_to_fall_below_s': 0.0 if not above else tfall})
+    lane_stress, per_lane = None, None
+    ls = width.get('local_state') if isinstance(width.get('local_state'), dict) else {}
+    lanes = cws.get('lanes') if cws else None
+    if lanes and isinstance(ls.get('strip_exit_temperature_k'), list) and \
+            isinstance(ls.get('z_m'), list):
+        temps = []
+        for x in lanes:
+            a, b = x['centre_m'] - x['width_m'] / 2, x['centre_m'] + x['width_m'] / 2
+            temps.append(_lane_mean(ls['z_m'], ls['strip_exit_temperature_k'], a, b))
+        mean_t = sum(temps) / len(temps)
+        E = case['material']['youngs_modulus_pa']
+        dsig = [E * ss.ALUMINIUM_EXPANSION_PER_K * (t - mean_t) for t in temps]
+        per_lane = [{'centre_m': x['centre_m'], 'winding_temperature_k': t}
+                    for x, t in zip(lanes, temps)]
+        lane_stress = []
+        sy = case['material']['yield_stress_pa']
+        for x, d, pl in zip(lanes, dsig, cws.get('per_lane') or []):
+            final = None
+            hs = cws.get('hoop_stress_pa')
+            j = lanes.index(x)
+            if hs:
+                final = max(hs[j]) + d
+            lane_stress.append({'centre_m': x['centre_m'], 'stress_change_pa': d,
+                                'final_hoop_stress_with_cooling_pa': final})
+            if final is not None and final >= sy and CT_FLAG_STRESS not in flags:
+                flags.append(CT_FLAG_STRESS)
+    out = {'status': CT_STATUS, 'provenance': ct['provenance'],
+           'winding_temperature_k': t_wind,
+           'winding_temperature_basis': ('process.heating.operating.exit_temperature_k: the '
+                                         'modelled strip exit temperature of the case pass, an '
+                                         'upper bound at winding'),
+           'per_lane': per_lane,
+           'conductivities': {'radial_w_mk': kr, 'axial_w_mk': kz, 'gap_m': gap,
+                              'gap_basis': gap_basis, 'gap_medium': ct['gap_medium'],
+                              'gap_conductivity_w_mk': k_g, 'gap_conductivity_basis': kg_basis,
+                              'strip_conductivity_w_mk': ks, 'volumetric_heat_capacity_j_m3k': rc,
+                              'basis': 'k_r = (h + g)/(h/k_s + g/k_g) (series), k_z = k_s*h/(h + '
+                                       'g) (parallel), rho*c of aluminium times h/(h + g) [D, '
+                                       'SPEC19; k_r << k_z: gap A8, TM-LA33 EX, TM-LA32 EX]'},
+           'time_scales': cool['time_scales'], 'cooling': rows, 'limit_rows': limit_rows,
+           'lane_stress_on_cooling_pa': lane_stress,
+           'basis': {'cooling': cool['method'] + ' (exact product for a uniform start, core side '
+                                                 'adiabatic, convection on the outer surface and '
+                                                 'both end faces) [D, classical]',
+                     'lane_stress': ('d_sigma_j = E*alpha*(T_j - mean T): a hotter lane ends '
+                                     'tighter; an upper bound (no radial relaxation, no creep)')},
+           'flags': flags, 'limitations': list(CT_LIMITATIONS)}
+    return out
+
+
+def coil_temperature_beside_thermal_check(sec):
+    """The rows added beside thermal_check's coil limits (its verdicts are not changed)."""
+    return {'note': ('computed coil temperature beside the published coil limits; the verdicts '
+                     'above compare the strip exit temperature and are unchanged'),
+            'winding_temperature_k': sec['winding_temperature_k'],
+            'limit_rows': sec['limit_rows'],
+            'hottest_after_hold_k': [{'time_s': r['time_s'], 'hottest_k': r['hottest_k']}
+                                     for r in sec['cooling']]}
 
 
 # ======================================== width-coupling kernel (SPEC19 package 8, G3; X17)

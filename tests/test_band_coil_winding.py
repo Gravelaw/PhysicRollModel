@@ -222,3 +222,54 @@ class Section(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AllocationSensitivity(unittest.TestCase):
+    """Decision after package 10: the other allocation point beside the chosen one; a verdict
+    that flips, or a peak within 5 % of yield, is not reported as a plain yes or no."""
+
+    @classmethod
+    def setUpClass(cls):
+        cw = bw.validate_coil_winding(
+            {'radial_law': LAWS['pfeiffer_30'], 'provenance': 'unit test', 'layers': 150,
+             'lane_width_m': 0.05,
+             'thickness_profile': {'positions_m': [0.0, 0.6, 0.6001, 0.6499, 0.65, 1.2],
+                                   'thickness_deviation_m': [0, 0, 1e-6, 1e-6, 0, 0]}},
+            {'inner_radius_m': 0.15, 'outer_radius_m': 0.6, 'winding_tension_pa': 30e6,
+             'compaction_factor': None})
+        case = {'material': {'youngs_modulus_pa': E, 'yield_stress_pa': SY},
+                'pass': {'exit_thickness_m': H, 'exit_speed_m_s': 13.0,
+                         'exit_tension_pa': 40e6}, 'measurement': None}
+        w = {'coil': {'inner_radius_m': 0.15, 'outer_radius_m': 0.6,
+                      'winding_tension_pa': 30e6, 'compaction_factor': None},
+             'coil_winding': cw}
+        cls.sec = bw.coil_winding_section(case, w, {'steady': None, 'ridges': []}, 0.6, 1.2)
+
+    def test_the_softest_stack_one_micron_lane_is_not_decided(self):
+        s = self.sec
+        self.assertEqual(s['status'], bw.CW_STATUS)
+        self.assertEqual(len(s['lanes']), 24)
+        j = 12
+        lane = s['allocation_sensitivity']['lanes'][j]
+        self.assertEqual(lane['mid_layer']['verdict'], 'CLOSE_TO_YIELD_NOT_DECIDED')
+        self.assertEqual(lane['layer_top']['verdict'], 'YIELDS')
+        self.assertAlmostEqual(lane['mid_layer']['peak_stress_pa'] / 1e6, 158.37, delta=0.05)
+        self.assertLess(abs(lane['mid_layer']['effective_compaction_factor'] / 0.034 - 1), 0.03)
+        self.assertLess(abs(lane['layer_top']['effective_compaction_factor'] / 0.031 - 1), 0.03)
+        self.assertEqual(s['per_lane'][j]['verdict'], 'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT')
+        self.assertEqual(s['per_lane'][j]['verdict_words'],
+                         'not decided: depends on the allocation point')
+        self.assertIn(bw.CW_FLAG_ALLOCATION, s['flags'])
+        self.assertEqual(s['per_lane'][0]['verdict'], 'DOES_NOT_YIELD')
+
+    def test_verdict_rules(self):
+        self.assertEqual(bw.CW_CLOSE_TO_YIELD_FRACTION, 0.05)
+        self.assertEqual(bw._cw_variant_verdict(0.0, 158.4e6, SY), 'CLOSE_TO_YIELD_NOT_DECIDED')
+        self.assertEqual(bw._cw_variant_verdict(0.0, 150e6, SY), 'DOES_NOT_YIELD')
+        self.assertEqual(bw._cw_variant_verdict(0.1, 165e6, SY), 'YIELDS')
+        self.assertEqual(bw._cw_lane_verdict('YIELDS', 'YIELDS'), 'YIELDS')
+        self.assertEqual(bw._cw_lane_verdict('DOES_NOT_YIELD', 'CLOSE_TO_YIELD_NOT_DECIDED'),
+                         'CLOSE_TO_YIELD_NOT_DECIDED')
+        self.assertEqual(bw._cw_lane_verdict('DOES_NOT_YIELD', 'YIELDS'),
+                         'NOT_DECIDED_DEPENDS_ON_ALLOCATION_POINT')
+        self.assertIn(bw.CW_FLAG_ALLOCATION, bpl.FLAGS)

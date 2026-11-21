@@ -165,11 +165,12 @@ input, or the gap of the gap study and its phase (section 8 of the gap study).
 | L-COIL-04 | Troughs and wrinkles: the lateral stress in the spans is an input; the wrinkle formula assumes a thin, wide, long span far above threshold with clamped ends; isotropic sheet; roll friction, crown and misalignment are not computed; creases are not predicted, only their elastic precursors; earlier strips are assumed on the same centre line. | Below the trough threshold the amplitude is zero. | `width.troughs` | G11 (Phase 2) | limitation |
 | L-COIL-05 | A trough spacing needs a stated band spacing or at least two regular gaps; one gap, or irregular gaps, between bands that may have different sources give at most weak support. | Two or more equal gaps between bands of different sources would still count as a spacing. | the troughs item in the evidence | - | limitation |
 | L-COIL-06 | Tension lines have no established model: a rule set with analyst weights on a published description; one candidate pitch (shell buckling of the wound lap) is reported for comparison only, never as evidence; no onset condition, air film or winding model. | Size not known. | `foil_tension_lines` model prediction | G12, G10, G9 | analyst choice |
-| L-COIL-07 | No coil temperature, coil cooling or creep model; the published battery-foil limits are coil temperatures and the model gives strip exit temperatures. | The comparison is indicative. | `MODELLED_EXIT_TEMPERATURE_ABOVE_BATTERY_COIL_LIMIT` | A8 (Phase 2) | limitation |
+| L-COIL-07 | The published battery-foil limits are coil temperatures and the process check compares strip exit temperatures. The coil temperature after winding can be estimated (a case option): it starts from the modelled strip exit temperature of the case pass, an upper bound at winding; the surface coefficient, the ambient temperature, the strip conductivity and the gap between laps (or the winding model's air gap) are inputs; no heat from the next laps, no radiation beyond the coefficient, a uniform gap. A thermal-stress estimate between lanes is an upper bound. No creep of the hoop stress and no recovery of the foil in the coil (Phase 3). The process check's verdicts are unchanged; the computed coil temperature is shown beside them. | The strip exit comparison is indicative; the coil estimate is high at winding by the unknown loss before the coil, and its cooling time scales rest on the supplied surface coefficient and gap (radial time scale about 18 h with an oil gap of 0.5 µm, about 330 h with an air gap of 2 µm, on a 0.15 to 0.6 m coil at 8 W/m²K). | `MODELLED_EXIT_TEMPERATURE_ABOVE_BATTERY_COIL_LIMIT`, `COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND`, `COIL_COOLING_STRESS_REACHES_YIELD`; `width.coil_temperature`, `thermal_check.coil_temperature_beside` | a coil surface temperature against time with a contact probe; creep and recovery (A8, B7, Phase 3) | limitation |
 | L-COIL-08 | "Worse at lower tension" is not specific to tension lines: a latent thermal stripe's in-mill onset also falls with tension. | 6.83 µm at 40 MPa against about 1.6 µm at 8 MPa in the demo's notes; the demo leaves the observation unanswered. | the tension observation in the evidence | - | limitation |
 | L-COIL-09 | The winding model (a separate module; the lane model and the engine section follow in later packages) needs the radial stack stiffness of the wound foil: how the stack of oily laps, with entrained air, compresses under pressure. No value for aluminium foil is published; the stack law is a required input with no default, and no demo carries one. The model is elastic, per lane, without interlayer slip; laps are lumped into layers; the air gap enters the stiffness only. | The answer depends on that stiffness: for one slightly thicker lane the radius difference in the coil is 0.77, 0.12 or 0.02 of laps × thickness difference for a stiff, a hundred times softer, or an assumed pressure-dependent stack; the present constant 0.5 lies inside that range and has no better or worse support than before. | `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`, `INNER_LAPS_IN_HOOP_COMPRESSION`, `LUMPED_LAYERS_FIRST_ORDER` (results of `wound_roll`) | a press test on a stack of 50 to 200 laps of the oily foil (pressure against strain); a coil diameter profile (G9, Phase 2 package 10) | limitation |
 | L-COIL-10 | The air film a web carries onto a roll or into the coil is a smooth-web estimate (no side leakage, no roughness venting, no nip film). | An upper bound: about 17 µm on a 0.125 m roll and 40 µm on 0.3 m at 20 m/s and 720 N/m; the real film is smaller by an unknown amount. | results of `wound_roll.entrained_air_film_m` | a nip model and venting (G10, Phase 2 package 11) | limitation |
-| L-COIL-11 | Winding by lanes (a case option, beside the present coil check): the exit profile of the case pass is wound lane by lane, the tension shared by a re-derived strain allocation between lanes, with elastic-perfectly plastic laps; perfectly registered lanes, no axial stress, the case-pass profile constant along the coil, plastic thinning and creep left out. Where a new layer's strain is taken (mid layer, the specification, or layer top, the planner's prototype) is an analyst choice. Nothing in the tally reads it; the length difference after unwinding is an additional profile. | For one lane 0.1 µm thicker the coil takes up 0.77, 0.12, 0.07 or 0.02 of laps × thickness difference with a stiff, a hundred times softer or two assumed pressure-dependent stacks; a lane 1 µm thicker yields the strip by about 400 laps with every stack but the softest, where the two allocation points disagree on whether it yields at all (peak 158 against 165 MPa). | `COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION`, `WINDING_LANE_YIELDS`, `WINDING_LANE_SLACK`, `WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION`; `width.coil_winding` | a press test of the stack; a measured coil diameter profile across the width (G9) | limitation |
+| L-COIL-11 | Winding by lanes (a case option, beside the present coil check): the exit profile of the case pass is wound lane by lane, the tension shared by a re-derived strain allocation between lanes, with elastic-perfectly plastic laps; perfectly registered lanes, no axial stress, the case-pass profile constant along the coil, plastic thinning and creep left out. Where a new layer's strain is taken (mid layer, the specification, or layer top, the planner's prototype) is an analyst choice. Nothing in the tally reads it; the length difference after unwinding is an additional profile. The other allocation point is run beside the chosen one: a lane whose yield verdict differs reads "not decided: depends on the allocation point", and a lane within 5 % of the yield stress without yielding reads "close to yield, not decided" (an analyst choice). | For one lane 0.1 µm thicker the coil takes up 0.77, 0.12, 0.07 or 0.02 of laps × thickness difference with a stiff, a hundred times softer or two assumed pressure-dependent stacks; a lane 1 µm thicker yields the strip by about 400 laps with every stack but the softest, where the two allocation points disagree on whether it yields at all (peak 158 against 165 MPa). | `COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION`, `WINDING_LANE_YIELDS`, `WINDING_LANE_SLACK`, `WINDING_DISAGREES_WITH_LINEAR_RIDGE_CRITERION`; `width.coil_winding` | a press test of the stack; a measured coil diameter profile across the width (G9) | limitation |
+| L-COIL-12 | An ironing roll adds a wound-in tension through a traction coefficient that is an input; how much air the nip squeezes out is not known (no nip film formula is in the reports), so the winding is computed for two bounds: the nip removes all the air, and it removes none (the full entrained film in every lap). | The winding results lie between the two bounds; the softer, air-filled bound gives lower stack pressures. | `AIR_CASES_BRACKET_THE_NIP_EFFECT`, `WOUND_IN_TENSION_CAPPED_AT_YIELD`; `width.coil_winding.air_cases`, `nip` | a coil diameter profile across the width, or a measured air content of the wound coil; a nip film model (G10) | limitation |
 
 ### 2.9 Mill dynamics and chatter
 
@@ -253,6 +254,12 @@ These are the results whose answer, not only whose size, turns on something nobo
   lane 1 µm thicker yields by about 400 laps except with the softest stack, so whether a coil
   ridge yields the strip is not decided by the model. A press test on a stack
   of the plant's foil decides it.
+- **Whether a coil is above a published coil limit** (L-COIL-07): the coil estimate starts
+  from the modelled strip exit temperature (an upper bound) and cools with a supplied surface
+  coefficient and gap between laps, neither measured; the radial cooling time changes about
+  twentyfold between an oil gap and an air gap.
+- **How much air an ironing roll removes** (L-COIL-12): unknown; the winding is given for the
+  two bounds.
 - **The fitted step-test constant** (L-LOOP-07, L-HEAT-09): it grows with the test length, so it
   says nothing about the plant until the plant's test length and display filter are known.
 
@@ -338,6 +345,10 @@ Not caught by the search:
 | `ALLOCATION_BASIS` | rule | winding by lanes | the re-derived strain allocation between lanes (relaxation radius) | L-COIL-11 |
 | `allocation_radius` | mid layer (prototype: layer top) | winding by lanes | where a new layer's strain is taken | up to 17 % on the factor of the softest stack; decides whether a 1 µm lane yields there (L-COIL-11) |
 | `CW_DEFAULT_LANE_WIDTH_M` | 50 mm (else the shapemeter zone width) | winding by lanes | lane width | not reported |
+| `CW_CLOSE_TO_YIELD_FRACTION` | 5 % | winding by lanes | how close to yield a lane must come to read "close to yield, not decided" | the verdict wording only (L-COIL-11) |
+| `AIR_CONDUCTIVITY_W_MK` | 0.026 W/mK (from memory) | coil temperature | air in the gap between laps | the radial conductivity (L-COIL-07) |
+| cooling grid | 40 cells, 400 equal steps | coil temperature | discretisation of the two 1-D cooling solutions | numerical |
+| wound-in tension cap | 1e-6 below yield | ironing roll | the allocation needs a mean below yield | L-COIL-12 |
 | `AIR_VISCOSITY_PA_S` | 1.8e-5 Pa s (from memory) | air film | air viscosity | L-COIL-10 |
 | air gap in the stiffness only | rule | winding model | whether the gap adds to the stack radius | not reported |
 | `DEFAULT_REPORTING_THRESHOLD_I_UNITS` | 2 I-units | strip shape | the reporting onset of a band | L-SHAPE-05 |
@@ -496,7 +507,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | gap | what is not modelled | phase |
 |---|---|---|
 | A7 | Barrel ends, necks, backup-roll contact, axial mechanical coupling of the roll, the expansion factor. | 3 |
-| A8 | Coil temperature after winding, coil cooling, creep in the coil. | 2 |
 | B5 | Particles and pinholes. | 3 |
 | B6 | Elastic data and yield for the strip's elastic zones. | 3 |
 | B7 | Recovery of the foil in the coil after rolling. | 3 |
@@ -509,7 +519,6 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | G1 | The roll stack: deflection, roll-to-roll contact, bending, tilt, shifting, ground camber. | 3 |
 | G2 | The closed-gap (roll-kiss) shape path for foil. | 3 |
 | G7 | Thermal camber at the strip edge and edge actuators. | 3 |
-| G10 | Air entrainment and the ironing roll. | 2 |
 | G11 | A computed lateral stress in the spans. | 2 |
 | G14 | Downstream steps: slitting, separating, annealing. | 3 |
 | G15 | Edge drop. | 3 |
@@ -532,6 +541,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | A4 | Feedback of the surface cycle to the roll temperature, stripes and shape; axial conduction in the layer; backup contact, wipers, carry-over. |
 | A5 | Re-reading the spray source; flow scaling of the coefficient, a jet-zone entry and a tapered fan; the basis question. |
 | A6 | The plant's step-test protocol; a measured coupling and inlet weight; the per-revolution layer in the test. |
+| A8 | Creep of the hoop stress in the coil, recovery of the foil, the strip temperature loss between roll gap and coil, a measured gap between laps. |
 | A9 | A pressure law that carries an oil from inlet to roll-gap pressure; limiting shear stress data. |
 | A10 | An oil-mist or vapour model; a coil temperature model. |
 | B1 | Flow-stress data at rolling rates; the net of rate and temperature at rolling conditions. |
@@ -546,6 +556,7 @@ packages done so far. Checked against section 11 (implementation status) of the 
 | G6 | A computed strip temperature; a vendor's temperature compensation. |
 | G8 | Published roll time constants to compare the model's own with. |
 | G9 | A measured radial stack law for oily aluminium foil; axial stress; a spool model; V-buckle and telescoping margins; creep in the coil. |
+| G10 | A nip film formula; side leakage and roughness venting; a measured traction coefficient. |
 | G12 | An onset condition for tension lines; air film and winding model. |
 | G13 | Roll-bending modulation of the barrel position; wear growth. |
 | G16 | The other strip-shape benchmark cases; an uncertainty statement for the chain. |
@@ -582,6 +593,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | flag | what it says | register row |
 |---|---|---|
 | `AGC_CHATTER_INTERACTION_DEPENDS_ON_LOOP_ROLL_OFF` | The effect of gauge control on chatter depends on a simple control-loop model. | L-DYN-05 |
+| `AIR_CASES_BRACKET_THE_NIP_EFFECT` | How much air the ironing roll squeezes out is not known; the page shows the coil with no air and with the full air film as the two limits. | L-COIL-12 |
 | `BITE_DERIVATION_FAILED_CHATTER_NOT_ASSESSABLE` | No roll-gap result, so the chatter checks could not be made. | L-BITE-13, L-DATA-10 |
 | `BITE_FROM_EXPERIMENTAL_MATTRESS_MODEL` | The roll-gap numbers come from the experimental foil model. | L-BITE-02 |
 | `BITE_FROM_REDUCED_HALF_SPACE_MODEL` | The roll-gap numbers come from the half-space foil model, a reduced form of a published model that has not been checked on a mill. | L-BITE-05 |
@@ -601,7 +613,9 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `CIRCULAR_FLATTENING_ASSUMED_NOT_VALIDATED` | The sheet roll-gap model assumes the rolls flatten into a circle, which is not validated. | L-BITE-01 |
 | `CIRCUMFERENTIAL_MEAN_COEFFICIENT_BIASED` | With the sprays on one arc the averaged cooling of the roll model differs by more than 5 % from the cooling the surface really gets. | L-HEAT-07 |
 | `CLOSED_GAP_ROLLING_LIKELY_ROLL_KISSING_NOT_MODELLED` | At this gauge the work rolls may touch beside the strip (closed-gap rolling), which the tool does not model; it assumes an open gap. | L-BITE-15 |
+| `COIL_COOLING_STRESS_REACHES_YIELD` | In this estimate a hotter lane would be stretched to yield when the coil cools. | L-COIL-07 |
 | `COIL_WINDING_MODEL_REPORTED_BESIDE_LINEAR_CRITERION` | Beside the standard coil check, the page shows the strip wound into the coil lane by lane with the stack stiffness you entered; the shortlist uses the standard check. | L-COIL-11 |
+| `COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND` | The coil temperature starts from the modelled strip temperature leaving the roll gap, which is an upper bound: the strip cools a little before it reaches the coil. | L-COIL-07 |
 | `COLD_START_BY_FRICTION_CONTINUATION` | The half-space model reached the entered friction from a lower friction, because the simpler foil model could not start at it. | L-BITE-11 |
 | `COMPLIANCE_ONLY_LEVEL_NOT_DEFINED_CHANGE_REACHES_GAUGE` | One comparison level of the flatness model is not defined for this soft strip. | L-SHAPE-02 |
 | `CONTACT_END_ZONES_ADDED_TO_SPEC_EQUATIONS` | The foil roll-gap model adds contact end zones to its published equations. | L-BITE-02 |
@@ -614,6 +628,7 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `DERIVED_BY_HALF_SPACE_FOIL_MODEL` | A roll-gap result was computed by the half-space foil model. | L-BITE-05 |
 | `DOUBLED_FINAL_PASS_NOT_MODELLED` | The thinnest pass is rolled doubled (two sheets), but the tool models one sheet. | L-BITE-16 |
 | `DUPLICATE_BAND_POSITIONS_MERGED` | Some band positions were closer than 1 mm and were merged into one band. | L-DATA-11 |
+| `ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS` | The air film the strip can carry into the coil (an upper estimate) is thicker than the strip itself at the outer wraps. | L-COIL-10 |
 | `EXIT_GAUGE_BELOW_20_UM_EXTENDED_MATTRESS_DOMAIN` | The exit gauge is below 20 µm, outside the range where the foil roll-gap model was probed; its numbers are unvalidated. | L-BITE-12 |
 | `EXIT_GAUGE_BELOW_BITE_MODEL_FLOOR` | The exit gauge is below 8 µm, where no roll-gap model runs. | L-BITE-13 |
 | `EXPERIMENTAL_MATTRESS_FOIL_MODEL` | At this foil gauge the roll gap comes from an experimental model with no benchmark; its numbers are order of magnitude only. | L-BITE-02 |
@@ -734,6 +749,8 @@ Every flag of the result, with its plain sentence and the register row it belong
 | `WINDING_INNER_LAPS_IN_HOOP_COMPRESSION` | In the lane-by-lane winding the inner laps end in compression along their length. | L-COIL-09 |
 | `WINDING_LANE_SLACK` | In the lane-by-lane winding at least one lane is wound without tension (a long lane). | L-COIL-11 |
 | `WINDING_LANE_YIELDS` | In the lane-by-lane winding at least one lane is stretched beyond yield in the coil. | L-COIL-11 |
+| `WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT` | For at least one lane the lane-by-lane winding says "yields" with one numerical choice and "does not yield" with the other; that lane is not decided. | L-COIL-11 |
+| `WOUND_IN_TENSION_CAPPED_AT_YIELD` | With the ironing roll the tension wound into the coil would reach the yield stress; it was capped there. | L-COIL-12 |
 | `ZERO_OIL_SUPPLY_UNDER_BLOCKED_NOZZLE_NO_SPREADING_MODEL` | Under a fully blocked nozzle no oil arrives in this estimate; oil that spreads from the neighbours is not counted. | L-FRIC-09 |
 | `ZONE_STEP_TEST_EMULATED` | The page shows which response time a test that switches one spray zone would give on this model, with and without the strip temperature and oil film effects, beside the published 20 s; a match does not show what your mill measured. | L-LOOP-07, L-HEAT-09 |
 | `ZONE_STRUCTURE_AT_REGIME_BOUNDARY` | The pass sits between the sheet and the foil range; the half-space model used the sheet-type contact and reports the other one beside it. | L-BITE-08 |

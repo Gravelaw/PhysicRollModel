@@ -1146,7 +1146,7 @@ checked: no flash point given"; the catalogue's flash-point and fire statements 
 friction, a weak coolant zone or flow, oil supply temperature, speed) are shown either way.
 A modelled strip exit temperature is an indicator, not a coil temperature (EXIT_IS_NOT_COIL);
 there is no oil-mist or vapour model. Hand check: flash point 80 C against a 45 C oil inlet
-gives a margin of 35.0 K.
+gives a margin of 35.0 K. Since SPEC19 package 11 an opt-in `width_model.coil_thermal` estimates the coil temperature after winding (an upper bound at winding: it starts from the modelled strip exit temperature) and its time to fall below each published coil limit, beside these verdicts, which are unchanged (section 7.15).
 
 **Roll wear and surface finish (literature, not modelled).** More aluminium fines with higher oil
 temperature, speed, reduction and roll roughness [PT-T15]; adsorbed films desorb as temperature
@@ -1364,6 +1364,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
+| `width_model.coil_winding.ironing_roll` (`load_per_width_n_m`, `traction_coefficient`), `.air` (`mode`, `viscosity_pa_s`); `width_model.deflector_roll_roughness_rq_m`; `width_model.coil_thermal` (`surface_htc_w_m2k`, `ambient_temperature_k`, `strip_conductivity_w_mk`, `gap_medium`, `interlayer_gap_m`, `hold_times_s`, `provenance`) | the ironing roll and air in the coil (the two bounds of the nip effect), traction on the deflector roll, and the coil temperature after winding against the published coil limits (section 7.15) | N/m, –, m, W/m2K, K, W/mK, m, s | ironing-roll load from the coiler set-up; coil surface temperature against time with a contact probe after winding; the traction coefficient and the surface coefficient are assumptions unless measured |
 | `width_model.coil_winding` (`radial_law` required, `provenance` required; `core_stiffness_pa`, `lane_width_m`, `layers`, `tension_taper`, `thickness_profile`, `include_length_profile`, `air_gap_m`, `allocation_radius`) | the coil wound lane by lane beside the present criterion (section 7.15) | Pa, m, – | the stack law from a press test on 50 to 200 laps of the oily foil (pressure against strain); winding tension and taper from the coiler set-up; no stack value for aluminium foil is published |
 | `width_model.spray_header.footprint_profile` (`"tophat"` default / `"parabolic"`), `footprint_width_m` (null = geometric), `htc_flow_exponent` (0.5 to 1.0, default 1) | SPEC22 opt-in header options: the fan profile (parabolic is a stand-in, no measured profile is published), the pattern width along the barrel as built, how cooling follows flow (section 7.1) | –, m, – | nozzle data sheet: the catalogue spray width at your standoff; leave the profile and the exponent at their defaults unless a pressure-film print or a measurement says otherwise |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
@@ -3244,6 +3245,60 @@ few hundred laps with every stack but the softest; with the softest the two allo
 disagree on whether it yields at all. The answer turns on the stack stiffness: a press test on a
 stack of the oily foil decides it.
 
+**Verdict of a lane (decision after package 10).** The other allocation point is run beside
+the chosen one (`allocation_sensitivity`: per lane the effective compaction factor and the yield
+verdict under both). A lane whose verdict differs reads "not decided: depends on the allocation
+point" (flag `WINDING_YIELD_VERDICT_DEPENDS_ON_ALLOCATION_POINT`); a lane whose peak stress is
+within 5 % of the yield stress without yielding reads "close to yield, not decided"
+(`CW_CLOSE_TO_YIELD_FRACTION`, an analyst choice [D]). The softest stack's 1 um lane of the table
+above (158.4 against 165 MPa mid layer, yielding at the layer top) is such a lane. Cost: the
+winding runs twice (about 1 s for 24 lanes of 150 layers).
+
+**Third part (SPEC19 package 11): ironing roll, air in the coil, coil temperature.**
+`width_model.coil_winding` takes `ironing_roll` (`load_per_width_n_m`, `traction_coefficient`):
+the wound-in tension `T_w + mu_n*N/h` [gap row G10, from SS-S49 EX; no formula for `mu_n`, it is
+an input], capped just below yield (`WOUND_IN_TENSION_CAPPED_AT_YIELD`), and `air` (`mode`
+`entrained_film`, `none` or `both`; `viscosity_pa_s`). With `entrained_film` each layer carries
+the foil-bearing film at its radius at twice the exit speed and the winding tension per width
+(upper bound); its gap closes under pressure in the stack (first part). NO nip film formula is in
+the reports: with an ironing roll and no mode the section is computed for the two BOUNDS, "the nip
+removes all the air" (`none`, the main result) and "the nip removes none of the air" (the full
+entrained film), and `air_cases` gives both (`AIR_CASES_BRACKET_THE_NIP_EFFECT`); a coil diameter
+profile across the width, or a measured air content of the wound coil, would narrow them. The
+section also gives `air_entrainment` (film at the core and the outer radius, over the strip
+thickness; `ENTRAINED_AIR_FILM_EXCEEDS_STRIP_THICKNESS`; 20.6 and 82.4 um at the battery-foil
+coil, 13 m/s and 900 N/m, 0.69 to 2.7 strip thicknesses) and `deflector_roll` (film on
+`deflector_roll_radius_m`; with the strip roughness and the new
+`width_model.deflector_roll_roughness_rq_m` the traction is `LIKELY_LOST` above three times the
+combined roughness [SS-S58 EX/AB], else `KEPT`; without them `NOT_ASSESSABLE`).
+
+Coil temperature: `width_model.coil_thermal` (`surface_htc_w_m2k`, `ambient_temperature_k`,
+`strip_conductivity_w_mk`, `gap_medium` oil / air, `interlayer_gap_m`, `hold_times_s`,
+`provenance`; no defaults for the coefficient, gap or conductivity). The coil starts at the
+modelled strip exit temperature of the case pass (`process.heating`, from the heat partition):
+an UPPER BOUND at winding (no loss between roll gap and coil;
+`COIL_WINDING_TEMPERATURE_TAKEN_AS_STRIP_EXIT_UPPER_BOUND`); per lane the lane mean of
+`width.local_state.strip_exit_temperature_k` when package 1 ran. `k_r = (h + g)/(h/k_s + g/k_g)`
+(series), `k_z = k_s*h/(h + g)` (parallel), `rho*c` of aluminium times `h/(h + g)` [D, SPEC19;
+`k_r << k_z`: gap A8, TM-LA33 EX, TM-LA32 EX]; the gap is supplied, or the mean gap under pressure
+of the winding section when it ran with air (it then couples to the wound-roll model; with the
+two bounds, the entrained-film bound's gap). Cooling of a uniformly hot hollow cylinder (core side
+adiabatic, convection on the outer surface and both end faces) as the product of a radial and an
+axial 1-D solution, exact for this start and these conditions [D, classical]; backward Euler on 40
+cells and 400 equal steps to the last hold time. Rows per hold time: hottest point, coil mean,
+outer surface at mid width; `limit_rows` against the published coil limits read from
+`thermal_check.coil_limits_c` (75 C entering the final pass, 80 C leaving it, 90 C elongation
+decay, with their sources): above or below at winding and the time for the hottest point to fall
+below. `thermal_check` gains `coil_temperature_beside` with these rows; its verdicts, which
+compare the strip exit temperature, are unchanged. Stress between lanes on cooling to a common
+temperature: `E*alpha*(T_j - mean T)` (1.652 MPa per K), added to the lane's hoop stress of the
+winding section and compared with yield (`COIL_COOLING_STRESS_REACHES_YIELD`), an upper bound.
+Worked numbers (30 um, `k_s` 200 W/mK): oil gap 0.5 um, `k_r` 7.63 W/mK; air gap 2 um, 0.415 W/mK.
+Coil 0.15 -> 0.6 m, 1.2 m wide, 8 W/m2K, oil: radial time scale 17.6 h, axial 1.22 h, lumped
+15.9 h, Biot 0.47 radial and 0.024 axial (the planner's 17.9 h and 16.2 h leave the gap share out
+of `rho*c`). Not modelled: heat from the next laps while winding, radiation beyond the
+coefficient, creep of the hoop stress and recovery of the foil properties in the coil (A8 stress
+part and B7, Phase 3). Cost below 0.05 s; the quick profile is unchanged.
 
 ## 8. Process models
 
@@ -4547,6 +4602,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
+| ironing roll, air, coil temperature / `tests/test_wound_roll.py` (`CoilTemperature`), `tests/test_band_coil_temperature.py`; allocation sensitivity / `tests/test_band_coil_winding.py` | series and parallel conductivities (7.63 and 0.415 W/mK); slab alone and cylinder alone against their lumped limit at small Biot number (2 %); the product against an independent 2-D solve (1 %); monotone cooling; nip tension and its cap; the demo coil's entrained film; a per-layer air gap softens the stack; in the engine the two air bounds (the entrained case softer), the coil temperature with and without package 1, limit rows with their sources, absent keys and `thermal_check` unchanged, report, validation; the softest stack's 1 um lane not decided, the verdict rules |
 | winding by lanes / `tests/test_band_coil_winding.py` | allocation: uniform lanes get the mean (1e-9), force balance (1e-9), a longer lane less, slack, yield cap and plastic strain; a uniform profile reproduces the single-lane model; the planner's table with the layer-top allocation; the specification's mid-layer values pinned; orderings (factor below 1, tension stops rising for soft stacks, softer stack smaller factor); the engine section beside the linear criterion; absent key changes nothing; report; validation; flag sentences |
 | winding model / `tests/test_wound_roll.py` | the closed form (radial stress within 0.5 % at 100 layers and 0.12 % at 400 at four radii; first-layer hoop within 2 and 0.5 MPa); first-order convergence (error ratio 200 -> 400 layers 1.7-2.3); outer and core conditions of the increment (1e-9); a soft core lowers the core pressure; a softer stack lowers the inner pressure and the lowest hoop stress (5.779 MPa, -2.98 MPa at `E_t/100`); the Pfeiffer modulus rises with pressure; air layer (no gap equals no air, a gap softens, it closes under pressure); taper; the film constant 0.6430 and the two films (1e-3); the stack law required with the press-test message; rejections; JSON safety |
 | spray header options / `tests/test_spray_header_options.py` | the defaults give the same floats as the old weight formula for both v2 demos' headers (equality); the parabola integrates to the top hat's total and a healthy parabolic header averages to 1 away from the ends; one blocked nozzle at 1.43 pitches: deficit peak 1.05 and half-width 1.0 pitch against 0.70 and 1.43 for the top hat, 0.47 against 0.31 at 3.21 pitches (2 %); `s^n` 0.49-0.62 for s = 0.45; validation (offset 70 degrees, profile, width, exponent); one width property for the layout, the coverage check and the thermal model; the realistic-header artifact equals a regeneration and its blocked nozzle is deeper and narrower than the battery-foil demo's |
