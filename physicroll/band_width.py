@@ -3998,7 +3998,14 @@ BF_STATUS = 'UNVALIDATED_LINEAR_BUCKLING_BESIDE_THE_SINE_MODE'
 BF_FLAG_BESIDE = 'BUCKLING_FE_REPORTED_BESIDE_SINE_MODE'
 BF_FLAG_MILL = 'BUCKLING_FE_IN_MILL_STATE_DIFFERS_FROM_SINE_MODE'
 BF_FLAG_RELEASED = 'BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE'
-BF_TOP_FLAGS = (BF_FLAG_BESIDE, BF_FLAG_MILL, BF_FLAG_RELEASED)
+BF_FLAG_TABLE = 'DEAD_LOAD_KEEPS_REPORTED_BAND_FLAT_ON_TABLE'
+BF_TOP_FLAGS = (BF_FLAG_BESIDE, BF_FLAG_MILL, BF_FLAG_RELEASED, BF_FLAG_TABLE)
+BF_NOT_IN_TALLY = ('The wave heights, the saturated stress and the table states of this section '
+                   'do NOT change any band state, onset, gauge-trend row, evidence item or score: '
+                   'the tally uses the sine-mode states.')
+BF_FLAT_ON_TABLE_NOTE = ('lies flat on a table under its own weight in this estimate; the length '
+                         'difference is still there and may show when the sheet is hung, slit '
+                         'or levelled')
 RELEASED_SAMPLE_LENGTH_FACTOR = 1.0   # [D, analyst choice: a square sample] longest half-wave
 BF_MAX_EVENTS = 4                     # events with a peak shape searched (run-time budget)
 BF_USED_BY_EVIDENCE = ('the present (sine-mode) band states: state and '
@@ -4006,7 +4013,15 @@ BF_USED_BY_EVIDENCE = ('the present (sine-mode) band states: state and '
                        'state, onset, gauge-trend row or score')
 BF_LIMITATIONS = (
     'Linear bifurcation of a flat, infinitely long strip with free edges: critical load, '
-    'wavelength and mode only; no wave height and no stress after buckling (SPEC19 package 7).',
+    'wavelength and mode.',
+    'Wave height (SPEC19 package 7): a one-mode Ritz estimate on the frozen critical mode with a '
+    'fibre membrane model (no in-plane shear, no lateral stress), softer than a plate: an UPPER '
+    'ESTIMATE, of the order of what that mode gives, not a height a person would measure on a '
+    'sample. The saturated stress (stress of a buckled band clipped near minus its critical '
+    'value) comes from the same estimate.',
+    'On a table: a gravity criterion on a rigid flat table (one-sided dead load, not an elastic '
+    'foundation), weightless mode shape at each wavelength, aluminium density 2700 kg/m3 from '
+    'memory, no friction, adhesion or finite sample length.',
     'One mode per profile and state: the most critical one. When it buckles, other bands are '
     'not decided by this section.',
     'The stress profile is the modelled far-field profile of the case pass (linear exit-tension '
@@ -4038,7 +4053,7 @@ def _bf_state(z, iu, sp, tension, longest, label):
     r = sb.critical_mode(z, s, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
                          poisson_ratio=sp['strip_poisson_ratio'], mean_tension_pa=tension,
                          edges=('free', 'free'), half_wave_range_m=(4 * spacing, longest))
-    out = {'mean_tension_pa': tension, 'status': r['status'],
+    out = {'support': SUPPORT_WORDS[label], 'mean_tension_pa': tension, 'status': r['status'],
            'critical_multiplier': r['critical_multiplier'], 'utilisation': r['utilisation'],
            'state': ('NO_COMPRESSION' if r['critical_multiplier'] is None else
                      'BUCKLES' if r['utilisation'] >= 1.0 else 'FLAT'),
@@ -4058,10 +4073,67 @@ def _bf_state(z, iu, sp, tension, longest, label):
         'half_wave_over_mode_width': r['half_wave_over_mode_width'],
         'mode_localisation': ('LOCAL' if r['mode_width_10_percent_m'] < 0.5 * (z[-1] - z[0])
                               else 'WHOLE_SHEET')})
+    # SPEC19 package 7: one-mode Ritz amplitude and saturated stress (an upper estimate)
+    pb = sb.post_buckling(z, s, r, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                          mean_tension_pa=tension)
+    ip = max(range(len(iu)), key=lambda i: iu[i])
+    whole = 'whole-sheet ' if out['mode_localisation'] == 'WHOLE_SHEET' else ''
+    out['post_buckling'] = {
+        'state': pb['state'], 'amplitude_m': pb['amplitude_m'],
+        'peak_to_valley_m': pb['peak_to_valley_m'], 'wave_i_units': pb.get('wave_i_units'),
+        'reading_at_profile_peak_i_units': pb['saturated_i_units'][ip],
+        'linear_reading_at_profile_peak_i_units': iu[ip],
+        'basis': pb['basis'],
+        'wording': (f'a wave of the order of {pb["peak_to_valley_m"] * 1e3:.2g} mm peak to '
+                    f'valley in the {whole}mode of half-wave {r["half_wavelength_m"] * 1e3:.3g} mm '
+                    f'({out["support"]}); an upper estimate, not a measured height'
+                    if pb['state'] == 'BUCKLED' else 'no wave: the profile is below its '
+                    'critical state')}
+    if label == 'in_mill' and pb['state'] == 'BUCKLED':
+        out['post_buckling']['z_m'] = list(z)
+        out['post_buckling']['saturated_i_units'] = pb['saturated_i_units']
+        out['post_buckling']['saturated_stress_pa'] = pb['saturated_stress_pa']
     return out
 
 
-def _bf_band_rows(bands, mill, rel):
+SUPPORT_WORDS = {'in_mill': 'in the mill under the exit tension, free strip edges',
+                 'after_release': 'hanging free after release, without tension or weight',
+                 'on_table': 'lying on a rigid flat table under its own weight'}
+
+
+def _bf_table(z, iu, sp):
+    from . import strip_buckling as sb
+    E = sp['strip_youngs_modulus_pa']
+    s = [-E * 1e-5 * v for v in iu]
+    d = sb.dead_load_lift(z, s, thickness_m=sp['exit_thickness_m'], youngs_modulus_pa=E,
+                          poisson_ratio=sp['strip_poisson_ratio'],
+                          density_kg_m3=sp.get('strip_density_kg_m3'))
+    out = {'support': SUPPORT_WORDS['on_table'], 'state': d['state'],
+           'scale_to_lift': d['scale_to_lift'],
+           'lift_limit_peak_i_units': (None if d['scale_to_lift'] is None
+                                       else d['scale_to_lift'] * max(iu)),
+           'half_wavelength_m': d.get('half_wavelength_m'),
+           'peak_to_valley_on_table_m': d['peak_to_valley_on_table_m'],
+           'weightless_peak_to_valley_m': d.get('weightless_peak_to_valley_m'),
+           'mode_peak_position_m': d.get('mode_peak_position_m'),
+           'mode_width_10_percent_m': d.get('mode_width_10_percent_m'),
+           'mode_localisation': (None if d.get('mode_width_10_percent_m') is None else
+                                 'LOCAL' if d['mode_width_10_percent_m'] < 0.5 * (z[-1] - z[0])
+                                 else 'WHOLE_SHEET'),
+           'at_search_limit': d['at_search_limit'], 'density_kg_m3': d['density_kg_m3'],
+           'basis': d['basis'], 'flags': d['flags']}
+    if d['state'] == 'LIFTS':
+        out['wording'] = (f'lifts above about {out["lift_limit_peak_i_units"]:.2g} I-units of '
+                          f'profile peak; a wave of the order of '
+                          f'{d["peak_to_valley_on_table_m"] * 1e3:.2g} mm peak to valley in the '
+                          f'mode of half-wave {d["half_wavelength_m"] * 1e3:.3g} mm on the table; '
+                          'an upper estimate, not a measured height')
+    else:
+        out['wording'] = ('the whole profile ' + BF_FLAT_ON_TABLE_NOTE)
+    return out
+
+
+def _bf_band_rows(bands, mill, rel, table=None):
     """Per present band: its sine-mode states beside what the wavelength search says."""
     rows = []
     for b in bands:
@@ -4093,6 +4165,29 @@ def _bf_band_rows(bands, mill, rel):
                     f'the wavelength search says {fe.lower().replace("_", " ")}, the sine mode '
                     f'says {present.lower().replace("_", " ")}; the evidence uses the sine '
                     'mode')
+            pb = st.get('post_buckling') or {}
+            if fe == 'BUCKLES' and pb.get('state') == 'BUCKLED':
+                row[key]['wave'] = pb['wording']
+        if table is not None:
+            governs = (table.get('mode_peak_position_m') is not None
+                       and b['start_m'] <= table['mode_peak_position_m'] <= b['end_m'])
+            if table['state'] == 'LIES_FLAT':
+                ts = 'LIES_FLAT'
+            elif table.get('mode_localisation') == 'WHOLE_SHEET':
+                ts = 'WHOLE_SHEET_MODE_NOT_A_BAND'
+            elif governs:
+                ts = 'LIFTS'
+            else:
+                ts = 'NOT_DECIDED_ONE_MODE'
+            row['on_table'] = {'table_state': ts, 'mode_peaks_in_this_band': governs}
+            if ts == 'LIFTS':
+                row['on_table']['wave'] = table['wording']
+            if ts == 'LIES_FLAT' and b['state_after_tension_release'] == \
+                    'MANIFEST_AFTER_TENSION_RELEASE':
+                row['on_table']['note'] = ('reported visible after tension release by the sine '
+                                           'mode, but ' + BF_FLAT_ON_TABLE_NOTE
+                                           + '; the tally keeps the sine-mode state')
+                row['on_table']['keeps_reported_band_flat'] = True
         rows.append(row)
     return rows
 
@@ -4100,12 +4195,14 @@ def _bf_band_rows(bands, mill, rel):
 def _bf_one(prof, sp, label):
     z, iu = _bf_profile(prof)
     width = z[-1] - z[0]
-    mill = _bf_state(z, iu, sp, sp['mean_tension_pa'], 2 * width, label)
-    rel = _bf_state(z, iu, sp, 0.0, RELEASED_SAMPLE_LENGTH_FACTOR * width, label)
+    mill = _bf_state(z, iu, sp, sp['mean_tension_pa'], 2 * width, 'in_mill')
+    rel = _bf_state(z, iu, sp, 0.0, RELEASED_SAMPLE_LENGTH_FACTOR * width, 'after_release')
+    table = _bf_table(z, iu, sp)
     bands = (prof.get('levels') or {}).get('with_feedback', {}).get('bands') or []
     out = {'label': label, 'nodes': len(z), 'node_spacing_m': z[1] - z[0],
            'profile_peak_loose_i_units': max(iu), 'profile_peak_tight_i_units': min(iu),
-           'in_mill': mill, 'after_release': rel, 'bands': _bf_band_rows(bands, mill, rel),
+           'in_mill': mill, 'after_release': rel, 'on_table': table,
+           'bands': _bf_band_rows(bands, mill, rel, table),
            'sine_mode_released_global_status': prof.get('released_global_status')}
     g = prof.get('released_global_status')
     if rel.get('mode_localisation') == 'WHOLE_SHEET' and g is not None:
@@ -4149,9 +4246,13 @@ def buckling_fe_section(shape, events, sp, option):
         if p.get('after_release_whole_sheet_agrees_with_sine_mode') is False and \
                 BF_FLAG_RELEASED not in flags:
             flags.append(BF_FLAG_RELEASED)
-        for st in (p['in_mill'], p['after_release']):
+            if (row.get('on_table') or {}).get('keeps_reported_band_flat') and \
+                    BF_FLAG_TABLE not in flags:
+                flags.append(BF_FLAG_TABLE)
+        for st in (p['in_mill'], p['after_release'], p['on_table']):
             flags += [f for f in st['flags'] if f not in flags]
     out = {'status': BF_STATUS, 'used_by_the_evidence': BF_USED_BY_EVIDENCE,
+           'not_in_the_tally': BF_NOT_IN_TALLY,
            'profiles': profiles,
            'basis': {'model': 'strip_buckling.critical_mode: ' + _sb_basis(),
                      'stress_profile': 'width.shape i_units_linear_feedback (the modelled '
@@ -4161,7 +4262,11 @@ def buckling_fe_section(shape, events, sp, option):
                      'in_mill': 'the exit tension of the case pass held fixed; half-waves '
                                 'from 4 node spacings to twice the strip width',
                      'after_release': 'tension zero; half-waves from 4 node spacings to the '
-                                      'strip width [D, analyst choice: a square sample]'},
+                                      'strip width [D, analyst choice: a square sample]',
+                     'wave_height': 'strip_buckling.post_buckling: ' + _sb_attr('AMPLITUDE_BASIS'),
+                     'on_table': 'strip_buckling.dead_load_lift: ' + _sb_attr('TABLE_BASIS')
+                                 + '; half-waves from 1/40 to 4 times the strip width, 24 '
+                                   'wavenumbers'},
            'flags': flags, 'limitations': list(BF_LIMITATIONS)}
     if skipped:
         out['events_not_searched'] = skipped
@@ -4171,6 +4276,11 @@ def buckling_fe_section(shape, events, sp, option):
 def _sb_basis():
     from . import strip_buckling as sb
     return sb.BASIS
+
+
+def _sb_attr(name):
+    from . import strip_buckling as sb
+    return getattr(sb, name)
 
 
 def not_assessable(reason):

@@ -579,7 +579,12 @@ What the model does make easier at thinner gauge:
   micrometres only because a stripe gives fewer I-units per micrometre at thinner gauge; read
   them as "every reported band is visible on the coil, at the slitter or on the table", not as
   a falling trend. (At sheet gauge the same onsets fell with gauge, section 7.3; across the
-  foil passes they do not.)
+  foil passes they do not.) On a table the dead load changes this at sheet gauge and not at
+  foil gauge (SPEC19 finding 4; the opt-in estimate of section 7.13): with the demos' profiles
+  a band below about 2.2 I-units of peak lies flat on a table under its own weight for the
+  0.21 mm sheet demo, against about 0.75 I-units for the 30 um battery-foil profile, so at foil
+  gauge a reportable band (2 I-units) still lifts. "Lies flat on a table" is not "no defect":
+  the length difference is still there and may show when the sheet is hung or slit.
 - **The flatness dead band** half-width falls from 0.271 to 0.115 to 0.0428 to 0.0165 I-units
   at 30 um, 0.0118 at 25 um, 0.00639 at 18 um and 0.00301 at 12 um: a relative crown change
   that lateral flow absorbs in thicker strip shows as flatness in foil.
@@ -1347,7 +1352,7 @@ the result lists them under `mills.<kind>.keys_taken`). All values are SI units.
 | `model_options` (except `bite_response_override`) | bite model choice, bite-damping fraction, flattening limit, cells | – | analyst choices; keep the defaults unless you know why |
 | `tribology.friction_closure.model: "load_sharing_curve"`, `contact_friction`, `valley_model`, `contact_ratio_curve`, `valley_film_curve` | the second friction law (section 8.1); the contact friction is REQUIRED with it; the curves default to the published foil pass | – | contact friction from your measured force, torque or slip, or a strip-drawing test; no default |
 | `tribology.lubricant.viscosity_table`, `pressure_law`, `roelands_z`, `eyring_stress_pa`, `eyring_stress_pressure_coefficient`, `limiting_shear_stress_pa`, `limiting_shear_pressure_coefficient` | oil viscosity at several temperatures (list of `{"temperature_k", "viscosity_pa_s"}`); the pressure law (`barus` default, `roelands` option); the oil's Eyring and limiting shear stress (no defaults) | K, Pa s, Pa, – | oil supplier data sheet; the shear stresses only from oil tests (section 8.1) |
-| `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
+| `model_options.buckling_model: "sine_mode_and_fe"` | also compute buckling with a wavelength search, a one-mode wave height and the dead load on a table (section 7.13) beside the standard band states; default `"sine_mode"` (absent: no section) | – | slower by about a second; the standard states stay the ones the evidence uses |
 | `model_options.bite_model: "half_space"` / `"auto_half_space"`, `model_options.shear_cap_factor` | the reduced half-space foil model for every pass / where Hitchcock stops; the largest friction stress as a share of the shear strength (0 to 1, default 1, used only by that model) | – | use it to see how far the conclusions depend on the roll-bite model: run the case with the standard choice and with the half-space model and compare (section 3.3); it is not a better default |
 | `width_model.roll` | work-roll barrel length and thermal properties (conductivity, density, specific heat, expansion) | m, W/(m K), kg/m³, J/(kg K), 1/K | roll drawing and roll supplier |
 | `width_model.spray_header`, `coolant_temperature_k`, `roll_heat_fraction_per_roll`, `numerics`, `rolls_carrying_stripe`, `shape_disturbing_coefficient`, `heredity_coefficient`, `cooling_zone_pitch_m`, `strip_centre_m` | spray header and cooling zones of the roll thermal model, coolant temperature, heat share into each roll, numerics | m, W/(m² K), K, – | spray header drawing, coolant system data; flatness-controller zone map; the spray coefficient can be fitted to a roll temperature scan or camber with `--calibrate-spray` (section 7.1) |
@@ -2843,8 +2848,8 @@ diagnosis 17.1 s quick).
 the result gains `width.shape.buckling_fe` (absent otherwise; `"sine_mode"` gives a not-supplied
 section). The present band states (`state`, `state_after_tension_release`), onsets, gauge trend
 and every score are unchanged and stay the ones the evidence uses; the section says so in
-`used_by_the_evidence`. Post-buckling amplitude, saturated stress and dead load on a table are
-SPEC19 package 7 and are not built.
+`used_by_the_evidence` and `not_in_the_tally`. Since SPEC19 package 7 it also gives a wave
+height, the saturated stress profile and the dead load on a table (second part below).
 
 **Model** `[D, re-derived in SPEC19]`; the reports describe the method [SS-S15 EX, SS-S12 AB] and
 give no equations. A long strip with a longitudinal pre-stress `sigma(z) = sigma_T +
@@ -2921,6 +2926,61 @@ trend row or evidence item. Limits: linear bifurcation of a flat, infinitely lon
 mode; longitudinal pre-stress only (no lateral stress, no shear); elastic; the wavelength of a
 wave seen after buckling can differ from the critical one; no edge restraint "between simply
 supported and clamped" (the published one is not in the reports).
+
+**Second part (SPEC19 package 7): wave height, saturated stress, dead load on a table.** The gap
+row's Koiter expansion and its "elastic foundation for the table" are not in the reports; the
+planner replaced them by a ONE-MODE RITZ ESTIMATE and a GRAVITY CRITERION `[D, re-derived in
+SPEC19]`, and the result carries those labels.
+
+*Wave height.* Fibre membrane model: each fibre carries longitudinal stress only. A wave
+`w = a*f(z)*cos(k*x)` of the frozen critical mode lengthens a fibre by `k^2*a^2*f^2/4`, so at
+fixed tension `sigma(z; a) = sigma_T + sigma_res(z) + (E*k^2*a^2/4)*(f^2 - m)`, `m = Int f^2/W`.
+The energy per length `Pi(a) = -(t*k^2/4)*(N - R)*a^2 + (E*t*k^4*Phi/32)*a^4` (`N` the net
+compression the mode carries, `R` its value at buckling, `Phi = Int f^4 - (Int f^2)^2/W`) gives
+`a^2 = 4*(N - R)/(E*k^2*Phi)` above the critical state and 0 below; peak to valley `H = 2*a`.
+Self-check (`tests/test_strip_buckling.py`, to 1e-6): a top-hat mode over a band of compression
+`sigma_c` gives `(pi*H/(2*L_w))^2 = (sigma_c - sigma_cr)/(E*(1 - m))` (the I-unit wave formula
+for a narrow band) and `sigma = -sigma_cr` inside the band: the Counhaye rule [SS-S8 EX], here a
+consequence. The mode shape is frozen, the fibres are independent (no in-plane shear, no lateral
+stress, softer than a plate): the amplitude is an UPPER ESTIMATE, written "of the order of",
+with the mode it belongs to and the support (in the mill under tension; hanging free after
+release, weightless; on a table). It is not a height a person would measure on a sample.
+
+*Saturated stress* (interaction I12): the stress of the buckled band from the same estimate. For
+a steady profile that buckles in the mill, `measurement.shapemeter` gets one ADDITIONAL reading,
+`steady_saturated`; the existing readings are unchanged and nothing reads it. It is not fed
+into the thickness transfer (the bite is hardly changed by buckling [SS-S8 EX]).
+
+*Dead load on a rigid table.* The sheet can only lift: `w = a*|f|*(1 + cos(k*x))`. Gravity adds
+`g1*a`, `g1 = rho*g*t*Int |f|`, and the bending of the mean lift adds `R_s = 2*D*Int f''^2/(t*k^2)`.
+With `c2 = t*k^2*(N - R - R_s)/2` and `c4 = E*t*k^4*Phi/8`, `Pi_t(a) = -(c2/2)*a^2 + (c4/4)*a^4 +
+g1*a`; the sheet lifts when the lowest `Pi_t` is below the flat state, i.e. `N - R - R_s >=
+(2/(t*k^2))*(3*g1*sqrt(3*c4/2))^(2/3)`. The lift limit is the smallest scale of the profile at
+which some wavenumber lifts (24 wavenumbers, half-waves 1/40 to 4 times the strip width);
+height on the table: the largest root of `c4*a^3 - c2*a + g1 = 0`. A gravity criterion, not an
+elastic foundation; weightless mode shape at each wavenumber; aluminium 2700 kg/m3 [M, flag
+`DENSITY_FROM_MEMORY_DEFAULT`]; no friction, adhesion or finite sample length.
+
+Per band (one mode): the band the in-mill mode peaks in gets the wave height when it buckles;
+on a table the band the lifting mode peaks in "lifts", the others are "not decided (one mode)";
+when the profile lies flat every band does, and a band the sine mode calls visible after
+release is then flagged `DEAD_LOAD_KEEPS_REPORTED_BAND_FLAT_ON_TABLE` with "lies flat on a table
+under its own weight in this estimate; the length difference is still there". None of this
+changes a band state, onset, gauge-trend row, evidence item or score.
+
+| demo (committed profiles) | in the mill | released, weightless, half-wave up to the width | on a table |
+|---|---|---|---|
+| battery-foil (30 um, 40 MPa, peak 25.09) | multiplier 2.301, flat; no wave | whole-sheet mode at 1.19 m (search limit); of the order of 21 mm peak to valley; reading at the peak 17.3 instead of 25.1 I-units | lifts above about 0.75 I-units of peak (scale 0.0298, at the shortest half-wave searched, 30 mm); of the order of 0.72 mm on the table |
+| lengthwise (0.21 mm, 30 MPa, peak 50.59) | multiplier 0.898, buckles; half-wave 107 mm; of the order of 1.2 mm peak to valley (amplitude 0.584 mm); reading 43.6 instead of 50.6 I-units | whole-sheet mode at 1.49 m (search limit); of the order of 34 mm | lifts above about 2.2 I-units (scale 0.0435); half-wave 90 mm; of the order of 3 mm |
+
+Beside, for the lengthwise demo: the project's saturation step raises the same band to 147.5
+I-units with sine-mode utilisation of 1 or more (it calls it buckled); the wavelength search on
+the unsaturated profile has it just buckled (0.898) with a wave of the order of 1.2 mm. Both
+are printed. **Finding 4 (SPEC19), unsoftened: on a table the dead load does not hide a
+reportable foil band** (lift limit below 0.75 I-units at the battery-foil profile), while at
+sheet gauge a band below about 2.2 I-units lies flat. No amplitude or table measurement with its
+stress profile is in the reports (`SS-S14-TABLE` not encoded). Cost of the second part: about
+0.3 s per profile for the table scan (battery-foil section 1.3 s, lengthwise 2.6 s in all).
 
 ## 8. Process models
 
@@ -4223,7 +4283,7 @@ real mill.
 | local state across the width / `tests/test_band_local.py` | formulas 2-7 against their closed forms to 1e-9 on a hand profile (0, 1, 2.358 K), with the exponential law and a two-point viscosity table that reproduces it; the planner's numbers of section 7.11 (2 %, coupling 5 %) and the implementation's own pinned to 1e-4; the friction change equals the closure slope times the film-ratio change within 1 % for 0.1 K (placeholder and load-sharing closures); a zero profile gives zeros and no conditional flag; supply: the three numbers, a level of 1e-4 starved, a blocked nozzle gives zero film and its flag; supplied against computed coupling, and the coupling independent of the roll entry temperature (linearity); flow-stress coefficient from the key, from `hardening.rate_temperature` or absent with the reason; validation messages; a healthy header gives zero; one coarse diagnosis: section present, with the key absent every other result key equal and the hypotheses identical; with a layout the healthy bite entry temperature of the surface cycle is used (equal to the actual one for a healthy header) |
 | step test emulation / `tests/test_band_flatness_loop.py` (`FitTests`, `StepTestSectionTests`), `tests/test_band_step_test_demos.py` | the fit recovers K 10, tau 20 s, theta 2 s from exact samples, a two-time-scale response fits a constant between them that grows with the window, a ramp to a plateau fits inside the grid, a slow response sets the limit flag, noise, a too-short record is refused (`RECORD_TOO_SHORT_FOR_WINDOW`); the section on the short roll (window growth, series absent without local coupling, hot faster than roll growth alone, validation); the planner's table on both demos reproduced (pinned to 1e-3) |
 | flatness loop in the engine / `tests/test_band_flatness_loop.py`, `tests/test_band_flatness_demos.py`, `tests/test_band_flatness_demos_lengthwise.py` | short roll (0.6 m, 8 nozzles, 4 control zones, 600 s): the reading operator equals the direct route to 1e-9, the influence diagonal is negative, a healthy header makes no valve change, a weak nozzle with 5 % valves trims with the error more than halved and with on / off valves does not settle, predicted events account for every valve change, zone outcome words, a supplied actuator removes a parabolic target, validation messages, NOT_ASSESSABLE without shape inputs; a coarse diagnosis with and without the key (everything else identical, events identical, report); both demos at full numerics with the pinned outcomes of the table in 7.12, and the planner's prototype variant reproducing 65 / 1382 s / 2.46-2.56 / 59.07 |
-| wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
+| wavelength search / `tests/test_strip_buckling.py`, `tests/test_band_buckling_fe.py` | the four closed forms (simply supported 1e-6, with tension 1e-6, clamped and simply supported / free 0.2 %), 8 -> 16 element convergence, tension shifts a uniform plate by exactly the tension, mesh independence of a Gaussian case (120 against 240 elements, 0.5 %), `multiplier_at` equals the scan, no compression gives no buckling, search-limit flags, a mirrored profile gives the mirrored mode, non-uniform nodes, rejections, JSON safety; in the engine: the demo profiles (battery-foil flat at 0.435, lengthwise waves at 1.113 with a 107 mm half-wave), after release a whole-sheet mode compared with the global indicator, per-band disagreement wording, run-time budget, and with the option every other key and every score unchanged; package 7: top-hat self-check (wave formula and saturated stress `-sigma_cr` to 1e-6), amplitude zero below and growing as the square root above the critical state, mean saturated stress equals the tension, lift scale above the weightless multiplier, the lift condition `Pi_t = 0`, `dPi_t/da = 0` (1e-6), heavier or thicker sheet raises the limit, table height below the weightless height, the planner's two demo rows (2 %), the saturated profile as an additional shapemeter reading only; `tests/test_benchmarks.py`: the three rows pinned and their verdicts |
 | flatness loop parts / `tests/test_roll_thermal.py` (`ControlledRunTests`), `tests/test_flatness_control.py` | `ControlledRun` equals `simulate` over a two-segment valve event to 1e-12 (field, radius, surface; ledger 1e-9; same steps and start-ups); constant levels from a steady start stay steady (radius 1e-11 m, surface within the steady solver's 1e-6 K, equal to `simulate`); one start-up per level change, cache cap; weighted-orthonormal low-order basis, a parabola removed at order 2 and not at order 1; the two-zone hand case (gain, corrections, demands to 1e-6, dead band, dwell); hysteresis; a fast square-wave demand cannot switch a valve faster than its dwell; clipping; a supplied actuator removes its own vector; a synthetic first-order plant settles with 5 % valves and switches at the dwell bound with two-level valves; delay FIFO, display filter, history thinning, JSON safety |
 | grinding rules / `tests/test_band_grinding.py` | feed-mark ceiling (45 and 53 mm support weakly, 70 mm neutral, an irregular spacing stays neutral; the criterion string and its plain entry; the feed note's tags); grinder chatter: a 6 mm pitch on a 280 mm work roll without grinder data is neutral with the flag, the backup roll and implied counts of 10 or 300 keep the old rule, a count computed from wheel and roll speed (146.6, not rounded) supports and a non-fitting computed count contradicts (never neutral), vibration frequency in place of the wheel, validation messages naming the entry, the catalogue order, the app round trip in r/min; the cosine crown (0.660 um after order 2 within 10 % of 0.68, 0.006 um after order 4, no band with the default order); the 21-station grid flag and the observed band width as reference |
 | local sources / `tests/test_band_local_sources.py` | a single sinusoid of friction gives `-1e5*xi*G(lam)*M_mu*dmu/h` to 1e-9 with the feedback and compliance only (compliance only larger); signs (more friction tight, softer metal loose, hotter fibre loose); zero changes give zero terms and the net equals the roll term; sums; a missing term named and "the net is incomplete"; the sign words; on a coarse case with a valve event: the section, event rows with the key and not-supplied rows without it, event histories and every other result identical, the report block only with the key and without `nan`; the battery-foil artifact against the planner's peaks (15 %, the flow-stress term 20 %) and pinned to 1e-6 |
@@ -4322,6 +4382,10 @@ guide's own list.
   local plate it gives 5.34 / 8.65 I-units against the published 5.3 / 8.92 with half-waves 2.5 /
   1.7 times the measured one. One linear mode on the modelled (not measured) far-field profile,
   no amplitude; reported beside the present states, which the evidence keeps using.
+- **Wave height and table (opt-in, section 7.13)**: a one-mode Ritz estimate with a fibre
+  membrane model (an upper estimate, of the order of) and a gravity criterion on a rigid table
+  (not an elastic foundation; density 2700 kg/m3 from memory); no amplitude or table
+  measurement exists to compare with; changes no band state or score.
 - **After-release whole-sheet mode** is an upper-bound indicator, not a band prediction; the
   local mode's width limit (2 x half-peak width) is an analyst choice.
 - **Sharp-edged stripes** can lock the local released width onto an edge spike and report

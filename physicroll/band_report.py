@@ -1359,7 +1359,8 @@ def _width_section(r):
 
 FE_WORDS = {'FLAT': 'flat', 'BUCKLES': 'waves', 'NO_COMPRESSION': 'no compression',
             'NOT_DECIDED_ONE_MODE': 'not decided (one mode)',
-            'WHOLE_SHEET_MODE_NOT_A_BAND': 'whole-sheet mode, not a band'}
+            'WHOLE_SHEET_MODE_NOT_A_BAND': 'whole-sheet mode, not a band',
+            'LIFTS': 'lifts', 'LIES_FLAT': 'lies flat'}
 
 
 def _buckling_fe_block(w):
@@ -1381,25 +1382,42 @@ def _buckling_fe_block(w):
                         f'<td>{_mm2(st.get("half_wavelength_m"))}</td>'
                         f'<td>{_mm2(st.get("mode_width_10_percent_m"))}</td>'
                         f'<td>{_f(st.get("mode_peak_position_m"), 1e3, 4, "mm")}</td>'
-                        f'<td>{_e(str(st.get("at_search_limit") or "-").lower())}</td></tr>')
+                        f'<td>{_e(str(st.get("at_search_limit") or "-").lower())}</td>'
+                        f'<td>{_e((st.get("post_buckling") or {}).get("wording", "-"))}</td></tr>')
+        tb = p.get('on_table') or {}
+        if tb:
+            rows.append(f'<tr><td>{_e(p["label"])}</td><td>on a table</td>'
+                        f'<td>{_e(FE_WORDS.get(tb.get("state"), str(tb.get("state"))))}</td>'
+                        f'<td>{_f(tb.get("scale_to_lift"))} (scale to lift)</td>'
+                        f'<td>{_mm2(tb.get("half_wavelength_m"))}</td>'
+                        f'<td>{_mm2(tb.get("mode_width_10_percent_m"))}</td>'
+                        f'<td>{_f(tb.get("mode_peak_position_m"), 1e3, 4, "mm")}</td>'
+                        f'<td>{_e(str(tb.get("at_search_limit") or "-").lower())}</td>'
+                        f'<td>{_e(tb.get("wording", "-"))}</td></tr>')
     brow = []
     for p in bf.get('profiles') or []:
         for b in p.get('bands') or []:
             std = _states(b['sine_mode_state'], b['sine_mode_state_after_tension_release'])
             fe_m = FE_WORDS.get(b['in_mill']['wavelength_search_state'], '')
             fe_r = FE_WORDS.get(b['after_release']['wavelength_search_state'], '')
+            ot = b.get('on_table') or {}
+            fe_t = FE_WORDS.get(ot.get('table_state'), '-') + (
+                f' ({ot["note"]})' if ot.get('note') else '')
             brow.append(f'<tr><td>{_e(p["label"])}</td><td>{_mm2(b["start_m"])} to '
                         f'{_mm2(b["end_m"])}</td><td>{_f(b["peak_i_units"])}</td>'
-                        f'<td>{std}</td><td>{_e(fe_m)}; {_e(fe_r)}</td></tr>')
+                        f'<td>{std}</td><td>{_e(fe_m)}; {_e(fe_r)}</td><td>{_e(fe_t)}</td></tr>')
     return (head + '<p>Linear buckling of the modelled flatness profile (free strip edges, '
             'exit tension in the mill, none after release) with a search over wavelengths. '
-            'Utilisation 1 or more means the profile waves. <strong>The standard result above '
-            'is the one the shortlist uses</strong>; this table changes no state or score.</p>'
+            'Utilisation 1 or more means the profile waves. Wave heights are one-mode upper '
+            'estimates (of the order of), with the support named; on a table a gravity '
+            'criterion decides whether the sheet lifts. <strong>The standard result above is '
+            'the one the shortlist uses</strong>; this table changes no state or score.</p>'
             '<table><tr><th>profile</th><th>state</th><th>result</th><th>utilisation</th>'
             '<th>half-wave</th><th>mode width (10 %)</th><th>mode peak</th>'
-            '<th>search limit</th></tr>' + ''.join(rows) + '</table>'
-            '<table><tr><th>profile</th><th>band</th><th>peak I-units</th>'
-            '<th>standard states</th><th>wavelength search (mill; after release)</th></tr>'
+            '<th>search limit</th><th>wave (upper estimate)</th></tr>' + ''.join(rows)
+            + '</table><table><tr><th>profile</th><th>band</th><th>peak I-units</th>'
+            '<th>standard states</th><th>wavelength search (mill; after release)</th>'
+            '<th>on a table</th></tr>'
             + ''.join(brow) + '</table><p class="warn">'
             + _e(' '.join(bf.get('limitations') or [])) + '</p>')
 

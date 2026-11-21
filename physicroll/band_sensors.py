@@ -569,6 +569,20 @@ def shapemeter_profiles(width, temperature_compensated=None):
                     'healthy header', 'z_m': st['z_m'], 'i_units': rip['i_units_with_feedback'],
                     'bands': [], 'reporting_threshold_i_units':
                         st.get('reporting_threshold_i_units')})
+    # SPEC19 package 7 (I12): with model_options.buckling_model = 'sine_mode_and_fe' and a
+    # steady profile that buckles in the mill, the saturated profile of the one-mode estimate
+    # as an ADDITIONAL reading (the readings above are unchanged; nothing reads it)
+    bf = shape.get('buckling_fe')
+    prof0 = ((bf.get('profiles') or [None])[0] if isinstance(bf, dict)
+             and bf.get('status') == 'UNVALIDATED_LINEAR_BUCKLING_BESIDE_THE_SINE_MODE' else None)
+    pb = ((prof0 or {}).get('in_mill') or {}).get('post_buckling') or {}
+    if pb.get('state') == 'BUCKLED' and isinstance(pb.get('saturated_i_units'), list):
+        out.append({'name': 'steady_saturated',
+                    'label': 'steady profile with the buckled band\'s stress saturated (one-mode '
+                             'estimate of the wavelength search; an upper estimate)',
+                    'z_m': pb['z_m'], 'i_units': pb['saturated_i_units'], 'bands': [],
+                    'reporting_threshold_i_units': (st or {}).get(
+                        'reporting_threshold_i_units') if isinstance(st, dict) else None})
     # SPEC17 package 6: the steady profile as measured hot (mechanical + thermal term)
     stt = width.get('strip_temperature')
     hot = ((stt.get('profiles') or {}).get('as_measured_hot')

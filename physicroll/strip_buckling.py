@@ -32,6 +32,35 @@ golden section in ``ln k`` between the neighbours of the best (``refine`` steps)
 inverse iterations from a fixed start vector. Cost: one factorisation is O(n) with n the number
 of nodes; one critical-mode search with 120 nodes takes about 0.2-0.3 s.
 
+Post-buckling (SPEC19 package 7) [D, re-derived in SPEC19]: a ONE-MODE RITZ estimate in place of
+the gap row's Koiter expansion (not in the reports). Fibre membrane model: each fibre carries a
+longitudinal stress only, uniform along x. With a wave ``w = a*f(z)*cos(k*x)`` of the critical
+mode shape a fibre's arc is longer than its chord by ``k^2*a^2*f^2/4``, so at fixed mean
+tension ``sigma(z; a) = sigma_T + sigma_res(z) + (E*k^2*a^2/4)*(f(z)^2 - m)``,
+``m = (1/W)*Int f^2``. Energy per unit length
+``Pi(a) = -(t*k^2/4)*(N - R)*a^2 + (E*t*k^4*Phi/32)*a^4`` with ``N = -Int (sigma_T +
+sigma_res)*f^2``, ``R = -Int (sigma_T + lambda_c*sigma_res)*f^2`` (its value at buckling) and
+``Phi = Int f^4 - (Int f^2)^2/W``; hence ``a^2 = 4*(N - R)/(E*k^2*Phi)`` for ``N > R``, else 0;
+peak to valley ``H = 2*a``. Self-check [D]: a top-hat mode over a narrow band of compression
+``sigma_c`` gives ``(pi*H/(2*L_w))^2 = (sigma_c - sigma_cr)/(E*(1 - m))`` with ``L_w = 2*pi/k``
+(the I-unit wave formula when the band is narrow against the strip) and ``sigma(z; a) =
+-sigma_cr`` inside the band: the Counhaye rule [SS-S8 EX], here a consequence. Limits: mode
+shape frozen at the critical one; fibres independent (no in-plane shear, no lateral stress),
+which makes the wave softer than a plate's: the amplitude is an UPPER ESTIMATE; one mode.
+
+Dead load on a rigid table [D, re-derived in SPEC19]: a GRAVITY CRITERION, not an elastic
+foundation (a table is not a spring). The sheet can only lift: ``w = a*|f|*(1 + cos(k*x))``.
+Added per unit length: gravity ``g1*a``, ``g1 = rho*g*t*Int |f|``, and the bending of the mean
+lift ``R_s = 2*D*Int f''^2/(t*k^2)``. With ``c2 = t*k^2*(N - R - R_s)/2`` and
+``c4 = E*t*k^4*Phi/8``: ``Pi_t(a) = -(c2/2)*a^2 + (c4/4)*a^4 + g1*a``; the sheet lifts when the
+lowest ``Pi_t`` is below 0, i.e. ``N - R - R_s >= G(k) = (2/(t*k^2))*(3*g1*sqrt(3*c4/2))^(2/3)``.
+Scale of the residual stress at which a mode of wavenumber k lifts (no tension):
+``s_lift(k) = (R + R_s + G(k))/(-Int sigma_res*f^2)``; the lift limit is the minimum over k.
+Wave height on the table: the largest root of ``c4*a^3 - c2*a + g1 = 0`` (Newton from
+``sqrt(c2/c4)``). Approximation: the weightless mode shape at each k is used; ``f''`` by central
+differences at the nodes; the table is rigid and flat, without friction or adhesion; the sheet
+is long against the wave.
+
 Closed forms recovered (tests/test_strip_buckling.py): uniform compression of a long plate with
 simply supported edges, ``4*pi^2*D/(t*b^2)`` and half-wave ``b``; the same with a tension, the
 critical stress shifted by exactly the tension; clamped edges, coefficient 6.97 and half-wave
@@ -45,6 +74,17 @@ EDGES = ('free', 'simply_supported', 'clamped')
 NO_BUCKLING = 'NO_COMPRESSION_NO_BUCKLING'
 FLAG_LONGEST = 'BUCKLING_MODE_AT_LONGEST_HALF_WAVE_SEARCHED'
 FLAG_SHORTEST = 'BUCKLING_MODE_AT_SHORTEST_HALF_WAVE_SEARCHED'
+FLAG_DENSITY = 'DENSITY_FROM_MEMORY_DEFAULT'
+FLAG_DEAD_LOAD_LIMIT = 'DEAD_LOAD_MODE_AT_SEARCH_LIMIT'
+ALUMINIUM_DENSITY_KG_M3 = 2700.0   # [M: textbook value, not in the reports]
+GRAVITY_M_S2 = 9.81
+AMPLITUDE_BASIS = ('[D, re-derived in SPEC19] one-mode Ritz estimate on the frozen critical '
+                   'mode, fibre membrane model (no in-plane shear, no lateral stress): an UPPER '
+                   'ESTIMATE of the wave height, of the order of what that mode would give')
+TABLE_BASIS = ('[D, re-derived in SPEC19] gravity criterion on a rigid flat table (one-sided '
+               'dead load, not an elastic foundation): the sheet lifts in a mode of wavenumber k '
+               'when the energy of the lifted state falls below the flat one; weightless mode '
+               'shape at each k; no friction, adhesion or finite sample length')
 BASIS = ('[D, re-derived in SPEC19] second variation of the plate energy of a long flat strip '
          'with a longitudinal pre-stress sigma_T + lambda*sigma_res(z), mode f(z)*cos(k*x); '
          'Hermite cubic elements across the width, exact 4-point Gauss integrals; largest '
@@ -396,3 +436,149 @@ def critical_mode(z_m, residual_stress_pa, *, thickness_m, youngs_modulus_pa, po
                 mode_width_50_percent_m=_extent(z, f, 0.5),
                 half_wave_over_mode_width=(half / w10 if w10 > 0 else None), scan=scan,
                 at_search_limit=limit, flags=flags)
+
+
+def _integ(z, g):
+    return sum(0.5 * (g[i] + g[i + 1]) * (z[i + 1] - z[i]) for i in range(len(z) - 1))
+
+
+def post_buckling(z_m, residual_stress_pa, mode_result, *, thickness_m, youngs_modulus_pa,
+                  mean_tension_pa=0.0) -> dict:
+    """One-mode Ritz amplitude and saturated stress of ``residual_stress_pa`` (scale 1) in the
+    mode of ``mode_result`` (``critical_mode`` at the same tension, or a dict with ``mode``,
+    ``wavenumber_per_m`` and ``critical_multiplier``). An UPPER ESTIMATE (see the module text)."""
+    z, s, t, E, _, sT, _ = _check(z_m, residual_stress_pa, thickness_m, youngs_modulus_pa, 0.3,
+                                  mean_tension_pa, ('free', 'free'))
+    lam = mode_result.get('critical_multiplier')
+    if lam is None:
+        return {'state': 'FLAT', 'amplitude_m': 0.0, 'peak_to_valley_m': 0.0,
+                'reason': 'no buckling mode', 'basis': AMPLITUDE_BASIS}
+    f, k = list(mode_result['mode']), mode_result['wavenumber_per_m']
+    if len(f) != len(z):
+        raise ValueError('mode_result.mode must have one value per node')
+    width = z[-1] - z[0]
+    i2 = _integ(z, [v * v for v in f])
+    i4 = _integ(z, [v ** 4 for v in f])
+    phi = i4 - i2 * i2 / width
+    isf = _integ(z, [a * v * v for a, v in zip(s, f)])
+    R = -(sT * i2 + lam * isf)
+    N = -(sT * i2 + isf)
+    wl = 2 * math.pi / k
+    out = {'wavenumber_per_m': k, 'half_wavelength_m': math.pi / k, 'wavelength_m': wl,
+           'net_compression_n_per_m': N, 'compression_at_buckling_n_per_m': R, 'phi_m': phi,
+           'basis': AMPLITUDE_BASIS}
+    if N <= R or phi <= 0:
+        sat = [sT + a for a in s]
+        a = 0.0
+        state = 'FLAT'
+    else:
+        a2 = 4 * (N - R) / (E * k * k * phi)
+        a = math.sqrt(a2)
+        m = i2 / width
+        sat = [sT + b + E * k * k * a2 / 4 * (v * v - m) for b, v in zip(s, f)]
+        state = 'BUCKLED'
+    H = 2 * a
+    out.update({'state': state, 'amplitude_m': a, 'peak_to_valley_m': H,
+                'wave_i_units': 1e5 * (math.pi * H / (2 * wl)) ** 2,
+                'saturated_stress_pa': sat,
+                'saturated_i_units': [-1e5 * (v - sT) / E for v in sat]})
+    return out
+
+
+def _mode_vector(strip, A, G, mu):
+    x = _mode(A, G, mu)
+    f = [0.0] * len(strip.z)
+    for dof, j in strip.map.items():
+        if dof % 2 == 0:
+            f[dof // 2] = x[j]
+    m = max(f, key=abs)
+    return [v / m for v in f]
+
+
+def dead_load_lift(z_m, residual_stress_pa, *, thickness_m, youngs_modulus_pa, poisson_ratio,
+                   density_kg_m3=None, half_wave_range_m=None, points=24) -> dict:
+    """Gravity criterion on a rigid table (no tension): the scale of ``residual_stress_pa`` at
+    which the sheet lifts, minimised over ``points`` wavenumbers (geometric), and the wave
+    height on the table at scale 1. ``density_kg_m3`` None: aluminium 2700 [M], flagged."""
+    z, s, t, E, nu, _, _ = _check(z_m, residual_stress_pa, thickness_m, youngs_modulus_pa,
+                                  poisson_ratio, 0.0, ('free', 'free'))
+    flags = []
+    if density_kg_m3 is None:
+        rho = ALUMINIUM_DENSITY_KG_M3
+        flags.append(FLAG_DENSITY)
+    else:
+        rho = _number('density_kg_m3', density_kg_m3, 100.0, 30000.0)
+    if isinstance(points, bool) or not isinstance(points, int) or not 4 <= points <= 60:
+        raise ValueError('points must be an integer in [4, 60]')
+    width = z[-1] - z[0]
+    if half_wave_range_m is None:
+        l_short, l_long = width / 40, 4 * width
+    else:
+        l_short = _number('half_wave_range_m', half_wave_range_m[0], 1e-9, 1e4)
+        l_long = _number('half_wave_range_m', half_wave_range_m[1], 1e-9, 1e4)
+        if not 0 < l_short < l_long:
+            raise ValueError('half_wave_range_m must be 0 < shortest < longest')
+    base = {'density_kg_m3': rho, 'half_wave_range_m': [l_short, l_long], 'basis': TABLE_BASIS,
+            'flags': flags}
+    if max(-v for v in s) <= 0:
+        return dict(base, state='LIES_FLAT', scale_to_lift=None, scan=[],
+                    peak_to_valley_on_table_m=0.0, at_search_limit=None,
+                    reason='no compression')
+    strip = _Strip(z, s, t, E, nu, 0.0, ('free', 'free'))
+    D = strip.D
+    k_lo, k_hi = math.pi / l_long, math.pi / l_short
+    rows = []
+    for i in range(points):
+        k = k_lo * (k_hi / k_lo) ** (i / (points - 1))
+        A, G = strip.assemble(k)
+        mu = _mu_max(A, G, _hi(strip, k), 1e-6)
+        if mu <= 0:
+            continue
+        lam = 1 / mu
+        f = _mode_vector(strip, A, G, mu)
+        fpp = [0.0] + [(f[j - 1] - 2 * f[j] + f[j + 1]) / ((z[j + 1] - z[j - 1]) / 2) ** 2
+                       for j in range(1, len(z) - 1)] + [0.0]
+        i2 = _integ(z, [v * v for v in f])
+        i4 = _integ(z, [v ** 4 for v in f])
+        phi = i4 - i2 * i2 / width
+        isf = _integ(z, [a * v * v for a, v in zip(s, f)])
+        R = -lam * isf
+        Rs = 2 * D * _integ(z, [v * v for v in fpp]) / (t * k * k)
+        g1 = rho * GRAVITY_M_S2 * t * _integ(z, [abs(v) for v in f])
+        c4 = E * t * k ** 4 * phi / 8
+        Gk = (2 / (t * k * k)) * (3 * g1 * math.sqrt(1.5 * c4)) ** (2 / 3)
+        s_lift = (R + Rs + Gk) / (-isf)
+        c2 = t * k * k * ((-isf) - R - Rs) / 2
+        a = 0.0
+        if c2 > 0 and s_lift <= 1:
+            a = math.sqrt(c2 / c4)
+            for _ in range(60):
+                a = a - (c4 * a ** 3 - c2 * a + g1) / (3 * c4 * a * a - c2)
+        wl2 = 4 * max(0.0, (-isf) - R) / (E * k * k * phi) if phi > 0 else 0.0
+        ipk = max(range(len(z)), key=lambda j: abs(f[j]))
+        rows.append({'index': i, 'half_wavelength_m': math.pi / k, 'weightless_multiplier': lam,
+                     'scale_to_lift': s_lift, 'peak_to_valley_on_table_m': 2 * a,
+                     'weightless_peak_to_valley_m': 2 * math.sqrt(wl2),
+                     'mode_peak_position_m': z[ipk],
+                     'mode_width_10_percent_m': _extent(z, f, 0.1),
+                     'lift_condition': {'c2': c2, 'c4': c4, 'g1': g1}})
+    if not rows:
+        return dict(base, state='LIES_FLAT', scale_to_lift=None, scan=[],
+                    peak_to_valley_on_table_m=0.0, at_search_limit=None,
+                    reason='no buckling mode at any wavenumber')
+    best = min(rows, key=lambda r: r['scale_to_lift'])
+    limit = ('LONGEST' if best['index'] == 0 else
+             'SHORTEST' if best['index'] == points - 1 else None)
+    if limit:
+        flags.append(FLAG_DEAD_LOAD_LIMIT)
+    lifts = best['scale_to_lift'] <= 1.0
+    return dict(base, state='LIFTS' if lifts else 'LIES_FLAT',
+                scale_to_lift=best['scale_to_lift'], half_wavelength_m=best['half_wavelength_m'],
+                peak_to_valley_on_table_m=best['peak_to_valley_on_table_m'] if lifts else 0.0,
+                weightless_peak_to_valley_m=best['weightless_peak_to_valley_m'],
+                mode_peak_position_m=best['mode_peak_position_m'],
+                mode_width_10_percent_m=best['mode_width_10_percent_m'],
+                at_search_limit=limit,
+                scan=[{k: r[k] for k in ('half_wavelength_m', 'weightless_multiplier',
+                                         'scale_to_lift', 'peak_to_valley_on_table_m')}
+                      for r in rows], best_lift_condition=best['lift_condition'])

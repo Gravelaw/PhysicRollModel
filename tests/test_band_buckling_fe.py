@@ -117,7 +117,7 @@ class DemoProfiles(unittest.TestCase):
         for name in ('battery-foil-demo', 'lengthwise-bands-demo'):
             n = len(self.sec[name]['profiles'])
             self.assertLess(self.t[name], 6.0)
-            self.assertLess(self.t[name] / (2 * n), 0.6 * 2)   # loose on a slow machine
+            self.assertLess(self.t[name] / (3 * n), 0.6 * 2)   # loose on a slow machine
 
     def test_disagreement_is_said_per_band(self):
         rows = [{'start_m': 0.0, 'end_m': 0.2, 'peak_i_units': 30.0,
@@ -129,6 +129,73 @@ class DemoProfiles(unittest.TestCase):
         self.assertIs(out['in_mill']['agrees_with_sine_mode'], False)
         self.assertIn('the evidence uses the sine mode', out['in_mill']['note'])
         self.assertIs(out['after_release']['agrees_with_sine_mode'], True)
+
+    # ------------------------------------------------------- SPEC19 package 7 (planner table)
+    def test_battery_foil_post_buckling_and_table(self):
+        p = self.sec['battery-foil-demo']['profiles'][0]
+        self.assertEqual(p['in_mill']['post_buckling']['state'], 'FLAT')
+        rel = p['after_release']['post_buckling']
+        self.assertAlmostEqual(rel['peak_to_valley_m'], 20.8e-3, delta=0.02 * 20.8e-3)
+        self.assertAlmostEqual(rel['reading_at_profile_peak_i_units'], 17.3, delta=0.02 * 17.3)
+        self.assertAlmostEqual(rel['linear_reading_at_profile_peak_i_units'], 25.09, delta=0.01)
+        self.assertIn('whole-sheet mode', rel['wording'])
+        tb = p['on_table']
+        self.assertEqual(tb['state'], 'LIFTS')
+        self.assertAlmostEqual(tb['scale_to_lift'], 0.0298, delta=0.02 * 0.0298)
+        self.assertAlmostEqual(tb['lift_limit_peak_i_units'], 0.75, delta=0.02 * 0.75)
+        self.assertAlmostEqual(tb['half_wavelength_m'], 0.030, delta=0.001)
+        self.assertEqual(tb['at_search_limit'], 'SHORTEST')
+        self.assertAlmostEqual(tb['peak_to_valley_on_table_m'], 0.72e-3, delta=0.02 * 0.72e-3)
+
+    def test_lengthwise_post_buckling_and_table(self):
+        p = self.sec['lengthwise-bands-demo']['profiles'][0]
+        pb = p['in_mill']['post_buckling']
+        self.assertAlmostEqual(p['in_mill']['critical_multiplier'], 0.8981, delta=0.02 * 0.8981)
+        self.assertEqual(pb['state'], 'BUCKLED')
+        self.assertAlmostEqual(pb['amplitude_m'], 0.5845e-3, delta=0.02 * 0.5845e-3)
+        self.assertAlmostEqual(pb['peak_to_valley_m'], 1.17e-3, delta=0.02 * 1.17e-3)
+        self.assertAlmostEqual(pb['reading_at_profile_peak_i_units'], 43.6, delta=0.02 * 43.6)
+        self.assertIn('of the order of', pb['wording'])
+        self.assertIn('upper estimate', pb['wording'])
+        self.assertIn('in the mill under the exit tension', pb['wording'])
+        self.assertEqual(len(pb['z_m']), len(pb['saturated_i_units']))
+        self.assertAlmostEqual(p['after_release']['post_buckling']['peak_to_valley_m'], 33.9e-3,
+                               delta=0.02 * 33.9e-3)
+        tb = p['on_table']
+        self.assertAlmostEqual(tb['lift_limit_peak_i_units'], 2.20, delta=0.02 * 2.20)
+        self.assertAlmostEqual(tb['scale_to_lift'], 0.0435, delta=0.02 * 0.0435)
+        self.assertAlmostEqual(tb['half_wavelength_m'], 0.090, delta=0.002)
+        self.assertAlmostEqual(tb['peak_to_valley_on_table_m'], 2.99e-3, delta=0.02 * 2.99e-3)
+        gov = [b for b in p['bands'] if b['on_table']['mode_peaks_in_this_band']]
+        self.assertEqual([b['on_table']['table_state'] for b in gov], ['LIFTS'])
+        self.assertIn('wave', gov[0]['in_mill'])
+        self.assertIn('NOT change any band state', self.sec['lengthwise-bands-demo']
+                      ['not_in_the_tally'])
+
+    def test_saturated_profile_is_an_additional_shapemeter_reading(self):
+        from physicroll import band_sensors as bsn
+        r = self.sec['lengthwise-bands-demo:r']
+        width = copy.deepcopy(r['width'])
+        before = [p['name'] for p in bsn.shapemeter_profiles(width)]
+        width['shape']['buckling_fe'] = self.sec['lengthwise-bands-demo']
+        after = [p['name'] for p in bsn.shapemeter_profiles(width)]
+        self.assertEqual([n for n in after if n != 'steady_saturated'], before)
+        self.assertIn('steady_saturated', after)
+        rb = self.sec['battery-foil-demo:r']
+        wb = copy.deepcopy(rb['width'])
+        wb['shape']['buckling_fe'] = self.sec['battery-foil-demo']     # flat in the mill
+        self.assertNotIn('steady_saturated', [p['name'] for p in bsn.shapemeter_profiles(wb)])
+
+    def test_table_keeps_a_reported_band_flat_is_said_per_band(self):
+        rows = [{'start_m': 0.0, 'end_m': 0.2, 'peak_i_units': 3.0,
+                 'state': 'LATENT_UNDER_TENSION',
+                 'state_after_tension_release': 'MANIFEST_AFTER_TENSION_RELEASE'}]
+        out = bw._bf_band_rows(rows, {'state': 'FLAT'}, {'state': 'FLAT'},
+                               {'state': 'LIES_FLAT', 'mode_peak_position_m': 0.1})[0]
+        self.assertEqual(out['on_table']['table_state'], 'LIES_FLAT')
+        self.assertTrue(out['on_table']['keeps_reported_band_flat'])
+        self.assertIn('the length difference is still there', out['on_table']['note'])
+        self.assertIn('the tally keeps the sine-mode state', out['on_table']['note'])
 
 
 class EngineOptIn(unittest.TestCase):
@@ -177,6 +244,7 @@ class EngineOptIn(unittest.TestCase):
         self.assertEqual(tuple(v for v, _ in q.choices), bd.BUCKLING_MODELS)
         for f in bw.BF_TOP_FLAGS:
             self.assertIn(f, bpl.FLAGS)
+        self.assertIn('lie flat on a table', q.help)
 
 
 if __name__ == '__main__':

@@ -949,9 +949,9 @@ MILL_QUESTIONS = (
        unit='count', group='Model settings'),
     _m('buckling_model', 'model_options.buckling_model', 'choice',
        'Also compute waves with a wavelength search?',
-       'Slower (about a second). Adds the band height at which the strip would start to wave '
-       'and the wavelength, in the mill and after release, beside the standard result; the '
-       'standard result is unchanged.',
+       'Slower (a second or two). Adds the band height at which the strip would start to wave, '
+       'the wavelength, a rough wave height and whether the band would lie flat on a table, '
+       'beside the standard result; the standard result is unchanged.',
        choices=_choices(bd.BUCKLING_MODELS, BUCKLING_MODEL_WORDS), group='Model settings'),
     _m('thermal_sensitivity', 'model_options.thermal_sensitivity', 'choice',
        'Heat-share sensitivity table', 'How much is recomputed for the sensitivity table. The '
@@ -2686,6 +2686,11 @@ FLAGS = {
         'For at least one band the wavelength search and the standard rule disagree on whether '
         'the strip waves in the mill; the shortlist uses the standard rule.',
         'Read both; neither has been checked on a mill.'),
+    'DEAD_LOAD_KEEPS_REPORTED_BAND_FLAT_ON_TABLE': (
+        'A band the standard rule calls visible after release would lie flat on an inspection '
+        'table under its own weight in this rough estimate; the length difference is still '
+        'there, and the shortlist keeps the standard state.',
+        'Look at the sample hanging or after slitting as well as on the table.'),
     'BUCKLING_FE_RELEASED_STATE_DIFFERS_FROM_SINE_MODE': (
         'For at least one band, or for the whole sheet, the wavelength search and the standard '
         'rule disagree on whether the strip waves after the tension is released; the shortlist '
