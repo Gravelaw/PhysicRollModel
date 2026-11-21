@@ -3201,7 +3201,15 @@ validation message says so. No demo or scenario carries a stack law. The planner
 (package 10, SPEC19 finding 5) shows why this matters: one 0.1 um thicker lane gives a radius
 difference of 0.77 of laps x thickness difference with an isotropic stack, 0.12 with
 `E_r = E_t/100` and 0.02 with an assumed Pfeiffer stack (`K2` 30): the project's constant 0.5
-lies inside this range and is neither supported nor contradicted. The effective compaction
+lies inside this range and is neither supported nor contradicted. That range holds for a lane
+that differs in thickness only. A lane that is also longer than its neighbours (a model band is
+both thinner and longer) is wound at a lower tension, and with a soft stack it is then pressed
+in less than they are: the factor can be negative, which means the thin lane stands higher on the
+coil, not lower. One run of the battery-foil demo with a stack law added gave 0.41 with an
+isotropic stack and -1.08 with `E_r = E_t/100` in every lane `[computed, one run 2026-11-21, not
+a committed artifact]`. The sign of the build-up therefore depends on the stack law as well as
+its size; the lane model's verdicts are reported beside the linear criterion and move no score.
+The effective compaction
 factor of a given stack is reported by the lane model (package 10), not by this single-lane
 module. Flag (on every result) `RADIAL_STACK_LAW_IS_AN_INPUT_NO_ALUMINIUM_DATA_FOUND`.
 
